@@ -257,16 +257,15 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
-			+ " contractresult, prevblockhash, inserttime, contractchainlength, milestone) " + " VALUES (?, ?, ?, ?, ?, ?, ?,?,?,?)";
+			+ " contractresult, prevblockhash, inserttime, milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)";
 	protected final String SELECT_CONTRACTRESULT  = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-			+ " contractresult, prevblockhash, inserttime, contractchainlength , milestone "
+			+ " contractresult, prevblockhash, inserttime, milestone "
 			+ " FROM contractresult ";
-	protected final String SELECT_CONTRACTRESULT_SQL = SELECT_CONTRACTRESULT + " WHERE contracttokenid=? and spent=false order by contractchainlength desc  ";
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL =SELECT_CONTRACTRESULT +"  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = 1 and contracttokenid=? and milestone >0 order by milestone desc limit 1";
 	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = 1 and contracttokenid=? and milestone < 0 order by contractchainlength  desc  ";
+			+ " WHERE confirmed = 1 and contracttokenid=? and milestone < 0  order by inserttime desc   ";
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
 	
@@ -276,15 +275,16 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " WHERE blockhash = ?";
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
 			+ "  INTO orderresult (blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime, orderchainlength, milestone) " + " VALUES (?, ?, ?, ?, ?, ?, ?,?,?)";
+			+ " orderresult, prevblockhash, inserttime,  milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?)";
 	protected final String SELECT_ORDERRESULT =   "  select blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime , orderchainlength, milestone" 
+			+ " orderresult, prevblockhash, inserttime ,  milestone" 
 			+ " FROM orderresult ";
-	protected final String SELECT_ORDERRESULT_SQL =   SELECT_ORDERRESULT
-			+ " WHERE spent=false order by orderchainlength desc ";
+	protected final String SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = 1  and milestone < 0  order by inserttime desc   ";
+	
 	protected final String SELECT_ORDERRESULT_HASH_SQL =   SELECT_ORDERRESULT +" WHERE blockhash=?";
-	protected final String SELECT_ORDER_RESULT_MAX_CONFIRMED_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = 1 and spent=? order by orderchainlength desc limit 1";
+	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = 1 and milestone >0 order by milestone desc limit 1";
 	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()
 			+ " orderresult SET milestone = ?   WHERE blockhash = ?";
 	

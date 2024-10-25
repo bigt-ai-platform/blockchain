@@ -122,7 +122,7 @@ public class ServiceContract extends ServiceBaseConnect {
 				Transaction tx = createPayoutTransaction(block, payouts);
 				return new ContractExecutionResult(block.getHash(), contract.getTokenid(),
 						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx, prevHash.getBlockHash(),
-						prevHash.getContractchainlength()+1,
+					
 						getContractEventRecordHash(cancelledContractEventRecord),
 						getRemainder(toBeSpent.values(), usedRecords.values()), block.getTimeSeconds(),
 						getRemainderContractEventRecord(toBeSpent.values(), usedRecords.values()), collectedBlocks);
@@ -215,7 +215,7 @@ public class ServiceContract extends ServiceBaseConnect {
 		Transaction tx = createPayoutTransaction(winnerBlock, payouts);
 		return new ContractExecutionResult(winnerBlock.getHash(), winner.getContractTokenid(),
 				getContractEventRecordHash(allRecords.values()), tx.getHash(), tx, prevHash.getBlockHash(),
-				prevHash.getContractchainlength() + 1, cancels, getRemainder(allRecords.values(), usedRecords.values()),
+				 cancels, getRemainder(allRecords.values(), usedRecords.values()),
 				winnerBlock.getTimeSeconds(),
 				getRemainderContractEventRecord(allRecords.values(), usedRecords.values()), collectedBlocks);
 	}

@@ -23,8 +23,7 @@ public class ContractExecutionResult extends SpentBlock {
 	String contracttokenid;
 	// reference the previous ContractResult block, it forms a chain
 	Sha256Hash prevblockhash;
-	// reference the previous ContractResult block, it forms a chain
-	long contractchainlength;
+ 
 	// referenced new order blocks
 	Set<Sha256Hash> referencedBlocks = new HashSet<>();;
 
@@ -50,7 +49,7 @@ public class ContractExecutionResult extends SpentBlock {
 	}
 
 	public ContractExecutionResult(Sha256Hash blockhash, String contractid, Set<Sha256Hash> toBeSpent,
-			Sha256Hash outputTxHash, Transaction outputTx, Sha256Hash prevblockhash, long contractchainlength,
+			Sha256Hash outputTxHash, Transaction outputTx, Sha256Hash prevblockhash,  
 			Set<Sha256Hash> cancelRecords, Set<Sha256Hash> remainderRecords, long inserttime,
 			Set<ContractEventRecord> remainderContractEventRecord, Set<Sha256Hash> referencedOrderBlocks) {
 		this.setBlockHash(blockhash);
@@ -65,7 +64,7 @@ public class ContractExecutionResult extends SpentBlock {
 
 		this.remainderContractEventRecord = remainderContractEventRecord;
 		this.referencedBlocks = referencedOrderBlocks;
-		this.contractchainlength = contractchainlength;
+ 
 	}
 
 	public byte[] toByteArray() {
@@ -76,7 +75,7 @@ public class ContractExecutionResult extends SpentBlock {
 			Utils.writeNBytesString(dos, contracttokenid);
 			Utils.writeNBytes(dos, outputTxHash.getBytes());
 			Utils.writeNBytes(dos, prevblockhash.getBytes());
-			Utils.writeLong(dos, contractchainlength);
+
 			dos.writeInt(allRecords.size());
 			for (Sha256Hash c : allRecords) {
 				Utils.writeNBytes(dos, c.getBytes());
@@ -108,7 +107,6 @@ public class ContractExecutionResult extends SpentBlock {
 		contracttokenid = Utils.readNBytesString(dis);
 		outputTxHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		contractchainlength = Utils.readLong(dis);
 		allRecords = new HashSet<>();
 		int allRecordsSize = dis.readInt();
 		for (int i = 0; i < allRecordsSize; i++) {
@@ -223,18 +221,11 @@ public class ContractExecutionResult extends SpentBlock {
 		this.referencedBlocks = referencedBlocks;
 	}
 
-	public long getContractchainlength() {
-		return contractchainlength;
-	}
-
-	public void setContractchainlength(long contractchainlength) {
-		this.contractchainlength = contractchainlength;
-	}
-
+ 
 	@Override
 	public String toString() {
 		return "ContractExecutionResult [contracttokenid=" + contracttokenid + ", prevblockhash=" + prevblockhash
-				+ ", contractchainlength=" + contractchainlength + ", referencedBlocks=" + referencedBlocks
+				+  ", referencedBlocks=" + referencedBlocks
 				+ ", outputTxHash=" + outputTxHash + ", allRecords=" + allRecords + ", cancelRecords=" + cancelRecords
 				+ ", remainderRecords=" + remainderRecords + ", outputTx=" + outputTx
 				+ ", remainderContractEventRecord=" + remainderContractEventRecord + "]";

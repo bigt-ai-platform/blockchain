@@ -51,37 +51,25 @@ public class PerformanceTest extends ContractTest {
 		List<Block> a2 = new ArrayList<Block>();
 
 		// second chain
-	//	usernumber=2000;
-	 	prepare("12200", a2);
+		// usernumber=2000;
+		prepare("12200", a2);
 		for (int i = 0; i < 12200; i++) {
 			createReward(a2);
 		}
 	}
-	
+
 	public void createReward(List<Block> blocksAddedAll) throws Exception {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
 		Callable callable = new Callable() {
 			@Override
-			public String call()  {
-				try {
-			 	ordermatch(blocksAddedAll);
-				}catch (Exception e) {
-					e.printStackTrace();
-					return "";
-				}
-				try {
-				contractExecution(blocksAddedAll,true);
-				checkSum();
-				return "";
-				}catch (Exception e) {
-					e.printStackTrace();
-					return "";
-				}
+			public String call() {
+				return contractAndOrder(blocksAddedAll);
 			}
+
 		};
-	 
+
 		final Future<String> handler = executor.submit(callable);
 		try {
 			handler.get(30, TimeUnit.MINUTES);
@@ -95,5 +83,22 @@ public class PerformanceTest extends ContractTest {
 			executor.shutdownNow();
 		}
 
+	}
+
+	public String contractAndOrder(List<Block> blocksAddedAll) {
+		try {
+			ordermatch(blocksAddedAll);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		}
+		try {
+			contractExecution(blocksAddedAll, true);
+			checkSum();
+			return "";
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		}
 	}
 }

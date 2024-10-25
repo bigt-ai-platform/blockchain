@@ -123,7 +123,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		Transaction tx = createOrderPayoutTransaction(block, payouts);
 
 		return new OrderExecutionResult(block.getHash(), getOrderRecordHash(toBeSpentOrders), tx.getHash(), tx,
-				prev.getBlockHash(), prev.getOrderchainLength() + 1, getOrderRecordHash(cancelledOrders),
+				prev.getBlockHash(), getOrderRecordHash(cancelledOrders),
 				remainingOrders.keySet(), block.getTimeSeconds(), remainingOrders.values(), toBeSpentOrders,
 				collectedBlocks, tokenId2Events);
 

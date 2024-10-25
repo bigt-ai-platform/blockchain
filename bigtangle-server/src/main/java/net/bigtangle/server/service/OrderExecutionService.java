@@ -146,7 +146,8 @@ public class OrderExecutionService {
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
 		// log.debug(" getValidatedOrderExecutionBlockPair time {} ms.",
 		// watch.elapsed(TimeUnit.MILLISECONDS));
-		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).enableOrderMatchExecutionChain(b)) {
+		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+				.enableOrderMatchExecutionChain(b)) {
 
 			return createOrderExecution(b, store);
 		} else {
@@ -166,24 +167,15 @@ public class OrderExecutionService {
 		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
-		
+
 		long cutoffheight = blockService.getRewardCutoffHeight(prevRewardHash, store);
-		Orderresult prev = store.getMaxConfirmedOrderresult(  false);
-		Orderresult prevExecution = prev == null ? Orderresult.zeroOrderresult() : prev;
-		Orderresult prevSpent = store.getMaxConfirmedOrderresult(true);
-		Orderresult prevSpentExecution = prevSpent == null ? Orderresult.zeroOrderresult() : prevSpent;
-		//Take only the longest execution
-		 if(prevExecution.getOrderchainLength() <=   prevSpentExecution.getOrderchainLength()
-				 && prev!=null ) {
-			 return null;
-		 }
-		
+
 		List<Block.Type> ordertypes = new ArrayList<Block.Type>();
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
-		// add all blocks of dependencies 
+		// add all blocks of dependencies
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, true,
 				ordertypes, true, store);
@@ -191,15 +183,27 @@ public class OrderExecutionService {
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength, true,
 				ordertypes, true, store);
 
-		BlockWrap prevBlock = serviceBase.getBlockWrap(prevExecution.getBlockHash(), store);
-		Set<BlockWrap> prevs = serviceBase.collectReferencedChainedOrderExecutions(prevBlock, store);
-		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevs);
- 
-		
+		Orderresult prevMilestone = store.getMaxMilestoneOrderresult();
+
+		Orderresult prevMilestoneExecution = prevMilestone == null ? Orderresult.zeroOrderresult() : prevMilestone;
+
+		List<Orderresult> prevNotMilestons = store.getConfirmedOrderresultNotMilestone();
+
+		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(prevNotMilestons,
+				prevMilestoneExecution, store);
+		// take last NotMilestons chain confirmed and set others as not confirmed
+
+		Orderresult lastExecution = prevMilestoneExecution;
+		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
+			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
+			unconfimedNonChained(prevsNotMilestoneChainedBlocks, prevNotMilestons, store, serviceBase);
+		}
+
+		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
+
 		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters,
-				cacheBlockService)
-				.orderMatching(block, prevExecution, serviceBase.getHashSet(collectNotSpents), store);
-	 
+				cacheBlockService).orderMatching(block, lastExecution, serviceBase.getHashSet(collectNotSpents), store);
+
 		// do not create the execution block, if there is no new referencedblocks and no
 		// match
 		if (result == null || (result.getOutputTx().getOutputs().isEmpty() && collectNotSpents.isEmpty()))
@@ -210,6 +214,36 @@ public class OrderExecutionService {
 		blockService.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
+	}
+
+	//
+	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
+			List<Orderresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
+			throws BlockStoreException, IOException {
+		// find the longest chained execution connected to last milestone
+		for (Orderresult prevNotMilestone : prevNotMilestons) {
+			if (!prevsNotMilestoneChainedBlocks.stream()
+					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
+				serviceBase.unConfirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),
+						store);
+			}
+
+		}
+
+	}
+
+	protected Orderresult getLast(Set<BlockWrap> prevs, FullBlockStore store) throws BlockStoreException, IOException {
+		BlockWrap re = null;
+		for (BlockWrap b : prevs) {
+			if (re == null)
+				re = b;
+			else {
+				if (b.getBlock().getHeight() > re.getBlock().getHeight())
+					re = b;
+			}
+		}
+
+		return store.getOrderResult(re.getBlock().getHash());
 	}
 
 	protected Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
@@ -235,7 +269,7 @@ public class OrderExecutionService {
 		}
 		return collectOrdersNoSpents;
 	}
-  
+
 	private Block blockSolve(Block block, final BigInteger chainTargetFinal)
 			throws InterruptedException, ExecutionException {
 		ExecutorService executor = Executors.newSingleThreadExecutor();

@@ -63,6 +63,7 @@ import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.utils.UtilSort;
 import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.utils.Json;
 
@@ -333,8 +334,23 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return address;
 	}
 
+	public List<BlockWrap> sortedPrevsChain(List<Contractresult> prevs, FullBlockStore store)
+			throws BlockStoreException {
+		// get all unspents forms a chain, remove others from prevs
+		List<BlockWrap> re = new  ArrayList<BlockWrap>();
+		if (prevs.isEmpty())
+			return re;
 
-	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,FullBlockStore store) throws BlockStoreException {
+		// find the longest chained execution connected to last milestone
+		for (Contractresult prevNotMilestone : prevs) { 
+			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store)); 
+		}
+		new UtilSort().sortBlockWrap(re);
+		return   re;
+	}
+
+	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,
+			FullBlockStore store) throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
 		Set<BlockWrap> re = new HashSet<BlockWrap>();
 		if (prevs.isEmpty())
@@ -345,7 +361,57 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			re = new HashSet<BlockWrap>();
 			Contractresult startingBlock = prevNotMilestone;
 			while (startingBlock != null) {
-				re.add( getBlockWrap(startingBlock.getBlockHash(),store));
+				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
+				if (startingBlock.getPrevblockhash().equals(prevMilestone.getBlockHash())) {
+					return re;
+				} else {
+					startingBlock = findPrev(prevs, startingBlock);
+				}
+			}
+		}
+		return re;
+	}
+
+	protected Orderresult findPrev(List<Orderresult> prevs, Orderresult result) {
+
+		for (Orderresult b : prevs) {
+			if (result.getPrevblockhash().equals(b.getBlockHash())) {
+				return b;
+			}
+		}
+		return null;
+
+	}
+
+
+	public List<BlockWrap> sortedPrevsChainOrderresult(List<Orderresult> prevs, FullBlockStore store)
+			throws BlockStoreException {
+		// get all unspents forms a chain, remove others from prevs
+		List<BlockWrap> re = new  ArrayList<BlockWrap>();
+		if (prevs.isEmpty())
+			return re;
+
+		// find the longest chained execution connected to last milestone
+		for (Orderresult prevNotMilestone : prevs) { 
+			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store)); 
+		}
+		new UtilSort().sortBlockWrap(re);
+		return   re;
+	}
+
+	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone,
+			FullBlockStore store) throws BlockStoreException {
+		// get all unspents forms a chain, remove others from prevs
+		Set<BlockWrap> re = new HashSet<BlockWrap>();
+		if (prevs.isEmpty())
+			return re;
+
+		// find the longest chained execution connected to last milestone
+		for (Orderresult prevNotMilestone : prevs) {
+			re = new HashSet<BlockWrap>();
+			Orderresult startingBlock = prevNotMilestone;
+			while (startingBlock != null) {
+				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
 				if (startingBlock.getPrevblockhash().equals(prevMilestone.getBlockHash())) {
 					return re;
 				} else {
@@ -366,7 +432,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return null;
 
 	}
-	
+
 	public Set<BlockWrap> collectReferencedChainedOrderExecutions(BlockWrap headContractExecutions,
 			FullBlockStore store) throws BlockStoreException {
 

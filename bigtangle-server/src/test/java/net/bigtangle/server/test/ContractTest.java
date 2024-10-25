@@ -104,7 +104,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<UTXO> utxos = getBalance(false, ulist);
 		List<UTXO> ylist = utxos.stream().filter(u -> u.getTokenId().equals(yuanTokenPub)).collect(Collectors.toList());
 		for (UTXO u : ylist) {
-			log.debug(u.toString());
+		//	log.debug(u.toString());
 			BigInteger p = map.get(u.getAddress());
 			if (p != null) {
 				map.put(u.getAddress(), p.add(u.getValue().getValue()));
@@ -183,12 +183,12 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 		Block resultBlock = null;
-		int count=0;
+		int count = 0;
 		for (ECKey key : ulist) {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contractKey.getPublicKeyAsHex());
-			count ++;
-			log.debug(" count "+count+  " payContract "  + key.toString());
+			count++;
+			log.debug(" count " + count + " payContract " + key.toString());
 			resultBlock = contractExecutionService.createContractExecution(contractKey.getPublicKeyAsHex(), store);
 
 			if (resultBlock != null) {
@@ -202,7 +202,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				// confirm the contract execution
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 						.confirmContractExecute(resultBlock, store);
-
+				mcmcServiceUpdate();
 				if (!check.getOutputTx().getOutputs().isEmpty()) {
 					Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
 							.getToAddress(networkParameters);
@@ -213,8 +213,8 @@ public class ContractTest extends AbstractIntegrationTest {
 
 					// List<UTXO> utxos = getBalance(false, ulist);
 					assertTrue(endMap.get(winnerAddress.toString()) != null);
-					log.debug("endMap.get(winnerAddress.toString())=" + winnerAddress.toString() + " = "+
-					endMap.get(winnerAddress.toString()));
+					log.debug("endMap.get(winnerAddress.toString())=" + winnerAddress.toString() + " = "
+							+ endMap.get(winnerAddress.toString()));
 					assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount)));
 
 				}
@@ -306,7 +306,6 @@ public class ContractTest extends AbstractIntegrationTest {
 		checkSum();
 		for (int i = 0; i < 1; i++) {
 			contractExecution(a1);
-
 		}
 		ordermatch(a1);
 		checkSum();

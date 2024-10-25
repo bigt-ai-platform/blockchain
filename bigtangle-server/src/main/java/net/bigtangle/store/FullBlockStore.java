@@ -511,8 +511,6 @@ public interface FullBlockStore {
 
 	public void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
-	public List<Contractresult> getContractresultUnspent(String contractid) throws BlockStoreException;
-
 	public Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
 
 	public Sha256Hash checkContractResultSpent(Sha256Hash contractResultRecords) throws BlockStoreException;
@@ -520,8 +518,6 @@ public interface FullBlockStore {
 	public boolean checkContractResultConfirmed(Sha256Hash contractResultRecords) throws BlockStoreException;
 
 	public void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
-
-	public List<Orderresult> getOrderResultUnspent() throws BlockStoreException;
 
 	public Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
@@ -547,12 +543,16 @@ public interface FullBlockStore {
 
 	List<ContractEventCancel> getContractEventCancelByBlockHash(HashSet<String> blockHashs) throws BlockStoreException;
 
-	public Orderresult getMaxConfirmedOrderresult(boolean spent) throws BlockStoreException;
-
+	public Orderresult getMaxMilestoneOrderresult() throws BlockStoreException;
+	public List<Orderresult> getConfirmedOrderresultNotMilestone()
+			throws BlockStoreException;
+	
 	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	public Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
-	public  List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid) throws BlockStoreException;
+
+	public List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid)
+			throws BlockStoreException;
 }

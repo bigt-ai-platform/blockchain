@@ -2390,8 +2390,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(7,
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
 			preparedStatement.setLong(8, record.getTime());
-			preparedStatement.setLong(9, record.getContractchainlength());
-			preparedStatement.setLong(10, -1);
+			preparedStatement.setLong(9, -1);
+		
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -2573,65 +2573,14 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
-	@Override
-	public List<Orderresult> getOrderResultUnspent() throws BlockStoreException {
+ 
 
-		PreparedStatement preparedStatement = null;
-		List<Orderresult> re = new ArrayList<>();
-		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_SQL);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
-				re.add(setOrderresult(resultSet));
-
-			}
-			return re;
-
-		} catch (Exception e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public List<Contractresult> getContractresultUnspent(String contractid) throws BlockStoreException {
-
-		PreparedStatement preparedStatement = null;
-		List<Contractresult> re = new ArrayList<>();
-		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_CONTRACTRESULT_SQL);
-			preparedStatement.setString(1, contractid);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
-				re.add(setContractresult(resultSet));
-			}
-			return re;
-
-		} catch (Exception e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
 
 	private Orderresult setOrderresult(ResultSet resultSet) throws SQLException {
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				resultSet.getLong("orderchainlength"), resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				 resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
 
 	}
 
@@ -2639,7 +2588,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getLong("contractchainlength"), resultSet.getString("contracttokenid"),
+				  resultSet.getString("contracttokenid"),
 				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
 
 	}
@@ -2662,9 +2611,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(5, record.toByteArray());
 			preparedStatement.setBytes(6,
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
-			preparedStatement.setLong(7, record.getTime());
-			preparedStatement.setLong(8, record.getOrderchainlength());
-			preparedStatement.setLong(9, -1);
+			preparedStatement.setLong(7, record.getTime()); 
+			preparedStatement.setLong(8, -1);
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -4584,12 +4532,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Orderresult getMaxConfirmedOrderresult(boolean spent) throws BlockStoreException {
+	public Orderresult getMaxMilestoneOrderresult( ) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_ORDER_RESULT_MAX_CONFIRMED_SQL);
-			preparedStatement.setBoolean(1, spent);
+			preparedStatement = getConnection().prepareStatement(SELECT_ORDER_RESULT_MAX_MILESTONE_SQL);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
 
@@ -4609,4 +4556,34 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 		}
 	}
+	@Override
+	public List<Orderresult> getConfirmedOrderresultNotMilestone()
+			throws BlockStoreException {
+
+		PreparedStatement preparedStatement = null;
+
+		List<Orderresult> re = new ArrayList<Orderresult>();
+		try {
+			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL);
+			 
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			while (resultSet.next()) {
+				re.add(setOrderresult(resultSet));
+			}
+			return re;
+
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					// // throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
+	
 }

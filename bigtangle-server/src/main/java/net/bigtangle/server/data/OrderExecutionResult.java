@@ -28,8 +28,7 @@ public class OrderExecutionResult extends SpentBlock {
 
 	// reference the previous ContractResult block, it forms a chain
 	Sha256Hash prevblockhash;
-	// reference the previous ContractResult block, it forms a chain
-	long orderchainlength;
+
 	// referenced new order blocks
 	Set<Sha256Hash> referencedBlocks = new HashSet<>();;
 
@@ -57,14 +56,14 @@ public class OrderExecutionResult extends SpentBlock {
 	}
 
 	public OrderExecutionResult(Sha256Hash blockhash, Set<Sha256Hash> toBeSpent, Sha256Hash outputTxHash,
-			Transaction outputTx, Sha256Hash prevblockhash,long orderchainlength, Set<Sha256Hash> cancelRecords,
+			Transaction outputTx, Sha256Hash prevblockhash, Set<Sha256Hash> cancelRecords,
 			Set<Sha256Hash> remainderRecords, long inserttime, Collection<OrderRecord> remainderOrderRecord,
 			Set<OrderRecord> spentOrderRecord,
 			Set<Sha256Hash> referencedOrderBlocks, Map<TradePair, List<Event>> tokenId2Events ) {
 		this.setBlockHash(blockhash);
 
 		this.prevblockhash = prevblockhash;
-		this.orderchainlength = orderchainlength;
+
 		this.outputTxHash = outputTxHash;
 		this.outputTx = outputTx;
 		this.allRecords = toBeSpent;
@@ -86,7 +85,7 @@ public class OrderExecutionResult extends SpentBlock {
 
 			Utils.writeNBytes(dos, outputTxHash.getBytes());
 			Utils.writeNBytes(dos, prevblockhash.getBytes());
-			Utils.writeLong(dos, orderchainlength);
+
 			dos.writeInt(allRecords.size());
 			for (Sha256Hash c : allRecords) {
 				Utils.writeNBytes(dos, c.getBytes());
@@ -118,7 +117,7 @@ public class OrderExecutionResult extends SpentBlock {
 
 		outputTxHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		orderchainlength =  Utils.readLong(dis);
+
 		allRecords = new HashSet<>();
 		int allRecordsSize = dis.readInt();
 		for (int i = 0; i < allRecordsSize; i++) {
@@ -241,12 +240,5 @@ public class OrderExecutionResult extends SpentBlock {
 		this.tokenId2Events = tokenId2Events;
 	}
 
-	public long getOrderchainlength() {
-		return orderchainlength;
-	}
-
-	public void setOrderchainlength(long orderchainlength) {
-		this.orderchainlength = orderchainlength;
-	}
-
+	 
 }

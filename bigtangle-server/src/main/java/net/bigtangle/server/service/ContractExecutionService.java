@@ -184,15 +184,17 @@ public class ContractExecutionService {
 				: prevMilestone;
 		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contractid);
 
-		Set<BlockWrap> prevsNotMilestone = serviceBase.collectPrevsChain(prevNotMilestons, prevMilestoneExecution,
-				store);
-		// take last NotMilestons
+		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(prevNotMilestons,
+				prevMilestoneExecution, store);
+		// take last NotMilestons chain confirmed and set others as not confirmed
+
 		Contractresult lastExecution = prevMilestoneExecution;
-		if (!prevsNotMilestone.isEmpty()) {
-			lastExecution = getLast(prevsNotMilestone, store);
+		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
+			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store); 
+			unconfimedNonChained(prevsNotMilestoneChainedBlocks, prevNotMilestons, store, serviceBase);
 		}
 
-		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestone);
+		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
 		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService)
 				.executeContract(block, store, contractid, lastExecution, serviceBase.getHashSet(collectNotSpents));
@@ -206,6 +208,22 @@ public class ContractExecutionService {
 		blockService.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
+	}
+
+	//
+	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
+			List<Contractresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
+			throws BlockStoreException, IOException {
+		// find the longest chained execution connected to last milestone
+		for (Contractresult prevNotMilestone : prevNotMilestons) {
+			if (!prevsNotMilestoneChainedBlocks.stream()
+					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
+				serviceBase.unConfirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),
+						store);
+			}
+
+		}
+
 	}
 
 	protected Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
