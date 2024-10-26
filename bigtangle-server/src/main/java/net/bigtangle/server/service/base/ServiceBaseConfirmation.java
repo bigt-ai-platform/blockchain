@@ -337,16 +337,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public List<BlockWrap> sortedPrevsChain(List<Contractresult> prevs, FullBlockStore store)
 			throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
-		List<BlockWrap> re = new  ArrayList<BlockWrap>();
+		List<BlockWrap> re = new ArrayList<BlockWrap>();
 		if (prevs.isEmpty())
 			return re;
 
 		// find the longest chained execution connected to last milestone
-		for (Contractresult prevNotMilestone : prevs) { 
-			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store)); 
+		for (Contractresult prevNotMilestone : prevs) {
+			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store));
 		}
 		new UtilSort().sortBlockWrap(re);
-		return   re;
+		return re;
 	}
 
 	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,
@@ -383,24 +383,23 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-
 	public List<BlockWrap> sortedPrevsChainOrderresult(List<Orderresult> prevs, FullBlockStore store)
 			throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
-		List<BlockWrap> re = new  ArrayList<BlockWrap>();
+		List<BlockWrap> re = new ArrayList<BlockWrap>();
 		if (prevs.isEmpty())
 			return re;
 
 		// find the longest chained execution connected to last milestone
-		for (Orderresult prevNotMilestone : prevs) { 
-			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store)); 
+		for (Orderresult prevNotMilestone : prevs) {
+			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store));
 		}
 		new UtilSort().sortBlockWrap(re);
-		return   re;
+		return re;
 	}
 
-	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone,
-			FullBlockStore store) throws BlockStoreException {
+	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone, FullBlockStore store)
+			throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
 		Set<BlockWrap> re = new HashSet<BlockWrap>();
 		if (prevs.isEmpty())
@@ -585,19 +584,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (connectedContracExecute.getPrevblockhash().equals(networkParameters.getGenesisBlock().getHash())) {
 				return false;
 			} else {
-				Sha256Hash checkContractResultSpent = store
-						.checkContractResultSpent(connectedContracExecute.getPrevblockhash());
-				return checkContractResultSpent != null
-						&& !checkContractResultSpent.equals(c.getBlock().getBlockHash());
+				return store.checkContractResultSpent(connectedContracExecute.getPrevblockhash(),
+						c.getBlock().getBlockHash());
+
 			}
 		case ORDEREXECUTE:
 			final OrderExecutionResult connectedOrderExecute = c.getConflictPoint().getConnectedOrderExecute();
 			if (connectedOrderExecute.getPrevblockhash().equals(Sha256Hash.ZERO_HASH)) {
 				return false;
 			} else {
-				Sha256Hash checkOrderResultSpent = store
-						.checkOrderResultSpent(connectedOrderExecute.getPrevblockhash());
-				return checkOrderResultSpent != null && !checkOrderResultSpent.equals(c.getBlock().getBlockHash());
+				return store.checkOrderResultSpent(connectedOrderExecute.getPrevblockhash(),
+						c.getBlock().getBlockHash());
 			}
 
 		default:
@@ -1384,7 +1381,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
 
 					blockStore.updateOrderCancelSpent(check.getCancelRecords(), block.getHash(), confirm);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), block.getHash(), confirm);
+
 					// Update the matching
 					addMatchingEventsOrderExecution(check, check.getOutputTx().getHashAsString(),
 							block.getTimeSeconds(), blockStore);
@@ -1410,7 +1407,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
 
 					blockStore.updateOrderCancelSpent(check.getCancelRecords(), null, confirm);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), null, confirm);
+
 					blockStore.updateOrderresultMilestone(block.getHash(), -1);
 					for (BlockWrap dep : getReferrencedBlockWrap(block, blockStore)) {
 						unconfirm(dep, new HashSet<>(), blockStore);
@@ -1451,7 +1448,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				blockStore.updateContractEventSpent(check.getAllRecords(), block.getHash(), true);
 
 				blockStore.updateContractResultConfirmed(block.getHash(), true);
-				blockStore.updateContractResultSpent(result.getPrevblockhash(), block.getHash(), true);
+
 				confirmTransaction(block, check.getOutputTx(), blockStore);
 				for (BlockWrap dep : getReferrencedBlockWrap(block, blockStore)) {
 					confirmBlock(dep, blockStore);
@@ -1471,7 +1468,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
-			blockStore.updateContractResultSpent(block.getHash(), null, false);
+
 			blockStore.updateContractResultConfirmed(block.getHash(), false);
 			blockStore.updateContractEventSpent(result.getAllRecords(), block.getHash(), false);
 			blockStore.updateTransactionOutputConfirmed(block.getHash(), result.getOutputTxHash(), 0, false);

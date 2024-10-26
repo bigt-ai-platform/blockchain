@@ -5,9 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
-public class Contractresult extends SpentBlock implements java.io.Serializable {
+public class Contractresult extends ConfirmBlock implements java.io.Serializable {
 
 	/**
 	 * 
@@ -24,22 +23,21 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 
 	}
 
-	public Contractresult(Sha256Hash hash, boolean confirmed, boolean spent, Sha256Hash prevBlockHash,
-			Sha256Hash spenderblockhash, byte[] contractExecutionResult,  String contracttokenid,long milestone,   long inserttime ) {
+	public Contractresult(Sha256Hash hash, boolean confirmed, Sha256Hash prevBlockHash,
+		 byte[] contractExecutionResult,  String contracttokenid,long milestone,   long inserttime ) {
 		super();
 		this.setBlockHash(hash);
 		this.setConfirmed(confirmed);
-		this.setSpent(spent);
 		this.setTime(inserttime); 
 		this.prevblockhash = prevBlockHash;
-		this.setSpenderBlockHash(spenderblockhash);
+
 		this.contractExecutionResult = contractExecutionResult;
 
 		this.contracttokenid =contracttokenid;
 		this.milestone =milestone;
 	}
 	public static  Contractresult zeroContractresult() {
-		return new Contractresult(Sha256Hash.ZERO_HASH, false, false, null, null, null,null, -1,0l);
+		return new Contractresult(Sha256Hash.ZERO_HASH,  false,  null, null,null, -1,0l);
 	}
 	
 	public byte[] toByteArray() {

@@ -506,14 +506,11 @@ public interface FullBlockStore {
 
 	void insertContractResult(ContractExecutionResult record) throws BlockStoreException;
 
-	public void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException;
-
 	public void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public Sha256Hash checkContractResultSpent(Sha256Hash contractResultRecords) throws BlockStoreException;
+	public boolean checkContractResultSpent(Sha256Hash prev, Sha256Hash blockHash) throws BlockStoreException;
 
 	public boolean checkContractResultConfirmed(Sha256Hash contractResultRecords) throws BlockStoreException;
 
@@ -521,15 +518,12 @@ public interface FullBlockStore {
 
 	public Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public Sha256Hash checkOrderResultSpent(Sha256Hash OrderResultRecords) throws BlockStoreException;
+	public boolean checkOrderResultSpent(Sha256Hash prevBlockhash, Sha256Hash blockhash) throws BlockStoreException;
 
 	public boolean checkOrderResultConfirmed(Sha256Hash OrderResultRecords) throws BlockStoreException;
 
 	void insertOrderResult(OrderExecutionResult record) throws BlockStoreException;
-
-	public void updateOrderResultSpent(Sha256Hash result, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException;
-
+ 
 	public List<Coin> getAccountBalance(String address, String tokenid) throws BlockStoreException;
 
 	public void calculateAccount(String address, String tokenid) throws BlockStoreException;

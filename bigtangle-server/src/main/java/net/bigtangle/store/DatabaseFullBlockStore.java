@@ -2383,15 +2383,12 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(1, record.getBlockHash().getBytes());
 			preparedStatement.setString(2, record.getContracttokenid());
 			preparedStatement.setBoolean(3, record.isConfirmed());
-			preparedStatement.setBoolean(4, record.isSpent());
+			preparedStatement.setBytes(4, record.toByteArray());
 			preparedStatement.setBytes(5,
-					record.getSpenderBlockHash() != null ? record.getSpenderBlockHash().getBytes() : null);
-			preparedStatement.setBytes(6, record.toByteArray());
-			preparedStatement.setBytes(7,
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
-			preparedStatement.setLong(8, record.getTime());
-			preparedStatement.setLong(9, -1);
-		
+			preparedStatement.setLong(6, record.getTime());
+			preparedStatement.setLong(7, -1);
+
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -2410,50 +2407,22 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException {
-
-		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = getConnection().prepareStatement(
-					getUpdate() + " contractresult SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ? ");
-
-			preparedStatement.setBoolean(1, spent);
-			preparedStatement.setBytes(2, spentBlock != null ? spentBlock.getBytes() : null);
-			preparedStatement.setBytes(3, contractResult.getBytes());
-			preparedStatement.executeUpdate();
-
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public Sha256Hash checkContractResultSpent(Sha256Hash o) throws BlockStoreException {
+	public boolean checkContractResultSpent(Sha256Hash prev, Sha256Hash blockHash) throws BlockStoreException {
 		// one of the block is spent then, return Sha256Hash, otherwise null
 
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
-					.prepareStatement(" select spenderblockhash  from contractevent " + " WHERE blockhash = ? ");
+					.prepareStatement(" select blockhash  from contractresult " + " WHERE prevblockhash = ? and confirmed=true");
 
-			preparedStatement.setBytes(1, o.getBytes());
+			preparedStatement.setBytes(1,prev.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
-				byte[] spentbytes = resultSet.getBytes(1);
-				if (spentbytes != null)
-					return Sha256Hash.wrap(spentbytes);
+				if (!Sha256Hash.wrap(resultSet.getBytes(1)).equals(blockHash))
+					return true;
 			}
 
-			return null;
+			return false;
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		} finally {
@@ -2573,23 +2542,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
- 
-
-
 	private Orderresult setOrderresult(ResultSet resultSet) throws SQLException {
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
-				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
-				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				 resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				Sha256Hash.wrap(resultSet.getBytes("prevblockhash")), resultSet.getBytes("orderexecutionresult"),
+				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
 
 	}
 
 	private Contractresult setContractresult(ResultSet resultSet) throws SQLException {
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
-				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
-				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				  resultSet.getString("contracttokenid"),
-				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				Sha256Hash.wrap(resultSet.getBytes("prevblockhash")), resultSet.getBytes("contractexecutionresult"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getLong("inserttime"));
 
 	}
 
@@ -2605,14 +2569,12 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(1, record.getBlockHash().getBytes());
 
 			preparedStatement.setBoolean(2, record.isConfirmed());
-			preparedStatement.setBoolean(3, record.isSpent());
+
+			preparedStatement.setBytes(3, record.toByteArray());
 			preparedStatement.setBytes(4,
-					record.getSpenderBlockHash() != null ? record.getSpenderBlockHash().getBytes() : null);
-			preparedStatement.setBytes(5, record.toByteArray());
-			preparedStatement.setBytes(6,
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
-			preparedStatement.setLong(7, record.getTime()); 
-			preparedStatement.setLong(8, -1);
+			preparedStatement.setLong(5, record.getTime());
+			preparedStatement.setLong(6, -1);
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -2631,50 +2593,22 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public void updateOrderResultSpent(Sha256Hash blockhash, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException {
-
-		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = getConnection().prepareStatement(
-					getUpdate() + " orderresult SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ? ");
-
-			preparedStatement.setBoolean(1, spent);
-			preparedStatement.setBytes(2, spentBlock != null ? spentBlock.getBytes() : null);
-			preparedStatement.setBytes(3, blockhash.getBytes());
-			preparedStatement.executeUpdate();
-
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public Sha256Hash checkOrderResultSpent(Sha256Hash o) throws BlockStoreException {
+	public boolean checkOrderResultSpent(Sha256Hash prevBlockhash, Sha256Hash blockhash) throws BlockStoreException {
 		// one of the block is spent then, return Sha256Hash, otherwise null
 
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
-					.prepareStatement(" select spenderblockhash  from orderresult " + " WHERE blockhash = ? ");
+					.prepareStatement(" select blockhash  from orderresult " + " WHERE prevblockhash = ? and confirmed =true ");
 
-			preparedStatement.setBytes(1, o.getBytes());
+			preparedStatement.setBytes(1, prevBlockhash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
-				byte[] spentbytes = resultSet.getBytes(1);
-				if (spentbytes != null)
-					return Sha256Hash.wrap(spentbytes);
+				if (!Sha256Hash.wrap(resultSet.getBytes(1)).equals(blockhash))
+					return true;
 			}
 
-			return null;
+			return false;
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		} finally {
@@ -4532,7 +4466,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Orderresult getMaxMilestoneOrderresult( ) throws BlockStoreException {
+	public Orderresult getMaxMilestoneOrderresult() throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 		try {
@@ -4556,16 +4490,16 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 		}
 	}
+
 	@Override
-	public List<Orderresult> getConfirmedOrderresultNotMilestone()
-			throws BlockStoreException {
+	public List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 
 		List<Orderresult> re = new ArrayList<Orderresult>();
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL);
-			 
+
 			ResultSet resultSet = preparedStatement.executeQuery();
 
 			while (resultSet.next()) {
@@ -4585,5 +4519,5 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 		}
 	}
-	
+
 }

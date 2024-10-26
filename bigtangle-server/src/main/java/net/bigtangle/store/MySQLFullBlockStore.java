@@ -356,23 +356,19 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_CONTRACT_RESULT_TABLE = "CREATE TABLE contractresult (\n"
             + "   blockhash binary(32) NOT NULL,\n"  
             + "   contracttokenid varchar(255)  NOT NULL,\n" 
-            + "   contractresult mediumblob NOT NULL,\n" 
+            + "   contractexecutionresult mediumblob NOT NULL,\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
             + "   confirmed boolean NOT NULL,\n" 
-            + "   spent boolean NOT NULL,\n"
-            + "   spenderblockhash binary(32),\n" 
-            + "    milestone bigint NOT NULL,\n"
-            + "    inserttime bigint NOT NULL,\n"
+            + "   milestone bigint NOT NULL,\n"
+            + "   inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
    
     //  the order execution result
     private static final String CREATE_ORDER_RESULT_TABLE = "CREATE TABLE orderresult (\n"
             + "   blockhash binary(32) NOT NULL,\n"  
-            + "   orderresult mediumblob NOT NULL,\n" 
+            + "   orderexecutionresult mediumblob NOT NULL,\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
             + "   confirmed boolean NOT NULL,\n" 
-            + "   spent boolean NOT NULL,\n"
-            + "   spenderblockhash binary(32),\n" 
             + "    milestone bigint NOT NULL,\n"
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";

@@ -239,6 +239,9 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		Set<BlockWrap> collected = addReferencedChainedContractExecutions(blocks, store);
 		collected = addReferencedChainedOrderExecutions(collected, store);
+		if(collected.isEmpty()) {
+		  	logger.debug("collected.isEmpty()");
+		}
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, serviceBase.getHashSet(collected),
 				prevChainLength + 1);
