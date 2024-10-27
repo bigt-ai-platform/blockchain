@@ -2,6 +2,8 @@ select * from blocks  where milestone <0 order by height desc ;
 select * from orders  where spent=false ;
 select * from contractevent   ;
 select * from contractresult order by milestone desc ;
+select * from contractresult order by inserttime desc ;
+select * from contractresult where milestone <0 and confirmed= true ;
 select * from orderresult  order by orderchainlength desc ;  
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
 select * from outputs  where confirmed =true and spent=false and tokenid !="bc" and toaddress="154AxPN4kEUYNY5Ubt8yCssoR7Zgppw8y4";

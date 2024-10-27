@@ -2443,7 +2443,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
-					.prepareStatement(" select spenderblockhash  from contractevent " + " WHERE blockhash = ? ");
+					.prepareStatement(" select spenderblockhash  from contractresult " + " WHERE blockhash = ? ");
 
 			preparedStatement.setBytes(1, o.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();

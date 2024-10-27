@@ -563,7 +563,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public boolean hasSpentDependencies(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
-			return getUTXOSpent(c, store);
+			return checkUTXOSpent(c, store);
 		case TOKENISSUANCE:
 			final Token connectedToken = c.getConflictPoint().getConnectedToken();
 
@@ -1138,7 +1138,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
 	}
 
-	public boolean getUTXOSpent(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+	/*
+	 * return true,  TransactionOutPoint of ConflictCandidate c  is spent by self 
+	 * otherwise there are at least two blocks spent  TransactionOutPoint of ConflictCandidate c
+	 */
+	public boolean checkUTXOSpent(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
 		TransactionOutPoint txout = c.getConflictPoint().getConnectedOutpoint();
 
 		UTXO a = store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
@@ -1147,10 +1151,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			solidifyWaiting(getBlock(txout.getBlockHash(), store), store);
 			a = store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 		}
-		// the TransactionOutPoint does not exist, the conflict would be ok, but it will
-		// not confirmed later.
+		// the TransactionOutPoint does not exist 
 		if (a == null)
 			return false;
+		//
 		boolean re = a.isSpent() && !c.getBlock().getBlockHash().equals(a.getSpenderBlockHash());
 		/*
 		 * if (re) { logger.debug("getUTXOSpent true " + a.toString() +

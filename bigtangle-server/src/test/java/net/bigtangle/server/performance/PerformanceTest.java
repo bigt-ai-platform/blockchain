@@ -94,6 +94,12 @@ public class PerformanceTest extends ContractTest {
 		}
 		try {
 			contractExecution(blocksAddedAll, true);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "";
+		}
+		try {
+
 			checkSum();
 			return "";
 		} catch (Exception e) {

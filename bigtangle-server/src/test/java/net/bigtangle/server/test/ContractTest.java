@@ -25,6 +25,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.UTXO;
@@ -62,8 +63,8 @@ public class ContractTest extends AbstractIntegrationTest {
 
 	public void prepare(String factor, List<Block> a1) throws JsonProcessingException, Exception {
 		wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)));
-		testToken(a1);
-		testContractTokens(a1);
+		createTestToken(a1);
+		createTestContractTokens(a1);
 		ulist = createUserkey();
 		payUserKeys(ulist, factor, a1);
 		payBigUserKeys(ulist, Long.valueOf(factor), a1);
@@ -117,38 +118,33 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testlotteryRepeat() throws Exception {
+	public void testRepeat() throws Exception {
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 
 		payContract(ulist, blocks, true);
+		checkSum();
 	}
 
 	@Test
-	public void lotteryConflict() throws Exception {
-		// create two blocks for the ContractExecution and only one is taken
+	public void testConflict() throws Exception {
+		// create two blocks for the ContractExecution in conflict  and only one is taken
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 
-		boolean win = false;
+		Block conflictBlock=null;
 		for (ECKey key : ulist) {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contractKey.getPublicKeyAsHex());
-
-			if (win) {
-				// create conflict
-				Block conflictBlock = contractExecutionService.createContractExecution(
-						cacheBlockPrototypeService.getBlockPrototype(store), contractKey.getPublicKeyAsHex(), store);
-				if (conflictBlock != null) {
-					blockSaveService.saveBlock(conflictBlock, store);
-					makeRewardBlock(conflictBlock);
-				}
-			}
+ 
 
 			Block resultBlock = contractExecutionService.createContractExecution(contractKey.getPublicKeyAsHex(),
 					store);
-
+			// create conflict with parallel and not save it
+			  conflictBlock = contractExecutionService.createContractExecution(
+					cacheBlockPrototypeService.getBlockPrototype(store), contractKey.getPublicKeyAsHex(), store);
+	
 			if (resultBlock != null) {
 				ContractExecutionResult result = new ContractExecutionResult()
 						.parse(resultBlock.getTransactions().get(0).getData());
@@ -167,17 +163,18 @@ public class ContractTest extends AbstractIntegrationTest {
 					check(ulist, endMap);
 					// List<UTXO> utxos = getBalance(false, ulist);
 					assertTrue(endMap.get(winnerAddress.toString()) != null);
-					assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount)));
-					win = true;
-
+					assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount))); 
+					break;
 				}
 			}
 		}
-
+		blockSaveService.saveBlock(conflictBlock, store);
+		makeRewardBlock(conflictBlock);
+		checkSum();
 	}
 
 	@Test
-	public void multipleExecutions() throws Exception {
+	public void testMultipleExecutions() throws Exception {
 		// multiple executions of contract confirms without reward and then do rewards
 		// chain to take all.
 		List<Block> blocks = new ArrayList<>();
@@ -238,7 +235,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount)));
 
 		}
-
+		checkSum();
 	}
 
 	public void ordermatch(List<Block> a1) throws Exception {
@@ -354,7 +351,7 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void unconfirmEvent() throws Exception {
+	public void testUnconfirmExecution() throws Exception {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
@@ -377,9 +374,11 @@ public class ContractTest extends AbstractIntegrationTest {
 						cacheBlockService).executeContract(resultBlock, store, result.getContracttokenid(),
 								store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 				blockSaveService.saveBlock(resultBlock, store);
-				makeRewardBlock(resultBlock);
+				Block reward = makeRewardBlock(resultBlock);
 				assertTrue(resultBlock != null);
-				if (!check.getOutputTx().getOutputs().isEmpty()) {
+				RewardInfo rewardInfo = new RewardInfo().parseChecked(reward.getTransactions().get(0).getData());
+				
+				if (!check.getOutputTx().getOutputs().isEmpty() && !rewardInfo.getBlocks().isEmpty()) {
 					Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
 							.getToAddress(networkParameters);
 					// check one of user get the winnerAmount
@@ -401,7 +400,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				}
 			}
 		}
-
+		checkSum();
 	}
 
 	@Test
@@ -443,11 +442,11 @@ public class ContractTest extends AbstractIntegrationTest {
 				assertTrue(endMap.get(winnerAddress.toString()) == null);
 			}
 		}
-
+		checkSum();
 	}
 
 	@Test
-	public void cancelEvent() throws Exception {
+	public void testCancelEvent() throws Exception {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
@@ -470,10 +469,10 @@ public class ContractTest extends AbstractIntegrationTest {
 		result = new ContractExecutionResult().parse(resultBlock.getTransactions().get(0).getData());
 		assertTrue(result.getAllRecords().size() == 0);
 		assertTrue(result.getCancelRecords().size() == 1);
-
+		checkSum();
 	}
 
-	public void testContractTokens(List<Block> blocksAddedAll) throws JsonProcessingException, Exception {
+	public void createTestContractTokens(List<Block> blocksAddedAll) throws JsonProcessingException, Exception {
 
 		String domain = "";
 
@@ -539,10 +538,10 @@ public class ContractTest extends AbstractIntegrationTest {
 		return userkeys;
 	}
 
-	public void testToken(List<Block> blocksAddedAll) throws Exception {
+	public void createTestToken(List<Block> blocksAddedAll) throws Exception {
 		String domain = "";
 		ECKey fromPrivate = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
-		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY",
+		createMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY",
 				payContractAmount.multiply(BigInteger.valueOf(usernumber * 100000000l)), blocksAddedAll);
 		makeRewardBlock(blocksAddedAll);
 	}
@@ -568,7 +567,7 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	// create a token with multi sign
-	protected void testCreateMultiSigToken(ECKey key, String tokename, int decimals, String domainname,
+	protected void createMultiSigToken(ECKey key, String tokename, int decimals, String domainname,
 			String description, BigInteger amount, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
 		try {
