@@ -50,7 +50,7 @@ public class TestParams extends AbstractBitcoinNetParams {
     }
 
     public String[] serverSeeds() {
-        return new String[] { "https://test.bigtangle.de:8089/", "https://test.bigtangle.info:8089/" };
+        return new String[] {   };
 
     }
 

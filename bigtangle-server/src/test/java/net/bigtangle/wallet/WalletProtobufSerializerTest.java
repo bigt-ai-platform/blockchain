@@ -3,7 +3,7 @@
  *  
  *******************************************************************************/
 
-package net.bigtangle.store;
+package net.bigtangle.wallet;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;

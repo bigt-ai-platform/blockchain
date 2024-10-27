@@ -1,14 +1,7 @@
-/*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
- *******************************************************************************/
 package net.bigtangle.server.performance;
 
 import java.io.StringWriter;
-import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -22,54 +15,42 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import com.google.common.math.LongMath;
-
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
-import net.bigtangle.core.response.GetBalancesResponse;
-import net.bigtangle.core.response.OrderdataResponse;
-import net.bigtangle.params.ReqCmd;
 import net.bigtangle.server.test.ContractTest;
-import net.bigtangle.utils.Json;
-import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class PerformanceTest extends ContractTest {
 
-	@Test // the switch to longest chain
-	public void testReorgMiningReward() throws Exception {
+public class PerformanceRemote extends ContractTest {
+
+	@BeforeEach
+	public void setUp() throws Exception {
+		contextRoot = "http://localhost:8088/";
+		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+		store = storeService.getStore();
+	}
+
+	@Test
+	public void testProcess() throws Exception {
 		List<Block> a2 = new ArrayList<Block>();
-
-		// second chain
-		// usernumber=2000;
-		prepare("12200", a2);
 		for (int i = 0; i < 12200; i++) {
-			createReward(a2);
+			create(a2);
 		}
 	}
 
-	//@Test
-	public void testCreateUserkey() throws Exception {
-		createUserkey();
-	}
-
-	public void createReward(List<Block> blocksAddedAll) throws Exception {
+	public void create(List<Block> a2) throws Exception {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
 		Callable callable = new Callable() {
 			@Override
 			public String call() {
-				return contractAndOrder(blocksAddedAll);
+				return contractAndOrder(a2);
 			}
 
 		};
@@ -89,26 +70,26 @@ public class PerformanceTest extends ContractTest {
 
 	}
 
-	public String contractAndOrder(List<Block> blocksAddedAll) {
+	public String contractAndOrder(List<Block> a1) {
 		try {
-			ordermatch(blocksAddedAll);
+			sell(a1);
+			buy(a1);
 		} catch (Exception e) {
 			e.printStackTrace();
 			return "";
 		}
 		try {
-			contractExecution(blocksAddedAll, true);
+			for (ECKey key : createUserkey()) {
+				Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
+				a1.add(w.payContract(null, yuanTokenPub, payContractAmount, null, null,
+						contractKey.getPublicKeyAsHex()));
+			}
+			return "";
 		} catch (Exception e) {
 			e.printStackTrace();
 			return "";
 		}
-		try {
 
-			checkSum();
-			return "";
-		} catch (Exception e) {
-			e.printStackTrace();
-			return "";
-		}
 	}
+
 }

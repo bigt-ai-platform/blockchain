@@ -1,4 +1,4 @@
-package net.bigtangle.json;
+package net.bigtangle.core;
 
 public class ByteResp implements java.io.Serializable {
 

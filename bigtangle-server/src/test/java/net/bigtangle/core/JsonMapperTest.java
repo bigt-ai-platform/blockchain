@@ -1,4 +1,4 @@
-package net.bigtangle.json;
+package net.bigtangle.core;
 
 import java.util.Random;
 

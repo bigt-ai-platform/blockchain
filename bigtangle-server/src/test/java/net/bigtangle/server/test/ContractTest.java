@@ -105,7 +105,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<UTXO> utxos = getBalance(false, ulist);
 		List<UTXO> ylist = utxos.stream().filter(u -> u.getTokenId().equals(yuanTokenPub)).collect(Collectors.toList());
 		for (UTXO u : ylist) {
-		//	log.debug(u.toString());
+			// log.debug(u.toString());
 			BigInteger p = map.get(u.getAddress());
 			if (p != null) {
 				map.put(u.getAddress(), p.add(u.getValue().getValue()));
@@ -128,23 +128,22 @@ public class ContractTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testConflict() throws Exception {
-		// create two blocks for the ContractExecution in conflict  and only one is taken
+		// create two blocks for the ContractExecution in conflict and only one is taken
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 
-		Block conflictBlock=null;
+		Block conflictBlock = null;
 		for (ECKey key : ulist) {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contractKey.getPublicKeyAsHex());
- 
 
 			Block resultBlock = contractExecutionService.createContractExecution(contractKey.getPublicKeyAsHex(),
 					store);
 			// create conflict with parallel and not save it
-			  conflictBlock = contractExecutionService.createContractExecution(
+			conflictBlock = contractExecutionService.createContractExecution(
 					cacheBlockPrototypeService.getBlockPrototype(store), contractKey.getPublicKeyAsHex(), store);
-	
+
 			if (resultBlock != null) {
 				ContractExecutionResult result = new ContractExecutionResult()
 						.parse(resultBlock.getTransactions().get(0).getData());
@@ -163,7 +162,7 @@ public class ContractTest extends AbstractIntegrationTest {
 					check(ulist, endMap);
 					// List<UTXO> utxos = getBalance(false, ulist);
 					assertTrue(endMap.get(winnerAddress.toString()) != null);
-					assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount))); 
+					assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount)));
 					break;
 				}
 			}
@@ -377,7 +376,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				Block reward = makeRewardBlock(resultBlock);
 				assertTrue(resultBlock != null);
 				RewardInfo rewardInfo = new RewardInfo().parseChecked(reward.getTransactions().get(0).getData());
-				
+
 				if (!check.getOutputTx().getOutputs().isEmpty() && !rewardInfo.getBlocks().isEmpty()) {
 					Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
 							.getToAddress(networkParameters);
@@ -531,9 +530,31 @@ public class ContractTest extends AbstractIntegrationTest {
 
 	public List<ECKey> createUserkey() {
 		List<ECKey> userkeys = new ArrayList<ECKey>();
+		String[] s = new String[] { "0927cf94d82b0a0f1c8f06f127844034820aecd0adbaaf67c962d3eb6b0a6ea8"
+				,"a2ba304ed68e2835ba3282e10380e31c8fe605fc232b88e497846654193ba38a"
+				,"b96358b80bbf822fea87f2a5eea33dcffbf15e7f1c9691b3cd643cbb24ea6821"
+				,"256f4faea34cbec71ae22d6f6b4ea80bddd5d7ef7c70530be78506b83bed7aea"
+				,"6d2538a814150fb28d086dec83a1389d1f4f5583d996883c1cd0972c21d773c1"
+				,"8ee39e7c10e31d7cfcf31d99d469b107e78120d84cff23aa38224504413e6b52"
+				,"0d59be5cafdf76f40be223c818d7ed61c9c374a973f6356c4a87cc13d610a2e2"
+				,"f42955011b4848fd6d26f898f937176a8549f3641000845223cef81078c8b92b"
+				,"2212ea2b6bb6479021f994632fa66f891b5953e04db0f5316347de2a45e1d6c2"
+				,"0b3451d9dd2d411a177ca3131e0e90c3f028c1534ca886f13af52ac442edd6fa"
+
+		};
+		for (String priv : s) {
+			ECKey key = ECKey.fromPrivate(Utils.HEX.decode(priv));
+			userkeys.add(key); 
+		}
+		return userkeys;
+	}
+
+	public List<ECKey> createUserkeyNew() {
+		List<ECKey> userkeys = new ArrayList<ECKey>();
 		for (int i = 0; i < usernumber; i++) {
 			ECKey key = new ECKey();
 			userkeys.add(key);
+			log.debug(key.getPrivateKeyAsHex());
 		}
 		return userkeys;
 	}
@@ -567,9 +588,8 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	// create a token with multi sign
-	protected void createMultiSigToken(ECKey key, String tokename, int decimals, String domainname,
-			String description, BigInteger amount, List<Block> blocksAddedAll)
-			throws JsonProcessingException, Exception {
+	protected void createMultiSigToken(ECKey key, String tokename, int decimals, String domainname, String description,
+			BigInteger amount, List<Block> blocksAddedAll) throws JsonProcessingException, Exception {
 		try {
 			wallet.setServerURL(contextRoot);
 			blocksAddedAll.add(createToken(key, tokename, decimals, domainname, description, amount, true, null,
