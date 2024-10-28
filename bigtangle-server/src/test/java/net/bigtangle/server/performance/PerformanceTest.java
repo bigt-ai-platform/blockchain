@@ -94,13 +94,13 @@ public class PerformanceTest extends ContractTest {
 			ordermatch(blocksAddedAll);
 		} catch (Exception e) {
 			e.printStackTrace();
-			return "";
+			 
 		}
 		try {
 			contractExecution(blocksAddedAll, true);
 		} catch (Exception e) {
 			e.printStackTrace();
-			return "";
+	 
 		}
 		try {
 
