@@ -2391,7 +2391,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
 			preparedStatement.setLong(8, record.getTime());
 			preparedStatement.setLong(9, -1);
-		
+
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -2573,14 +2573,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
- 
-
-
 	private Orderresult setOrderresult(ResultSet resultSet) throws SQLException {
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				 resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
 
 	}
 
@@ -2588,8 +2585,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				  resultSet.getString("contracttokenid"),
-				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getLong("inserttime"));
 
 	}
 
@@ -2611,7 +2608,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(5, record.toByteArray());
 			preparedStatement.setBytes(6,
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
-			preparedStatement.setLong(7, record.getTime()); 
+			preparedStatement.setLong(7, record.getTime());
 			preparedStatement.setLong(8, -1);
 			preparedStatement.executeUpdate();
 
@@ -4482,11 +4479,10 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection().prepareStatement(SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL);
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
-			if (resultSet.next()) {
-
+			while (resultSet.next()) {
 				return setContractresult(resultSet);
-			} else
-				return null;
+			}
+			return null;
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -4532,7 +4528,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Orderresult getMaxMilestoneOrderresult( ) throws BlockStoreException {
+	public Orderresult getMaxMilestoneOrderresult() throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 		try {
@@ -4556,16 +4552,16 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 		}
 	}
+
 	@Override
-	public List<Orderresult> getConfirmedOrderresultNotMilestone()
-			throws BlockStoreException {
+	public List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 
 		List<Orderresult> re = new ArrayList<Orderresult>();
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL);
-			 
+
 			ResultSet resultSet = preparedStatement.executeQuery();
 
 			while (resultSet.next()) {
@@ -4585,5 +4581,5 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 		}
 	}
-	
+
 }
