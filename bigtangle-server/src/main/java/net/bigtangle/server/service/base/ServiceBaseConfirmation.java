@@ -1228,6 +1228,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (block.getBlockEvaluation().getHeight() > maxHeight)
 			return false;
 
+		// below  cutoffHeight is not allowed
+		if (block.getBlockEvaluation().getHeight() < cutoffHeight)
+			return false;
+		
 		// Get sets of all / all new unconfirmed blocks when approving the
 		// specified block in combination with the currently included blocks
 		@SuppressWarnings("unchecked")

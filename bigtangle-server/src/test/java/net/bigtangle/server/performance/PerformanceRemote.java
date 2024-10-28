@@ -32,7 +32,7 @@ public class PerformanceRemote extends ContractTest {
 	public void setUp() throws Exception {
 		contextRoot = "http://localhost:8088/";
 		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
-		store = storeService.getStore();
+	//	store = storeService.getStore();
 	}
 
 	@Test
