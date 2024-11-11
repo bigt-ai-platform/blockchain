@@ -26,8 +26,6 @@ import org.springframework.stereotype.Service;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Contractresult;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.Sha256Hash;
@@ -38,7 +36,6 @@ import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
@@ -224,8 +221,8 @@ public class OrderExecutionService {
 		for (Orderresult prevNotMilestone : prevNotMilestons) {
 			if (!prevsNotMilestoneChainedBlocks.stream()
 					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
-				serviceBase.unConfirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),
-						store);
+				serviceBase.confirmOrderExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store), -1,
+						false, store);
 			}
 
 		}

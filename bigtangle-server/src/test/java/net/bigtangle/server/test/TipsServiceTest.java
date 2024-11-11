@@ -28,6 +28,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.crypto.TransactionSignature;
@@ -144,12 +145,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictEligibleReward() throws Exception {
 
 		// Generate blocks until passing first reward interval
-		Block rollingBlock = networkParameters.getGenesisBlock().createNextBlock(networkParameters.getGenesisBlock());
+		Block rollingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
 		blockGraph.add(rollingBlock, true, store);
 
 		Block rollingBlock1 = rollingBlock;
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
+			rollingBlock1 =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock1, true, store);
 		}
 
@@ -584,15 +585,15 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		b1 = difficultychange(b1);
 		b1 = difficultychange(b1);
 		b1 = difficultychange(b1);
-		b1 = b1.createNextBlock(b1);
+		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
 		makeRewardBlock(new ArrayList<Block>());
-		b1 = b1.createNextBlock(b1);
+		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
 		assertEquals(b1.getDifficultyTarget(), Utils.encodeCompactBits(networkParameters.getMaxTarget()));
 
 	}
 
 	private Block difficultychange(Block b1) throws BlockStoreException {
-		b1 = b1.createNextBlock(b1);
+		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
 		b1.setDifficultyTarget(Utils.encodeCompactBits(networkParameters.getMaxTargetReward()));
 
 		// log.debug( (Utils.encodeCompactBits( networkParameters. getMaxTargetReward())

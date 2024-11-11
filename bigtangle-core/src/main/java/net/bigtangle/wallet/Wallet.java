@@ -1630,7 +1630,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 		// +1 for domain name or super domain
 		token.setSignnumber(token.getSignnumber() + 1);
-		Block block =getTip(); 
+		Block block = getTip();
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(pubKeyTo, basecoin, tokenInfo, memoInfo);
 
@@ -1928,7 +1928,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		}
 		Transaction multispent = payToListTransaction(aesKey, giveMoneyResult, tokenid, memo, coinList);
 
-		Block block =getTip(); 
+		Block block = getTip();
 		block.addTransaction(multispent);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID.equals(tokenid)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
@@ -2148,7 +2148,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
 		signTransaction(tx, aesKey);
-		Block block =getTip(); 
+		Block block = getTip();
 
 		block.addTransaction(tx);
 		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
@@ -2275,7 +2275,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws JsonProcessingException, IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
@@ -2283,7 +2283,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 				break;
 			}
 		}
-
+		if (legitimatingKey == null) {
+			throw new NoDataException(" no keys ");
+		}
 		// Make an order op
 		Transaction tx = new Transaction(params);
 		OrderCancelInfo info = new OrderCancelInfo(orderblockhash);
@@ -2306,7 +2308,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws JsonProcessingException, IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
@@ -2314,7 +2316,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 				break;
 			}
 		}
-
+		if (legitimatingKey == null) {
+			throw new NoDataException(" no keys ");
+		}
 		// Make an order op
 		Transaction tx = new Transaction(params);
 		ContractEventCancelInfo info = new ContractEventCancelInfo(eventblockhash);
@@ -2432,7 +2436,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 				Transaction.SigHash.ALL, false);
 		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
 		input.setScriptSig(inputScript);
-		Block block =getTip(); 
+		Block block = getTip();
 		block.addTransaction(transaction);
 
 		return solveAndPost(block);
@@ -2549,7 +2553,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
 			transaction.setData(cipher);
 		}
-		Block block =getTip(); 
+		Block block = getTip();
 
 		Sha256Hash sighash = transaction.getHash();
 		ECKey.ECDSASignature party1Signature = userKey.sign(sighash);
@@ -2721,7 +2725,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 		int time = 60 * 60 * 8;
 		if (System.currentTimeMillis() / 1000 - oldBlock.getTimeSeconds() > time) {
-			Block block =getTip(); 
+			Block block = getTip();
 			block.setBlockType(oldBlock.getBlockType());
 			for (Transaction transaction : oldBlock.getTransactions()) {
 				block.addTransaction(transaction);
@@ -2802,7 +2806,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 */
 	public Block retryBlocks(Block oldBlock) throws BlockStoreException, JsonProcessingException, IOException {
 
-		Block block =getTip(); 
+		Block block = getTip();
 		block.setBlockType(oldBlock.getBlockType());
 		for (Transaction transaction : oldBlock.getTransactions()) {
 			block.addTransaction(transaction);
@@ -2838,7 +2842,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			String price = MonetaryFormat.FIAT.noCode().format(matchResult.getPrice(), base.getDecimals() + priceshift);
 			return new BigDecimal(price);
 		}
-		throw new NoDataException();
+		throw new NoDataException("tokenid=" + tokenid + " basetoken=" + basetoken);
 	}
 
 	public void changePassword(String password, String oldPassword) {

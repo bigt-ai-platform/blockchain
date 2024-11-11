@@ -52,9 +52,7 @@ public class UTXO extends SpentBlock implements  Serializable {
     // saved in database as JSON from MemoInfo,
     // but it is simple kv text from database to display in UI
     private String memo;
-    // transform to key value, for usage in application
-    private MemoInfo memoInfo;
-
+   
     // JSON
     public UTXO() {
     }
@@ -158,11 +156,7 @@ public class UTXO extends SpentBlock implements  Serializable {
         this.coinbase = coinbase;
         this.setBlockHash(blockhash);
         this.fromaddress = fromaddress;
-        try {
-            this.memoInfo = MemoInfo.parse(memo);
-        } catch (Exception e) {
-            // IGNORE
-        }
+  
         this.memo =memo;
                 //;
 
@@ -290,12 +284,5 @@ public class UTXO extends SpentBlock implements  Serializable {
         this.minimumsign = minimumsign;
     }
 
-    public MemoInfo getMemoInfo() {
-        return memoInfo;
-    }
-
-    public void setMemoInfo(MemoInfo memoInfo) {
-        this.memoInfo = memoInfo;
-    }
-
+   
 }

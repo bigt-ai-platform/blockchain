@@ -72,11 +72,13 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 			throw new VerificationException(" .checkSolidity is failed: " + solidityState.toString()
 					+ "\n with block = " + newMilestoneBlock.toString());
 
+		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
+
 		// Unconfirm anything not confirmed by milestone
 		List<Sha256Hash> wipeBlocks = store.getWhereConfirmedNotMilestone();
 		HashSet<Sha256Hash> traversedBlockHashes = new HashSet<>();
 		for (Sha256Hash wipeBlock : wipeBlocks)
-			unconfirm(wipeBlock, traversedBlockHashes, store);
+			unconfirm(wipeBlock, traversedBlockHashes, milestoneNumber, store);
 
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
@@ -115,9 +117,9 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// solid > 0, so we should be able to confirm everything
 		solidifyBlock(newMilestoneBlock, solidityState, true, store);
 		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
-		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
+
 		for (BlockWrap approvedBlock : allApprovedNewBlocks)
-			confirm(approvedBlock.getBlockEvaluation().getBlockHash(), traversedConfirms, milestoneNumber, store);
+			confirm(approvedBlock.getBlockEvaluation().getBlockHash(), traversedConfirms, milestoneNumber, true, store);
 
 	}
 
@@ -194,7 +196,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	}
 
 	/**
-	 * Computes RewardBuilderResult here for new reward blocks. 
+	 * Computes RewardBuilderResult here for new reward blocks.
 	 * 
 	 * @param prevTrunk      a predecessor block in the db
 	 * @param prevBranch     a predecessor block in the db
@@ -373,17 +375,15 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				// Unconfirm anything not in milestone
 				for (Sha256Hash wipeBlock : blocksInMilestoneInterval) {
 					BlockWrap blockWrap = getBlockWrap(wipeBlock, store);
-					unconfirm(blockWrap, new HashSet<>(), store);
-
+					unconfirm(blockWrap, new HashSet<>(), milestoneNumber, store);
+					// store.commitDatabaseBatchWrite();
+					// store.beginDatabaseBatchWrite();
 				}
-				// store.commitDatabaseBatchWrite();
-				// store.beginDatabaseBatchWrite();
+
 			}
 
 		}
 		Block cursor;
-		// problem with order rollback
-
 		// Walk in ascending chronological order.
 		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
 			cursor = it.next();

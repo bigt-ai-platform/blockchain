@@ -218,7 +218,7 @@ public class ContractExecutionService {
 		for (Contractresult prevNotMilestone : prevNotMilestons) {
 			if (!prevsNotMilestoneChainedBlocks.stream()
 					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
-				serviceBase.unConfirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),
+				serviceBase.confirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),-1,true,
 						store);
 			}
 

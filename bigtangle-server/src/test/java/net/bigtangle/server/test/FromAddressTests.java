@@ -51,10 +51,9 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		yuanWallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)),
 				contextRoot);
 
-
 		payBigTo(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)),
 				Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
-		
+
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
 		for (Coin coin : list) {
 			if (coin.isBIG()) {
@@ -73,7 +72,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		}
 
 		accountKey = new ECKey();
-	
+
 		testTokens();
 
 		list = getBalanceAccount(false, yuanWallet.walletKeys());
@@ -101,16 +100,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		}
 	}
 
-	private void checkResult(ECKey userkey, String fromaddress, String memo) throws Exception {
-
-		List<UTXO> users = getBalance(userkey.toAddress(networkParameters).toBase58());
-
-		for (UTXO u : users) {
-			assertTrue(u.getFromaddress().equals(fromaddress));
-			assertTrue(u.getMemoInfo().getKv().get(0).getValue().equals(memo));
-		}
-	}
-
+ 
 	private void createUserPay(ECKey accountKey) throws Exception {
 		List<ECKey> ulist = payKeys();
 		for (ECKey key : ulist) {
@@ -126,7 +116,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 		log.debug("====ready buyTicket====");
 		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
-				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket" );
+				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
 		makeRewardBlock();
 		for (Block b : bs) {
 			blockGraph.updateTransactionOutputSpendPendingDo(b);
@@ -136,9 +126,9 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		List<ECKey> userkeys = new ArrayList<ECKey>();
 		userkeys.add(key);
 		log.debug("====chaeck utxo");
-		 List<UTXO>  utxos=getBalance(false, key);
-		 for (UTXO utxo : utxos) {
-			log.debug("user uxxo=="+utxo.toString());
+		List<UTXO> utxos = getBalance(false, key);
+		for (UTXO utxo : utxos) {
+			log.debug("user uxxo==" + utxo.toString());
 		}
 		List<Coin> coins = getBalanceAccount(false, userkeys);
 		for (Coin coin : coins) {
@@ -191,7 +181,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 
 		}
 //		checkResult(key, yuanWallet.walletKeys().get(0).toAddress(networkParameters).toBase58(), memo);
-		//fee=1000
+		// fee=1000
 		payBigTo(key, Coin.FEE_DEFAULT.getValue(), null);
 		makeRewardBlock();
 		log.debug("====start check admin wallet====");
@@ -204,7 +194,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 						.equals(coin.getValue()));
 			}
 		}
-		//fee=1000
+		// fee=1000
 		payBigTo(key2, Coin.FEE_DEFAULT.getValue(), null);
 		makeRewardBlock();
 		log.debug("====start check admin wallet====");
@@ -225,8 +215,6 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		}
 		return userkeys;
 	}
-
- 
 
 	public void testTokens() throws JsonProcessingException, Exception {
 		String domain = "";

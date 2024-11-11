@@ -197,7 +197,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected final String SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL = "SELECT block "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? " + afterSelect();
 
-	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ?, confirmed =true "
+	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
 	
 	protected final String UPDATE_ORDER_UNSPENT_SQL = getUpdate() + " orders SET spent = false, spenderblockhash = null "
@@ -237,7 +237,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ "targetcoinvalue, targettokenid,    beneficiaryaddress";
 
 	protected final String UPDATE_CONTRACT_EVENT_CONFIRMED_SQL = getUpdate() + " contractevent SET confirmed = ? "
-			+ " WHERE blockhash = ?";
+			+ " WHERE blockhash = ? and  collectinghash=? ";
 	protected final String UPDATE_CONTRACT_EVENT_SPENT_SQL = getUpdate()
 			+ " contractevent SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
 	protected final String SELECT_PREV_CONTRACT_SQL = "SELECT " + CONTRACT_TEMPLATE
@@ -245,7 +245,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	protected final String SELECT_CONTRACT_SQL = "SELECT " + CONTRACT_TEMPLATE
 			+ " FROM contractevent WHERE blockhash = ? AND  collectinghash=? ";
-
+	protected final String SELECT_OPEN_CONTRACT_EVENT_SQL = "SELECT " + CONTRACT_TEMPLATE
+			+ " FROM contractevent WHERE confirmed=1 AND spent=0 AND targettokenid= ? ";
+	
 	protected final String UPDATE_CONTRACTRESULT_SPENT_SQL = getUpdate()
 			+ " contractresult SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
 

@@ -1,11 +1,19 @@
 select * from blocks  where milestone <0 order by height desc ;
-select * from orders  where spent=false ;
+
 select * from contractevent   ;
+select * FROM contractevent a, outputs b WHERE  a.confirmed=false AND a.blockhash=b.blockhash
+select * FROM contractevent a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true
 select * from contractresult order by milestone desc ;
 select * from contractresult order by inserttime desc ;
 select * from contractresult where milestone <0 and confirmed= true ;
+select * FROM contractevent a, blocks b WHERE a.confirmed=1 AND a.spent=0 and a.blockhash=b.hash
+select * FROM contractevent a   WHERE a.confirmed=1 AND a.spent=0
+
+select * from orders  where spent=false ;
 select * from orderresult  order by milestone desc ;  
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
+select * from orders a, blocks b where a.blockhash=b.hash  ;
+
 select * from outputs  where confirmed =true and spent=false and tokenid !="bc" and toaddress="154AxPN4kEUYNY5Ubt8yCssoR7Zgppw8y4";
 select count( *) from blocks   ;
 select count( *) from blocks  WHERE milestone>9;
@@ -15,6 +23,9 @@ select * from txreward order by chainlength desc;
 SELECT block, height, blocktype FROM blocks WHERE milestone>11670 ;
 select * from blocks where height < 750 ;
 
+
+
+select * from contractresult order by inserttime desc ;
 select * from blocks order by height desc limit 500 ;
 select * from blocks where height < 4000 order by height desc limit 500 ;
 select * from blocks join unsolidblocks on blocks.hash = unsolidblocks.hash order by blocks.height asc limit 100 ;
@@ -74,6 +85,8 @@ select * from blocks join outputs on blocks.hash=outputs.blockhash where blocks.
 select count(*) from outputs  where spent=1 and confirmed=1 ;
 select * from outputs  where spent=0 and confirmed=1 ;
 select * from orders  where spent=0 and confirmed=1 ;
+select * from orderresult  order by milestone desc ;  
+
 select * from ordercancel
 update blocks set milestone=0    where height=0
 select count(*) from outputs where confirmed=1 and spent=0 and tokenid = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a" ;

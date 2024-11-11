@@ -28,6 +28,7 @@ import javax.annotation.Nullable;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
@@ -53,7 +54,6 @@ import net.bigtangle.core.ordermatch.MatchResult;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
-import net.bigtangle.server.data.ContractEventRecord;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.OrderExecutionResult;
@@ -2171,18 +2171,53 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public void updateContractEventSpent(Set<Sha256Hash> contractEventRecords, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException {
+	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
 		try {
-			preparedStatement = getConnection().prepareStatement(
-					getUpdate() + " contractevent SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ? ");
-			for (Sha256Hash o : contractEventRecords) {
-				preparedStatement.setBoolean(1, spent);
-				preparedStatement.setBytes(2, spentBlock != null ? spentBlock.getBytes() : null);
-				preparedStatement.setBytes(3, o.getBytes());
+			preparedStatement = getConnection()
+					.prepareStatement(getUpdate() + " contractevent SET spent = ?, spenderblockhash = ? "
+							+ " WHERE blockhash = ? and collectinghash=? ");
+	
+			for (ContractEventRecord o : records) {
+				preparedStatement.setBoolean(1, o.isSpent());
+				preparedStatement.setBytes(2,
+						o.getSpenderBlockHash() != null ? o.getSpenderBlockHash().getBytes() : null);
+				preparedStatement.setBytes(3, o.getBlockHash().getBytes());
+				preparedStatement.setBytes(4, o.getCollectinghash().getBytes());
+				preparedStatement.addBatch();
+			}
+			preparedStatement.executeBatch();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					// throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
 
+	
+ 
+	@Override
+	public void updateContractEventBySpender(Set<Sha256Hash> contractEventRecords, Sha256Hash collectinghash,
+			Sha256Hash spenderblockhash) throws BlockStoreException {
+
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = getConnection()
+					.prepareStatement(getUpdate() + " contractevent SET spent = ?, spenderblockhash = ? "
+							+ " WHERE blockhash = ? and collectinghash=? and spenderblockhash=? ");
+			for (Sha256Hash o : contractEventRecords) {
+				preparedStatement.setBoolean(1, false);
+				preparedStatement.setBytes(2, null);
+				preparedStatement.setBytes(3, o.getBytes());
+				preparedStatement.setBytes(4, collectinghash.getBytes());
+				preparedStatement.setBytes(5, spenderblockhash.getBytes());
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
@@ -2231,37 +2266,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public boolean checkContractEventConfirmed(List<Sha256Hash> contractEventRecords) throws BlockStoreException {
-		// one of the block is spent then, return true
-
-		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = getConnection()
-					.prepareStatement(" select confirmed  from contractevent " + " WHERE blockhash = ? ");
-			for (Sha256Hash o : contractEventRecords) {
-				preparedStatement.setBytes(1, o.getBytes());
-				ResultSet resultSet = preparedStatement.executeQuery();
-				if (resultSet.next()) {
-					if (resultSet.getBoolean("confirmed"))
-						return true;
-				}
-			}
-			return false;
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public void updateContractEventConfirmed(Collection<Sha256Hash> records, boolean confirm)
+	public void updateContractEventConfirmed(Collection<Sha256Hash> records, Sha256Hash collectinghash, boolean confirm)
 			throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
@@ -2270,6 +2275,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			for (Sha256Hash o : records) {
 				preparedStatement.setBoolean(1, confirm);
 				preparedStatement.setBytes(2, o.getBytes());
+				preparedStatement.setBytes(3, collectinghash.getBytes());
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
@@ -2469,8 +2475,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 	@Override
 	public boolean checkContractResultConfirmed(Sha256Hash o) throws BlockStoreException {
-		// one of the block is spent then, return true
-
+		//  Sha256Hash o is confirm? not found is  false 
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
@@ -2478,9 +2483,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 			preparedStatement.setBytes(1, o.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
-			if (resultSet.next()) {
-				if (resultSet.getBoolean("confirmed"))
-					return true;
+			if (resultSet.next()) { 
+					return resultSet.getBoolean("confirmed");
 			}
 
 			return false;
@@ -2686,19 +2690,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public boolean checkOrderResultConfirmed(Sha256Hash o) throws BlockStoreException {
-		// one of the block is spent then, return true
+	public boolean checkOrderResultConfirmed(Sha256Hash prev) throws BlockStoreException {
+		//is this prev Sha256Hash confirmed? not found is false
 
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
 					.prepareStatement(" select confirmed  from orderresult " + " WHERE blockhash = ? ");
 
-			preparedStatement.setBytes(1, o.getBytes());
+			preparedStatement.setBytes(1, prev.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
-				if (resultSet.getBoolean("confirmed"))
-					return true;
+				return resultSet.getBoolean("confirmed");
 			}
 
 			return false;
@@ -4582,4 +4585,40 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
+	@Override
+	public List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException {
+		List<ContractEventRecord> result = new ArrayList<>();
+
+		String sql = SELECT_OPEN_CONTRACT_EVENT_SQL + " ORDER BY blockhash, collectinghash ";
+
+		PreparedStatement preparedStatement = null;
+		try {
+			// log.debug(sql);
+			preparedStatement = getConnection().prepareStatement(sql);
+			preparedStatement.setString(1, tokenid);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				ContractEventRecord c = setContractEventRecord(resultSet);
+				result.add(c);
+			}
+			return result;
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		} catch (ProtocolException e) {
+			// Corrupted database.
+			throw new BlockStoreException(e);
+		} catch (VerificationException e) {
+			// Should not be able to happen unless the database contains bad
+			// blocks.
+			throw new BlockStoreException(e);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					// throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
 }

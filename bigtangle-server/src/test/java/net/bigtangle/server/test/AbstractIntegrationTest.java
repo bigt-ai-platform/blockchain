@@ -69,6 +69,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.exception.UTXOProviderException;
@@ -100,6 +101,7 @@ import net.bigtangle.server.service.RewardService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.TipsService;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.store.FullBlockStoreImpl;
 import net.bigtangle.utils.Json;
@@ -187,7 +189,7 @@ public abstract class AbstractIntegrationTest {
 		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
+			rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(feeTransaction);
 			rollingBlock1.solve();
 			blockGraph.add(rollingBlock1, true, store);
@@ -200,7 +202,7 @@ public abstract class AbstractIntegrationTest {
 // add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
+			rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(wallet.feeTransaction(null));
 			rollingBlock1.solve();
 			blockGraph.add(rollingBlock1, true, store);
@@ -213,7 +215,7 @@ public abstract class AbstractIntegrationTest {
 		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 
-		rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
+		rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 		rollingBlock1.addTransaction(wallet.feeTransaction(null));
 		rollingBlock1.solve();
 		blockGraph.add(rollingBlock1, true, store);
@@ -414,7 +416,7 @@ public abstract class AbstractIntegrationTest {
 		input.setScriptSig(inputScript);
 
 		// Create block with tx
-		block = predecessor.createNextBlock(predecessor);
+		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
@@ -429,7 +431,7 @@ public abstract class AbstractIntegrationTest {
 		Block block = null;
 
 		// Create and add block
-		block = predecessor.createNextBlock(predecessor);
+		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
 		addedBlocks.add(block);
@@ -443,7 +445,7 @@ public abstract class AbstractIntegrationTest {
 		Block block = null;
 
 		// Create and add block
-		block = predecessor.createNextBlock(predecessor);
+		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
 		return block;
@@ -469,8 +471,17 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
 				addedBlocks);
-		addedBlocks.add(orderExecutionService.createOrderExecution(store));
+		executeOrderAndConfirm(addedBlocks);
 
+	}
+
+	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
+		Block b=orderExecutionService.createOrderExecution(store);
+		//no reward, this order will be not confirmed 
+		// confirm the contract execution
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+				.confirmOrderExecute(b, -1,true, store);
+		addedBlocks.add(b);
 	}
 
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
@@ -515,7 +526,7 @@ public abstract class AbstractIntegrationTest {
 
 		makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
 				addedBlocks);
-		addedBlocks.add(orderExecutionService.createOrderExecution(store));
+		executeOrderAndConfirm(addedBlocks);
 
 	}
 
@@ -567,7 +578,7 @@ public abstract class AbstractIntegrationTest {
 		tx.setDataSignature(buf1);
 
 		// Create block with order
-		Block block = predecessor.createNextBlock(predecessor);
+		Block block =Block.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
@@ -594,7 +605,7 @@ public abstract class AbstractIntegrationTest {
 		tx.setDataSignature(buf1);
 
 		// Create block with order
-		Block block = predecessor.createNextBlock(predecessor);
+		Block block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
@@ -796,7 +807,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block createAndAddNextBlock(Block b1, Block b2) throws VerificationException, BlockStoreException {
-		Block block = b1.createNextBlock(b2);
+		Block block =UtilsTest.createBlock(networkParameters, b1, b2);
 		this.blockGraph.add(block, true, store);
 		return block;
 	}
@@ -804,7 +815,7 @@ public abstract class AbstractIntegrationTest {
 	protected Block createAndAddNextBlockWithTransaction(Block b1, Block b2, Transaction prevOut, boolean mcmc)
 			throws VerificationException, BlockStoreException, JsonParseException, JsonMappingException, IOException,
 			UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
-		Block block1 = b1.createNextBlock(b2);
+		Block block1 =UtilsTest.createBlock(networkParameters, b1, b2);
 		block1.addTransaction(prevOut);
 		// block1.addTransaction(wallet.feeTransaction(null));
 		block1 = adjustSolve(block1);
@@ -1498,13 +1509,75 @@ public abstract class AbstractIntegrationTest {
 		return store.getBlockWrap(hash).getBlockEvaluation();
 	}
 
-	public Sha256Hash checkSum() throws JsonProcessingException, Exception {
-		TokensumsMap map = checkpointService.checkToken(store);
-		Map<String, Tokensums> r11 = map.getTokensumsMap();
-		for (Entry<String, Tokensums> a : r11.entrySet()) {
-			assertTrue(a.getValue().check(), " " + a.toString());
+	/*
+	 * store consistent reads
+	 */
+	public TokensumsMap checkSum(TokensumsMap last) throws JsonProcessingException, Exception {
+		try {
+			store.beginDatabaseBatchWrite();
+			TokensumsMap map = checkpointService.checkToken(store);
+			Map<String, Tokensums> r11 = map.getTokensumsMap();
+		
+			for (Entry<String, Tokensums> a : r11.entrySet()) {
+				log.debug(a.getValue().toString());	
+				if (!a.getValue().check()) {	
+					if (last != null) {
+						checkSumDiffLog(map, last, a.getKey());
+					}
+				}
+				assertTrue(a.getValue().check(), " " + a.toString());
+				
+			}
+			log.debug(" checkSum ok ");
+			store.commitDatabaseBatchWrite();
+			return map;
+		} finally {
+			store.defaultDatabaseBatchWrite();
 		}
-		return map.hash();
+	}
+
+	public void checkSumDiffLog(TokensumsMap newMap, TokensumsMap last, String tokenid)
+			throws JsonProcessingException, Exception {
+		Tokensums a = newMap.getTokensumsMap().get(tokenid);
+		Tokensums b = last.getTokensumsMap().get(tokenid);
+		a.getUtxos().stream().forEach(n -> {
+			if (!b.getUtxos().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash())
+					&& p.getTxHash().equals(n.getTxHash())
+					&& p.getIndex()==(n.getIndex())
+					)) {
+				log.debug(" new not in last " + n.toString());
+			}
+		});
+		b.getUtxos().stream().forEach(n -> {
+			if (!a.getUtxos().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash())
+					&& p.getTxHash().equals(n.getTxHash())
+					&& p.getIndex()==(n.getIndex()))) {
+				log.debug(" last not in new " + n.toString());
+			}
+		});
+		
+		a.getContracts().stream().forEach(n -> {
+			if (!b.getContracts().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
+				log.debug(" new not in last " + n.toString());
+			}
+		});
+		b.getContracts().stream().forEach(n -> {
+			if (!a.getContracts().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
+				log.debug(" last not in new " + n.toString());
+			}
+		});
+		
+		a.getOrders().stream().forEach(n -> {
+			if (!b.getOrders().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
+				log.debug(" new not in last " + n.toString());
+			}
+		});
+		b.getOrders().stream().forEach(n -> {
+			if (!a.getOrders().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
+				log.debug(" last not in new " + n.toString());
+			}
+		});
+		
 	}
 
 	public void sell(List<Block> blocksAddedAll) throws Exception {

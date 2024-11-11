@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.TipsService;
 
@@ -260,7 +261,7 @@ public class FakeTxBuilder {
  
     public static Block makeSolvedTestBlock(Block prev, Transaction... transactions) throws BlockStoreException {
        // Address to = new ECKey().toAddress(prev.getParams());
-        Block b = prev.createNextBlock(prev);
+        Block b = UtilsTest.createBlock(MainNetParams.get(), prev, prev);
         // Coinbase tx already exists.
         for (Transaction tx : transactions) {
             b.addTransaction(tx);
@@ -271,7 +272,7 @@ public class FakeTxBuilder {
 
     public static Block makeSolvedTestBlock(Block prev, Address to, Transaction... transactions)
             throws BlockStoreException {
-        Block b = prev.createNextBlock(prev);
+        Block b = UtilsTest.createBlock(MainNetParams.get(),prev, prev);
         // Coinbase tx already exists.
         for (Transaction tx : transactions) {
             b.addTransaction(tx);

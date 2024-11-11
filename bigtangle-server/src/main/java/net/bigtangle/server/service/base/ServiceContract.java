@@ -20,6 +20,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
@@ -33,7 +34,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.server.data.ContractEventRecord;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.FullBlockStore;
@@ -122,10 +122,10 @@ public class ServiceContract extends ServiceBaseConnect {
 				Transaction tx = createPayoutTransaction(block, payouts);
 				return new ContractExecutionResult(block.getHash(), contract.getTokenid(),
 						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx, prevHash.getBlockHash(),
-					
 						getContractEventRecordHash(cancelledContractEventRecord),
 						getRemainder(toBeSpent.values(), usedRecords.values()), block.getTimeSeconds(),
-						getRemainderContractEventRecord(toBeSpent.values(), usedRecords.values()), collectedBlocks);
+						getRemainderContractEventRecord(toBeSpent.values(), usedRecords.values()),
+						getContractEventRecordSet(toBeSpent.values()), collectedBlocks);
 
 			}
 		}
@@ -208,22 +208,30 @@ public class ServiceContract extends ServiceBaseConnect {
 		Random se = new Random(randomness);
 		List<String> userlist = baseList(usedRecords.values(), amount);
 		int randomWin = se.nextInt(userlist.size());
-		log.debug("randomn win = " + randomWin + " userlist size =" + userlist.size());
+	//	log.debug("randomn win = " + randomWin + " userlist size =" + userlist.size());
 		ContractEventRecord winner = findList(usedRecords.values(), userlist.get(randomWin));
-		log.debug("winner = " + winner.toString());
+	//	log.debug("winner = " + winner.toString());
 		payout(payouts, winner.getBeneficiaryAddress(), winner.getTargetTokenid(), sum(usedRecords.values()));
 		Transaction tx = createPayoutTransaction(winnerBlock, payouts);
 		return new ContractExecutionResult(winnerBlock.getHash(), winner.getContractTokenid(),
-				getContractEventRecordHash(allRecords.values()), tx.getHash(), tx, prevHash.getBlockHash(),
-				 cancels, getRemainder(allRecords.values(), usedRecords.values()),
-				winnerBlock.getTimeSeconds(),
-				getRemainderContractEventRecord(allRecords.values(), usedRecords.values()), collectedBlocks);
+				getContractEventRecordHash(allRecords.values()), tx.getHash(), tx, prevHash.getBlockHash(), cancels,
+				getRemainder(allRecords.values(), usedRecords.values()), winnerBlock.getTimeSeconds(),
+				getRemainderContractEventRecord(allRecords.values(), usedRecords.values()),
+				getContractEventRecordSet(allRecords.values()), collectedBlocks);
 	}
 
 	public Set<Sha256Hash> getContractEventRecordHash(Collection<ContractEventRecord> orders) {
 		Set<Sha256Hash> hashs = new HashSet<>();
 		for (ContractEventRecord o : orders) {
 			hashs.add(o.getBlockHash());
+		}
+		return hashs;
+	}
+
+	public Set<ContractEventRecord> getContractEventRecordSet(Collection<ContractEventRecord> orders) {
+		Set<ContractEventRecord> hashs = new HashSet<>();
+		for (ContractEventRecord o : orders) {
+			hashs.add(o);
 		}
 		return hashs;
 	}

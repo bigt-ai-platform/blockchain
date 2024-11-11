@@ -104,7 +104,7 @@ public class PerformanceTest extends ContractTest {
 		}
 		try {
 
-			checkSum();
+			checkSum(null);
 			return "";
 		} catch (Exception e) {
 			e.printStackTrace();

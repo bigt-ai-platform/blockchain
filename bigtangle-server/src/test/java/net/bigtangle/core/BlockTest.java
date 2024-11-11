@@ -135,7 +135,7 @@ public class BlockTest {
     @Test
     public void testUpdateLength() {
         NetworkParameters params = MainNetParams.get();
-        Block block = params.getGenesisBlock().createNextBlock(params.getGenesisBlock());
+        Block block = UtilsTest.createBlock(PARAMS,params.getGenesisBlock(), params.getGenesisBlock());
        // assertEquals(block.bitcoinSerialize().length, block.length);
         final int origBlockLen = block.length;
         Transaction tx = new Transaction(params);
@@ -197,5 +197,5 @@ public class BlockTest {
         Block reparsed = PARAMS.getDefaultSerializer().makeBlock(header.bitcoinSerialize());
         assertEquals(reparsed, header);
     }
-    
+  
 }

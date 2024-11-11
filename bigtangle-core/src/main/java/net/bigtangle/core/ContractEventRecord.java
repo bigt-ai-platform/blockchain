@@ -3,13 +3,10 @@
  *  
  *******************************************************************************/
 
-package net.bigtangle.server.data;
+package net.bigtangle.core;
 
 import java.math.BigInteger;
 import java.util.Objects;
-
-import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.SpentBlock;
 
 public class ContractEventRecord extends SpentBlock {
 

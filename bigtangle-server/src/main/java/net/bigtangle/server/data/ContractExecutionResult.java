@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlock;
 import net.bigtangle.core.Transaction;
@@ -30,7 +31,7 @@ public class ContractExecutionResult extends SpentBlock {
 	// this ContractResult produces coinbase outputTxHash
 	Sha256Hash outputTxHash;
 	// all records used in this calculation of ContractResult
-	Set<Sha256Hash> allRecords = new HashSet<>();
+	Set<Sha256Hash> toBeSpent = new HashSet<>();
 	// the cancelled records referenced by this ContractResult
 	Set<Sha256Hash> cancelRecords = new HashSet<>();
 	// remainder Record is open records after execution
@@ -41,9 +42,9 @@ public class ContractExecutionResult extends SpentBlock {
 	// not part of toArray, not persistent, but data after the check
 	// with re calculation to save
 	Transaction outputTx;
-
 	Set<ContractEventRecord> remainderContractEventRecord;
-
+	Set<ContractEventRecord> toBeSpentContractEventRecord;
+	
 	public ContractExecutionResult() {
 
 	}
@@ -51,18 +52,21 @@ public class ContractExecutionResult extends SpentBlock {
 	public ContractExecutionResult(Sha256Hash blockhash, String contractid, Set<Sha256Hash> toBeSpent,
 			Sha256Hash outputTxHash, Transaction outputTx, Sha256Hash prevblockhash,  
 			Set<Sha256Hash> cancelRecords, Set<Sha256Hash> remainderRecords, long inserttime,
-			Set<ContractEventRecord> remainderContractEventRecord, Set<Sha256Hash> referencedOrderBlocks) {
+			Set<ContractEventRecord> remainderContractEventRecord, 
+			Set<ContractEventRecord> toBeSpentContractEventRecord, Set<Sha256Hash> referencedOrderBlocks) {
 		this.setBlockHash(blockhash);
 		this.contracttokenid = contractid;
 		this.prevblockhash = prevblockhash;
 		this.outputTxHash = outputTxHash;
 		this.outputTx = outputTx;
-		this.allRecords = toBeSpent;
+		this.toBeSpent = toBeSpent;
 		this.cancelRecords = cancelRecords;
 		this.remainderRecords = remainderRecords;
 		this.setTime(inserttime);
 
 		this.remainderContractEventRecord = remainderContractEventRecord;
+		this.toBeSpentContractEventRecord =toBeSpentContractEventRecord;
+		
 		this.referencedBlocks = referencedOrderBlocks;
  
 	}
@@ -76,8 +80,8 @@ public class ContractExecutionResult extends SpentBlock {
 			Utils.writeNBytes(dos, outputTxHash.getBytes());
 			Utils.writeNBytes(dos, prevblockhash.getBytes());
 
-			dos.writeInt(allRecords.size());
-			for (Sha256Hash c : allRecords) {
+			dos.writeInt(toBeSpent.size());
+			for (Sha256Hash c : toBeSpent) {
 				Utils.writeNBytes(dos, c.getBytes());
 			}
 
@@ -107,10 +111,10 @@ public class ContractExecutionResult extends SpentBlock {
 		contracttokenid = Utils.readNBytesString(dis);
 		outputTxHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		allRecords = new HashSet<>();
+		toBeSpent = new HashSet<>();
 		int allRecordsSize = dis.readInt();
 		for (int i = 0; i < allRecordsSize; i++) {
-			allRecords.add(Sha256Hash.wrap(Utils.readNBytes(dis)));
+			toBeSpent.add(Sha256Hash.wrap(Utils.readNBytes(dis)));
 		}
 		cancelRecords = new HashSet<>();
 		int cancelRecordsSize = dis.readInt();
@@ -181,13 +185,6 @@ public class ContractExecutionResult extends SpentBlock {
 		this.prevblockhash = prevblockhash;
 	}
 
-	public Set<Sha256Hash> getAllRecords() {
-		return allRecords;
-	}
-
-	public void setAllRecords(Set<Sha256Hash> allRecords) {
-		this.allRecords = allRecords;
-	}
 
 	public Set<Sha256Hash> getCancelRecords() {
 		return cancelRecords;
@@ -222,11 +219,27 @@ public class ContractExecutionResult extends SpentBlock {
 	}
 
  
+	public Set<Sha256Hash> getToBeSpent() {
+		return toBeSpent;
+	}
+
+	public void setToBeSpent(Set<Sha256Hash> toBeSpent) {
+		this.toBeSpent = toBeSpent;
+	}
+
+	public Set<ContractEventRecord> getToBeSpentContractEventRecord() {
+		return toBeSpentContractEventRecord;
+	}
+
+	public void setToBeSpentContractEventRecord(Set<ContractEventRecord> toBeSpentContractEventRecord) {
+		this.toBeSpentContractEventRecord = toBeSpentContractEventRecord;
+	}
+
 	@Override
 	public String toString() {
 		return "ContractExecutionResult [contracttokenid=" + contracttokenid + ", prevblockhash=" + prevblockhash
 				+  ", referencedBlocks=" + referencedBlocks
-				+ ", outputTxHash=" + outputTxHash + ", allRecords=" + allRecords + ", cancelRecords=" + cancelRecords
+				+ ", outputTxHash=" + outputTxHash + ", allRecords=" + toBeSpent + ", cancelRecords=" + cancelRecords
 				+ ", remainderRecords=" + remainderRecords + ", outputTx=" + outputTx
 				+ ", remainderContractEventRecord=" + remainderContractEventRecord + "]";
 	}

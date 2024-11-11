@@ -44,8 +44,6 @@ import net.bigtangle.utils.OkHttp3Util;
  */
 public class RewardService2Test extends AbstractIntegrationTest {
 
-	
-
 	// test payment, buy and sell
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
 
@@ -67,21 +65,21 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		List<Block> a2 = new ArrayList<Block>();
 		// first chains
 		testToken(a1);
-
+		TokensumsMap c = checkSum(null);
 		for (int i = 0; i < 1; i++) {
 			createReward(a1);
+		 c = checkSum(c);
 		}
 
-		checkSum();
+	
 		resetStore();
 		testToken(a2);
 		// second chain
 
 		for (int i = 0; i < 2; i++) {
 			createReward(a2);
-		}
-		checkSum();
-
+		//	 	 c = checkSum(c);
+		} 
 		// replay
 		resetStore();
 
@@ -90,15 +88,15 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			if (b != null)
 				blockGraph.add(b, true, true, store);
 		}
-		checkSum();
+		//checkSum(c);
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
 				blockGraph.add(b, true, true, store);
-
+			checkSum(c);
 		}
 
-		checkSum();
+		
 		// replay second and then replay first
 		resetStore();
 		for (Block b : a2) {
@@ -112,7 +110,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		}
 
 		// assertTrue(hash.equals(checkpointService.checkToken(store).hash()));
-		checkSum();
+		checkSum(c);
 		// assertTrue(hash1.equals(hash2));
 	}
 
@@ -128,7 +126,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			createReward(a1);
 		}
 
-		checkSum();
+		TokensumsMap c = checkSum(null);
 		resetStore();
 		testToken(a2);
 		// second chain
@@ -136,7 +134,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		for (int i = 0; i < 2; i++) {
 			createReward(a2);
 		}
-		checkSum();
+		c = checkSum(c);
 
 		// replay
 		resetStore();
@@ -146,19 +144,19 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			if (b != null)
 				blockGraph.add(b, true, true, store);
 		}
-		checkSum();
+		c = checkSum(null);
 		// replay second chain
 		Collections.shuffle(a2);
 		for (Block b : a2) {
 			if (b != null) {
 				blockGraph.add(b, true, true, store);
-				checkSum();
+				c = checkSum(c);
 			}
 
 		}
 
 		// assertTrue(hash.equals(checkpointService.checkToken(store).hash()));
-		checkSum();
+		checkSum(c);
 		// assertTrue(hash1.equals(hash2));
 	}
 
@@ -171,7 +169,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		for (int i = 0; i < 5; i++) {
 			createReward(a2);
 		}
-		checkSum();
+		checkSum(null);
 
 		checkpointService.checkToken(store).hash();
 		// replay
@@ -185,10 +183,9 @@ public class RewardService2Test extends AbstractIntegrationTest {
 
 		}
 
-		checkSum();
+		checkSum(null);
 
 	}
-
 
 	public void testToken(List<Block> blocksAddedAll) throws Exception {
 

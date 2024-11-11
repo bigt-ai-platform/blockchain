@@ -141,7 +141,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			logger.debug(c.toString());
 		}
 
-		for (OrderRecord c : check.getSpentOrderRecord()) {
+		for (OrderRecord c : check.getToBeSpentRecord()) {
 			logger.debug("getSpentOrderRecord +  confirm =" + confirm);
 			logger.debug(c.toString());
 		}

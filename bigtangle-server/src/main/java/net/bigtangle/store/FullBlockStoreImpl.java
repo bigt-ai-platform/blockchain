@@ -83,7 +83,6 @@ public class FullBlockStoreImpl {
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 
-
 	public boolean add(Block block, boolean allowUnsolid, FullBlockStore store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
@@ -229,7 +228,7 @@ public class FullBlockStoreImpl {
 						log.info("saveChainConnected failed   " + chainBlockQueue.toString(), e);
 					}
 				}
-			
+
 			}
 			log.info("saveChainConnected time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
@@ -261,11 +260,11 @@ public class FullBlockStoreImpl {
 
 			// Solidify referenced blocks
 			try {
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-					.solidifyBlocks(currRewardInfo, store);
-			}catch (MissingDependencyException e) {
-				log.warn("Block isFailState. MissingDependencyException" + block.toString()+ " MissingDependencyException"
-						+ e.toString());
+				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+						.solidifyBlocks(currRewardInfo, store);
+			} catch (MissingDependencyException e) {
+				log.warn("Block isFailState. MissingDependencyException" + block.toString()
+						+ " MissingDependencyException" + e.toString());
 				return;
 			}
 			SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters,
@@ -326,11 +325,11 @@ public class FullBlockStoreImpl {
 		block.verifyTransactions();
 
 		// allow non chain block predecessors not solid
-		SolidityState solidityState=new SolidityState(State.Success, null, false);
+		SolidityState solidityState = new SolidityState(State.Success, null, false);
 		try {
-		  solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
-				.checkSolidity(block, !allowUnsolid, blockStore, allowMissingPredecessor);
-		}catch (Exception e) {
+			solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+					.checkSolidity(block, !allowUnsolid, blockStore, allowMissingPredecessor);
+		} catch (Exception e) {
 			if (!allowUnsolid)
 				throw e;
 		}
@@ -396,7 +395,7 @@ public class FullBlockStoreImpl {
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			if (haveNewBestChain) {
-				log.info("Block is causing a re-organize");		
+				log.info("Block is causing a re-organize");
 				connect(block, solidityState, store);
 				new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService)
 						.handleNewBestChain(block, store);
@@ -454,7 +453,7 @@ public class FullBlockStoreImpl {
 		FullBlockStore blockStore = storeService.getStore();
 		try {
 			updateTransactionOutputSpendPending(block, blockStore);
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).evictTransactions(block,
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).evictTransactionsAndBlockEva(block,
 					blockStore);
 			// Initialize MCMC
 			if (blockStore.getMCMC(block.getHash()) == null) {
@@ -497,18 +496,8 @@ public class FullBlockStoreImpl {
 		HashSet<Sha256Hash> traversedUnconfirms = new HashSet<>();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
-		for (BlockEvaluation block : blocksToRemove) {
-
-			try {
-				blockStore.beginDatabaseBatchWrite();
-				serviceBase.unconfirm(block.getBlockHash(), traversedUnconfirms, blockStore);
-				blockStore.commitDatabaseBatchWrite();
-			} catch (Exception e) {
-				blockStore.abortDatabaseBatchWrite();
-				throw e;
-			} finally {
-				blockStore.defaultDatabaseBatchWrite();
-			}
+		for (BlockEvaluation block : blocksToRemove) { 
+			unconfirmDo( block.getBlockHash(),traversedUnconfirms, serviceBase, blockStore);
 		}
 		// TXReward maxConfirmedReward = blockStore.getMaxConfirmedReward();
 
@@ -525,19 +514,38 @@ public class FullBlockStoreImpl {
 		// Finally add the resolved new blocks to the confirmed set
 		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
 		for (BlockWrap block : blocksToAdd) {
-			try {
-				blockStore.beginDatabaseBatchWrite();
-				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-						.confirm(block.getBlockEvaluation().getBlockHash(), traversedConfirms, (long) -1, blockStore);
-				blockStore.commitDatabaseBatchWrite();
-			} catch (Exception e) {
-				blockStore.abortDatabaseBatchWrite();
-				throw e;
-			} finally {
-				blockStore.defaultDatabaseBatchWrite();
-			}
+			confirmDo(block.getBlockEvaluation().getBlockHash(), traversedConfirms, blockStore);
 		}
 
+	}
+
+	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms,
+			ServiceBaseConnect serviceBase,  FullBlockStore blockStore) throws BlockStoreException {
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			serviceBase.unconfirm(hash, traversedUnconfirms, -1, blockStore);
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	public void confirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
+			throws BlockStoreException {
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(hash,
+					traversedConfirms, (long) -1, true, blockStore);
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
 	}
 
 	public void updateConfirmed() throws BlockStoreException {

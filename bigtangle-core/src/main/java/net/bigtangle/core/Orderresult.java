@@ -103,6 +103,11 @@ public class Orderresult extends SpentBlock implements java.io.Serializable {
 	public void setMilestone(long milestone) {
 		this.milestone = milestone;
 	}
+
+	@Override
+	public String toString() {
+		return "Orderresult [prevblockhash=" + prevblockhash + ", milestone=" + milestone + "]";
+	}
   
 
 }

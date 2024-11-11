@@ -45,6 +45,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.MultiSignByRequest;
 import net.bigtangle.core.response.MultiSignResponse;
@@ -162,10 +163,10 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 	// @Before
 	public Block getRollingBlock(ECKey outKey) throws Exception {
 
-		Block rollingBlock = networkParameters.getGenesisBlock().createNextBlock(networkParameters.getGenesisBlock());
+		Block rollingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
 		blockGraph.add(rollingBlock, true, store);
 		for (int i = 1; i < networkParameters.getSpendableCoinbaseDepth(); i++) {
-			rollingBlock = rollingBlock.createNextBlock(networkParameters.getGenesisBlock());
+			rollingBlock =UtilsTest.createBlock(networkParameters,rollingBlock, networkParameters.getGenesisBlock());
 			blockGraph.add(rollingBlock, true, store);
 		}
 		return rollingBlock;

@@ -17,15 +17,17 @@ public class Tokensums  extends DataClass implements java.io.Serializable {
     BigInteger initial = BigInteger.ZERO;
     BigInteger unspent = BigInteger.ZERO;
     BigInteger order = BigInteger.ZERO;
+    BigInteger contract = BigInteger.ZERO;
     //It must be sorted list for calculation hash
     List<UTXO> utxos = new ArrayList<UTXO>();
     List<OrderRecord> orders = new ArrayList<OrderRecord>();
-
+    List<ContractEventRecord> contracts = new ArrayList<ContractEventRecord>();
     
 
     public void calculate() {
         calcOutputs();
         ordersum();
+        contractsum();
     }
     
     public void calcOutputs() { 
@@ -41,20 +43,33 @@ public class Tokensums  extends DataClass implements java.io.Serializable {
             if (orderRecord.getOfferTokenid().equals(tokenid)) {
                 order = order.add(BigInteger.valueOf(orderRecord.getOfferValue()));
             }
+      
         }
     }
 
+    public void contractsum() {
+        for (ContractEventRecord c : contracts) {
+            if (c.getTargetTokenid().equals(tokenid)) {
+            	contract = contract.add( c.getTargetValue());
+            }
+        }
+    }
+
+    
     @Override
     public String toString() {
-        return "Tokensums [ \n tokenid=" + tokenid + ",  \n initial=" + initial + ", \n unspent UTXO=" + unspent + ", \n order=" + order
-                + " \n unspent.add(order) = " + unspent.add(order) + "]";
+        return "Tokensums [ \n tokenid=" + tokenid + ",  \n initial=" + initial + ", \n unspent UTXO=" + unspent 
+        		+ ", \n order=" + order
+        		+ ", \n contract=" + contract
+                + " \n unspentUTXO.add(order).add(contract) = " + unspent.add(order).add(contract) + "]";
     }
 
     public boolean check() {
         if (NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenid)) {
-            return initial.compareTo(unspent.add(order)) <= 0;
+        	//fee payment, only create reward block will fee to miner
+            return initial.compareTo(unspent.add(order).add(contract)) >= 0;
         } else {
-            return initial.compareTo(unspent.add(order)) >= 0;
+            return initial.compareTo(unspent.add(order).add(contract)) == 0;
         }
     }
 
@@ -134,6 +149,22 @@ public class Tokensums  extends DataClass implements java.io.Serializable {
     public void setOrders(List<OrderRecord> orders) {
         this.orders = orders;
     }
+
+	public BigInteger getContract() {
+		return contract;
+	}
+
+	public void setContract(BigInteger contract) {
+		this.contract = contract;
+	}
+
+	public List<ContractEventRecord> getContracts() {
+		return contracts;
+	}
+
+	public void setContracts(List<ContractEventRecord> contracts) {
+		this.contracts = contracts;
+	}
 
    
 }

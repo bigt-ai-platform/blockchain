@@ -111,13 +111,9 @@ public class Block extends Message {
     protected int optimalEncodingMessageSize;
 
     /**
-     * To add new BLOCKTYPES, implement their rules in the switches:
-     * FullPrunedBlockGraph.connectBlock FullPrunedBlockGraph.confirmBlock
-     * FullPrunedBlockGraph.unconfirmBlock
-     * FullPrunedBlockGraph.unconfirmDependents
-     * ValidatorService.checkTypeSpecificSolidity
-     * BlockWrap.addTypeSpecificConflictCandidates ConflictCandidate enum +
-     * switches
+     * To add new BLOCKTYPES to implement type specific function
+     * The order can not be changed for history! enum cardinal is saved in database.
+     * It can be added new at the end of enum Type
      */
     public enum Type {
         BLOCKTYPE_INITIAL(false, Integer.MAX_VALUE, false), // Genesis block
@@ -1185,48 +1181,7 @@ public class Block extends Message {
 
   
 
-    public Block createNextBlock(Block branchBlock) {
-        return createNextBlock(branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS,
-                Address.fromBase58(params, "1Kbm8rqjcX6j5oLbq9J8FapksdvrfGUA88").getHash160());
-    }
-
-    /**
-     * Returns a solved, valid empty block that builds on top of this one and
-     * the specified other Block.
-     */
-    public Block createNextBlock(Block branchBlock, final long version, byte[] mineraddress) {
-        Block b = new Block(params, version);
-
-        b.setMinerAddress(mineraddress);
-        b.setPrevBlockHash(getHash());
-        b.setPrevBranchBlockHash(branchBlock.getHash());
-
-        // Set difficulty according to previous consensus
-        // only BLOCKTYPE_REWARD and BLOCKTYPE_INITIAL should overwrite this
-        b.setLastMiningRewardBlock(Math.max(lastMiningRewardBlock, branchBlock.lastMiningRewardBlock));
-        b.setDifficultyTarget(lastMiningRewardBlock >= branchBlock.lastMiningRewardBlock ? difficultyTarget
-                : branchBlock.difficultyTarget);
-
-        b.setHeight(Math.max(getHeight(), branchBlock.getHeight()) + 1);
-
-        // Don't let timestamp go backwards
-        long currTime = System.currentTimeMillis() / 1000;
-        long minTime = Math.max(currTime, branchBlock.getTimeSeconds());
-        if (currTime >= minTime)
-            b.setTime(currTime + 1);
-        else
-            b.setTime(minTime);
-        b.solve();
-        try {
-            b.verifyHeader();
-        } catch (VerificationException e) {
-            throw new RuntimeException(e); // Cannot happen.
-        }
-        if (b.getVersion() != version) {
-            throw new RuntimeException();
-        }
-        return b;
-    }
+   
 
     /**
      * Return whether this block contains any transactions.
@@ -1235,7 +1190,7 @@ public class Block extends Message {
      *         purely a header).
      */
     public boolean hasTransactions() {
-        return !this.transactions.isEmpty();
+        return  this.transactions!=null && !this.transactions.isEmpty();
     }
 
     public byte[] getMinerAddress() {

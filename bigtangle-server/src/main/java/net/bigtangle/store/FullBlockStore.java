@@ -23,6 +23,7 @@ import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
@@ -46,7 +47,6 @@ import net.bigtangle.core.ordermatch.MatchResult;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
-import net.bigtangle.server.data.ContractEventRecord;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
@@ -489,10 +489,14 @@ public interface FullBlockStore {
 	public ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash)
 			throws BlockStoreException;
 
-	public void updateContractEventSpent(Set<Sha256Hash> contractEventRecords, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException;
+ 
+	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
-	public void updateContractEventConfirmed(Collection<Sha256Hash> contracts, boolean confirm)
+	
+	public void updateContractEventBySpender(Set<Sha256Hash> contractEventRecords, Sha256Hash collectinghash, Sha256Hash spentBlock )
+			throws BlockStoreException;
+	
+	public void updateContractEventConfirmed(Collection<Sha256Hash> contracts, Sha256Hash collectinghash,  boolean confirm)
 			throws BlockStoreException;
 
 	public Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
@@ -501,8 +505,6 @@ public interface FullBlockStore {
 	public List<String> getOpenContractid() throws BlockStoreException;
 
 	public Sha256Hash getContractEventSpent(Sha256Hash contractEvent) throws BlockStoreException;
-
-	public boolean checkContractEventConfirmed(List<Sha256Hash> contractEventRecords) throws BlockStoreException;
 
 	void insertContractResult(ContractExecutionResult record) throws BlockStoreException;
 
@@ -555,4 +557,8 @@ public interface FullBlockStore {
 
 	public List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid)
 			throws BlockStoreException;
+
+	public List<ContractEventRecord> getContractEventRecordOpen(  String tokenid) throws BlockStoreException;
+
+
 }

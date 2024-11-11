@@ -23,6 +23,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MultiSignAddress;
@@ -47,7 +48,6 @@ import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.data.ContractEventRecord;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
@@ -293,7 +293,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getAllRecords().equals(check.getAllRecords())
+					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 				result.setBlockHash(block.getHash());
@@ -301,6 +301,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
 				for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
 					c.setCollectinghash(block.getHash());
+					c.setConfirmed(false);
 				}
 				blockStore.insertContractEvent(check.getRemainderContractEventRecord());
 
@@ -322,7 +323,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 					cacheBlockService).orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getAllRecords().equals(check.getAllRecords())
+					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 				result.setBlockHash(block.getHash());
@@ -383,50 +384,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	 * in milestone (reward) with MCMC upper value and conflict free, then set those
 	 * as confirmed.
 	 */
-	public void updateConfirmedDo(TXReward maxConfirmedReward, FullBlockStore blockStore) throws BlockStoreException {
-
-		// First remove any blocks that should no longer be in the milestone
-		HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
-		HashSet<Sha256Hash> traversedUnconfirms = new HashSet<>();
-		for (BlockEvaluation block : blocksToRemove) {
-
-			try {
-				blockStore.beginDatabaseBatchWrite();
-				unconfirm(block.getBlockHash(), traversedUnconfirms, blockStore);
-				blockStore.commitDatabaseBatchWrite();
-			} catch (Exception e) {
-				blockStore.abortDatabaseBatchWrite();
-				throw e;
-			} finally {
-				blockStore.defaultDatabaseBatchWrite();
-			}
-		}
-		// TXReward maxConfirmedReward = blockStore.getMaxConfirmedReward();
-		long cutoffHeight = getCurrentCutoffHeight(maxConfirmedReward, blockStore);
-		long maxHeight = getCurrentMaxHeight(maxConfirmedReward, blockStore);
-
-		// Now try to find blocks that can be added to the milestone.
-		// DISALLOWS UNSOLID
-		TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
-
-		// VALIDITY CHECKS
-		resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-
-		// Finally add the resolved new blocks to the confirmed set
-		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
-		for (BlockWrap block : blocksToAdd) {
-			try {
-				blockStore.beginDatabaseBatchWrite();
-				confirm(block.getBlockEvaluation().getBlockHash(), traversedConfirms, (long) -1, blockStore);
-				blockStore.commitDatabaseBatchWrite();
-			} catch (Exception e) {
-				blockStore.abortDatabaseBatchWrite();
-				throw e;
-			} finally {
-				blockStore.defaultDatabaseBatchWrite();
-			}
-		}
-
-	}
+	 
 
 }

@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +40,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.Coin;
@@ -52,7 +50,6 @@ import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.OrderCancelInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -64,9 +61,6 @@ import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.InsufficientMoneyException;
-import net.bigtangle.core.exception.UTXOProviderException;
-import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.GetBalancesResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetTokensResponse;
@@ -164,35 +158,7 @@ public abstract class AbstractIntegrationTest {
 	protected static ObjectMapper objectMapper = new ObjectMapper();
 	public FullBlockStore store;
 
-	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll, Transaction feeTransaction)
-			throws BlockStoreException, UTXOProviderException, InsufficientMoneyException, IOException,
-			InterruptedException, ExecutionException {
-		// add more blocks follow this startBlock
-		Block rollingBlock1 = startBlock;
-		for (int i = 0; i < num; i++) {
-			rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
-			rollingBlock1.addTransaction(feeTransaction);
-			rollingBlock1.solve();
-			blockGraph.add(rollingBlock1, true, store);
-			blocksAddedAll.add(rollingBlock1);
-		}
-		return rollingBlock1;
-	}
-
-	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll) throws BlockStoreException,
-			UTXOProviderException, InsufficientMoneyException, IOException, InterruptedException, ExecutionException {
-// add more blocks follow this startBlock
-		Block rollingBlock1 = startBlock;
-		for (int i = 0; i < num; i++) {
-			rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
-			rollingBlock1.addTransaction(wallet.feeTransaction(null));
-			rollingBlock1.solve();
-			blockGraph.add(rollingBlock1, true, store);
-			mcmc();
-			blocksAddedAll.add(rollingBlock1);
-		}
-		return rollingBlock1;
-	}
+ 
 
 	public void checkTokenAssertTrue(String tokenid, String domainname) throws Exception {
 		HashMap<String, Object> requestParam0 = new HashMap<String, Object>();
@@ -329,70 +295,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeAndConfirmTransaction(ECKey fromKey, ECKey beneficiary, String tokenId, long sellAmount,
-			List<Block> addedBlocks) throws Exception {
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		return makeAndConfirmTransaction(fromKey, beneficiary, tokenId, sellAmount, addedBlocks, predecessor);
-	}
-
-	protected Block makeAndConfirmTransaction(ECKey fromKey, ECKey beneficiary, String tokenId, long sellAmount,
-			List<Block> addedBlocks, Block predecessor) throws Exception {
-		Block block = null;
-
-		// Make transaction
-		Transaction tx = new Transaction(networkParameters);
-		Coin amount = Coin.valueOf(sellAmount, tokenId);
-		List<UTXO> outputs = getBalance(false, fromKey).stream()
-				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid()).equals(tokenId))
-				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0).collect(Collectors.toList());
-		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, beneficiary));
-		tx.addOutput(
-				new TransactionOutput(networkParameters, tx, spendableOutput.getValue().subtract(amount), fromKey));
-		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
-
-		// Sign
-		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-		TransactionSignature sig = new TransactionSignature(fromKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
-		input.setScriptSig(inputScript);
-
-		// Create block with tx
-		block = predecessor.createNextBlock(predecessor);
-		block.addTransaction(tx);
-		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
-		addedBlocks.add(block);
-
-		// Confirm and return
-		makeRewardBlock(addedBlocks);
-		return block;
-	}
-
-	protected Block makeAndConfirmBlock(List<Block> addedBlocks, Block predecessor) throws Exception {
-		Block block = null;
-
-		// Create and add block
-		block = predecessor.createNextBlock(predecessor);
-		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
-		addedBlocks.add(block);
-
-		// Confirm and return
-		makeRewardBlock(addedBlocks);
-		return block;
-	}
-
-	protected Block makeAndAddBlock(Block predecessor) throws Exception {
-		Block block = null;
-
-		// Create and add block
-		block = predecessor.createNextBlock(predecessor);
-		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
-		return block;
-	}
+ 
 
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount,
 			List<Block> addedBlocks) throws Exception {
@@ -445,39 +348,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
  
-
-	protected Block makeCancelOp(Block order, ECKey legitimatingKey, List<Block> addedBlocks) throws Exception {
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		return makeCancelOp(order, legitimatingKey, addedBlocks, predecessor);
-	}
-
-	protected Block makeCancelOp(Block order, ECKey legitimatingKey, List<Block> addedBlocks, Block predecessor)
-			throws Exception {
-		// Make an order op
-		Transaction tx = new Transaction(networkParameters);
-		OrderCancelInfo info = new OrderCancelInfo(order.getHash());
-		tx.setData(info.toByteArray());
-
-		// Legitimate it by signing
-		Sha256Hash sighash1 = tx.getHash();
-		ECKey.ECDSASignature party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
-		tx.setDataSignature(buf1);
-
-		// Create block with order
-		Block block = predecessor.createNextBlock(predecessor);
-		block.addTransaction(tx);
-		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
-		block = adjustSolve(block);
-
-		this.blockGraph.add(block, true, store);
-		addedBlocks.add(block);
-
-		mcmcServiceUpdate();
-		return block;
-	}
+ 
 
 	protected Block makeRewardBlock() throws Exception {
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
@@ -615,32 +486,7 @@ public abstract class AbstractIntegrationTest {
 		Sha256Hash sha256Hash = Sha256Hash.wrap(rawHashBytes);
 		return sha256Hash;
 	}
-
-	protected Block createAndAddNextBlock(Block b1, Block b2) throws VerificationException, BlockStoreException {
-		Block block = b1.createNextBlock(b2);
-		this.blockGraph.add(block, true, store);
-		return block;
-	}
-
-	protected Block createAndAddNextBlockWithTransaction(Block b1, Block b2, Transaction prevOut, boolean mcmc)
-			throws VerificationException, BlockStoreException, JsonParseException, JsonMappingException, IOException,
-			UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
-		Block block1 = b1.createNextBlock(b2);
-		block1.addTransaction(prevOut);
-		// block1.addTransaction(wallet.feeTransaction(null));
-		block1 = adjustSolve(block1);
-		this.blockGraph.add(block1, true, store);
-		if (mcmc)
-			mcmcServiceUpdate();
-		return block1;
-	}
-
-	protected Block createAndAddNextBlockWithTransaction(Block b1, Block b2, Transaction prevOut)
-			throws VerificationException, BlockStoreException, JsonParseException, JsonMappingException, IOException,
-			UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
-
-		return createAndAddNextBlockWithTransaction(b1, b2, prevOut, true);
-	}
+ 
 
 	public Block adjustSolve(Block block) throws IOException, JsonParseException, JsonMappingException {
 		// save block

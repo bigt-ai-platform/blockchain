@@ -17,14 +17,13 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Coin;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.UTXOProviderException;
-import net.bigtangle.server.config.DBStoreConfiguration;
-import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.store.FullBlockStore;
 
@@ -32,24 +31,10 @@ import net.bigtangle.store.FullBlockStore;
 public class CheckpointService {
 	private static final Logger log = LoggerFactory.getLogger(CheckpointService.class);
 
-	@Autowired
-	private ServerConfiguration serverConfiguration;
-
-	@Autowired
-	private DBStoreConfiguration dbStoreConfiguration;
-
  
-//	@Autowired
-//	private SparkConfig sparkConfig;
 
 	@Autowired
-	protected StoreService storeService;
-
-	String SELECT_OUTPUTS_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress,"
-			+ " addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, "
-			+ "spendpending , spendpendingtime, minimumsign, time, spenderblockhash "
-			+ " FROM outputs WHERE spent=false ";
-
+	protected StoreService storeService; 
  
 	// private static final Logger log =
 	// LoggerFactory.getLogger(CheckpointService.class);
@@ -60,21 +45,19 @@ public class CheckpointService {
 		return store.getOpenAllOutputs(tokenid);
 	}
 
-	public Coin ordersum(String tokenid, List<OrderRecord> orders) throws JsonProcessingException, Exception {
-		Coin sumUnspent = Coin.valueOf(0l, tokenid);
-		for (OrderRecord orderRecord : orders) {
-			if (orderRecord.getOfferTokenid().equals(tokenid)) {
-				sumUnspent = sumUnspent.add(Coin.valueOf(orderRecord.getOfferValue(), tokenid));
-			}
-		}
-		return sumUnspent;
-	}
+ 
 
 	private List<OrderRecord> orders(String tokenid, FullBlockStore store) throws BlockStoreException {
 		return store.getAllOpenOrdersSorted(null, tokenid);
 
 	}
 
+	private List<ContractEventRecord> contracts(String tokenid, FullBlockStore store) throws BlockStoreException {
+		return store.getContractEventRecordOpen(  tokenid);
+
+	}
+
+	
 	public Map<String, BigInteger> tokensumInitial(FullBlockStore store) throws BlockStoreException {
 
 		return store.getTokenAmountMap();
@@ -92,6 +75,7 @@ public class CheckpointService {
 			tokensums.setUtxos(getOutputs(tokenid, store));
 			tokensums.setOrders(orders(tokenid, store));
 			tokensums.setInitial(tokensumsInitial.get(tokenid));
+			tokensums.setContracts(contracts(tokenid, store));
 			tokensums.calculate();
 			tokensumset.getTokensumsMap().put(tokenid, tokensums);
 		}

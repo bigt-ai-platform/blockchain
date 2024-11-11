@@ -99,6 +99,9 @@ public class BlockWrap {
 		return blockConflicts;
 	}
 
+	/*
+	 * This TypeSpecific will be added, if it have to check more than the transactions
+	 */
 	private void addTypeSpecificConflictCandidates(HashSet<ConflictCandidate> blockConflicts) {
 		switch (this.getBlock().getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE:

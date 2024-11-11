@@ -35,7 +35,7 @@ public class OrderExecutionResult extends SpentBlock {
 	// coinbase outputTxHash
 	Sha256Hash outputTxHash;
 	// all records used in this calculation
-	Set<Sha256Hash> allRecords = new HashSet<>();
+	Set<Sha256Hash> toBeSpent = new HashSet<>();
 	// the cancelled records referenced by this ContractResult
 	Set<Sha256Hash> cancelRecords = new HashSet<>();
 	// remainder Record is open records after execution
@@ -46,9 +46,8 @@ public class OrderExecutionResult extends SpentBlock {
 	// not part of toArray, not persistent, but data after the check
 	// with re calculation to save
 	Transaction outputTx;
-
 	Collection<OrderRecord> remainderOrderRecord;
-	Set<OrderRecord> spentOrderRecord;
+	Set<OrderRecord> toBeSpentRecord;
 	Map<TradePair, List<Event>> tokenId2Events;
 	
 	public OrderExecutionResult() {
@@ -66,14 +65,14 @@ public class OrderExecutionResult extends SpentBlock {
 
 		this.outputTxHash = outputTxHash;
 		this.outputTx = outputTx;
-		this.allRecords = toBeSpent;
+		this.toBeSpent = toBeSpent;
 		this.cancelRecords = cancelRecords;
 		this.remainderRecords = remainderRecords;
 		this.setTime(inserttime);
 
 		this.remainderOrderRecord = remainderOrderRecord;
 		this.referencedBlocks = referencedOrderBlocks;
-		this.	spentOrderRecord= spentOrderRecord;
+		this.	toBeSpentRecord= spentOrderRecord;
 		this.tokenId2Events=tokenId2Events;
 	}
 
@@ -86,8 +85,8 @@ public class OrderExecutionResult extends SpentBlock {
 			Utils.writeNBytes(dos, outputTxHash.getBytes());
 			Utils.writeNBytes(dos, prevblockhash.getBytes());
 
-			dos.writeInt(allRecords.size());
-			for (Sha256Hash c : allRecords) {
+			dos.writeInt(toBeSpent.size());
+			for (Sha256Hash c : toBeSpent) {
 				Utils.writeNBytes(dos, c.getBytes());
 			}
 
@@ -118,10 +117,10 @@ public class OrderExecutionResult extends SpentBlock {
 		outputTxHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
 
-		allRecords = new HashSet<>();
+		toBeSpent = new HashSet<>();
 		int allRecordsSize = dis.readInt();
 		for (int i = 0; i < allRecordsSize; i++) {
-			allRecords.add(Sha256Hash.wrap(Utils.readNBytes(dis)));
+			toBeSpent.add(Sha256Hash.wrap(Utils.readNBytes(dis)));
 		}
 		cancelRecords = new HashSet<>();
 		int cancelRecordsSize = dis.readInt();
@@ -184,12 +183,13 @@ public class OrderExecutionResult extends SpentBlock {
 		this.prevblockhash = prevblockhash;
 	}
 
-	public Set<Sha256Hash> getAllRecords() {
-		return allRecords;
+ 
+	public Set<Sha256Hash> getToBeSpent() {
+		return toBeSpent;
 	}
 
-	public void setAllRecords(Set<Sha256Hash> allRecords) {
-		this.allRecords = allRecords;
+	public void setToBeSpent(Set<Sha256Hash> toBeSpent) {
+		this.toBeSpent = toBeSpent;
 	}
 
 	public Set<Sha256Hash> getCancelRecords() {
@@ -224,12 +224,13 @@ public class OrderExecutionResult extends SpentBlock {
 		this.remainderOrderRecord = remainderOrderRecord;
 	}
 
-	public Set<OrderRecord> getSpentOrderRecord() {
-		return spentOrderRecord;
+ 
+	public Set<OrderRecord> getToBeSpentRecord() {
+		return toBeSpentRecord;
 	}
 
-	public void setSpentOrderRecord(Set<OrderRecord> spentOrderRecord) {
-		this.spentOrderRecord = spentOrderRecord;
+	public void setToBeSpentRecord(Set<OrderRecord> toBeSpentRecord) {
+		this.toBeSpentRecord = toBeSpentRecord;
 	}
 
 	public Map<TradePair, List<Event>> getTokenId2Events() {
