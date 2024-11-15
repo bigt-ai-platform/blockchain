@@ -41,6 +41,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenKeyValues;
@@ -152,6 +153,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, "
 			+ "spendpending , spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND outputindex = ? AND blockhash = ? ";
 
+	protected final String SELECT_OUTPUTS_SPENTBLOCK_SQL = "SELECT " + " spent, confirmed, "
+			+ " spenderblockhash FROM outputs WHERE hash = ? AND outputindex = ? AND blockhash = ? ";
+
 	protected final String SELECT_TRANSACTION_OUTPUTS_SQL_BASE = "SELECT " + "outputs.hash, coinvalue, scriptbytes, "
 			+ " outputs.outputindex, coinbase, " + "  outputs.toaddress  as  toaddress,"
 			+ " outputsmulti.toaddress  as multitoaddress, " + "  addresstargetable, blockhash, tokenid, "
@@ -185,7 +189,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ "  FROM blocks , mcmc WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 AND confirmed = true AND mcmc.rating < "
 			+ NetworkParameters.CONFIRMATION_LOWER_THRESHOLD + afterSelect();
 
-	protected final String SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL = "SELECT hash "  
+	protected final String SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL = "SELECT hash "
 			+ "  FROM blocks WHERE milestone >= ? AND milestone <= ?" + afterSelect();
 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
@@ -199,13 +203,13 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
-	
-	protected final String UPDATE_ORDER_UNSPENT_SQL = getUpdate() + " orders SET spent = false, spenderblockhash = null "
-			+ " WHERE spenderblockhash = ?";
-	
+
+	protected final String UPDATE_ORDER_UNSPENT_SQL = getUpdate()
+			+ " orders SET spent = false, spenderblockhash = null " + " WHERE spenderblockhash = ?";
+
 	protected final String UPDATE_ORDER_CONFIRMED_SQL = getUpdate() + " orders SET confirmed = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
- 
+
 	protected final String ORDER_TEMPLATE = "  blockhash, collectinghash, offercoinvalue, offertokenid, "
 			+ "confirmed, spent, spenderblockhash, targetcoinvalue, targettokenid, "
 			+ "beneficiarypubkey, validToTime, validFromTime, side , beneficiaryaddress, orderbasetoken, price, tokendecimals ";
@@ -247,7 +251,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " FROM contractevent WHERE blockhash = ? AND  collectinghash=? ";
 	protected final String SELECT_OPEN_CONTRACT_EVENT_SQL = "SELECT " + CONTRACT_TEMPLATE
 			+ " FROM contractevent WHERE confirmed=1 AND spent=0 AND targettokenid= ? ";
-	
+
 	protected final String UPDATE_CONTRACTRESULT_SPENT_SQL = getUpdate()
 			+ " contractresult SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
 
@@ -260,17 +264,21 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
 			+ " contractresult, prevblockhash, inserttime, milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)";
-	protected final String SELECT_CONTRACTRESULT  = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-			+ " contractresult, prevblockhash, inserttime, milestone "
-			+ " FROM contractresult ";
-	protected final String SELECT_CONTRACTRESULT_HASH_SQL =SELECT_CONTRACTRESULT +"  WHERE blockhash=?   ";
+	protected final String SELECT_CONTRACTRESULT = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
+			+ " contractresult, prevblockhash, inserttime, milestone " + " FROM contractresult ";
+	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
+	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
+
 	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = 1 and contracttokenid=? and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = 1 and contracttokenid=? and milestone < 0  order by inserttime desc   ";
+	protected final String SELECT_CONTRACTRESULT_CONFIRMED_ANY_SQL = SELECT_CONTRACTRESULT
+			+ " WHERE confirmed = 1 and contracttokenid=?    ";
+	
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
-	
+
 	protected final String UPDATE_ORDERRESULT_SPENT_SQL = getUpdate()
 			+ " orderresult SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
 	protected final String UPDATE_ORDERRESULT_CONFIRMED_SQL = getUpdate() + " orderresult SET confirmed = ? "
@@ -278,18 +286,18 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
 			+ "  INTO orderresult (blockhash, confirmed, spent, spenderblockhash, "
 			+ " orderresult, prevblockhash, inserttime,  milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?)";
-	protected final String SELECT_ORDERRESULT =   "  select blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime ,  milestone" 
-			+ " FROM orderresult ";
+	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
+			+ " orderresult, prevblockhash, inserttime ,  milestone" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = 1  and milestone < 0  order by inserttime desc   ";
-	
-	protected final String SELECT_ORDERRESULT_HASH_SQL =   SELECT_ORDERRESULT +" WHERE blockhash=?";
+	protected final String SELECT_ORDERRESULT_CONFIRMED_ANY_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = 1    ";
+	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = 1 and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()
 			+ " orderresult SET milestone = ?   WHERE blockhash = ?";
-	
+
 	protected final String INSERT_TOKENS_SQL = getInsert()
 			+ " INTO tokens (blockhash, confirmed, tokenid, tokenindex, amount, "
 			+ "tokenname, description, domainname, signnumber,tokentype, tokenstop,"
@@ -299,7 +307,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected String SELECT_TOKENS_SQL_TEMPLATE = "SELECT blockhash, confirmed, tokenid, tokenindex, amount, tokenname, description, domainname, signnumber,tokentype, tokenstop ,"
 			+ "tokenkeyvalues, revoked,language,classification,decimals, domainpredblockhash ";
 
-	protected final String SELECT_TOKEN_SPENT_BY_BLOCKHASH_SQL = "SELECT spent FROM tokens WHERE blockhash = ?";
+	protected final String SELECT_TOKEN_SPENT_BY_BLOCKHASH_SQL = "SELECT confirmed, spent,spenderblockhash FROM tokens WHERE blockhash = ?";
 
 	protected final String SELECT_TOKEN_CONFIRMED_SQL = "SELECT confirmed FROM tokens WHERE blockhash = ?";
 
@@ -310,8 +318,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected final String SELECT_DOMAIN_ISSUING_CONFIRMED_BLOCK_SQL = "SELECT blockhash FROM tokens WHERE tokenname = ? AND domainpredblockhash = ? AND tokenindex = ? AND confirmed = true";
 
 	protected final String SELECT_DOMAIN_DESCENDANT_CONFIRMED_BLOCKS_SQL = "SELECT blockhash FROM tokens WHERE domainpredblockhash = ? AND confirmed = true";
-
-	protected final String SELECT_TOKEN_SPENDER_SQL = "SELECT spenderblockhash FROM tokens WHERE blockhash = ?";
 
 	protected final String SELECT_TOKEN_PREVBLOCKHASH_SQL = "SELECT prevblockhash FROM tokens WHERE blockhash = ?";
 
@@ -466,14 +472,11 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ "addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,spendpendingtime, minimumsign, time, hash, outputindex, spenderblockhash "
 			+ " FROM outputs WHERE confirmed=1 AND spent=0 ORDER BY hash, outputindex";
 
-  
 	protected final String SELECT_ORDERCANCEL_SQL = "SELECT blockhash, orderblockhash, confirmed, spent, spenderblockhash,time"
 			+ " FROM ordercancel WHERE 1 = 1";
 	protected final String ORDERCANCEL_CONFIRMED_SQL = "SELECT blockhash, orderblockhash, confirmed, spent, spenderblockhash,time"
 			+ " FROM ordercancel WHERE confirmed = true and spent=false";
 	protected final String ORDERCANCEL_UPDATE_SPENT_SQL = "UPDATE ordercancel SET spent = ?, spenderblockhash=?  WHERE blockhash = ? ";
-
- 
 
 	protected final String BlockPrototype_SELECT_SQL = "   select prevblockhash, prevbranchblockhash, "
 			+ " inserttime from blockprototype   ";
@@ -496,7 +499,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " FROM contracteventcancel WHERE confirmed = true and spent=false";
 	protected final String CONTRACTEVENTCANCEL_UPDATE_SPENT_SQL = "UPDATE contracteventcancel SET spent = ?, spenderblockhash=?  WHERE blockhash = ? ";
 
-	
 	protected NetworkParameters params;
 	protected Connection conn;
 
@@ -517,8 +519,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	}
 
 	public void create() throws BlockStoreException {
-
-		
 
 		try {
 			// Create tables if needed
@@ -555,7 +555,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	 */
 	protected abstract String getDatabaseDriverClass();
 
-	 
 	/**
 	 * Get the SQL statements that create the tables (DDL).
 	 * 
@@ -656,7 +655,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	 */
 	protected abstract String getUpdateSettingsSLQ();
 
- 
 	@Override
 	public void close() {
 		try {
@@ -877,7 +875,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public void put(Block block) throws BlockStoreException {
-		
 
 		try {
 
@@ -906,7 +903,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	public byte[] getByte(Sha256Hash hash) throws BlockStoreException {
 
-		
 		PreparedStatement s = null;
 		// log.info("find block hexStr : " + hash.toString());
 		try {
@@ -938,7 +934,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public List<byte[]> blocksFromChainLength(long start, long end) throws BlockStoreException {
 		// Optimize for chain head
 		List<byte[]> re = new ArrayList<byte[]>();
-		
+
 		PreparedStatement s = null;
 		// log.info("find block hexStr : " + hash.toString());
 		try {
@@ -969,7 +965,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public List<byte[]> blocksFromNonChainHeigth(long heigth) throws BlockStoreException {
 		// Optimize for chain head
 		List<byte[]> re = new ArrayList<byte[]>();
-		
+
 		PreparedStatement s = null;
 		// log.info("find block hexStr : " + hash.toString());
 		try {
@@ -1038,7 +1034,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	public List<BlockWrap> getNotInvalidApproverBlocks(Sha256Hash hash) throws BlockStoreException {
 		List<BlockWrap> storedBlocks = new ArrayList<BlockWrap>();
-		
+
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(SELECT_NOT_INVALID_APPROVER_BLOCKS_SQL);
@@ -1069,10 +1065,10 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
- 
+
 	public List<Sha256Hash> getSolidApproverBlockHashes(Sha256Hash hash) throws BlockStoreException {
 		List<Sha256Hash> storedBlockHash = new ArrayList<Sha256Hash>();
-		
+
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(SELECT_SOLID_APPROVER_HASHES_SQL);
@@ -1105,7 +1101,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public boolean getOutputConfirmation(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException {
-		
+
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(
@@ -1134,8 +1130,38 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	}
 
 	@Override
+	public SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
+			throws BlockStoreException {
+
+		PreparedStatement s = null;
+		try {
+			s = getConnection().prepareStatement(SELECT_OUTPUTS_SPENTBLOCK_SQL);
+			s.setBytes(1, hash.getBytes());
+			// index is actually an unsigned int
+			s.setLong(2, index);
+			s.setBytes(3, blockHash.getBytes());
+			ResultSet results = s.executeQuery();
+			if (!results.next()) {
+				return null;
+			}
+			return setSpentBlock(blockHash, results);
+
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		} finally {
+			if (s != null) {
+				try {
+					s.close();
+				} catch (SQLException e) {
+					// throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
+
+	@Override
 	public UTXO getTransactionOutput(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException {
-		
+
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(SELECT_OUTPUTS_SQL);
@@ -1160,6 +1186,15 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 				}
 			}
 		}
+	}
+
+	protected SpentBlockData setSpentBlock(Sha256Hash blockHash, ResultSet results) throws SQLException {
+
+		boolean spent = results.getBoolean("spent");
+		Sha256Hash spenderblockhash = Sha256Hash.wrap(results.getBytes("spenderblockhash"));
+		boolean confirmed = results.getBoolean("confirmed");
+
+		return new SpentBlockData(blockHash, spent, confirmed, spenderblockhash);
 	}
 
 	private UTXO setUTXO(Sha256Hash hash, long index, ResultSet results) throws SQLException {
@@ -1190,7 +1225,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public void addUnspentTransactionOutput(List<UTXO> utxos) throws BlockStoreException {
-		
+
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(INSERT_OUTPUTS_SQL);
@@ -1238,8 +1273,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 	}
 
-	
-
 	@Override
 	public void addUnspentTransactionOutput(UTXO out) throws BlockStoreException {
 		List<UTXO> a = new ArrayList<UTXO>();
@@ -1249,7 +1282,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public void beginDatabaseBatchWrite() throws BlockStoreException {
-		
 
 		try {
 			getConnection().setAutoCommit(false);
@@ -1310,7 +1342,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	 *                             initialised.
 	 */
 	public void resetStore() throws BlockStoreException {
-		
+
 		defaultDatabaseBatchWrite();
 		try {
 			deleteStore();
@@ -1327,7 +1359,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	 * @throws BlockStoreException If tables couldn't be deleted.
 	 */
 	public void deleteStore() throws BlockStoreException {
-		
 
 		try {
 			Statement s = getConnection().createStatement();
@@ -1343,7 +1374,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 		}
 	}
- 
 
 	@Override
 	public List<UTXO> getOpenAllOutputs(String tokenid) throws UTXOProviderException {
@@ -1351,7 +1381,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<UTXO>();
 		try {
-			
+
 			// Must be sorted for hash checkpoint
 			s = getConnection().prepareStatement(SELECT_ALL_OUTPUTS_TOKEN_SQL + " order by hash, outputindex ");
 			s.setString(1, tokenid);
@@ -1380,7 +1410,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<UTXO>();
 		try {
-			
+
 			// Must be sorted for hash checkpoint
 			s = getConnection().prepareStatement(SELECT_TRANSACTION_OUTPUTS_SQL_BASE + "  where blockhash =?");
 			s.setBytes(1, blockhash.getBytes());
@@ -1408,7 +1438,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<UTXO>();
 		try {
-			
+
 			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_SQL);
 			for (Address address : addresses) {
 				s.setString(1, address.toString());
@@ -1422,7 +1452,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			return outputs;
 		} catch (SQLException ex) {
 			throw new UTXOProviderException(ex);
-		}   finally {
+		} finally {
 			if (s != null)
 				try {
 					s.close();
@@ -1437,7 +1467,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<UTXO>();
 		try {
-			
+
 			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_SQL);
 
 			s.setString(1, address.toString());
@@ -1466,7 +1496,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<UTXO>();
 		try {
-			
+
 			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_TOKEN_SQL);
 			for (Address address : addresses) {
 				s.setString(1, address.toString());
@@ -1495,7 +1525,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public BlockWrap getBlockWrap(Sha256Hash hash) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_SQL);
 			preparedStatement.setBytes(1, hash.getBytes());
@@ -1525,7 +1555,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public List<UTXO> getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime)
 			throws BlockStoreException {
 		List<UTXO> outputs = new ArrayList<UTXO>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			String sql = SELECT_TRANSACTION_OUTPUTS_SQL_BASE + "WHERE  confirmed=true ";
@@ -1581,7 +1611,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		Comparator<BlockWrap> comparator = Comparator.comparingLong((BlockWrap b) -> b.getBlock().getHeight())
 				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
 		TreeSet<BlockWrap> storedBlockHashes = new TreeSet<>(comparator);
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_MCMC_CONFIRM);
@@ -1613,7 +1643,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public HashSet<BlockEvaluation> getBlocksToUnconfirm() throws BlockStoreException {
 		HashSet<BlockEvaluation> storedBlockHashes = new HashSet<BlockEvaluation>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_TO_UNCONFIRM_SQL);
@@ -1642,7 +1672,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			throws BlockStoreException {
 		PriorityQueue<BlockWrap> blocksByDescendingHeight = new PriorityQueue<BlockWrap>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL);
@@ -1670,13 +1700,15 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
- 
+
 	@Override
-	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength) throws BlockStoreException {
+	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength)
+			throws BlockStoreException {
 		// long currChainLength = getMaxConfirmedReward().getChainLength();
-	//	long minChainLength = Math.max(0, currChainLength - NetworkParameters.MILESTONE_CUTOFF);
+		// long minChainLength = Math.max(0, currChainLength -
+		// NetworkParameters.MILESTONE_CUTOFF);
 		List<Sha256Hash> resultQueue = new ArrayList<>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL);
@@ -1684,8 +1716,8 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			preparedStatement.setLong(2, currChainLength);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
-				resultQueue.add(Sha256Hash.wrap(resultSet.getBytes(1))); 
-			 		}
+				resultQueue.add(Sha256Hash.wrap(resultSet.getBytes(1)));
+			}
 			return resultQueue;
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
@@ -1725,7 +1757,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public void deleteMCMC(long chainlength) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
 		PreparedStatement deleteStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_MCMC_CHAINLENGHT_SQL);
 			deleteStatement = getConnection().prepareStatement(" delete from mcmc where hash = ?");
@@ -1761,7 +1793,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public void updateBlockEvaluationWeightAndDepth(List<DepthAndWeight> depthAndWeight) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
 		PreparedStatement insertStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL);
 			insertStatement = getConnection().prepareStatement(INSERT_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL);
@@ -1804,13 +1836,10 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 	}
 
- 
-
 	@Override
 	public void updateBlockEvaluationMilestone(Sha256Hash blockhash, long b) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
 
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_MILESTONE_SQL);
@@ -1836,7 +1865,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean b) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
 
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_CONFIRMED_SQL);
@@ -1856,13 +1884,12 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 
 	}
- 
 
 	@Override
 	public void updateBlockEvaluationRating(List<Rating> ratings) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 
 			preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_RATING_SQL);
@@ -1890,7 +1917,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_SOLID_SQL);
 			preparedStatement.setLong(1, solid);
@@ -1908,13 +1935,12 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
- 
 
 	@Override
 	public BlockEvaluation getTransactionOutputSpender(Sha256Hash blockHash, Sha256Hash hash, long index)
 			throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			UTXO u = getTransactionOutput(blockHash, hash, index);
 			if (u == null || u.getSpenderBlockHash() == null)
@@ -1939,11 +1965,11 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
- 
+
 	@Override
 	public void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
 			@Nullable Sha256Hash spenderBlockHash) throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_OUTPUTS_SPENT_SQL);
@@ -1967,12 +1993,11 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 
 	}
- 
 
 	@Override
 	public void updateTransactionOutputConfirmed(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b)
 			throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_OUTPUTS_CONFIRMED_SQL);
@@ -1996,7 +2021,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public void updateAllTransactionOutputsConfirmed(Sha256Hash prevBlockHash, boolean b) throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_ALL_OUTPUTS_CONFIRMED_SQL);
@@ -2015,11 +2040,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
- 
 
 	@Override
 	public void updateTransactionOutputSpendPending(List<UTXO> utxos) throws BlockStoreException {
-		
 
 		PreparedStatement preparedStatement = null;
 		try {
@@ -2051,7 +2074,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		List<Token> list = new ArrayList<Token>();
 		if (tokenids.isEmpty())
 			return list;
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			String sql = SELECT_CONFIRMED_TOKENS_SQL;
@@ -2084,7 +2107,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public List<Token> getTokenTypeList(int type) throws BlockStoreException {
 		List<Token> list = new ArrayList<Token>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_TOKENS_TYPE_SQL);
@@ -2113,7 +2136,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	public Map<String, BigInteger> getTokenAmountMap() throws BlockStoreException {
 		Map<String, BigInteger> map = new HashMap<String, BigInteger>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 
@@ -2146,7 +2169,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public List<Token> getTokensListFromDomain(String domainname) throws BlockStoreException {
 		List<Token> list = new ArrayList<Token>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			String sql = SELECT_CONFIRMED_TOKENS_SQL;
@@ -2180,7 +2203,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public List<Token> getTokensList(String name) throws BlockStoreException {
 		List<Token> list = new ArrayList<Token>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			String sql = SELECT_CONFIRMED_TOKENS_SQL;
@@ -2269,7 +2292,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			String tokenname, String description, String domainname, int signnumber, int tokentype, boolean tokenstop,
 			Sha256Hash prevblockhash, byte[] tokenkeyvalues, Boolean revoked, String language, String classification,
 			int decimals, String domainNameBlockHash) throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 
@@ -2297,9 +2320,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			preparedStatement.setString(20, domainNameBlockHash);
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
-			// It is possible we try to add a duplicate Block  
-			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode()))) 
-			throw new BlockStoreException(e);
+			// It is possible we try to add a duplicate Block
+			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
+				throw new BlockStoreException(e);
 		} finally {
 			if (preparedStatement != null) {
 				try {
@@ -2314,7 +2337,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public Sha256Hash getTokenPrevblockhash(Sha256Hash blockhash) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_PREVBLOCKHASH_SQL);
 			preparedStatement.setBytes(1, blockhash.getBytes());
@@ -2338,63 +2361,18 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	}
 
 	@Override
-	public Sha256Hash getTokenSpender(String blockhash) throws BlockStoreException {
+	public SpentBlockData getTokenSpent(Sha256Hash blockhash) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
-		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_SPENDER_SQL);
-			preparedStatement.setString(1, blockhash);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			if (!resultSet.next()) {
-				return null;
-			}
-			return resultSet.getBytes(1) == null ? null : Sha256Hash.wrap(resultSet.getBytes(1));
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public boolean getTokenSpent(Sha256Hash blockhash) throws BlockStoreException {
-		PreparedStatement preparedStatement = null;
-		
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_SPENT_BY_BLOCKHASH_SQL);
 			preparedStatement.setBytes(1, blockhash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
-			resultSet.next();
-			return resultSet.getBoolean(1);
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
+			if (resultSet.next()) {
+				return setSpentBlock(blockhash, resultSet);
 			}
-		}
-	}
 
-	@Override
-	public boolean getTokenConfirmed(Sha256Hash blockHash) throws BlockStoreException {
-		PreparedStatement preparedStatement = null;
-		
-		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_CONFIRMED_SQL);
-			preparedStatement.setBytes(1, blockHash.getBytes());
-			ResultSet resultSet = preparedStatement.executeQuery();
-			resultSet.next();
-			return resultSet.getBoolean(1);
+			return null;
+
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		} finally {
@@ -2411,7 +2389,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public boolean getTokenAnyConfirmed(String tokenid, long tokenIndex) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_ANY_CONFIRMED_SQL);
 			preparedStatement.setString(1, tokenid);
@@ -2434,7 +2412,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public boolean getTokennameAndDomain(String tokenname, String domainpre) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			String sql = "SELECT confirmed FROM tokens WHERE tokenname = ? AND domainpredblockhash = ?  ";
 			preparedStatement = getConnection().prepareStatement(sql);
@@ -2463,7 +2441,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public BlockWrap getTokenIssuingConfirmedBlock(String tokenid, long tokenIndex) throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_TOKEN_ISSUING_CONFIRMED_BLOCK_SQL);
 			preparedStatement.setString(1, tokenid);
@@ -2490,7 +2468,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	public BlockWrap getDomainIssuingConfirmedBlock(String tokenName, String domainPred, long index)
 			throws BlockStoreException {
 		PreparedStatement preparedStatement = null;
-		
+
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_DOMAIN_ISSUING_CONFIRMED_BLOCK_SQL);
 			preparedStatement.setString(1, tokenName);
@@ -2517,7 +2495,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public List<String> getDomainDescendantConfirmedBlocks(String domainPred) throws BlockStoreException {
 		List<String> storedBlocks = new ArrayList<String>();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_DOMAIN_DESCENDANT_CONFIRMED_BLOCKS_SQL);
@@ -2543,7 +2521,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	@Override
 	public void updateTokenSpent(Sha256Hash blockhash, boolean b, Sha256Hash spenderBlockHash)
 			throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 
@@ -2567,7 +2545,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	@Override
 	public void updateTokenConfirmed(Sha256Hash blockHash, boolean confirmed) throws BlockStoreException {
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 
@@ -2619,7 +2597,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 		List<BlockEvaluationDisplay> result = new ArrayList<BlockEvaluationDisplay>();
 		TXReward maxConfirmedReward = getMaxConfirmedReward();
-		
+
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(sql);
@@ -2648,26 +2626,23 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	}
 
 	@Override
-	public  BlockEvaluation getBlockEvaluationsByhashs(Sha256Hash hash)
-			throws BlockStoreException {
- 
+	public BlockEvaluation getBlockEvaluationsByhashs(Sha256Hash hash) throws BlockStoreException {
+
 		PreparedStatement preparedStatement = null;
 		try {
 
-		 
-				preparedStatement = getConnection().prepareStatement( "SELECT hash,  " + " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
-						+ "  FROM  blocks WHERE hash = ? ");
-				preparedStatement.setBytes(1,  hash.getBytes());
-				ResultSet resultSet = preparedStatement.executeQuery();
-				if (resultSet.next()) {
-					 return BlockEvaluation.build(
-							hash, resultSet.getLong("height"),
-							resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
-							resultSet.getLong("inserttime"),  resultSet.getLong("solid"),
-							resultSet.getBoolean("confirmed"));
-				
-				}
-	 
+			preparedStatement = getConnection().prepareStatement("SELECT hash,  "
+					+ " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
+					+ "  FROM  blocks WHERE hash = ? ");
+			preparedStatement.setBytes(1, hash.getBytes());
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if (resultSet.next()) {
+				return BlockEvaluation.build(hash, resultSet.getLong("height"), resultSet.getLong("milestone"),
+						resultSet.getLong("milestonelastupdate"), resultSet.getLong("inserttime"),
+						resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
+
+			}
+
 			return null;
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -2681,6 +2656,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
+
 	@Override
 	public List<BlockEvaluationDisplay> getSearchBlockEvaluationsByhashs(List<String> blockhashs)
 			throws BlockStoreException {
@@ -2694,7 +2670,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		sql += "SELECT hash,  " + " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
 				+ "  FROM  blocks WHERE hash = ? ";
 
-		
 		TXReward maxConfirmedReward = getMaxConfirmedReward();
 		PreparedStatement preparedStatement = null;
 		try {
@@ -2726,6 +2701,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			}
 		}
 	}
+
 	protected String buildINList(Collection<String> datalist) {
 		if (datalist == null || datalist.isEmpty())
 			return "";
@@ -2735,12 +2711,10 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		return stringBuffer.substring(1).toString();
 	}
 
-
 	@Override
 	public void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
 
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_ORDERRESULT_MILESTONE_SQL);
@@ -2760,11 +2734,11 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		}
 
 	}
+
 	@Override
 	public void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		
 
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_CONTRACTRESULT_MILESTONE_SQL);

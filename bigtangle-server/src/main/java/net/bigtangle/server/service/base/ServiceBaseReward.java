@@ -27,8 +27,6 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.data.ContractExecutionResult;
-import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
@@ -44,7 +42,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseReward.class);
 
-	public void checkRewardChain(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
+	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
@@ -387,7 +385,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// Walk in ascending chronological order.
 		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
 			cursor = it.next();
-			checkRewardChain(cursor, store);
+			checkRewardChainConfirmReferenced(cursor, store);
 			// if we build a chain longer than head, do a commit, even it may be
 			// failed after this.
 			if (cursor.getRewardInfo().getChainlength() > head.getRewardInfo().getChainlength()) {

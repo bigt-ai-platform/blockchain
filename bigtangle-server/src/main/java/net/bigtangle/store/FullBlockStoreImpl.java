@@ -47,7 +47,6 @@ import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
-import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
@@ -385,8 +384,7 @@ public class FullBlockStoreImpl {
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		if (block.getRewardInfo().getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
-			new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService).checkRewardChain(block,
-					store);
+			new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService).checkRewardChainConfirmReferenced(block, store);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.

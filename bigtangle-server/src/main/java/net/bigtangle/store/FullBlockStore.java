@@ -35,6 +35,7 @@ import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.UTXO;
@@ -272,11 +273,8 @@ public interface FullBlockStore {
 
 	public Sha256Hash getTokenPrevblockhash(Sha256Hash blockhash) throws BlockStoreException;
 
-	public boolean getTokenSpent(Sha256Hash blockhash) throws BlockStoreException;
-
-	public boolean getTokenConfirmed(Sha256Hash blockHash) throws BlockStoreException;
-
-	public Sha256Hash getTokenSpender(String blockhash) throws BlockStoreException;
+	public SpentBlockData getTokenSpent(Sha256Hash blockhash) throws BlockStoreException;
+ 
 
 	public boolean getTokenAnyConfirmed(String tokenid, long tokenindex) throws BlockStoreException;
 
@@ -514,18 +512,16 @@ public interface FullBlockStore {
 	public void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
-
-	public Sha256Hash checkContractResultSpent(Sha256Hash contractResultRecords) throws BlockStoreException;
-
-	public boolean checkContractResultConfirmed(Sha256Hash contractResultRecords) throws BlockStoreException;
+	public List<Contractresult>  getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException;
+	
+	public SpentBlockData checkContractResultSpent(Sha256Hash blockhash) throws BlockStoreException; 
 
 	public void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public Sha256Hash checkOrderResultSpent(Sha256Hash OrderResultRecords) throws BlockStoreException;
-
-	public boolean checkOrderResultConfirmed(Sha256Hash OrderResultRecords) throws BlockStoreException;
+	public SpentBlockData  checkOrderResultSpent(Sha256Hash blockhash) throws BlockStoreException;
+ 
 
 	void insertOrderResult(OrderExecutionResult record) throws BlockStoreException;
 
@@ -560,5 +556,7 @@ public interface FullBlockStore {
 
 	public List<ContractEventRecord> getContractEventRecordOpen(  String tokenid) throws BlockStoreException;
 
-
+	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException;
+	public boolean getContractExecuteAnyConfirmed(String tokenid) throws BlockStoreException;
+	public boolean getOrderExecuteAnyConfirmed() throws BlockStoreException;
 }

@@ -7,8 +7,9 @@ select * from contractresult order by milestone desc ;
 select * from contractresult order by inserttime desc ;
 select * from contractresult where milestone <0 and confirmed= true ;
 select * FROM contractevent a, blocks b WHERE a.confirmed=1 AND a.spent=0 and a.blockhash=b.hash
+select * FROM contractevent a, blocks b WHERE a.blockhash=b.hash
 select * FROM contractevent a   WHERE a.confirmed=1 AND a.spent=0
-
+select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash
 select * from orders  where spent=false ;
 select * from orderresult  order by milestone desc ;  
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;

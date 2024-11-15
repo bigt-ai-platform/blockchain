@@ -264,8 +264,7 @@ public abstract class AbstractIntegrationTest {
 		cacheBlockService.evictAccountBalance();
 		cacheBlockService.evictMaxConfirmedReward();
 		cacheBlockService.evictBlockMCMC();
-		cacheBlockService.evictBlockEvaluation();
-		;
+		cacheBlockService.evictBlockEvaluation(); 
 		cacheBlockPrototypeService.evictBlockPrototypeByte();
 	}
 

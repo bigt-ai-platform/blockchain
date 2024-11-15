@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -22,6 +23,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.NetworkParameters;
@@ -32,6 +34,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
+import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceContract;
@@ -95,7 +98,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				check(ulist, endMap);
 				// List<UTXO> utxos = getBalance(false, ulist);
 				assertTrue(endMap.get(winnerAddress.toString()) != null);
-				 c = checkSum(c);
+				c = checkSum(c);
 				assertTrue(endMap.get(winnerAddress.toString()).equals(new BigInteger(winnerAmount)));
 			}
 		}
@@ -167,10 +170,19 @@ public class ContractTest extends AbstractIntegrationTest {
 					break;
 				}
 			}
+			blockSaveService.saveBlock(conflictBlock, store);
+			ServiceContract	s= new ServiceContract(serverConfiguration, networkParameters,
+					cacheBlockService);
+			Set<BlockWrap> allApprovedNewBlocks = new HashSet<BlockWrap>();
+			s.getBlockWrap( resultBlock.getHash(), store);
+			allApprovedNewBlocks.add(s.getBlockWrap( conflictBlock.getHash(), store));
+			assertTrue(	s.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
+	  
 		}
-		blockSaveService.saveBlock(conflictBlock, store);
-		makeRewardBlock(conflictBlock);
-		checkSum(null);
+	
+		//makeRewardBlock(conflictBlock);
+	
+		// checkSum(null);
 	}
 
 	@Test
@@ -240,12 +252,12 @@ public class ContractTest extends AbstractIntegrationTest {
 	public void ordermatch(List<Block> a1) throws Exception {
 		// payMoneyToWallet1(a1);
 		sell(a1);
-	TokensumsMap a = checkSum(null);
+		TokensumsMap a = checkSum(null);
 		buy(a1);
-		a=checkSum(a);
+		a = checkSum(a);
 		// Generate mining reward block
 		makeOrderExecutionAndReward(a1);
-		a=checkSum(a);
+		a = checkSum(a);
 	}
 
 	public void contractExecution(List<Block> a1) throws Exception {
@@ -304,21 +316,21 @@ public class ContractTest extends AbstractIntegrationTest {
 		TokensumsMap a = checkSum(null);
 		for (int i = 0; i < 1; i++) {
 			contractExecution(a1);
-	//		a = checkSum(a);
+			// a = checkSum(a);
 		}
 		ordermatch(a1);
-	//	checkSum(a);
+		// checkSum(a);
 		resetStore();
 
 		// second chain
 		prepare("800", a2);
 		for (int i = 0; i < 2; i++) {
 			contractExecution(a2);
-	//		a=checkSum(a);
+			// a=checkSum(a);
 		}
-	
+
 		ordermatch(a2);
-		a=checkSum(a);
+		a = checkSum(a);
 
 		// replay
 		resetStore();
@@ -328,7 +340,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			if (b != null)
 				blockGraph.add(b, true, true, store);
 		}
-		//checkSum(a);
+		// checkSum(a);
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
@@ -336,7 +348,6 @@ public class ContractTest extends AbstractIntegrationTest {
 			checkSum(a);
 		}
 
-		
 		// replay second and then replay first
 		resetStore();
 		for (Block b : a2) {

@@ -48,7 +48,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// MCMC should not update this far out
 		makeRewardBlock();
 		assertFalse(getBlockEvaluation(rollingBlock1.getHash(), store).isConfirmed());
-		assertTrue(  store.getBlockWrap(rollingBlock1.getHash()).getMcmc().getRating() == 0);
+		assertTrue(store.getBlockWrap(rollingBlock1.getHash()).getMcmc().getRating() == 0);
 
 		// Reward block should include it
 		Pair<BlockWrap, BlockWrap> validatedRewardBlockPair = tipsService
@@ -104,7 +104,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictReward() throws Exception {
 
-		// Generate blocks until passing first reward interval 
+		// Generate blocks until passing first reward interval
 		Block rollingBlock = networkParameters.getGenesisBlock();
 
 		// Generate eligible mining reward blocks
@@ -123,7 +123,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
-		ECKey outKey = new ECKey(); 
+		ECKey outKey = new ECKey();
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -137,7 +137,8 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey, null);
 		makeRewardBlock();
-		// Generate two subsequent issuances, it can not both are confirmed, but can be none is confirmed
+		// Generate two subsequent issuances, it can not both are confirmed, but can be
+		// none is confirmed
 
 		Block conflictBlock1, conflictBlock2;
 		{
@@ -168,7 +169,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		BlockEvaluation blockEvaluation2 = getBlockEvaluation(conflictBlock2.getHash(), store);
 
 		assertFalse(blockEvaluation.isConfirmed() && blockEvaluation2.isConfirmed());
-	//	assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
+		// assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
 
 		makeRewardBlock();
 
@@ -176,7 +177,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		blockEvaluation2 = getBlockEvaluation(conflictBlock2.getHash(), store);
 
 		assertFalse(blockEvaluation.isConfirmed() && blockEvaluation2.isConfirmed());
-	//	assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
+		// assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
 
 		mcmcServiceUpdate();
 
@@ -184,7 +185,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		blockEvaluation2 = getBlockEvaluation(conflictBlock2.getHash(), store);
 
 		assertFalse(blockEvaluation.isConfirmed() && blockEvaluation2.isConfirmed());
-	//	assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
+		// assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
 	}
 
 	@Test
@@ -228,7 +229,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Block conflictBlock2 = saveTokenUnitTestWithTokenname(tokenInfo3, coinbase3, outKey, null);
 
 		// Make a fusing block
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, conflictBlock1, conflictBlock2);
+		Block rollingBlock = UtilsTest.createBlock(networkParameters, conflictBlock1, conflictBlock2);
 		blockGraph.add(rollingBlock, true, store);
 
 		makeRewardBlock();
@@ -260,7 +261,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Make another conflicting issuance that goes through
 		// Sha256Hash genHash = networkParameters.getGenesisBlock().getHash();
 		Block block2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, block2, block1);
+		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
 		blockGraph.add(rollingBlock, true, store);
 
 		mcmcServiceUpdate();
@@ -302,7 +303,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Sha256Hash genHash = networkParameters.getGenesisBlock().getHash();
 		Block block2 = saveTokenUnitTest(tokenInfo2, coinbase2, outKey, null, null);
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, block2, block1);
+		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
 		blockGraph.add(rollingBlock, true, store);
 
 		mcmcServiceUpdate();
@@ -378,7 +379,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Make another conflicting issuance that goes through
 		Block block2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, confBlock, confBlock, null, false);
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, block2, block1);
+		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
 		blockGraph.add(rollingBlock, true, store);
 
 		// Let block 1 win
@@ -390,7 +391,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// No reorg
 		rollingBlock = block2;
 		for (int i = 0; i < 25; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -406,7 +407,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing second reward interval
 		Block rollingBlock = networkParameters.getGenesisBlock();
 		for (int i = 0; i < 2 * 1 + 1 + 1; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -599,12 +600,12 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		assertTrue(getBlockEvaluation(block1.getHash(), store).isConfirmed());
 		Transaction tx1 = block1.getTransactions().get(0);
 		assertTrue(store.getTransactionOutput(block1.getHash(), tx1.getHash(), 0).isConfirmed());
-		assertTrue(store.getTokenConfirmed(block1.getHash()));
+		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
 
 		// Remove it from the confirmed
 		Block rollingBlock = networkParameters.getGenesisBlock();
 		for (int i = 1; i < 35; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 			makeRewardBlock();
 

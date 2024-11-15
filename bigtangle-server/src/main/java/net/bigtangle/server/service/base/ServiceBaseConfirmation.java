@@ -43,6 +43,7 @@ import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.Transaction;
@@ -280,12 +281,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public boolean hasSpentInputs(Set<BlockWrap> allApprovedNewBlocks, FullBlockStore store) {
 		return allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates()).flatMap(i -> i.stream()).anyMatch(c -> {
 			try {
-				boolean re = hasSpentDependencies(c, store);
-				// if (re)
-				// logger.debug("hasSpentInputs " + c.getBlock().getBlock().toString());
+				boolean re = hasSpentDependencies(c, false, store);
+				if (re)
+					logger.debug("hasSpentInputs " + c.getBlock().getBlock().toString());
 				return re;
 			} catch (BlockStoreException e) {
-				// e.printStackTrace();
+				e.printStackTrace();
 				return true;
 			}
 		});
@@ -560,19 +561,26 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return notMissingAnything;
 	}
 
-	public boolean hasSpentDependencies(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+	/*
+	 * return true, if the inputs/prev is spent by other or not confirmed
+	 */
+	public boolean hasSpentDependencies(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+			throws BlockStoreException {
+		SpentBlockData s;
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
-			return checkUTXOSpent(c, store);
+			return checkUTXOSpent(c, checkNoConfirm, store);
 		case TOKENISSUANCE:
 			final Token connectedToken = c.getConflictPoint().getConnectedToken();
-
-			// Initial issuances are allowed iff no other same token issuances
-			// are confirmed, i.e. spent iff any token confirmed
-			if (connectedToken.getTokenindex() == 0)
+			if (connectedToken.getTokenindex() == 0) {
 				return store.getTokenAnyConfirmed(connectedToken.getTokenid(), connectedToken.getTokenindex());
+			}
+			s = store.getTokenSpent(connectedToken.getPrevblockhash());
+			if (s == null)
+				return false;
 			else
-				return store.getTokenSpent(connectedToken.getPrevblockhash());
+				return checkSpentOrNoConfirm(c, checkNoConfirm, s);
+
 		case REWARDISSUANCE:
 			return store.getRewardSpent(c.getConflictPoint().getConnectedReward().getPrevRewardHash());
 		case DOMAINISSUANCE:
@@ -582,51 +590,92 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					connectedDomainToken.getDomainNameBlockHash(), connectedDomainToken.getTokenindex()) != null;
 		case CONTRACTEXECUTE:
 			final ContractExecutionResult connectedContracExecute = c.getConflictPoint().getConnectedContracExecute();
-			Sha256Hash checkContractResultSpent = store
-					.checkContractResultSpent(connectedContracExecute.getPrevblockhash());
-			// There is spender other than myself
-			return checkContractResultSpent != null && !checkContractResultSpent.equals(c.getBlock().getBlockHash());
+			if (Sha256Hash.ZERO_HASH.equals(connectedContracExecute.getPrevblockhash()) && checkNoConfirm) {
+				return store.getContractExecuteAnyConfirmed(connectedContracExecute.getContracttokenid());
+			}
+			s = store.checkContractResultSpent(connectedContracExecute.getPrevblockhash());
+			if (s == null)
+				return false;
+			else
+				return checkSpentOrNoConfirm(c, checkNoConfirm, s);
 
 		case ORDEREXECUTE:
 			final OrderExecutionResult connectedOrderExecute = c.getConflictPoint().getConnectedOrderExecute();
-			Sha256Hash checkOrderResultSpent = store.checkOrderResultSpent(connectedOrderExecute.getPrevblockhash());
-			return checkOrderResultSpent != null && !checkOrderResultSpent.equals(c.getBlock().getBlockHash());
+			if (Sha256Hash.ZERO_HASH.equals(connectedOrderExecute.getPrevblockhash()) && checkNoConfirm) {
+				return store.getOrderExecuteAnyConfirmed();
+			}
+			s = store.checkOrderResultSpent(connectedOrderExecute.getPrevblockhash());
+			// There is spender other than myself
+			if (s == null)
+				return false;
+			else
+				return checkSpentOrNoConfirm(c, checkNoConfirm, s);
 
 		default:
 			throw new RuntimeException("Not Implemented");
 		}
 	}
 
+	private boolean checkSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, SpentBlockData s) {
+		boolean re = s.isSpent() && !s.getSpenderBlockHash().equals(c.getBlock().getBlockHash());
+
+		if (checkNoConfirm)
+			re = re || !s.isConfirmed();
+		return re;
+	}
+
 	public boolean hasConfirmedDependencies(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+		SpentBlockData s;
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
 			return getUTXOConfirmed(c.getConflictPoint().getConnectedOutpoint(), store);
 		case TOKENISSUANCE:
 			final Token connectedToken = c.getConflictPoint().getConnectedToken();
-			// Initial issuances are allowed (although they may be spent already)
 			if (connectedToken.getTokenindex() == 0)
 				return true;
+			s = store.getTokenSpent(connectedToken.getPrevblockhash());
+			if (s == null)
+				return false;
 			else
-				return store.getTokenConfirmed(connectedToken.getPrevblockhash());
+				return s.isConfirmed();
+
 		case REWARDISSUANCE:
 			return store.getRewardConfirmed(c.getConflictPoint().getConnectedReward().getPrevRewardHash());
 		case DOMAINISSUANCE:
+
 			final Token connectedDomainToken = c.getConflictPoint().getConnectedDomainToken();
-			return store.getTokenConfirmed(Sha256Hash.wrap(connectedDomainToken.getDomainNameBlockHash()));
+			s = store.getTokenSpent(Sha256Hash.wrap(connectedDomainToken.getDomainNameBlockHash()));
+			if (s == null)
+				return false;
+			else
+				return s.isConfirmed();
 		case CONTRACTEXECUTE:
 			final ContractExecutionResult connectedContracExecute = c.getConflictPoint().getConnectedContracExecute();
-			return store.checkContractResultConfirmed(connectedContracExecute.getPrevblockhash());
-
+			s = store.checkContractResultSpent(connectedContracExecute.getPrevblockhash());
+			if (s == null)
+				return false;
+			else
+				return s.isConfirmed();
 		case ORDEREXECUTE:
 			final OrderExecutionResult connectedOrderExecute = c.getConflictPoint().getConnectedOrderExecute();
-			return store.checkOrderResultConfirmed(connectedOrderExecute.getPrevblockhash());
+			s = store.checkOrderResultSpent(connectedOrderExecute.getPrevblockhash());
+			if (s == null)
+				return false;
+			else
+				return s.isConfirmed();
 
 		default:
 			throw new RuntimeException("not implemented");
 		}
 	}
 
-	private boolean findBlockWithSpentOrUnconfirmedInputs(HashSet<BlockWrap> blocks, FullBlockStore store) {
+	/*
+	 * toConflictCandidates() takes all the inputs from transaction and read the
+	 * input.getOutPoint() or the prev of chained data as token and Execution The
+	 * conflitcs will be if there is other transaction spent my input or my prev
+	 * chained execution or the input/prev is not confirmed.
+	 */
+	public boolean findBlockWithSpentOrUnconfirmedInputs(Set<BlockWrap> blocks, FullBlockStore store) {
 		// Get all conflict candidates in blocks
 		Stream<ConflictCandidate> candidates = blocks.stream().map(b -> b.toConflictCandidates())
 				.flatMap(i -> i.stream());
@@ -635,21 +684,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// still unconfirmed
 		return candidates.filter((ConflictCandidate c) -> {
 			try {
-				return hasSpentDependencies(c, store) || !hasConfirmedDependencies(c, store);
+				return hasSpentDependencies(c, true, store);
 			} catch (BlockStoreException e) {
 				e.printStackTrace();
 			}
 			return false;
 		}).findFirst().isPresent();
-	}
-
-	/*
-	 * Input are transaction input or prev chained data check no other spent
-	 * transaction input than myself or not confirmed chained prev
-	 */
-	private boolean hasSpentOrNotConfirmedInput(FullBlockStore store, ConflictCandidate c) throws BlockStoreException {
-		return hasSpentDependencies(c, store) || !hasConfirmedDependencies(c, store);
-
 	}
 
 	/**
@@ -1043,7 +1083,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void filterSpent(Collection<ConflictCandidate> blockConflicts, FullBlockStore store) {
 		blockConflicts.removeIf(c -> {
 			try {
-				return !hasSpentDependencies(c, store);
+				return !hasSpentDependencies(c, false, store);
 			} catch (BlockStoreException e) {
 				e.printStackTrace();
 				return true;
@@ -1136,25 +1176,28 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * otherwise there are at least two blocks spent TransactionOutPoint of
 	 * ConflictCandidate c
 	 */
-	public boolean checkUTXOSpent(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+	public boolean checkUTXOSpent(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+			throws BlockStoreException {
 		TransactionOutPoint txout = c.getConflictPoint().getConnectedOutpoint();
 
-		UTXO a = store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+		SpentBlockData a = store.getTransactionSpentBlock(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 		// the TransactionOutPoint does not exist, try do the calculation
 		if (a == null) {
 			solidifyWaiting(getBlock(txout.getBlockHash(), store), store);
-			a = store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+			a = store.getTransactionSpentBlock(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 		}
 		// the TransactionOutPoint does not exist
 		if (a == null)
 			return false;
 		//
-		boolean re = a.isSpent() && !c.getBlock().getBlockHash().equals(a.getSpenderBlockHash());
-		/*
-		 * if (re) { logger.debug("getUTXOSpent true " + a.toString() +
-		 * "\n TransactionOutPoint = " + getBlock(txout.getBlockHash(), store) +
-		 * " \n spender = " + getBlock(a.getSpenderBlockHash(), store)); }
-		 */
+		boolean re = checkSpentOrNoConfirm(c, checkNoConfirm, a);
+
+		if (re) {
+			logger.debug("getUTXOSpent true " + a.toString() + "\n TransactionOutPoint = "
+					+ getBlock(txout.getBlockHash(), store) + " \n spender = "
+					+ getBlock(a.getSpenderBlockHash(), store));
+		}
+
 		return re;
 
 	}
@@ -1428,7 +1471,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						c.setSpenderBlockHash(null);
 
 					}
-				
+
 					for (Sha256Hash dep : check.getToBeSpent()) {
 						confirmOrderAndTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
 					}
@@ -1448,11 +1491,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 				}
 				// update order
-				//   referenced blocks are new with Zero Collecting hash
+				// referenced blocks are new with Zero Collecting hash
 				for (Sha256Hash dep : check.getReferencedBlocks()) {
 					confirmOrderZero(dep, confirm, blockStore);
 				}
-				
+
 				blockStore.updateOrderSpent(check.getToBeSpentRecord());
 				blockStore.updateOrderConfirmed(check.getRemainderRecords(), block.getHash(), confirm);
 				// update order result
@@ -1471,11 +1514,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
+	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, FullBlockStore blockStore)
+			throws BlockStoreException {
+		confirmContractExecute(block, milestoneNumber, confirm, true, blockStore);
+	}
+
 	/*
 	 * connect from the contract Execution
 	 */
-	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, FullBlockStore blockStore)
-			throws BlockStoreException {
+	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, boolean resetConflictConfirm,
+			FullBlockStore blockStore) throws BlockStoreException {
 
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
@@ -1492,6 +1540,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 
 				if (confirm) {
+
+					if (resetConflictConfirm) {
+						resetConfirmContractExecuteConflict(result, milestoneNumber, blockStore);
+					}
+
 					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
 						c.setSpent(true);
 						c.setSpenderBlockHash(block.getHash());
@@ -1524,12 +1577,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					}
 				}
 				// update ContractEventRecord
-				//   referenced blocks are new with Zero Collecting hash
+				// referenced blocks are new with Zero Collecting hash
 				for (Sha256Hash dep : check.getReferencedBlocks()) {
 					confirmContractEventZero(dep, confirm, blockStore);
 				}
-				
-				
+
 				blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
 				blockStore.updateContractEventConfirmed(check.getRemainderRecords(), block.getHash(), confirm);
 
@@ -1543,10 +1595,29 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 				// reset cache
 				evictTransactionsAndBlockEva(block, blockStore);
+
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	/*
+	 * for confirmation of ContractExecute, check the conflict ContractExecute, with
+	 * same previous ContractExecute, will be set to revert confirm. Only needed for
+	 * ContractExecute not in reward milestoneNumber = -1
+	 */
+	private void resetConfirmContractExecuteConflict(ContractExecutionResult result, long milestoneNumber,
+			FullBlockStore blockStore) throws BlockStoreException {
+		List<Contractresult> allWithPrev = blockStore.getContractresultWithPrev(result.getPrevblockhash());
+		for (Contractresult a : allWithPrev) {
+			if (a.isConfirmed() && a.getMilestone() < 0 && !a.getBlockHash().equals(result.getBlockHash())) {
+				BlockWrap blockWrap = getBlockWrap(a.getBlockHash(), blockStore);
+				updateBlockConfirm(blockWrap, milestoneNumber, false, blockStore);
+				confirmContractExecute(blockWrap.getBlock(), milestoneNumber, false, blockStore);
+			}
+		}
+
 	}
 
 	private void confirmReward(BlockWrap block, boolean confirm, FullBlockStore blockStore) throws BlockStoreException {
@@ -1839,7 +1910,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			FullBlockStore store) {
 		return allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates()).flatMap(i -> i.stream()).filter(c -> {
 			try {
-				return hasSpentDependencies(c, store);
+				return hasSpentDependencies(c, false, store);
 			} catch (BlockStoreException e) {
 				e.printStackTrace();
 				return true;
@@ -1869,7 +1940,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		confirm(blockWrap, traversedBlockHashes, milestoneNumber, confirmation, store);
 	}
 
-	public void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
+	private void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
 			boolean confirmation, FullBlockStore store) throws BlockStoreException {
 		// If already confirmed, return
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
@@ -1881,29 +1952,27 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return;
 		}
 
-		BlockEvaluation blockEvaluation = blockWrap.getBlockEvaluation();
-
 		// If already confirmed or un confirmed, return
-		if (blockEvaluation.isConfirmed() && confirmation)
+		if (blockWrap.getBlockEvaluation().isConfirmed() && confirmation)
 			return;
-		if (!blockEvaluation.isConfirmed() && !confirmation)
+		if (!blockWrap.getBlockEvaluation().isConfirmed() && !confirmation)
 			return;
 
-		store.updateBlockEvaluationConfirmed(blockEvaluation.getBlockHash(), confirmation);
-
-		store.updateBlockEvaluationMilestone(blockEvaluation.getBlockHash(), milestoneNumber);
-
-		confirmBlockTransactionWithType(blockWrap, milestoneNumber, confirmation, store);
-
-		evictTransactionsAndBlockEva(blockWrap.getBlock(), store);
+		updateBlockConfirm(blockWrap, milestoneNumber, confirmation, store);
 
 		// Keep track of confirmed blocks
 		traversedBlockHashes.add(blockWrap.getBlockHash());
 	}
 
-	public void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
-		confirm(blockWrap, traversedBlockHashes, milestoneNumber, true, blockStore);
+	private void updateBlockConfirm(BlockWrap blockWrap, long milestoneNumber, boolean confirmation,
+			FullBlockStore store) throws BlockStoreException {
+		store.updateBlockEvaluationConfirmed(blockWrap.getBlockHash(), confirmation);
+
+		store.updateBlockEvaluationMilestone(blockWrap.getBlockHash(), milestoneNumber);
+
+		confirmBlockTransactionWithType(blockWrap, milestoneNumber, confirmation, store);
+
+		evictTransactionsAndBlockEva(blockWrap.getBlock(), store);
 	}
 
 	public void unconfirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,

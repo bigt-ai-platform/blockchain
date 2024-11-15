@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
@@ -23,7 +22,6 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
@@ -96,11 +94,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			firstIssuance = block1.getHash();
 
 			// Should exist now
-			store.getTokenConfirmed(block1.getHash()); // Fine as
-														// long as it
-														// does not
-														// throw
-			assertFalse(store.getTokenSpent(block1.getHash()));
+	 
+			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 		}
 
 		// Generate a subsequent issuance
@@ -131,12 +126,10 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey3, null);
 
 			// block1 = pullBlockDoMultiSign(tokens.getTokenid(), ecKey1, null);
-			// Should exist now
-			store.getTokenConfirmed(block1.getHash()); // Fine as
-														// long as it
-														// does not
-														// throw
-			assertFalse(store.getTokenSpent(block1.getHash()));
+	 
+		 
+		 
+			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 		}
 	}
 
@@ -219,8 +212,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		makeRewardBlock();
 
 		// Should be confirmed now
-		assertTrue(store.getTokenConfirmed(block1.getHash()));
-		assertFalse(store.getTokenSpent(block1.getHash()));
+		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
+		assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 	}
 
 	 
@@ -365,16 +358,16 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				new HashSet<>(), (long) -1,  true,store);
 
 		// Should be confirmed now
-		assertTrue(store.getTokenConfirmed(block11.getHash()));
-		assertFalse(store.getTokenSpent(block11.getHash()));
+		assertTrue(store.getTokenSpent(block11.getHash() ).isConfirmed());
+		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
 
 		// Unconfirm
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).unconfirm(block11.getHash(),
 				new HashSet<>(),-1,store);
 
 		// Should be unconfirmed now
-		assertFalse(store.getTokenConfirmed(block11.getHash()));
-		assertFalse(store.getTokenSpent(block11.getHash()));
+		assertFalse(store.getTokenSpent(block11.getHash()).isConfirmed());
+		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
 	}
 
  
