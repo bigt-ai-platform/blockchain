@@ -257,7 +257,7 @@ public class ServiceContract extends ServiceBaseConnect {
 		for (ContractEventRecord o : all) {
 			if (!used.contains(o)) {
 				o.setConfirmed(true);
-				re.add(o);
+				re.add(ContractEventRecord.cloneOrderRecord(o));
 			}
 		}
 		return re;
@@ -274,7 +274,7 @@ public class ServiceContract extends ServiceBaseConnect {
 
 		for (Map.Entry<Sha256Hash, ContractEventRecord> u : player.entrySet()) {
 			sum = sum.add(u.getValue().getTargetValue());
-			userlist.put(u.getKey(), u.getValue());
+			userlist.put(u.getKey(),  ContractEventRecord.cloneOrderRecord(u.getValue()));
 			if (sum.compareTo(winnerAmount) >= 0) {
 				return true;
 			}

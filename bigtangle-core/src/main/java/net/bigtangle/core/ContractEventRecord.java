@@ -92,7 +92,8 @@ public class ContractEventRecord extends SpentBlock {
 	public String toString() {
 		return "ContractEventRecord [  beneficiaryAddress=" + beneficiaryAddress + ", collectinghash=" + collectinghash
 				+ ", contractTokenid=" + contractTokenid + ", targetValue=" + targetValue + ", targetTokenid="
-				+ targetTokenid + "]";
+				+ targetTokenid 
+				+super.toString() + "]";
 	}
 
 }

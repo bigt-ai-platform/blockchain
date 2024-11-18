@@ -2235,6 +2235,30 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
+
+	@Override
+	public void resetContractEventSpent(Sha256Hash spenderblockhash) throws BlockStoreException {
+
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = getConnection()
+					.prepareStatement(getUpdate() + " contractevent SET spent = false, spenderblockhash = null "
+							+ " WHERE spenderblockhash=? ");
+			preparedStatement.setBytes(1, spenderblockhash.getBytes());
+			preparedStatement.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					// throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
+	
 	@Override
 	public Sha256Hash getContractEventSpent(Sha256Hash contractevent) throws BlockStoreException {
 		// one of the block is spent then, return Sha256Hash, otherwise null
@@ -2280,6 +2304,28 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+					// throw new BlockStoreException("Could not close statement");
+				}
+			}
+		}
+	}
+
+	@Override
+	public void resetContractEventConfirmed( Sha256Hash collectinghash)
+			throws BlockStoreException {
+
+		PreparedStatement preparedStatement = null;
+		try {
+			preparedStatement = getConnection().prepareStatement(RESET_CONTRACT_EVENT_CONFIRMED_SQL);
+			preparedStatement.setBytes(1, collectinghash.getBytes());
+			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		} finally {

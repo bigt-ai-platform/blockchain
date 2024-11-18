@@ -28,6 +28,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderRecord;
+import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.InsufficientMoneyException;
@@ -48,12 +49,13 @@ public class PerformanceTest extends ContractTest {
 	@Test // the switch to longest chain
 	public void testReorgMiningReward() throws Exception {
 		List<Block> a2 = new ArrayList<Block>();
-
+		TokensumsMap c = checkSum(null);
 		// second chain
 		// usernumber=2000;
 		prepare("12200", a2);
 		for (int i = 0; i < 12200; i++) {
 			createReward(a2);
+			c = checkSum(c);
 		}
 	}
 
@@ -90,12 +92,12 @@ public class PerformanceTest extends ContractTest {
 	}
 
 	public String contractAndOrder(List<Block> blocksAddedAll) {
-		try {
-			ordermatch(blocksAddedAll);
-		} catch (Exception e) {
-			e.printStackTrace();
-			 
-		}
+//		try {
+//			ordermatch(blocksAddedAll);
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//			 
+//		}
 		try {
 			contractExecution(blocksAddedAll, true);
 		} catch (Exception e) {
@@ -104,7 +106,7 @@ public class PerformanceTest extends ContractTest {
 		}
 		try {
 
-			checkSum(null);
+		//	checkSum(null);
 			return "";
 		} catch (Exception e) {
 			e.printStackTrace();

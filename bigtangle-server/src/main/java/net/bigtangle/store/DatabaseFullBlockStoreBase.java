@@ -242,6 +242,8 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	protected final String UPDATE_CONTRACT_EVENT_CONFIRMED_SQL = getUpdate() + " contractevent SET confirmed = ? "
 			+ " WHERE blockhash = ? and  collectinghash=? ";
+	protected final String RESET_CONTRACT_EVENT_CONFIRMED_SQL = getUpdate() + " contractevent SET confirmed = false "
+			+ " WHERE  collectinghash=? ";
 	protected final String UPDATE_CONTRACT_EVENT_SPENT_SQL = getUpdate()
 			+ " contractevent SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
 	protected final String SELECT_PREV_CONTRACT_SQL = "SELECT " + CONTRACT_TEMPLATE

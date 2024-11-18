@@ -274,7 +274,6 @@ public interface FullBlockStore {
 	public Sha256Hash getTokenPrevblockhash(Sha256Hash blockhash) throws BlockStoreException;
 
 	public SpentBlockData getTokenSpent(Sha256Hash blockhash) throws BlockStoreException;
- 
 
 	public boolean getTokenAnyConfirmed(String tokenid, long tokenindex) throws BlockStoreException;
 
@@ -487,15 +486,17 @@ public interface FullBlockStore {
 	public ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash)
 			throws BlockStoreException;
 
- 
 	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
-	
-	public void updateContractEventBySpender(Set<Sha256Hash> contractEventRecords, Sha256Hash collectinghash, Sha256Hash spentBlock )
-			throws BlockStoreException;
-	
-	public void updateContractEventConfirmed(Collection<Sha256Hash> contracts, Sha256Hash collectinghash,  boolean confirm)
-			throws BlockStoreException;
+	public void updateContractEventBySpender(Set<Sha256Hash> contractEventRecords, Sha256Hash collectinghash,
+			Sha256Hash spentBlock) throws BlockStoreException;
+
+	public void resetContractEventSpent(Sha256Hash spenderblockhash) throws BlockStoreException;
+
+	public void resetContractEventConfirmed(Sha256Hash collectinghash) throws BlockStoreException;
+
+	public void updateContractEventConfirmed(Collection<Sha256Hash> contracts, Sha256Hash collectinghash,
+			boolean confirm) throws BlockStoreException;
 
 	public Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
 			throws BlockStoreException;
@@ -512,16 +513,16 @@ public interface FullBlockStore {
 	public void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
-	public List<Contractresult>  getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException;
-	
-	public SpentBlockData checkContractResultSpent(Sha256Hash blockhash) throws BlockStoreException; 
+
+	public List<Contractresult> getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException;
+
+	public SpentBlockData checkContractResultSpent(Sha256Hash blockhash) throws BlockStoreException;
 
 	public void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public SpentBlockData  checkOrderResultSpent(Sha256Hash blockhash) throws BlockStoreException;
- 
+	public SpentBlockData checkOrderResultSpent(Sha256Hash blockhash) throws BlockStoreException;
 
 	void insertOrderResult(OrderExecutionResult record) throws BlockStoreException;
 
@@ -542,9 +543,9 @@ public interface FullBlockStore {
 	List<ContractEventCancel> getContractEventCancelByBlockHash(HashSet<String> blockHashs) throws BlockStoreException;
 
 	public Orderresult getMaxMilestoneOrderresult() throws BlockStoreException;
-	public List<Orderresult> getConfirmedOrderresultNotMilestone()
-			throws BlockStoreException;
-	
+
+	public List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException;
+
 	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
@@ -554,9 +555,12 @@ public interface FullBlockStore {
 	public List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid)
 			throws BlockStoreException;
 
-	public List<ContractEventRecord> getContractEventRecordOpen(  String tokenid) throws BlockStoreException;
+	public List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
 
-	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException;
+	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
+			throws BlockStoreException;
+
 	public boolean getContractExecuteAnyConfirmed(String tokenid) throws BlockStoreException;
+
 	public boolean getOrderExecuteAnyConfirmed() throws BlockStoreException;
 }

@@ -9,11 +9,15 @@ select * from contractresult where milestone <0 and confirmed= true ;
 select * FROM contractevent a, blocks b WHERE a.confirmed=1 AND a.spent=0 and a.blockhash=b.hash
 select * FROM contractevent a, blocks b WHERE a.blockhash=b.hash
 select * FROM contractevent a   WHERE a.confirmed=1 AND a.spent=0
+select * FROM contractevent a   WHERE   a.spent=0
 select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash
+select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   b.confirmed=0
+
 select * from orders  where spent=false ;
 select * from orderresult  order by milestone desc ;  
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
 select * from orders a, blocks b where a.blockhash=b.hash  ;
+select * FROM orders a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true
 
 select * from outputs  where confirmed =true and spent=false and tokenid !="bc" and toaddress="154AxPN4kEUYNY5Ubt8yCssoR7Zgppw8y4";
 select count( *) from blocks   ;

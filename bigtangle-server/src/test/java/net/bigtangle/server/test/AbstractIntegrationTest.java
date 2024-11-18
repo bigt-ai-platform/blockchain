@@ -637,7 +637,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks) throws Exception {
-		mcmcServiceUpdate();
+	//	mcmcServiceUpdate();
 		Block b = orderExecutionService.createOrderExecution(store);
 		return rewardWithBlock(addedBlocks, b);
 

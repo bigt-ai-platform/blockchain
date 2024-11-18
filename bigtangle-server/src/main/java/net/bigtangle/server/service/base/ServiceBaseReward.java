@@ -117,7 +117,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
 
 		for (BlockWrap approvedBlock : allApprovedNewBlocks)
-			confirm(approvedBlock.getBlockEvaluation().getBlockHash(), traversedConfirms, milestoneNumber, true, store);
+			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
 
 	}
 

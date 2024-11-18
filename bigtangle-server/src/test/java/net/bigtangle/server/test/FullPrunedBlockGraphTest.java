@@ -29,6 +29,7 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
+import net.bigtangle.server.service.base.ServiceContract;
 
 public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
@@ -265,7 +266,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				networkParameters.getGenesisBlock(), tx11);
 
 		// Confirm
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block.getHash(),
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService);
+		s.confirm(s.getBlockWrap(block.getHash() , store),
 				new HashSet<>(), (long) -1, true, store);
 
 		// Should be confirmed now
@@ -354,8 +356,10 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// This (saveBlock) calls milestoneUpdate currently
 		Block block11 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block11.getHash(),
-				new HashSet<>(), (long) -1,  true,store);
+ 
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService);
+		s.confirm(s.getBlockWrap(block11.getHash() , store),
+				new HashSet<>(), (long) -1, true, store);
 
 		// Should be confirmed now
 		assertTrue(store.getTokenSpent(block11.getHash() ).isConfirmed());

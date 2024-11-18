@@ -512,7 +512,7 @@ public class FullBlockStoreImpl {
 		// Finally add the resolved new blocks to the confirmed set
 		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
 		for (BlockWrap block : blocksToAdd) {
-			confirmDo(block.getBlockEvaluation().getBlockHash(), traversedConfirms, blockStore);
+			confirmDo(block , traversedConfirms, blockStore);
 		}
 
 	}
@@ -531,11 +531,11 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void confirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
+	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
 			throws BlockStoreException {
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(hash,
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block,
 					traversedConfirms, (long) -1, true, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

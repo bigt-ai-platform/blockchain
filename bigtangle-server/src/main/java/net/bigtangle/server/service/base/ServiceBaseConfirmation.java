@@ -1549,41 +1549,42 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						c.setSpent(true);
 						c.setSpenderBlockHash(block.getHash());
 					}
+
 					blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
 					for (Sha256Hash dep : check.getToBeSpent()) {
 						confirmContractEventAndTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber,
 								blockStore);
 					}
+					blockStore.updateContractEventConfirmed(check.getRemainderRecords(), block.getHash(), confirm);
+					blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
+
 				} else {
-					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
-						c.setSpent(false);
-						c.setSpenderBlockHash(null);
-					}
+					// reset the spent from this block execution
+					blockStore.resetContractEventSpent(block.getHash());
+					blockStore.	resetContractEventConfirmed(block.getHash());
 					blockStore.updateContractresultMilestone(block.getHash(), -1);
 					// revert the transaction into prev state, the transaction has not state of
-					// collecting hash
+					// collecting hash, do the unconfirm the transaction
 					for (Sha256Hash dep : check.getToBeSpent()) {
 						confirmContractEventAndTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
 					}
-					// set the prev state
+					// restore the prev state
 					if (prevblockhash.getContractExecutionResult() != null) {
 						ContractExecutionResult prevResult = new ContractExecutionResult()
-								.parse(prevblockhash.getContractExecutionResult());
-
+								.parse(prevblockhash.getContractExecutionResult()); 
+					 Block prevBlock = getBlock(prevResult.getBlockHash(), blockStore) ;
 						for (Sha256Hash dep : prevResult.getToBeSpent()) {
-							confirmContractEventAndTransaction(getBlock(dep, blockStore), block, true,
+							confirmContractEventAndTransaction(getBlock(dep, blockStore), prevBlock, true,
 									prevblockhash.getMilestone(), blockStore);
-						}
+						} 
 					}
+	
 				}
 				// update ContractEventRecord
 				// referenced blocks are new with Zero Collecting hash
 				for (Sha256Hash dep : check.getReferencedBlocks()) {
 					confirmContractEventZero(dep, confirm, blockStore);
 				}
-
-				blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
-				blockStore.updateContractEventConfirmed(check.getRemainderRecords(), block.getHash(), confirm);
 
 				// update ContractResult
 				blockStore.updateContractResultConfirmed(block.getHash(), confirm);
@@ -1923,24 +1924,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * will confirm and unconfirm all transaction data of the block and make the
 	 * used transaction data spent.
 	 * 
-	 * @param blockHash
+	 * @param blockWrap
 	 * @param milestoneNumber
 	 * @param traversedBlockHashes: all block hash is called in this process
 	 * @param confirmation:         confirm and revoke confirm
 	 * @throws BlockStoreException
 	 */
-
-	public void confirm(Sha256Hash blockHash, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
-			boolean confirmation, FullBlockStore store) throws BlockStoreException {
-		// If already confirmed, return
-		if (traversedBlockHashes.contains(blockHash))
-			return;
-
-		BlockWrap blockWrap = getBlockWrap(blockHash, store);
-		confirm(blockWrap, traversedBlockHashes, milestoneNumber, confirmation, store);
-	}
-
-	private void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
+	public void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
 			boolean confirmation, FullBlockStore store) throws BlockStoreException {
 		// If already confirmed, return
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
