@@ -74,9 +74,6 @@ public class ServiceContract extends ServiceBaseConnect {
 		// Collect all orders approved by this block in the interval
 		List<ContractEventCancelInfo> cancels = new ArrayList<>();
 
-		TreeMap<Sha256Hash, ContractEventRecord> sortedNew = new TreeMap<>(Comparator
-				.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) blockHash).getBytes(), randomness))));
-
 		TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = new TreeMap<>(Comparator
 				.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) blockHash).getBytes(), randomness))));
 
@@ -87,7 +84,7 @@ public class ServiceContract extends ServiceBaseConnect {
 
 		// Set<ContractEventRecord> cancelled = new HashSet<>();
 
-		collectWithCancel(block, collectedBlocks, cancels, sortedNew, toBeSpent, store);
+		collectWithCancel(block, collectedBlocks, cancels, toBeSpent, store);
 		Set<ContractEventRecord> cancelledContractEventRecord = new HashSet<>();
 
 		// timeoutOrdersToCancelled(block, toBeSpent, cancelledContractEventRecord);
@@ -117,12 +114,13 @@ public class ServiceContract extends ServiceBaseConnect {
 				usedRecords = new TreeMap<>(Comparator.comparing(
 						blockHash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) blockHash).getBytes(), randomness))));
 				Transaction tx = createPayoutTransaction(block, payouts);
+				Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(
+						toBeSpent.values(), usedRecords.values());
 				return new ContractExecutionResult(block.getHash(), contract.getTokenid(),
 						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx, prevHash.getBlockHash(),
 						getContractEventRecordHash(cancelledContractEventRecord),
-						getRemainder(toBeSpent.values(), usedRecords.values()), block.getTimeSeconds(),
-						getRemainderContractEventRecord(toBeSpent.values(), usedRecords.values()),
-						getContractEventRecordSet(toBeSpent.values()), collectedBlocks);
+						getContractEventRecordHash(remainderContractEventRecord), block.getTimeSeconds(),
+						remainderContractEventRecord, getContractEventRecordSet(toBeSpent.values()), collectedBlocks);
 
 			}
 		}
@@ -162,8 +160,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	}
 
 	private void collectWithCancel(Block block, Set<Sha256Hash> collectedBlocks, List<ContractEventCancelInfo> cancels,
-			Map<Sha256Hash, ContractEventRecord> news, TreeMap<Sha256Hash, ContractEventRecord> spents,
-			FullBlockStore store) throws BlockStoreException {
+			TreeMap<Sha256Hash, ContractEventRecord> spents, FullBlockStore store) throws BlockStoreException {
 		for (Sha256Hash bHash : collectedBlocks) {
 			Block b = getBlock(bHash, store);
 			if (b.getBlockType() == Type.BLOCKTYPE_CONTRACT_EVENT) {
@@ -177,7 +174,6 @@ public class ServiceContract extends ServiceBaseConnect {
 				}
 				if (event != null) {
 					ContractEventRecord cloneOrderRecord = ContractEventRecord.cloneOrderRecord(event);
-					news.put(b.getHash(), cloneOrderRecord);
 					spents.put(b.getHash(), cloneOrderRecord);
 				}
 			} else if (b.getBlockType() == Type.BLOCKTYPE_CONTRACTEVENT_CANCEL) {
@@ -205,16 +201,19 @@ public class ServiceContract extends ServiceBaseConnect {
 		Random se = new Random(randomness);
 		List<String> userlist = baseList(usedRecords.values(), amount);
 		int randomWin = se.nextInt(userlist.size());
-	//	log.debug("randomn win = " + randomWin + " userlist size =" + userlist.size());
+		// log.debug("randomn win = " + randomWin + " userlist size =" +
+		// userlist.size());
 		ContractEventRecord winner = findList(usedRecords.values(), userlist.get(randomWin));
-	//	log.debug("winner = " + winner.toString());
+		// log.debug("winner = " + winner.toString());
 		payout(payouts, winner.getBeneficiaryAddress(), winner.getTargetTokenid(), sum(usedRecords.values()));
 		Transaction tx = createPayoutTransaction(winnerBlock, payouts);
+		Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(allRecords.values(),
+				usedRecords.values());
+
 		return new ContractExecutionResult(winnerBlock.getHash(), winner.getContractTokenid(),
 				getContractEventRecordHash(allRecords.values()), tx.getHash(), tx, prevHash.getBlockHash(), cancels,
-				getRemainder(allRecords.values(), usedRecords.values()), winnerBlock.getTimeSeconds(),
-				getRemainderContractEventRecord(allRecords.values(), usedRecords.values()),
-				getContractEventRecordSet(allRecords.values()), collectedBlocks);
+				getContractEventRecordHash(remainderContractEventRecord), winnerBlock.getTimeSeconds(),
+				remainderContractEventRecord, getContractEventRecordSet(allRecords.values()), collectedBlocks);
 	}
 
 	public Set<Sha256Hash> getContractEventRecordHash(Collection<ContractEventRecord> orders) {
@@ -241,23 +240,16 @@ public class ServiceContract extends ServiceBaseConnect {
 		return hashs;
 	}
 
-	public Set<Sha256Hash> getRemainder(Collection<ContractEventRecord> all, Collection<ContractEventRecord> used) {
-		Set<Sha256Hash> hashs = new HashSet<>();
-		for (ContractEventRecord o : all) {
-			if (!used.contains(o)) {
-				hashs.add(o.getBlockHash());
-			}
-		}
-		return hashs;
-	}
-
 	public Set<ContractEventRecord> getRemainderContractEventRecord(Collection<ContractEventRecord> all,
 			Collection<ContractEventRecord> used) {
 		Set<ContractEventRecord> re = new HashSet<>();
 		for (ContractEventRecord o : all) {
-			if (!used.contains(o)) {
-				o.setConfirmed(true);
-				re.add(ContractEventRecord.cloneOrderRecord(o));
+			if (used.stream().noneMatch(p -> p.getBlockHash().equals(o.getBlockHash()))) {
+				ContractEventRecord t = ContractEventRecord.cloneOrderRecord(o);
+				t.setConfirmed(true);
+				t.setSpent(false);
+				t.setSpenderBlockHash(null);
+				re.add(t);
 			}
 		}
 		return re;
@@ -274,7 +266,7 @@ public class ServiceContract extends ServiceBaseConnect {
 
 		for (Map.Entry<Sha256Hash, ContractEventRecord> u : player.entrySet()) {
 			sum = sum.add(u.getValue().getTargetValue());
-			userlist.put(u.getKey(),  ContractEventRecord.cloneOrderRecord(u.getValue()));
+			userlist.put(u.getKey(), ContractEventRecord.cloneOrderRecord(u.getValue()));
 			if (sum.compareTo(winnerAmount) >= 0) {
 				return true;
 			}

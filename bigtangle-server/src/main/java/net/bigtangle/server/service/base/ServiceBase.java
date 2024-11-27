@@ -5,44 +5,75 @@
 package net.bigtangle.server.service.base;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutPoint;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserData;
 import net.bigtangle.core.Utils;
+import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.core.response.PermissionedAddressesResponse;
+import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.utils.Json;
 
-public class ServiceBase {
+public abstract class ServiceBase {
 	protected ServerConfiguration serverConfiguration;
 	protected NetworkParameters networkParameters;
 	protected CacheBlockService cacheBlockService;
+
+	protected abstract void connectTypeSpecificUTXOs(Block block, FullBlockStore blockStore)
+			throws BlockStoreException, VerificationException;
+
+	protected abstract void connectUTXOs(Block block, FullBlockStore blockStore) throws BlockStoreException;
+
+	protected abstract void connectUTXOs(Block block, List<Transaction> transactions, FullBlockStore blockStore)
+			throws BlockStoreException;
+
+	protected abstract Optional<OrderMatchingResult> calculateBlockOrderMatchingResult(Block block,
+			FullBlockStore blockStore) throws BlockStoreException;
 
 	public ServiceBase(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService) {
@@ -160,10 +191,8 @@ public class ServiceBase {
 		case BLOCKTYPE_CONTRACT_EVENT:
 			break;
 		case BLOCKTYPE_CONTRACT_EXECUTE:
-			allrequireds.addAll(getReferrencedBlockHashes(block));
 			break;
 		case BLOCKTYPE_ORDER_EXECUTE:
-			allrequireds.addAll(getReferrencedBlockHashes(block));
 			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			break;
@@ -402,6 +431,364 @@ public class ServiceBase {
 			return fromAddress;
 		}
 		return fromAddress;
+	}
+
+	//
+	public Transaction generateVirtualMiningRewardTX(Block block, FullBlockStore blockStore)
+			throws BlockStoreException {
+		if (enableOrderMatchExecutionChain(block)) {
+			return generateVirtualMiningRewardTXFeeBased(block, blockStore);
+		} else {
+			return generateVirtualMiningRewardTX1(block, blockStore);
+		}
+	}
+
+	public Transaction generateVirtualMiningRewardTXFeeBased(Block block, FullBlockStore blockStore)
+			throws BlockStoreException {
+		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+		Set<Sha256Hash> candidateBlocks = rewardInfo.getBlocks();
+
+		// Build transaction outputs sorted by addresses
+		Transaction tx = new Transaction(networkParameters);
+
+		// Reward the consensus block with the static reward
+		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
+				new Address(networkParameters, block.getMinerAddress()));
+
+		return tx;
+	}
+
+	public long countRewardTXFeeBased(Set<Sha256Hash> candidateBlocks, FullBlockStore store) throws BlockStoreException
+
+	{
+		long re = 0;
+		for (Sha256Hash s : candidateBlocks) {
+			Block t = getBlock(s, store);
+			if (t.getBlockType() == Block.Type.BLOCKTYPE_CONTRACT_EXECUTE) {
+				re = re + new ContractExecutionResult().parseChecked(t.getTransactions().get(0).getData())
+						.getReferencedBlocks().size();
+			} else if (t.getBlockType() == Block.Type.BLOCKTYPE_ORDER_EXECUTE) {
+
+				re = re + new OrderExecutionResult().parseChecked(t.getTransactions().get(0).getData())
+						.getReferencedBlocks().size();
+			} else {
+				re = re + 1;
+			}
+		}
+		return re;
+	}
+
+	/**
+	 * Deterministically creates a mining reward transaction based on the previous
+	 * blocks and previous reward transaction. DOES NOT CHECK FOR SOLIDITY. You have
+	 * to ensure that the approved blocks result in an eligible reward block.
+	 * 
+	 * @return mining reward transaction
+	 * @throws BlockStoreException
+	 */
+	public Transaction generateVirtualMiningRewardTX1(Block block, FullBlockStore blockStore)
+			throws BlockStoreException {
+
+		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+		Set<Sha256Hash> candidateBlocks = rewardInfo.getBlocks();
+
+		// Count how many blocks from miners in the reward interval are approved
+		// and build rewards
+		Queue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+		for (Sha256Hash bHash : candidateBlocks) {
+			blockQueue.add(getBlockWrap(bHash, blockStore));
+		}
+
+		// Initialize
+		Set<BlockWrap> currentHeightBlocks = new HashSet<>();
+		Map<BlockWrap, Set<Sha256Hash>> snapshotWeights = new HashMap<>();
+		Map<Address, Long> finalRewardCount = new HashMap<>();
+		BlockWrap currentBlock = null, approvedBlock = null;
+		Address consensusBlockMiner = new Address(networkParameters, block.getMinerAddress());
+		long currentHeight = Long.MAX_VALUE;
+		long totalRewardCount = 0;
+
+		for (BlockWrap tip : blockQueue) {
+			snapshotWeights.put(tip, new HashSet<>());
+		}
+
+		// Go backwards by height
+		while ((currentBlock = blockQueue.poll()) != null) {
+
+			// If we have reached a new height level, trigger payout
+			// calculation
+			if (currentHeight > currentBlock.getBlockEvaluation().getHeight()) {
+
+				// Calculate rewards
+				totalRewardCount = calculateHeightRewards(currentHeightBlocks, snapshotWeights, finalRewardCount,
+						totalRewardCount);
+
+				// Finished with this height level, go to next level
+				currentHeightBlocks.clear();
+				long currentHeight_ = currentHeight;
+				snapshotWeights.entrySet().removeIf(e -> e.getKey().getBlockEvaluation().getHeight() == currentHeight_);
+				currentHeight = currentBlock.getBlockEvaluation().getHeight();
+			}
+
+			// Stop criterion: Block not in candidate list
+			if (!candidateBlocks.contains(currentBlock.getBlockHash()))
+				continue;
+
+			// Add your own hash to approver hashes of current approver hashes
+			snapshotWeights.get(currentBlock).add(currentBlock.getBlockHash());
+
+			// Count the blocks of current height
+			currentHeightBlocks.add(currentBlock);
+
+			// Continue with both approved blocks
+			approvedBlock = getBlockWrap(currentBlock.getBlock().getPrevBlockHash(), blockStore);
+			if (!blockQueue.contains(approvedBlock)) {
+				if (approvedBlock != null) {
+					blockQueue.add(approvedBlock);
+					snapshotWeights.put(approvedBlock, new HashSet<>(snapshotWeights.get(currentBlock)));
+				}
+			} else {
+				snapshotWeights.get(approvedBlock).add(currentBlock.getBlockHash());
+			}
+			approvedBlock = getBlockWrap(currentBlock.getBlock().getPrevBranchBlockHash(), blockStore);
+			if (!blockQueue.contains(approvedBlock)) {
+				if (approvedBlock != null) {
+					blockQueue.add(approvedBlock);
+					snapshotWeights.put(approvedBlock, new HashSet<>(snapshotWeights.get(currentBlock)));
+				}
+			} else {
+				snapshotWeights.get(approvedBlock).add(currentBlock.getBlockHash());
+			}
+		}
+
+		// Exception for height 0 (genesis): since prevblock does not exist,
+		// finish payout
+		// calculation
+		if (currentHeight == 0) {
+			totalRewardCount = calculateHeightRewards(currentHeightBlocks, snapshotWeights, finalRewardCount,
+					totalRewardCount);
+		}
+
+		// Build transaction outputs sorted by addresses
+		Transaction tx = new Transaction(networkParameters);
+
+		// Reward the consensus block with the static reward
+		tx.addOutput(Coin.SATOSHI.times(NetworkParameters.REWARD_AMOUNT_BLOCK_REWARD), consensusBlockMiner);
+
+		// Reward twice: once the consensus block, once the normal block maker
+		// of good quantiles
+		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream()
+				.sorted(Comparator.comparing((Entry<Address, Long> e) -> e.getKey())).collect(Collectors.toList())) {
+			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD),
+					consensusBlockMiner);
+			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD), entry.getKey());
+		}
+
+		// The input does not really need to be a valid signature, as long
+		// as it has the right general form and is slightly different for
+		// different tx
+		TransactionInput input = new TransactionInput(networkParameters, tx, Script
+				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
+		tx.addInput(input);
+		tx.setMemo(new MemoInfo("MiningRewardTX"));
+		return tx;
+	}
+
+	// For each height, throw away anything below the 99-percentile
+	// in terms of reduced weight
+	private long calculateHeightRewards(Set<BlockWrap> currentHeightBlocks,
+			Map<BlockWrap, Set<Sha256Hash>> snapshotWeights, Map<Address, Long> finalRewardCount,
+			long totalRewardCount) {
+		long heightRewardCount = (long) Math.ceil(0.95d * currentHeightBlocks.size());
+		totalRewardCount += heightRewardCount;
+
+		long rewarded = 0;
+		for (BlockWrap rewardedBlock : currentHeightBlocks.stream()
+				.sorted(Comparator.comparingLong(b -> snapshotWeights.get(b).size()).reversed())
+				.collect(Collectors.toList())) {
+			if (rewarded >= heightRewardCount)
+				break;
+
+			Address miner = new Address(networkParameters, rewardedBlock.getBlock().getMinerAddress());
+			if (!finalRewardCount.containsKey(miner))
+				finalRewardCount.put(miner, 1L);
+			else
+				finalRewardCount.put(miner, finalRewardCount.get(miner) + 1);
+			rewarded++;
+		}
+		return totalRewardCount;
+	}
+
+	protected void solidifyReward(Block block, FullBlockStore blockStore) throws BlockStoreException {
+
+		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
+		long currChainLength = blockStore.getRewardChainLength(prevRewardHash) + 1;
+		long difficulty = rewardInfo.getDifficultyTargetReward();
+
+		blockStore.insertReward(block.getHash(), prevRewardHash, difficulty, currChainLength);
+
+	}
+
+	protected void insertVirtualUTXOs(Block block, Transaction virtualTx, FullBlockStore blockStore) {
+		try {
+			ArrayList<Transaction> txs = new ArrayList<Transaction>();
+			txs.add(virtualTx);
+			connectUTXOs(block, txs, blockStore);
+		} catch (BlockStoreException e) {
+			// Expected after reorgs
+			// logger.warn("Probably reinserting reward: ", e);
+		}
+	}
+
+	public void solidifyBlock(Block block, SolidityState solidityState, boolean setMilestoneSuccess,
+			FullBlockStore blockStore) throws BlockStoreException {
+//		if (block.getBlockType() == Type.BLOCKTYPE_ORDER_EXECUTE) {
+//			logger.debug(block.toString());
+//		}
+
+		switch (solidityState.getState()) {
+		case MissingCalculation:
+			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
+
+			// Reward blocks follow different logic: If this is new, run
+			// consensus logic
+			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+				solidifyReward(block, blockStore);
+				return;
+			}
+			// Insert other blocks into waiting list
+			// insertUnsolidBlock(block, solidityState, blockStore);
+			break;
+		case MissingPredecessor:
+			if (block.getBlockType() == Type.BLOCKTYPE_INITIAL
+					&& getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() > 0) {
+				throw new RuntimeException("Should not happen");
+			}
+
+			blockStore.updateBlockEvaluationSolid(block.getHash(), 0);
+
+			// Insert into waiting list
+			// insertUnsolidBlock(block, solidityState, blockStore);
+			break;
+		case Success:
+			// If already set, nothing to do here...
+			if (getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() == 2)
+				return;
+
+			// TODO don't calculate again, it may already have been calculated
+			// before
+			connectUTXOs(block, blockStore);
+			connectTypeSpecificUTXOs(block, blockStore);
+			calculateBlockOrderMatchingResult(block, blockStore);
+
+			if (block.getBlockType() == Type.BLOCKTYPE_REWARD && !setMilestoneSuccess) {
+				// If we don't want to set the milestone success, initialize as
+				// missing calc
+				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
+			} else {
+				// Else normal update
+				blockStore.updateBlockEvaluationSolid(block.getHash(), 2);
+			}
+			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+				solidifyReward(block, blockStore);
+				return;
+			}
+
+			break;
+		case Invalid:
+
+			blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
+			break;
+		}
+		cacheBlockService.evictBlockEvaluation(block.getHash());
+	}
+
+	public void solidifyBlocks(RewardInfo currRewardInfo, FullBlockStore store) throws BlockStoreException {
+		Comparator<Block> comparator = Comparator.comparingLong((Block b) -> b.getHeight())
+				.thenComparing((Block b) -> b.getHash());
+		TreeSet<Block> referencedBlocks = new TreeSet<Block>(comparator);
+		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
+			Block block = getBlock(hash, store);
+			if (block != null)
+				referencedBlocks.add(block);
+		}
+		for (Block block : referencedBlocks) {
+			solidifyWaiting(block, store);
+		}
+	}
+
+	public boolean solidifyWaiting(Block block, FullBlockStore store) throws BlockStoreException {
+
+		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+				.checkSolidity(block, false, store, false);
+		// allow here unsolid block, as sync may do only the referenced blocks
+		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
+			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
+		} else {
+			solidifyBlock(block, solidityState, false, store);
+		}
+		return true;
+	}
+
+	public boolean getUTXOConfirmed(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
+		return store.getOutputConfirmation(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+	}
+
+	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
+		return store.getTransactionOutputSpender(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+	}
+
+	public UTXO getUTXO(TransactionOutPoint out, FullBlockStore store) throws BlockStoreException {
+		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
+	}
+
+	public long getCurrentMaxHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
+		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
+		if (maxConfirmedReward == null)
+			return NetworkParameters.FORWARD_BLOCK_HORIZON;
+		return store.get(maxConfirmedReward.getBlockHash()).getHeight() + NetworkParameters.FORWARD_BLOCK_HORIZON;
+	}
+
+	public long getCurrentCutoffHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
+		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
+		if (maxConfirmedReward == null)
+			return 0;
+		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
+		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
+		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
+	}
+
+	/**
+	 * Get the {@link Script} from the script bytes or return Script of empty byte
+	 * array.
+	 */
+	protected Script getScript(byte[] scriptBytes) {
+		try {
+			return new Script(scriptBytes);
+		} catch (Exception e) {
+			return new Script(new byte[0]);
+		}
+	}
+
+	/**
+	 * Get the address from the {@link Script} if it exists otherwise return empty
+	 * string "".
+	 *
+	 * @param script The script.
+	 * @return The address.
+	 */
+	protected String getScriptAddress(@Nullable Script script) {
+		String address = "";
+		try {
+			if (script != null) {
+				address = script.getToAddress(networkParameters, true).toString();
+			}
+		} catch (Exception e) {
+			// e.printStackTrace();
+		}
+		return address;
 	}
 
 }

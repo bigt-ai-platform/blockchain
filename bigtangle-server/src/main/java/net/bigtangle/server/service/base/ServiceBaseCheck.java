@@ -72,6 +72,8 @@ import net.bigtangle.core.exception.VerificationException.SigOpsException;
 import net.bigtangle.core.exception.VerificationException.TimeReversionException;
 import net.bigtangle.core.exception.VerificationException.TransactionOutputsDisallowedException;
 import net.bigtangle.core.exception.VerificationException.UnsolidException;
+import net.bigtangle.core.response.GetTXRewardListResponse;
+import net.bigtangle.core.response.GetTXRewardResponse;
 import net.bigtangle.core.response.MultiSignByRequest;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.Script.VerifyFlag;
@@ -86,7 +88,7 @@ import net.bigtangle.utils.ContextPropagatingThreadFactory;
 import net.bigtangle.utils.DomainValidator;
 import net.bigtangle.utils.Json;
 
-public class ServiceBaseCheck extends ServiceBase {
+public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	public ServiceBaseCheck(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService) {
@@ -2027,4 +2029,18 @@ public class ServiceBaseCheck extends ServiceBase {
 
 		return Utils.encodeCompactBits(difficultyChain);
 	}
+	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, FullBlockStore store)
+			throws BlockStoreException {
+
+		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
+
+	}
+
+	public GetTXRewardListResponse getAllConfirmedReward(Map<String, Object> request, FullBlockStore store)
+			throws BlockStoreException {
+
+		return GetTXRewardListResponse.create(store.getAllConfirmedReward());
+
+	}
+
 }

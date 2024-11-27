@@ -132,9 +132,12 @@ public class FullBlockStoreImpl {
 		return true;
 	}
 
+	/*
+	 * updateChainConnected and confirm can not run in parallel
+	 */
 	public void updateChain() throws BlockStoreException {
 		updateChainConnected();
-		updateConfirmedTimeBoxed();
+	//	updateConfirmedTimeBoxed();
 	}
 
 	public void updateChainConnected() throws BlockStoreException {
@@ -166,6 +169,7 @@ public class FullBlockStoreImpl {
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
 				processChainConnected(store, false, true);
+				updateConfirmedDo(store);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
 					log.info("updateChain time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
@@ -384,7 +388,8 @@ public class FullBlockStoreImpl {
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		if (block.getRewardInfo().getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
-			new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService).checkRewardChainConfirmReferenced(block, store);
+			new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService)
+					.checkRewardChainConfirmReferenced(block, store);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
@@ -451,8 +456,8 @@ public class FullBlockStoreImpl {
 		FullBlockStore blockStore = storeService.getStore();
 		try {
 			updateTransactionOutputSpendPending(block, blockStore);
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).evictTransactionsAndBlockEva(block,
-					blockStore);
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+					.evictTransactionsAndBlockEva(block, blockStore);
 			// Initialize MCMC
 			if (blockStore.getMCMC(block.getHash()) == null) {
 				ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<DepthAndWeight>();
@@ -487,38 +492,58 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void updateConfirmedDo(TXReward maxConfirmedReward, FullBlockStore blockStore) throws BlockStoreException {
-
-		// First remove any blocks that should no longer be in the milestone
-		HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
-		HashSet<Sha256Hash> traversedUnconfirms = new HashSet<>();
+	public void updateConfirmedDo(FullBlockStore blockStore) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
-		for (BlockEvaluation block : blocksToRemove) { 
-			unconfirmDo( block.getBlockHash(),traversedUnconfirms, serviceBase, blockStore);
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			// First remove any blocks that should no longer be in the milestone
+			HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
+
+			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
+			for (BlockEvaluation b : blocksToRemove) {
+				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b.getBlockHash(), blockStore));
+			}
+			serviceBase.unconfirmBlocksSorted(blockStore, -1, blocksToRemoveBlocks, new HashSet<>());
+
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
 		}
-		// TXReward maxConfirmedReward = blockStore.getMaxConfirmedReward();
 
-		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
-		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
+		try {
+			blockStore.beginDatabaseBatchWrite();
 
-		// Now try to find blocks that can be added to the milestone.
-		// DISALLOWS UNSOLID
-		TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
+			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
 
-		// VALIDITY CHECKS
-		serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
+			// Now try to find blocks that can be added to the milestone.
+			// DISALLOWS UNSOLID
+			TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
 
-		// Finally add the resolved new blocks to the confirmed set
-		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
-		for (BlockWrap block : blocksToAdd) {
-			confirmDo(block , traversedConfirms, blockStore);
+			// VALIDITY CHECKS
+			serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
+
+			// Finally add the resolved new blocks to the confirmed set
+			serviceBase.confirmBlocksSorted(blockStore, -1, blocksToAdd, new HashSet<>());
+
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
 		}
 
 	}
 
-	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms,
-			ServiceBaseConnect serviceBase,  FullBlockStore blockStore) throws BlockStoreException {
+	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms, ServiceBaseConnect serviceBase,
+			FullBlockStore blockStore) throws BlockStoreException {
 		try {
 			blockStore.beginDatabaseBatchWrite();
 			serviceBase.unconfirm(hash, traversedUnconfirms, -1, blockStore);
@@ -546,7 +571,7 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void updateConfirmed() throws BlockStoreException {
+	private void updateConfirmed() throws BlockStoreException {
 		String LOCKID = "chain";
 		int LockTime = 1000000;
 		FullBlockStore store = storeService.getStore();
@@ -573,13 +598,11 @@ public class FullBlockStoreImpl {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-				updateConfirmedDo(maxConfirmedReward, store);
+				updateConfirmedDo(store);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
 					log.info("updateConfirmedDo time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 				}
-
-				cleanUp(maxConfirmedReward, store);
+				cleanUp(store);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
 					log.info("cleanUp time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 				}
@@ -597,7 +620,8 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void cleanUp(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
+	public void cleanUp(FullBlockStore store) throws BlockStoreException {
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		cleanUpDo(maxConfirmedReward, store);
 	}
 
@@ -620,7 +644,7 @@ public class FullBlockStoreImpl {
 	 * run timeboxed updateConfirmed, there is no transaction here. Timeout will
 	 * cancel the rest of update confirm and can be update from next run
 	 */
-	public void updateConfirmedTimeBoxed() throws BlockStoreException {
+	private void updateConfirmedTimeBoxed() throws BlockStoreException {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })

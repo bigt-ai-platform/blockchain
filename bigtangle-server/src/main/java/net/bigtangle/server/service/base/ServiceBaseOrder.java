@@ -15,9 +15,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.Map.Entry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -38,16 +40,14 @@ import net.bigtangle.core.Side;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.exception.VerificationException.InvalidTransactionDataException;
 import net.bigtangle.core.exception.VerificationException.MissingDependencyException;
 import net.bigtangle.core.ordermatch.MatchResult;
 import net.bigtangle.core.ordermatch.OrderBookEvents;
-import net.bigtangle.core.ordermatch.TradePair;
 import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
 import net.bigtangle.core.ordermatch.OrderBookEvents.Match;
+import net.bigtangle.core.ordermatch.TradePair;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -65,16 +65,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			CacheBlockService cacheBlockService) {
 		super(serverConfiguration, networkParameters, cacheBlockService);
 
-	}
-
-	protected abstract void connectTypeSpecificUTXOs(Block block, FullBlockStore blockStore)
-			throws BlockStoreException, VerificationException;
-
-	protected abstract void connectUTXOs(Block block, FullBlockStore blockStore)
-			throws BlockStoreException;
-
-	protected abstract void  connectUTXOs(Block block, List<Transaction> transactions, FullBlockStore blockStore)
-			throws BlockStoreException;
+	} 
 
 	public void addMatchingEvents(OrderMatchingResult orderMatchingResult, String transactionHash, long matchBlockTime,
 			FullBlockStore store) throws BlockStoreException {
@@ -565,6 +556,72 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			// Expected after reorgs
 			logger.warn("Probably reinserting orders: ", e);
 		}
+	}
+	public void removeMatchingEvents(Sha256Hash h, FullBlockStore store) throws BlockStoreException {
+		store.deleteMatchingEvents(h.toString());
+	}
+
+	/**
+	 * Calculates and inserts any virtual transaction outputs so dependees can
+	 * become solid
+	 * 
+	 * @param block
+	 * @return
+	 * @throws BlockStoreException
+	 */
+	public Optional<OrderMatchingResult> calculateBlockOrderMatchingResult(Block block, FullBlockStore blockStore)
+			throws BlockStoreException {
+
+		Transaction tx = null;
+		OrderMatchingResult matchingResult = null;
+
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CROSSTANGLE:
+			break;
+		case BLOCKTYPE_FILE:
+			break;
+		case BLOCKTYPE_GOVERNANCE:
+			break;
+		case BLOCKTYPE_INITIAL:
+			break;
+		case BLOCKTYPE_REWARD:
+			tx = generateVirtualMiningRewardTX(block, blockStore);
+			insertVirtualUTXOs(block, tx, blockStore);
+
+			// Get list of consumed orders, virtual order matching tx and newly
+			// generated remaining order book
+			if (!enableOrderMatchExecutionChain(block)) {
+				matchingResult = generateOrderMatching(block, blockStore);
+				tx = matchingResult.getOutputTx();
+				insertVirtualUTXOs(block, tx, blockStore);
+				insertVirtualOrderRecords(block, matchingResult.getRemainingOrders(), blockStore);
+			}
+			break;
+		case BLOCKTYPE_TOKEN_CREATION:
+			break;
+		case BLOCKTYPE_TRANSFER:
+			break;
+		case BLOCKTYPE_USERDATA:
+			break;
+		case BLOCKTYPE_CONTRACT_EVENT:
+			break;
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			break;
+		case BLOCKTYPE_ORDER_EXECUTE:
+			break;
+		case BLOCKTYPE_ORDER_OPEN:
+			break;
+		case BLOCKTYPE_ORDER_CANCEL:
+			break;
+		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
+			break;
+		default:
+			throw new RuntimeException("Not Implemented");
+
+		}
+
+		// Return the computation result
+		return Optional.ofNullable(matchingResult);
 	}
 
 }

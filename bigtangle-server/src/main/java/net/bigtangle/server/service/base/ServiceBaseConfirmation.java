@@ -13,38 +13,29 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.annotation.Nullable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluation;
-import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Orderresult;
-import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
-import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -54,8 +45,6 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.response.GetTXRewardListResponse;
-import net.bigtangle.core.response.GetTXRewardResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -63,7 +52,6 @@ import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
-import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.utils.UtilSort;
 import net.bigtangle.store.FullBlockStore;
@@ -234,21 +222,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			boolean checkSpentConflict, FullBlockStore store) throws BlockStoreException {
 		boolean check = true;
 		if (checkSpentConflict) {
-			Set<BlockWrap> allApprovedCheckBlocks = new HashSet<>();
-			allApprovedCheckBlocks.add(block);
+			Set<BlockWrap> checkBlocks = new HashSet<>();
+			checkBlocks.add(block);
 			// contract execution, then check all referenced blocks with no conflicts
 			if (Block.Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())
 					|| Block.Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
-				allApprovedCheckBlocks.addAll(getReferrencedBlockWrap(block.getBlock(), store));
+				checkBlocks.addAll(getReferrencedBlockWrap(block.getBlock(), store));
 			}
-			check = checkSpentAndConflict(allApprovedNewBlocks, allApprovedCheckBlocks, store);
+			check = checkSpentAndConflict(allApprovedNewBlocks, checkBlocks, store);
 		}
 		if (check) {
 			allApprovedNewBlocks.add(block);
-			if ((Block.Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())
-					|| Block.Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType()))) {
-				allApprovedNewBlocks.addAll(getReferrencedBlockWrap(block.getBlock(), store));
-			}
 		}
 
 	}
@@ -290,50 +274,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				return true;
 			}
 		});
-	}
-
-	public boolean solidifyWaiting(Block block, FullBlockStore store) throws BlockStoreException {
-
-		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
-				.checkSolidity(block, false, store, false);
-		// allow here unsolid block, as sync may do only the referenced blocks
-		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
-			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
-		} else {
-			solidifyBlock(block, solidityState, false, store);
-		}
-		return true;
-	}
-
-	/**
-	 * Get the {@link Script} from the script bytes or return Script of empty byte
-	 * array.
-	 */
-	protected Script getScript(byte[] scriptBytes) {
-		try {
-			return new Script(scriptBytes);
-		} catch (Exception e) {
-			return new Script(new byte[0]);
-		}
-	}
-
-	/**
-	 * Get the address from the {@link Script} if it exists otherwise return empty
-	 * string "".
-	 *
-	 * @param script The script.
-	 * @return The address.
-	 */
-	protected String getScriptAddress(@Nullable Script script) {
-		String address = "";
-		try {
-			if (script != null) {
-				address = script.getToAddress(networkParameters, true).toString();
-			}
-		} catch (Exception e) {
-			// e.printStackTrace();
-		}
-		return address;
 	}
 
 	public List<BlockWrap> sortedPrevsChain(List<Contractresult> prevs, FullBlockStore store)
@@ -859,7 +799,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		HashSet<Sha256Hash> traversedUnconfirms = new HashSet<>();
 		for (BlockWrap b : conflictingConfirmedBlocks.stream().filter(b -> losingBlocks.contains(b))
 				.collect(Collectors.toList())) {
-			unconfirm(b.getBlockEvaluation().getBlockHash(), traversedUnconfirms, -1, store);
+			unconfirm(b, traversedUnconfirms, -1, store);
 		}
 
 		// For candidates that have been eliminated (conflictingOutPoints in
@@ -1103,21 +1043,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return missingPredecessorBlockHashes;
 	}
 
-	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, FullBlockStore store)
-			throws BlockStoreException {
-
-		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
-
-	}
-
-	public GetTXRewardListResponse getAllConfirmedReward(Map<String, Object> request, FullBlockStore store)
-			throws BlockStoreException {
-
-		return GetTXRewardListResponse.create(store.getAllConfirmedReward());
-
-	}
-
-	protected void showConflict(HashSet<BlockWrap> allApprovedNewBlocks) {
+	protected void showConflict(Set<BlockWrap> allApprovedNewBlocks) {
 		List<List<ConflictCandidate>> candidateConflicts = allApprovedNewBlocks.stream()
 				.map(b -> b.toConflictCandidates()).flatMap(i -> i.stream())
 				.collect(Collectors.groupingBy(i -> i.getConflictPoint())).values().stream().filter(l -> l.size() > 1)
@@ -1127,48 +1053,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				logger.debug(" conflict list: " + c.toString());
 			}
 		}
-	}
-
-	public void solidifyBlocks(RewardInfo currRewardInfo, FullBlockStore store) throws BlockStoreException {
-		Comparator<Block> comparator = Comparator.comparingLong((Block b) -> b.getHeight())
-				.thenComparing((Block b) -> b.getHash());
-		TreeSet<Block> referencedBlocks = new TreeSet<Block>(comparator);
-		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
-			Block block = getBlock(hash, store);
-			if (block != null)
-				referencedBlocks.add(block);
-		}
-		for (Block block : referencedBlocks) {
-			solidifyWaiting(block, store);
-		}
-	}
-
-	public boolean getUTXOConfirmed(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
-		return store.getOutputConfirmation(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
-	}
-
-	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
-		return store.getTransactionOutputSpender(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
-	}
-
-	public UTXO getUTXO(TransactionOutPoint out, FullBlockStore store) throws BlockStoreException {
-		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
-	}
-
-	public long getCurrentMaxHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
-		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
-		if (maxConfirmedReward == null)
-			return NetworkParameters.FORWARD_BLOCK_HORIZON;
-		return store.get(maxConfirmedReward.getBlockHash()).getHeight() + NetworkParameters.FORWARD_BLOCK_HORIZON;
-	}
-
-	public long getCurrentCutoffHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
-		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
-		if (maxConfirmedReward == null)
-			return 0;
-		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
-		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
-		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
 	}
 
 	/*
@@ -1469,7 +1353,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					for (OrderRecord c : check.getToBeSpentRecord()) {
 						c.setSpent(false);
 						c.setSpenderBlockHash(null);
-
 					}
 
 					for (Sha256Hash dep : check.getToBeSpent()) {
@@ -1479,8 +1362,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					if (prevblockhash.getOrderExecutionResult() != null) {
 						OrderExecutionResult prevOrderresult = new OrderExecutionResult()
 								.parse(prevblockhash.getOrderExecutionResult());
+						Block prevBlock = getBlock(prevOrderresult.getBlockHash(), blockStore);
 						for (Sha256Hash dep : prevOrderresult.getToBeSpent()) {
-							confirmOrderAndTransaction(getBlock(dep, blockStore), block, confirm,
+							confirmOrderAndTransaction(getBlock(dep, blockStore), prevBlock, confirm,
 									prevblockhash.getMilestone(), blockStore);
 						}
 					}
@@ -1532,75 +1416,107 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
 					cacheBlockService).executeContract(block, blockStore, result.getContracttokenid(), prevblockhash,
 							result.getReferencedBlocks());
-			// Sets.difference(result.getRemainderRecords(), check.getRemainderRecords());
-			// Sets.difference(check.getRemainderRecords(), result.getRemainderRecords());
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
 					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-
-				if (confirm) {
-
-					if (resetConflictConfirm) {
-						resetConfirmContractExecuteConflict(result, milestoneNumber, blockStore);
-					}
-
-					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
-						c.setSpent(true);
-						c.setSpenderBlockHash(block.getHash());
-					}
-
-					blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
-					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmContractEventAndTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber,
-								blockStore);
-					}
-					blockStore.updateContractEventConfirmed(check.getRemainderRecords(), block.getHash(), confirm);
-					blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
-
-				} else {
-					// reset the spent from this block execution
-					blockStore.resetContractEventSpent(block.getHash());
-					blockStore.	resetContractEventConfirmed(block.getHash());
-					blockStore.updateContractresultMilestone(block.getHash(), -1);
-					// revert the transaction into prev state, the transaction has not state of
-					// collecting hash, do the unconfirm the transaction
-					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmContractEventAndTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
-					}
-					// restore the prev state
-					if (prevblockhash.getContractExecutionResult() != null) {
-						ContractExecutionResult prevResult = new ContractExecutionResult()
-								.parse(prevblockhash.getContractExecutionResult()); 
-					 Block prevBlock = getBlock(prevResult.getBlockHash(), blockStore) ;
-						for (Sha256Hash dep : prevResult.getToBeSpent()) {
-							confirmContractEventAndTransaction(getBlock(dep, blockStore), prevBlock, true,
-									prevblockhash.getMilestone(), blockStore);
-						} 
-					}
-	
-				}
-				// update ContractEventRecord
-				// referenced blocks are new with Zero Collecting hash
-				for (Sha256Hash dep : check.getReferencedBlocks()) {
-					confirmContractEventZero(dep, confirm, blockStore);
-				}
-
-				// update ContractResult
-				blockStore.updateContractResultConfirmed(block.getHash(), confirm);
-				confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
-				blockStore.updateContractResultSpent(result.getPrevblockhash(), block.getHash(), confirm);
-
-				// update cancel
-				blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), confirm);
-
-				// reset cache
-				evictTransactionsAndBlockEva(block, blockStore);
+				confirmContractExecuteNoCheck(block, milestoneNumber, confirm, resetConflictConfirm, blockStore,
+						prevblockhash, check);
 
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private void confirmContractExecuteNoCheck(Block block, long milestoneNumber, boolean confirm,
+			boolean resetConflictConfirm, FullBlockStore blockStore, Contractresult prevblockhash,
+			ContractExecutionResult checked) throws BlockStoreException, IOException {
+		if (confirm) {
+			// there can be more than one confirmed execution in conflict, set other to
+			// unconfirmed
+//			if (resetConflictConfirm) {
+//				resetConfirmContractExecuteConflict(checked, milestoneNumber, blockStore);
+//			}
+			// toBeSpent are prev and referenced must be set transaction state and milestoneNumber
+			for (Sha256Hash dep : checked.getToBeSpent()) {
+				confirmContractEventTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber, blockStore);
+			}
+
+			for (ContractEventRecord c : checked.getToBeSpentContractEventRecord()) {
+				c.setConfirmed(true);
+				c.setSpent(true);
+				c.setSpenderBlockHash(block.getHash());
+			}
+			blockStore.updateContractEventSpent(checked.getToBeSpentContractEventRecord());
+
+			for (ContractEventRecord c : checked.getRemainderContractEventRecord()) {
+				c.setConfirmed(true);
+				c.setSpent(false);
+				c.setSpenderBlockHash(null);
+				c.setCollectinghash(block.getHash());
+			}
+			blockStore.updateContractEventSpent(checked.getRemainderContractEventRecord());
+
+			blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
+			// update ContractResult
+			blockStore.updateContractResultConfirmed(block.getHash(), confirm);
+			confirmTransaction(block, confirm, checked.getOutputTx(), blockStore);
+			blockStore.updateContractResultSpent(checked.getPrevblockhash(), block.getHash(), confirm);
+
+			// update cancel
+			blockStore.updateContractEventCancelSpent(checked.getCancelRecords(), block.getHash(), confirm);
+
+		} else {
+			for (Sha256Hash dep : checked.getToBeSpent()) {
+				confirmContractEventTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
+			}
+
+			for (ContractEventRecord c : checked.getToBeSpentContractEventRecord()) {
+				c.setConfirmed(false);
+				c.setSpent(false);
+				c.setSpenderBlockHash(null);
+			}
+			blockStore.updateContractEventSpent(checked.getToBeSpentContractEventRecord());
+
+			for (ContractEventRecord c : checked.getRemainderContractEventRecord()) {
+				c.setConfirmed(false);
+				c.setSpent(false);
+				c.setSpenderBlockHash(null);
+				// remainder set the collection hash using block hash, as the calculation of
+				// execution the block hash is not fixed.
+				c.setCollectinghash(block.getHash());
+			}
+			blockStore.updateContractEventSpent(checked.getRemainderContractEventRecord());
+
+			// reset the confirmed from this block execution as remainder
+			// c.setCollectinghash(block.getHash());
+
+			blockStore.resetContractEventConfirmed(block.getHash());
+
+			blockStore.updateContractresultMilestone(block.getHash(), -1);
+			// revert the transaction into prev state, the transaction has not state of
+			// collecting hash, do the unconfirm the transaction
+
+			// update ContractResult
+			blockStore.updateContractResultConfirmed(block.getHash(), confirm);
+			confirmTransaction(block, confirm, checked.getOutputTx(), blockStore);
+			blockStore.updateContractResultSpent(checked.getPrevblockhash(), null, confirm);
+			// update cancel
+			blockStore.updateContractEventCancelSpent(checked.getCancelRecords(), block.getHash(), confirm);
+			// restore the prev state
+			if (prevblockhash.getContractExecutionResult() != null) {
+				ContractExecutionResult prevResult = new ContractExecutionResult()
+						.parse(prevblockhash.getContractExecutionResult());
+				BlockWrap prevBlock = getBlockWrap(prevResult.getBlockHash(), blockStore);
+				confirmContractExecute(prevBlock.getBlock(), prevBlock.getBlockEvaluation().getMilestone(), true, false,
+						blockStore);
+			}
+
+		}
+
+		// reset cache
+		evictTransactionsAndBlockEva(block, blockStore);
 	}
 
 	/*
@@ -1637,17 +1553,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		cacheBlockService.evictMaxConfirmedReward();
 	}
 
-	protected void insertVirtualUTXOs(Block block, Transaction virtualTx, FullBlockStore blockStore) {
-		try {
-			ArrayList<Transaction> txs = new ArrayList<Transaction>();
-			txs.add(virtualTx);
-			connectUTXOs(block, txs, blockStore);
-		} catch (BlockStoreException e) {
-			// Expected after reorgs
-			logger.warn("Probably reinserting reward: ", e);
-		}
-	}
-
 	private void confirmToken(BlockWrap block, boolean confirm, FullBlockStore blockStore) throws BlockStoreException {
 		// Set used other output spent
 		if (confirm) {
@@ -1663,25 +1568,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		blockStore.updateTokenConfirmed(block.getBlock().getHash(), confirm);
 	}
 
-	private void confirmContractEventAndTransaction(Block block, Block issueblock, boolean confirm,
-			long milestoneNumber, FullBlockStore blockStore) throws BlockStoreException {
+	private void confirmContractEventTransaction(Block block, Block issueblock, boolean confirm, long milestoneNumber,
+			FullBlockStore blockStore) throws BlockStoreException {
 
 		blockStore.updateBlockEvaluationConfirmed(block.getHash(), confirm);
 		blockStore.updateBlockEvaluationMilestone(block.getHash(), milestoneNumber);
-		List<Sha256Hash> bs = new ArrayList<>();
-		bs.add(block.getHash());
-		blockStore.updateContractEventConfirmed(bs, issueblock.getHash(), confirm);
 		confirmTransaction(block, confirm, blockStore);
 		evictTransactionsAndBlockEva(block, blockStore);
-	}
-
-	private void confirmContractEventZero(Sha256Hash blockhash, boolean confirm, FullBlockStore blockStore)
-			throws BlockStoreException {
-
-		List<Sha256Hash> bs = new ArrayList<>();
-		bs.add(blockhash);
-		blockStore.updateContractEventConfirmed(bs, Sha256Hash.ZERO_HASH, confirm);
-
 	}
 
 	private void confirmOrderAndTransaction(Block block, Block issueblock, boolean confirm, long milestoneNumber,
@@ -1776,136 +1669,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		unconfirm(blockWrap, traversedBlockHashes, milestoneNumber, blockStore);
 	}
 
-	public void removeMatchingEvents(Sha256Hash h, FullBlockStore store) throws BlockStoreException {
-		store.deleteMatchingEvents(h.toString());
-	}
-
-	public void solidifyBlock(Block block, SolidityState solidityState, boolean setMilestoneSuccess,
-			FullBlockStore blockStore) throws BlockStoreException {
-//		if (block.getBlockType() == Type.BLOCKTYPE_ORDER_EXECUTE) {
-//			logger.debug(block.toString());
-//		}
-
-		switch (solidityState.getState()) {
-		case MissingCalculation:
-			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
-
-			// Reward blocks follow different logic: If this is new, run
-			// consensus logic
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-				solidifyReward(block, blockStore);
-				return;
-			}
-			// Insert other blocks into waiting list
-			// insertUnsolidBlock(block, solidityState, blockStore);
-			break;
-		case MissingPredecessor:
-			if (block.getBlockType() == Type.BLOCKTYPE_INITIAL
-					&& getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() > 0) {
-				throw new RuntimeException("Should not happen");
-			}
-
-			blockStore.updateBlockEvaluationSolid(block.getHash(), 0);
-
-			// Insert into waiting list
-			// insertUnsolidBlock(block, solidityState, blockStore);
-			break;
-		case Success:
-			// If already set, nothing to do here...
-			if (getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() == 2)
-				return;
-
-			// TODO don't calculate again, it may already have been calculated
-			// before
-			connectUTXOs(block, blockStore);
-			connectTypeSpecificUTXOs(block, blockStore);
-			calculateBlockOrderMatchingResult(block, blockStore);
-
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD && !setMilestoneSuccess) {
-				// If we don't want to set the milestone success, initialize as
-				// missing calc
-				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
-			} else {
-				// Else normal update
-				blockStore.updateBlockEvaluationSolid(block.getHash(), 2);
-			}
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-				solidifyReward(block, blockStore);
-				return;
-			}
-
-			break;
-		case Invalid:
-
-			blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
-			break;
-		}
-		cacheBlockService.evictBlockEvaluation(block.getHash());
-	}
-
-	/**
-	 * Calculates and inserts any virtual transaction outputs so dependees can
-	 * become solid
-	 * 
-	 * @param block
-	 * @return
-	 * @throws BlockStoreException
-	 */
-	public Optional<OrderMatchingResult> calculateBlockOrderMatchingResult(Block block, FullBlockStore blockStore)
-			throws BlockStoreException {
-
-		Transaction tx = null;
-		OrderMatchingResult matchingResult = null;
-
-		switch (block.getBlockType()) {
-		case BLOCKTYPE_CROSSTANGLE:
-			break;
-		case BLOCKTYPE_FILE:
-			break;
-		case BLOCKTYPE_GOVERNANCE:
-			break;
-		case BLOCKTYPE_INITIAL:
-			break;
-		case BLOCKTYPE_REWARD:
-			tx = generateVirtualMiningRewardTX(block, blockStore);
-			insertVirtualUTXOs(block, tx, blockStore);
-
-			// Get list of consumed orders, virtual order matching tx and newly
-			// generated remaining order book
-			if (!enableOrderMatchExecutionChain(block)) {
-				matchingResult = generateOrderMatching(block, blockStore);
-				tx = matchingResult.getOutputTx();
-				insertVirtualUTXOs(block, tx, blockStore);
-				insertVirtualOrderRecords(block, matchingResult.getRemainingOrders(), blockStore);
-			}
-			break;
-		case BLOCKTYPE_TOKEN_CREATION:
-			break;
-		case BLOCKTYPE_TRANSFER:
-			break;
-		case BLOCKTYPE_USERDATA:
-			break;
-		case BLOCKTYPE_CONTRACT_EVENT:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_OPEN:
-			break;
-		case BLOCKTYPE_ORDER_CANCEL:
-			break;
-		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
-			break;
-		default:
-			throw new RuntimeException("Not Implemented");
-
-		}
-
-		// Return the computation result
-		return Optional.ofNullable(matchingResult);
-	}
-
 	@SuppressWarnings("unused")
 	private Optional<ConflictCandidate> findFirstSpentInput(HashSet<BlockWrap> allApprovedNewBlocks,
 			FullBlockStore store) {
@@ -1942,11 +1705,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return;
 		}
 
-		// If already confirmed or un confirmed, return
-		if (blockWrap.getBlockEvaluation().isConfirmed() && confirmation)
-			return;
-		if (!blockWrap.getBlockEvaluation().isConfirmed() && !confirmation)
-			return;
+	 
 
 		updateBlockConfirm(blockWrap, milestoneNumber, confirmation, store);
 
@@ -1968,199 +1727,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public void unconfirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
 			FullBlockStore blockStore) throws BlockStoreException {
 		confirm(blockWrap, traversedBlockHashes, milestoneNumber, false, blockStore);
-	}
-
-	//
-	public Transaction generateVirtualMiningRewardTX(Block block, FullBlockStore blockStore)
-			throws BlockStoreException {
-		if (enableOrderMatchExecutionChain(block)) {
-			return generateVirtualMiningRewardTXFeeBased(block, blockStore);
-		} else {
-			return generateVirtualMiningRewardTX1(block, blockStore);
-		}
-	}
-
-	public Transaction generateVirtualMiningRewardTXFeeBased(Block block, FullBlockStore blockStore)
-			throws BlockStoreException {
-		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-		Set<Sha256Hash> candidateBlocks = rewardInfo.getBlocks();
-
-		// Build transaction outputs sorted by addresses
-		Transaction tx = new Transaction(networkParameters);
-
-		// Reward the consensus block with the static reward
-		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
-				new Address(networkParameters, block.getMinerAddress()));
-
-		return tx;
-	}
-
-	public long countRewardTXFeeBased(Set<Sha256Hash> candidateBlocks, FullBlockStore store) throws BlockStoreException
-
-	{
-		long re = 0;
-		for (Sha256Hash s : candidateBlocks) {
-			Type t = getBlock(s, store).getBlockType();
-			if (t == Block.Type.BLOCKTYPE_CONTRACT_EXECUTE || t == Block.Type.BLOCKTYPE_ORDER_EXECUTE) {
-				continue;
-			} else {
-				re = re + 1;
-			}
-		}
-		return re;
-	}
-
-	/**
-	 * Deterministically creates a mining reward transaction based on the previous
-	 * blocks and previous reward transaction. DOES NOT CHECK FOR SOLIDITY. You have
-	 * to ensure that the approved blocks result in an eligible reward block.
-	 * 
-	 * @return mining reward transaction
-	 * @throws BlockStoreException
-	 */
-	public Transaction generateVirtualMiningRewardTX1(Block block, FullBlockStore blockStore)
-			throws BlockStoreException {
-
-		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-		Set<Sha256Hash> candidateBlocks = rewardInfo.getBlocks();
-
-		// Count how many blocks from miners in the reward interval are approved
-		// and build rewards
-		Queue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
-		for (Sha256Hash bHash : candidateBlocks) {
-			blockQueue.add(getBlockWrap(bHash, blockStore));
-		}
-
-		// Initialize
-		Set<BlockWrap> currentHeightBlocks = new HashSet<>();
-		Map<BlockWrap, Set<Sha256Hash>> snapshotWeights = new HashMap<>();
-		Map<Address, Long> finalRewardCount = new HashMap<>();
-		BlockWrap currentBlock = null, approvedBlock = null;
-		Address consensusBlockMiner = new Address(networkParameters, block.getMinerAddress());
-		long currentHeight = Long.MAX_VALUE;
-		long totalRewardCount = 0;
-
-		for (BlockWrap tip : blockQueue) {
-			snapshotWeights.put(tip, new HashSet<>());
-		}
-
-		// Go backwards by height
-		while ((currentBlock = blockQueue.poll()) != null) {
-
-			// If we have reached a new height level, trigger payout
-			// calculation
-			if (currentHeight > currentBlock.getBlockEvaluation().getHeight()) {
-
-				// Calculate rewards
-				totalRewardCount = calculateHeightRewards(currentHeightBlocks, snapshotWeights, finalRewardCount,
-						totalRewardCount);
-
-				// Finished with this height level, go to next level
-				currentHeightBlocks.clear();
-				long currentHeight_ = currentHeight;
-				snapshotWeights.entrySet().removeIf(e -> e.getKey().getBlockEvaluation().getHeight() == currentHeight_);
-				currentHeight = currentBlock.getBlockEvaluation().getHeight();
-			}
-
-			// Stop criterion: Block not in candidate list
-			if (!candidateBlocks.contains(currentBlock.getBlockHash()))
-				continue;
-
-			// Add your own hash to approver hashes of current approver hashes
-			snapshotWeights.get(currentBlock).add(currentBlock.getBlockHash());
-
-			// Count the blocks of current height
-			currentHeightBlocks.add(currentBlock);
-
-			// Continue with both approved blocks
-			approvedBlock = getBlockWrap(currentBlock.getBlock().getPrevBlockHash(), blockStore);
-			if (!blockQueue.contains(approvedBlock)) {
-				if (approvedBlock != null) {
-					blockQueue.add(approvedBlock);
-					snapshotWeights.put(approvedBlock, new HashSet<>(snapshotWeights.get(currentBlock)));
-				}
-			} else {
-				snapshotWeights.get(approvedBlock).add(currentBlock.getBlockHash());
-			}
-			approvedBlock = getBlockWrap(currentBlock.getBlock().getPrevBranchBlockHash(), blockStore);
-			if (!blockQueue.contains(approvedBlock)) {
-				if (approvedBlock != null) {
-					blockQueue.add(approvedBlock);
-					snapshotWeights.put(approvedBlock, new HashSet<>(snapshotWeights.get(currentBlock)));
-				}
-			} else {
-				snapshotWeights.get(approvedBlock).add(currentBlock.getBlockHash());
-			}
-		}
-
-		// Exception for height 0 (genesis): since prevblock does not exist,
-		// finish payout
-		// calculation
-		if (currentHeight == 0) {
-			totalRewardCount = calculateHeightRewards(currentHeightBlocks, snapshotWeights, finalRewardCount,
-					totalRewardCount);
-		}
-
-		// Build transaction outputs sorted by addresses
-		Transaction tx = new Transaction(networkParameters);
-
-		// Reward the consensus block with the static reward
-		tx.addOutput(Coin.SATOSHI.times(NetworkParameters.REWARD_AMOUNT_BLOCK_REWARD), consensusBlockMiner);
-
-		// Reward twice: once the consensus block, once the normal block maker
-		// of good quantiles
-		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream()
-				.sorted(Comparator.comparing((Entry<Address, Long> e) -> e.getKey())).collect(Collectors.toList())) {
-			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD),
-					consensusBlockMiner);
-			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD), entry.getKey());
-		}
-
-		// The input does not really need to be a valid signature, as long
-		// as it has the right general form and is slightly different for
-		// different tx
-		TransactionInput input = new TransactionInput(networkParameters, tx, Script
-				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
-		tx.addInput(input);
-		tx.setMemo(new MemoInfo("MiningRewardTX"));
-		return tx;
-	}
-
-	// For each height, throw away anything below the 99-percentile
-	// in terms of reduced weight
-	private long calculateHeightRewards(Set<BlockWrap> currentHeightBlocks,
-			Map<BlockWrap, Set<Sha256Hash>> snapshotWeights, Map<Address, Long> finalRewardCount,
-			long totalRewardCount) {
-		long heightRewardCount = (long) Math.ceil(0.95d * currentHeightBlocks.size());
-		totalRewardCount += heightRewardCount;
-
-		long rewarded = 0;
-		for (BlockWrap rewardedBlock : currentHeightBlocks.stream()
-				.sorted(Comparator.comparingLong(b -> snapshotWeights.get(b).size()).reversed())
-				.collect(Collectors.toList())) {
-			if (rewarded >= heightRewardCount)
-				break;
-
-			Address miner = new Address(networkParameters, rewardedBlock.getBlock().getMinerAddress());
-			if (!finalRewardCount.containsKey(miner))
-				finalRewardCount.put(miner, 1L);
-			else
-				finalRewardCount.put(miner, finalRewardCount.get(miner) + 1);
-			rewarded++;
-		}
-		return totalRewardCount;
-	}
-
-	private void solidifyReward(Block block, FullBlockStore blockStore) throws BlockStoreException {
-
-		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
-		long currChainLength = blockStore.getRewardChainLength(prevRewardHash) + 1;
-		long difficulty = rewardInfo.getDifficultyTargetReward();
-
-		blockStore.insertReward(block.getHash(), prevRewardHash, difficulty, currChainLength);
-
 	}
 
 }

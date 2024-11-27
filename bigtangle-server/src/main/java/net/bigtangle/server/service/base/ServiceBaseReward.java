@@ -5,7 +5,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -42,7 +41,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseReward.class);
 
-	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
+	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, FullBlockStore store)
+			throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
@@ -72,12 +72,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
 
-		// Unconfirm anything not confirmed by milestone
-		List<Sha256Hash> wipeBlocks = store.getWhereConfirmedNotMilestone();
-		HashSet<Sha256Hash> traversedBlockHashes = new HashSet<>();
-		for (Sha256Hash wipeBlock : wipeBlocks)
-			unconfirm(wipeBlock, traversedBlockHashes, milestoneNumber, store);
-
+	
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 		for (Sha256Hash hash : referrencedBlocks) {
@@ -113,13 +108,12 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		// Otherwise, all predecessors exist and were at least
 		// solid > 0, so we should be able to confirm everything
-		solidifyBlock(newMilestoneBlock, solidityState, true, store);
-		HashSet<Sha256Hash> traversedConfirms = new HashSet<>();
-
-		for (BlockWrap approvedBlock : allApprovedNewBlocks)
-			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
+		solidifyBlock(newMilestoneBlock, solidityState, true, store);  
+	
+		confirmBlocksSorted(store, milestoneNumber, allApprovedNewBlocks, new HashSet<>());
 
 	}
+
 
 	private void checkGeneratedReward(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
 
@@ -398,12 +392,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	public class SortbyBlock implements Comparator<Block> {
-
-		public int compare(Block a, Block b) {
-			return a.getHeight() < b.getHeight() ? 1 : -1;
-		}
-	}
 
 	/**
 	 * Returns the set of contiguous blocks between 'higher' and 'lower'. Higher is

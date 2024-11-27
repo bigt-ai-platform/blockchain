@@ -1492,12 +1492,11 @@ public abstract class AbstractIntegrationTest {
 
 	public void mcmcServiceUpdate() throws InterruptedException, ExecutionException, BlockStoreException {
 		mcmcService.update(store);
-		blockGraph.updateConfirmed();
+		blockGraph.updateConfirmedDo(store);
 	}
 
 	public void mcmc() throws JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
-		mcmcServiceUpdate();
-
+		mcmcServiceUpdate(); 
 	}
 
 	public BlockWrap defaultBlockWrap(Block block) throws Exception {

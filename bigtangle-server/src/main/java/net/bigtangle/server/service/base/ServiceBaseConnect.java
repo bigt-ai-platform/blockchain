@@ -8,6 +8,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -43,6 +47,7 @@ import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
+import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
@@ -295,8 +300,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 				blockStore.insertContractResult(result);
 				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
 				for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-					c.setCollectinghash(block.getHash());
+					//connected not confirmed
 					c.setConfirmed(false);
+					c.setCollectinghash(block.getHash());
 				}
 				blockStore.insertContractEvent(check.getRemainderContractEventRecord());
 
@@ -372,13 +378,38 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	/*
-	 * updateConfirmedDo update the confirmation via MCMC, there ma be conflicts
-	 * within those blocks not in milestone. calculate all blocks not in milestone
-	 * (reward) with MCMC low and set this as unconfirmed. calculate all blocks not
-	 * in milestone (reward) with MCMC upper value and conflict free, then set those
-	 * as confirmed.
-	 */
-	 
+	public void confirmBlocksSorted(FullBlockStore store, long milestoneNumber,
+			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
+		ArrayList<BlockWrap> arrayList = new ArrayList<BlockWrap>(blocks);
+		Collections.sort(arrayList, new SortbyBlockWrapAsc());
+		for (BlockWrap approvedBlock :  arrayList)
+			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
+	}
 
+	public void unconfirmBlocksSorted(FullBlockStore store, long milestoneNumber,
+			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
+		ArrayList<BlockWrap> arrayList = new ArrayList<BlockWrap>(blocks);
+		Collections.sort(arrayList, new SortbyBlockWrap());
+		for (BlockWrap block :  arrayList)
+			unconfirm(block, traversedConfirms, milestoneNumber, store);
+	}
+	public class SortbyBlock implements Comparator<Block> {
+
+		public int compare(Block a, Block b) {
+			return a.getHeight() < b.getHeight() ? 1 : -1;
+		}
+	}
+
+	public class SortbyBlockWrap implements Comparator<BlockWrap> {
+
+		public int compare(BlockWrap a, BlockWrap b) {
+			return a.getBlock().getHeight() < b.getBlock().getHeight() ? 1 : -1;
+		}
+	}
+	public class SortbyBlockWrapAsc implements Comparator<BlockWrap> {
+
+		public int compare(BlockWrap a, BlockWrap b) {
+			return a.getBlock().getHeight() > b.getBlock().getHeight() ? 1 : -1;
+		}
+	}
 }

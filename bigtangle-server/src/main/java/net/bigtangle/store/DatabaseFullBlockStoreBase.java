@@ -196,7 +196,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 " + afterSelect();
 
 	protected final String SELECT_BLOCKS_CONFIRMED_AND_NOT_MILESTONE_SQL = "SELECT hash "
-			+ "FROM blocks WHERE milestone = -1 AND confirmed = 1 " + afterSelect();
+			+ "FROM blocks WHERE milestone = -1 AND confirmed = 1 order by height desc " + afterSelect();
 
 	protected final String SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL = "SELECT block "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? " + afterSelect();
@@ -244,8 +244,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " WHERE blockhash = ? and  collectinghash=? ";
 	protected final String RESET_CONTRACT_EVENT_CONFIRMED_SQL = getUpdate() + " contractevent SET confirmed = false "
 			+ " WHERE  collectinghash=? ";
-	protected final String UPDATE_CONTRACT_EVENT_SPENT_SQL = getUpdate()
-			+ " contractevent SET spent = ?, spenderblockhash = ? " + " WHERE blockhash = ?";
+
 	protected final String SELECT_PREV_CONTRACT_SQL = "SELECT " + CONTRACT_TEMPLATE
 			+ " FROM contractevent WHERE contracttokenid = ? AND  collectinghash=? ";
 

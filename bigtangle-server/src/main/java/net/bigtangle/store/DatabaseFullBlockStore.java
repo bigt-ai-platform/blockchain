@@ -2174,18 +2174,24 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException {
 
+
+	
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection()
-					.prepareStatement(getUpdate() + " contractevent SET spent = ?, spenderblockhash = ? "
+					.prepareStatement(getUpdate() + " contractevent SET spent = ?, spenderblockhash = ?, confirmed =? "
 							+ " WHERE blockhash = ? and collectinghash=? ");
 	
 			for (ContractEventRecord o : records) {
+				if(!o.isConfirmed() && o.isSpent()) {
+					int a =0;
+				}
 				preparedStatement.setBoolean(1, o.isSpent());
 				preparedStatement.setBytes(2,
 						o.getSpenderBlockHash() != null ? o.getSpenderBlockHash().getBytes() : null);
-				preparedStatement.setBytes(3, o.getBlockHash().getBytes());
-				preparedStatement.setBytes(4, o.getCollectinghash().getBytes());
+				preparedStatement.setBoolean(3, o.isConfirmed());
+				preparedStatement.setBytes(4, o.getBlockHash().getBytes());
+				preparedStatement.setBytes(5, o.getCollectinghash().getBytes());
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
@@ -2293,11 +2299,14 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public void updateContractEventConfirmed(Collection<Sha256Hash> records, Sha256Hash collectinghash, boolean confirm)
 			throws BlockStoreException {
-
+		if(!confirm) {
+			int a =0;
+		}
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(UPDATE_CONTRACT_EVENT_CONFIRMED_SQL);
 			for (Sha256Hash o : records) {
+				 
 				preparedStatement.setBoolean(1, confirm);
 				preparedStatement.setBytes(2, o.getBytes());
 				preparedStatement.setBytes(3, collectinghash.getBytes());
