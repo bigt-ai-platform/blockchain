@@ -29,7 +29,7 @@ public class ConflictPoint {
 	private Token connectedDomainToken;
 
 	@Nullable
-	private ContractExecutionResult connectedContracExecute;
+	private ContractExecutionResult connectedContractExecute;
 	@Nullable
 	private OrderExecutionResult connectedOrderExecute;
 
@@ -42,7 +42,7 @@ public class ConflictPoint {
 		this.connectedReward = reward;
 		this.connectedToken = connectedToken;
 		this.connectedDomainToken = connectedDomainToken;
-		this.connectedContracExecute = connectedContracExecute;
+		this.connectedContractExecute = connectedContracExecute;
 		this.connectedOrderExecute = connectedOrderExecute;
 
 	}
@@ -97,8 +97,8 @@ public class ConflictPoint {
 					&& getConnectedDomainToken().getTokenname().equals(other.getConnectedDomainToken().getTokenname())
 					&& getConnectedDomainToken().getTokenindex() == other.getConnectedDomainToken().getTokenindex();
 		case CONTRACTEXECUTE:
-			return getConnectedContracExecute().getPrevblockhash()
-					.equals(other.getConnectedContracExecute().getPrevblockhash());
+			return getConnectedContractExecute().getPrevblockhash()
+					.equals(other.getConnectedContractExecute().getPrevblockhash());
 		case ORDEREXECUTE:
 			return getConnectedOrderExecute().getPrevblockhash()
 					.equals(other.getConnectedOrderExecute().getPrevblockhash());
@@ -121,7 +121,7 @@ public class ConflictPoint {
 			return Objects.hashCode(type, getConnectedDomainToken().getDomainNameBlockHash(),
 					getConnectedDomainToken().getTokenname(), getConnectedDomainToken().getTokenindex());
 		case CONTRACTEXECUTE:
-			return Objects.hashCode(type, getConnectedContracExecute().getPrevblockhash());
+			return Objects.hashCode(type, getConnectedContractExecute().getPrevblockhash());
 		case ORDEREXECUTE:
 			return Objects.hashCode(type, getConnectedOrderExecute().getPrevblockhash());
 
@@ -154,8 +154,8 @@ public class ConflictPoint {
 		return connectedDomainToken;
 	}
 
-	public ContractExecutionResult getConnectedContracExecute() {
-		return connectedContracExecute;
+	public ContractExecutionResult getConnectedContractExecute() {
+		return connectedContractExecute;
 	}
 	public   OrderExecutionResult getConnectedOrderExecute() {
 		return connectedOrderExecute;
@@ -165,7 +165,7 @@ public class ConflictPoint {
 	public String toString() {
 		return "ConflictPoint [type=" + type + ", connectedOutpoint=" + connectedOutpoint + ", connectedReward="
 				+ connectedReward + ", connectedToken=" + connectedToken + ", connectedDomainToken="
-				+ connectedDomainToken + ", connectedContracExecute=" + connectedContracExecute + "]";
+				+ connectedDomainToken + ", connectedContracExecute=" + connectedContractExecute + "]";
 	}
 
 }

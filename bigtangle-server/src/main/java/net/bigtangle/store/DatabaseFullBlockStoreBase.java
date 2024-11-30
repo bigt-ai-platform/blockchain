@@ -274,8 +274,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ " WHERE confirmed = 1 and contracttokenid=? and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = 1 and contracttokenid=? and milestone < 0  order by inserttime desc   ";
-	protected final String SELECT_CONTRACTRESULT_CONFIRMED_ANY_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = 1 and contracttokenid=?    ";
+	 
 	
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
@@ -294,6 +293,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	protected final String SELECT_ORDERRESULT_CONFIRMED_ANY_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = 1    ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
+	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = 1 and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()

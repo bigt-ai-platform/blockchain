@@ -540,36 +540,7 @@ public class FullBlockStoreImpl {
 			blockStore.defaultDatabaseBatchWrite();
 		}
 
-	}
-
-	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms, ServiceBaseConnect serviceBase,
-			FullBlockStore blockStore) throws BlockStoreException {
-		try {
-			blockStore.beginDatabaseBatchWrite();
-			serviceBase.unconfirm(hash, traversedUnconfirms, -1, blockStore);
-			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
-			blockStore.abortDatabaseBatchWrite();
-			throw e;
-		} finally {
-			blockStore.defaultDatabaseBatchWrite();
-		}
-	}
-
-	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
-			throws BlockStoreException {
-		try {
-			blockStore.beginDatabaseBatchWrite();
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block,
-					traversedConfirms, (long) -1, true, blockStore);
-			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
-			blockStore.abortDatabaseBatchWrite();
-			throw e;
-		} finally {
-			blockStore.defaultDatabaseBatchWrite();
-		}
-	}
+	} 
 
 	private void updateConfirmed() throws BlockStoreException {
 		String LOCKID = "chain";

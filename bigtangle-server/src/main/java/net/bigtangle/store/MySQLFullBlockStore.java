@@ -401,6 +401,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_BLOCKS_HEIGHT_INDEX = "CREATE INDEX blocks_height_idx ON blocks (height)  USING btree ";
     private static final String CREATE_TXREARD_CHAINLENGTH_INDEX = "CREATE INDEX txreard_chainlength_idx ON txreward (chainlength, confirmed)  ";
     private static final String CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX = "CREATE INDEX contractevent_contracttokenid_idx ON contractevent (contracttokenid) USING btree";
+    private static final String CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX contractevent_collectinghash_idx ON contractevent (collectinghash)";
     private static final String CREATE_CONTRACT_EXECUTION_CONTRACTTOKENID_TABLE_INDEX = "CREATE INDEX contractresult_contracttokenid_idx ON contractresult (contracttokenid) USING btree";
     private static final String CREATE_ORDERS_SPENT_TABLE_INDEX = "CREATE INDEX orders_spent_idx ON orders (confirmed, spent) ";
     private static final String CREATE_MATCHING_TOKEN_TABLE_INDEX = "CREATE INDEX matching_inserttime_idx ON matching (inserttime) ";
@@ -508,6 +509,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         List<String> sqlStatements = new ArrayList<String>(); 
         sqlStatements.add(CREATE_OUTPUTS_FROMADDRESS_INDEX); 
         sqlStatements.add(CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX); 
+        sqlStatements.add(CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX); 
         sqlStatements.add(CREATE_CONTRACT_EXECUTION_CONTRACTTOKENID_TABLE_INDEX);
         sqlStatements.add(CREATE_ORDERS_SPENT_TABLE_INDEX);
         sqlStatements.add(CREATE_MATCHING_TOKEN_TABLE_INDEX);

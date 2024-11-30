@@ -11,17 +11,17 @@ select * FROM contractevent a, blocks b WHERE a.blockhash=b.hash
 select * FROM   blocks b WHERE b.milestone >0 
 select * FROM contractevent a   WHERE a.confirmed=1 AND a.spent=0
 select * FROM contractevent a   WHERE   a.spent=1 and confirmed=false
-select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash and   b.confirmed=false and a.confirmed =true 
+select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash and   a.spent=true and b.spent=false
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   b.confirmed!=a.confirmed
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and a.collectinghash=0x00911194d5d0db7cc4c2098c671434496ee81da207e4d67ee292d9e920e5a926
-select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   a.confirmed=false and a.spent=true
+select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   a.confirmed=true and a.spent=false
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash 
 or  a.collectinghash=0x0000000000000000000000000000000000000000000000000000000000000000   
 select * FROM contractevent order by  spenderblockhash, collectinghash
 
 
 select * from orders  where spent=false ;
-select * from orderresult  order by milestone desc ;  
+select * from orderresult order by inserttime desc ;
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
 select * from orders a, blocks b where a.blockhash=b.hash  ;
 select * FROM orders a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true

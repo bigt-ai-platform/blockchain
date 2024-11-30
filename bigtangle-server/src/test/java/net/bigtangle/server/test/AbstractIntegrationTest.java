@@ -12,6 +12,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -102,6 +103,7 @@ import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.TipsService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
+import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.store.FullBlockStoreImpl;
 import net.bigtangle.utils.Json;
@@ -1526,7 +1528,7 @@ public abstract class AbstractIntegrationTest {
 				assertTrue(a.getValue().check(), " " + a.toString());
 				
 			}
-			log.debug(" checkSum ok ");
+		//	log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
 			return map;
 		} finally {
@@ -1657,6 +1659,36 @@ public abstract class AbstractIntegrationTest {
 
 		}
 
+	}
+	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms ,
+			FullBlockStore blockStore) throws BlockStoreException {
+		
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			 new ServiceContract(serverConfiguration, networkParameters,
+						cacheBlockService).unconfirm(hash, traversedUnconfirms, -1, blockStore);
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
+			throws BlockStoreException {
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block,
+					traversedConfirms, (long) -1, true, blockStore);
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
 	}
 
 }

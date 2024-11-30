@@ -1132,8 +1132,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		Block b = makeRewardBlock(addedBlocks);
 		assertCurrentTokenAmountEquals(origTokenAmounts);
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-				.unconfirm(b.getHash(), new HashSet<>(), -1, store);
+		 	unconfirmDo(b.getHash(), new HashSet<>(),   store);
 
 		assertCurrentTokenAmountEquals(origTokenAmounts);
 	}
@@ -1503,8 +1502,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Execute order matching
 		Block a = makeOrderExecutionAndReward(addedBlocks);
 		c = checkSum(c);
-		blockGraph.unconfirmDo(a.getHash(), new HashSet<>(),
-				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService), store);
+		 unconfirmDo(a.getHash(), new HashSet<>(),
+				  store);
 		c = checkSum(c);
 
 	}

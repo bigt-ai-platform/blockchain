@@ -210,27 +210,22 @@ public interface FullBlockStore {
 	public List<OrderCancel> getOrderCancelConfirmed() throws BlockStoreException;
 
 	public void updateOrderCancelSpent(Set<Sha256Hash> cancels, Sha256Hash blockhash, Boolean spent)
-			throws BlockStoreException;
-
-	public void updateOrderConfirmed(Sha256Hash blockHash, Sha256Hash issuingMatcherBlockHash, boolean confirmed)
-			throws BlockStoreException;
-
-	public void updateOrderConfirmed(Set<Sha256Hash> hashs, Sha256Hash issuingMatcherBlockHash, boolean confirmed)
-			throws BlockStoreException;
+			throws BlockStoreException; 
 
 	public void updateOrderConfirmed(Collection<OrderRecord> orderRecords, boolean confirm) throws BlockStoreException;
 
-	public void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException;
-
-	public void updateOrderSpent(Set<Sha256Hash> orderRecords, Sha256Hash blockhash, Boolean spent)
-			throws BlockStoreException;
-
+	public void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException; 
+	
 	public HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)
 			throws BlockStoreException;
 
 	public HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrdersNotSpent(Sha256Hash issuingMatcherBlockHash)
 			throws BlockStoreException;
 
+	public void updateOrder(Sha256Hash collectinghash,boolean confirm, boolean spent,
+			Sha256Hash spentBlock) throws BlockStoreException;
+	public void updateOrderBlockhash(Sha256Hash orderhansh, Sha256Hash collectinghash,boolean confirm, boolean spent,
+			Sha256Hash spentBlock) throws BlockStoreException;
 	public void prunedHistoryUTXO(Long maxRewardblock) throws BlockStoreException;
 
 	public void prunedPriceTicker(Long timeInSeconds) throws BlockStoreException;
@@ -486,17 +481,11 @@ public interface FullBlockStore {
 	public ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash)
 			throws BlockStoreException;
 
-	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
-
-	public void updateContractEventBySpender(Set<Sha256Hash> contractEventRecords, Sha256Hash collectinghash,
+	public void updateContractEvent(Sha256Hash collectinghash,boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
-
-	public void resetContractEventSpent(Sha256Hash spenderblockhash) throws BlockStoreException;
-
-	public void resetContractEventConfirmed(Sha256Hash collectinghash) throws BlockStoreException;
-
-	public void updateContractEventConfirmed(Collection<Sha256Hash> contracts, Sha256Hash collectinghash,
-			boolean confirm) throws BlockStoreException;
+	public void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash,boolean confirm, boolean spent,
+			Sha256Hash spentBlock) throws BlockStoreException;
+ 
 
 	public Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
 			throws BlockStoreException;
@@ -514,15 +503,13 @@ public interface FullBlockStore {
 
 	public Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public List<Contractresult> getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException;
-
-	public SpentBlockData checkContractResultSpent(Sha256Hash blockhash) throws BlockStoreException;
+	public List<Contractresult> getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException; 
 
 	public void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
 	public Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
-	public SpentBlockData checkOrderResultSpent(Sha256Hash blockhash) throws BlockStoreException;
+	public  List<Orderresult> getOrderresultWithPrev(Sha256Hash prevhash) throws BlockStoreException;
 
 	void insertOrderResult(OrderExecutionResult record) throws BlockStoreException;
 
@@ -560,7 +547,6 @@ public interface FullBlockStore {
 	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
 			throws BlockStoreException;
 
-	public boolean getContractExecuteAnyConfirmed(String tokenid) throws BlockStoreException;
-
+	 
 	public boolean getOrderExecuteAnyConfirmed() throws BlockStoreException;
 }
