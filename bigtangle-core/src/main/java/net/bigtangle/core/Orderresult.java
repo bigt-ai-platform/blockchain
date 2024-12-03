@@ -38,7 +38,7 @@ public class Orderresult extends SpentBlock implements java.io.Serializable {
 	}
 
 	public static Orderresult zeroOrderresult( ) {
-	 return new Orderresult(Sha256Hash.ZERO_HASH, false, false, null, null, null,  -1,0l);
+	 return new Orderresult(Sha256Hash.ZERO_HASH, false, false, null, null, null,  -1,0L);
 	}
 	
 	public byte[] toByteArray() {

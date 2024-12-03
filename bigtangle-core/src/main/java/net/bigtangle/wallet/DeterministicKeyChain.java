@@ -1247,7 +1247,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         final List<ECKey> keys = new ArrayList<ECKey>(getKeys(false));
         for (Iterator<ECKey> i = keys.iterator(); i.hasNext();) {
             DeterministicKey parent = ((DeterministicKey) i.next()).getParent();
-            if (parent == null || !externalParentKey.equals(parent))
+            if (!externalParentKey.equals(parent))
                 i.remove();
         }
         return keys;

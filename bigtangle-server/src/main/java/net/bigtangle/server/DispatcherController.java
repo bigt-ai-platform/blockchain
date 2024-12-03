@@ -394,7 +394,7 @@ public class DispatcherController {
 				Boolean isSign = (Boolean) request.get("isSign");
 				AbstractResponse response = this.multiSignService.getMultiSignListWithTokenid(tokenid,
 						tokenindex == null ? -1 : Integer.valueOf(tokenindex), (List<String>) request.get("addresses"),
-						isSign == null ? false : isSign, store);
+                        isSign != null && isSign, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -878,10 +878,12 @@ public class DispatcherController {
 			remoteAddr = request.getRemoteAddr();
 		} else {
 			StringTokenizer tokenizer = new StringTokenizer(remoteAddr, ",");
-			while (tokenizer.hasMoreTokens()) {
-				remoteAddr = tokenizer.nextToken();
-				break;
-			}
+            if (tokenizer.hasMoreTokens()) {
+                do {
+                    remoteAddr = tokenizer.nextToken();
+                    break;
+                } while (tokenizer.hasMoreTokens());
+            }
 		}
 		return remoteAddr;
 	}

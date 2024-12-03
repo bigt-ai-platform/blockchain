@@ -16,7 +16,7 @@ public class UtilSort {
 
 	}
 
-	public class SortbyUTXO implements Comparator<UTXO> {
+	public static  class SortbyUTXO implements Comparator<UTXO> {
 
 		public int compare(UTXO a, UTXO b) {
 			return a.getTime() > b.getTime() ? -1 : 1;
@@ -33,19 +33,19 @@ public class UtilSort {
 
 	}
 	
-	public class SortbyBlock implements Comparator<Block> {
+	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
 			return a.getHeight() > b.getHeight() ? 1 : -1;
 		}
 	}
-	public class SortBlockWrap implements Comparator<BlockWrap> {
+	public static  class SortBlockWrap implements Comparator<BlockWrap> {
 
 		public int compare(BlockWrap a, BlockWrap b) {
 			return a.getBlock().getHeight() > b.getBlock().getHeight() ? 1 : -1;
 		}
 	}
-	public class SortbyChain implements Comparator<TXReward> {
+	public static class SortbyChain implements Comparator<TXReward> {
 		// Used for sorting in ascending order of
 		// roll number
 		public int compare(TXReward a, TXReward b) {

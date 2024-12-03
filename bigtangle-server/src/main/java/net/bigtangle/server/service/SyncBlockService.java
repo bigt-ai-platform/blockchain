@@ -355,7 +355,7 @@ public class SyncBlockService {
 	 * switch chain select * from txreward where confirmed=1 chainlength with my
 	 * blockhash with remote ;
 	 */
-	public class MaxConfirmedReward {
+	public static class MaxConfirmedReward {
 		String server;
 		TXReward aTXReward;
 	}

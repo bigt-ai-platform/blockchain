@@ -1360,9 +1360,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 	 * @throws BlockStoreException If tables couldn't be deleted.
 	 */
 	public void deleteStore() throws BlockStoreException {
-
+		 Statement s = null;
 		try {
-			Statement s = getConnection().createStatement();
+			  s = getConnection().createStatement();
 			for (String sql : getDropTablesSQL()) {
 				log.info("drop table : " + sql);
 				s.addBatch(sql);
@@ -1372,7 +1372,12 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		} catch (Exception e) {
 			log.info("drop table : ", e);
 		} finally {
-
+			if (s != null)
+				try {
+					s.close();
+				} catch (SQLException e) {
+					//
+				}
 		}
 	}
 

@@ -39,7 +39,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 		this.milestone =milestone;
 	}
 	public static  Contractresult zeroContractresult() {
-		return new Contractresult(Sha256Hash.ZERO_HASH, false, false, null, null, null,null, -1,0l);
+		return new Contractresult(Sha256Hash.ZERO_HASH, false, false, null, null, null,null, -1,0L);
 	}
 	
 	public byte[] toByteArray() {

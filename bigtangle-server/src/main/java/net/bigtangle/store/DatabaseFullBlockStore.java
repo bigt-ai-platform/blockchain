@@ -8,6 +8,7 @@ package net.bigtangle.store;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -2305,7 +2306,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBytes(2, collectinghash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
 
-			while (resultSet.next()) {
+			if (resultSet.next()) {
 				return setContractEventRecord(resultSet);
 			}
 			return null;
@@ -2446,7 +2447,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection().prepareStatement(SELECT_CONTRACTRESULT_HASH_SQL);
 			preparedStatement.setBytes(1, blockhash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
+			if (resultSet.next()) {
 				return setContractresult(resultSet);
 
 			}
@@ -2499,7 +2500,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_HASH_SQL);
 			preparedStatement.setBytes(1, blockhash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
+			if (resultSet.next()) {
 				return setOrderresult(resultSet);
 
 			}
@@ -4054,7 +4055,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				matchResult.setBasetokenid(resultSet.getString(2));
 				matchResult.setPrice(resultSet.getLong(3) / resultSet.getLong(4));
 				BigDecimal avgprice = BigDecimal.ZERO;
-				avgprice.setScale(3);
+				avgprice.setScale(3, RoundingMode.HALF_DOWN);
 				avgprice = new BigDecimal(resultSet.getLong(3)).divide(new BigDecimal(resultSet.getLong(4)));
 				matchResult.setAvgprice(avgprice);
 				matchResult.setMatchday(matchday);
@@ -4363,7 +4364,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection().prepareStatement(SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL);
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
+			if (resultSet.next()) {
 				return setContractresult(resultSet);
 			}
 			return null;

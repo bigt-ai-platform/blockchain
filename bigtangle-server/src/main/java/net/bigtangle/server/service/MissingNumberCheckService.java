@@ -39,7 +39,7 @@ public class MissingNumberCheckService {
 
     }
 
-    class MissingNumberCheck implements Callable<List<Long>> {
+    static class MissingNumberCheck implements Callable<List<Long>> {
         private Long start;
         private Long end;
         private List<TXReward> sequence;

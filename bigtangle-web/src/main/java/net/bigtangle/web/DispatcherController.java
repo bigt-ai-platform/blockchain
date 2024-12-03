@@ -199,10 +199,12 @@ public class DispatcherController {
 			remoteAddr = request.getRemoteAddr();
 		} else {
 			StringTokenizer tokenizer = new StringTokenizer(remoteAddr, ",");
-			while (tokenizer.hasMoreTokens()) {
-				remoteAddr = tokenizer.nextToken();
-				break;
-			}
+            if (tokenizer.hasMoreTokens()) {
+                do {
+                    remoteAddr = tokenizer.nextToken();
+                    break;
+                } while (tokenizer.hasMoreTokens());
+            }
 		}
 		return remoteAddr;
 	}

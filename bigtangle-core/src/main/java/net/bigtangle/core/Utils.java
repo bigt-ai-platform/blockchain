@@ -284,7 +284,7 @@ public class Utils {
 
 	public static Long readLong(DataInputStream dis) throws IOException, UnsupportedEncodingException {
 		if (dis.readBoolean()) {
-			return new Long(dis.readByte());
+			return (long) dis.readByte();
 		} else {
 			return null;
 		}

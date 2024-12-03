@@ -393,20 +393,20 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		for (BlockWrap block :  arrayList)
 			unconfirm(block, traversedConfirms, milestoneNumber, store);
 	}
-	public class SortbyBlock implements Comparator<Block> {
+	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
 			return a.getHeight() < b.getHeight() ? 1 : -1;
 		}
 	}
 
-	public class SortbyBlockWrap implements Comparator<BlockWrap> {
+	public static class SortbyBlockWrap implements Comparator<BlockWrap> {
 
 		public int compare(BlockWrap a, BlockWrap b) {
 			return a.getBlock().getHeight() < b.getBlock().getHeight() ? 1 : -1;
 		}
 	}
-	public class SortbyBlockWrapAsc implements Comparator<BlockWrap> {
+	public static class SortbyBlockWrapAsc implements Comparator<BlockWrap> {
 
 		public int compare(BlockWrap a, BlockWrap b) {
 			return a.getBlock().getHeight() > b.getBlock().getHeight() ? 1 : -1;

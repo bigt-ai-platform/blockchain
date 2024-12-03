@@ -216,7 +216,7 @@ public abstract class NetworkParameters {
         coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram())); 
         RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
                 Utils.encodeCompactBits(params.getMaxTargetReward()),
-                new HashSet<Sha256Hash>(), 0l);
+                new HashSet<Sha256Hash>(), 0L);
 
         coinbase.setData(rewardInfo.toByteArray());
         add(params, BigtangleCoinTotal, params.genesisPub, coinbase);

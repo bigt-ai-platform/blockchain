@@ -171,7 +171,7 @@ public class ServerPool {
 	 * the there is small differences
 	 * 
 	 */
-	public class SortbyChain implements Comparator<ServerState> {
+	public static class SortbyChain implements Comparator<ServerState> {
 		// Used for sorting in descending order of chain number and response
 		// time
 		public int compare(ServerState a, ServerState b) {

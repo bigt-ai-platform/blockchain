@@ -10,7 +10,7 @@ import java.util.Objects;
  * Block may contains data with the dataClassName and the class has a version number
  */
 public abstract class DataClass {
-    private long version = 1l;
+    private long version = 1L;
 
     public byte[] toByteArray() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
