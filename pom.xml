@@ -23,7 +23,6 @@
 		<kafka.version>1.1.0</kafka.version>
 		<junit.jupiter.version>5.9.3</junit.jupiter.version>
 		<junit.platform.version>1.9.1</junit.platform.version>
-		<org.apache.spark.version>3.5.0</org.apache.spark.version>
 	</properties>
 	<modules>
 		<module>bigtangle-core</module>

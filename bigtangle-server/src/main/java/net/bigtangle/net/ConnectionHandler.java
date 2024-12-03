@@ -172,7 +172,7 @@ class ConnectionHandler implements MessageWriteTarget {
     }
 
     private void connectionClosed() {
-        boolean callClosed = false;
+        boolean callClosed ;
         lock.lock();
         try {
             callClosed = !closeCalled;

@@ -954,9 +954,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				.filter(l -> l.size() > 1).flatMap(l -> l.stream()).collect(Collectors.toList());
 
 		// Add the conflicting candidates
-		for (ConflictCandidate c : candidateCandidateConflicts) {
-			conflictingOutPoints.add(c);
-		}
+        conflictingOutPoints.addAll(candidateCandidateConflicts);
 	}
 
 	/**

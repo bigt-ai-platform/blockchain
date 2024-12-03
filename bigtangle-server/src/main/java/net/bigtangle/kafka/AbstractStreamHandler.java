@@ -74,7 +74,7 @@ public abstract class AbstractStreamHandler {
     @PreDestroy
     public void closeStream() {
         if(streams !=null)
-        streams.close();
+          streams.close();
     }
 
     private String getApplicationId() {

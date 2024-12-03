@@ -456,7 +456,7 @@ public final class MonetaryFormat {
             String sub = decimals.substring(  smallestUnitExponent - shift);
             long valueSub = Long.parseLong(sub);
             if(valueSub >0 )
-            throw new NumberFormatException(
+               throw new NumberFormatException(
                     "there is value in string  " + str + " after decimals:" + smallestUnitExponent);
         }
         String satoshis = numbers + decimals.substring(0, smallestUnitExponent - shift);

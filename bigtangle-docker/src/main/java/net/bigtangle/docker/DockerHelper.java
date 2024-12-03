@@ -62,18 +62,18 @@ public class DockerHelper {
 
         p = Runtime.getRuntime().exec(remoteCommand);
         p.waitFor();
-        String line = "";
+        String line ;
         if (p.exitValue() == 0) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
             while ((line = reader.readLine()) != null) {
-                output.append(line + "\n");
+                output.append(line).append("\n");
             }
             return output.toString();
         } else {
             BufferedReader errorReader = new BufferedReader(new InputStreamReader(p.getErrorStream()));
             while ((line = errorReader.readLine()) != null) {
-                output.append(line + "\n");
+                output.append(line).append("\n");
             }
             errorReader.close();
             throw new RuntimeException(output.toString());

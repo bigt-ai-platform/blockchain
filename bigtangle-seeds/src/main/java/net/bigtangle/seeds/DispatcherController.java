@@ -1,14 +1,13 @@
 /*******************************************************************************
- *  
+ * <p>
  *  Copyright   2018  Inasset GmbH. 
  *******************************************************************************/
 package net.bigtangle.seeds;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
@@ -29,13 +28,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Stopwatch;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import net.bigtangle.core.TXReward;
-import net.bigtangle.core.Utils;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
 import net.bigtangle.utils.Gzip;
@@ -50,7 +46,7 @@ public class DispatcherController {
 	public static List<ServerInfo> serverinfoList;
 	public static String PATH = "./logs/serverinfo.json";
 	@Autowired
-	protected SyncBlockService syncBlockService;
+	//protected SyncBlockService syncBlockService;
 
 	@SuppressWarnings("unchecked")
 	@RequestMapping(value = "{reqCmd}", method = { RequestMethod.POST, RequestMethod.GET })
@@ -59,13 +55,10 @@ public class DispatcherController {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
+            return "";
+        });
 		try {
 			handler.get(30, TimeUnit.MINUTES);
 		} catch (TimeoutException e) {
@@ -99,18 +92,19 @@ public class DispatcherController {
 			switch (reqCmd0000) {
 
 			case register: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				ServerInfo serverInfo = new ServerInfo();
 				String url = (String) request.get("url");
-				logger.debug("url==" + url);
+                logger.debug("url=={}", url);
 				String servertype = (String) request.get("servertype");
 				boolean flag = false;
 				if (serverinfoList != null) {
 					for (ServerInfo temp : serverinfoList) {
-						if (temp.getUrl().equals(url) && temp.getServertype().equals(servertype)) {
-							flag = true;
-						}
+                        if (temp.getUrl().equals(url) && temp.getServertype().equals(servertype)) {
+                            flag = true;
+                            break;
+                        }
 					}
 				}
 
@@ -120,7 +114,7 @@ public class DispatcherController {
 					serverInfo.setServertype(servertype);
 					serverInfo.setStatus("active");
 					if (serverinfoList == null) {
-						serverinfoList = new ArrayList<ServerInfo>();
+						serverinfoList = new ArrayList<>();
 					}
 					try {
 						SyncBlockService.getMaxConfirmedReward(serverInfo.getUrl());
@@ -131,13 +125,10 @@ public class DispatcherController {
 
 				}
 
-				// this.outPrintJSONString(httpServletResponse,
-				// GetStringResponse.create(urlTobyte(url)), watch);
-
 			}
 				break;
 			case serverinfolist: {
-				List<ServerInfo> tempList = new ArrayList<ServerInfo>();
+				List<ServerInfo> tempList = new ArrayList<>();
 				if (serverinfoList != null && !serverinfoList.isEmpty()) {
 					for (ServerInfo serverInfo : serverinfoList) {
 						if (serverInfo.getStatus().equals("active")) {
@@ -166,8 +157,7 @@ public class DispatcherController {
 			this.outPrintJSONString(httpServletResponse, resp, watch);
 		} finally {
 			if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
-				logger.info(reqCmd + " takes {} from {}", watch.elapsed(TimeUnit.MILLISECONDS),
-						remoteAddr(httprequest));
+                logger.info("{} takes {} from {}", reqCmd, watch.elapsed(TimeUnit.MILLISECONDS), remoteAddr(httprequest));
 			watch.stop();
 		}
 	}
@@ -177,13 +167,7 @@ public class DispatcherController {
 		return "Bigtangle-seeds";
 	}
 
-	public void gzipBinary(HttpServletResponse httpServletResponse, List<ServerInfo> response) throws Exception {
-		GZIPOutputStream servletOutputStream = new GZIPOutputStream(httpServletResponse.getOutputStream());
 
-		servletOutputStream.write(Json.jsonmapper().writeValueAsBytes(response));
-		servletOutputStream.flush();
-		servletOutputStream.close();
-	}
 
 	private void errorLimit(HttpServletResponse httpServletResponse, Stopwatch watch) throws Exception {
 		AbstractResponse resp = ErrorResponse.create(101);
@@ -192,28 +176,6 @@ public class DispatcherController {
 		this.outPrintJSONString(httpServletResponse, resp, watch);
 	}
 
-	public void outPutDataMap(HttpServletResponse httpServletResponse, Object data) throws Exception {
-		httpServletResponse.setCharacterEncoding("UTF-8");
-		HashMap<String, Object> result = new HashMap<String, Object>();
-		result.put("data", data);
-		GZIPOutputStream servletOutputStream = new GZIPOutputStream(httpServletResponse.getOutputStream());
-
-		servletOutputStream.write(Json.jsonmapper().writeValueAsBytes(result));
-		servletOutputStream.flush();
-		servletOutputStream.close();
-	}
-
-	public void outPointBinaryArray(HttpServletResponse httpServletResponse, byte[] data) throws Exception {
-		httpServletResponse.setCharacterEncoding("UTF-8");
-
-		HashMap<String, Object> result = new HashMap<String, Object>();
-		result.put("dataHex", Utils.HEX.encode(data));
-		GZIPOutputStream servletOutputStream = new GZIPOutputStream(httpServletResponse.getOutputStream());
-
-		servletOutputStream.write(Json.jsonmapper().writeValueAsBytes(result));
-		servletOutputStream.flush();
-		servletOutputStream.close();
-	}
 
 	public void outPrintJSONString(HttpServletResponse httpServletResponse, AbstractResponse response, Stopwatch watch)
 			throws Exception {
@@ -231,19 +193,21 @@ public class DispatcherController {
 	}
 
 	public String remoteAddr(HttpServletRequest request) {
-		String remoteAddr = "";
+		String remoteAddr;
 		remoteAddr = request.getHeader("X-FORWARDED-FOR");
-		if (remoteAddr == null || "".equals(remoteAddr)) {
+		if (remoteAddr == null || remoteAddr.isEmpty()) {
 			remoteAddr = request.getRemoteAddr();
 		} else {
 			StringTokenizer tokenizer = new StringTokenizer(remoteAddr, ",");
-			while (tokenizer.hasMoreTokens()) {
-				remoteAddr = tokenizer.nextToken();
-				break;
-			}
+            if (tokenizer.hasMoreTokens()) {
+                do {
+                    remoteAddr = tokenizer.nextToken();
+                    break;
+                } while (tokenizer.hasMoreTokens());
+            }
 		}
 		return remoteAddr;
 	}
 
-	private static final String Huobi15Fee = "15";
+
 }

@@ -73,14 +73,14 @@ public class MemoInfo implements java.io.Serializable {
             if (jsonStr == null)
                 return null;
             MemoInfo m = Json.jsonmapper().readValue(jsonStr, MemoInfo.class);
-            String s = "";
+            StringBuilder s = new StringBuilder();
             for (KeyValue keyvalue : m.getKv()) {
                 if (valueDisplay(keyvalue) != null && keyvalue.getKey() != null && !keyvalue.getKey().equals("null")
                         && !keyvalue.getKey().equals("")      ) {
-                    s += keyvalue.getKey() + ": " + valueDisplay(keyvalue) + " \n";
+                    s.append(keyvalue.getKey()).append(": ").append(valueDisplay(keyvalue)).append(" \n");
                 }
             }
-            return s;
+            return s.toString();
         } catch (Exception e) {
             return jsonStr;
         }

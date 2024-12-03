@@ -827,8 +827,6 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 					block.getTransactions().get(0).getMemo(), Utils.HEX.encode(out.getValue().getTokenid()), false,
 					true, false, minsignnumber, 0, block.getTimeSeconds(), null);
 			addUnspentTransactionOutput(newOut);
-			List<UTXO> gen = new ArrayList<>();
-			gen.add(newOut);
 			if (script.isSentToMultiSig()) {
 
 				for (ECKey ecKey : script.getPubKeys()) {
@@ -2084,7 +2082,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		PreparedStatement preparedStatement = null;
 		try {
 			String sql = SELECT_CONFIRMED_TOKENS_SQL;
-			if (tokenids != null && !tokenids.isEmpty()) {
+			if ( !tokenids.isEmpty()) {
 				sql += "  and tokenid in ( " + buildINList(tokenids) + " )";
 			}
 			sql += LIMIT_500;
@@ -2584,7 +2582,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 					+ "  FROM  blocks ";
 			sql += " where height >= " + height;
 			sql += " ORDER BY insertTime desc ";
-			Long a = Long.valueOf(lastestAmount);
+			long a = Long.valueOf(lastestAmount);
 			if (a > maxblocks) {
 				a = maxblocks;
 			}
@@ -2596,7 +2594,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			sql += " where height >= " + height;
 			sql += " and  outputs.toaddress in ";
 			for (String str : address)
-				stringBuffer.append(",").append("'" + str + "'");
+				stringBuffer.append(",").append("'").append(str).append("'");
 			sql += "(" + stringBuffer.substring(1).toString() + ")";
 
 			sql += " ORDER BY insertTime desc ";
@@ -2679,9 +2677,9 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 		TXReward maxConfirmedReward = getMaxConfirmedReward();
 		PreparedStatement preparedStatement = null;
 		try {
-
+			preparedStatement = getConnection().prepareStatement(sql);
 			for (String hash : blockhashs) {
-				preparedStatement = getConnection().prepareStatement(sql);
+
 				preparedStatement.setBytes(1, Utils.HEX.decode(hash));
 				ResultSet resultSet = preparedStatement.executeQuery();
 				while (resultSet.next()) {
@@ -2713,7 +2711,7 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			return "";
 		StringBuffer stringBuffer = new StringBuffer();
 		for (String str : datalist)
-			stringBuffer.append(",").append("'" + str + "'");
+			stringBuffer.append(",").append("'").append(str).append("'");
 		return stringBuffer.substring(1).toString();
 	}
 

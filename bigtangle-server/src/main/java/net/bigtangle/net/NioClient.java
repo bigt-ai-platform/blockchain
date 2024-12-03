@@ -5,8 +5,6 @@
 
 package net.bigtangle.net;
 
-import com.google.common.base.*;
-import com.google.common.util.concurrent.*;
 import org.slf4j.*;
 
 import java.io.*;
@@ -90,16 +88,7 @@ public class NioClient implements MessageWriteTarget {
         manager.startAsync();
         manager.awaitRunning();
         handler = new Handler(parser, connectTimeoutMillis);
-        Futures.addCallback(manager.openConnection(serverAddress, handler), new FutureCallback<SocketAddress>() {
-            @Override
-            public void onSuccess(SocketAddress result) {
-            }
 
-            @Override
-            public void onFailure(Throwable t) {
-                log.error("Connect to {} failed: {}", serverAddress, Throwables.getRootCause(t));
-            }
-        });
     }
 
     @Override

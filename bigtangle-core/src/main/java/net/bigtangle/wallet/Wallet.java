@@ -39,7 +39,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -56,7 +55,6 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.google.common.math.LongMath;
 import com.google.protobuf.ByteString;
 
@@ -166,11 +164,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// outside the wallet lock. So don't expose this object directly via any
 	// accessors!
 	@GuardedBy("keyChainGroupLock")
-	private KeyChainGroup keyChainGroup;
-
-	// A list of scripts watched by this wallet.
-	@GuardedBy("keyChainGroupLock")
-	private Set<Script> watchedScripts;
+	private final KeyChainGroup keyChainGroup;
 
 	protected final NetworkParameters params;
 
@@ -198,9 +192,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	@GuardedBy("lock")
 	private List<TransactionSigner> signers;
 
-	public static Wallet fromSeed(NetworkParameters params, DeterministicSeed seed) {
-		return new Wallet(params, new KeyChainGroup(params, seed), null);
-	}
 
 	/**
 	 * Creates a wallet that tracks payments to and from the HD key hierarchy rooted
@@ -232,7 +223,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public static Wallet fromKeys(NetworkParameters params, ECKey key, String url) {
 
 		checkArgument(!(key instanceof DeterministicKey));
-		List<ECKey> keys = new ArrayList<ECKey>();
+		List<ECKey> keys = new ArrayList<>();
 		keys.add(key);
 		KeyChainGroup group = new KeyChainGroup(params);
 		group.importKeys(keys);
@@ -259,9 +250,8 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		// can upgrade later.
 		if (this.keyChainGroup.numKeys() == 0)
 			this.keyChainGroup.createAndActivateNewHDChain();
-		watchedScripts = Sets.newHashSet();
 
-		signers = new ArrayList<TransactionSigner>();
+		signers = new ArrayList<>();
 		addTransactionSigner(new LocalTransactionSigner());
 		if (url == null) {
 			this.serverPool = new ServerPool(params);
@@ -274,12 +264,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		return params;
 	}
 
-	/**
-	 * Gets the active keychain via {@link KeyChainGroup#getActiveKeyChain()}
-	 */
-	public DeterministicKeyChain getActiveKeyChain() {
-		return keyChainGroup.getActiveKeyChain();
-	}
 
 	/**
 	 * <p>
@@ -314,7 +298,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		}
 	}
 
-	/******************************************************************************************************************/
 
 	// region Key Management
 
@@ -975,7 +958,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		USE_DUMMY_SIG,
 		/**
 		 * If signature is missing,
-		 * {@link org.bitcoinj.signers.TransactionSigner.MissingSignatureException} will
+		 * will
 		 * be thrown for P2SH and {@link ECKey.MissingPrivateKeyException} for other tx
 		 * types.
 		 */
@@ -1432,7 +1415,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 * created after T. This can be used to recover from a situation where a set of
 	 * keys is believed to be compromised. You can stop key rotation by calling this
 	 * method again with zero as the argument. Once set up, calling
-	 * {@link #doMaintenance(org.spongycastle.crypto.params.KeyParameter, boolean)}
+	 * {@link  (org.spongycastle.crypto.params.KeyParameter, boolean)}
 	 * will create and possibly send rotation transactions: but it won't be done
 	 * automatically (because you might have to ask for the users password).
 	 * </p>
@@ -1930,7 +1913,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 		Block block = getTip();
 		block.addTransaction(multispent);
-		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID.equals(tokenid)) {
+		if (getFee() && !Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, tokenid)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
 		}
 		return solveAndPost(block);
@@ -2445,7 +2428,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public ECKey getECKey(KeyParameter aesKey, String address) {
 
 		List<ECKey> keys = walletKeys(aesKey);
-		ECKey beneficiary = null;
+		ECKey beneficiary;
 		for (ECKey ecKey : keys) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
 				beneficiary = ecKey;
@@ -2540,7 +2523,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		//
-		if (getFee() && NetworkParameters.BIGTANGLE_TOKENID.equals(tokenid)) {
+		if (getFee() && Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, tokenid)) {
 			summe = summe.subtract(Coin.FEE_DEFAULT);
 		}
 		return pay(aesKey, destination, summe, new MemoInfo(memo));
@@ -2695,7 +2678,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 		Transaction transaction = block.getTransactions().get(0);
 
-		List<MultiSignBy> multiSignBies = null;
+		List<MultiSignBy> multiSignBies ;
 		if (transaction.getDataSignature() == null) {
 			multiSignBies = new ArrayList<MultiSignBy>();
 		} else {

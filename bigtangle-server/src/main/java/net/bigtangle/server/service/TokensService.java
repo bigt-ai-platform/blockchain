@@ -7,7 +7,6 @@ package net.bigtangle.server.service;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -43,39 +42,34 @@ public class TokensService {
 
     public AbstractResponse getTokenById(String tokenid, FullBlockStore store) throws BlockStoreException {
         List<Token> tokens = store.getTokenID(tokenid);
-        AbstractResponse response = GetTokensResponse.create(tokens);
-        return response;
+        return GetTokensResponse.create(tokens);
     }
 
     public AbstractResponse getToken(String blockhashString, FullBlockStore store) throws BlockStoreException {
         List<Token> tokens = new ArrayList<>();
         tokens.add(store.getTokenByBlockHash(Sha256Hash.wrap(blockhashString)));
-        AbstractResponse response = GetTokensResponse.create(tokens);
-        return response;
+        return GetTokensResponse.create(tokens);
     }
 
     public AbstractResponse getWebTokensList(FullBlockStore store) throws BlockStoreException {
-        List<Token> list = new ArrayList<Token>();
-        list.addAll(store.getTokenTypeList(TokenType.web.ordinal()));
+        List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.web.ordinal()));
         return GetTokensResponse.create(list);
     }
     public AbstractResponse getContractTokensList(FullBlockStore store) throws BlockStoreException {
-        List<Token> list = new ArrayList<Token>();
-        list.addAll(store.getTokenTypeList(TokenType.contract.ordinal()));
+        List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.contract.ordinal()));
         return GetTokensResponse.create(list);
     }
 
     public GetTokensResponse searchTokens(String name, FullBlockStore store) throws BlockStoreException {
-        List<Token> list = new ArrayList<Token>();
-        list.addAll(store.getTokensList(name));
+        List<Token> list = new ArrayList<>(store.getTokensList(name));
         Map<String, BigInteger> map = store.getTokenAmountMap();
         return GetTokensResponse.create(list, map);
     }
 
     public GetTokensResponse searchExchangeTokens(String name, FullBlockStore store)
-            throws BlockStoreException, IOException {
-        List<Token> list = new ArrayList<Token>();
-        if (name != null && !"".equals(name.trim())) {
+            throws BlockStoreException {
+        List<Token> list = new ArrayList<>();
+        if (name != null && !name.trim().isEmpty()) {
             list.addAll(store.getTokensList(name));
         } else {
             addExchangeTokensInUserdata(list, store);
@@ -90,18 +84,14 @@ public class TokensService {
                 byte[] buf = userDataService.getUserData(DataClassName.CONTACTINFO.name(), pubKey, store);
                 ContactInfo contactInfo1;
                 contactInfo1 = new ContactInfo().parse(buf);
-                Set<String> tokenids = new HashSet<String>();
+                Set<String> tokenids = new HashSet<>();
                 tokenids.add(NetworkParameters.BIGTANGLE_TOKENID_STRING);
                 for (Contact contact : contactInfo1.getContactList()) {
                     tokenids.add(contact.getAddress());
                 }
                 list.addAll(store.getTokenID(tokenids));
                 //make sure that BIG is default first
-                Collections.sort(list, new Comparator<Token>() {
-                    public int compare(Token s1, Token s2) { 
-                        return s1.getTokenid().length() - s2.getTokenid().length();
-                    }
-                });
+                list.sort(Comparator.comparingInt(s -> s.getTokenid().length()));
                 
             } catch (IOException e) {
                 logger.info("addExchangeTokensInUserdata", e);

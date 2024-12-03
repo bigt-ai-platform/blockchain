@@ -164,7 +164,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				if (req == null)
 					return SolidityState.from(reqHash, true);
 
-				if (req != null && req.getBlockEvaluation().getMilestone() < 0
+				if ( req.getBlockEvaluation().getMilestone() < 0
 						&& !currRewardInfo.getBlocks().contains(reqHash)) {
 					// FIXME blocks problem with 4046309 throw new
 					// VerificationException("Predecessors are not in

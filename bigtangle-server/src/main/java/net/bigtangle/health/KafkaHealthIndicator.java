@@ -71,8 +71,7 @@ public class KafkaHealthIndicator implements HealthIndicator {
         try {
             if (kafkaStart()) {
                 Collection<TopicListing> a = adminClient.listTopics(new ListTopicsOptions()).listings().get();
-                if (log.isDebugEnabled()) log.debug("TopicListing {}",
-                        a);
+                 log.debug("TopicListing {}",      a.toString());
                 return true;
             }
         } catch (InterruptedException e) {

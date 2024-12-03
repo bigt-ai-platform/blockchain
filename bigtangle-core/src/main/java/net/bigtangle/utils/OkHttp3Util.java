@@ -7,6 +7,7 @@ package net.bigtangle.utils;
 import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -62,7 +63,7 @@ public class OkHttp3Util {
                 return post(url, b, number);
             }
         } else {
-            throw new RuntimeException("all servers are failed:  " + url);
+            throw new RuntimeException("all servers are failed:  " + Arrays.toString(url));
         }
     }
 
@@ -80,7 +81,7 @@ public class OkHttp3Util {
                 return post(url, b, number);
             }
         } else {
-            throw new RuntimeException("all servers are failed:  " + url);
+            throw new RuntimeException("all servers are failed:  " + Arrays.toString(url));
         }
     }
 

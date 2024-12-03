@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,7 +28,6 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
@@ -55,12 +53,9 @@ import net.bigtangle.utils.OkHttp3Util;
 /**
  * <p>
  * Provides services for sync blocks from remote servers via p2p.
- * 
  * sync remote chain data from chainlength, if chainlength = null, then sync the
  * chain data from the total rating with chain 100% For the sync from given
  * checkpoint, the server must be restarted.
- * 
- * 
  * </p>
  */
 @Service
@@ -148,7 +143,7 @@ public class SyncBlockService {
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
 				connectingOrphans(store);
-				syncChain(-1l, false, store);
+				syncChain(-1L, false, store);
 				syncNonChained(store);
 				store.deleteLockobject(LOCKID);
 				// if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
@@ -206,7 +201,7 @@ public class SyncBlockService {
 			if (storedBlock1 == null) {
 				byte[] re = requestBlock(block.getPrevBranchBlockHash(), store);
 				if (re != null) {
-					Block req = (Block) networkParameters.getDefaultSerializer().makeBlock(re);
+					Block req =  networkParameters.getDefaultSerializer().makeBlock(re);
 					blockgraph.add(req, true, store);
 				}
 			}
@@ -223,10 +218,10 @@ public class SyncBlockService {
 		// block from network peers
 		// log.debug("requestBlock" + hash.toString());
 		String[] re = serverConfiguration.getRequester().split(",");
-		List<String> badserver = new ArrayList<String>();
+		List<String> badserver = new ArrayList<>();
 		byte[] data = null;
 		for (String s : re) {
-			if (s != null && !"".equals(s.trim()) && !badserver(badserver, s)) {
+			if (s != null && !s.trim().isEmpty() && !badserver(badserver, s)) {
 				HashMap<String, String> requestParam = new HashMap<String, String>();
 				requestParam.put("hashHex", Utils.HEX.encode(hash.getBytes()));
 				try {
@@ -257,7 +252,7 @@ public class SyncBlockService {
 
 	public void requestBlocks(long chainlengthstart, long chainlengthend, String s, List<TXReward> remotes,
 			FullBlockStore store)
-			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
+			throws IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		requestParam.put("start", chainlengthstart + "");
@@ -292,7 +287,7 @@ public class SyncBlockService {
 
 	}
 
-	public void requestNoncĆhainBlocks(String s, FullBlockStore store)
+	public void requestNonĆhainBlocks(String s, FullBlockStore store)
 			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
@@ -402,7 +397,7 @@ public class SyncBlockService {
 		for (String s : re) {
 			if (s != null && !"".equals(s)) {
 				try {
-					requestNoncĆhainBlocks(s, store);
+					requestNonĆhainBlocks(s, store);
 				} catch (Exception e) {
 					log.debug("", e);
 				}
@@ -483,18 +478,18 @@ public class SyncBlockService {
 		}
 	}
 
-	public class SortbyBlock implements Comparator<Block> {
+	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
-			return a.getHeight() > b.getHeight() ? 1 : -1;
+			return a.getHeight() >= b.getHeight() ? 1 : -1;
 		}
 	}
 
-	public class SortbyChain implements Comparator<TXReward> {
+	public static class SortbyChain implements Comparator<TXReward> {
 		// Used for sorting in ascending order of
 		// roll number
 		public int compare(TXReward a, TXReward b) {
-			return a.getChainLength() < b.getChainLength() ? 1 : -1;
+			return a.getChainLength() <= b.getChainLength() ? 1 : -1;
 		}
 	}
 

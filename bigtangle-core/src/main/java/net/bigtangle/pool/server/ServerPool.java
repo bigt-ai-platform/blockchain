@@ -118,7 +118,7 @@ public class ServerPool {
 	}
 
 	public synchronized void addServer(String s) throws JsonProcessingException, IOException {
-		Long time = System.currentTimeMillis();
+		long time = System.currentTimeMillis();
 		TXReward chain;
 		// chain = getChainNumber(s);
 		ServerState serverState = new ServerState();

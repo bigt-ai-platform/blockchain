@@ -230,10 +230,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	}
 
 	public Set<ContractEventRecord> getContractEventRecordSet(Collection<ContractEventRecord> orders) {
-		Set<ContractEventRecord> hashs = new HashSet<>();
-		for (ContractEventRecord o : orders) {
-			hashs.add(o);
-		}
+        Set<ContractEventRecord> hashs = new HashSet<>(orders);
 		return hashs;
 	}
 

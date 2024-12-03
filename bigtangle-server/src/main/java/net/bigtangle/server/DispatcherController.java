@@ -358,7 +358,7 @@ public class DispatcherController {
 			case blocksFromNonChainHeight: {
 				String reqStr = new String(bodyByte, "UTF-8");
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				Long cutoffHeight = Long.parseLong(
+				long cutoffHeight = Long.parseLong(
 						(String) request.get("cutoffHeight") == null ? "1" : (String) request.get("cutoffHeight"));
 				GetBlockListResponse response = this.blockService.blocksFromNonChainHeigth(cutoffHeight, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
@@ -393,7 +393,7 @@ public class DispatcherController {
 				}
 				Boolean isSign = (Boolean) request.get("isSign");
 				AbstractResponse response = this.multiSignService.getMultiSignListWithTokenid(tokenid,
-						tokenindex == null ? -1 : Integer.valueOf(tokenindex), (List<String>) request.get("addresses"),
+						 Integer.valueOf(tokenindex), (List<String>) request.get("addresses"),
                         isSign != null && isSign, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}

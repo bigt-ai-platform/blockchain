@@ -190,8 +190,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
         StringWriter mes = new StringWriter();
         for (int i = 1; i < elements.length; i++) {
             StackTraceElement s = elements[i];
-            mes.append("\tat " + s.getClassName() + "." + s.getMethodName() + "(" + s.getFileName() + ":"
-                    + s.getLineNumber() + "  ) \n");
+            mes.append("\tat ").append(s.getClassName()).append(".").append(s.getMethodName()).append("(").append(s.getFileName()).append(":").append(String.valueOf(s.getLineNumber())).append("  ) \n");
         }
         log.debug(mes.toString());
 

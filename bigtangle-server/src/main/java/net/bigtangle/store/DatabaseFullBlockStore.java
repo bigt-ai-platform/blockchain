@@ -369,7 +369,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	private void setMultisign(List<MultiSign> list, ResultSet resultSet) throws SQLException {
 		String id = resultSet.getString("id");
 		String tokenid = resultSet.getString("tokenid");
-		Long tokenindex = resultSet.getLong("tokenindex");
+		long tokenindex = resultSet.getLong("tokenindex");
 		String address0 = resultSet.getString("address");
 		byte[] blockhash = resultSet.getBytes("blockhash");
 		int sign = resultSet.getInt("sign");
@@ -1221,26 +1221,17 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			throws BlockStoreException {
 		String sql = "update paymultisignaddress set sign = ?, signInputData = ? where orderid = ? and pubKey = ?";
 
-		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = getConnection().prepareStatement(sql);
-			preparedStatement.setInt(1, sign);
-			preparedStatement.setBytes(2, signInputData);
-			preparedStatement.setString(3, orderid);
-			preparedStatement.setString(4, pubKey);
-			preparedStatement.executeUpdate();
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// // throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
+        try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
+            preparedStatement.setInt(1, sign);
+            preparedStatement.setBytes(2, signInputData);
+            preparedStatement.setString(3, orderid);
+            preparedStatement.setString(4, pubKey);
+            preparedStatement.executeUpdate();
+        } catch (SQLException e) {
+            throw new BlockStoreException(e);
+        }
+        // // throw new BlockStoreException("Could not close statement");
+    }
 
 	@Override
 	public int getMaxPayMultiSignAddressSignIndex(String orderid) throws BlockStoreException {
@@ -1794,26 +1785,17 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public boolean getOrderSpent(Sha256Hash txHash, Sha256Hash issuingMatcherBlockHash) throws BlockStoreException {
 
-		PreparedStatement preparedStatement = null;
-		try {
-			preparedStatement = getConnection().prepareStatement(SELECT_ORDER_SPENT_SQL);
-			preparedStatement.setBytes(1, txHash.getBytes());
-			preparedStatement.setBytes(2, issuingMatcherBlockHash.getBytes());
-			ResultSet resultSet = preparedStatement.executeQuery();
-			resultSet.next();
-			return resultSet.getBoolean(1);
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
+        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDER_SPENT_SQL)) {
+            preparedStatement.setBytes(1, txHash.getBytes());
+            preparedStatement.setBytes(2, issuingMatcherBlockHash.getBytes());
+            ResultSet resultSet = preparedStatement.executeQuery();
+            resultSet.next();
+            return resultSet.getBoolean(1);
+        } catch (SQLException ex) {
+            throw new BlockStoreException(ex);
+        }
+        // throw new BlockStoreException("Could not close statement");
+    }
 
 	@Override
 	public HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)
@@ -3035,16 +3017,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		PreparedStatement preparedStatement = null;
 		PreparedStatement deleteStatement = null;
 		try {
+			deleteStatement = getConnection().prepareStatement(DELETE_MATCHING_EVENT_LAST_BY_KEY);
 			for (MatchResult match : matchs) {
-				deleteStatement = getConnection().prepareStatement(DELETE_MATCHING_EVENT_LAST_BY_KEY);
+
 				deleteStatement.setString(1, match.getTokenid());
 				deleteStatement.setString(2, match.getBasetokenid());
 				deleteStatement.addBatch();
 			}
-			deleteStatement.executeBatch();
+            assert deleteStatement != null;
+            deleteStatement.executeBatch();
 
+			preparedStatement = getConnection().prepareStatement(INSERT_MATCHING_EVENT_LAST_SQL);
 			for (MatchResult match : matchs) {
-				preparedStatement = getConnection().prepareStatement(INSERT_MATCHING_EVENT_LAST_SQL);
 				preparedStatement.setString(1, match.getTxhash());
 				preparedStatement.setString(2, match.getTokenid());
 				preparedStatement.setString(3, match.getBasetokenid());
@@ -4056,7 +4040,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				matchResult.setPrice(resultSet.getLong(3) / resultSet.getLong(4));
 				BigDecimal avgprice = BigDecimal.ZERO;
 				avgprice.setScale(3, RoundingMode.HALF_DOWN);
-				avgprice = new BigDecimal(resultSet.getLong(3)).divide(new BigDecimal(resultSet.getLong(4)));
+				avgprice = new BigDecimal(resultSet.getLong(3)).divide(new BigDecimal(resultSet.getLong(4)), RoundingMode.HALF_DOWN);
 				matchResult.setAvgprice(avgprice);
 				matchResult.setMatchday(matchday);
 				matchResult.setHignprice(resultSet.getLong(5));

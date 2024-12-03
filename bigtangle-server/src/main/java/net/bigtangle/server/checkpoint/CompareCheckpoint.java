@@ -46,16 +46,16 @@ public class CompareCheckpoint {
 		syncBlockService = new SyncBlockService();
 		checkpointService = new CheckpointService();
 
-		while (true) {
-			try {
-				testComapre();
+        do {
+            try {
+                testComapre();
 
-				Thread.sleep(30000);
-			} catch (Throwable e) {
-				e.printStackTrace();
+                Thread.sleep(30000);
+            } catch (Throwable e) {
+                e.printStackTrace();
 
-			}
-		}
+            }
+        } while (true);
 
 	}
 

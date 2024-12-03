@@ -160,7 +160,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				sigOps += tx.getSigOpCount();
 			}
 			// pro block check fee
-			Boolean checkFee = false;
+			boolean checkFee = false;
 			if (block.getBlockType().equals(Block.Type.BLOCKTYPE_REWARD)
 					|| block.getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)
 					|| block.getBlockType().equals(Block.Type.BLOCKTYPE_ORDER_EXECUTE)) {
@@ -314,7 +314,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private boolean checkTxInputOutput(Map<String, Coin> valueInput, Map<String, Coin> valueOut, Block block) {
-		Boolean checkFee = false;
+		boolean checkFee = false;
 
 		for (Map.Entry<String, Coin> entry : valueOut.entrySet()) {
 			if (!valueInput.containsKey(entry.getKey())) {
