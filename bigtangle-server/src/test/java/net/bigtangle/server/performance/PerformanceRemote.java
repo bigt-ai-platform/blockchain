@@ -1,6 +1,7 @@
 package net.bigtangle.server.performance;
 
 import java.io.StringWriter;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -20,14 +21,19 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
-import net.bigtangle.server.test.ContractTest;
+import net.bigtangle.server.test.AbstractIntegrationTest;
 import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 
-public class PerformanceRemote extends ContractTest {
+public class PerformanceRemote extends  AbstractIntegrationTest {
 
+	public static String lotteryTokenPub = "039aee4f0291991dd71ea0dd3c0e91ef680e769eca0326f1e36b74107aec4ac1f4";
+	public static String lotteryTokenPriv = "6cecae9a820844dac41521ddad4f1b5068fdcac59ce28a6dd1ed01a12f782362";
+	public ECKey contractKey = ECKey.fromPrivate(Utils.HEX.decode(lotteryTokenPriv));
+	String contractAmount = "2500";
+	public BigInteger payContractAmount = new BigInteger(contractAmount);
 	@BeforeEach
 	public void setUp() throws Exception {
 		contextRoot = "http://localhost:8088/";

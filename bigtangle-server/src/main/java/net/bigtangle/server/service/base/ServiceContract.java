@@ -43,15 +43,20 @@ public class ServiceContract extends ServiceBaseConnect {
 
 	}
 
+	public ContractExecutionResult executeContract(Block block, FullBlockStore blockStore, String contractid,
+			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
+		Token contract = blockStore.getTokenID(contractid).get(0);
+		return executeContract(block, blockStore, contract, prevHash, referencedblocks);
+	}
 //	private static final Logger log = LoggerFactory.getLogger(ServiceContract.class);
 
 	/*
 	 * the ContractEvent received and do next action
 	 */
-	public ContractExecutionResult executeContract(Block block, FullBlockStore blockStore, String contractid,
+	public ContractExecutionResult executeContract(Block block, FullBlockStore blockStore, Token contract,
 			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
 
-		Token contract = blockStore.getTokenID(contractid).get(0);
+		//
 		String classname = getValue("classname", contract.getTokenKeyValues());
 		if ("net.bigtangle.server.service.LotteryContract".equals(classname)) {
 			return lotteryContract(block, blockStore, contract, prevHash, referencedblocks);
@@ -106,8 +111,8 @@ public class ServiceContract extends ServiceBaseConnect {
 				.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) blockHash).getBytes(), randomness))));
 
 		if (winnerAmount != null && canTakeWinner(toBeSpent, usedRecords, new BigInteger(winnerAmount))) {
-			return doTakeWinner(block, store, usedRecords, new BigInteger(amount), prevContractresult, toBeSpent, collectedBlocks,
-					payouts, getContractEventRecordHash(cancelledContractEventRecord));
+			return doTakeWinner(block, store, usedRecords, new BigInteger(amount), prevContractresult, toBeSpent,
+					collectedBlocks, payouts, getContractEventRecordHash(cancelledContractEventRecord));
 		} else {
 			if (!collectedBlocks.isEmpty()) {
 				// no winner reset used
@@ -117,8 +122,8 @@ public class ServiceContract extends ServiceBaseConnect {
 				Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(
 						toBeSpent.values(), usedRecords.values());
 				return new ContractExecutionResult(block.getHash(), contract.getTokenid(),
-						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx, prevContractresult.getBlockHash(),
-						getContractEventRecordHash(cancelledContractEventRecord),
+						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx,
+						prevContractresult.getBlockHash(), getContractEventRecordHash(cancelledContractEventRecord),
 						getContractEventRecordHash(remainderContractEventRecord), block.getTimeSeconds(),
 						remainderContractEventRecord, getContractEventRecordSet(toBeSpent.values()), collectedBlocks);
 

@@ -29,6 +29,8 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Token;
+import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
@@ -122,8 +124,8 @@ public class ContractExecutionService {
 	public void createContractExecution(FullBlockStore store) throws Exception {
 
 		// select all contractid from the table with unspent event
-		for (String contractid : store.getOpenContractid()) {
-			Block contractExecution = createContractExecution(contractid, store);
+		for (Token contract  : getOpenContract(store)) {
+			Block contractExecution = createContractExecution(contract, store);
 			if (contractExecution != null) {
 				log.debug(" contractExecution block is created: " + contractExecution);
 				blockSaveService.saveBlock(contractExecution, store);
@@ -131,7 +133,11 @@ public class ContractExecutionService {
 		}
 
 	}
-
+	//Add valid check
+	public List<Token> getOpenContract(FullBlockStore store) throws Exception {
+	 return store.getTokenTypeList(TokenType.contract.ordinal());
+	
+	}
 	/**
 	 * Runs the ContractExecution making logic
 	 * 
@@ -139,17 +145,17 @@ public class ContractExecutionService {
 	 * @throws Exception
 	 */
 
-	public Block createContractExecution(String contractid, FullBlockStore store) throws Exception {
+	public Block createContractExecution(Token contract, FullBlockStore store) throws Exception {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
 		// log.debug(" getValidatedContractExecutionBlockPair time {} ms.",
 		// watch.elapsed(TimeUnit.MILLISECONDS));
-		return createContractExecution(b, contractid, store);
+		return createContractExecution(b, contract, store);
 
 	}
 
-	public Block createContractExecution(Block block, String contractid, FullBlockStore store)
+	public Block createContractExecution(Block block, Token contract, FullBlockStore store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
 		block.setBlockType(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
@@ -178,11 +184,11 @@ public class ContractExecutionService {
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength, true,
 				referencedOrdertypes, true, store);
 
-		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contractid);
+		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
 
 		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.zeroContractresult()
 				: prevMilestone;
-		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contractid);
+		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contract.getTokenid());
 
 		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(prevNotMilestons,
 				prevMilestoneExecution, store);
@@ -197,7 +203,7 @@ public class ContractExecutionService {
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
 		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService)
-				.executeContract(block, store, contractid, lastExecution, serviceBase.getHashSet(collectNotSpents));
+				.executeContract(block, store, contract, lastExecution, serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks
 		if (result == null || (result.getOutputTx().getOutputs().isEmpty() && collectNotSpents.isEmpty()))

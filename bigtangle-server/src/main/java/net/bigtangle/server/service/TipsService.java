@@ -127,6 +127,11 @@ public class TipsService {
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
 	}
 
+	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(FullBlockStore store) throws BlockStoreException {
+		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+		return getValidatedRewardBlockPair(prevRewardHash, store);
+	}
+	
 	/**
 	 * Selects two blocks to approve via MCMC for the given prototype block such
 	 * that the two approved blocks are not conflicting with the prototype block
@@ -173,7 +178,7 @@ public class TipsService {
 		}
 		for (int i = 0; i < 5; i++) {
 			Pair<BlockWrap, BlockWrap> paar = getValidatedRewardBlockPairDo(maxConfirmedReward,
-					currentApprovedNonMilestoneBlocks, prevRewardHash, store);
+					 new HashSet<>(), prevRewardHash, store);
 			if (!paar.getLeft().equals(paar.getRight())) {
 				return paar;
 			}
@@ -199,18 +204,18 @@ public class TipsService {
 		long cutoffHeight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
 		long maxHeight = serviceBase.getRewardMaxHeight(prevRewardHash);
 		long prevMilestoneNumber = store.getRewardChainLength(prevRewardHash);
-		HashSet<BlockWrap> currentNewMilestoneBlocks = new HashSet< >();
+		HashSet<BlockWrap> currentNewMilestoneBlocks = new HashSet<>();
 
 		// Initialize approved blocks
 		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
 		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
-		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, left, cutoffHeight,
-				prevMilestoneNumber, true, null,false, store))
+		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, left, cutoffHeight, prevMilestoneNumber,
+				true, null, false, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
-		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, right, cutoffHeight,
-				prevMilestoneNumber, true, null,false, store))
+		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, right, cutoffHeight, prevMilestoneNumber,
+				true, null, false, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
 
 		// Necessary: Initial test if the prototype's
@@ -218,120 +223,8 @@ public class TipsService {
 		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
 			throw new InfeasiblePrototypeException("The given prototype is invalid under the current milestone");
 
-		// Perform next steps
-		BlockWrap nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-				store);
-		BlockWrap nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-				store);
-
-		// Repeat: Proceed on path to be included first (highest rating else
-		// random)
-		while (nextLeft != left && nextRight != right) {
-			if (nextLeft.getMcmc().getRating() > nextRight.getMcmc().getRating()) {
-				// Terminate if next left approves too many new milestone blocks
-				@SuppressWarnings("unchecked")
-				HashSet<BlockWrap> nextNewMilestoneBlocks = (HashSet< BlockWrap>) currentNewMilestoneBlocks.clone();
-				if (!serviceBase.addReferencedBlockHashesTo(nextNewMilestoneBlocks, nextLeft, cutoffHeight,
-						prevMilestoneNumber, false, null,false, store))
-					throw new InfeasiblePrototypeException(
-							"Shouldn't happen: block is missing predecessors but was approved.");
-				if (nextNewMilestoneBlocks.size() > NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD) {
-					nextLeft = left;
-					break;
-				}
-
-				// Otherwise, go left
-				left = nextLeft;
-				if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight,
-						store))
-					throw new InfeasiblePrototypeException(
-							"Shouldn't happen: block is missing predecessors but was approved.");
-				currentNewMilestoneBlocks = nextNewMilestoneBlocks;
-
-				// Perform next steps
-				nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
-				nextRight = validateOrPerformValidatedStep(right, currentApprovedUnconfirmedBlocks, nextRight,
-						cutoffHeight, maxHeight, store);
-			} else {
-				// Terminate if next right approves too many new milestone
-				// blocks
-				@SuppressWarnings("unchecked")
-				HashSet<BlockWrap> nextNewMilestoneBlocks = (HashSet<BlockWrap>) currentNewMilestoneBlocks.clone();
-				if (!serviceBase.addReferencedBlockHashesTo(nextNewMilestoneBlocks, nextRight, cutoffHeight,
-						prevMilestoneNumber, false, null,false, store))
-					throw new InfeasiblePrototypeException(
-							"Shouldn't happen: block is missing predecessors but was approved.");
-				if (nextNewMilestoneBlocks.size() > NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD) {
-					nextRight = right;
-					break;
-				}
-
-				// Go right
-				right = nextRight;
-				if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight,
-						store))
-					throw new InfeasiblePrototypeException(
-							"Shouldn't happen: block is missing predecessors but was approved.");
-				currentNewMilestoneBlocks = nextNewMilestoneBlocks;
-
-				// Perform next steps
-				nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-						store);
-				nextLeft = validateOrPerformValidatedStep(left, currentApprovedUnconfirmedBlocks, nextLeft,
-						cutoffHeight, maxHeight, store);
-			}
-		}
-
-		// Go forward on the remaining paths
-		while (nextLeft != left) {
-			// Terminate if next left approves too many new milestone blocks
-			@SuppressWarnings("unchecked")
-			HashSet<BlockWrap> nextNewMilestoneBlocks = (HashSet<BlockWrap>) currentNewMilestoneBlocks.clone();
-			if (!serviceBase.addReferencedBlockHashesTo(nextNewMilestoneBlocks, nextLeft, cutoffHeight,
-					prevMilestoneNumber, false, null,false, store))
-				throw new InfeasiblePrototypeException(
-						"Shouldn't happen: block is missing predecessors but was approved.");
-			if (nextNewMilestoneBlocks.size() > NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD) {
-				nextLeft = left;
-				break;
-			}
-
-			// Go left
-			left = nextLeft;
-			if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight,
-					store))
-				throw new InfeasiblePrototypeException(
-						"Shouldn't happen: block is missing predecessors but was approved.");
-			currentNewMilestoneBlocks = nextNewMilestoneBlocks;
-			nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
-		}
-		while (nextRight != right) {
-			// Terminate if next right approves too many new milestone blocks
-			@SuppressWarnings("unchecked")
-			HashSet<BlockWrap> nextNewMilestoneBlocks = (HashSet<BlockWrap>) currentNewMilestoneBlocks.clone();
-			if (!serviceBase.addReferencedBlockHashesTo(nextNewMilestoneBlocks, nextRight, cutoffHeight,
-					prevMilestoneNumber, false, null, false, store))
-				throw new InfeasiblePrototypeException(
-						"Shouldn't happen: block is missing predecessors but was approved.");
-			if (nextNewMilestoneBlocks.size() > NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD) {
-				nextRight = right;
-				break;
-			}
-
-			// Go right
-			right = nextRight;
-			if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight,
-					store))
-				throw new InfeasiblePrototypeException(
-						"Shouldn't happen: block is missing predecessors but was approved.");
-			currentNewMilestoneBlocks = nextNewMilestoneBlocks;
-			nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
-		}
-
-		watch.stop();
-		log.trace("getValidatedRewardBlockPair iteration time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-
-		return Pair.of(left, right);
+		return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
+				cutoffHeight, maxHeight);
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
@@ -363,6 +256,13 @@ public class TipsService {
 		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
 			throw new InfeasiblePrototypeException("The given prototype is invalid under the current milestone");
 
+		return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
+				cutoffHeight, maxHeight);
+	}
+
+	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
+			BlockWrap left, BlockWrap right, FullBlockStore store, Stopwatch watch, ServiceBaseConnect serviceBase,
+			long cutoffHeight, long maxHeight) throws BlockStoreException {
 		// Perform next steps
 		BlockWrap nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
 				store);
@@ -441,7 +341,7 @@ public class TipsService {
 	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonMilestoneBlocks,
 			long cutoffHeight, long maxHeight, FullBlockStore store) throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
-		for (Sha256Hash req : store.getSolidApproverBlockHashes(fromBlock.getBlockHash())) { 
+		for (Sha256Hash req : store.getSolidApproverBlockHashes(fromBlock.getBlockHash())) {
 			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 					.getBlockWrap(req, store));
 		}

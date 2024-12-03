@@ -1468,12 +1468,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			for (Sha256Hash dep : checked.getToBeSpent()) {
 				confirmContractEventTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber, blockStore);
 			}
-			blockStore.updateContractEvent(checked.getPrevblockhash(), true, true, block.getHash()); 
+			blockStore.updateContractEvent(checked.getPrevblockhash(), true, true, block.getHash());
 			blockStore.updateContractEvent(block.getHash(), true, false, null);
 			for (Sha256Hash ref : checked.getReferencedBlocks()) {
 				blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
 			}
-			
+
 			// update ContractResult
 			blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
 			blockStore.updateContractResultConfirmed(block.getHash(), confirm);
@@ -1666,19 +1666,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			FullBlockStore blockStore) throws BlockStoreException {
 		BlockWrap blockWrap = getBlockWrap(blockHash, blockStore);
 		unconfirm(blockWrap, traversedBlockHashes, milestoneNumber, blockStore);
-	}
-
-	@SuppressWarnings("unused")
-	private Optional<ConflictCandidate> findFirstSpentInput(HashSet<BlockWrap> allApprovedNewBlocks,
-			FullBlockStore store) {
-		return allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates()).flatMap(i -> i.stream()).filter(c -> {
-			try {
-				return hasSpentDependencies(c, false, store);
-			} catch (BlockStoreException e) {
-				e.printStackTrace();
-				return true;
-			}
-		}).findFirst();
 	}
 
 	/**
