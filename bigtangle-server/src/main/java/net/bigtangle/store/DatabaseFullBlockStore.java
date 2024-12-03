@@ -84,7 +84,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			Sha256Hash prevblockhash) throws BlockStoreException {
 
 		PreparedStatement preparedStatement = null;
-		List<MultiSignAddress> list = new ArrayList<MultiSignAddress>();
+		List<MultiSignAddress> list = new ArrayList<>();
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_MULTISIGNADDRESS_SQL);
 			preparedStatement.setString(1, tokenid);
@@ -2374,7 +2374,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public List<Orderresult> getOrderresultWithPrev(Sha256Hash prevhash) throws BlockStoreException {
 		// one of the block is spent then, return Sha256Hash, otherwise null
-		List<Orderresult> re = new ArrayList<Orderresult>();
+		List<Orderresult> re = new ArrayList<>();
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_PREV_HASH_SQL);
@@ -2644,7 +2644,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void prunedBlocks(Long height, Long chain) throws BlockStoreException {
 
 		PreparedStatement deleteStatement = null;
-		PreparedStatement preparedStatement = null;
+		PreparedStatement preparedStatement ;
 		try {
 
 			deleteStatement = getConnection().prepareStatement(" delete FROM blocks WHERE" + "   hash  = ? ");
@@ -3061,7 +3061,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
-	public List<MatchResult> filterMatch(List<MatchResult> matchs) throws BlockStoreException {
+	public List<MatchResult> filterMatch(List<MatchResult> matchs)  {
 		List<MatchResult> re = new ArrayList<MatchResult>();
 		for (MatchResult match : matchs) {
 			if (!re.stream().anyMatch(element -> element.getBasetokenid().equals(match.getBasetokenid())

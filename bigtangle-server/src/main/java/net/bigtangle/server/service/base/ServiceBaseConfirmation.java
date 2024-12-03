@@ -5,7 +5,6 @@
 package net.bigtangle.server.service.base;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,7 +12,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
@@ -21,6 +19,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +51,6 @@ import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.utils.UtilSort;
 import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.utils.Json;
 
@@ -73,8 +71,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public void removeBlockAndApproversFrom(Collection<BlockWrap> blocks, BlockWrap startingBlock, FullBlockStore store)
 			throws BlockStoreException {
 
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
+		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
+                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
 		Set<Sha256Hash> blockQueueSet = new HashSet<>();
 		blockQueue.add(startingBlock);
 		blockQueueSet.add(startingBlock.getBlockHash());
@@ -108,8 +106,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public void addConfirmedApproversTo(Collection<BlockWrap> blocks, BlockWrap startingBlock, FullBlockStore store)
 			throws BlockStoreException {
 
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
+		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
+                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
 		Set<Sha256Hash> blockQueueSet = new HashSet<>();
 		blockQueue.add(startingBlock);
 		blockQueueSet.add(startingBlock.getBlockHash());
@@ -148,8 +146,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			long prevMilestoneNumber, boolean throwException, List<Block.Type> blocktypes, boolean checkSpentConflict,
 			FullBlockStore store) throws BlockStoreException {
 
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
+                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
 		Set<Sha256Hash> blockQueueSet = new HashSet<>();
 		blockQueue.add(startingBlock);
 		blockQueueSet.add(startingBlock.getBlockHash());
@@ -192,8 +190,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					BlockWrap pred = getBlockWrap(req, store);
 					if (pred == null) {
 						notMissingAnything = false;
-						continue;
-					} else {
+                    } else {
 						blockQueueSet.add(req);
 						blockQueue.add(pred);
 					}
@@ -204,7 +201,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return notMissingAnything;
 	}
 
-	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) throws BlockStoreException {
+	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) {
 		for (BlockWrap b : allApproved) {
 			if (b.getBlockHash().equals(newBlock.getBlockHash())) {
 				return true;
@@ -250,56 +247,36 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		}
 
-		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream()).collect(Collectors.groupingBy(i -> i.getConflictPoint())).values().stream()
+		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint)).values().stream()
 				.anyMatch(l -> l.size() > 1);
-		if (anyCandidateConflicts) {
-			return false;
-		}
+        return !anyCandidateConflicts;
 
-		return true;
-
-	}
+    }
 
 	public boolean hasSpentInputs(Set<BlockWrap> allApprovedNewBlocks, FullBlockStore store) {
-		return allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates()).flatMap(i -> i.stream()).anyMatch(c -> {
+		return allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream).anyMatch(c -> {
 			try {
 				boolean re = hasSpentDependencies(c, false, store);
 				if (re)
-					logger.debug("hasSpentInputs " + c.getBlock().getBlock().toString());
+                    logger.debug("hasSpentInputs {}", c.getBlock().getBlock().toString());
 				return re;
 			} catch (BlockStoreException e) {
-				e.printStackTrace();
 				return true;
 			}
 		});
 	}
 
-	public List<BlockWrap> sortedPrevsChain(List<Contractresult> prevs, FullBlockStore store)
-			throws BlockStoreException {
-		// get all unspents forms a chain, remove others from prevs
-		List<BlockWrap> re = new ArrayList<BlockWrap>();
-		if (prevs.isEmpty())
-			return re;
-
-		// find the longest chained execution connected to last milestone
-		for (Contractresult prevNotMilestone : prevs) {
-			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store));
-		}
-		new UtilSort().sortBlockWrap(re);
-		return re;
-	}
-
 	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,
 			FullBlockStore store) throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
+		Set<BlockWrap> re = new HashSet<>();
 		if (prevs.isEmpty())
 			return re;
 
 		// find the longest chained execution connected to last milestone
 		for (Contractresult prevNotMilestone : prevs) {
-			re = new HashSet<BlockWrap>();
+			re = new HashSet<>();
 			Contractresult startingBlock = prevNotMilestone;
 			while (startingBlock != null) {
 				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
@@ -324,31 +301,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public List<BlockWrap> sortedPrevsChainOrderresult(List<Orderresult> prevs, FullBlockStore store)
-			throws BlockStoreException {
-		// get all unspents forms a chain, remove others from prevs
-		List<BlockWrap> re = new ArrayList<BlockWrap>();
-		if (prevs.isEmpty())
-			return re;
-
-		// find the longest chained execution connected to last milestone
-		for (Orderresult prevNotMilestone : prevs) {
-			re.add(getBlockWrap(prevNotMilestone.getBlockHash(), store));
-		}
-		new UtilSort().sortBlockWrap(re);
-		return re;
-	}
 
 	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone, FullBlockStore store)
 			throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
+		Set<BlockWrap> re = new HashSet<>();
 		if (prevs.isEmpty())
 			return re;
 
 		// find the longest chained execution connected to last milestone
 		for (Orderresult prevNotMilestone : prevs) {
-			re = new HashSet<BlockWrap>();
+			re = new HashSet<>();
 			Orderresult startingBlock = prevNotMilestone;
 			while (startingBlock != null) {
 				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
@@ -376,7 +339,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public Set<BlockWrap> collectReferencedChainedOrderExecutions(BlockWrap headContractExecutions,
 			FullBlockStore store) throws BlockStoreException {
 
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
+		Set<BlockWrap> re = new HashSet<>();
 		boolean brokenChained = true;
 		BlockWrap startingBlock = headContractExecutions;
 		while (startingBlock != null) {
@@ -401,7 +364,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			}
 		}
 		if (brokenChained) {
-			return new HashSet<BlockWrap>();
+			return new HashSet<>();
 		} else {
 			return re;
 		}
@@ -414,7 +377,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public Set<BlockWrap> collectReferencedChainedContractExecutions(BlockWrap headContractExecutions,
 			FullBlockStore store) throws BlockStoreException {
 
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
+		Set<BlockWrap> re = new HashSet<>();
 
 		BlockWrap startingBlock = headContractExecutions;
 		boolean brokenChained = true;
@@ -440,7 +403,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			}
 		}
 		if (brokenChained) {
-			return new HashSet<BlockWrap>();
+			return new HashSet<>();
 		} else {
 			return re;
 		}
@@ -456,8 +419,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public boolean addRequiredUnconfirmedBlocksTo(Collection<BlockWrap> blocks, BlockWrap startingBlock,
 			long cutoffHeight, FullBlockStore store) throws BlockStoreException {
 
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
+                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
 		Set<Sha256Hash> blockQueueSet = new HashSet<>();
 		blockQueue.add(startingBlock);
 		blockQueueSet.add(startingBlock.getBlockHash());
@@ -488,8 +451,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					BlockWrap pred = getBlockWrap(req, store);
 					if (pred == null) {
 						notMissingAnything = false;
-						continue;
-					} else {
+                    } else {
 						blockQueueSet.add(req);
 						blockQueue.add(pred);
 					}
@@ -634,19 +596,19 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 */
 	public boolean findBlockWithSpentOrUnconfirmedInputs(Set<BlockWrap> blocks, FullBlockStore store) {
 		// Get all conflict candidates in blocks
-		Stream<ConflictCandidate> candidates = blocks.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream());
+		Stream<ConflictCandidate> candidates = blocks.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream);
 
 		// Find conflict candidates whose used outputs are already spent or
 		// still unconfirmed
-		return candidates.filter((ConflictCandidate c) -> {
+		return candidates.anyMatch((ConflictCandidate c) -> {
 			try {
 				return hasSpentDependencies(c, true, store);
 			} catch (BlockStoreException e) {
-				e.printStackTrace();
+			//	e.printStackTrace();
 			}
 			return false;
-		}).findFirst().isPresent();
+		});
 	}
 
 	/**
@@ -654,9 +616,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * blocks remaining in the set of blocks.
 	 * 
 	 * @param blocksToAdd  the set of blocks to add to the current milestone
-	 * @param cutoffHeight
-	 * @throws BlockStoreException
-	 */
+     */
 	public void resolveAllConflicts(TreeSet<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store)
 			throws BlockStoreException {
 		// Cutoff: Remove if predecessors neither in milestone nor to be
@@ -687,10 +647,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/**
 	 * Remove blocks from blocksToAdd that miss their required predecessors, i.e.
 	 * the predecessors are not confirmed or in blocksToAdd.
-	 * 
-	 * @param blocksToAdd
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void removeWhereUnconfirmedRequirements(TreeSet<BlockWrap> blocksToAdd, FullBlockStore store)
 			throws BlockStoreException {
 		Iterator<BlockWrap> iterator = blocksToAdd.iterator();
@@ -709,17 +667,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Remove blocks from blocksToAdd that are currently locally ineligible.
-	 * 
-	 * @param blocksToAdd
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	public void removeWhereIneligible(Set<BlockWrap> blocksToAdd, FullBlockStore store) {
 		findWhereCurrentlyIneligible(blocksToAdd).forEach(b -> {
 			try {
 				removeBlockAndApproversFrom(blocksToAdd, b, store);
 			} catch (BlockStoreException e) {
 				// Cannot happen.
-				e.printStackTrace();
 				throw new RuntimeException(e);
 			}
 		});
@@ -727,10 +682,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Find blocks from blocksToAdd that are currently locally ineligible.
-	 * 
-	 * @param blocksToAdd
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private Set<BlockWrap> findWhereCurrentlyIneligible(Set<BlockWrap> blocksToAdd) {
 		return blocksToAdd.stream().filter(b -> b.getBlock().getBlockType() == Type.BLOCKTYPE_REWARD)
 				.collect(Collectors.toSet());
@@ -740,14 +693,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Remove blocks from blocksToAdd that have at least one used output not
 	 * confirmed yet. They may however be spent already, since this leads to
 	 * conflicts.
-	 * 
-	 * @param blocksToAdd
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	public void removeWhereUsedOutputsUnconfirmed(Set<BlockWrap> blocksToAdd, FullBlockStore store)
-			throws BlockStoreException {
+		{
 		// Confirmed blocks are always ok
-		new HashSet<BlockWrap>(blocksToAdd).stream().filter(b -> !b.getBlockEvaluation().isConfirmed())
+            new HashSet<>(blocksToAdd).stream().filter(b -> !b.getBlockEvaluation().isConfirmed())
 				.flatMap(b -> b.toConflictCandidates().stream()).filter(c -> {
 					try {
 						return !hasConfirmedDependencies(c, store); // Any
@@ -756,7 +707,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						// dependencies unconfirmed
 					} catch (BlockStoreException e) {
 						// Cannot happen.
-						e.printStackTrace();
 						throw new RuntimeException(e);
 					}
 				}).forEach(c -> {
@@ -764,7 +714,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						removeBlockAndApproversFrom(blocksToAdd, c.getBlock(), store);
 					} catch (BlockStoreException e) {
 						// Cannot happen.
-						e.printStackTrace();
 						throw new RuntimeException(e);
 					}
 				});
@@ -773,8 +722,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void resolveMilestoneConflicts(Set<BlockWrap> blocksToAdd, FullBlockStore store)
 			throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
-		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream()).collect(Collectors.toList());
+		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.toList());
 
 		// Find only those that are spent
 		filterSpent(conflicts, store);
@@ -793,15 +742,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Resolves conflicts between non-milestone blocks and candidates
-	 * 
-	 * @param blocksToAdd
-	 * @param cutoffHeight
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void resolveTemporaryConflicts(Set<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store)
 			throws BlockStoreException {
-		HashSet<ConflictCandidate> conflictingOutPoints = new HashSet<ConflictCandidate>();
-		HashSet<BlockWrap> conflictingConfirmedBlocks = new HashSet<BlockWrap>();
+		HashSet<ConflictCandidate> conflictingOutPoints = new HashSet<>();
+		HashSet<BlockWrap> conflictingConfirmedBlocks = new HashSet<>();
 
 		// Find all conflicts in the new blocks + confirmed blocks
 		findFixableConflicts(blocksToAdd, conflictingOutPoints, conflictingConfirmedBlocks, store);
@@ -814,8 +760,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// For confirmed blocks that have been eliminated call disconnect
 		// procedure
 		HashSet<Sha256Hash> traversedUnconfirms = new HashSet<>();
-		for (BlockWrap b : conflictingConfirmedBlocks.stream().filter(b -> losingBlocks.contains(b))
-				.collect(Collectors.toList())) {
+		for (BlockWrap b : conflictingConfirmedBlocks.stream().filter(losingBlocks::contains)
+				.toList()) {
 			unconfirm(b, traversedUnconfirms, -1, store);
 		}
 
@@ -829,15 +775,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/**
 	 * Resolve all conflicts by grouping by UTXO ordered by descending rating.
 	 * 
-	 * @param conflictingOutPoints
 	 * @return losingBlocks: blocks that have been removed due to conflict
 	 *         resolution
-	 * @throws BlockStoreException
-	 */
+     */
 	private HashSet<BlockWrap> resolveTemporaryConflicts(Set<ConflictCandidate> conflictingOutPoints,
 			Set<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store) throws BlockStoreException {
 		// Initialize blocks that will/will not survive the conflict resolution
-		HashSet<BlockWrap> initialBlocks = conflictingOutPoints.stream().map(c -> c.getBlock())
+		HashSet<BlockWrap> initialBlocks = conflictingOutPoints.stream().map(ConflictCandidate::getBlock)
 				.collect(Collectors.toCollection(HashSet::new));
 		HashSet<BlockWrap> winningBlocks = new HashSet<>(blocksToAdd);
 		for (BlockWrap winningBlock : initialBlocks) {
@@ -849,17 +793,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		// Sort conflicts internally by descending rating, then cumulative
 		// weight.
-		Comparator<ConflictCandidate> byDescendingRating = getConflictComparator()
-				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getRating())
-				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getCumulativeWeight())
-				.thenComparingLong((ConflictCandidate e) -> -e.getBlock().getBlockEvaluation().getInsertTime())
-				.thenComparing((ConflictCandidate e) -> e.getBlock().getBlockEvaluation().getBlockHash()).reversed();
-
-		Supplier<TreeSet<ConflictCandidate>> conflictTreeSetSupplier = () -> new TreeSet<ConflictCandidate>(
-				byDescendingRating);
+		Supplier<TreeSet<ConflictCandidate>> conflictTreeSetSupplier = getTreeSetSupplier();
 
 		Map<Object, TreeSet<ConflictCandidate>> conflicts = conflictingOutPoints.stream().collect(
-				Collectors.groupingBy(i -> i.getConflictPoint(), Collectors.toCollection(conflictTreeSetSupplier)));
+				Collectors.groupingBy(ConflictCandidate::getConflictPoint, Collectors.toCollection(conflictTreeSetSupplier)));
 
 		// Sort conflicts among each other by descending max(rating).
 		Comparator<TreeSet<ConflictCandidate>> byDescendingSetRating = getConflictSetComparator()
@@ -872,8 +809,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getBlockEvaluation().getBlockHash())
 				.reversed();
 
-		Supplier<TreeSet<TreeSet<ConflictCandidate>>> conflictsTreeSetSupplier = () -> new TreeSet<TreeSet<ConflictCandidate>>(
-				byDescendingSetRating);
+		Supplier<TreeSet<TreeSet<ConflictCandidate>>> conflictsTreeSetSupplier = () -> new TreeSet<>(
+                byDescendingSetRating);
 
 		TreeSet<TreeSet<ConflictCandidate>> sortedConflicts = conflicts.values().stream()
 				.collect(Collectors.toCollection(conflictsTreeSetSupplier));
@@ -906,31 +843,30 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return losingBlocks;
 	}
 
+	@NotNull
+	private Supplier<TreeSet<ConflictCandidate>> getTreeSetSupplier() {
+		Comparator<ConflictCandidate> byDescendingRating = getConflictComparator()
+				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getRating())
+				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getCumulativeWeight())
+				.thenComparingLong((ConflictCandidate e) -> -e.getBlock().getBlockEvaluation().getInsertTime())
+				.thenComparing((ConflictCandidate e) -> e.getBlock().getBlockEvaluation().getBlockHash()).reversed();
+
+        return () -> new TreeSet<>(
+byDescendingRating);
+	}
+
 	private Comparator<TreeSet<ConflictCandidate>> getConflictSetComparator() {
-		return new Comparator<TreeSet<ConflictCandidate>>() {
-			@Override
-			public int compare(TreeSet<ConflictCandidate> o1, TreeSet<ConflictCandidate> o2) {
-				return 0;
-			}
-		};
+		return (o1, o2) -> 0;
 	}
 
 	private Comparator<ConflictCandidate> getConflictComparator() {
-		return new Comparator<ConflictCandidate>() {
-			@Override
-			public int compare(ConflictCandidate o1, ConflictCandidate o2) {
-				return 0;
-			}
-		};
+		return (o1, o2) -> 0;
 	}
 
 	/**
 	 * Finds conflicts in blocksToAdd itself and with the confirmed blocks.
-	 * 
-	 * @param blocksToAdd
-	 * @param conflictingOutPoints
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void findFixableConflicts(Set<BlockWrap> blocksToAdd, Set<ConflictCandidate> conflictingOutPoints,
 			Set<BlockWrap> conflictingConfirmedBlocks, FullBlockStore store) throws BlockStoreException {
 
@@ -940,18 +876,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Finds conflicts among blocks to add themselves
-	 * 
-	 * @param blocksToAdd
-	 * @param conflictingOutPoints
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void findCandidateConflicts(Set<BlockWrap> blocksToAdd, Set<ConflictCandidate> conflictingOutPoints)
-			throws BlockStoreException {
+			 {
 		// Get conflicts that are spent more than once in the
 		// candidates
-		List<ConflictCandidate> candidateCandidateConflicts = blocksToAdd.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream()).collect(Collectors.groupingBy(i -> i.getConflictPoint())).values().stream()
-				.filter(l -> l.size() > 1).flatMap(l -> l.stream()).collect(Collectors.toList());
+		List<ConflictCandidate> candidateCandidateConflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint)).values().stream()
+				.filter(l -> l.size() > 1).flatMap(Collection::stream).toList();
 
 		// Add the conflicting candidates
         conflictingOutPoints.addAll(candidateCandidateConflicts);
@@ -959,16 +892,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Finds conflicts between current confirmed and blocksToAdd
-	 * 
-	 * @param blocksToAdd
-	 * @param conflictingOutPoints
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void findUndoableConflicts(Set<BlockWrap> blocksToAdd, Set<ConflictCandidate> conflictingOutPoints,
 			Set<BlockWrap> conflictingConfirmedBlocks, FullBlockStore store) throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
-		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream()).collect(Collectors.toList());
+		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.toList());
 
 		// Find only those that are spent in confirmed
 		filterSpent(conflicts, store);
@@ -1040,7 +970,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			try {
 				return !hasSpentDependencies(c, false, store);
 			} catch (BlockStoreException e) {
-				e.printStackTrace();
+				//e.printStackTrace();
 				return true;
 			}
 		});
@@ -1060,12 +990,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	protected void showConflict(Set<BlockWrap> allApprovedNewBlocks) {
 		List<List<ConflictCandidate>> candidateConflicts = allApprovedNewBlocks.stream()
-				.map(b -> b.toConflictCandidates()).flatMap(i -> i.stream())
-				.collect(Collectors.groupingBy(i -> i.getConflictPoint())).values().stream().filter(l -> l.size() > 1)
-				.collect(Collectors.toList());
+				.map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
+				.collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint)).values().stream().filter(l -> l.size() > 1)
+				.toList();
 		for (List<ConflictCandidate> l : candidateConflicts) {
 			for (ConflictCandidate c : l) {
-				logger.debug(" conflict list: " + c.toString());
+                logger.debug(" conflict list: {}", c.toString());
 			}
 		}
 	}
@@ -1092,9 +1022,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		boolean re = checkSpentOrNoConfirm(c, checkNoConfirm, a);
 
 		if (re) {
-			logger.debug("getUTXOSpent true " + a.toString() + "\n TransactionOutPoint = "
-					+ getBlock(txout.getBlockHash(), store) + " \n spender = "
-					+ getBlock(a.getSpenderBlockHash(), store));
+            logger.debug("getUTXOSpent true {}\n TransactionOutPoint = {} \n spender = {}", a, getBlock(txout.getBlockHash(), store), getBlock(a.getSpenderBlockHash(), store));
 		}
 
 		return re;
@@ -1110,8 +1038,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * @param currentApprovedUnconfirmedBlocks The set of all currently approved
 	 *                                         unconfirmed blocks.
 	 * @return true if the given set is eligible
-	 * @throws BlockStoreException
-	 */
+     */
 	public boolean isEligibleForApprovalSelection(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
 			FullBlockStore store) throws BlockStoreException {
 		// Currently ineligible blocks are not ineligible. If we find one, we
@@ -1128,13 +1055,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// If conflicts among the approved blocks exist, cannot approve
 		HashSet<ConflictCandidate> conflictingOutPoints = new HashSet<>();
 		findCandidateConflicts(currentApprovedUnconfirmedBlocks, conflictingOutPoints);
-		if (!conflictingOutPoints.isEmpty())
-			return false;
+        return conflictingOutPoints.isEmpty();
 
 		// Otherwise, the new approved block set is compatible with current
 		// confirmation set
-		return true;
-	}
+    }
 
 	/**
 	 * Checks if the given block is eligible to be walked to during local approval
@@ -1147,8 +1072,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *                                         unconfirmed blocks.
 	 * @return true if the given block is eligible to be walked to during approval
 	 *         tip selection.
-	 * @throws BlockStoreException
-	 */
+     */
 	public boolean isEligibleForApprovalSelection(BlockWrap block, HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
 			long cutoffHeight, long maxHeight, FullBlockStore store) throws BlockStoreException {
 		// Any confirmed blocks are always compatible with the current
@@ -1319,7 +1243,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			throws BlockStoreException {
 
 		// All consumed order records are now unspent by this block
-		Set<OrderRecord> updateOrder = new HashSet<OrderRecord>(matchingResult.getSpentOrders());
+		Set<OrderRecord> updateOrder = new HashSet<>(matchingResult.getSpentOrders());
 		for (OrderRecord o : updateOrder) {
 			o.setSpent(false);
 			o.setSpenderBlockHash(null);
@@ -1359,7 +1283,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						resetConfirmOrderExecuteConflict(result, milestoneNumber, blockStore);
 					}
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmOrderAndTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber,
+						confirmOrderAndTransaction(getBlock(dep, blockStore), confirm, milestoneNumber,
 								blockStore);
 					}
 					blockStore.updateOrder(check.getPrevblockhash(), true, true, block.getHash());
@@ -1382,7 +1306,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							block.getTimeSeconds(), blockStore);
 				} else {
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmOrderAndTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
+						confirmOrderAndTransaction(getBlock(dep, blockStore), confirm, -1, blockStore);
 					}
 					blockStore.updateOrder(check.getPrevblockhash(), true, false, null);
 
@@ -1410,7 +1334,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				evictTransactionsAndBlockEva(block, blockStore);
 
 			} else {
-				logger.debug("check failed result=" + result.toString() + " check =" + check.toString());
+                logger.debug("check failed result={} check ={}", result, check.toString());
 			}
 
 		} catch (IOException e) {
@@ -1464,7 +1388,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// toBeSpent consists prev and referenced without canceled
 			// It must set transaction state and milestoneNumber
 			for (Sha256Hash dep : checked.getToBeSpent()) {
-				confirmContractEventTransaction(getBlock(dep, blockStore), block, confirm, milestoneNumber, blockStore);
+				confirmContractEventTransaction(getBlock(dep, blockStore), confirm, milestoneNumber, blockStore);
 			}
 			blockStore.updateContractEvent(checked.getPrevblockhash(), true, true, block.getHash());
 			blockStore.updateContractEvent(block.getHash(), true, false, null);
@@ -1483,7 +1407,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		} else {
 			for (Sha256Hash dep : checked.getToBeSpent()) {
-				confirmContractEventTransaction(getBlock(dep, blockStore), block, confirm, -1, blockStore);
+				confirmContractEventTransaction(getBlock(dep, blockStore), confirm, -1, blockStore);
 			}
 
 			blockStore.updateContractEvent(checked.getPrevblockhash(), true, false, null);
@@ -1577,8 +1501,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		blockStore.updateTokenConfirmed(block.getBlock().getHash(), confirm);
 	}
 
-	private void confirmContractEventTransaction(Block block, Block issueblock, boolean confirm, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+	private void confirmContractEventTransaction(Block block, boolean confirm, long milestoneNumber,
+												 FullBlockStore blockStore) throws BlockStoreException {
 
 		blockStore.updateBlockEvaluationConfirmed(block.getHash(), confirm);
 		blockStore.updateBlockEvaluationMilestone(block.getHash(), milestoneNumber);
@@ -1586,8 +1510,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		evictTransactionsAndBlockEva(block, blockStore);
 	}
 
-	private void confirmOrderAndTransaction(Block block, Block issueblock, boolean confirm, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+	private void confirmOrderAndTransaction(Block block, boolean confirm, long milestoneNumber,
+											FullBlockStore blockStore) throws BlockStoreException {
 
 		blockStore.updateBlockEvaluationConfirmed(block.getHash(), confirm);
 		blockStore.updateBlockEvaluationMilestone(block.getHash(), milestoneNumber);
@@ -1671,12 +1595,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * will confirm and unconfirm all transaction data of the block and make the
 	 * used transaction data spent.
 	 * 
-	 * @param blockWrap
-	 * @param milestoneNumber
 	 * @param traversedBlockHashes: all block hash is called in this process
 	 * @param confirmation:         confirm and revoke confirm
-	 * @throws BlockStoreException
-	 */
+     */
 	public void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
 			boolean confirmation, FullBlockStore store) throws BlockStoreException {
 		// If already confirmed, return

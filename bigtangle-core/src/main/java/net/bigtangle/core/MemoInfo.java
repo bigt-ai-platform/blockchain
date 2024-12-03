@@ -8,9 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 import net.bigtangle.utils.Json;
 
@@ -31,7 +29,7 @@ public class MemoInfo implements java.io.Serializable {
      *  add string memo 
      */
     public MemoInfo(String memo) {
-        kv = new ArrayList<KeyValue>();
+        kv = new ArrayList<>();
         KeyValue keyValue = new KeyValue();
         keyValue.setKey(MEMO);
         keyValue.setValue(memo);
@@ -41,9 +39,9 @@ public class MemoInfo implements java.io.Serializable {
     /*
      * add ENCRYPT data as key value
      */
-    public MemoInfo addEncryptMemo(String memo) {
+    public void addEncryptMemo(String memo) {
         if (kv == null) {
-            kv = new ArrayList<KeyValue>();
+            kv = new ArrayList<>();
         }
 
         KeyValue keyValue = new KeyValue();
@@ -51,7 +49,6 @@ public class MemoInfo implements java.io.Serializable {
         keyValue.setValue(memo);
         kv.add(keyValue);
 
-        return this;
     }
 
     public String toJson() throws JsonProcessingException {
@@ -59,7 +56,7 @@ public class MemoInfo implements java.io.Serializable {
 
     }
 
-    public static MemoInfo parse(String jsonStr) throws JsonParseException, JsonMappingException, IOException {
+    public static MemoInfo parse(String jsonStr) throws IOException {
         if (jsonStr == null)
             return null;
         return Json.jsonmapper().readValue(jsonStr, MemoInfo.class);
@@ -76,7 +73,7 @@ public class MemoInfo implements java.io.Serializable {
             StringBuilder s = new StringBuilder();
             for (KeyValue keyvalue : m.getKv()) {
                 if (valueDisplay(keyvalue) != null && keyvalue.getKey() != null && !keyvalue.getKey().equals("null")
-                        && !keyvalue.getKey().equals("")      ) {
+                        && !keyvalue.getKey().isEmpty()) {
                     s.append(keyvalue.getKey()).append(": ").append(valueDisplay(keyvalue)).append(" \n");
                 }
             }

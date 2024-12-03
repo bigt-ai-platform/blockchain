@@ -9,7 +9,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -137,7 +136,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			throws BlockStoreException {
 		for (final Transaction tx : transactions) {
 			boolean isCoinBase = tx.isCoinBase();
-			List<UTXO> utxos = new ArrayList<UTXO>();
+			List<UTXO> utxos = new ArrayList<>();
 			for (TransactionOutput out : tx.getOutputs()) {
 				Script script = getScript(out.getScriptBytes());
 				String fromAddress = fromAddress(tx, isCoinBase);
@@ -248,7 +247,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			}
 			boolean buy = reqInfo.buy();
 			Side side = buy ? Side.BUY : Side.SELL;
-			int decimals = 0;
+			int decimals;
 			if (buy) {
 				decimals = blockStore.getTokenID(reqInfo.getTargetTokenid()).get(0).getDecimals();
 			} else {
@@ -259,7 +258,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 					reqInfo.getBeneficiaryPubKey(), reqInfo.getValidToTime(), reqInfo.getValidFromTime(), side.name(),
 					reqInfo.getBeneficiaryAddress(), reqInfo.getOrderBaseToken(), reqInfo.getPrice(), decimals);
 			versionPrice(record, reqInfo);
-			List<OrderRecord> orders = new ArrayList<OrderRecord>();
+			List<OrderRecord> orders = new ArrayList<>();
 			orders.add(record);
 			blockStore.insertOrder(orders);
 		} catch (IOException e) {
@@ -274,7 +273,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			ContractEventRecord record = new ContractEventRecord(block.getHash(), Sha256Hash.ZERO_HASH,
 					reqInfo.getContractTokenid(), false, false, null, reqInfo.getOfferValue(),
 					reqInfo.getOfferTokenid(), reqInfo.getBeneficiaryAddress());
-			List<ContractEventRecord> events = new ArrayList<ContractEventRecord>();
+			List<ContractEventRecord> events = new ArrayList<>();
 			events.add(record);
 			blockStore.insertContractEvent(events);
 		} catch (IOException e) {
@@ -308,8 +307,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			} else {
 				// the ContractExecute can not be reproduced here
-				logger.debug("ContractResult check failed  from result " + result.toString() + " compare to check "
-						+ check.toString());
+                logger.debug("ContractResult check failed  from result {} compare to check {}", result, check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -339,8 +337,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			} else {
 				// the ContractExecute can not be reproduced here
-				logger.warn("OrderExecutionResult check failed  from result " + result.toString() + " compare to check "
-						+ check.toString());
+                logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result, check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -380,16 +377,16 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 	public void confirmBlocksSorted(FullBlockStore store, long milestoneNumber,
 			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
-		ArrayList<BlockWrap> arrayList = new ArrayList<BlockWrap>(blocks);
-		Collections.sort(arrayList, new SortbyBlockWrapAsc());
+		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
+		arrayList.sort(new SortbyBlockWrapAsc());
 		for (BlockWrap approvedBlock :  arrayList)
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
 	}
 
 	public void unconfirmBlocksSorted(FullBlockStore store, long milestoneNumber,
 			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
-		ArrayList<BlockWrap> arrayList = new ArrayList<BlockWrap>(blocks);
-		Collections.sort(arrayList, new SortbyBlockWrap());
+		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
+		arrayList.sort(new SortbyBlockWrap());
 		for (BlockWrap block :  arrayList)
 			unconfirm(block, traversedConfirms, milestoneNumber, store);
 	}
