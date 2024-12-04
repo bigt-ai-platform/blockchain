@@ -51,7 +51,6 @@ import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.SendRequest;
 import net.bigtangle.wallet.Wallet;
 
- 
 public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	private static final Logger log = LoggerFactory.getLogger(DirectExchangeTest.class);
@@ -161,7 +160,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
 			ECKey outKey = new ECKey();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue() );
+			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		makeRewardBlock();
@@ -170,8 +169,10 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		log.info("balance : " + balance);
 		for (UTXO utxo : balance) {
 
-			assertTrue(utxo.getValue().getValue().equals(NetworkParameters.BigtangleCoinTotal
-					.subtract(Coin.COIN.getValue().multiply(BigInteger.valueOf(3))).subtract(Coin.FEE_DEFAULT.getValue())));
+			assertTrue(utxo.getValue().getValue()
+					.equals(NetworkParameters.BigtangleCoinTotal
+							.subtract(Coin.COIN.getValue().multiply(BigInteger.valueOf(3)))
+							.subtract(Coin.FEE_DEFAULT.getValue())));
 
 		}
 	}
@@ -187,7 +188,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
 			ECKey outKey = new ECKey();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue() );
+			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
 		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		makeRewardBlock();
@@ -228,9 +229,8 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	// TODO @Test
 	public void testExchangeTokenMulti() throws Exception {
-		 
 
-		List<ECKey> keys =  wallet.walletKeys(null);
+		List<ECKey> keys = wallet.walletKeys(null);
 		TokenInfo tokenInfo = new TokenInfo();
 		testCreateMultiSigToken(keys, tokenInfo);
 		UTXO multitemp = null;
@@ -320,8 +320,8 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		Address destination = Address.fromBase58(networkParameters, yourutxo.getAddress());
 		amount = Coin.valueOf(1000, myutxo.getValue().getTokenid());
 		req = SendRequest.to(destination, amount);
-		//wallet.completeTx(req, null);
-		wallet.signTransaction(req);
+		// wallet.completeTx(req, null);
+		wallet.signTransaction(req.tx, req.aesKey, req.missingSigsMode);
 
 		exchangeTokenComplete(req.tx);
 		UTXO multitemp1 = null;
@@ -402,13 +402,12 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void createTransaction() throws Exception {
-		 
 
 		Address destination = Address.fromBase58(networkParameters, "1NWN57peHapmeNq1ndDeJnjwPmC56Z6x8j");
 
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 
-		List<Block> rollingBlock= wallet.pay(null, destination.toString(), amount, "");
+		List<Block> rollingBlock = wallet.pay(null, destination.toString(), amount, "");
 
 		log.info("req block, hex : " + rollingBlock.get(0));
 

@@ -32,14 +32,13 @@ import com.google.common.base.MoreObjects;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
- 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.wallet.Wallet.MissingSigsMode;
+import net.bigtangle.wallet.WalletBase.MissingSigsMode;
 
 /**
  * A SendRequest gives the wallet information about precisely how to send money to a recipient or set of recipients.
