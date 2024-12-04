@@ -67,7 +67,6 @@ import net.bigtangle.script.ScriptBuilder;
  * <p>
  * To get a block, you can either build one from the raw bytes you can get from
  * another implementation, or request one specifically using
- * {@link Peer#getBlock(Sha256Hash)}.
  * </p>
  * 
  */
@@ -131,11 +130,11 @@ public class Block extends Message {
     	BLOCKTYPE_ORDER_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
     	BLOCKTYPE_CONTRACTEVENT_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false); // Order execution
     	
-        private boolean allowCoinbaseTransaction;
-        private int maxSize;
-        private boolean requiresCalculation;
+        private final boolean allowCoinbaseTransaction;
+        private final int maxSize;
+        private final boolean requiresCalculation;
 
-        private Type(boolean allowCoinbaseTransaction, int maxSize, boolean requiresCalculation) {
+         Type(boolean allowCoinbaseTransaction, int maxSize, boolean requiresCalculation) {
             this.allowCoinbaseTransaction = allowCoinbaseTransaction;
             this.maxSize = maxSize;
             this.requiresCalculation = requiresCalculation;
@@ -186,7 +185,7 @@ public class Block extends Message {
         this.prevBlockHash = prevBlockHash;
         this.prevBranchBlockHash = prevBranchBlockHash;
 
-        this.blockType = Type.values()[(int)blocktype];
+        this.blockType = Type.values()[blocktype];
         this.minerAddress = new byte[20];
         length = NetworkParameters.HEADER_SIZE;
         this.transactions = new ArrayList<>();
@@ -206,7 +205,6 @@ public class Block extends Message {
      *            deserializing of the wire as the length will be provided as
      *            part of the header. If unknown then set to
      *            Message.UNKNOWN_LENGTH
-     * @throws ProtocolException
      */
     public Block(NetworkParameters params, byte[] payloadBytes, MessageSerializer serializer, int length)
             throws ProtocolException {
@@ -288,7 +286,7 @@ public class Block extends Message {
 
         int numTransactions = (int) readVarInt();
         optimalEncodingMessageSize += VarInt.sizeOf(numTransactions);
-        transactions = new ArrayList<Transaction>(numTransactions);
+        transactions = new ArrayList<>(numTransactions);
         for (int i = 0; i < numTransactions; i++) {
             Transaction tx = new Transaction(params, payload, cursor, this, serializer, UNKNOWN_LENGTH);
             // Label the transaction as coming from the P2P network, so code
@@ -392,8 +390,6 @@ public class Block extends Message {
     /**
      * Special handling to check if we have a valid byte array for both header
      * and transactions
-     *
-     * @throws IOException
      */
     @Override
     public byte[] bitcoinSerialize() {
@@ -437,7 +433,6 @@ public class Block extends Message {
      * Provides a reasonable guess at the byte length of the transactions part
      * of the block. The returned value will be accurate in 99% of cases and in
      * those cases where not will probably slightly oversize.
-     *
      * This is used to preallocate the underlying byte array for a
      * ByteArrayOutputStream. If the size is under the real value the only
      * penalty is resizing of the underlying byte array.
@@ -537,7 +532,7 @@ public class Block extends Message {
      * The number that is one greater than the largest representable SHA-256
      * hash.
      */
-    private static BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
+    private static final BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
 
     /**
      * Returns the work represented by this block.
@@ -599,7 +594,7 @@ public class Block extends Message {
             s.append("   mineraddress: ").append(new Address(params, minerAddress)).append("\n");
 
         s.append("   blocktype: ").append(blockType).append("\n");
-        if (transactions != null && transactions.size() > 0) {
+        if (transactions != null && !transactions.isEmpty()) {
             s.append("   ").append(transactions.size()).append(" transaction(s):\n");
             for (Transaction tx : transactions) {
                 s.append(tx);
@@ -935,10 +930,6 @@ public class Block extends Message {
      *
      * @param height
      *            block height, if known, or -1 otherwise.
-     * @param flags
-     *            flags to indicate which tests should be applied (i.e. whether
-     *            to test for height in the coinbase transaction).
-     * @throws VerificationException
      *             if there was an error verifying the block.
      */
     public void verify(final int height) throws VerificationException {
@@ -984,14 +975,6 @@ public class Block extends Message {
      * after this.
      */
     public void addTransaction(Transaction t) {
-        addTransaction(t, true);
-    }
-
-    /**
-     * Adds a transaction to this block, with or without checking the sanity of
-     * doing so
-     */
-    void addTransaction(Transaction t, boolean runSanityChecks) {
         unCacheTransactions();
         if (transactions == null) {
             transactions = new ArrayList<Transaction>();
@@ -1094,44 +1077,6 @@ public class Block extends Message {
     // Used to make transactions unique.
     private static int txCounter;
 
- 
-    public void addCoinbaseTransactionPubKeyData(byte[] pubKeyTo, Coin value, DataClassName dataClassName,
-            byte[] data) {
-        unCacheTransactions();
-        transactions = new ArrayList<Transaction>();
-
-        Transaction coinbase = new Transaction(params);
-
-        ByteBuffer byteBuffer = ByteBuffer.allocate(pubKeyTo.length + 4 + data.length + 4);
-        byteBuffer.putInt(pubKeyTo.length);
-        byteBuffer.put(pubKeyTo);
-        byteBuffer.putInt(data.length);
-        byteBuffer.put(data);
-        coinbase.setData(byteBuffer.array());
-        coinbase.setDataClassName(dataClassName.name());
-
-        // coinbase.tokenid = value.tokenid;
-        final ScriptBuilder inputBuilder = new ScriptBuilder();
-
-        inputBuilder.data(new byte[] { (byte) txCounter, (byte) (txCounter++ >> 8) });
-
-        // A real coinbase transaction has some stuff in the scriptSig like the
-        // extraNonce and difficulty. The
-        // transactions are distinguished by every TX output going to a
-        // different key.
-        //
-        // Here we will do things a bit differently so a new address isn't
-        // needed every time. We'll put a simple
-        // counter in the scriptSig so every transaction has a different hash.
-        coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram()));
-        coinbase.addOutput(new TransactionOutput(params, coinbase, value,
-                ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
-
-        transactions.add(coinbase);
-        coinbase.setParent(this);
-        coinbase.length = coinbase.unsafeBitcoinSerialize().length;
-        adjustLength(transactions.size(), coinbase.length);
-    }
 
     public void addCoinbaseTransaction(byte[] pubKeyTo, Coin value, TokenInfo tokenInfo, MemoInfo memoInfo) {
         unCacheTransactions();

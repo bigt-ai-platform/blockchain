@@ -31,6 +31,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -49,10 +50,6 @@ import org.slf4j.LoggerFactory;
 import org.spongycastle.crypto.InvalidCipherTextException;
 import org.spongycastle.crypto.params.KeyParameter;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.math.LongMath;
@@ -85,9 +82,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserSettingDataInfo;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.VarInt;
-import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.InsufficientMoneyException;
-import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.NoDataException;
 import net.bigtangle.core.exception.NoTokenException;
 import net.bigtangle.core.exception.ScriptException;
@@ -190,7 +185,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// Objects that perform transaction signing. Applied subsequently one after
 	// another
 	@GuardedBy("lock")
-	private List<TransactionSigner> signers;
+	private final List<TransactionSigner> signers;
 
 
 	/**
@@ -369,27 +364,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		}
 	}
 
-	/**
-	 * Returns the number of keys in the key chain group, including lookahead keys.
-	 */
-	public int getKeyChainGroupSize() {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.numKeys();
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	@VisibleForTesting
-	public int getKeyChainGroupCombinedKeyLookaheadEpochs() {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.getCombinedKeyLookaheadEpochs();
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
 
 	/**
 	 * Returns a list of the non-deterministic keys that have been imported into the
@@ -755,7 +729,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	/**
 	 * Get the type of encryption used for this wallet.
-	 *
 	 * (This is a convenience method - the encryption type is actually stored in the
 	 * keyCrypter).
 	 */
@@ -986,8 +959,8 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 			List<TransactionInput> inputs = tx.getInputs();
 			List<TransactionOutput> outputs = tx.getOutputs();
-			checkState(inputs.size() > 0);
-			checkState(outputs.size() > 0);
+			checkState(!inputs.isEmpty());
+			checkState(!outputs.isEmpty());
 
 			KeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
 
@@ -1068,11 +1041,8 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 
 			ECKey recipientKey = findKeyFromPubKey(sender);
-			if (recipientKey != null && (recipientKey.isEncrypted() || recipientKey.hasPrivKey())) {
-				return true;
-			}
-			return false;
-		}
+            return recipientKey != null && (recipientKey.isEncrypted() || recipientKey.hasPrivKey());
+        }
 		return false;
 	}
 
@@ -1166,13 +1136,13 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			// spend.
 			CoinSelector selector = req.coinSelector == null ? coinSelector : req.coinSelector;
 			// selector is allowed to modify candidates list.
-			CoinSelection selection = selector.select(valueNeeded, new LinkedList<TransactionOutput>(candidates));
+			CoinSelection selection = selector.select(valueNeeded, new LinkedList<>(candidates));
 			// Can we afford this?
 			if (selection.valueGathered.compareTo(valueNeeded) < 0) {
 				valueMissing = valueNeeded.subtract(selection.valueGathered);
 				break;
 			}
-			checkState(selection.gathered.size() > 0 || originalInputs.size() > 0);
+			checkState(!selection.gathered.isEmpty() || !originalInputs.isEmpty());
 
 			// We keep track of an upper bound on transaction size to
 			// calculate
@@ -1215,10 +1185,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 				size += changeOutput.unsafeBitcoinSerialize().length + VarInt.sizeOf(req.tx.getOutputs().size())
 						- VarInt.sizeOf(req.tx.getOutputs().size() - 1);
 				// This solution is either category 1 or 2
-				if (!eitherCategory2Or3) // must be category 1
-					additionalValueForNextCategory = null;
+                // must be category 1
 
-			} else {
+            } else {
 				if (eitherCategory2Or3) {
 					// This solution definitely fits in category 3 (we threw
 					// away change because it was smaller than MIN_TX_FEE)
@@ -1248,8 +1217,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 				lastCalculatedSize = size;
 				// We need more fees anyway, just try again with the same
 				// additional value
-				additionalValueForNextCategory = additionalValueSelected;
-				continue;
+                continue;
 			}
 
 			if (isCategory3) {
@@ -1364,7 +1332,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	// endregion
 
-	/******************************************************************************************************************/
+	/*****************************************************************************************************************/
 
 	// region Wallet maintenance transactions
 
@@ -1444,7 +1412,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public List<FreeStandingTransactionOutput> calculateAllSpendCandidates(KeyParameter aesKey, boolean multisigns)
 			throws IOException {
 
-		List<FreeStandingTransactionOutput> candidates = new ArrayList<FreeStandingTransactionOutput>();
+		List<FreeStandingTransactionOutput> candidates = new ArrayList<>();
 		for (UTXO output : calculateAllSpendCandidatesUTXO(aesKey, multisigns)) {
 			candidates.add(new FreeStandingTransactionOutput(this.params, output));
 		}
@@ -1456,7 +1424,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 * spendpending has timeout for 5 minute return false, if there is spendpending
 	 * and timeout not
 	 */
-	public boolean checkSpendpending(UTXO output) throws IOException {
+	public boolean checkSpendpending(UTXO output){
 		if (output.isSpendPending()) {
 			return (System.currentTimeMillis() - output.getSpendPendingTime()) > SPENTPENDINGTIMEOUT;
 		}
@@ -1467,13 +1435,13 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// All Spend Candidates as List<UTXO>
 	public List<UTXO> calculateAllSpendCandidatesUTXO(KeyParameter aesKey, boolean multisigns) throws IOException {
 
-		List<UTXO> candidates = new ArrayList<UTXO>();
-		List<String> pubKeyHashs = new ArrayList<String>();
+		List<UTXO> candidates = new ArrayList<>();
+		List<String> pubKeyHashs = new ArrayList<>();
 		for (ECKey ecKey : walletKeys(aesKey)) {
 			pubKeyHashs.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(getServerURL() + ReqCmd.getOutputs.name(),
-				Json.jsonmapper().writeValueAsString(pubKeyHashs).getBytes("UTF-8"));
+				Json.jsonmapper().writeValueAsString(pubKeyHashs).getBytes(StandardCharsets.UTF_8));
 		GetOutputsResponse getOutputsResponse = Json.jsonmapper().readValue(response, GetOutputsResponse.class);
 		for (UTXO output : getOutputsResponse.getOutputs()) {
 			if (checkSpendpending(output)) {
@@ -1492,7 +1460,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public List<FreeStandingTransactionOutput> transforSpendCandidates(List<UTXO> outputs) {
-		List<FreeStandingTransactionOutput> candidates = new ArrayList<FreeStandingTransactionOutput>();
+		List<FreeStandingTransactionOutput> candidates = new ArrayList<>();
 		for (UTXO output : outputs) {
 			candidates.add(new FreeStandingTransactionOutput(this.params, output));
 		}
@@ -1551,7 +1519,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public HashMap<String, Address> getAddresses(KeyParameter aesKey) {
 
-		HashMap<String, Address> addressResult = new HashMap<String, Address>();
+		HashMap<String, Address> addressResult = new HashMap<>();
 
 		for (ECKey key : this.walletKeys(aesKey)) {
 			String n = key.toAddress(this.getNetworkParameters()).toString();
@@ -1624,7 +1592,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		ECKey.ECDSASignature party1Signature = ownerKey.sign(sighash, aesKey);
 		byte[] buf1 = party1Signature.encodeToDER();
 
-		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
+		List<MultiSignBy> multiSignBies = new ArrayList<>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
@@ -1639,14 +1607,12 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		if (getFee()) {
 			block.addTransaction(feeTransaction(aesKey));
 		}
-		Block adjust = adjustSolveAndSign(block);
-		return adjust;
+        return adjustSolveAndSign(block);
 	}
 
-	private Block adjustSolveAndSign(Block block) throws IOException, JsonParseException, JsonMappingException {
+	private Block adjustSolveAndSign(Block block) throws IOException {
 		// save block
 		try {
-
 			block.solve();
 			OkHttp3Util.post(getServerURL() + ReqCmd.signToken.name(), block.bitcoinSerialize());
 			return block;
@@ -1668,14 +1634,14 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// this key
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo,
 				calculateAllSpendCandidates(aesKey, false), 3, 60000);
 	}
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
-			String memo) throws JsonProcessingException, IOException, InsufficientMoneyException {
+			String memo) throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false),
 				3, 60000);
@@ -1683,7 +1649,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo,
 			List<FreeStandingTransactionOutput> coinList)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo, coinList, 3,
 				60000);
@@ -1691,18 +1657,18 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo, List<FreeStandingTransactionOutput> coinList, int repeat, int sleep)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		try {
 			return payToList(aesKey, giveMoneyResult, tokenid, memo, filterTokenid(tokenid, coinList));
 		} catch (InsufficientMoneyException e) {
-			log.debug(
-					" InsufficientMoneyException  " + giveMoneyResult + " repeat time =" + repeat + " sleep=" + sleep);
+            log.debug(" InsufficientMoneyException  {} repeat time ={} sleep={}", giveMoneyResult, repeat, sleep);
 			if (repeat > 0) {
 				repeat -= 1;
 				try {
 					Thread.sleep(sleep);
 				} catch (InterruptedException e1) {
+					log.debug(e1.getMessage());
 				}
 				return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo,
 						calculateAllSpendCandidates(aesKey, false), repeat, sleep);
@@ -1710,12 +1676,13 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		} catch (RuntimeException e) {
 			if (e.getMessage() != null && e.getMessage()
 					.contains("net.bigtangle.core.exception.VerificationException$ConflictPossibleException")) {
-				log.debug(e.getMessage() + "   " + giveMoneyResult + " repeat time =" + repeat + " sleep=" + sleep);
+                log.debug("{}   {} repeat time ={} sleep={}", e.getMessage(), giveMoneyResult, repeat, sleep);
 				if (repeat > 0) {
 					repeat -= 1;
 					try {
 						Thread.sleep(sleep);
 					} catch (InterruptedException e1) {
+						log.debug(e1.getMessage());
 					}
 					return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo,
 							calculateAllSpendCandidates(aesKey, false), repeat, sleep);
@@ -1732,25 +1699,25 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// pay the tokenid from the list HashMap<String, Long> giveMoneyResult of
 	// address and amount and return the remainder back to fromkey.
 	public Block payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
-			String memo) throws JsonProcessingException, IOException, InsufficientMoneyException {
+			String memo) throws  IOException, InsufficientMoneyException {
 		return payToList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
 	public List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 		return payFromList(aesKey, destination, amount, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
 	public List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
 			List<FreeStandingTransactionOutput> coinList)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws  IOException, InsufficientMoneyException {
 		return payFromList(aesKey, destination, amount, memo, coinList,
 				NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 4);
 	}
 
 	private List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
 			List<FreeStandingTransactionOutput> coinList, int split)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		List<FreeStandingTransactionOutput> coinTokenList = filterTokenid(amount.getTokenid(), coinList);
 
@@ -1761,23 +1728,23 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		// NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 4);
 		List<List<FreeStandingTransactionOutput>> parts = chopped(coinTokenList, split);
 
-		List<Block> re = new ArrayList<Block>();
+		List<Block> re = new ArrayList<>();
 		Coin payAmount = amount;
-		for (int i = 0; i < parts.size(); i++) {
-			Coin canPay = sum(parts.get(i));
-			re.add(payFromListNoSplit(aesKey, destination, payAmount, memo, parts.get(i), getTip()));
-			if (canPay.compareTo(payAmount) >= 0) {
-				break;
-			}
-			payAmount = payAmount.subtract(canPay);
-		}
+        for (List<FreeStandingTransactionOutput> part : parts) {
+            Coin canPay = sum(part);
+            re.add(payFromListNoSplit(aesKey, destination, payAmount, memo, part, getTip()));
+            if (canPay.compareTo(payAmount) >= 0) {
+                break;
+            }
+            payAmount = payAmount.subtract(canPay);
+        }
 
 		for (Block block : re) {
 			if (getFee() && !amount.isBIG()) {
 				// add big fee
 				block.addTransaction(feeTransaction(aesKey, coinList));
 			}
-			log.debug(" " + block.toString());
+            log.debug(" {}", block.toString());
 			solveAndPost(block);
 		}
 		return re;
@@ -1795,7 +1762,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	// restAmount
 	private Block payFromListNoSplit(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
 			List<FreeStandingTransactionOutput> coinList, Block tipBlock)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws InsufficientMoneyException {
 
 		Transaction multispent = payFromListNoSplitTransaction(aesKey, destination, amount, memo, coinList);
 		tipBlock.addTransaction(multispent);
@@ -1830,7 +1797,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		if (beneficiary == null || restAmount.isNegative()) {
-			throw new InsufficientMoneyException(amount.toString() + " outputs size= " + coinTokenList.size());
+			throw new InsufficientMoneyException(amount + " outputs size= " + coinTokenList.size());
 		}
 
 		signTransaction(multispent, aesKey);
@@ -1866,7 +1833,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		if (beneficiary == null || restAmount.isNegative()) {
-			throw new InsufficientMoneyException(amount.toString() + " outputs size= " + coinTokenList.size());
+			throw new InsufficientMoneyException(amount + " outputs size= " + coinTokenList.size());
 		}
 
 		signTransaction(multispent, aesKey);
@@ -1877,16 +1844,16 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			// add big fee
 			b.addTransaction(feeTransaction(aesKey, coinList));
 		}
-		log.debug(" " + b.toString());
+        log.debug(" {}", b);
 		solveAndPost(b);
 		return b;
 	}
 
-	public Block getTip() throws IOException, JsonProcessingException {
+	public Block getTip() throws IOException {
 		return params.getDefaultSerializer().makeBlock(getTipData());
 	}
 
-	private byte[] getTipData() throws IOException, JsonProcessingException {
+	private byte[] getTipData() throws IOException {
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		return OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getTip,
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -1894,17 +1861,17 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	// chops a list into non-view sublists of length L
 	public static <T> List<List<T>> chopped(List<T> list, final int L) {
-		List<List<T>> parts = new ArrayList<List<T>>();
+		List<List<T>> parts = new ArrayList<>();
 		final int N = list.size();
 		for (int i = 0; i < N; i += L) {
-			parts.add(new ArrayList<T>(list.subList(i, Math.min(N, i + L))));
+			parts.add(new ArrayList<>(list.subList(i, Math.min(N, i + L))));
 		}
 		return parts;
 	}
 
 	public Block payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo, List<FreeStandingTransactionOutput> coinList)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		if (giveMoneyResult.isEmpty()) {
 			return null;
@@ -1950,7 +1917,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		if (beneficiary == null || amount.isNegative()) {
-			throw new InsufficientMoneyException(summe.toString() + " outputs size= " + coinListTokenid.size());
+			throw new InsufficientMoneyException(summe + " outputs size= " + coinListTokenid.size());
 		}
 
 		signTransaction(multispent, aesKey);
@@ -1983,7 +1950,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		}
 		if (beneficiary == null || amount.isNegative()) {
 			throw new InsufficientMoneyException(
-					Coin.FEE_DEFAULT.toString() + " outputs size= " + coinListTokenid.size());
+					Coin.FEE_DEFAULT + " outputs size= " + coinListTokenid.size());
 		}
 
 		signTransaction(spent, aesKey);
@@ -1992,8 +1959,8 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	// check the token id is on the server
 	// throw NoTokenException
-	public Token checkTokenId(String tokenid) throws JsonProcessingException, IOException, NoTokenException {
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+	public Token checkTokenId(String tokenid) throws  IOException, NoTokenException {
+		HashMap<String, Object> requestParam = new HashMap<>();
 		requestParam.put("tokenid", tokenid);
 		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.getTokenById.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -2032,7 +1999,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 */
 	public Block buyOrder(KeyParameter aesKey, String targetTokenId, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 		Token targetToken = checkTokenId(targetTokenId);
 		return buyOrder(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime, orderBaseToken,
 				allowRemainder);
@@ -2040,7 +2007,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public Block buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 
 		if (targetToken.getTokenid().equals(orderBaseToken))
 			throw new OrderImpossibleException("buy token is base token ");
@@ -2054,7 +2021,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public Block buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 
 		return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime, orderBaseToken,
 				allowRemainder, candidates, 3, 60000);
@@ -2063,13 +2030,13 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public Block buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates, int repeat, int sleep)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 		try {
 			return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime, orderBaseToken,
 					allowRemainder, candidates);
 		} catch (RuntimeException e) {
 			if (e.getMessage().contains("ConflictPossibleException:")) {
-				log.debug(" ConflictPossibleException  " + " repeat time =" + repeat + " sleep=" + sleep);
+                log.debug(" ConflictPossibleException   repeat time ={} sleep={}", repeat, sleep);
 
 				if (repeat > 0) {
 					repeat -= 1;
@@ -2092,7 +2059,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public Block buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 
 		if (targetToken.getTokenid().equals(orderBaseToken))
 			throw new OrderImpossibleException("buy token is base token ");
@@ -2120,7 +2087,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		if (beneficiary == null || toBePaid.isNegative()) {
-			throw new InsufficientMoneyException("" + orderBaseToken);
+			throw new InsufficientMoneyException(orderBaseToken);
 		}
 
 		OrderOpenInfo info = new OrderOpenInfo(targetValue, targetToken.getTokenid(), beneficiary.getPubKey(),
@@ -2149,7 +2116,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 */
 	public Block sellOrder(KeyParameter aesKey, String offerTokenId, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
-			throws JsonProcessingException, IOException, NoTokenException, InsufficientMoneyException {
+			throws IOException, NoTokenException, InsufficientMoneyException {
 		Token t = checkTokenId(offerTokenId);
 		return sellOrder(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken, allowRemainder);
 	}
@@ -2177,13 +2144,13 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public Block sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates, int repeat, int sleep)
-			throws IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException {
 		try {
 			return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken,
 					allowRemainder, candidates);
 		} catch (RuntimeException e) {
 			if (e.getMessage().contains("ConflictPossibleException:")) {
-				log.debug(" ConflictPossibleException  " + " repeat time =" + repeat + " sleep=" + sleep);
+                log.debug(" ConflictPossibleException   repeat time ={} sleep={}", repeat, sleep);
 
 				if (repeat > 0) {
 					repeat -= 1;
@@ -2207,7 +2174,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	public Block sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
-			throws IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException {
 		if (t.getTokenid().equals(orderBaseToken))
 			throw new OrderImpossibleException("sell token is not allowed as base token ");
 		Integer priceshift = params.getOrderPriceShift(orderBaseToken);
@@ -2258,7 +2225,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoDataException {
+			throws IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
@@ -2291,7 +2258,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoDataException {
+			throws IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
@@ -2325,7 +2292,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public Block payContract(KeyParameter aesKey, String tokenId, BigInteger payAmount, Long validToTime,
 			Long validFromTime, String contractTokenid)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException, NoTokenException {
 		// add client check if the tokenid exists
 		// Token t = checkTokenId(tokenId);
 		// Burn BIG to buy
@@ -2350,7 +2317,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			}
 		}
 		if (beneficiary == null || amount.isNegative()) {
-			throw new InsufficientMoneyException(amount.toString() + " outputs size= " + coinList.size());
+			throw new InsufficientMoneyException(amount + " outputs size= " + coinList.size());
 
 		}
 
@@ -2384,7 +2351,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	private List<FreeStandingTransactionOutput> filterTokenid(byte[] tokenid, List<FreeStandingTransactionOutput> l) {
-		List<FreeStandingTransactionOutput> re = new ArrayList<FreeStandingTransactionOutput>();
+		List<FreeStandingTransactionOutput> re = new ArrayList<>();
 		for (FreeStandingTransactionOutput u : l) {
 			if (Arrays.equals(u.getValue().getTokenid(), tokenid)) {
 				re.add(u);
@@ -2394,9 +2361,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block paySubtangle(KeyParameter aesKey, String outputStr, ECKey connectKey, Address toAddressInSubtangle,
-			Coin coin, Address address) throws JsonProcessingException, IOException {
+			Coin coin, Address address) throws IOException {
 
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		HashMap<String, Object> requestParam = new HashMap<>();
 		requestParam.put("hexStr", outputStr);
 		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.getOutputByKey.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -2439,25 +2406,25 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public List<Block> pay(KeyParameter aesKey, String destination, Coin amount, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
-		return payFromList(aesKey, destination.toString(), amount, new MemoInfo(memo));
+		return payFromList(aesKey, destination, amount, new MemoInfo(memo));
 	}
 
 	public List<Block> pay(KeyParameter aesKey, Address destination, Coin amount, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payFromList(aesKey, destination.toString(), amount, new MemoInfo(memo));
 	}
 
 	public List<Block> pay(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payFromList(aesKey, destination, amount, memo);
 	}
 
 	public Transaction createTransaction(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payFromListNoSplitTransaction(aesKey, destination, amount, memo,
 				calculateAllSpendCandidates(aesKey, false));
@@ -2465,21 +2432,21 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	public Transaction createTransaction(KeyParameter aesKey, List<FreeStandingTransactionOutput> candidates,
 			String destination, Coin amount, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws InsufficientMoneyException {
 
 		return payFromListNoSplitTransaction(aesKey, destination, amount, new MemoInfo(memo), candidates);
 	}
 
 	public Transaction createTransaction(KeyParameter aesKey, List<FreeStandingTransactionOutput> candidates,
 			Address destination, Coin amount, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws InsufficientMoneyException {
 
 		return payFromListNoSplitTransaction(aesKey, destination.toString(), amount, new MemoInfo(memo), candidates);
 	}
 
 //no repeat here
 	public Block payTransaction(List<Transaction> txs)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException {
 		Block block = getTip();
 		for (Transaction tx : txs) {
 			block.addTransaction(tx);
@@ -2492,7 +2459,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 * in same wallet.
 	 */
 	public List<Block> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo)
-			throws JsonProcessingException, IOException, InsufficientMoneyException {
+			throws IOException, InsufficientMoneyException {
 
 		return payPartsToOne(aesKey, destination, tokenid, memo, BigInteger.ZERO);
 	}
@@ -2502,12 +2469,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 * in same wallet.
 	 */
 	public List<Block> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo,
-			BigInteger low) throws JsonProcessingException, IOException, InsufficientMoneyException {
+			BigInteger low) throws IOException, InsufficientMoneyException {
 
 		List<UTXO> l = calculateAllSpendCandidatesUTXO(aesKey, false);
-
-		List<FreeStandingTransactionOutput> candidates = new ArrayList<FreeStandingTransactionOutput>();
-
 		Coin summe = Coin.valueOf(0, tokenid);
 		int size = 0;
 		for (UTXO u : l) {
@@ -2515,9 +2479,6 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 					&& size < NetworkParameters.MAX_DEFAULT_BLOCK_SIZE / 10000) {
 				if (low.signum() == 0 || (low.signum() > 0 && u.getValue().getValue().compareTo(low) > 0)) {
 					summe = summe.add(u.getValue());
-
-					candidates.add(new FreeStandingTransactionOutput(this.params, u));
-
 					size += 1;
 				}
 			}
@@ -2530,7 +2491,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public Block saveUserdata(ECKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, InvalidCipherTextException {
+			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
 		// transaction.getData() is not encrypted
 		if (encrypt) {
 			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
@@ -2542,7 +2503,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		ECKey.ECDSASignature party1Signature = userKey.sign(sighash);
 		byte[] buf1 = party1Signature.encodeToDER();
 
-		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
+		List<MultiSignBy> multiSignBies = new ArrayList<>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setAddress(userKey.toAddress(params).toBase58());
 		multiSignBy0.setPublickey(Utils.HEX.encode(userKey.getPubKey()));
@@ -2558,8 +2519,8 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public UserSettingDataInfo getUserSettingDataInfo(ECKey userKey, boolean encrypt)
-			throws JsonProcessingException, IOException, InvalidCipherTextException {
-		HashMap<String, String> requestParam0 = new HashMap<String, String>();
+			throws IOException, InvalidCipherTextException {
+		HashMap<String, String> requestParam0 = new HashMap<>();
 		requestParam0.put("dataclassname", DataClassName.UserSettingDataInfo.name());
 		requestParam0.put("pubKey", Utils.HEX.encode(userKey.getPubKey()));
 		byte[] buf = OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getUserData.name(),
@@ -2583,7 +2544,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		GetDomainTokenResponse getDomainBlockHashResponse = this.getDomainNameBlockHash(tokenname);
 		Token domainName = getDomainBlockHashResponse.getdomainNameToken();
 
-		List<ECKey> walletKeys = new ArrayList<ECKey>();
+		List<ECKey> walletKeys = new ArrayList<>();
 		walletKeys.add(ownerKey);
 
 		final int signnumber = walletKeys.size();
@@ -2591,7 +2552,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public void publishDomainName(List<ECKey> signKeys, ECKey ownerKey, String tokenid, String tokenname,
-			KeyParameter aesKey, BigInteger amount, String description) throws Exception {
+								  KeyParameter aesKey, String description) throws Exception {
 		GetDomainTokenResponse getDomainBlockHashResponse = this.getDomainNameBlockHash(tokenname);
 		Token domainNameBlockHash = getDomainBlockHashResponse.getdomainNameToken();
 		final int signnumber = signKeys.size();
@@ -2612,7 +2573,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		TokenInfo tokenInfo = new TokenInfo();
 		tokenInfo.setToken(tokens);
 
-		List<MultiSignAddress> multiSignAddresses = new ArrayList<MultiSignAddress>();
+		List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 		tokenInfo.setMultiSignAddresses(multiSignAddresses);
 
 		for (ECKey ecKey : multiSigns) {
@@ -2625,22 +2586,20 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public TokenIndexResponse getServerCalTokenIndex(String tokenid) throws Exception {
-		HashMap<String, String> requestParam = new HashMap<String, String>();
+		HashMap<String, String> requestParam = new HashMap<>();
 		requestParam.put("tokenid", tokenid);
 		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.getTokenIndex.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
-		TokenIndexResponse tokenIndexResponse = Json.jsonmapper().readValue(resp, TokenIndexResponse.class);
-		return tokenIndexResponse;
+        return Json.jsonmapper().readValue(resp, TokenIndexResponse.class);
 	}
 
 	public PermissionedAddressesResponse getPrevTokenMultiSignAddressList(Token token) throws Exception {
-		HashMap<String, String> requestParam = new HashMap<String, String>();
+		HashMap<String, String> requestParam = new HashMap<>();
 		requestParam.put("domainNameBlockHash", token.getDomainNameBlockHash());
 		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.getTokenPermissionedAddresses.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
-		PermissionedAddressesResponse permissionedAddressesResponse = Json.jsonmapper().readValue(resp,
-				PermissionedAddressesResponse.class);
-		return permissionedAddressesResponse;
+        return Json.jsonmapper().readValue(resp,
+                PermissionedAddressesResponse.class);
 	}
 
 	public GetDomainTokenResponse getDomainNameBlockHash(String domainname) throws Exception {
@@ -2648,18 +2607,17 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	}
 
 	public GetDomainTokenResponse getDomainNameBlockHash(String domainname, String token) throws Exception {
-		HashMap<String, String> requestParam = new HashMap<String, String>();
+		HashMap<String, String> requestParam = new HashMap<>();
 		requestParam.put("domainname", domainname);
 		requestParam.put("token", token);
 		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.getDomainNameBlockHash.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
-		GetDomainTokenResponse getDomainBlockHashResponse = Json.jsonmapper().readValue(resp,
-				GetDomainTokenResponse.class);
-		return getDomainBlockHashResponse;
+        return Json.jsonmapper().readValue(resp,
+                GetDomainTokenResponse.class);
 	}
 
 	public Block multiSign(final String tokenid, ECKey outKey, KeyParameter aesKey) throws Exception {
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		HashMap<String, Object> requestParam = new HashMap<>();
 
 		String address = outKey.toAddress(params).toBase58();
 		requestParam.put("address", address);
@@ -2672,7 +2630,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			return null;
 		MultiSign multiSign = multiSignResponse.getMultiSigns().get(0);
 
-		byte[] payloadBytes = Utils.HEX.decode((String) multiSign.getBlockhashHex());
+		byte[] payloadBytes = Utils.HEX.decode(multiSign.getBlockhashHex());
 		Block block = params.getDefaultSerializer().makeBlock(payloadBytes);
 		// replace block prototype if it is too too old
 
@@ -2680,7 +2638,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 		List<MultiSignBy> multiSignBies ;
 		if (transaction.getDataSignature() == null) {
-			multiSignBies = new ArrayList<MultiSignBy>();
+			multiSignBies = new ArrayList<>();
 		} else {
 			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 					MultiSignByRequest.class);
@@ -2704,7 +2662,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		return adjustSolveAndSign(checkBlockPrototype(block));
 	}
 
-	private Block checkBlockPrototype(Block oldBlock) throws BlockStoreException, NoBlockException, IOException {
+	private Block checkBlockPrototype(Block oldBlock) throws IOException {
 
 		int time = 60 * 60 * 8;
 		if (System.currentTimeMillis() / 1000 - oldBlock.getTimeSeconds() > time) {
@@ -2738,7 +2696,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		String tokenid = token.getTokenid();
 		// key.getPublicKeyAsHex();
 
-		HashMap<String, String> requestParam00 = new HashMap<String, String>();
+		HashMap<String, String> requestParam00 = new HashMap<>();
 		requestParam00.put("tokenid", tokenid);
 		byte[] resp2 = OkHttp3Util.postString(getServerURL() + ReqCmd.getTokenIndex.name(),
 				Json.jsonmapper().writeValueAsString(requestParam00));
@@ -2769,9 +2727,9 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 
 	}
 
-	public Block getBlock(String hashHex) throws JsonProcessingException, IOException {
+	public Block getBlock(String hashHex) throws IOException {
 
-		Map<String, Object> requestParam = new HashMap<String, Object>();
+		Map<String, Object> requestParam = new HashMap<>();
 		requestParam.put("hashHex", hashHex);
 
 		byte[] data = OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getBlockByHash.name(),
@@ -2779,7 +2737,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 		return params.getDefaultSerializer().makeBlock(data);
 	}
 
-	public Block retryBlock(String hashHex) throws BlockStoreException, JsonProcessingException, IOException {
+	public Block retryBlock(String hashHex) throws IOException {
 		return retryBlocks(getBlock(hashHex));
 	}
 
@@ -2787,7 +2745,7 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 	 * if a block is failed due to rating without conflict, it can be retried by
 	 * setting new BlockPrototype.
 	 */
-	public Block retryBlocks(Block oldBlock) throws BlockStoreException, JsonProcessingException, IOException {
+	public Block retryBlocks(Block oldBlock) throws IOException {
 
 		Block block = getTip();
 		block.setBlockType(oldBlock.getBlockType());
@@ -2795,20 +2753,20 @@ public class Wallet extends BaseTaggableObject implements KeyBag {
 			block.addTransaction(transaction);
 
 		}
-		if (block.getTransactions().size() == 0) {
+		if (block.getTransactions().isEmpty()) {
 			return null;
 		}
 		return solveAndPost(block);
 	}
 
 	public Block rePayBlock(KeyParameter aesKey, String hashHex)
-			throws BlockStoreException, JsonProcessingException, IOException {
+			throws IOException {
 		return retryBlocks(getBlock(hashHex));
 	}
 
 	public BigDecimal getLastPrice(String tokenid, String basetoken)
-			throws JsonProcessingException, IOException, NoDataException {
-		List<String> tokenids = new ArrayList<String>();
+			throws IOException, NoDataException {
+		List<String> tokenids = new ArrayList<>();
 		tokenids.add(tokenid);
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
 		requestParam.put("tokenids", tokenids);
