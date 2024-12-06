@@ -186,7 +186,7 @@ public class ContractExecutionService {
 
 		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
 
-		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.zeroContractresult()
+		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.firstContractresult()
 				: prevMilestone;
 		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contract.getTokenid());
 

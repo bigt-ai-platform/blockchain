@@ -1689,6 +1689,7 @@ public abstract class AbstractIntegrationTest {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
+	 
 	}
 
 	public List<ECKey> createUserkey() {

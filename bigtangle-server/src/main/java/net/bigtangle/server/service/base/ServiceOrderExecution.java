@@ -122,7 +122,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		// Make deterministic tx with proceeds
 		Transaction tx = createOrderPayoutTransaction(block, payouts);
 
-		return new OrderExecutionResult(block.getHash(), getOrderRecordHash(toBeSpentOrders), tx.getHash(), tx,
+		return new OrderExecutionResult( getOrderRecordHash(toBeSpentOrders), tx.getHash(), tx,
 				prev.getBlockHash(), getOrderRecordHash(cancelledOrders),
 				remainingOrders.keySet(), block.getTimeSeconds(), remainingOrders.values(), toBeSpentOrders,
 				collectedBlocks, tokenId2Events);

@@ -481,6 +481,9 @@ public interface FullBlockStore {
 	public ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash)
 			throws BlockStoreException;
 
+	public void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
+
+	
 	public void updateContractEvent(Sha256Hash collectinghash,boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
 	public void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash,boolean confirm, boolean spent,
@@ -494,7 +497,7 @@ public interface FullBlockStore {
 
 	public Sha256Hash getContractEventSpent(Sha256Hash contractEvent) throws BlockStoreException;
 
-	void insertContractResult(ContractExecutionResult record) throws BlockStoreException;
+	void insertContractResult(ContractExecutionResult record, Sha256Hash blockhash) throws BlockStoreException;
 
 	public void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
 			throws BlockStoreException;
@@ -511,7 +514,7 @@ public interface FullBlockStore {
 
 	public  List<Orderresult> getOrderresultWithPrev(Sha256Hash prevhash) throws BlockStoreException;
 
-	void insertOrderResult(OrderExecutionResult record) throws BlockStoreException;
+	void insertOrderResult(OrderExecutionResult record, Sha256Hash blockhash) throws BlockStoreException;
 
 	public void updateOrderResultSpent(Sha256Hash result, Sha256Hash spentBlock, boolean spent)
 			throws BlockStoreException;

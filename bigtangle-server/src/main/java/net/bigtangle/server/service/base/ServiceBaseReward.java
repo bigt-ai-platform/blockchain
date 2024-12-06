@@ -48,6 +48,12 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
 		long cutoffHeight = getRewardCutoffHeight(currRewardInfo.getPrevRewardHash(), store);
 
+
+		// Unconfirm anything not confirmed by milestone
+	//	List<Sha256Hash> wipeBlocks = store.getWhereConfirmedNotMilestone();
+	//	unconfirmBlocks(store, -1, wipeBlocks);
+		
+		
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
 		if (!solidityState.isSuccessState())
@@ -72,7 +78,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
 
-	
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 		for (Sha256Hash hash : referrencedBlocks) {
@@ -108,12 +113,11 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		// Otherwise, all predecessors exist and were at least
 		// solid > 0, so we should be able to confirm everything
-		solidifyBlock(newMilestoneBlock, solidityState, true, store);  
-	
+		solidifyBlock(newMilestoneBlock, solidityState, true, store);
+
 		confirmBlocksSorted(store, milestoneNumber, allApprovedNewBlocks, new HashSet<>());
 
 	}
-
 
 	private void checkGeneratedReward(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
 
@@ -164,8 +168,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				if (req == null)
 					return SolidityState.from(reqHash, true);
 
-				if ( req.getBlockEvaluation().getMilestone() < 0
-						&& !currRewardInfo.getBlocks().contains(reqHash)) {
+				if (req.getBlockEvaluation().getMilestone() < 0 && !currRewardInfo.getBlocks().contains(reqHash)) {
 					// FIXME blocks problem with 4046309 throw new
 					// VerificationException("Predecessors are not in
 					// milestone." + req.toString());
@@ -231,8 +234,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
 				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 
-		Set<BlockWrap> collected = addReferencedChainedContractExecutions(blocks, store);
-		collected = addReferencedChainedOrderExecutions(collected, store);
+		Set<BlockWrap> collected = collectExecutionChained(store, blocks);
+		
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, serviceBase.getHashSet(collected),
 				prevChainLength + 1);
@@ -240,6 +243,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		tx.setMemo(new MemoInfo("Reward"));
 		return new RewardBuilderResult(tx, difficultyReward);
 	}
+
 
 	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {
 		List<Block.Type> ordertypes = new ArrayList<Block.Type>();
@@ -267,61 +271,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		return ordertypes;
 	}
 
-	/*
-	 * contract execution forms chained, it will takes all the chained contract
-	 * execution until to last execution in rewards
-	 */
-	public Set<BlockWrap> addReferencedChainedContractExecutions(Set<BlockWrap> blocks, FullBlockStore store)
-			throws BlockStoreException {
-		BlockWrap headContractExecutions = null;
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
-		// take all exclude the BLOCKTYPE_CONTRACT_EXECUTE and get the last
-		// BLOCKTYPE_CONTRACT_EXECUTE
-		for (BlockWrap block : blocks) {
-			if (Block.Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())) {
-				if (headContractExecutions == null) {
-					headContractExecutions = block;
-				} else {
-					if (headContractExecutions.getBlock().getHeight() < block.getBlock().getHeight()) {
-						headContractExecutions = block;
-					}
-				}
-			} else {
-				re.add(block);
-			}
-		}
-		// get all chained BLOCKTYPE_CONTRACT_EXECUTE until milestone
-		if (headContractExecutions != null) {
-			re.addAll(collectReferencedChainedContractExecutions(headContractExecutions, store));
-		}
-
-		return re;
-	}
-
-	public Set<BlockWrap> addReferencedChainedOrderExecutions(Set<BlockWrap> blocks, FullBlockStore store)
-			throws BlockStoreException {
-		BlockWrap headContractExecutions = null;
-		Set<BlockWrap> re = new HashSet<BlockWrap>();
-		for (BlockWrap block : blocks) {
-			if (Block.Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
-				if (headContractExecutions == null) {
-					headContractExecutions = block;
-				} else {
-					if (headContractExecutions.getBlock().getHeight() < block.getBlock().getHeight()) {
-						headContractExecutions = block;
-					}
-				}
-			} else {
-				re.add(block);
-			}
-		}
-		if (headContractExecutions != null) {
-			re.addAll(collectReferencedChainedOrderExecutions(headContractExecutions, store));
-		}
-
-		return re;
-	}
-
+ 
 	/**
 	 * Called as part of connecting a block when the new block results in a
 	 * different chain having higher total work.
@@ -365,15 +315,10 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
 						milestoneNumber, store);
 				// Unconfirm anything not in milestone
-				for (Sha256Hash wipeBlock : blocksInMilestoneInterval) {
-					BlockWrap blockWrap = getBlockWrap(wipeBlock, store);
-					unconfirm(blockWrap, new HashSet<>(), milestoneNumber, store);
-					// store.commitDatabaseBatchWrite();
-					// store.beginDatabaseBatchWrite();
-				}
-
+				unconfirmBlocks(store, milestoneNumber, blocksInMilestoneInterval);
 			}
-
+			store.commitDatabaseBatchWrite();
+			store.beginDatabaseBatchWrite();
 		}
 		Block cursor;
 		// Walk in ascending chronological order.
@@ -392,6 +337,14 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
+	private void unconfirmBlocks(FullBlockStore store, long milestoneNumber, List<Sha256Hash> blocksInMilestoneInterval)
+			throws BlockStoreException {
+		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
+		for (Sha256Hash b : blocksInMilestoneInterval) {
+			blocksToRemoveBlocks.add(getBlockWrap(b, store));
+		}
+		unconfirmBlocksSorted(store, milestoneNumber, blocksToRemoveBlocks, new HashSet<>());
+	}
 
 	/**
 	 * Returns the set of contiguous blocks between 'higher' and 'lower'. Higher is

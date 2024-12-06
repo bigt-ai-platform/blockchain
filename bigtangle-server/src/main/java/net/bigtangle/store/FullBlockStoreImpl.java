@@ -6,6 +6,7 @@
 package net.bigtangle.store;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -137,7 +138,7 @@ public class FullBlockStoreImpl {
 	 */
 	public void updateChain() throws BlockStoreException {
 		updateChainConnected();
-	//	updateConfirmedTimeBoxed();
+		// updateConfirmedTimeBoxed();
 	}
 
 	public void updateChainConnected() throws BlockStoreException {
@@ -168,8 +169,9 @@ public class FullBlockStoreImpl {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				processChainConnected(store, false, true);
 				updateConfirmedDo(store);
+				processChainConnected(store, false, true);
+			
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
 					log.info("updateChain time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
@@ -503,6 +505,7 @@ public class FullBlockStoreImpl {
 			HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
 
 			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
+		
 			for (BlockEvaluation b : blocksToRemove) {
 				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b.getBlockHash(), blockStore));
 			}
@@ -529,8 +532,11 @@ public class FullBlockStoreImpl {
 			// VALIDITY CHECKS
 			serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
 
+			// Execute must be chained for confirm
 			// Finally add the resolved new blocks to the confirmed set
-			serviceBase.confirmBlocksSorted(blockStore, -1, blocksToAdd, new HashSet<>());
+			serviceBase.confirmBlocksSorted(blockStore, -1,
+					serviceBase.collectExecutionChained(blockStore, Collections.synchronizedSet(blocksToAdd)),
+					new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -540,7 +546,7 @@ public class FullBlockStoreImpl {
 			blockStore.defaultDatabaseBatchWrite();
 		}
 
-	} 
+	}
 
 	private void updateConfirmed() throws BlockStoreException {
 		String LOCKID = "chain";

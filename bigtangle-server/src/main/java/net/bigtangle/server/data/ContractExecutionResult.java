@@ -10,7 +10,7 @@ import java.util.Set;
 
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.SpentBlock;
+import net.bigtangle.core.Spent;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 
@@ -19,7 +19,7 @@ import net.bigtangle.core.Utils;
  * It must be check on every node and should be the same result.
  * The data is saved in table ContractResult mainly as byte.
  */
-public class ContractExecutionResult extends SpentBlock {
+public class ContractExecutionResult extends Spent {
 
 	String contracttokenid;
 	// reference the previous ContractResult block, it forms a chain
@@ -49,12 +49,11 @@ public class ContractExecutionResult extends SpentBlock {
 
 	}
 
-	public ContractExecutionResult(Sha256Hash blockhash, String contractid, Set<Sha256Hash> toBeSpent,
+	public ContractExecutionResult( String contractid, Set<Sha256Hash> toBeSpent,
 			Sha256Hash outputTxHash, Transaction outputTx, Sha256Hash prevblockhash,  
 			Set<Sha256Hash> cancelRecords, Set<Sha256Hash> remainderRecords, long inserttime,
 			Set<ContractEventRecord> remainderContractEventRecord, 
 			Set<ContractEventRecord> toBeSpentContractEventRecord, Set<Sha256Hash> referencedOrderBlocks) {
-		this.setBlockHash(blockhash);
 		this.contracttokenid = contractid;
 		this.prevblockhash = prevblockhash;
 		this.outputTxHash = outputTxHash;

@@ -9,19 +9,19 @@ select * from contractresult where milestone <0 and confirmed= true ;
 select * FROM contractevent a, blocks b WHERE a.confirmed=1 AND a.spent=0 and a.blockhash=b.hash
 select * FROM contractevent a, blocks b WHERE a.blockhash=b.hash
 select * FROM   blocks b WHERE b.milestone >0 
-select * FROM contractevent a   WHERE a.spent=0
+select * FROM contractevent a   WHERE a.spent=0 and confirmed=true
 select * FROM contractevent a   WHERE   a.spent=1 and confirmed=false
 select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash and   a.spent=true and b.spent=false
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and  a.confirmed=1 AND a.spent=0
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and a.collectinghash=0x00911194d5d0db7cc4c2098c671434496ee81da207e4d67ee292d9e920e5a926
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   a.confirmed=true and a.spent=false
-select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash 
+select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash  
 or  a.collectinghash=0x0000000000000000000000000000000000000000000000000000000000000000   
 select * FROM contractevent order by  spenderblockhash, collectinghash
 select * FROM contractevent order by   collectinghash, blockhash
 select * FROM contractresult b, mcmc m WHERE  m.hash=b.blockhash
 select * FROM blocks b, mcmc m WHERE  m.hash=b.hash and b.milestone <0
-select * from orders  where spent=false ;
+select * from orders  where spent=false and confirmed=true order by blockhash;
 select * from orderresult order by inserttime desc ;
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
 select * from orders a, blocks b where a.blockhash=b.hash  ;
@@ -52,8 +52,8 @@ select * from orderresult  ;
 select *  FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 
 AND confirmed = false   AND mcmc.rating >= 5;
 
-select *  FROM info.blocks where  hash=0x0101689a54a61a629975137a3e43773c58d3a4fd7441d9f914879944e2643424;
-select * from outputs where blockhash = 0x007a1d7e3d908208161eec81d9243b217c375cfd7324553b11464012d1e03aa5;
+select *  FROM info.blocks where  hash=0x0017a6120fecbf4eb1731def0dd0660c9dc350fed488f104aa3a4dbef27ea9a3;
+select * from outputs where blockhash = 0x0009a0d2309039774e93ab211205a865737ab7f82bd235b6c63519b05d47bf05;
 
 select * from blocks where blocktype=2 order by height desc limit 500
 select * from blocks where milestone=339 and blocktype=3

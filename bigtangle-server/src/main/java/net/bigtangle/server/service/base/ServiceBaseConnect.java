@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -295,11 +296,11 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-				result.setBlockHash(block.getHash());
-				blockStore.insertContractResult(result);
+
+				blockStore.insertContractResult(result, block.getHash());
 				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
 				for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-					//connected not confirmed
+					// connected not confirmed
 					c.setConfirmed(false);
 					c.setCollectinghash(block.getHash());
 				}
@@ -307,7 +308,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			} else {
 				// the ContractExecute can not be reproduced here
-                logger.debug("ContractResult check failed  from result {} compare to check {}", result, check.toString());
+				logger.debug("ContractResult check failed  from result {} compare to check {}", result,
+						check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -325,8 +327,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-				result.setBlockHash(block.getHash());
-				blockStore.insertOrderResult(result);
+				blockStore.insertOrderResult(result, block.getHash());
 				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
 
 				for (OrderRecord c : check.getRemainderOrderRecord()) {
@@ -337,7 +338,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			} else {
 				// the ContractExecute can not be reproduced here
-                logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result, check.toString());
+				logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result,
+						check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -375,21 +377,33 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void confirmBlocksSorted(FullBlockStore store, long milestoneNumber,
-			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
+	public void confirmBlocksSorted(FullBlockStore store, long milestoneNumber, Collection<BlockWrap> blocks,
+			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
 		arrayList.sort(new SortbyBlockWrapAsc());
-		for (BlockWrap approvedBlock :  arrayList)
+		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
+		//	checkSum(store);
+		}
 	}
 
-	public void unconfirmBlocksSorted(FullBlockStore store, long milestoneNumber,
-			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
+	// Execute must be chained for confirm, unconfirmed execution will force all
+	// following executions unconfirmed
+
+	public void unconfirmBlocksSorted(FullBlockStore store, long milestoneNumber, Collection<BlockWrap> blocks,
+			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
+//		Set<BlockWrap> all = new HashSet<>();
+//		for(BlockWrap b: blocks) {
+//			collectFollowChaineExecutions(b, all, store);
+//		}
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
 		arrayList.sort(new SortbyBlockWrap());
-		for (BlockWrap block :  arrayList)
-			unconfirm(block, traversedConfirms, milestoneNumber, store);
+		for (BlockWrap block : arrayList) {
+			unconfirm(block, traversedConfirms, -1, store);
+		// 	checkSum(store);
+		}
 	}
+
 	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
@@ -403,10 +417,49 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			return a.getBlock().getHeight() <= b.getBlock().getHeight() ? 1 : -1;
 		}
 	}
+
 	public static class SortbyBlockWrapAsc implements Comparator<BlockWrap> {
 
 		public int compare(BlockWrap a, BlockWrap b) {
 			return a.getBlock().getHeight() >= b.getBlock().getHeight() ? 1 : -1;
 		}
+	}
+
+	/*
+	 * contract execution forms chained, it will takes all the chained contract
+	 * execution until to last execution in rewards
+	 */
+	public Set<BlockWrap> collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
+			FullBlockStore store) throws BlockStoreException {
+		BlockWrap lastContractExecution = null;
+		Set<BlockWrap> re = new HashSet<>();
+		// get the last EXECUTE
+		for (BlockWrap block : blocks) {
+			if (blocktype.equals(block.getBlock().getBlockType())) {
+				if (lastContractExecution == null) {
+					lastContractExecution = block;
+				} else {
+					if (lastContractExecution.getBlock().getHeight() < block.getBlock().getHeight()) {
+						lastContractExecution = block;
+					}
+				}
+			} else {
+				re.add(block);
+			}
+		}
+		// backward to get all chained EXECUTE until milestone
+		if (lastContractExecution != null) {
+			re.addAll(collectReferencedChaineExecutions(lastContractExecution, store));
+		}
+
+		return re;
+	}
+
+	public Set<BlockWrap> collectExecutionChained(FullBlockStore store, Set<BlockWrap> blocks)
+			throws BlockStoreException {
+		Set<BlockWrap> collected = collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE,
+				store);
+		collected = collectReferencedChainedExecutions(collected, Block.Type.BLOCKTYPE_ORDER_EXECUTE, store);
+		return collected;
 	}
 }

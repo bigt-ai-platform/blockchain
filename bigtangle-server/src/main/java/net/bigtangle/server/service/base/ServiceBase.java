@@ -4,6 +4,7 @@
  *******************************************************************************/
 package net.bigtangle.server.service.base;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,17 +27,21 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
+import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
+import net.bigtangle.core.Tokensums;
+import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
@@ -45,6 +50,7 @@ import net.bigtangle.core.UserData;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.core.response.PermissionedAddressesResponse;
@@ -454,7 +460,13 @@ public abstract class ServiceBase {
 		// Reward the consensus block with the static reward
 		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
 				new Address(networkParameters, block.getMinerAddress()));
-
+		tx.setMemo(new MemoInfo("Reward"));
+		// The input does not really need to be a valid signature, as long
+		// as it has the right general form and is slightly different for
+		// different tx
+		TransactionInput input = new TransactionInput(networkParameters, tx, Script
+				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
+		tx.addInput(input);
 		return tx;
 	}
 
@@ -789,6 +801,46 @@ public abstract class ServiceBase {
 			// e.printStackTrace();
 		}
 		return address;
+	}
+
+	public TokensumsMap checkToken(FullBlockStore store) throws BlockStoreException, UTXOProviderException {
+
+		TokensumsMap tokensumset = new TokensumsMap();
+
+		Map<String, BigInteger> tokensumsInitial = tokensumInitial(store);
+		Set<String> tokenids = tokensumsInitial.keySet();
+		for (String tokenid : tokenids) {
+			Tokensums tokensums = new Tokensums();
+			tokensums.setTokenid(tokenid);
+			tokensums.setUtxos(getOutputs(tokenid, store));
+			tokensums.setOrders(orders(tokenid, store));
+			tokensums.setInitial(tokensumsInitial.get(tokenid));
+			tokensums.setContracts(contracts(tokenid, store));
+			tokensums.calculate();
+			tokensumset.getTokensumsMap().put(tokenid, tokensums);
+		}
+		return tokensumset;
+	}
+
+	private List<OrderRecord> orders(String tokenid, FullBlockStore store) throws BlockStoreException {
+		return store.getAllOpenOrdersSorted(null, tokenid);
+
+	}
+
+	private List<ContractEventRecord> contracts(String tokenid, FullBlockStore store) throws BlockStoreException {
+		return store.getContractEventRecordOpen(tokenid);
+
+	}
+
+	public Map<String, BigInteger> tokensumInitial(FullBlockStore store) throws BlockStoreException {
+
+		return store.getTokenAmountMap();
+	}
+
+	private List<UTXO> getOutputs(String tokenid, FullBlockStore store)
+			throws UTXOProviderException, BlockStoreException {
+		// Must be sorted with the key of
+		return store.getOpenAllOutputs(tokenid);
 	}
 
 }

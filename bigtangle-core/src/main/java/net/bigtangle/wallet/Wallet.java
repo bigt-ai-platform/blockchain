@@ -200,56 +200,7 @@ public class Wallet extends WalletBase {
 	}
  
 
-
-	/**
-	 * Returns true if this wallet has at least one of the private keys needed to
-	 * sign for this scriptPubKey. Returns false if the form of the script is not
-	 * known or if the script is OP_RETURN.
-	 */
-	public boolean canSignFor(Script script) {
-		if (script.isSentToRawPubKey()) {
-			byte[] pubkey = script.getPubKey();
-			ECKey key = findKeyFromPubKey(pubkey);
-			return key != null && (key.isEncrypted() || key.hasPrivKey());
-		}
-		if (script.isPayToScriptHash()) {
-			RedeemData data = findRedeemDataFromScriptHash(script.getPubKeyHash());
-			return data != null && canSignFor(data.redeemScript);
-		} else if (script.isSentToAddress()) {
-			ECKey key = findKeyFromPubHash(script.getPubKeyHash());
-			return key != null && (key.isEncrypted() || key.hasPrivKey());
-		} else if (script.isSentToMultiSig()) {
-			for (ECKey pubkey : script.getPubKeys()) {
-				ECKey key = findKeyFromPubKey(pubkey.getPubKey());
-				if (key != null && (key.isEncrypted() || key.hasPrivKey()))
-					return true;
-			}
-		} else if (script.isSentToCLTVPaymentChannel()) {
-			// Any script for which we are the recipient or sender counts.
-			byte[] sender = script.getCLTVPaymentChannelSenderPubKey();
-			ECKey senderKey = findKeyFromPubKey(sender);
-			if (senderKey != null && (senderKey.isEncrypted() || senderKey.hasPrivKey())) {
-				return true;
-			}
-
-			ECKey recipientKey = findKeyFromPubKey(sender);
-			return recipientKey != null && (recipientKey.isEncrypted() || recipientKey.hasPrivKey());
-		}
-		return false;
-	}
-
-	/**
-	 * Returns the {@link CoinSelector} object which controls which outputs can be
-	 * spent by this wallet.
-	 */
-	public CoinSelector getCoinSelector() {
-		lock.lock();
-		try {
-			return coinSelector;
-		} finally {
-			lock.unlock();
-		}
-	}
+ 
 
 	/******************************************************************************************************************/
 
@@ -319,87 +270,6 @@ public class Wallet extends WalletBase {
 
 	}
 
-	public List<FreeStandingTransactionOutput> transforSpendCandidates(List<UTXO> outputs) {
-		List<FreeStandingTransactionOutput> candidates = new ArrayList<>();
-		for (UTXO output : outputs) {
-			candidates.add(new FreeStandingTransactionOutput(this.params, output));
-		}
-		return candidates;
-	}
-
-	public void substract(Map<String, Coin> valueInput, Map<String, Coin> valueOut) {
-
-		for (Map.Entry<String, Coin> entry : valueInput.entrySet()) {
-
-			Coin a = valueOut.get(entry.getKey());
-			if (a != null) {
-				valueInput.put(entry.getKey(), entry.getValue().subtract(a));
-			}
-		}
-	}
-
-	public String getServerURL() {
-		if (serverPool == null) {
-			serverPool = new ServerPool(params);
-		}
-		return serverPool.getServer().getServerurl();
-	}
-
-	public void setServerPool(ServerPool serverPool) {
-		this.serverPool = serverPool;
-	}
-
-	public KeyChainGroup getKeyChainGroup() {
-		return this.keyChainGroup;
-	}
-
-	/*
-	 * get all keys in the wallet
-	 */
-	public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
-		DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-		List<ECKey> walletKeys = new ArrayList<ECKey>();
-		for (ECKey key : getImportedKeys()) {
-			ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
-			walletKeys.add(ecKey);
-		}
-		for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
-			for (ECKey key : chain.getLeafKeys()) {
-				ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
-				walletKeys.add(ecKey);
-			}
-		}
-		return walletKeys;
-	}
-
-	public List<ECKey> walletKeys() {
-		KeyParameter aesKey = null;
-		return walletKeys(aesKey);
-	}
-
-	public HashMap<String, Address> getAddresses(KeyParameter aesKey) {
-
-		HashMap<String, Address> addressResult = new HashMap<>();
-
-		for (ECKey key : this.walletKeys(aesKey)) {
-			String n = key.toAddress(this.getNetworkParameters()).toString();
-			addressResult.put(n, key.toAddress(this.getNetworkParameters()));
-		}
-
-		return addressResult;
-	}
-
-	public boolean calculatedAddressHit(KeyParameter aesKey, String address) {
-
-		for (ECKey key : this.walletKeys(aesKey)) {
-			String n = key.toAddress(this.getNetworkParameters()).toString();
-			if (n.equalsIgnoreCase(address)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
 		return saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));

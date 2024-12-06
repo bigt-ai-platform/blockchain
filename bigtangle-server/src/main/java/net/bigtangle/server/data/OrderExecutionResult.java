@@ -13,18 +13,18 @@ import java.util.Set;
 
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.SpentBlock;
+import net.bigtangle.core.Spent;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.ordermatch.TradePair;
 import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
+import net.bigtangle.core.ordermatch.TradePair;
 
 /*
  * OrderExecutionResult provide the results from the execution based on prev results.
  * It must be check on every node and should return the same result.
  * The data is saved in table OrderExecutionResult mainly as byte.
  */
-public class OrderExecutionResult extends SpentBlock {
+public class OrderExecutionResult extends Spent {
 
 	// reference the previous ContractResult block, it forms a chain
 	Sha256Hash prevblockhash;
@@ -49,20 +49,16 @@ public class OrderExecutionResult extends SpentBlock {
 	Collection<OrderRecord> remainderOrderRecord;
 	Set<OrderRecord> toBeSpentRecord;
 	Map<TradePair, List<Event>> tokenId2Events;
-	
+
 	public OrderExecutionResult() {
 
 	}
 
-	public OrderExecutionResult(Sha256Hash blockhash, Set<Sha256Hash> toBeSpent, Sha256Hash outputTxHash,
-			Transaction outputTx, Sha256Hash prevblockhash, Set<Sha256Hash> cancelRecords,
-			Set<Sha256Hash> remainderRecords, long inserttime, Collection<OrderRecord> remainderOrderRecord,
-			Set<OrderRecord> spentOrderRecord,
-			Set<Sha256Hash> referencedOrderBlocks, Map<TradePair, List<Event>> tokenId2Events ) {
-		this.setBlockHash(blockhash);
-
+	public OrderExecutionResult(Set<Sha256Hash> toBeSpent, Sha256Hash outputTxHash, Transaction outputTx,
+			Sha256Hash prevblockhash, Set<Sha256Hash> cancelRecords, Set<Sha256Hash> remainderRecords, long inserttime,
+			Collection<OrderRecord> remainderOrderRecord, Set<OrderRecord> spentOrderRecord,
+			Set<Sha256Hash> referencedOrderBlocks, Map<TradePair, List<Event>> tokenId2Events) {
 		this.prevblockhash = prevblockhash;
-
 		this.outputTxHash = outputTxHash;
 		this.outputTx = outputTx;
 		this.toBeSpent = toBeSpent;
@@ -72,8 +68,8 @@ public class OrderExecutionResult extends SpentBlock {
 
 		this.remainderOrderRecord = remainderOrderRecord;
 		this.referencedBlocks = referencedOrderBlocks;
-		this.	toBeSpentRecord= spentOrderRecord;
-		this.tokenId2Events=tokenId2Events;
+		this.toBeSpentRecord = spentOrderRecord;
+		this.tokenId2Events = tokenId2Events;
 	}
 
 	public byte[] toByteArray() {
@@ -183,7 +179,6 @@ public class OrderExecutionResult extends SpentBlock {
 		this.prevblockhash = prevblockhash;
 	}
 
- 
 	public Set<Sha256Hash> getToBeSpent() {
 		return toBeSpent;
 	}
@@ -224,7 +219,6 @@ public class OrderExecutionResult extends SpentBlock {
 		this.remainderOrderRecord = remainderOrderRecord;
 	}
 
- 
 	public Set<OrderRecord> getToBeSpentRecord() {
 		return toBeSpentRecord;
 	}
@@ -241,5 +235,4 @@ public class OrderExecutionResult extends SpentBlock {
 		this.tokenId2Events = tokenId2Events;
 	}
 
-	 
 }

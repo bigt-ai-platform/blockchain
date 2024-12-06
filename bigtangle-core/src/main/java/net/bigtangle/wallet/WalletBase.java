@@ -28,7 +28,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -1262,6 +1264,56 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		encrypt(scrypt, aesKey);
 	}
 
+	 
+
+		/*
+		 * get all keys in the wallet
+		 */
+		public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
+			DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
+			List<ECKey> walletKeys = new ArrayList<ECKey>();
+			for (ECKey key : getImportedKeys()) {
+				ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+				walletKeys.add(ecKey);
+			}
+			for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
+				for (ECKey key : chain.getLeafKeys()) {
+					ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+					walletKeys.add(ecKey);
+				}
+			}
+			return walletKeys;
+		}
+
+		public List<ECKey> walletKeys() {
+			KeyParameter aesKey = null;
+			return walletKeys(aesKey);
+		}
+
+		public HashMap<String, Address> getAddresses(KeyParameter aesKey) {
+
+			HashMap<String, Address> addressResult = new HashMap<>();
+
+			for (ECKey key : this.walletKeys(aesKey)) {
+				String n = key.toAddress(this.getNetworkParameters()).toString();
+				addressResult.put(n, key.toAddress(this.getNetworkParameters()));
+			}
+
+			return addressResult;
+		}
+
+		public boolean calculatedAddressHit(KeyParameter aesKey, String address) {
+
+			for (ECKey key : this.walletKeys(aesKey)) {
+				String n = key.toAddress(this.getNetworkParameters()).toString();
+				if (n.equalsIgnoreCase(address)) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 	// use the fixed server
 	public void setServerURL(String contextRoot) {
 		serverPool = new ServerPool(params, new String[] { contextRoot });
@@ -1274,5 +1326,20 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	public void setFee(Boolean fee) {
 		this.fee = fee;
 	}
+	 
+		public String getServerURL() {
+			if (serverPool == null) {
+				serverPool = new ServerPool(params);
+			}
+			return serverPool.getServer().getServerurl();
+		}
+
+		public void setServerPool(ServerPool serverPool) {
+			this.serverPool = serverPool;
+		}
+
+		public KeyChainGroup getKeyChainGroup() {
+			return this.keyChainGroup;
+		}
 
 }
