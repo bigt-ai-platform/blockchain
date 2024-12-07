@@ -202,7 +202,7 @@ public class Script {
             } else if (opcode == OP_PUSHDATA2) {
                 // Read a short, then read that many bytes of data.
                 if (bis.available() < 2) throw new ScriptException("Unexpected end of script");
-                dataToRead = bis.read() | (bis.read() << 8);
+                dataToRead = bis.read() | ((long)bis.read() << 8);
             } else if (opcode == OP_PUSHDATA4) {
                 // Read a uint32, then read that many bytes of data.
                 // Though this is allowed, because its value cannot be > 520, it should never actually be used

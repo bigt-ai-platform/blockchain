@@ -40,7 +40,7 @@ public class ServerConfiguration {
     private double alphaMCMC = -0.05;
     private Boolean runKafkaStream = false;
     // At Chain length = int * checkpoint set a checkpoint
-    private Long checkpoint=50000l ;
+    private Long checkpoint=50000L ;
     private int syncblocks=500;
   
 
@@ -48,36 +48,30 @@ public class ServerConfiguration {
     private String dockerDBHost="mysql-test";
     private String dockerDBHostData="/data/vm/"+dockerDBHost;
     //save in the userdata with pubkey
-    private String[] exchangelist= new String[] {"02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975"};
     private  long timeoutMinute = OkHttp3Util.timeoutMinute;
     //can be FullPruned server node with cleanup old data or fullnode node with all data
     private String servermode="fullnode";
     
-    private List<BurnedAddress>  burnedAddress=   BurnedAddress.init();
 
     
-    
-    private List<String> deniedIPlist = new ArrayList<String>();
+    private List<String> deniedIPlist = new ArrayList<>();
     private Boolean ipcheck = false;
     //if ipcheck, alway allow those IPs
-    private List<String> allowIPlist = new ArrayList<String>();
+    private List<String> allowIPlist = new ArrayList<>();
     
-    public synchronized Boolean checkService() {
+    public synchronized Boolean checkService()  {
         if (!serviceReady) {
+
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-
+                throw new RuntimeException(e);
             }
+
         }
         return serviceReady;
     }
 
- 
-    public synchronized void setServiceOK() {
-
-        serviceReady = true;
-    }
 
     public synchronized void setServiceWait() {
 
@@ -255,14 +249,6 @@ public class ServerConfiguration {
         this.maxsearchblocks = maxsearchblocks;
     }
 
-    public String[] getExchangelist() {
-        return exchangelist;
-    }
-
-    public void setExchangelist(String[] exchangelist) {
-        this.exchangelist = exchangelist;
-    }
-
     public long getTimeoutMinute() {
         return timeoutMinute;
     }
@@ -299,15 +285,6 @@ public class ServerConfiguration {
         this.ipcheck = ipcheck;
     }
 
-
-    public List<BurnedAddress> getLockAddress() {
-        return burnedAddress;
-    }
-
-
-    public void setLockAddress(List<BurnedAddress> burnedAddress) {
-        this.burnedAddress = burnedAddress;
-    }
 
 
     public Boolean getDockerCreateDBHost() {

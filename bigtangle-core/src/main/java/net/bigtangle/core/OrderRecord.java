@@ -7,7 +7,6 @@ package net.bigtangle.core;
 
 public class OrderRecord extends SpentBlock {
 
-	private static final long serialVersionUID = -2331665478149550684L;
 
 	// order matching block
 	private Sha256Hash issuingMatcherBlockHash;
@@ -39,9 +38,8 @@ public class OrderRecord extends SpentBlock {
 	 */
 
 	private boolean cancelPending;
-	private long cancelPendingTime;
 
-	public OrderRecord() {
+    public OrderRecord() {
 	}
 
 	public OrderRecord(Sha256Hash initialBlockHash, Sha256Hash issuingMatcherBlockHash, long offerValue,
@@ -136,10 +134,6 @@ public class OrderRecord extends SpentBlock {
 		return beneficiaryPubKey;
 	}
 
-	public void setBeneficiaryPubKey(byte[] beneficiaryPubKey) {
-		this.beneficiaryPubKey = beneficiaryPubKey;
-	}
-
 	public Long getValidToTime() {
 		return validToTime;
 	}
@@ -148,9 +142,6 @@ public class OrderRecord extends SpentBlock {
 		this.validToTime = validToTime;
 	}
 
-	public static long getSerialversionuid() {
-		return serialVersionUID;
-	}
 
 	public Long getValidFromTime() {
 		return validFromTime;
@@ -184,14 +175,6 @@ public class OrderRecord extends SpentBlock {
 		this.cancelPending = cancelPending;
 	}
 
-	public long getCancelPendingTime() {
-		return cancelPendingTime;
-	}
-
-	public void setCancelPendingTime(long cancelPendingTime) {
-		this.cancelPendingTime = cancelPendingTime;
-	}
-
 	public String getOrderBaseToken() {
 		return orderBaseToken;
 	}
@@ -202,10 +185,6 @@ public class OrderRecord extends SpentBlock {
 
 	public int getTokenDecimals() {
 		return tokenDecimals;
-	}
-
-	public void setTokenDecimals(int tokenDecimals) {
-		this.tokenDecimals = tokenDecimals;
 	}
 
 	@Override

@@ -49,8 +49,6 @@ public class CompareCheckpoint {
         do {
             try {
                 testComapre();
-
-                Thread.sleep(30000);
             } catch (Throwable e) {
                 e.printStackTrace();
 

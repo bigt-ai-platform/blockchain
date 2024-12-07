@@ -383,7 +383,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		arrayList.sort(new SortbyBlockWrapAsc());
 		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
-		//	checkSum(store);
+		 	checkSum(store);
 		}
 	}
 
@@ -400,7 +400,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		arrayList.sort(new SortbyBlockWrap());
 		for (BlockWrap block : arrayList) {
 			unconfirm(block, traversedConfirms, -1, store);
-		// 	checkSum(store);
+		 	checkSum(store);
 		}
 	}
 

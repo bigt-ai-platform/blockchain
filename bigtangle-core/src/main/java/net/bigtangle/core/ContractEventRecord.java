@@ -6,9 +6,8 @@
 package net.bigtangle.core;
 
 import java.math.BigInteger;
-import java.util.Objects;
 
-public class ContractEventRecord extends SpentBlock {
+public class ContractEventRecord extends SpentBlock  implements java.io.Serializable {
 
 	private static final long serialVersionUID = -2331665478149550684L;
 

@@ -580,7 +580,7 @@ public class Wallet extends WalletBase {
 	}
 
 	private byte[] getTipData() throws IOException {
-		HashMap<String, String> requestParam = new HashMap<String, String>();
+		HashMap<String, String> requestParam = new HashMap<>();
 		return OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getTip,
 				Json.jsonmapper().writeValueAsString(requestParam));
 	}
@@ -767,6 +767,7 @@ public class Wallet extends WalletBase {
 					try {
 						Thread.sleep(sleep);
 					} catch (InterruptedException e1) {
+						log.debug(e1.toString());
 					}
 					candidates = calculateAllSpendCandidates(aesKey, false);
 					return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime,
@@ -847,7 +848,7 @@ public class Wallet extends WalletBase {
 
 	public Block sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
-			throws IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException {
 		if (t.getTokenid().equals(orderBaseToken))
 			throw new OrderImpossibleException("sell token is not allowed as base token ");
 
@@ -860,7 +861,7 @@ public class Wallet extends WalletBase {
 	public Block sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
-			throws IOException, InsufficientMoneyException, NoTokenException {
+			throws IOException, InsufficientMoneyException {
 		return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken, allowRemainder,
 				candidates, 3, 60000);
 	}
@@ -881,6 +882,7 @@ public class Wallet extends WalletBase {
 					try {
 						Thread.sleep(sleep);
 					} catch (InterruptedException e1) {
+						log.debug(e1.toString());
 					}
 					candidates = calculateAllSpendCandidates(aesKey, false);
 					return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken,
@@ -1427,9 +1429,7 @@ public class Wallet extends WalletBase {
 		// tokens.setTokentype(TokenType.currency.ordinal());
 		tokenInfo.setToken(token);
 		tokenInfo.setMultiSignAddresses(addresses);
-		// tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid,
-		// "", key.getPublicKeyAsHex()));
-		return saveToken(tokenInfo, new Coin(token.getAmount(), tokenid), key, null, pubkeyTo, memoInfo);
+        return saveToken(tokenInfo, new Coin(token.getAmount(), tokenid), key, null, pubkeyTo, memoInfo);
 	}
 
 	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
@@ -1484,7 +1484,7 @@ public class Wallet extends WalletBase {
 	public BigDecimal getLastPrice(String tokenid, String basetoken) throws IOException, NoDataException {
 		List<String> tokenids = new ArrayList<>();
 		tokenids.add(tokenid);
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		HashMap<String, Object> requestParam = new HashMap<>();
 		requestParam.put("tokenids", tokenids);
 		requestParam.put("count", 1);
 		requestParam.put("basetoken", basetoken);

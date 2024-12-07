@@ -1522,6 +1522,7 @@ public class Transaction extends ChildMessage {
             else
                 this.memo = memoInfo.toJson();
         } catch (JsonProcessingException e) {
+            this.memo="";
         }
         unCache();
     }

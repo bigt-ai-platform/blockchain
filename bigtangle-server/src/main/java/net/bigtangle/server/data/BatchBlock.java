@@ -5,12 +5,14 @@
 
 package net.bigtangle.server.data;
 
+import java.io.Serial;
 import java.util.Date;
 
 import net.bigtangle.core.Sha256Hash;
 
 public class BatchBlock implements java.io.Serializable {
 
+    @Serial
     private static final long serialVersionUID = -6405699071408618795L;
 
     private Sha256Hash hash;

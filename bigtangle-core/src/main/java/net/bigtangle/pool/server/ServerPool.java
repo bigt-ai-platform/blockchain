@@ -159,8 +159,8 @@ public class ServerPool {
 		for (String s : serverCandidates) {
 			try {
 				addServer(s);
-			} catch (JsonProcessingException e) {
-			} catch (IOException e) {
+			} catch ( Exception e) {
+				log.debug(e.toString());
 			}
 		}
 	}

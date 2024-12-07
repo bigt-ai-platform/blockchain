@@ -29,7 +29,7 @@ import net.bigtangle.wallet.Wallet;
 
 public class PerformanceRemote extends  AbstractIntegrationTest {
 
-	public static String lotteryTokenPub = "039aee4f0291991dd71ea0dd3c0e91ef680e769eca0326f1e36b74107aec4ac1f4";
+	//public static String lotteryTokenPub = "039aee4f0291991dd71ea0dd3c0e91ef680e769eca0326f1e36b74107aec4ac1f4";
 	public static String lotteryTokenPriv = "6cecae9a820844dac41521ddad4f1b5068fdcac59ce28a6dd1ed01a12f782362";
 	public ECKey contractKey = ECKey.fromPrivate(Utils.HEX.decode(lotteryTokenPriv));
 	String contractAmount = "2500";
@@ -43,25 +43,20 @@ public class PerformanceRemote extends  AbstractIntegrationTest {
 
 	@Test
 	public void testProcess() throws Exception {
-		List<Block> a2 = new ArrayList<Block>();
+		List<Block> a2 = new ArrayList<>();
 		for (int i = 0; i < 12200; i++) {
 			create(a2);
 		}
 	}
 
-	public void create(List<Block> a2) throws Exception {
+	@SuppressWarnings({"rawtypes", "unchecked"})
+    public void create(List<Block> a2) throws Exception {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
-		Callable callable = new Callable() {
-			@Override
-			public String call() {
-				return contractAndOrder(a2);
-			}
+		Callable callable = () -> contractAndOrder(a2);
 
-		};
-
-		final Future<String> handler = executor.submit(callable);
+		final Future handler = executor.submit(callable);
 		try {
 			handler.get(30, TimeUnit.MINUTES);
 		} catch (Exception e) {

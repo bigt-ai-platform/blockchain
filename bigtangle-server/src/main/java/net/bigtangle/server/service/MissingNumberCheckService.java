@@ -14,13 +14,13 @@ public class MissingNumberCheckService {
 
     public boolean check(List<TXReward> sequence) throws ExecutionException, InterruptedException {
 
-        Long start = 1l;
-        Long end = new Long(sequence.size());
+        long start = 1L;
+        long end = sequence.size();
         ExecutorService executor = Executors.newFixedThreadPool(4);
         List<Future<List<Long>>> futureList = new ArrayList<>();
         List<Long> missingNumbers = new ArrayList<>();
-        for (Long i = start; i <= end; i += 1000) {
-            Callable<List<Long>> callable = new MissingNumberCheck(i, i + 999l, sequence);
+        for (long i = start; i <= end; i += 1000) {
+            Callable<List<Long>> callable = new MissingNumberCheck(i, i + 999L, sequence);
             Future<List<Long>> future = executor.submit(callable);
             futureList.add(future);
         }
@@ -35,14 +35,14 @@ public class MissingNumberCheckService {
 
         }
         executor.shutdown();
-        return missingNumbers.isEmpty();
+        return   missingNumbers.isEmpty();
 
     }
 
     static class MissingNumberCheck implements Callable<List<Long>> {
-        private Long start;
-        private Long end;
-        private List<TXReward> sequence;
+        private final Long start;
+        private final Long end;
+        private final List<TXReward> sequence;
 
         public MissingNumberCheck(Long start, Long end, List<TXReward> sequence) {
             this.start = start;
@@ -52,7 +52,7 @@ public class MissingNumberCheckService {
 
         @Override
         public List<Long> call() throws Exception {
-            List<Long> missingNumbers = new ArrayList<Long>();
+            List<Long> missingNumbers = new ArrayList<>();
             for (Long i = start; i <= end; i++) {
                 if (!contain(i)) {
                     missingNumbers.add(i);

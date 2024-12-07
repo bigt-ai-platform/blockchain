@@ -33,14 +33,16 @@ public class ScheduleRewardService {
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.miningrate:50000}")
     public void updateReward() {
+        try {
         if (scheduleConfiguration.isMining() && serverConfiguration.checkService()) {
-            try {
+
                 logger.debug(" Start schedule updateReward: ");
                 rewardService.startSingleProcess();
+        }
             } catch (Exception e) {
                 logger.warn("performRewardVoting ", e);
             }
-        }
+
     }
 
 }

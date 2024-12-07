@@ -211,7 +211,7 @@ public class SyncBlockService {
 	}
 
 	public long getTimeSeconds(int days) throws Exception {
-		return System.currentTimeMillis() / 1000 - days * 60 * 24 * 60;
+		return System.currentTimeMillis() / 1000 - days * 60 * 24 * 60L;
 	}
 
 	public byte[] requestBlock(Sha256Hash hash, FullBlockStore store) {

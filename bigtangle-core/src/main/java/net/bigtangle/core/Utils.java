@@ -439,7 +439,7 @@ public class Utils {
 			result >>= 8;
 			size++;
 		}
-		result |= size << 24;
+		result |= (long)size << 24;
 		result |= value.signum() == -1 ? 0x00800000 : 0;
 		return result;
 	}
@@ -453,7 +453,7 @@ public class Utils {
 	 * Advances (or rewinds) the mock clock by the given number of seconds.
 	 */
 	public static Date rollMockClock(int seconds) {
-		return rollMockClockMillis(seconds * 1000);
+		return rollMockClockMillis(seconds * 1000L);
 	}
 
 	/**

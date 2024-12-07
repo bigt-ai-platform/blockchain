@@ -556,7 +556,9 @@ public class ECKey implements EncryptableItem {
                 throw new RuntimeException(e);
             } finally {
                 if (decoder != null)
-                    try { decoder.close(); } catch (IOException x) {}
+                    try { decoder.close(); } catch (IOException x) {
+                        throw new RuntimeException(x);  // Cannot happen.
+                    }
             }
         }
 

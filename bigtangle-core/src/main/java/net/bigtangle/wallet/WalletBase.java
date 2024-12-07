@@ -21,7 +21,6 @@
 package net.bigtangle.wallet;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import java.io.File;
@@ -30,8 +29,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -46,18 +43,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 
-import net.bigtangle.core.Address;
-import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.VarInt;
-import net.bigtangle.core.exception.InsufficientMoneyException;
-import net.bigtangle.core.exception.ScriptException;
-import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
@@ -116,8 +107,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// compromised.
 	protected volatile long vKeyRotationTimestamp;
 
-	protected CoinSelector coinSelector = new DefaultCoinSelector();
-
 	// The wallet version. This is an int that can be used to track breaking
 	// changes in the wallet format.
 	// You can also use it to detect wallets that come from the future (ie they
@@ -172,59 +161,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 
 	// region Key Management
-
-	/**
-	 * Upgrades the wallet to be deterministic (BIP32). You should call this,
-	 * possibly providing the users encryption key, after loading a wallet produced
-	 * by previous versions of bitcoinj. If the wallet is encrypted the key
-	 * <b>must</b> be provided, due to the way the seed is derived deterministically
-	 * from private key bytes: failing to do this will result in an exception being
-	 * thrown. For non-encrypted wallets, the upgrade will be done for you
-	 * automatically the first time a new key is requested (this happens when
-	 * spending due to the change address).
-	 */
-	public void upgradeToDeterministic(@Nullable KeyParameter aesKey) throws DeterministicUpgradeRequiresPassword {
-		keyChainGroupLock.lock();
-		try {
-			keyChainGroup.upgradeToDeterministic(vKeyRotationTimestamp, aesKey);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * Returns true if the wallet contains random keys and no HD chains, in which
-	 * case you should call
-	 * {@link #upgradeToDeterministic(org.spongycastle.crypto.params.KeyParameter)}
-	 * before attempting to do anything that would require a new address or key.
-	 */
-	public boolean isDeterministicUpgradeRequired() {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.isDeterministicUpgradeRequired();
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	private void maybeUpgradeToHD() throws DeterministicUpgradeRequiresPassword {
-		maybeUpgradeToHD(null);
-	}
-
-	@GuardedBy("keyChainGroupLock")
-	private void maybeUpgradeToHD(@Nullable KeyParameter aesKey) throws DeterministicUpgradeRequiresPassword {
-		checkState(keyChainGroupLock.isHeldByCurrentThread());
-		if (keyChainGroup.isDeterministicUpgradeRequired()) {
-			log.info("Upgrade to HD wallets is required, attempting to do so.");
-			try {
-				upgradeToDeterministic(aesKey);
-			} catch (DeterministicUpgradeRequiresPassword e) {
-				log.error("Failed to auto upgrade due to encryption. You should call wallet.upgradeToDeterministic "
-						+ "with the users AES key to avoid this error.");
-				throw e;
-			}
-		}
-	}
 
 	/**
 	 * Removes the given key from the basicKeyChain. Be very careful with this -
@@ -301,93 +237,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 				throw new IllegalArgumentException("Cannot import HD keys back into the wallet");
 	}
 
-	/**
-	 * Takes a list of keys and a password, then encrypts and imports them in one
-	 * step using the current keycrypter.
-	 */
-	public int importKeysAndEncrypt(final List<ECKey> keys, CharSequence password) {
-		keyChainGroupLock.lock();
-		int result;
-		try {
-			checkNotNull(getKeyCrypter(), "Wallet is not encrypted");
-			result = importKeysAndEncrypt(keys, getKeyCrypter().deriveKey(password));
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-		saveNow();
-		return result;
-	}
-
-	/**
-	 * Takes a list of keys and an AES key, then encrypts and imports them in one
-	 * step using the current keycrypter.
-	 */
-	public int importKeysAndEncrypt(final List<ECKey> keys, KeyParameter aesKey) {
-		keyChainGroupLock.lock();
-		try {
-			checkNoDeterministicKeys(keys);
-			return keyChainGroup.importKeysAndEncrypt(keys, aesKey);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * See {@link net.bigtangle.wallet.DeterministicKeyChain#setLookaheadSize(int)}
-	 * for more info on this.
-	 */
-	public void setKeyChainGroupLookaheadSize(int lookaheadSize) {
-		keyChainGroupLock.lock();
-		try {
-			keyChainGroup.setLookaheadSize(lookaheadSize);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * See {@link net.bigtangle.wallet.DeterministicKeyChain#setLookaheadSize(int)}
-	 * for more info on this.
-	 */
-	public int getKeyChainGroupLookaheadSize() {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.getLookaheadSize();
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * See
-	 * {@link net.bigtangle.wallet.DeterministicKeyChain#setLookaheadThreshold(int)}
-	 * for more info on this.
-	 */
-	public void setKeyChainGroupLookaheadThreshold(int num) {
-		keyChainGroupLock.lock();
-		try {
-			maybeUpgradeToHD();
-			keyChainGroup.setLookaheadThreshold(num);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * See
-	 * {@link net.bigtangle.wallet.DeterministicKeyChain#setLookaheadThreshold(int)}
-	 * for more info on this.
-	 */
-	public int getKeyChainGroupLookaheadThreshold() {
-		keyChainGroupLock.lock();
-		try {
-			maybeUpgradeToHD();
-			return keyChainGroup.getLookaheadThreshold();
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
 	/*
 	 * Locates a keypair from the basicKeyChain given the hash of the public key.
 	 * This is needed when finding out which key we need to use to redeem a
@@ -401,19 +250,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findKeyFromPubHash(pubkeyHash);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * Returns true if the given key is in the wallet, false otherwise. Currently an
-	 * O(N) operation.
-	 */
-	public boolean hasKey(ECKey key) {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.hasKey(key);
 		} finally {
 			keyChainGroupLock.unlock();
 		}
@@ -446,39 +282,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findRedeemDataFromScriptHash(payToScriptHash);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * Returns the immutable seed for the current active HD chain.
-	 * 
-	 * @throws net.bigtangle.core.ECKey.MissingPrivateKeyException if the seed is
-	 *                                                             unavailable
-	 *                                                             (watching wallet)
-	 */
-	public DeterministicSeed getKeyChainSeed() {
-		keyChainGroupLock.lock();
-		try {
-			DeterministicSeed seed = keyChainGroup.getActiveKeyChain().getSeed();
-			if (seed == null)
-				throw new ECKey.MissingPrivateKeyException();
-			return seed;
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * Returns a key for the given HD path, assuming it's already been derived. You
-	 * normally shouldn't use this: use currentReceiveKey/freshReceiveKey instead.
-	 */
-	public DeterministicKey getKeyByPath(List<ChildNumber> path) {
-		keyChainGroupLock.lock();
-		try {
-			maybeUpgradeToHD();
-			return keyChainGroup.getActiveKeyChain().getKeyByPath(path, false);
 		} finally {
 			keyChainGroupLock.unlock();
 		}
@@ -559,38 +362,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/**
-	 * Check whether the password can decrypt the first key in the wallet. This can
-	 * be used to check the validity of an entered password.
-	 *
-	 * @return boolean true if password supplied can decrypt the first private key
-	 *         in the wallet, false otherwise.
-	 * @throws IllegalStateException if the wallet is not encrypted.
-	 */
-	public boolean checkPassword(CharSequence password) {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.checkPassword(password);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
-	 * Check whether the AES key can decrypt the first encrypted key in the wallet.
-	 *
-	 * @return boolean true if AES key supplied can decrypt the first encrypted
-	 *         private key in the wallet, false otherwise.
-	 */
-	public boolean checkAESKey(KeyParameter aesKey) {
-		keyChainGroupLock.lock();
-		try {
-			return keyChainGroup.checkAESKey(aesKey);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/**
 	 * Get the wallet's KeyCrypter, or null if the wallet is not encrypted. (Used in
 	 * encrypting/ decrypting an ECKey).
 	 */
@@ -629,33 +400,9 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		return getEncryptionType() != EncryptionType.UNENCRYPTED;
 	}
 
-	/** Changes wallet encryption password, this is atomic operation. */
-	public void changeEncryptionPassword(CharSequence currentPassword, CharSequence newPassword) {
-		keyChainGroupLock.lock();
-		try {
-			decrypt(currentPassword);
-			encrypt(newPassword);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
-	/** Changes wallet AES encryption key, this is atomic operation. */
-	public void changeEncryptionKey(KeyCrypter keyCrypter, KeyParameter currentAesKey, KeyParameter newAesKey) {
-		keyChainGroupLock.lock();
-		try {
-			decrypt(currentAesKey);
-			encrypt(keyCrypter, newAesKey);
-		} finally {
-			keyChainGroupLock.unlock();
-		}
-	}
-
 	// endregion
 
-	/******************************************************************************************************************/
-
-	// region Serialization support
+    // region Serialization support
 
 	/** Internal use only. */
 	protected List<Protos.Key> serializeKeyChainGroupToProtobuf() {
@@ -809,281 +556,13 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 
-	/**
-	 * Returns true if this wallet has at least one of the private keys needed to
-	 * sign for this scriptPubKey. Returns false if the form of the script is not
-	 * known or if the script is OP_RETURN.
-	 */
-	public boolean canSignFor(Script script) {
-		if (script.isSentToRawPubKey()) {
-			byte[] pubkey = script.getPubKey();
-			ECKey key = findKeyFromPubKey(pubkey);
-			return key != null && (key.isEncrypted() || key.hasPrivKey());
-		}
-		if (script.isPayToScriptHash()) {
-			RedeemData data = findRedeemDataFromScriptHash(script.getPubKeyHash());
-			return data != null && canSignFor(data.redeemScript);
-		} else if (script.isSentToAddress()) {
-			ECKey key = findKeyFromPubHash(script.getPubKeyHash());
-			return key != null && (key.isEncrypted() || key.hasPrivKey());
-		} else if (script.isSentToMultiSig()) {
-			for (ECKey pubkey : script.getPubKeys()) {
-				ECKey key = findKeyFromPubKey(pubkey.getPubKey());
-				if (key != null && (key.isEncrypted() || key.hasPrivKey()))
-					return true;
-			}
-		} else if (script.isSentToCLTVPaymentChannel()) {
-			// Any script for which we are the recipient or sender counts.
-			byte[] sender = script.getCLTVPaymentChannelSenderPubKey();
-			ECKey senderKey = findKeyFromPubKey(sender);
-			if (senderKey != null && (senderKey.isEncrypted() || senderKey.hasPrivKey())) {
-				return true;
-			}
-
-			ECKey recipientKey = findKeyFromPubKey(sender);
-            return recipientKey != null && (recipientKey.isEncrypted() || recipientKey.hasPrivKey());
-        }
-		return false;
-	}
-
-	/**
-	 * Returns the {@link CoinSelector} object which controls which outputs can be
-	 * spent by this wallet.
-	 */
-	public CoinSelector getCoinSelector() {
-		lock.lock();
-		try {
-			return coinSelector;
-		} finally {
-			lock.unlock();
-		}
-	}
-
-	/**
-	 * A coin selector is responsible for choosing which outputs to spend when
-	 * creating transactions. The default selector implements a policy of spending
-	 * transactions that appeared in the best chain and pending transactions that
-	 * were created by this wallet, but not others. You can override the coin
-	 * selector for any given send operation by changing
-	 * {@link SendRequest#coinSelector}.
-	 */
-	public void setCoinSelector(CoinSelector coinSelector) {
-		lock.lock();
-		try {
-			this.coinSelector = checkNotNull(coinSelector);
-		} finally {
-			lock.unlock();
-		}
-	}
-
 	/******************************************************************************************************************/
 
 	public abstract WalletFiles autosaveToFile(File f, long delayTime, TimeUnit timeUnit,
 			@Nullable WalletFiles.Listener eventListener) ;
 
-	/******************************************************************************************************************/
 
-	protected static class FeeCalculation {
-		public CoinSelection bestCoinSelection;
-		public TransactionOutput bestChangeOutput;
-	}
 
-	public FeeCalculation calculateFee(SendRequest req, Coin value, List<TransactionInput> originalInputs,
-			boolean needAtLeastReferenceFee, List<FreeStandingTransactionOutput> candidates, Address changeAddress)
-			throws InsufficientMoneyException {
-		checkState(lock.isHeldByCurrentThread());
-		// There are 3 possibilities for what adding change might do:
-		// 1) No effect
-		// 2) Causes increase in fee (change < 0.01 COINS)
-		// 3) Causes the transaction to have a dust output or change < fee
-		// increase (ie change will be thrown away)
-		// If we get either of the last 2, we keep note of what the inputs
-		// looked like at the time and try to
-		// add inputs as we go up the list (keeping track of minimum inputs for
-		// each category). At the end, we pick
-		// the best input set as the one which generates the lowest total fee.
-		Coin additionalValueForNextCategory = null;
-		CoinSelection selection3 = null;
-		CoinSelection selection2 = null;
-		TransactionOutput selection2Change = null;
-		CoinSelection selection1 = null;
-		TransactionOutput selection1Change = null;
-		// We keep track of the last size of the transaction we calculated.
-		int lastCalculatedSize = 0;
-		Coin valueNeeded, valueMissing = null;
-
-		while (true) {
-			resetTxInputs(req, originalInputs);
-
-			valueNeeded = value;
-			if (additionalValueForNextCategory != null)
-				valueNeeded = valueNeeded.add(additionalValueForNextCategory);
-			Coin additionalValueSelected = additionalValueForNextCategory;
-
-			// Of the coins we could spend, pick some that we actually will
-			// spend.
-			CoinSelector selector = req.coinSelector == null ? coinSelector : req.coinSelector;
-			// selector is allowed to modify candidates list.
-			CoinSelection selection = selector.select(valueNeeded, new LinkedList<>(candidates));
-			// Can we afford this?
-			if (selection.valueGathered.compareTo(valueNeeded) < 0) {
-				valueMissing = valueNeeded.subtract(selection.valueGathered);
-				break;
-			}
-			checkState(!selection.gathered.isEmpty() || !originalInputs.isEmpty());
-
-			// We keep track of an upper bound on transaction size to
-			// calculate
-			// fees that need to be added.
-			// Note that the difference between the upper bound and lower
-			// bound
-			// is usually small enough that it
-			// will be very rare that we pay a fee we do not need to.
-			//
-			// We can't be sure a selection is valid until we check fee per
-			// kb
-			// at the end, so we just store
-			// them here temporarily.
-			boolean eitherCategory2Or3 = false;
-			boolean isCategory3 = false;
-
-			Coin change = selection.valueGathered.subtract(valueNeeded);
-			if (additionalValueSelected != null)
-				change = change.add(additionalValueSelected);
-
-			int size = 0;
-			TransactionOutput changeOutput = null;
-			if (change.signum() > 0) {
-				// The value of the inputs is greater than what we want to
-				// send.
-				// Just like in real life then,
-				// we need to take back some coins ... this is called
-				// "change".
-				// Add another output that sends the change
-				// back to us. The address comes either from the request or
-				// currentChangeAddress() as a default.
-				// Address changeAddress = req.changeAddress;
-				if (changeAddress == null)
-					throw new RuntimeException(" no changeAddress");
-				changeOutput = new TransactionOutput(params, req.tx, change, changeAddress);
-				// If the change output would result in this transaction
-				// being
-				// rejected as dust, just drop the change and make it a fee
-
-				size += changeOutput.unsafeBitcoinSerialize().length + VarInt.sizeOf(req.tx.getOutputs().size())
-						- VarInt.sizeOf(req.tx.getOutputs().size() - 1);
-				// This solution is either category 1 or 2
-                // must be category 1
-
-            } else {
-				if (eitherCategory2Or3) {
-					// This solution definitely fits in category 3 (we threw
-					// away change because it was smaller than MIN_TX_FEE)
-					isCategory3 = true;
-					additionalValueForNextCategory = Transaction.REFERENCE_DEFAULT_MIN_TX_FEE;
-				}
-			}
-
-			// Now add unsigned inputs for the selected coins.
-			for (TransactionOutput output : selection.gathered) {
-				TransactionInput input = req.tx
-						.addInput(((FreeStandingTransactionOutput) output).getUTXO().getBlockHash(), output);
-				// If the scriptBytes don't default to none, our size
-				// calculations will be thrown off.
-				checkState(input.getScriptBytes().length == 0);
-			}
-
-			// Estimate transaction size and loop again if we need more fee
-			// per
-			// kb. The serialized tx doesn't
-			// include things we haven't added yet like input
-			// signatures/scripts
-			// or the change output.
-			size += req.tx.unsafeBitcoinSerialize().length;
-			size += estimateBytesForSigning(selection);
-			if (size > lastCalculatedSize && req.feePerKb.signum() > 0) {
-				lastCalculatedSize = size;
-				// We need more fees anyway, just try again with the same
-				// additional value
-                continue;
-			}
-
-			if (isCategory3) {
-				if (selection3 == null)
-					selection3 = selection;
-			} else if (eitherCategory2Or3) {
-				// If we are in selection2, we will require at least CENT
-				// additional. If we do that, there is no way
-				// we can end up back here because CENT additional will
-				// always
-				// get us to 1
-				checkState(selection2 == null);
-
-				selection2 = selection;
-				selection2Change = checkNotNull(changeOutput); // If we get
-																// no
-																// change in
-																// category
-																// 2, we
-																// are
-																// actually
-																// in
-																// category 3
-			} else {
-				// Once we get a category 1 (change kept), we should break
-				// out
-				// of the loop because we can't do better
-				// checkState(selection1 == null);
-				checkState(additionalValueForNextCategory == null);
-				selection1 = selection;
-				selection1Change = changeOutput;
-			}
-
-			if (additionalValueForNextCategory != null) {
-				if (additionalValueSelected != null)
-					checkState(additionalValueForNextCategory.compareTo(additionalValueSelected) > 0);
-				continue;
-			}
-			break;
-		}
-
-		resetTxInputs(req, originalInputs);
-
-		if (selection3 == null && selection2 == null && selection1 == null) {
-			checkNotNull(valueMissing);
-			// log.warn("Insufficient value in wallet for send: needed {} more",
-			// valueMissing.toString());
-			throw new InsufficientMoneyException(valueMissing.toString());
-		}
-
-		Coin lowestFee = null;
-		FeeCalculation result = new FeeCalculation();
-		if (selection1 != null) {
-			if (selection1Change != null)
-				lowestFee = selection1.valueGathered.subtract(selection1Change.getValue());
-			else
-				lowestFee = selection1.valueGathered;
-			result.bestCoinSelection = selection1;
-			result.bestChangeOutput = selection1Change;
-		}
-
-		if (selection2 != null) {
-			Coin fee = selection2.valueGathered.subtract(checkNotNull(selection2Change).getValue());
-			if (lowestFee == null || fee.compareTo(lowestFee) < 0) {
-				lowestFee = fee;
-				result.bestCoinSelection = selection2;
-				result.bestChangeOutput = selection2Change;
-			}
-		}
-
-		if (selection3 != null) {
-			if (lowestFee == null || selection3.valueGathered.compareTo(lowestFee) < 0) {
-				result.bestCoinSelection = selection3;
-				result.bestChangeOutput = null;
-			}
-		}
-		return result;
-	}
 	 
 		public void signTransaction(Transaction tx, KeyParameter aesKey, MissingSigsMode missingSigsMode) {
 			lock.lock();
@@ -1141,44 +620,9 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 			signTransaction(tx, aesKey, MissingSigsMode.THROW);
 		}
 
-	private void resetTxInputs(SendRequest req, List<TransactionInput> originalInputs) {
-		req.tx.clearInputs();
-		for (TransactionInput input : originalInputs)
-			req.tx.addInput(input);
-	}
-
-	private int estimateBytesForSigning(CoinSelection selection) {
-		int size = 0;
-		for (TransactionOutput output : selection.gathered) {
-			try {
-				Script script = output.getScriptPubKey();
-				ECKey key = null;
-				Script redeemScript = null;
-				if (script.isSentToAddress()) {
-					key = findKeyFromPubHash(script.getPubKeyHash());
-					// Expected checkNotNull(key, "Coin selection includes
-					// unspendable outputs");
-				} else if (script.isPayToScriptHash()) {
-					redeemScript = findRedeemDataFromScriptHash(script.getPubKeyHash()).redeemScript;
-					checkNotNull(redeemScript, "Coin selection includes unspendable outputs");
-				}
-				size += script.getNumberOfBytesRequiredToSpend(key, redeemScript);
-			} catch (ScriptException e) {
-				// If this happens it means an output script in a wallet tx
-				// could not be understood. That should never
-				// happen, if it does it means the wallet has got into an
-				// inconsistent state.
-				throw new IllegalStateException(e);
-			}
-		}
-		return size;
-	}
-
 	// endregion
 
-	/*****************************************************************************************************************/
-
-	// region Wallet maintenance transactions
+    // region Wallet maintenance transactions
 
 	// Wallet maintenance transactions. These transactions may not be directly
 	// connected to a payment the user is
@@ -1243,15 +687,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		saveNow();
 	}
 
-	/**
-	 * Returns whether the keys creation time is before the key rotation time, if
-	 * one was set.
-	 */
-	public boolean isKeyRotating(ECKey key) {
-		long time = vKeyRotationTimestamp;
-		return time != 0 && key.getCreationTimeSeconds() < time;
-	}
-
 	public void changePassword(String password, String oldPassword) {
 
 		Protos.ScryptParameters SCRYPT_PARAMETERS = Protos.ScryptParameters.newBuilder().setP(6).setR(8).setN(32768)
@@ -1271,7 +706,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		 */
 		public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
 			DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-			List<ECKey> walletKeys = new ArrayList<ECKey>();
+			List<ECKey> walletKeys = new ArrayList<>();
 			for (ECKey key : getImportedKeys()) {
 				ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 				walletKeys.add(ecKey);
@@ -1286,32 +721,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		}
 
 		public List<ECKey> walletKeys() {
-			KeyParameter aesKey = null;
-			return walletKeys(aesKey);
-		}
-
-		public HashMap<String, Address> getAddresses(KeyParameter aesKey) {
-
-			HashMap<String, Address> addressResult = new HashMap<>();
-
-			for (ECKey key : this.walletKeys(aesKey)) {
-				String n = key.toAddress(this.getNetworkParameters()).toString();
-				addressResult.put(n, key.toAddress(this.getNetworkParameters()));
-			}
-
-			return addressResult;
-		}
-
-		public boolean calculatedAddressHit(KeyParameter aesKey, String address) {
-
-			for (ECKey key : this.walletKeys(aesKey)) {
-				String n = key.toAddress(this.getNetworkParameters()).toString();
-				if (n.equalsIgnoreCase(address)) {
-					return true;
-				}
-			}
-
-			return false;
+            return walletKeys(null);
 		}
 
 	// use the fixed server
