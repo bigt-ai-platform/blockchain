@@ -21,6 +21,7 @@
 package net.bigtangle.wallet;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import java.io.File;
@@ -235,6 +236,37 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		for (ECKey key : keys)
 			if (key instanceof DeterministicKey)
 				throw new IllegalArgumentException("Cannot import HD keys back into the wallet");
+	}
+
+	/**
+	 * Takes a list of keys and a password, then encrypts and imports them in one
+	 * step using the current keycrypter.
+	 */
+	public int importKeysAndEncrypt(final List<ECKey> keys, CharSequence password) {
+		keyChainGroupLock.lock();
+		int result;
+		try {
+			checkNotNull(getKeyCrypter(), "Wallet is not encrypted");
+			result = importKeysAndEncrypt(keys, getKeyCrypter().deriveKey(password));
+		} finally {
+			keyChainGroupLock.unlock();
+		}
+		saveNow();
+		return result;
+	}
+
+	/**
+	 * Takes a list of keys and an AES key, then encrypts and imports them in one
+	 * step using the current keycrypter.
+	 */
+	public int importKeysAndEncrypt(final List<ECKey> keys, KeyParameter aesKey) {
+		keyChainGroupLock.lock();
+		try {
+			checkNoDeterministicKeys(keys);
+			return keyChainGroup.importKeysAndEncrypt(keys, aesKey);
+		} finally {
+			keyChainGroupLock.unlock();
+		}
 	}
 
 	/*

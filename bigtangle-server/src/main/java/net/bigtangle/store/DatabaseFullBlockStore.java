@@ -2412,7 +2412,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 			preparedStatement.setBytes(1, prevhash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
-			if (resultSet.next()) {
+			while (resultSet.next()) {
 				re.add(setOrderresult(resultSet));
 			}
 			return re;
@@ -4178,7 +4178,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			}
 
 			ResultSet resultSet = preparedStatement.executeQuery();
-			if (resultSet.next()) {
+			while (resultSet.next()) {
 				Coin coin = new Coin(new BigInteger(resultSet.getBytes("coinvalue")), resultSet.getString("tokenid"));
 				list.add(coin);
 			}

@@ -126,7 +126,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			conflictBlock = contractExecutionService
 					.createContractExecution(cacheBlockPrototypeService.getBlockPrototype(store), contracttoken, store);
 			TokensumsMap c = checkSum(null);
-			if (resultBlock != null) {
+			if (resultBlock != null &&  conflictBlock!=null) {
 
 				blockSaveService.saveBlock(resultBlock, store);
 				makeRewardBlock(resultBlock);
@@ -284,7 +284,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		makeRewardBlock(checkBlock);
 		c = checkSum(c);
 		ContractExecutionResult result = new ContractExecutionResult()
-				.parse(resultBlock.getTransactions().get(0).getData());
+				.parse(checkBlock.getTransactions().get(0).getData());
 
 		ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService)
 				.executeContract(resultBlock, store, result.getContracttokenid(),

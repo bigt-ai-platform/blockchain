@@ -49,11 +49,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		long cutoffHeight = getRewardCutoffHeight(currRewardInfo.getPrevRewardHash(), store);
 
 
-		// Unconfirm anything not confirmed by milestone
-	//	List<Sha256Hash> wipeBlocks = store.getWhereConfirmedNotMilestone();
-	//	unconfirmBlocks(store, -1, wipeBlocks);
-		
-		
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
 		if (!solidityState.isSuccessState())
@@ -235,7 +230,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 
 		Set<BlockWrap> collected = collectExecutionChained(store, blocks);
-		
+
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, serviceBase.getHashSet(collected),
 				prevChainLength + 1);
@@ -243,7 +238,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		tx.setMemo(new MemoInfo("Reward"));
 		return new RewardBuilderResult(tx, difficultyReward);
 	}
-
 
 	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {
 		List<Block.Type> ordertypes = new ArrayList<Block.Type>();
@@ -271,7 +265,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		return ordertypes;
 	}
 
- 
 	/**
 	 * Called as part of connecting a block when the new block results in a
 	 * different chain having higher total work.

@@ -402,6 +402,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			BlockWrap block = blockQueue.poll();
 			blockQueueSet.remove(block.getBlockHash());
 
+			//no milestone blocks can be here
+			if( block.getBlockEvaluation().getMilestone() >0 ) {
+				throw new VerificationException("no milestone block can be here" +  block.toString());
+			}
 			// Nothing added if already in set
 			if (checkExists(blocks, block))
 				continue;

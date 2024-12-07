@@ -171,7 +171,7 @@ public class FullBlockStoreImpl {
 				Stopwatch watch = Stopwatch.createStarted();
 				updateConfirmedDo(store);
 				processChainConnected(store, false, true);
-			
+
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
 					log.info("updateChain time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
@@ -504,11 +504,18 @@ public class FullBlockStoreImpl {
 			// First remove any blocks that should no longer be in the milestone
 			HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
 
+			// Unconfirm anything not confirmed by milestone
+			List<Sha256Hash> wipeBlocks = blockStore.getWhereConfirmedNotMilestone();
+
 			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
-		
+
 			for (BlockEvaluation b : blocksToRemove) {
 				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b.getBlockHash(), blockStore));
 			}
+			for (Sha256Hash b : wipeBlocks) {
+				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b, blockStore));
+			}
+
 			serviceBase.unconfirmBlocksSorted(blockStore, -1, blocksToRemoveBlocks, new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
