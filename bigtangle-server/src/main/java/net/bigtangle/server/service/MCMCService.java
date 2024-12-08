@@ -79,13 +79,10 @@ public class MCMCService {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				startSingleProcessDo();
-				return "finish";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            startSingleProcessDo();
+            return "finish";
+        });
 		try {
 			handler.get(scheduleConfiguration.getMcmcrate() * 5, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
@@ -111,7 +108,7 @@ public class MCMCService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - scheduleConfiguration.getMcmcrate() * 100) {
-				log.info("mcmcService   out date delete and insert: " + Utils.dateTimeFormat(lock.getLocktime()));
+                log.info("mcmcService   out date delete and insert: {}", Utils.dateTimeFormat(lock.getLocktime()));
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -144,7 +141,7 @@ public class MCMCService {
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 			long cutoffHeight = blockService.getCurrentCutoffHeight(maxConfirmedReward, store);
 			long maxHeight = blockService.getCurrentMaxHeight(maxConfirmedReward, store);
-			updateWeightAndDepth(maxConfirmedReward, cutoffHeight, maxHeight, store);
+			updateWeightAndDepth(cutoffHeight, maxHeight, store);
 			updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
 			deleteMCMC(maxConfirmedReward, store);
 			cacheBlockService.evictBlockMCMC();
@@ -162,11 +159,10 @@ public class MCMCService {
 	/**
 	 * Update cumulative weight: the amount of blocks a block is approved by. Update
 	 * depth: the longest chain of blocks to a tip. Allows unsolid blocks too.
-	 * 
-	 * @throws BlockStoreException
-	 */
-	private void updateWeightAndDepth(TXReward maxConfirmedReward, long cutoffHeight, long maxHeight,
-			FullBlockStore store) throws BlockStoreException {
+	 *
+     */
+	private void updateWeightAndDepth(long cutoffHeight, long maxHeight,
+									  FullBlockStore store) throws BlockStoreException {
 		// Begin from the highest maintained height blocks and go backwards from
 		// there
 		PriorityQueue<BlockWrap> blockQueue = store.getSolidBlocksInIntervalDescending(cutoffHeight, maxHeight);
@@ -179,8 +175,8 @@ public class MCMCService {
 			depths.put(block.getBlockHash(), 0L);
 		}
 
-		BlockWrap currentBlock = null;
-		List<DepthAndWeight> depthAndWeight = new ArrayList<DepthAndWeight>();
+		BlockWrap currentBlock;
+		List<DepthAndWeight> depthAndWeight = new ArrayList<>();
 		while ((currentBlock = blockQueue.poll()) != null) {
 			Sha256Hash currentBlockHash = currentBlock.getBlockHash();
 
@@ -235,14 +231,13 @@ public class MCMCService {
 	/**
 	 * Update rating: the percentage of times that tips selected by MCMC approve a
 	 * block. Allows unsolid blocks too.
-	 * 
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	private void updateRating(TXReward maxConfirmedReward, long cutoffHeight, long maxHeight, FullBlockStore store)
 			throws BlockStoreException {
 		// Select #tipCount solid tips via MCMC
-		HashMap<Sha256Hash, HashSet<UUID>> selectedTipApprovers = new HashMap<Sha256Hash, HashSet<UUID>>(
-				NetworkParameters.NUMBER_RATING_TIPS);
+		HashMap<Sha256Hash, HashSet<UUID>> selectedTipApprovers = new HashMap<>(
+                NetworkParameters.NUMBER_RATING_TIPS);
 
 		Collection<BlockWrap> selectedTips = tipsService.getRatingTips(maxConfirmedReward,
 				NetworkParameters.NUMBER_RATING_TIPS, maxHeight, store);
@@ -271,8 +266,8 @@ public class MCMCService {
 			approvers.put(tip.getBlock().getHash(), new HashSet<>());
 		}
 
-		BlockWrap currentBlock = null;
-		List<Rating> ratings = new ArrayList<Rating>();
+		BlockWrap currentBlock;
+		List<Rating> ratings = new ArrayList<>();
 		while ((currentBlock = blockQueue.poll()) != null) {
 			// Abort if unmaintained
 			if (currentBlock.getBlockEvaluation().getHeight() <= cutoffHeight)

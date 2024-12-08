@@ -1,12 +1,6 @@
 package net.bigtangle.server.service;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
@@ -17,9 +11,7 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
-import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
-import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -40,7 +32,6 @@ import net.bigtangle.core.exception.VerificationException.UnsolidException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetBlockListResponse;
-import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
@@ -48,7 +39,6 @@ import net.bigtangle.store.FullBlockStore;
 import net.bigtangle.store.FullBlockStoreImpl;
 import net.bigtangle.utils.DomainValidator;
 import net.bigtangle.utils.Gzip;
-import net.bigtangle.utils.Json;
 
 /**
  * <p>
@@ -65,8 +55,6 @@ public class BlockService {
 	protected NetworkParameters networkParameters;
 	@Autowired
 	FullBlockStoreImpl blockgraph;
-	@Autowired
-	protected KafkaConfiguration kafkaConfiguration;
 
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
@@ -175,14 +163,6 @@ public class BlockService {
 		return store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex()).isSpent();
 	}
 
-	public boolean getUTXOConfirmed(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
-		return store.getOutputConfirmation(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
-	}
-
-	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
-		return store.getTransactionOutputSpender(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
-	}
-
 	public UTXO getUTXO(TransactionOutPoint out, FullBlockStore store) throws BlockStoreException {
 		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
 	}
@@ -193,12 +173,12 @@ public class BlockService {
 	public Optional<Block> addConnectedFromKafka(byte[] key, byte[] bytes) {
 
 		try {
-			logger.debug("addConnectedFromKafka from sendkey:" + Arrays.toString(key));
+            logger.debug("addConnectedFromKafka from sendkey:{}", Arrays.toString(key));
 			return addConnected(Gzip.decompressOut(bytes), true);
 		} catch (VerificationException e) {
 			return Optional.empty();
 		} catch (Exception e) {
-			logger.debug("addConnectedFromKafka with sendkey:" + Arrays.toString(key), e);
+            logger.debug("addConnectedFromKafka with sendkey:{}", Arrays.toString(key), e);
 			return Optional.empty();
 		}
 
@@ -212,8 +192,7 @@ public class BlockService {
 		if (bytes == null)
 			return Optional.empty();
 		Block makeBlock = networkParameters.getDefaultSerializer().makeBlock(bytes);
-		logger.debug(" addConnected  Blockhash=" + makeBlock.getHashAsString() + " height =" + makeBlock.getHeight()
-				+ " block: " + makeBlock.toString());
+        logger.debug(" addConnected  Blockhash={} height ={} block: {}", makeBlock.getHashAsString(), makeBlock.getHeight(), makeBlock);
 		return addConnectedBlock(makeBlock, allowUnsolid);
 	}
 
@@ -223,7 +202,7 @@ public class BlockService {
 			if (!store.existBlock(block.getHash())) {
 				try {
 					if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-						logger.debug(" connected received chain block  " + block.getLastMiningRewardBlock());
+                        logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
 					}
 					blockgraph.add(block, allowUnsolid, store);
 					// removeBlockPrototype(block,store);
@@ -231,8 +210,7 @@ public class BlockService {
 				} catch (ProofOfWorkException | UnsolidException e) {
 					return Optional.empty();
 				} catch (Exception e) {
-					logger.debug(" cannot add block: Blockhash=" + block.getHashAsString() + " height ="
-							+ block.getHeight() + " block: " + block, e);
+                    logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(), block.getHeight(), block, e);
 					return Optional.empty();
 
 				}
@@ -249,17 +227,17 @@ public class BlockService {
 		block = adjustPrototype(block, store);
 		long h = calcHeightRequiredBlocks(block, store);
 		if (h > block.getHeight()) {
-			logger.debug("adjustHeightRequiredBlocks" + block + " to " + h);
+            logger.debug("adjustHeightRequiredBlocks{} to {}", block, h);
 			block.setHeight(h);
 		}
 	}
 
-	public Block adjustPrototype(Block block, FullBlockStore store) throws BlockStoreException, NoBlockException {
+	public Block adjustPrototype(Block block, FullBlockStore store) throws BlockStoreException {
 		// two hours for just getBlockPrototype
 		int delaySeconds = 7200;
 
 		if (block.getTimeSeconds() < System.currentTimeMillis() / 1000 - delaySeconds) {
-			logger.debug("adjustPrototype " + block);
+            logger.debug("adjustPrototype {}", block);
 			Block newblock = getNewBlockPrototype(store);
 			for (Transaction transaction : block.getTransactions()) {
 				newblock.addTransaction(transaction);
@@ -299,13 +277,6 @@ public class BlockService {
 		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
 		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
-	}
-
-	public long getRewardMaxHeight(Sha256Hash prevRewardHash) {
-		return Long.MAX_VALUE;
-		// Block rewardBlock = store.get(prevRewardHash);
-		// return rewardBlock.getHeight() +
-		// NetworkParameters.FORWARD_BLOCK_HORIZON;
 	}
 
 	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, FullBlockStore store) throws BlockStoreException {
@@ -349,17 +320,13 @@ public class BlockService {
 	}
 
 	public void checkDomainname(Block block) {
-		switch (block.getBlockType()) {
-		case BLOCKTYPE_TOKEN_CREATION:
-			TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-			if (TokenType.domainname.ordinal() == currentToken.getToken().getTokentype()) {
-				if (!DomainValidator.getInstance().isValid(currentToken.getToken().getTokenname()))
-					throw new VerificationException("Domain name is not valid.");
-			}
-			break;
-		default:
-			break;
-		}
+        if (Objects.requireNonNull(block.getBlockType()) == Type.BLOCKTYPE_TOKEN_CREATION) {
+            TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
+            if (TokenType.domainname.ordinal() == currentToken.getToken().getTokentype()) {
+                if (!DomainValidator.getInstance().isValid(currentToken.getToken().getTokenname()))
+                    throw new VerificationException("Domain name is not valid.");
+            }
+        }
 	}
 
 	/*

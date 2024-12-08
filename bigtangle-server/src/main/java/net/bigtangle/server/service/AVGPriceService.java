@@ -44,8 +44,7 @@ public class AVGPriceService {
 
     /**
      * Scheduled update function that updates the Tangle
-     * 
-     * @throws BlockStoreException
+     *
      */
 
     // createReward is time boxed and can run parallel.
@@ -65,7 +64,7 @@ public class AVGPriceService {
                 store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
                 canrun = true;
             } else {
-                log.info("AVGPriceService running return:  " + Utils.dateTimeFormat(lock.getLocktime()));
+                log.info("AVGPriceService running return:  {}", Utils.dateTimeFormat(lock.getLocktime()));
             }
             if (canrun) {
                 store.batchAddAvgPrice();

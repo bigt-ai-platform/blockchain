@@ -50,9 +50,9 @@ public class TipsService {
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 
-	private static Random seed = new Random();
+	private static final Random seed = new Random();
 
-	private ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+	private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
 	/**
 	 * A job submitted to the executor which finds a rating tip.
@@ -70,8 +70,7 @@ public class TipsService {
 
 		@Override
 		public BlockWrap call() throws Exception {
-			BlockWrap ratingTip = getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store);
-			return ratingTip;
+            return getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store);
 		}
 	}
 
@@ -83,18 +82,17 @@ public class TipsService {
 	 * 
 	 * @param count The number of rating tips.
 	 * @return A list of rating tips.
-	 * @throws BlockStoreException
-	 */
+     */
 	public Collection<BlockWrap> getRatingTips(TXReward maxConfirmedReward, int count, long maxHeight,
 			FullBlockStore store) throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
 
 		List<BlockWrap> entryPoints = getEntryPoints(count, maxConfirmedReward.getChainLength(), store);
-		List<Future<BlockWrap>> ratingTipFutures = new ArrayList<Future<BlockWrap>>(count);
-		List<BlockWrap> ratingTips = new ArrayList<BlockWrap>(count);
+		List<Future<BlockWrap>> ratingTipFutures = new ArrayList<>(count);
+		List<BlockWrap> ratingTips = new ArrayList<>(count);
 
 		for (BlockWrap entryPoint : entryPoints) {
-			FutureTask<BlockWrap> future = new FutureTask<BlockWrap>(new RatingTipWalker(entryPoint, maxHeight, store));
+			FutureTask<BlockWrap> future = new FutureTask<>(new RatingTipWalker(entryPoint, maxHeight, store));
 			executor.execute(future);
 			ratingTipFutures.add(future);
 		}
@@ -120,29 +118,22 @@ public class TipsService {
 	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
 	 * 
 	 * @return Two blockhashes selected via MCMC
-	 * @throws BlockStoreException
-	 */
+     */
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(FullBlockStore store) throws BlockStoreException {
 
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
 	}
 
-	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(FullBlockStore store) throws BlockStoreException {
-		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
-		return getValidatedRewardBlockPair(prevRewardHash, store);
-	}
-	
 	/**
 	 * Selects two blocks to approve via MCMC for the given prototype block such
 	 * that the two approved blocks are not conflicting with the prototype block
 	 * itself
-	 * 
+	 *
 	 * @param prototype Existing solid block that is considered when walking
-	 * @return Two blockhashes selected via MCMC
 	 * @throws VerificationException if the given prototype is not compatible with
 	 *                               the current milestone
 	 */
-	public Pair<BlockWrap, BlockWrap> getValidatedBlockPairCompatibleWithExisting(Block prototype, FullBlockStore store)
+	public void getValidatedBlockPairCompatibleWithExisting(Block prototype, FullBlockStore store)
 			throws BlockStoreException {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -152,15 +143,14 @@ public class TipsService {
 		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks,
 				serviceBase.getBlockWrap(prototype.getHash(), store), cutoffHeight, store))
 			throw new InfeasiblePrototypeException("The given prototype is insolid");
-		return getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
+		getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
 	}
 
 	/**
 	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
 	 * 
 	 * @return Two blockhashes selected via MCMC
-	 * @throws BlockStoreException
-	 */
+     */
 	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, FullBlockStore store)
 			throws BlockStoreException {
 		return getValidatedRewardBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
@@ -382,7 +372,7 @@ public class TipsService {
 	 *         approvers
 	 */
 	public BlockWrap performTransition(BlockWrap currentBlock, List<BlockWrap> candidates) {
-		if (candidates.size() == 0) {
+		if (candidates.isEmpty()) {
 			return currentBlock;
 		} else if (candidates.size() == 1) {
 			return candidates.get(0);
@@ -418,8 +408,7 @@ public class TipsService {
 	 * 
 	 * @param count amount of entry points to get
 	 * @return hashes of the entry points
-	 * @throws Exception
-	 */
+     */
 	private List<BlockWrap> getEntryPoints(int count, long currChainLength, FullBlockStore store)
 			throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
@@ -462,14 +451,13 @@ public class TipsService {
 		for (int i = 0; i < count; i++) {
 			// Randomly select weighted by cumulative weights
 			double selectionRealization = seed.nextDouble() * normalizedBlockWeightSum;
-			for (int selection = 0; selection < candidates.size(); selection++) {
-				BlockWrap selectedBlock = candidates.get(selection);
-				selectionRealization -= selectedBlock.getMcmc().getCumulativeWeight() / maxBlockWeight;
-				if (selectionRealization <= 0) {
-					results.add(selectedBlock);
-					break;
-				}
-			}
+            for (BlockWrap selectedBlock : candidates) {
+                selectionRealization -= selectedBlock.getMcmc().getCumulativeWeight() / maxBlockWeight;
+                if (selectionRealization <= 0) {
+                    results.add(selectedBlock);
+                    break;
+                }
+            }
 		}
 
 		return results;

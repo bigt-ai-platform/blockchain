@@ -30,7 +30,6 @@ import net.bigtangle.utils.Threading;
 public class HeathCheckService {
     private static final Logger log = LoggerFactory.getLogger(HeathCheckService.class);
 
-    protected static final String BlockStreamHandler_STREAM_HDL = "blockStreamHandler";
     protected static final String DATABASE_NAME = "database";
 
     @Autowired

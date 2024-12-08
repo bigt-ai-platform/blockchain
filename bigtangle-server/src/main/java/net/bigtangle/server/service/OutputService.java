@@ -17,15 +17,11 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.exc.StreamReadException;
-import com.fasterxml.jackson.databind.DatabindException;
 import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
@@ -51,11 +47,11 @@ public class OutputService {
 	protected CacheBlockService cacheBlockService;
 
 	public AbstractResponse getAccountBalanceInfo(Set<byte[]> pubKeyHashs, FullBlockStore store)
-			throws BlockStoreException, DatabindException, JsonProcessingException, IOException {
-		List<UTXO> outputs = new ArrayList<UTXO>();
+			throws BlockStoreException {
+		List<UTXO> outputs = new ArrayList<>();
 		List<TransactionOutput> transactionOutputs = this.calculateAllSpendCandidatesFromUTXOProvider(pubKeyHashs,
 				 store);
-		Map<String, Coin> values = new HashMap<String, Coin>();
+		Map<String, Coin> values = new HashMap<>();
 
 		for (TransactionOutput transactionOutput : transactionOutputs) {
 			FreeStandingTransactionOutput freeStandingTransactionOutput = (FreeStandingTransactionOutput) transactionOutput;
@@ -69,7 +65,7 @@ public class OutputService {
 				values.put(v.getTokenHex(), v);
 			}
 		}
-		List<Coin> tokens = new ArrayList<Coin>();
+		List<Coin> tokens = new ArrayList<>();
 		for (Map.Entry<String, Coin> entry : values.entrySet()) {
 			tokens.add(entry.getValue());
 		}
@@ -77,8 +73,8 @@ public class OutputService {
 		return GetBalancesResponse.create(tokens, filterToken(outputs), getTokename(outputs, store));
 	}
 
-	public AbstractResponse getAccountBalanceInfoFromAccount(Set<byte[]> pubKeyHashs, List<String> tokenidList,
-			FullBlockStore store) throws BlockStoreException {
+	public AbstractResponse getAccountBalanceInfoFromAccount(Set<byte[]> pubKeyHashs,
+															 FullBlockStore store) throws BlockStoreException {
 
 		List<Coin> tokens = new ArrayList<>();
 
@@ -92,7 +88,7 @@ public class OutputService {
 	}
 
 	public List<UTXO> filterToken(List<UTXO> outputs) {
-		List<UTXO> re = new ArrayList<UTXO>();
+		List<UTXO> re = new ArrayList<>();
 		for (UTXO u : outputs) {
 			if (!FilterToken.filter(u.getTokenId())) {
 				re.add(u);
@@ -118,37 +114,9 @@ public class OutputService {
 		return candidates;
 	}
 
-	public LinkedList<TransactionOutput> calculateAllSpendCandidatesFromUTXOProvider(List<byte[]> pubKeyHashs,
-			byte[] tokenid, boolean excludeImmatureCoinbases, FullBlockStore store) {
-		LinkedList<TransactionOutput> candidates = Lists.newLinkedList();
-		try {
-			for (UTXO output : getStoredOutputsFromUTXOProvider(pubKeyHashs, tokenid, store)) {
-				if (output.isSpent() || !output.isConfirmed())
-					continue;
-				candidates.add(new FreeStandingTransactionOutput(networkParameters, output));
-			}
-		} catch (
-
-		UTXOProviderException e) {
-			throw new RuntimeException("UTXO provider error", e);
-		}
-		return candidates;
-	}
-
-	private List<UTXO> getStoredOutputsFromUTXOProvider(List<byte[]> pubKeyHashs, byte[] tokenid, FullBlockStore store)
-			throws UTXOProviderException {
-		List<Address> addresses = new ArrayList<Address>();
-		for (byte[] key : pubKeyHashs) {
-			Address address = new Address(networkParameters, key);
-			addresses.add(address);
-		}
-		List<UTXO> list = store.getOpenTransactionOutputs(addresses, tokenid);
-		return list;
-	}
-
 	private List<UTXO> getStoredOutputsFromUTXOProvider(Set<byte[]> pubKeyHashs, FullBlockStore store)
-			throws UTXOProviderException, StreamReadException, DatabindException, JsonProcessingException, IOException {
-		List<UTXO> list = new ArrayList<UTXO>();
+			throws UTXOProviderException, IOException {
+		List<UTXO> list = new ArrayList<>();
 		for (byte[] key : pubKeyHashs) {
 			Address address = new Address(networkParameters, key);
 			list.addAll(getOpenTransactionOutputs(address.toString(), store));
@@ -158,7 +126,7 @@ public class OutputService {
 	}
 
 	public List<UTXO> getOpenTransactionOutputs(String address, FullBlockStore store)
-			throws UTXOProviderException, StreamReadException, DatabindException, JsonProcessingException, IOException {
+			throws UTXOProviderException, IOException {
 		List<UTXO> re = new ArrayList<>();
 		for (byte[] d : cacheBlockService.getOpenTransactionOutputs(address, store)) {
 			re.add(Json.jsonmapper().readValue(d, UTXO.class));
@@ -178,8 +146,8 @@ public class OutputService {
 	}
 
 	public GetOutputsResponse getAccountOutputs(Set<byte[]> pubKeyHashs, FullBlockStore store)
-			throws BlockStoreException, StreamReadException, DatabindException, JsonProcessingException, IOException {
-		List<UTXO> outputs = new ArrayList<UTXO>();
+			throws BlockStoreException {
+		List<UTXO> outputs = new ArrayList<>();
 		List<TransactionOutput> transactionOutputs = this.calculateAllSpendCandidatesFromUTXOProvider(pubKeyHashs,
 				store);
 		for (TransactionOutput transactionOutput : transactionOutputs) {
@@ -191,28 +159,13 @@ public class OutputService {
 
 	public GetOutputsResponse getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime,
 			FullBlockStore store) throws Exception {
-		List<UTXO> outputs = new ArrayList<UTXO>();
+		List<UTXO> outputs = new ArrayList<>();
 		// no check valid adress
-		if ((fromaddress != null && !"".equals(fromaddress) && checkValidAddress(fromaddress))
-				|| (toaddress != null && !"".equals(toaddress) && checkValidAddress(toaddress))) {
+		if ((fromaddress != null && !fromaddress.isEmpty() && checkValidAddress(fromaddress))
+				|| (toaddress != null && !toaddress.isEmpty() && checkValidAddress(toaddress))) {
 			outputs = store.getOutputsHistory(fromaddress, toaddress, starttime, endtime);
 		}
 		return GetOutputsResponse.create(filterToken(outputs), getTokename(outputs, store));
-	}
-
-	public GetOutputsResponse getAccountOutputsWithToken(byte[] pubKey, byte[] tokenid, FullBlockStore store)
-			throws BlockStoreException {
-		List<byte[]> pubKeyHashs = new ArrayList<byte[]>();
-		pubKeyHashs.add(pubKey);
-
-		List<UTXO> outputs = new ArrayList<UTXO>();
-		List<TransactionOutput> transactionOutputs = this.calculateAllSpendCandidatesFromUTXOProvider(pubKeyHashs,
-				tokenid, false, store);
-		for (TransactionOutput transactionOutput : transactionOutputs) {
-			FreeStandingTransactionOutput freeStandingTransactionOutput = (FreeStandingTransactionOutput) transactionOutput;
-			outputs.add(freeStandingTransactionOutput.getUTXO());
-		}
-		return GetOutputsResponse.create(outputs, getTokename(outputs, store));
 	}
 
 	public AbstractResponse getOutputsWithHexStr(String hexStr, FullBlockStore store) throws BlockStoreException {
@@ -220,28 +173,20 @@ public class OutputService {
 		return OutputsDetailsResponse.create(output);
 	}
 
-	public AbstractResponse getOutputsMultiList(String hexStr, int index, FullBlockStore store)
-			throws BlockStoreException {
-		List<OutputsMulti> outputsMultis = store.queryOutputsMultiByHashAndIndex(Utils.HEX.decode(hexStr), index);
-
-		return OutputsDetailsResponse.create(outputsMultis);
-	}
-
 	private UTXO getStoredOutputsWithHexStr(String hexStr, FullBlockStore store) throws BlockStoreException {
 		String[] strs = hexStr.split(":");
 		byte[] hash = Utils.HEX.decode(strs[0]);
 		long outputindex = Long.parseLong(strs[1]);
-		UTXO utxo = store.getOutputsWithHexStr(hash, outputindex);
-		return utxo;
+        return store.getOutputsWithHexStr(hash, outputindex);
 	}
 
 	public Map<String, Token> getTokename(List<UTXO> outxos, FullBlockStore store) throws BlockStoreException {
-		Set<String> tokenids = new HashSet<String>();
+		Set<String> tokenids = new HashSet<>();
 		for (UTXO d : outxos) {
 			tokenids.add(d.getTokenId());
 
 		}
-		Map<String, Token> re = new HashMap<String, Token>();
+		Map<String, Token> re = new HashMap<>();
 		if (!tokenids.isEmpty()) {
 			List<Token> tokens = store.getTokensList(tokenids);
 			for (Token t : tokens) {
@@ -252,12 +197,12 @@ public class OutputService {
 	}
 
 	public Map<String, Token> getTokenameByCoin(List<Coin> coins, FullBlockStore store) throws BlockStoreException {
-		Set<String> tokenids = new HashSet<String>();
+		Set<String> tokenids = new HashSet<>();
 		for (Coin d : coins) {
 			tokenids.add(d.getTokenHex());
 
 		}
-		Map<String, Token> re = new HashMap<String, Token>();
+		Map<String, Token> re = new HashMap<>();
 		if (!tokenids.isEmpty()) {
 			List<Token> tokens = store.getTokensList(tokenids);
 			for (Token t : tokens) {

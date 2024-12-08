@@ -9,9 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Sha256Hash;
@@ -20,17 +17,10 @@ import net.bigtangle.core.TokenType;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.GetTokensResponse;
-import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.store.FullBlockStore;
 
 @Service
 public class TokensService {
-
-    @Autowired
-    ServerConfiguration serverConfiguration;
-    @Autowired
-    UserDataService userDataService;
-    private static final Logger logger = LoggerFactory.getLogger(TokensService.class);
 
     public AbstractResponse getTokenById(String tokenid, FullBlockStore store) throws BlockStoreException {
         List<Token> tokens = store.getTokenID(tokenid);

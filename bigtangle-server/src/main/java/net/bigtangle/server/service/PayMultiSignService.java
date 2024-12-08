@@ -38,7 +38,7 @@ public class PayMultiSignService {
     }
  
 
-    public void launchPayMultiSign(byte[] data, FullBlockStore store) throws BlockStoreException, Exception {
+    public void launchPayMultiSign(byte[] data, FullBlockStore store) throws Exception {
         PayMultiSign payMultiSign = convertTransactionDataToPayMultiSign(data);
 
         String hashhex = payMultiSign.getOutputHashHex();
@@ -63,13 +63,13 @@ public class PayMultiSignService {
     }
 
  
-    public AbstractResponse payMultiSign(Map<String, Object> request, FullBlockStore store) throws BlockStoreException, Exception {
+    public AbstractResponse payMultiSign(Map<String, Object> request, FullBlockStore store) throws Exception {
         String orderid = (String) request.get("orderid");
 
         PayMultiSign payMultiSign_ =  store.getPayMultiSignWithOrderid(orderid);
 
         List<PayMultiSignAddress> payMultiSignAddresses_ =  store.getPayMultiSignAddressWithOrderid(orderid);
-        HashMap<String, PayMultiSignAddress> payMultiSignAddresseRes = new HashMap<String, PayMultiSignAddress>();
+        HashMap<String, PayMultiSignAddress> payMultiSignAddresseRes = new HashMap<>();
         for (PayMultiSignAddress payMultiSignAddress : payMultiSignAddresses_)
             payMultiSignAddresseRes.put(payMultiSignAddress.getPubKey(), payMultiSignAddress);
         if (payMultiSignAddresseRes.isEmpty()) {
@@ -93,10 +93,6 @@ public class PayMultiSignService {
             throw new BlockStoreException("multisign signature error");
         }
 
-        // int signIndex =
-        // this.store.getMaxPayMultiSignAddressSignIndex(orderid);
-        // signIndex++;
-
         byte[] signInputData = Utils.HEX.decode((String) request.get("signInputData"));
          store.updatePayMultiSignAddressSign(orderid, address0, 1, signInputData);
 
@@ -108,7 +104,7 @@ public class PayMultiSignService {
         }
     }
 
-    private PayMultiSign convertTransactionDataToPayMultiSign(byte[] data) throws BlockStoreException, Exception {
+    private PayMultiSign convertTransactionDataToPayMultiSign(byte[] data) throws Exception {
         String jsonStr = new String(data);
         PayMultiSign payMultiSign = Json.jsonmapper().readValue(jsonStr, PayMultiSign.class);
         payMultiSign.setBlockhash(Utils.HEX.decode(payMultiSign.getBlockhashHex()));
@@ -117,7 +113,7 @@ public class PayMultiSignService {
 
     public AbstractResponse getPayMultiSignList(List<String> pubKeys, FullBlockStore store) throws BlockStoreException {
         List<PayMultiSign> payMultiSigns = store.getPayMultiSignList(pubKeys);
-        List<PayMultiSignExt> payMultiSignExts = new ArrayList<PayMultiSignExt>();
+        List<PayMultiSignExt> payMultiSignExts = new ArrayList<>();
         for (PayMultiSign payMultiSign : payMultiSigns) {
             PayMultiSignExt payMultiSignExt = new PayMultiSignExt();
             payMultiSignExt.setAmount(payMultiSign.getAmount());

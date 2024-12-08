@@ -5,7 +5,6 @@
 package net.bigtangle.server.service;
 
 import java.math.BigInteger;
-import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -80,9 +79,8 @@ public class RewardService {
 
 	/**
 	 * Scheduled update function that updates the Tangle
-	 * 
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 
 	// createReward is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -99,13 +97,12 @@ public class RewardService {
 			} else {
 				long timeout = 15 * scheduleConfiguration.getMiningrate();
 				if (lock.getLocktime() < System.currentTimeMillis() - timeout) {
-					log.info(" reward locked is fored delete   " + lock.getLocktime() + " < "
-							+ (System.currentTimeMillis() - timeout));
+                    log.info(" reward locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - timeout);
 					store.deleteLockobject(LOCKID);
 					store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 					canrun = true;
 				} else {
-					log.info("reward running return:  " + Utils.dateTimeFormat(lock.getLocktime()));
+                    log.info("reward running return:  {}", Utils.dateTimeFormat(lock.getLocktime()));
 				}
 			}
 			if (canrun) {
@@ -124,19 +121,15 @@ public class RewardService {
 
 	/**
 	 * Runs the reward making logic
-	 * 
-	 * @return the new block or block voted on
-	 * @throws Exception
 	 */
 
-	public Block createReward(FullBlockStore store) throws Exception {
+	public void createReward(FullBlockStore store) throws Exception {
 
 		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
 		Block reward = createReward(prevRewardHash, store);
 		if (reward != null) {
-			log.debug(" reward block is created: " + reward);
+            log.debug(" reward block is created: {}", reward);
 		}
-		return reward;
 	}
 
 	public Block createReward(Sha256Hash prevRewardHash, FullBlockStore store) throws Exception {
@@ -239,14 +232,11 @@ public class RewardService {
 			throws InterruptedException, ExecutionException {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				log.debug(" reward block solve started  : " + chainTargetFinal + " \n for block" + block);
-				block.solve(chainTargetFinal);
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            log.debug(" reward block solve started  : {} \n for block{}", chainTargetFinal, block);
+            block.solve(chainTargetFinal);
+            return "";
+        });
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);
@@ -261,14 +251,14 @@ public class RewardService {
 		return block;
 	}
 
-	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, FullBlockStore store)
+	public GetTXRewardResponse getMaxConfirmedReward(FullBlockStore store)
 			throws BlockStoreException {
 
 		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
 
 	}
 
-	public GetTXRewardListResponse getAllConfirmedReward(Map<String, Object> request, FullBlockStore store)
+	public GetTXRewardListResponse getAllConfirmedReward(FullBlockStore store)
 			throws BlockStoreException {
 
 		return GetTXRewardListResponse.create(store.getAllConfirmedReward());

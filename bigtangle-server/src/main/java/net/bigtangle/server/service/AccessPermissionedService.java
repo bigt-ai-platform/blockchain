@@ -35,8 +35,7 @@ public class AccessPermissionedService {
 
     public int checkSessionRandomNumResp(String pubKey, String accessToken,FullBlockStore store) {
         try {
-            int count =  store .getCountAccessPermissionByPubKey(pubKey, accessToken);
-            return count;
+            return store .getCountAccessPermissionByPubKey(pubKey, accessToken);
         } catch (Exception e) {
             return 0;
         }

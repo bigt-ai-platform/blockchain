@@ -36,8 +36,7 @@ public class AccessGrantService {
 
     public int getCountAccessGrantByAddress(String address, FullBlockStore store) {
         try {
-            int count =  store.getCountAccessGrantByAddress(address);
-            return count;
+            return store.getCountAccessGrantByAddress(address);
         } catch (Exception e) {
             return 0;
         }

@@ -59,8 +59,6 @@ public class ContractExecutionService {
 	@Autowired
 	private BlockService blockService;
 	@Autowired
-	protected TipsService tipService;
-	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
 	@Autowired
@@ -81,9 +79,8 @@ public class ContractExecutionService {
 
 	/**
 	 * Scheduled update function that updates the Tangle
-	 * 
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 
 	// createContractExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -98,8 +95,7 @@ public class ContractExecutionService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()) {
-				log.info(" ContractExecution locked is fored delete   " + lock.getLocktime() + " < "
-						+ (System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()));
+                log.info(" ContractExecution locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -127,7 +123,7 @@ public class ContractExecutionService {
 		for (Token contract  : getOpenContract(store)) {
 			Block contractExecution = createContractExecution(contract, store);
 			if (contractExecution != null) {
-				log.debug(" contractExecution block is created: " + contractExecution);
+                log.debug(" contractExecution block is created: {}", contractExecution);
 				blockSaveService.saveBlock(contractExecution, store);
 			}
 		}
@@ -142,8 +138,7 @@ public class ContractExecutionService {
 	 * Runs the ContractExecution making logic
 	 * 
 	 * @return the new block or block voted on
-	 * @throws Exception
-	 */
+     */
 
 	public Block createContractExecution(Token contract, FullBlockStore store) throws Exception {
 
@@ -169,7 +164,7 @@ public class ContractExecutionService {
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 		long cutoffheight = blockService.getRewardCutoffHeight(prevRewardHash, store);
 
-		List<Block.Type> referencedOrdertypes = new ArrayList<Block.Type>();
+		List<Block.Type> referencedOrdertypes = new ArrayList<>();
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EVENT);
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 
@@ -219,11 +214,11 @@ public class ContractExecutionService {
 	//
 	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
 			List<Contractresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
-			throws BlockStoreException, IOException {
+			throws BlockStoreException {
 		// find the longest chained execution connected to last milestone
 		for (Contractresult prevNotMilestone : prevNotMilestons) {
-			if (!prevsNotMilestoneChainedBlocks.stream()
-					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
+			if (prevsNotMilestoneChainedBlocks.stream()
+					.noneMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
 				serviceBase.confirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),-1,true,
 						store);
 			}
@@ -233,7 +228,7 @@ public class ContractExecutionService {
 	}
 
 	protected Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
-			throws BlockStoreException, IOException {
+			throws IOException {
 		Set<BlockWrap> collectNews = new HashSet<>();
 		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
 		for (BlockWrap b : collectedBlocks) {
@@ -246,7 +241,7 @@ public class ContractExecutionService {
 	}
 
 	protected Contractresult getLast(Set<BlockWrap> prevs, FullBlockStore store)
-			throws BlockStoreException, IOException {
+			throws BlockStoreException {
 		BlockWrap re = null;
 		for (BlockWrap b : prevs) {
 			if (re == null)
@@ -260,7 +255,7 @@ public class ContractExecutionService {
 		return store.getContractresult(re.getBlock().getHash());
 	}
 
-	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws BlockStoreException, IOException {
+	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {
 		Set<Sha256Hash> collectOrdersNoSpents = new HashSet<>();
 		for (BlockWrap b : prevs) {
 			ContractExecutionResult result = new ContractExecutionResult()
@@ -275,15 +270,12 @@ public class ContractExecutionService {
 			throws InterruptedException, ExecutionException {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				// log.debug(" contractExecution block solve started : " + chainTargetFinal + "
-				// \n for block" + block);
-				block.solve(chainTargetFinal);
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            // log.debug(" contractExecution block solve started : " + chainTargetFinal + "
+            // \n for block" + block);
+            block.solve(chainTargetFinal);
+            return "";
+        });
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);

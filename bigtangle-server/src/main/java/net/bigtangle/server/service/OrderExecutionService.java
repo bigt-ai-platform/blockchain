@@ -57,8 +57,6 @@ public class OrderExecutionService {
 	@Autowired
 	private BlockService blockService;
 	@Autowired
-	protected TipsService tipService;
-	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
 	@Autowired
@@ -80,9 +78,8 @@ public class OrderExecutionService {
 
 	/**
 	 * Scheduled update function that updates the Tangle
-	 * 
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 
 	// createOrderExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -97,8 +94,7 @@ public class OrderExecutionService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()) {
-				log.info(" OrderExecution locked is fored delete   " + lock.getLocktime() + " < "
-						+ (System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()));
+                log.info(" OrderExecution locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -134,16 +130,13 @@ public class OrderExecutionService {
 	 * Runs the OrderExecution making logic
 	 * 
 	 * @return the new block or block voted on
-	 * @throws Exception
-	 */
+     */
 
 	public Block createOrderExecutionDo(FullBlockStore store) throws Exception {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
-		// log.debug(" getValidatedOrderExecutionBlockPair time {} ms.",
-		// watch.elapsed(TimeUnit.MILLISECONDS));
-		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+        if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 				.enableOrderMatchExecutionChain(b)) {
 
 			return createOrderExecution(b, store);
@@ -167,7 +160,7 @@ public class OrderExecutionService {
 
 		long cutoffheight = blockService.getRewardCutoffHeight(prevRewardHash, store);
 
-		List<Block.Type> ordertypes = new ArrayList<Block.Type>();
+		List<Block.Type> ordertypes = new ArrayList<>();
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -216,11 +209,11 @@ public class OrderExecutionService {
 	//
 	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
 			List<Orderresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
-			throws BlockStoreException, IOException {
+			throws BlockStoreException {
 		// find the longest chained execution connected to last milestone
 		for (Orderresult prevNotMilestone : prevNotMilestons) {
-			if (!prevsNotMilestoneChainedBlocks.stream()
-					.anyMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
+			if (prevsNotMilestoneChainedBlocks.stream()
+					.noneMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
 				serviceBase.confirmOrderExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store), -1,
 						false, store);
 			}
@@ -229,7 +222,7 @@ public class OrderExecutionService {
 
 	}
 
-	protected Orderresult getLast(Set<BlockWrap> prevs, FullBlockStore store) throws BlockStoreException, IOException {
+	protected Orderresult getLast(Set<BlockWrap> prevs, FullBlockStore store) throws BlockStoreException {
 		BlockWrap re = null;
 		for (BlockWrap b : prevs) {
 			if (re == null)
@@ -244,7 +237,7 @@ public class OrderExecutionService {
 	}
 
 	protected Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
-			throws BlockStoreException, IOException {
+			throws IOException {
 		Set<BlockWrap> collectNews = new HashSet<>();
 		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
 		for (BlockWrap b : collectedBlocks) {
@@ -256,7 +249,7 @@ public class OrderExecutionService {
 		return collectNews;
 	}
 
-	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws BlockStoreException, IOException {
+	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {
 		Set<Sha256Hash> collectOrdersNoSpents = new HashSet<>();
 		for (BlockWrap b : prevs) {
 			OrderExecutionResult result = new OrderExecutionResult()
@@ -271,15 +264,12 @@ public class OrderExecutionService {
 			throws InterruptedException, ExecutionException {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				// log.debug(" contractExecution block solve started : " + chainTargetFinal + "
-				// \n for block" + block);
-				block.solve(chainTargetFinal);
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            // log.debug(" contractExecution block solve started : " + chainTargetFinal + "
+            // \n for block" + block);
+            block.solve(chainTargetFinal);
+            return "";
+        });
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);
@@ -290,9 +280,7 @@ public class OrderExecutionService {
 		} finally {
 			executor.shutdownNow();
 		}
-		// log.debug("contractExecution Solved time {} ms.",
-		// watch.elapsed(TimeUnit.MILLISECONDS));
-		return block;
+        return block;
 	}
 
 }

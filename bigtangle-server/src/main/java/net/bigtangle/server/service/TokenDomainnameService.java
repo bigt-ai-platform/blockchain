@@ -1,7 +1,6 @@
 package net.bigtangle.server.service;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,25 +30,19 @@ public class TokenDomainnameService {
 
     /**
      * query token type is domainname
-     * 
-     * @param domainNameBlockHash
-     * @return
-     * @throws BlockStoreException
+     *
      */
 
     public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,FullBlockStore store)
             throws BlockStoreException {
         if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
-            List<MultiSignAddress> multiSignAddresses = new ArrayList<MultiSignAddress>();
-            for (Iterator<PermissionDomainname> iterator =networkParameters.getPermissionDomainnameList()
-                    .iterator(); iterator.hasNext();) {
-                PermissionDomainname permissionDomainname = iterator.next();
+            List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
+            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();
                 multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
             }
-            PermissionedAddressesResponse response = (PermissionedAddressesResponse) PermissionedAddressesResponse
+            return (PermissionedAddressesResponse) PermissionedAddressesResponse
                     .create("", false, multiSignAddresses);
-            return response;
         } else {
             Token token =  store.getTokenByBlockHash(Sha256Hash.wrap(domainNameBlockHash));
             final String domainName = token.getTokenname();
@@ -57,26 +50,20 @@ public class TokenDomainnameService {
             List<MultiSignAddress> multiSignAddresses = this
                     .queryDomainnameTokenMultiSignAddresses(token.getBlockHash(),store);
 
-            PermissionedAddressesResponse response = (PermissionedAddressesResponse) PermissionedAddressesResponse
+            return (PermissionedAddressesResponse) PermissionedAddressesResponse
                     .create(domainName, false, multiSignAddresses);
-            return response;
         }
     }
 
     /**
      * get domainname token multi sign address
-     * 
-     * @param domainNameBlockHash
-     * @return
-     * @throws BlockStoreException
+     *
      */
     public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,FullBlockStore store)
             throws BlockStoreException {
         if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHash())) {
-            List<MultiSignAddress> multiSignAddresses = new ArrayList<MultiSignAddress>();
-            for (Iterator<PermissionDomainname> iterator = networkParameters.getPermissionDomainnameList()
-                    .iterator(); iterator.hasNext();) {
-                PermissionDomainname permissionDomainname = iterator.next();
+            List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
+            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();
                 multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
             }
@@ -87,9 +74,8 @@ public class TokenDomainnameService {
                 throw new BlockStoreException("token not found");
 
             final String tokenid = token.getTokenid();
-            List<MultiSignAddress> multiSignAddresses =  store
+            return store
                     .getMultiSignAddressListByTokenidAndBlockHashHex(tokenid, token.getBlockHash());
-            return multiSignAddresses;
         }
     }
 

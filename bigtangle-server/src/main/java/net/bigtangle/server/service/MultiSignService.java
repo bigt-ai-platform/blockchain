@@ -50,9 +50,7 @@ public class MultiSignService {
 	protected NetworkParameters params;
 	@Autowired
 	protected TokenDomainnameService tokenDomainnameService;
-	@Autowired
-	private BlockService blockService;
-	@Autowired
+    @Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
@@ -79,9 +77,9 @@ public class MultiSignService {
 
 	public AbstractResponse getMultiSignListWithTokenid(String tokenid, Integer tokenindex, List<String> addresses,
 			boolean isSign, FullBlockStore store) throws Exception {
-		HashSet<String> a = new HashSet<String>();
+		HashSet<String> a = new HashSet<>();
 		if (addresses != null) {
-			a = new HashSet<String>(addresses);
+			a = new HashSet<>(addresses);
 		}
 		return getMultiSignListWithTokenid(tokenid, tokenindex, a, isSign, store);
 	}
@@ -89,9 +87,9 @@ public class MultiSignService {
 	public AbstractResponse getMultiSignListWithTokenid(String tokenid, Integer tokenindex, Set<String> addresses,
 			boolean isSign, FullBlockStore store) throws Exception {
 		List<MultiSign> multiSigns = store.getMultiSignListByTokenid(tokenid, tokenindex, addresses, isSign);
-		List<Map<String, Object>> multiSignList = new ArrayList<Map<String, Object>>();
+		List<Map<String, Object>> multiSignList = new ArrayList<>();
 		for (MultiSign multiSign : multiSigns) {
-			HashMap<String, Object> map = new HashMap<String, Object>();
+			HashMap<String, Object> map = new HashMap<>();
 			map.put("id", multiSign.getId());
 			map.put("tokenid", multiSign.getTokenid());
 			map.put("tokenindex", multiSign.getTokenindex());
@@ -106,7 +104,7 @@ public class MultiSignService {
 
 			Coin fromAmount = new Coin(tokenInfo.getToken().getAmount(), multiSign.getTokenid());
 			map.put("amount", fromAmount);
-			int signcount = 0;
+			int signcount;
 			if (transaction.getDataSignature() == null) {
 				signcount = 0;
 			} else {
@@ -128,7 +126,7 @@ public class MultiSignService {
 		return TokenIndexResponse.createTokenSerialIndexResponse(tokens.getTokenindex() + 1, tokens.getBlockHash());
 	}
 
-	public void saveMultiSign(Block block, FullBlockStore store) throws BlockStoreException, Exception {
+	public void saveMultiSign(Block block, FullBlockStore store) throws Exception {
 		// blockService.checkBlockBeforeSave(block);
 		try {
 			store.beginDatabaseBatchWrite();
@@ -186,7 +184,7 @@ public class MultiSignService {
 		}
 	}
 
-	public void deleteMultiSign(Block block, FullBlockStore store) throws BlockStoreException, Exception {
+	public void deleteMultiSign(Block block, FullBlockStore store) {
 		try {
 
 			Transaction transaction = block.getTransactions().get(0);
@@ -199,7 +197,7 @@ public class MultiSignService {
 		}
 	}
 
-	public void signTokenAndSaveBlock(Block block, boolean allowConflicts, FullBlockStore store) throws Exception {
+	public void signTokenAndSaveBlock(Block block, FullBlockStore store) throws Exception {
 		try {
 			ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService);

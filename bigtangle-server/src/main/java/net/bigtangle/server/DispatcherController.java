@@ -125,7 +125,7 @@ public class DispatcherController {
 	public void process(@PathVariable("reqCmd") String reqCmd, @RequestBody byte[] contentBytes,
 			HttpServletResponse httpServletResponse, HttpServletRequest httprequest) throws Exception {
 		userDataService.addStatistcs(reqCmd, remoteAddr(httprequest));
-		if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+		if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 			Stopwatch watch = Stopwatch.createStarted();
 			// logger.debug(" denied " +remoteAddr(httprequest) + " " + reqCmd
 			// );
@@ -180,7 +180,7 @@ public class DispatcherController {
 			switch (reqCmd0000) {
 			case getTip: {
 				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					// return bomb
 					logger.debug("bomb getDifficultyTarget " + remoteAddr(httprequest) + " " + reqCmd);
 					errorLimit(httpServletResponse, watch);
@@ -195,7 +195,7 @@ public class DispatcherController {
 			}
 				break;
 			case saveBlock: {
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					logger.debug("saveBlock denied " + remoteAddr(httprequest) + " " + reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
@@ -208,7 +208,7 @@ public class DispatcherController {
 			}
 				break;
 			case getOutputs: {
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					logger.debug("getOutputs denied " + remoteAddr(httprequest) + " " + reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
@@ -272,7 +272,7 @@ public class DispatcherController {
 			}
 				break;
 			case getBalances: {
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					logger.debug("getOutputs getBalances " + remoteAddr(httprequest) + " " + reqCmd);
 					return;
 				}
@@ -288,7 +288,7 @@ public class DispatcherController {
 				break;
 
 			case getAccountBalances: {
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httpServletResponse, httprequest)) {
+				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					logger.debug("getOutputs getBalances " + remoteAddr(httprequest) + " " + reqCmd);
 					return;
 				}
@@ -298,7 +298,7 @@ public class DispatcherController {
 				for (String keyStrHex : keyStrHex000) {
 					pubKeyHashs.add(Utils.HEX.decode(keyStrHex));
 				}
-				AbstractResponse response = walletService.getAccountBalanceInfoFromAccount(pubKeyHashs, null, store);
+				AbstractResponse response = walletService.getAccountBalanceInfoFromAccount(pubKeyHashs, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -400,7 +400,7 @@ public class DispatcherController {
 				break;
 			case signToken: {
 				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-				this.multiSignService.signTokenAndSaveBlock(block, false, store);
+				this.multiSignService.signTokenAndSaveBlock(block, store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
@@ -508,7 +508,7 @@ public class DispatcherController {
 				if (spentStr != null && spentStr.equals("true"))
 					spent = true;
 				List<String> addresses = (List<String>) request.get("addresses");
-				AbstractResponse response = orderdataService.getOrderdataList(spent, address, addresses, tokenid,
+				AbstractResponse response = orderdataService.getOrderdataList(address, addresses, tokenid,
 						store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
@@ -571,7 +571,7 @@ public class DispatcherController {
 			case getChainNumber: {
 				String reqStr = new String(bodyByte, "UTF-8");
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = rewardService.getMaxConfirmedReward(request, store);
+				AbstractResponse response = rewardService.getMaxConfirmedReward(store);
 
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
@@ -580,7 +580,7 @@ public class DispatcherController {
 			case getAllConfirmedReward: {
 				String reqStr = new String(bodyByte, "UTF-8");
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = rewardService.getAllConfirmedReward(request, store);
+				AbstractResponse response = rewardService.getAllConfirmedReward(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;

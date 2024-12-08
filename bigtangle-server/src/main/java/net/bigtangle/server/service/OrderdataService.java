@@ -20,11 +20,11 @@ import net.bigtangle.store.FullBlockStore;
 @Service
 public class OrderdataService {
 
-	public AbstractResponse getOrderdataList(boolean spent, String address, List<String> addresses, String tokenid,
-			FullBlockStore store) throws BlockStoreException {
+	public AbstractResponse getOrderdataList(String address, List<String> addresses, String tokenid,
+											 FullBlockStore store) throws BlockStoreException {
 		if (addresses == null)
-			addresses = new ArrayList<String>();
-		if (address != null && !"".equals(address)) {
+			addresses = new ArrayList<>();
+		if (address != null && !address.isEmpty()) {
 			addresses.add(address);
 		}
 
@@ -36,23 +36,19 @@ public class OrderdataService {
 			throws BlockStoreException {
 		List<OrderRecord> allOrdersSorted = store.getAllOpenOrdersSorted(addresses, tokenid);
 
-		HashSet<String> orderBlockHashs = new HashSet<String>();
+		HashSet<String> orderBlockHashs = new HashSet<>();
 		for (OrderRecord orderRecord : allOrdersSorted) {
 			orderBlockHashs.add(orderRecord.getBlockHashHex());
 		}
 
 		List<OrderCancel> orderCancels = store.getOrderCancelByOrderBlockHash(orderBlockHashs);
-		HashMap<String, OrderCancel> orderCannelData = new HashMap<String, OrderCancel>();
+		HashMap<String, OrderCancel> orderCannelData = new HashMap<>();
 		for (OrderCancel orderCancel : orderCancels) {
 			orderCannelData.put(orderCancel.getOrderBlockHash().toString(), orderCancel);
 		}
 
 		for (OrderRecord orderRecord : allOrdersSorted) {
-			if (orderCannelData.containsKey(orderRecord.getBlockHashHex())) {
-				orderRecord.setCancelPending(true);
-			} else {
-				orderRecord.setCancelPending(false);
-			}
+            orderRecord.setCancelPending(orderCannelData.containsKey(orderRecord.getBlockHashHex()));
 		}
 
 		return OrderdataResponse.createOrderRecordResponse(allOrdersSorted, getTokename(allOrdersSorted, store));
@@ -60,12 +56,12 @@ public class OrderdataService {
 
 	public Map<String, Token> getTokename(List<OrderRecord> allOrdersSorted, FullBlockStore store)
 			throws BlockStoreException {
-		Set<String> tokenids = new HashSet<String>();
+		Set<String> tokenids = new HashSet<>();
 		for (OrderRecord d : allOrdersSorted) {
 			tokenids.add(d.getOfferTokenid());
 			tokenids.add(d.getTargetTokenid());
 		}
-		Map<String, Token> re = new HashMap<String, Token>();
+		Map<String, Token> re = new HashMap<>();
 		List<Token> tokens = store.getTokensList(tokenids);
 		for (Token t : tokens) {
 			re.put(t.getTokenid(), t);
