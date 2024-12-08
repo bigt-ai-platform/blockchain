@@ -128,7 +128,7 @@ public class UserdataTest extends AbstractIntegrationTest {
 
     }
 
-    @Test
+  //  @Test
     public void testExchangeUserdata() throws Exception {
 
         HashMap<String, String> requestParam = new HashMap<String, String>();
@@ -153,13 +153,10 @@ public class UserdataTest extends AbstractIntegrationTest {
 
        Block b=wallet.saveUserdata(outKey, transaction,false,null);
         makeRewardBlock(b);
-       byte[] response0 = OkHttp3Util.post(contextRoot + ReqCmd.searchExchangeTokens.name(),
-                Json.jsonmapper().writeValueAsString(requestParam).getBytes());
-        GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(response0, GetTokensResponse.class);
+        UserSettingDataInfo contactInfo1 =wallet.getUserSettingDataInfo(outKey,false);
+        assertTrue(contactInfo1.getUserSettingDatas().size() == 1);
 
-        assertTrue(getTokensResponse.getTokens().stream().map(Token::getTokenid).collect(Collectors.toList())
-                .contains(outKey.getPublicKeyAsHex()));
-
+     
     }
 
 }

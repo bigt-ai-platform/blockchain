@@ -495,10 +495,48 @@ public class FullBlockStoreImpl {
 	}
 
 	public void updateConfirmedDo(FullBlockStore blockStore) throws BlockStoreException {
+		
+
+		unconfirmDo(blockStore );
+
+		confirmDo(blockStore );
+
+	}
+
+	public void confirmDo(FullBlockStore blockStore ) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
-		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
 
+			// Now try to find blocks that can be added to the milestone.
+			// DISALLOWS UNSOLID
+			TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
+
+			// VALIDITY CHECKS
+			serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
+
+			// Execute must be chained for confirm
+			// Finally add the resolved new blocks to the confirmed set
+			serviceBase.confirmBlocksSorted(blockStore, -1,
+					serviceBase.collectExecutionChained(blockStore, Collections.synchronizedSet(blocksToAdd)),
+					new HashSet<>());
+
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	private void unconfirmDo(FullBlockStore blockStore ) throws BlockStoreException {
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
 		try {
 			blockStore.beginDatabaseBatchWrite();
 			// First remove any blocks that should no longer be in the milestone
@@ -525,34 +563,6 @@ public class FullBlockStoreImpl {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
-
-		try {
-			blockStore.beginDatabaseBatchWrite();
-
-			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
-			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
-
-			// Now try to find blocks that can be added to the milestone.
-			// DISALLOWS UNSOLID
-			TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
-
-			// VALIDITY CHECKS
-			serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-
-			// Execute must be chained for confirm
-			// Finally add the resolved new blocks to the confirmed set
-			serviceBase.confirmBlocksSorted(blockStore, -1,
-					serviceBase.collectExecutionChained(blockStore, Collections.synchronizedSet(blocksToAdd)),
-					new HashSet<>());
-
-			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
-			blockStore.abortDatabaseBatchWrite();
-			throw e;
-		} finally {
-			blockStore.defaultDatabaseBatchWrite();
-		}
-
 	}
 
 	private void updateConfirmed() throws BlockStoreException {

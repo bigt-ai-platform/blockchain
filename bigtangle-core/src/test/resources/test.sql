@@ -204,6 +204,7 @@ select count(*) from outputs where confirmed=1 and spent=0 and tokenid = "03bed6
  txreward.difficulty, txreward.chainlength FROM txreward where chainlength=446310;
  
  
+select * from userdata;
 
  ALTER USER 'root' IDENTIFIED WITH mysql_native_password BY 'test1234';
 flush privileges;

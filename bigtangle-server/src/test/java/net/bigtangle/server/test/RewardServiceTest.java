@@ -337,7 +337,8 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock1 = null;
 		for (int i = 0; i < num; i++) {
 			// rollingBlock1 = rollingBlock1.createNextBlock(rollingBlock1);
-			mcmcServiceUpdate();
+			mcmcService.update(store); 
+			blockGraph.confirmDo(store);
 			HashMap<String, String> requestParam = new HashMap<String, String>();
 			byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 					Json.jsonmapper().writeValueAsString(requestParam));

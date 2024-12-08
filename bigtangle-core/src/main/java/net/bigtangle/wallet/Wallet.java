@@ -1261,6 +1261,7 @@ public class Wallet extends WalletBase {
 
 	}
 
+	
 	public void publishDomainName(ECKey ownerKey, String tokenid, String tokenname, KeyParameter aesKey,
 			String description) throws Exception {
 		GetDomainTokenResponse getDomainBlockHashResponse = this.getDomainNameBlockHash(tokenname);
