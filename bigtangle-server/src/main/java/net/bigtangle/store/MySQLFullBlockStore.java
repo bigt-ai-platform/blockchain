@@ -517,17 +517,6 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX);
         return sqlStatements;
     }
-    
-    @Override
-    protected String getDatabaseDriverClass() {
-        return DATABASE_DRIVER_CLASS;
-    }
 
-    @Override
-    protected String getUpdateSettingsSLQ() {
-        // return UPDATE_SETTINGS_SQL;
-        return getUpdate() + " settings SET settingvalue = ? WHERE name = ?";
-    }
 
- 
 }

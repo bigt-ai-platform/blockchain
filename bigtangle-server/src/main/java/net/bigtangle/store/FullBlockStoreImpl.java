@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -64,7 +63,7 @@ import net.bigtangle.utils.Gzip;
  * update chain is locked by database. Chain block will add to chain if there is
  * no exception. if the reward block is unsolid as missing previous block, then
  * it will trigger a sync and be deleted.
- * 
+ * <p>
  * </p>
  */
 @Service
@@ -86,7 +85,7 @@ public class FullBlockStoreImpl {
 	public boolean add(Block block, boolean allowUnsolid, FullBlockStore store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-			added = addChain(block, allowUnsolid, true, store);
+			added = addChain(block, store);
 		} else {
 			added = addNonChain(block, allowUnsolid, store);
 		}
@@ -105,7 +104,7 @@ public class FullBlockStoreImpl {
 	public void addFromSync(Block block, boolean allowUnsolid, FullBlockStore store) throws BlockStoreException {
 
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-			addChain(block, allowUnsolid, true, store);
+			addChain(block, store);
 		} else {
 			addNonChain(block, allowUnsolid, store, true);
 		}
@@ -121,7 +120,7 @@ public class FullBlockStoreImpl {
 		return a;
 	}
 
-	public boolean addChain(Block block, boolean allowUnsolid, boolean tryConnecting, FullBlockStore store)
+	public boolean addChain(Block block, FullBlockStore store)
 			throws BlockStoreException {
 
 		// Check the block is partially formally valid and fulfills PoW
@@ -214,13 +213,13 @@ public class FullBlockStoreImpl {
 		List<ChainBlockQueue> cbs = store.selectChainblockqueue(false, serverConfiguration.getSyncblocks());
 		if (cbs != null && !cbs.isEmpty()) {
 			Stopwatch watch = Stopwatch.createStarted();
-			log.info("selectChainblockqueue with size  " + cbs.size());
+            log.info("selectChainblockqueue with size  {}", cbs.size());
 			// check only do add if there is longer chain as saved in database
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 			ChainBlockQueue maxFromQuery = cbs.get(cbs.size() - 1);
 			if (!updatelowchain && maxConfirmedReward.getChainLength() > maxFromQuery.getChainlength()) {
-				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery.toString(),
-						maxConfirmedReward.toString());
+				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery,
+                        maxConfirmedReward);
 				return;
 			}
 			for (ChainBlockQueue chainBlockQueue : cbs) {
@@ -230,7 +229,7 @@ public class FullBlockStoreImpl {
 					try {
 						saveChainConnected(chainBlockQueue, store);
 					} catch (Exception e) {
-						log.info("saveChainConnected failed   " + chainBlockQueue.toString(), e);
+                        log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
 					}
 				}
 
@@ -268,15 +267,14 @@ public class FullBlockStoreImpl {
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 						.solidifyBlocks(currRewardInfo, store);
 			} catch (MissingDependencyException e) {
-				log.warn("Block isFailState. MissingDependencyException" + block.toString()
-						+ " MissingDependencyException" + e.toString());
+                log.warn("Block isFailState. MissingDependencyException{} MissingDependencyException{}", block, e);
 				return;
 			}
 			SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService).checkChainSolidity(block, true, store);
 
 			if (solidityState.isDirectlyMissing()) {
-				log.debug("Block isDirectlyMissing. saveChainConnected stop to save." + block.toString());
+                log.debug("Block isDirectlyMissing. saveChainConnected stop to save.{}", block);
 				// sync the lastest chain from remote start from the -2 rewards
 				// syncBlockService.startSingleProcess(block.getLastMiningRewardBlock()
 				// - 2, false);
@@ -284,7 +282,7 @@ public class FullBlockStoreImpl {
 			}
 
 			if (solidityState.isFailState()) {
-				log.warn("Block isFailState. remove it from ChainBlockQueue." + block.toString());
+                log.warn("Block isFailState. remove it from ChainBlockQueue.{}", block);
 				return;
 			}
 			// Inherit solidity from predecessors if they are not solid
@@ -292,7 +290,7 @@ public class FullBlockStoreImpl {
 
 			// Sanity check
 			if (solidityState.isFailState() || solidityState.getState() == State.MissingPredecessor) {
-				log.debug("Block isFailState. remove it from ChainBlockQueue." + block.toString());
+                log.debug("Block isFailState. remove it from ChainBlockQueue.{}", block);
 				return;
 			}
 			connectRewardBlock(block, solidityState, store);
@@ -308,7 +306,7 @@ public class FullBlockStoreImpl {
 	}
 
 	private void deleteChainQueue(ChainBlockQueue chainBlockQueue, FullBlockStore store) throws BlockStoreException {
-		List<ChainBlockQueue> l = new ArrayList<ChainBlockQueue>();
+		List<ChainBlockQueue> l = new ArrayList<>();
 		l.add(chainBlockQueue);
 		store.deleteChainBlockQueue(l);
 	}
@@ -339,7 +337,7 @@ public class FullBlockStoreImpl {
 				throw e;
 		}
 		if (solidityState.isFailState()) {
-			log.debug(solidityState.toString() + " block " + block.toString());
+            log.debug("{} block {}", solidityState, block);
 		}
 		// If explicitly wanted (e.g. new block from local clients), this
 		// block must strictly be solid now.
@@ -370,14 +368,6 @@ public class FullBlockStoreImpl {
 		}
 
 		return true;
-	}
-
-	public Set<Sha256Hash> checkMissing(Block block, FullBlockStore blockStore) throws BlockStoreException {
-
-		// missing predecessors
-		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-				.getMissingPredecessors(block, blockStore);
-
 	}
 
 	private void connectRewardBlock(final Block block, SolidityState solidityState, FullBlockStore store)
@@ -416,11 +406,7 @@ public class FullBlockStoreImpl {
 	 * Inserts the specified block into the DB
 	 * 
 	 * @param block         the block
-	 * @param solidityState
-	 * @param height        the block's height
-	 * @throws BlockStoreException
-	 * @throws VerificationException
-	 */
+     */
 	private void connect(final Block block, SolidityState solidityState, FullBlockStore store)
 			throws BlockStoreException, VerificationException {
 		store.put(block);
@@ -434,14 +420,9 @@ public class FullBlockStoreImpl {
 	private void updateTransactionOutputSpendPending(Block block) {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				return updateTransactionOutputSpendPendingDo(block);
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> updateTransactionOutputSpendPendingDo(block));
 		try {
-			handler.get(2000l, TimeUnit.MILLISECONDS);
+			handler.get(2000L, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
 			log.info("TimeoutException cancel updateTransactionOutputSpendPending ");
 			handler.cancel(true);
@@ -462,7 +443,7 @@ public class FullBlockStoreImpl {
 					.evictTransactionsAndBlockEva(block, blockStore);
 			// Initialize MCMC
 			if (blockStore.getMCMC(block.getHash()) == null) {
-				ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<DepthAndWeight>();
+				ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<>();
 				depthAndWeight.add(new DepthAndWeight(block.getHash(), 1, 0));
 				blockStore.updateBlockEvaluationWeightAndDepth(depthAndWeight);
 			}
@@ -477,7 +458,7 @@ public class FullBlockStoreImpl {
 			throws BlockStoreException {
 		for (final Transaction tx : block.getTransactions()) {
 			boolean isCoinBase = tx.isCoinBase();
-			List<UTXO> spendPending = new ArrayList<UTXO>();
+			List<UTXO> spendPending = new ArrayList<>();
 			if (!isCoinBase) {
 				for (int index = 0; index < tx.getInputs().size(); index++) {
 					TransactionInput in = tx.getInputs().get(index);
@@ -545,7 +526,7 @@ public class FullBlockStoreImpl {
 			// Unconfirm anything not confirmed by milestone
 			List<Sha256Hash> wipeBlocks = blockStore.getWhereConfirmedNotMilestone();
 
-			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
+			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 
 			for (BlockEvaluation b : blocksToRemove) {
 				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b.getBlockHash(), blockStore));
@@ -587,7 +568,7 @@ public class FullBlockStoreImpl {
 					canrun = true;
 				} else {
 					if (lock.getLocktime() < System.currentTimeMillis() - 2000)
-						log.info("updateConfirmed running start = " + Utils.dateTimeFormat(lock.getLocktime()));
+                        log.info("updateConfirmed running start = {}", Utils.dateTimeFormat(lock.getLocktime()));
 				}
 			}
 			if (canrun) {
@@ -638,19 +619,16 @@ public class FullBlockStoreImpl {
 	 * run timeboxed updateConfirmed, there is no transaction here. Timeout will
 	 * cancel the rest of update confirm and can be update from next run
 	 */
-	private void updateConfirmedTimeBoxed() throws BlockStoreException {
+	private void updateConfirmedTimeBoxed() {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				updateConfirmed();
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            updateConfirmed();
+            return "";
+        });
 		try {
-			handler.get(3000l, TimeUnit.MILLISECONDS);
+			handler.get(3000L, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
 			log.info("Timeout cancel updateConfirmed ");
 			handler.cancel(true);

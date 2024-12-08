@@ -125,36 +125,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         //// throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public void deleteMultiSignAddress(String tokenid, String address) throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(DELETE_MULTISIGNADDRESS_SQL)) {
-            preparedStatement.setString(1, tokenid);
-            preparedStatement.setString(2, address);
-            preparedStatement.executeUpdate();
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
-	public int getCountMultiSignAddress(String tokenid) throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(COUNT_MULTISIGNADDRESS_SQL)) {
-            preparedStatement.setString(1, tokenid);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                return resultSet.getInt("count");
-            }
-            return 0;
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public Token getCalMaxTokenIndex(String tokenid) throws BlockStoreException {
 
         try (PreparedStatement preparedStatement = getConnection().prepareStatement(COUNT_TOKENSINDEX_SQL)) {
@@ -195,30 +166,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public List<Token> getTokenID(Set<String> tokenids) throws BlockStoreException {
-		List<Token> list = new ArrayList<>();
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(
-                SELECT_TOKENS_SQL_TEMPLATE + " FROM tokens WHERE tokenid IN ( " + buildINList(tokenids) + " ) ")) {
-
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                Token tokens = new Token();
-                setToken(resultSet, tokens);
-                list.add(tokens);
-            }
-            return list;
-        } catch (Exception ex) {
-
-            throw new BlockStoreException(ex);
-
-        }
-        // // throw new BlockStoreException("Could not close statement");
-
-    }
-
-	@Override
+    @Override
 	public List<Token> getTokenID(String tokenid) throws BlockStoreException {
 		List<Token> list = new ArrayList<>();
 
@@ -240,26 +188,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
     }
 
-	@Override
-	public int getCountMultiSignByTokenIndexAndAddress(String tokenid, long tokenindex, String address)
-			throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_MULTISIGNBY_SQL)) {
-            preparedStatement.setString(1, tokenid);
-            preparedStatement.setLong(2, tokenindex);
-            preparedStatement.setString(3, address);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                return resultSet.getInt("count");
-            }
-            return 0;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public List<MultiSign> getMultiSignListByAddress(String address) throws BlockStoreException {
 		List<MultiSign> list = new ArrayList<>();
 
@@ -435,26 +364,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public List<MultiSign> getMultiSignListByTokenid(String tokenid, long tokenindex) throws BlockStoreException {
-		List<MultiSign> list = new ArrayList<>();
-
-        String sql = SELECT_MULTISIGN_ADDRESS_ALL_SQL + " AND tokenid=? AND tokenindex = ?";
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
-            preparedStatement.setString(1, tokenid.trim());
-            preparedStatement.setLong(2, tokenindex);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                setMultisign(list, resultSet);
-            }
-            return list;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public void deleteMultiSign(String tokenid) throws BlockStoreException {
 
 
@@ -664,24 +574,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				resultSet.getLong("chainlength"));
 	}
 
-	@Override
-	public List<Sha256Hash> getRewardBlocksWithPrevHash(Sha256Hash hash) throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_REWARD_WHERE_PREV_HASH_SQL)) {
-            preparedStatement.setBytes(1, hash.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            List<Sha256Hash> list = new ArrayList<>();
-            while (resultSet.next()) {
-                list.add(Sha256Hash.wrap(resultSet.getBytes(1)));
-            }
-            return list;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public void updateMultiSignBlockBitcoinSerialize(String tokenid, long tokenindex, byte[] bytes)
 			throws BlockStoreException {
 
@@ -893,22 +786,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public int getMaxPayMultiSignAddressSignIndex(String orderid) throws BlockStoreException {
-		String sql = "SELECT MAX(signIndex) AS signIndex FROM paymultisignaddress WHERE orderid = ?";
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
-            preparedStatement.setString(1, orderid);
-            ResultSet resultSet = preparedStatement.executeQuery();
-            resultSet.next();
-            return resultSet.getInt(1);
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public PayMultiSign getPayMultiSignWithOrderid(String orderid) throws BlockStoreException {
 		String sql = "select orderid, tokenid, toaddress, blockhash, amount, minsignnumber, outputHashHex, outputindex from paymultisign where orderid = ?";
 
@@ -1239,53 +1117,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public boolean getOrderConfirmed(Sha256Hash txHash, Sha256Hash issuingMatcherBlockHash) throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDER_CONFIRMED_SQL)) {
-            preparedStatement.setBytes(1, txHash.getBytes());
-            preparedStatement.setBytes(2, issuingMatcherBlockHash.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            resultSet.next();
-            return resultSet.getBoolean(1);
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
-	public Sha256Hash getOrderSpender(Sha256Hash txHash, Sha256Hash issuingMatcherBlockHash)
-			throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDER_SPENDER_SQL)) {
-            preparedStatement.setBytes(1, txHash.getBytes());
-            preparedStatement.setBytes(2, issuingMatcherBlockHash.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            resultSet.next();
-            return resultSet.getBytes(1) == null ? null : Sha256Hash.wrap(resultSet.getBytes(1));
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
-	public boolean getOrderSpent(Sha256Hash txHash, Sha256Hash issuingMatcherBlockHash) throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDER_SPENT_SQL)) {
-            preparedStatement.setBytes(1, txHash.getBytes());
-            preparedStatement.setBytes(2, issuingMatcherBlockHash.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            resultSet.next();
-            return resultSet.getBoolean(1);
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)
 			throws BlockStoreException {
 
@@ -1303,25 +1135,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrdersNotSpent(Sha256Hash issuingMatcherBlockHash)
-			throws BlockStoreException {
-
-        HashMap<Sha256Hash, OrderRecord> result = new HashMap<>();
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDERS_NotSpent_BY_ISSUER_SQL)) {
-            preparedStatement.setBytes(1, issuingMatcherBlockHash.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                result.put(Sha256Hash.wrap(resultSet.getBytes(1)), setOrder(resultSet));
-            }
-            return result;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public OrderRecord getOrder(Sha256Hash txHash, Sha256Hash issuingMatcherBlockHash) throws BlockStoreException {
 
         try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDER_SQL)) {
@@ -1480,27 +1294,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public void updateOrder(Sha256Hash collectinghash, boolean confirm, boolean spent,
-			Sha256Hash spenderBlockHash) throws BlockStoreException {
 
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(getUpdate()
-                + " orders SET spent = ?, spenderblockhash = ?, confirmed =? " + " WHERE collectinghash=? ")) {
-
-            preparedStatement.setBoolean(1, spent);
-            preparedStatement.setBytes(2, spenderBlockHash != null ? spenderBlockHash.getBytes() : null);
-            preparedStatement.setBoolean(3, confirm);
-            preparedStatement.setBytes(4, collectinghash.getBytes());
-            preparedStatement.executeUpdate();
-
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-	
-
-	@Override
+    @Override
 	public void updateOrderBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash, boolean confirm, boolean spent,
 			Sha256Hash spenderBlockHash) throws BlockStoreException {
 
@@ -1564,65 +1359,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         }
         // throw new BlockStoreException("Could not close statement");
     }
-	@Override
-	public void updateContractEvent(Sha256Hash collectinghash, boolean confirm, boolean spent,
-			Sha256Hash spenderBlockHash) throws BlockStoreException {
 
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(getUpdate()
-                + " contractevent SET spent = ?, spenderblockhash = ?, confirmed =? " + " WHERE collectinghash=? ")) {
-
-            preparedStatement.setBoolean(1, spent);
-            preparedStatement.setBytes(2, spenderBlockHash != null ? spenderBlockHash.getBytes() : null);
-            preparedStatement.setBoolean(3, confirm);
-            preparedStatement.setBytes(4, collectinghash.getBytes());
-            preparedStatement.executeUpdate();
-
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
-	public Sha256Hash getContractEventSpent(Sha256Hash contractevent) throws BlockStoreException {
-		// one of the block is spent then, return Sha256Hash, otherwise null
-
-        try (PreparedStatement preparedStatement = getConnection()
-                .prepareStatement(" select spenderblockhash  from contractevent " + " WHERE blockhash = ? ")) {
-
-            preparedStatement.setBytes(1, contractevent.getBytes());
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                byte[] spentbytes = resultSet.getBytes(1);
-                if (spentbytes != null)
-                    return Sha256Hash.wrap(spentbytes);
-            }
-
-            return null;
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
-	public List<String> getOpenContractid() throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_OPEN_CONTRACTID_CONTRACT_SQL)) {
-            ResultSet resultSet = preparedStatement.executeQuery();
-            List<String> list = new ArrayList<>();
-            while (resultSet.next()) {
-                list.add(resultSet.getString("contracttokenid"));
-            }
-            return list;
-
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
 			throws BlockStoreException {
 
@@ -2395,31 +2133,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
-	@Override
-	public List<OrderCancel> getOrderCancelConfirmed() throws BlockStoreException {
-
-		List<OrderCancel> orderCancels = new ArrayList<>();
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(ORDERCANCEL_CONFIRMED_SQL)) {
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                OrderCancel orderCancel = new OrderCancel();
-                orderCancel.setBlockHash(Sha256Hash.wrap(resultSet.getBytes("blockhash")));
-                orderCancel.setOrderBlockHash(Sha256Hash.wrap(resultSet.getBytes("orderblockhash")));
-                orderCancel.setConfirmed(resultSet.getBoolean("confirmed"));
-                orderCancel.setSpent(resultSet.getBoolean("spent"));
-                orderCancel.setSpenderBlockHash(Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")));
-                orderCancel.setTime(resultSet.getLong("time"));
-                orderCancels.add(orderCancel);
-            }
-            return orderCancels;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public void insertContractEventCancel(ContractEventCancel orderCancel) throws BlockStoreException {
 
         try (PreparedStatement preparedStatement = getConnection().prepareStatement(INSERT_OrderCancel_SQL)) {
@@ -2458,72 +2172,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public List<ContractEventCancel> getContractEventCancelByBlockHash(HashSet<String> blockHashs)
-			throws BlockStoreException {
-		if (blockHashs.isEmpty()) {
-			return new ArrayList<>();
-		}
-		List<ContractEventCancel> ContractEventCancels = new ArrayList<>();
-
-		PreparedStatement preparedStatement = null;
-		try {
-			StringBuilder sql = new StringBuilder();
-			for (String s : blockHashs) {
-				sql.append(",'").append(s).append("'");
-			}
-			preparedStatement = getConnection().prepareStatement(
-					SELECT_CONTRACTEVENTCANCEL_SQL + " AND eventblockhash IN (" + sql.substring(1) + ")");
-			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
-				ContractEventCancel contractEventCancel = new ContractEventCancel();
-				contractEventCancel.setBlockHash(Sha256Hash.wrap(resultSet.getBytes("blockhash")));
-				contractEventCancel.setEventBlockHash(Sha256Hash.wrap(resultSet.getBytes("eventblockhash")));
-				contractEventCancel.setConfirmed(resultSet.getBoolean("confirmed"));
-				contractEventCancel.setSpent(resultSet.getBoolean("spent"));
-				contractEventCancel.setSpenderBlockHash(Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")));
-				contractEventCancel.setTime(resultSet.getLong("time"));
-				ContractEventCancels.add(contractEventCancel);
-			}
-			return ContractEventCancels;
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
-		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
-				}
-			}
-		}
-	}
-
-	@Override
-	public List<ContractEventCancel> getContractEventCancelConfirmed() throws BlockStoreException {
-
-		List<ContractEventCancel> contractEventCancels = new ArrayList<>();
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(CONTRACTEVENTCANCEL_CONFIRMED_SQL)) {
-            ResultSet resultSet = preparedStatement.executeQuery();
-            while (resultSet.next()) {
-                ContractEventCancel contractEventCancel = new ContractEventCancel();
-                contractEventCancel.setBlockHash(Sha256Hash.wrap(resultSet.getBytes("blockhash")));
-                contractEventCancel.setEventBlockHash(Sha256Hash.wrap(resultSet.getBytes("eventblockhash")));
-                contractEventCancel.setConfirmed(resultSet.getBoolean("confirmed"));
-                contractEventCancel.setSpent(resultSet.getBoolean("spent"));
-                contractEventCancel.setSpenderBlockHash(Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")));
-                contractEventCancel.setTime(resultSet.getLong("time"));
-                contractEventCancels.add(contractEventCancel);
-            }
-            return contractEventCancels;
-        } catch (SQLException ex) {
-            throw new BlockStoreException(ex);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
-
-	@Override
+    @Override
 	public List<MatchLastdayResult> getTimeBetweenMatchingEvents(String tokenid, String basetoken, Long startDate,
 			Long endDate, int count) throws BlockStoreException {
 
@@ -3320,16 +2969,4 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
         // throw new BlockStoreException("Could not close statement");
     }
 
-	@Override
-	public boolean getOrderExecuteAnyConfirmed() throws BlockStoreException {
-
-        try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ORDERRESULT_CONFIRMED_ANY_SQL)) {
-
-            ResultSet resultSet = preparedStatement.executeQuery();
-            return resultSet.next();
-        } catch (SQLException e) {
-            throw new BlockStoreException(e);
-        }
-        // throw new BlockStoreException("Could not close statement");
-    }
 }

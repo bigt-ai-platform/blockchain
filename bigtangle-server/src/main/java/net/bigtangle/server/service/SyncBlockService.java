@@ -582,7 +582,7 @@ public class SyncBlockService {
 			List<ChainBlockQueue> l = new ArrayList<ChainBlockQueue>();
 			l.add(orphanBlock);
 			store.deleteChainBlockQueue(l);
-			blockgraph.addChain(block, true, false, store);
+			blockgraph.addChain(block, store);
 		}
 
 	}
