@@ -237,8 +237,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks, FullBlockStore store)
-			throws BlockStoreException {
+	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks, FullBlockStore store) {
 		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 
 		allApprovedNewBlocks.addAll(allApproved);
@@ -341,16 +340,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	public Sha256Hash getExecutionPrev(Block block) {
-		switch (block.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			return new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData())
-					.getPrevblockhash();
-		case BLOCKTYPE_ORDER_EXECUTE:
-			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
-
-		default:
-			throw new RuntimeException("Wrong block.getBlockType()");
-		}
+        return switch (block.getBlockType()) {
+            case BLOCKTYPE_CONTRACT_EXECUTE ->
+                    new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData())
+                            .getPrevblockhash();
+            case BLOCKTYPE_ORDER_EXECUTE ->
+                    new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
+            default -> throw new RuntimeException("Wrong block.getBlockType()");
+        };
 	}
 
 	/*
@@ -404,7 +401,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 			//no milestone blocks can be here
 			if( block.getBlockEvaluation().getMilestone() >0 ) {
-				throw new VerificationException("no milestone block can be here" +  block.toString());
+				throw new VerificationException("no milestone block can be here" + block);
 			}
 			// Nothing added if already in set
 			if (checkExists(blocks, block))
@@ -1067,7 +1064,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * @return true if the given set is eligible
 	 */
 	public boolean isEligibleForApprovalSelection(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			FullBlockStore store) throws BlockStoreException {
+			FullBlockStore store) {
 		// Currently ineligible blocks are not ineligible. If we find one, we
 		// must stop
 		if (!findWhereCurrentlyIneligible(currentApprovedUnconfirmedBlocks).isEmpty())
@@ -1148,15 +1145,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 		// type-specific updates
 		switch (block.getBlock().getBlockType()) {
-		case BLOCKTYPE_CROSSTANGLE:
+		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
+             BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-		case BLOCKTYPE_FILE:
-			break;
-		case BLOCKTYPE_GOVERNANCE:
-			break;
-		case BLOCKTYPE_INITIAL:
-			break;
-		case BLOCKTYPE_REWARD:
+            case BLOCKTYPE_REWARD:
 			confirmReward(block, confirmation, blockStore);
 			// For history, OrderMatching is part of rewards
 			if (!enableOrderMatchExecutionChain(block.getBlock())) {
@@ -1166,26 +1158,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		case BLOCKTYPE_TOKEN_CREATION:
 			confirmToken(block, confirmation, blockStore);
 			break;
-		case BLOCKTYPE_TRANSFER:
-			break;
-		case BLOCKTYPE_USERDATA:
+            case BLOCKTYPE_USERDATA:
 			confirmVOSOrUserData(block, confirmation, blockStore);
 			break;
-		case BLOCKTYPE_CONTRACT_EVENT:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
+            case BLOCKTYPE_CONTRACT_EXECUTE:
 			confirmContractExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_ORDER_EXECUTE:
 			confirmOrderExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
 			break;
-		case BLOCKTYPE_ORDER_OPEN:
-			break;
-		case BLOCKTYPE_ORDER_CANCEL:
-			break;
-		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
-			break;
-		default:
+            default:
 			throw new RuntimeException("Not Implemented");
 
 		}
@@ -1348,9 +1330,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					blockStore.updateOrderSpent(check.getToBeSpentRecord());
 
 				 
-					blockStore.updateOrderConfirmed( check.getRemainderOrderRecord() ,false);;
+					blockStore.updateOrderConfirmed( check.getRemainderOrderRecord() ,false);
 
-					for (Sha256Hash ref : check.getReferencedBlocks()) {
+                    for (Sha256Hash ref : check.getReferencedBlocks()) {
 						blockStore.updateOrderBlockhash(ref, Sha256Hash.ZERO_HASH, false, false, null);
 					}
 					if (prevblockhash.getOrderExecutionResult() != null) {

@@ -37,10 +37,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 
 	}
 
-	// private static final Logger log =
-	// LoggerFactory.getLogger(ServiceOrderExecution.class);
-
-	public OrderExecutionResult orderMatching(Block block, Orderresult prev, Set<Sha256Hash> collectedBlocks,
+    public OrderExecutionResult orderMatching(Block block, Orderresult prev, Set<Sha256Hash> collectedBlocks,
 			FullBlockStore blockStore) throws BlockStoreException {
 		TreeMap<ByteBuffer, TreeMap<String, BigInteger>> payouts = new TreeMap<>();
 
@@ -50,9 +47,9 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		// Collect all orders approved by this block in the interval
 		List<OrderCancelInfo> cancels = new ArrayList<>();
 		Map<Sha256Hash, OrderRecord> sortedNewOrders = new TreeMap<>(
-				Comparator.comparing(hash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) hash).getBytes(), randomness))));
+				Comparator.comparing(hash -> Sha256Hash.wrap(Utils.xor(hash.getBytes(), randomness))));
 
-		HashMap<Sha256Hash, OrderRecord> remainingOrders = new HashMap<Sha256Hash, OrderRecord>();
+		HashMap<Sha256Hash, OrderRecord> remainingOrders = new HashMap<>();
 		if (!Sha256Hash.ZERO_HASH.equals(prev.getBlockHash())) {
 			// new order must be from collectedBlocks, not this write as
 			// Sha256Hash.ZERO_HASH in orders
@@ -67,7 +64,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		collectOrdersWithCancel(block, collectedBlocks, cancels, sortedNewOrders, toBeSpentOrders, blockStore);
 		// sort order for execute in deterministic randomness
 		Map<Sha256Hash, OrderRecord> sortedOldOrders = new TreeMap<>(
-				Comparator.comparing(hash -> Sha256Hash.wrap(Utils.xor(((Sha256Hash) hash).getBytes(), randomness))));
+				Comparator.comparing(hash -> Sha256Hash.wrap(Utils.xor(hash.getBytes(), randomness))));
 		sortedOldOrders.putAll(remainingOrders);
 		remainingOrders.putAll(sortedNewOrders);
 
@@ -90,7 +87,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		// order books
 		int orderId = 0;
 		ArrayList<OrderRecord> orderId2Order = new ArrayList<>();
-		TreeMap<TradePair, OrderBook> orderBooks = new TreeMap<TradePair, OrderBook>();
+		TreeMap<TradePair, OrderBook> orderBooks = new TreeMap<>();
 
 		// Add old orders first without not valid yet
 		for (OrderRecord o : sortedOldOrders.values()) {

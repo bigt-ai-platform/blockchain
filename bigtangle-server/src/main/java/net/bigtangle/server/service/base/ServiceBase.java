@@ -12,13 +12,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
@@ -59,7 +57,6 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
-import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.FullBlockStore;
@@ -78,8 +75,8 @@ public abstract class ServiceBase {
 	protected abstract void connectUTXOs(Block block, List<Transaction> transactions, FullBlockStore blockStore)
 			throws BlockStoreException;
 
-	protected abstract Optional<OrderMatchingResult> calculateBlockOrderMatchingResult(Block block,
-			FullBlockStore blockStore) throws BlockStoreException;
+	protected abstract void calculateBlockOrderMatchingResult(Block block,
+															  FullBlockStore blockStore) throws BlockStoreException;
 
 	public ServiceBase(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService) {
@@ -104,21 +101,16 @@ public abstract class ServiceBase {
 
 	/**
 	 * get domainname token multi sign address
-	 * 
-	 * @param domainNameBlockHash
-	 * @return
-	 * @throws BlockStoreException
-	 */
+	 *
+     */
 	public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,
 			FullBlockStore store) throws BlockStoreException {
 		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHash())) {
-			List<MultiSignAddress> multiSignAddresses = new ArrayList<MultiSignAddress>();
-			for (Iterator<PermissionDomainname> iterator = networkParameters.getPermissionDomainnameList()
-					.iterator(); iterator.hasNext();) {
-				PermissionDomainname permissionDomainname = iterator.next();
-				ECKey ecKey = permissionDomainname.getOutKey();
-				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
-			}
+			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
+            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
+                ECKey ecKey = permissionDomainname.getOutKey();
+                multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
+            }
 			return multiSignAddresses;
 		} else {
 			Token token = store.queryDomainnameToken(domainNameBlockHash);
@@ -126,9 +118,8 @@ public abstract class ServiceBase {
 				throw new BlockStoreException("token not found");
 
 			final String tokenid = token.getTokenid();
-			List<MultiSignAddress> multiSignAddresses = store.getMultiSignAddressListByTokenidAndBlockHashHex(tokenid,
-					token.getBlockHash());
-			return multiSignAddresses;
+            return store.getMultiSignAddressListByTokenidAndBlockHashHex(tokenid,
+                    token.getBlockHash());
 		}
 	}
 
@@ -172,15 +163,11 @@ public abstract class ServiceBase {
 
 		}
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_CROSSTANGLE:
+		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
+             BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_CONTRACT_EXECUTE, BLOCKTYPE_ORDER_EXECUTE,
+             BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-		case BLOCKTYPE_FILE:
-			break;
-		case BLOCKTYPE_GOVERNANCE:
-			break;
-		case BLOCKTYPE_INITIAL:
-			break;
-		case BLOCKTYPE_REWARD:
+            case BLOCKTYPE_REWARD:
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(rewardInfo.getPrevRewardHash());
 			break;
@@ -190,23 +177,7 @@ public abstract class ServiceBase {
 			if (currentToken.getToken().getPrevblockhash() != null)
 				allrequireds.add(currentToken.getToken().getPrevblockhash());
 			break;
-		case BLOCKTYPE_TRANSFER:
-			break;
-		case BLOCKTYPE_USERDATA:
-			break;
-		case BLOCKTYPE_CONTRACT_EVENT:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_OPEN:
-			break;
-		case BLOCKTYPE_ORDER_CANCEL:
-			break;
-		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
-			break;
-		default:
+            default:
 			throw new RuntimeException("No Implementation");
 		}
 
@@ -230,7 +201,7 @@ public abstract class ServiceBase {
 			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData())
 					.getReferencedBlocks();
 		}
-		return new HashSet<Sha256Hash>();
+		return new HashSet<>();
 	}
 
 	public Block getBlock(Sha256Hash blockhash, FullBlockStore store) throws BlockStoreException {
@@ -273,9 +244,7 @@ public abstract class ServiceBase {
 
 	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength,
 			FullBlockStore store) throws BlockStoreException {
-		// long minChainLength = Math.max(0, currChainLength -
-		// NetworkParameters.MILESTONE_CUTOFF);
-		return store.getBlocksInMilestoneInterval(minChainLength, currChainLength);
+        return store.getBlocksInMilestoneInterval(minChainLength, currChainLength);
 
 	}
 
@@ -301,12 +270,9 @@ public abstract class ServiceBase {
 		return GetBlockListResponse.create(store.blocksFromChainLength(start, end));
 	}
 
-	public long getRewardMaxHeight(Sha256Hash prevRewardHash) {
+	public long getRewardMaxHeight() {
 		return Long.MAX_VALUE;
-		// Block rewardBlock = store.get(prevRewardHash);
-		// return rewardBlock.getHeight() +
-		// NetworkParameters.FORWARD_BLOCK_HORIZON;
-	}
+    }
 
 	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, FullBlockStore store) throws BlockStoreException {
 
@@ -325,26 +291,13 @@ public abstract class ServiceBase {
 		return getBlock(currPrevRewardHash, store).getHeight();
 	}
 
-	public long calcHeightRequiredBlocks(Block block, List<BlockWrap> allPredecessors, FullBlockStore store)
+	public SolidityState getMinPredecessorSolidity(Block block,
+												   List<BlockWrap> allPredecessors, FullBlockStore store, boolean predecessorsSolid)
 			throws BlockStoreException {
-		// List<BlockWrap> requires = getAllRequirements(block, store);
-		long height = 0;
-		for (BlockWrap b : allPredecessors) {
-			height = Math.max(height, b.getBlock().getHeight());
-		}
-		return height + 1;
-	}
 
-	public SolidityState getMinPredecessorSolidity(Block block, boolean throwExceptions,
-			List<BlockWrap> allPredecessors, FullBlockStore store, boolean predecessorsSolid)
-			throws BlockStoreException {
-		// final List<BlockWrap> allPredecessors = getAllRequirements(block, store);
-		// SolidityState missingCalculation = null;
-
-		for (BlockWrap predecessor : allPredecessors) {
+        for (BlockWrap predecessor : allPredecessors) {
 			if (predecessor.getBlockEvaluation().getSolid() == 2) {
-				continue;
-			} else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
+            } else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
 				SolidityState solidityState = SolidityState.getSuccessState();
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 						.solidifyBlock(predecessor.getBlock(), solidityState, true, store);
@@ -354,8 +307,7 @@ public abstract class ServiceBase {
 			} else {
 				// TODO check logger.warn("predecessor.getBlockEvaluation().getSolid() = "
 				// + predecessor.getBlockEvaluation().getSolid() + " " + block.toString());
-				continue;
-				// throw new RuntimeException("not implemented");
+                // throw new RuntimeException("not implemented");
 			}
 		}
 
@@ -392,16 +344,15 @@ public abstract class ServiceBase {
 	public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,
 			FullBlockStore store) throws BlockStoreException {
 		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
-			List<MultiSignAddress> multiSignAddresses = new ArrayList<MultiSignAddress>();
+			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (Iterator<PermissionDomainname> iterator = networkParameters.getPermissionDomainnameList()
 					.iterator(); iterator.hasNext();) {
 				PermissionDomainname permissionDomainname = iterator.next();
 				ECKey ecKey = permissionDomainname.getOutKey();
 				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
 			}
-			PermissionedAddressesResponse response = (PermissionedAddressesResponse) PermissionedAddressesResponse
-					.create("", false, multiSignAddresses);
-			return response;
+            return (PermissionedAddressesResponse) PermissionedAddressesResponse
+                    .create("", false, multiSignAddresses);
 		} else {
 			Token token = store.getTokenByBlockHash(Sha256Hash.wrap(domainNameBlockHash));
 			final String domainName = token.getTokenname();
@@ -409,9 +360,8 @@ public abstract class ServiceBase {
 			List<MultiSignAddress> multiSignAddresses = this
 					.queryDomainnameTokenMultiSignAddresses(token.getBlockHash(), store);
 
-			PermissionedAddressesResponse response = (PermissionedAddressesResponse) PermissionedAddressesResponse
-					.create(domainName, false, multiSignAddresses);
-			return response;
+            return (PermissionedAddressesResponse) PermissionedAddressesResponse
+                    .create(domainName, false, multiSignAddresses);
 		}
 	}
 
@@ -428,7 +378,7 @@ public abstract class ServiceBase {
 
 					}
 
-					if (!fromAddress.equals(""))
+					if (!fromAddress.isEmpty())
 						return fromAddress;
 				} catch (Exception e) {
 					// No address found.
@@ -496,8 +446,7 @@ public abstract class ServiceBase {
 	 * to ensure that the approved blocks result in an eligible reward block.
 	 * 
 	 * @return mining reward transaction
-	 * @throws BlockStoreException
-	 */
+     */
 	public Transaction generateVirtualMiningRewardTX1(Block block, FullBlockStore blockStore)
 			throws BlockStoreException {
 
@@ -506,8 +455,8 @@ public abstract class ServiceBase {
 
 		// Count how many blocks from miners in the reward interval are approved
 		// and build rewards
-		Queue<BlockWrap> blockQueue = new PriorityQueue<BlockWrap>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+		Queue<BlockWrap> blockQueue = new PriorityQueue<>(
+                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
 		for (Sha256Hash bHash : candidateBlocks) {
 			blockQueue.add(getBlockWrap(bHash, blockStore));
 		}
@@ -516,7 +465,7 @@ public abstract class ServiceBase {
 		Set<BlockWrap> currentHeightBlocks = new HashSet<>();
 		Map<BlockWrap, Set<Sha256Hash>> snapshotWeights = new HashMap<>();
 		Map<Address, Long> finalRewardCount = new HashMap<>();
-		BlockWrap currentBlock = null, approvedBlock = null;
+		BlockWrap currentBlock, approvedBlock;
 		Address consensusBlockMiner = new Address(networkParameters, block.getMinerAddress());
 		long currentHeight = Long.MAX_VALUE;
 		long totalRewardCount = 0;
@@ -578,9 +527,7 @@ public abstract class ServiceBase {
 		// finish payout
 		// calculation
 		if (currentHeight == 0) {
-			totalRewardCount = calculateHeightRewards(currentHeightBlocks, snapshotWeights, finalRewardCount,
-					totalRewardCount);
-		}
+        }
 
 		// Build transaction outputs sorted by addresses
 		Transaction tx = new Transaction(networkParameters);
@@ -591,7 +538,7 @@ public abstract class ServiceBase {
 		// Reward twice: once the consensus block, once the normal block maker
 		// of good quantiles
 		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream()
-				.sorted(Comparator.comparing((Entry<Address, Long> e) -> e.getKey())).collect(Collectors.toList())) {
+				.sorted(Comparator.comparing((Entry<Address, Long> e) -> e.getKey())).toList()) {
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD),
 					consensusBlockMiner);
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD), entry.getKey());
@@ -618,7 +565,7 @@ public abstract class ServiceBase {
 		long rewarded = 0;
 		for (BlockWrap rewardedBlock : currentHeightBlocks.stream()
 				.sorted(Comparator.comparingLong(b -> snapshotWeights.get(b).size()).reversed())
-				.collect(Collectors.toList())) {
+				.toList()) {
 			if (rewarded >= heightRewardCount)
 				break;
 
@@ -645,7 +592,7 @@ public abstract class ServiceBase {
 
 	protected void insertVirtualUTXOs(Block block, Transaction virtualTx, FullBlockStore blockStore) {
 		try {
-			ArrayList<Transaction> txs = new ArrayList<Transaction>();
+			ArrayList<Transaction> txs = new ArrayList<>();
 			txs.add(virtualTx);
 			connectUTXOs(block, txs, blockStore);
 		} catch (BlockStoreException e) {
@@ -720,7 +667,7 @@ public abstract class ServiceBase {
 	public void solidifyBlocks(RewardInfo currRewardInfo, FullBlockStore store) throws BlockStoreException {
 		Comparator<Block> comparator = Comparator.comparingLong((Block b) -> b.getHeight())
 				.thenComparing((Block b) -> b.getHash());
-		TreeSet<Block> referencedBlocks = new TreeSet<Block>(comparator);
+		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			Block block = getBlock(hash, store);
 			if (block != null)
@@ -731,7 +678,7 @@ public abstract class ServiceBase {
 		}
 	}
 
-	public boolean solidifyWaiting(Block block, FullBlockStore store) throws BlockStoreException {
+	public void solidifyWaiting(Block block, FullBlockStore store) throws BlockStoreException {
 
 		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
 				.checkSolidity(block, false, store, false);
@@ -741,7 +688,6 @@ public abstract class ServiceBase {
 		} else {
 			solidifyBlock(block, solidityState, false, store);
 		}
-		return true;
 	}
 
 	public boolean getUTXOConfirmed(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
@@ -750,10 +696,6 @@ public abstract class ServiceBase {
 
 	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
 		return store.getTransactionOutputSpender(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
-	}
-
-	public UTXO getUTXO(TransactionOutPoint out, FullBlockStore store) throws BlockStoreException {
-		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
 	}
 
 	public long getCurrentMaxHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
@@ -838,7 +780,7 @@ public abstract class ServiceBase {
 	}
 
 	private List<UTXO> getOutputs(String tokenid, FullBlockStore store)
-			throws UTXOProviderException, BlockStoreException {
+			throws UTXOProviderException {
 		// Must be sorted with the key of
 		return store.getOpenAllOutputs(tokenid);
 	}

@@ -173,23 +173,11 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 	public void connectTypeSpecificUTXOs(Block block, FullBlockStore blockStore) throws BlockStoreException {
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_CROSSTANGLE:
-			break;
-		case BLOCKTYPE_FILE:
-			break;
-		case BLOCKTYPE_GOVERNANCE:
-			break;
-		case BLOCKTYPE_INITIAL:
-			break;
-		case BLOCKTYPE_REWARD:
-			break;
+
 		case BLOCKTYPE_TOKEN_CREATION:
 			connectToken(block, blockStore);
 			break;
-		case BLOCKTYPE_TRANSFER:
-			break;
-		case BLOCKTYPE_USERDATA:
-			break;
+
 		case BLOCKTYPE_CONTRACT_EXECUTE:
 			connectContractExecute(block, blockStore);
 			break;

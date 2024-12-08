@@ -202,7 +202,7 @@ public class TipsService {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		long cutoffHeight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
-		long maxHeight = serviceBase.getRewardMaxHeight(prevRewardHash);
+		long maxHeight = serviceBase.getRewardMaxHeight();
 		long prevMilestoneNumber = store.getRewardChainLength(prevRewardHash);
 		HashSet<BlockWrap> currentNewMilestoneBlocks = new HashSet<>();
 

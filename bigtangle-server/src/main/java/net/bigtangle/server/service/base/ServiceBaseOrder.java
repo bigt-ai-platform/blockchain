@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
@@ -564,12 +563,11 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	/**
 	 * Calculates and inserts any virtual transaction outputs so dependees can
 	 * become solid
-	 * 
+	 *
 	 * @param block
-	 * @return
 	 * @throws BlockStoreException
 	 */
-	public Optional<OrderMatchingResult> calculateBlockOrderMatchingResult(Block block, FullBlockStore blockStore)
+	public void calculateBlockOrderMatchingResult(Block block, FullBlockStore blockStore)
 			throws BlockStoreException {
 
 		Transaction tx = null;
@@ -621,7 +619,6 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 		}
 
 		// Return the computation result
-		return Optional.ofNullable(matchingResult);
 	}
 
 }

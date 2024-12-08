@@ -1211,7 +1211,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 
 			// Inherit solidity from predecessors if they are not solid
-			SolidityState minPredecessorSolidity = getMinPredecessorSolidity(block, throwExceptions, allRequirements,
+			SolidityState minPredecessorSolidity = getMinPredecessorSolidity(block, allRequirements,
 					store, !allowMissingPredecessor);
 
 			// For consensus blocks, it works as follows:

@@ -3,15 +3,10 @@ package net.bigtangle.server.service.base;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
+import net.bigtangle.server.core.ConflictCandidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +47,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
 		if (!solidityState.isSuccessState())
-			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState.toString());
+			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState);
 
 		// Solidify referenced blocks
 		solidifyBlocks(currRewardInfo, store);
@@ -68,8 +63,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				.checkSolidity(newMilestoneBlock, false, store, false);
 
 		if (!solidityState.isSuccessState())
-			throw new VerificationException(" .checkSolidity is failed: " + solidityState.toString()
-					+ "\n with block = " + newMilestoneBlock.toString());
+			throw new VerificationException(" .checkSolidity is failed: " + solidityState
+					+ "\n with block = " + newMilestoneBlock);
 
 		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
 
@@ -93,8 +88,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		}
 		// If any conflicts exist between the current set of
 		// blocks, no-go
-		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(b -> b.toConflictCandidates())
-				.flatMap(i -> i.stream()).collect(Collectors.groupingBy(i -> i.getConflictPoint())).values().stream()
+		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint)).values().stream()
 				.anyMatch(l -> l.size() > 1);
 		if (anyCandidateConflicts)
 			showConflict(allApprovedNewBlocks);
@@ -181,7 +176,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 			BlockWrap block = getBlockWrap(hash, store);
 			if (block.getBlock().getBlockType() == Type.BLOCKTYPE_REWARD)
 				throw new VerificationException(
-						"Reward block referenced block has other reward blocks" + block.toString());
+						"Reward block referenced block has other reward blocks" + block);
 		}
 	}
 
@@ -240,7 +235,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	}
 
 	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {
-		List<Block.Type> ordertypes = new ArrayList<Block.Type>();
+		List<Block.Type> ordertypes = new ArrayList<>();
 
 		ordertypes.add(Block.Type.BLOCKTYPE_INITIAL);
 		ordertypes.add(Block.Type.BLOCKTYPE_TRANSFER);
@@ -282,7 +277,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		Block head = getChainHead(store);
 		final Block splitPoint = findSplit(newChainHead, head, store);
 		if (splitPoint == null) {
-			logger.info(" splitPoint is null, the chain ist not complete: ", newChainHead);
+			logger.info(" splitPoint is null, the chain ist not complete: {} ", newChainHead);
 			return;
 		}
 
@@ -292,14 +287,14 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		logger.info("Split at block: \n {}", splitPoint);
 		// Then build a list of all blocks in the old part of the chain and the
 		// new part.
-		LinkedList<Block> oldBlocks = new LinkedList<Block>();
+		LinkedList<Block> oldBlocks = new LinkedList<>();
 		if (!head.getHash().equals(splitPoint.getHash())) {
 			oldBlocks = getPartialChain(head, splitPoint, store);
 		}
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
 		// Disconnect each block in the previous best chain that is no
 		// longer in the new best chain from last to begin
-		Collections.sort(oldBlocks, new SortbyBlock());
+		oldBlocks.sort(new SortbyBlock());
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
 			if (!oldBlock.getHash().equals(networkParameters.getGenesisBlock().getHash())) {
@@ -332,7 +327,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	private void unconfirmBlocks(FullBlockStore store, long milestoneNumber, List<Sha256Hash> blocksInMilestoneInterval)
 			throws BlockStoreException {
-		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<BlockWrap>();
+		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 		for (Sha256Hash b : blocksInMilestoneInterval) {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
 		}
