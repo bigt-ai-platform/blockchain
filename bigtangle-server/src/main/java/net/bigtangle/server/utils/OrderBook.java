@@ -4,7 +4,6 @@
  *******************************************************************************/
 package net.bigtangle.server.utils;
 
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -50,16 +49,12 @@ public class OrderBook {
         this.bids = new Long2ObjectRBTreeMap<>(LongComparators.OPPOSITE_COMPARATOR);
         this.asks = new Long2ObjectRBTreeMap<>(LongComparators.NATURAL_COMPARATOR);
 //        this.orders = new Long2ObjectOpenHashMap<>();
-        this.orders = new ConcurrentHashMap<String, Order>();
+        this.orders = new ConcurrentHashMap<>();
         this.listener = listener;
     }
     
     public void enter(long orderId_, Side side, long price, long size) {
         this.enter(String.valueOf(orderId_), side, price, size);
-    }
-
-    public void enter(Side side, long price, long size) {
-        this.enter(UUID.randomUUID().toString().replaceAll("-", ""), side, price, size);
     }
 
     /**

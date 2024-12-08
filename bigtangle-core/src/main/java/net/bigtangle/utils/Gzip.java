@@ -12,7 +12,7 @@ public class Gzip {
  
     public static byte[] decompressOut(byte[] contentBytes) throws IOException {
         if (contentBytes.length == 0)
-            return null;
+            return new byte[0];
         ByteArrayInputStream bis = new ByteArrayInputStream(contentBytes);
         GZIPInputStream gis = new GZIPInputStream(bis);
         return IOUtils.toByteArray(gis);

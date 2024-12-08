@@ -24,7 +24,7 @@ public class BeforeStartup {
     @PostConstruct
     public void run() throws Exception {
 
-        logger.debug("server config: " + serverConfiguration.toString());
+        logger.debug("server config: {}", serverConfiguration.toString());
             
         // set false in test
         if (serverConfiguration.getCreatetable()) {

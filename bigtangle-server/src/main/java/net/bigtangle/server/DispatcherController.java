@@ -1,13 +1,12 @@
 /*******************************************************************************
- *  
+ * <p>
  *  Copyright   2018  Inasset GmbH. 
  *******************************************************************************/
 package net.bigtangle.server;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,8 +30,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.base.Stopwatch;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -127,22 +124,15 @@ public class DispatcherController {
 		userDataService.addStatistcs(reqCmd, remoteAddr(httprequest));
 		if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 			Stopwatch watch = Stopwatch.createStarted();
-			// logger.debug(" denied " +remoteAddr(httprequest) + " " + reqCmd
-			// );
-			errorLimit(httpServletResponse, watch);
+            errorLimit(httpServletResponse, watch);
 			return;
-			// rollingBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget()
-			// / 100000);
-		}
+        }
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
-				processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
-				return "";
-			}
-		});
+		final Future<String> handler = executor.submit((Callable) () -> {
+            processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
+            return "";
+        });
 		try {
 			handler.get(serverConfiguration.getTimeoutMinute(), TimeUnit.MINUTES);
 		} catch (TimeoutException e) {
@@ -174,7 +164,7 @@ public class DispatcherController {
 			if (!checkPermission(httpServletResponse, httprequest, watch, store)) {
 				return;
 			}
-			if (!checkReady(httpServletResponse, httprequest, watch)) {
+			if (!checkReady(httpServletResponse, watch)) {
 				return;
 			}
 			switch (reqCmd0000) {
@@ -182,21 +172,18 @@ public class DispatcherController {
 				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					// return bomb
-					logger.debug("bomb getDifficultyTarget " + remoteAddr(httprequest) + " " + reqCmd);
+                    logger.debug("bomb getDifficultyTarget {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
-					// rollingBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget()
-					// / 100000);
-				}
-				// register(rollingBlock, store);
-				// logger.debug(" getTip " + rollingBlock.toString());
+                }
+
 				byte[] data = rollingBlock.bitcoinSerialize();
 				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
 			}
 				break;
 			case saveBlock: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-					logger.debug("saveBlock denied " + remoteAddr(httprequest) + " " + reqCmd);
+                    logger.debug("saveBlock denied {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
 				}
@@ -209,13 +196,13 @@ public class DispatcherController {
 				break;
 			case getOutputs: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-					logger.debug("getOutputs denied " + remoteAddr(httprequest) + " " + reqCmd);
+                    logger.debug("getOutputs denied {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
 				}
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
-				Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
+				Set<byte[]> pubKeyHashs = new HashSet<>();
 				for (String keyStrHex : keyStrHex000) {
 					pubKeyHashs.add(Utils.HEX.decode(keyStrHex));
 				}
@@ -228,7 +215,7 @@ public class DispatcherController {
 			}
 				break;
 			case outputsOfTokenid: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = walletService.getOpenAllOutputsResponse((String) request.get("tokenid"),
 						store);
@@ -237,35 +224,31 @@ public class DispatcherController {
 				break;
 
 			case searchTokens: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				GetTokensResponse response = tokensService.searchTokens((String) request.get("name"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case searchWebTokens: {
-			//	String reqStr = new String(bodyByte, "UTF-8");
-			//	Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = tokensService.getWebTokensList(store);
+                AbstractResponse response = tokensService.getWebTokensList(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case searchContractTokens: {
-			//	String reqStr = new String(bodyByte, "UTF-8");
-			//	Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = tokensService.getContractTokensList(store);
+                AbstractResponse response = tokensService.getContractTokensList(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case searchExchangeTokens: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				GetTokensResponse response = tokensService.searchExchangeTokens((String) request.get("name"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case getTokenById: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = tokensService.getTokenById((String) request.get("tokenid"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
@@ -273,12 +256,12 @@ public class DispatcherController {
 				break;
 			case getBalances: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-					logger.debug("getOutputs getBalances " + remoteAddr(httprequest) + " " + reqCmd);
+                    logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
 					return;
 				}
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
-				Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
+				Set<byte[]> pubKeyHashs = new HashSet<>();
 				for (String keyStrHex : keyStrHex000) {
 					pubKeyHashs.add(Utils.HEX.decode(keyStrHex));
 				}
@@ -289,12 +272,12 @@ public class DispatcherController {
 
 			case getAccountBalances: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-					logger.debug("getOutputs getBalances " + remoteAddr(httprequest) + " " + reqCmd);
+                    logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
 					return;
 				}
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
-				Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
+				Set<byte[]> pubKeyHashs = new HashSet<>();
 				for (String keyStrHex : keyStrHex000) {
 					pubKeyHashs.add(Utils.HEX.decode(keyStrHex));
 				}
@@ -304,7 +287,7 @@ public class DispatcherController {
 				break;
 
 			case findBlockEvaluation: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = this.blockService.searchBlock(request, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
@@ -312,7 +295,7 @@ public class DispatcherController {
 				break;
 
 			case searchBlockByBlockHashs: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = this.blockService.searchBlockByBlockHashs(request, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
@@ -320,7 +303,7 @@ public class DispatcherController {
 				break;
 
 			case getBlockByHash: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				if (request.get("hashHex") != null) {
 					Block block = this.blockService.getBlock(Sha256Hash.wrap(request.get("hashHex").toString()), store);
@@ -340,14 +323,14 @@ public class DispatcherController {
 			}
 				break;
 			case adjustHeight: {
-				Block block = (Block) networkParameters.getDefaultSerializer().makeBlock(bodyByte);
+				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 				this.blockService.adjustHeightRequiredBlocks(block, store);
 				this.outPointBinaryArray(httpServletResponse, block.bitcoinSerialize(), reqCmd);
 			}
 				break;
 
 			case blocksFromChainLength: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				GetBlockListResponse response = this.blockService.blocksFromChainLength(
 						Long.valueOf((String) request.get("start")), Long.valueOf((String) request.get("end")), store);
@@ -356,16 +339,16 @@ public class DispatcherController {
 			}
 				break;
 			case blocksFromNonChainHeight: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				long cutoffHeight = Long.parseLong(
-						(String) request.get("cutoffHeight") == null ? "1" : (String) request.get("cutoffHeight"));
+						request.get("cutoffHeight") == null ? "1" : (String) request.get("cutoffHeight"));
 				GetBlockListResponse response = this.blockService.blocksFromNonChainHeigth(cutoffHeight, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case getTokenSignByAddress: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String address = (String) request.get("address");
 				String tokenid = (String) request.get("tokenid");
@@ -374,7 +357,7 @@ public class DispatcherController {
 			}
 				break;
 			case getTokenSigns: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String tokenid = (String) request.get("tokenid");
 				long tokenindex = Long.parseLong(request.get("tokenindex") + "");
@@ -384,11 +367,11 @@ public class DispatcherController {
 			}
 				break;
 			case getTokenSignByTokenid: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String tokenid = (String) request.get("tokenid");
 				String tokenindex = (String) request.get("tokenindex");
-				if (tokenindex == null || "".equals(tokenindex.trim())) {
+				if (tokenindex == null || tokenindex.trim().isEmpty()) {
 					tokenindex = "-1";
 				}
 				Boolean isSign = (Boolean) request.get("isSign");
@@ -406,7 +389,7 @@ public class DispatcherController {
 				break;
 
 			case getTokenIndex: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String tokenid = (String) request.get("tokenid");
 				AbstractResponse response = this.multiSignService.getNextTokenSerialIndex(tokenid, store);
@@ -414,7 +397,7 @@ public class DispatcherController {
 			}
 				break;
 			case getUserData: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String dataclassname = (String) request.get("dataclassname");
 				String pubKey = (String) request.get("pubKey");
@@ -423,7 +406,7 @@ public class DispatcherController {
 			}
 				break;
 			case userDataList: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				int blocktype = (int) request.get("blocktype");
 				List<String> pubKeyList = (List<String>) request.get("pubKeyList");
@@ -437,21 +420,21 @@ public class DispatcherController {
 			}
 				break;
 			case payMultiSign: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = this.payMultiSignService.payMultiSign(request, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case getPayMultiSignList: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
 				AbstractResponse response = this.payMultiSignService.getPayMultiSignList(keyStrHex000, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case getPayMultiSignAddressList: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String orderid = (String) request.get("orderid");
 				AbstractResponse response = this.payMultiSignService.getPayMultiSignAddressList(orderid, store);
@@ -459,7 +442,7 @@ public class DispatcherController {
 			}
 				break;
 			case payMultiSignDetails: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String orderid = (String) request.get("orderid");
 				AbstractResponse response = this.payMultiSignService.getPayMultiSignDetails(orderid, store);
@@ -467,7 +450,7 @@ public class DispatcherController {
 			}
 				break;
 			case getOutputByKey: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String hexStr = (String) request.get("hexStr");
 				AbstractResponse response = walletService.getOutputsWithHexStr(hexStr, store);
@@ -476,7 +459,7 @@ public class DispatcherController {
 				break;
 
 			case regSubtangle: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubkey = (String) request.get("pubkey");
 				String signHex = (String) request.get("signHex");
@@ -489,7 +472,7 @@ public class DispatcherController {
 			}
 				break;
 			case updateSubtangle: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubkey = (String) request.get("pubkey");
 				String userdataPubkey = (String) request.get("userdataPubkey");
@@ -499,29 +482,25 @@ public class DispatcherController {
 			}
 				break;
 			case getOrders: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String spentStr = (String) request.get("spent");
-				String address = (String) request.get("address");
+                String address = (String) request.get("address");
 				String tokenid = (String) request.get("tokenid");
-				boolean spent = false;
-				if (spentStr != null && spentStr.equals("true"))
-					spent = true;
-				List<String> addresses = (List<String>) request.get("addresses");
+                List<String> addresses = (List<String>) request.get("addresses");
 				AbstractResponse response = orderdataService.getOrderdataList(address, addresses, tokenid,
 						store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case getOrdersTicker: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				Long startDate = (Long) request.get("startDate");
 				Long endDate = (Long) request.get("endDate");
 				Integer count = (Integer) request.get("count");
 				String basetoken = (String) request.get("basetoken");
 				String interval = (String) request.get("interval");
-				Set<String> tokenids = new HashSet<String>((List<String>) request.get("tokenids"));
+				Set<String> tokenids = new HashSet<>((List<String>) request.get("tokenids"));
 				// logger.debug(request.toString() );
 
 				if (count != null) {
@@ -529,7 +508,7 @@ public class DispatcherController {
 					AbstractResponse response = orderTickerService.getLastMatchingEvents(tokenids, basetoken, store);
 					this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 				} else {
-					AbstractResponse response = null;
+					AbstractResponse response;
 					if ("43200".equals(interval)) {
 						response = orderTickerService.getTimeAVBGBetweenMatchingEvents(tokenids, basetoken, null, null,
 								store);
@@ -543,7 +522,7 @@ public class DispatcherController {
 			}
 				break;
 			case getTokenPermissionedAddresses: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				final String domainNameBlockHash = (String) request.get("domainNameBlockHash");
 				PermissionedAddressesResponse response = this.tokenDomainnameService
@@ -552,11 +531,11 @@ public class DispatcherController {
 			}
 				break;
 			case getDomainNameBlockHash: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				final String domainname = (String) request.get("domainname");
 				final String token = (String) request.get("token");
-				if (token == null || "".equals(token)) {
+				if (token == null || token.isEmpty()) {
 					this.outPrintJSONString(httpServletResponse,
 							this.tokenDomainnameService.queryParentDomainnameBlockHash(domainname, store), watch,
 							reqCmd);
@@ -569,23 +548,23 @@ public class DispatcherController {
 				break;
 
 			case getChainNumber: {
-				String reqStr = new String(bodyByte, "UTF-8");
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = rewardService.getMaxConfirmedReward(store);
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+                Json.jsonmapper().readValue(reqStr, Map.class);
+                AbstractResponse response = rewardService.getMaxConfirmedReward(store);
 
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 
 			case getAllConfirmedReward: {
-				String reqStr = new String(bodyByte, "UTF-8");
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = rewardService.getAllConfirmedReward(store);
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+                Json.jsonmapper().readValue(reqStr, Map.class);
+                AbstractResponse response = rewardService.getAllConfirmedReward(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 			case findRetryBlocks: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = this.blockService.findRetryBlocks(request, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
@@ -593,7 +572,7 @@ public class DispatcherController {
 				break;
 
 			case getSessionRandomNum: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubKey = (String) request.get("pubKey");
 				AbstractResponse response = this.accessPermissionedService.getSessionRandomNumResp(pubKey, store);
@@ -602,7 +581,7 @@ public class DispatcherController {
 				break;
 
 			case addAccessGrant: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubKey = (String) request.get("pubKey");
 				this.accessGrantService.addAccessGrant(pubKey, store);
@@ -611,7 +590,7 @@ public class DispatcherController {
 				break;
 
 			case deleteAccessGrant: {
-				String reqStr = new String(bodyByte, "UTF-8");
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubKey = (String) request.get("pubKey");
 				this.accessGrantService.deleteAccessGrant(pubKey, store);
@@ -649,8 +628,7 @@ public class DispatcherController {
 		} finally {
 			store.close();
 			if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
-				logger.info(reqCmd + " takes {} from {}", watch.elapsed(TimeUnit.MILLISECONDS),
-						remoteAddr(httprequest));
+                logger.info("{} takes {} from {}", reqCmd, watch.elapsed(TimeUnit.MILLISECONDS), remoteAddr(httprequest));
 			watch.stop();
 		}
 	}
@@ -662,8 +640,8 @@ public class DispatcherController {
 
 	private void outputHistory(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
 			FullBlockStore store)
-			throws UnsupportedEncodingException, IOException, JsonParseException, JsonMappingException, Exception {
-		String reqStr = new String(bodyByte, "UTF-8");
+			throws Exception {
+		String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 		@SuppressWarnings("unchecked")
 		Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 		String fromaddress = request.get("fromaddress") == null ? "" : request.get("fromaddress").toString();
@@ -675,8 +653,8 @@ public class DispatcherController {
 	}
 
 	private void batchBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			FullBlockStore store) throws BlockStoreException, Exception {
-		Block block = (Block) networkParameters.getDefaultSerializer().makeBlock(bodyByte);
+			FullBlockStore store) throws Exception {
+		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 
 		if (serverConfiguration.getMyserverblockOnly()) {
 			if (!blockService.existMyserverblocks(block.getPrevBlockHash(), store)) {
@@ -697,8 +675,8 @@ public class DispatcherController {
 	}
 
 	private void saveBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			FullBlockStore store) throws BlockStoreException, Exception {
-		Block block = (Block) networkParameters.getDefaultSerializer().makeBlock(bodyByte);
+			FullBlockStore store) throws Exception {
+		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 		// only block with my miner address
 		if (!Arrays.equals(block.getMinerAddress(),
 				Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160())) {
@@ -736,7 +714,7 @@ public class DispatcherController {
 	}
 
 	private boolean checkPermission(HttpServletResponse httpServletResponse, HttpServletRequest httprequest,
-			Stopwatch watch, FullBlockStore store) throws BlockStoreException, Exception {
+			Stopwatch watch, FullBlockStore store) throws Exception {
 		if (!serverConfiguration.getPermissioned()) {
 			return true;
 		}
@@ -765,7 +743,7 @@ public class DispatcherController {
 			return false;
 		}
 
-		if (!checkAuth(httpServletResponse, httprequest, store)) {
+		if (!checkAuth(httprequest, store)) {
 			AbstractResponse resp = ErrorResponse.create(100);
 			resp.setMessage("no auth");
 			this.outPrintJSONString(httpServletResponse, resp, watch, "checkPermission");
@@ -775,8 +753,8 @@ public class DispatcherController {
 		return true;
 	}
 
-	private boolean checkReady(HttpServletResponse httpServletResponse, HttpServletRequest httprequest, Stopwatch watch)
-			throws BlockStoreException, Exception {
+	private boolean checkReady(HttpServletResponse httpServletResponse, Stopwatch watch)
+			throws Exception {
 		if (!serverConfiguration.checkService()) {
 			AbstractResponse resp = ErrorResponse.create(103);
 			resp.setMessage("service is not ready.");
@@ -787,15 +765,14 @@ public class DispatcherController {
 		}
 	}
 
-	public boolean checkAuth(HttpServletResponse httpServletResponse, HttpServletRequest httprequest,
-			FullBlockStore store) {
+	public boolean checkAuth(HttpServletRequest httprequest,
+							 FullBlockStore store) {
 		String header = httprequest.getHeader("accessToken");
 		boolean flag = false;
 		if (header != null && !header.trim().isEmpty()) {
 			HttpSession session = httprequest.getSession(true);
 			if ("key_verified".equals(session.getAttribute("key_verify_flag"))) {
-				flag = true;
-				return flag;
+                return true;
 			}
 			String pubkey = header.split(",")[0];
 			String signHex = header.split(",")[1];
@@ -837,7 +814,7 @@ public class DispatcherController {
 			throws Exception {
 		httpServletResponse.setCharacterEncoding("UTF-8");
 
-		HashMap<String, Object> result = new HashMap<String, Object>();
+		HashMap<String, Object> result = new HashMap<>();
 		result.put("dataHex", Utils.HEX.encode(data));
 		MyGZIPOutputStream servletOutputStream = new MyGZIPOutputStream(httpServletResponse.getOutputStream());
 
@@ -872,9 +849,9 @@ public class DispatcherController {
 	}
 
 	public String remoteAddr(HttpServletRequest request) {
-		String remoteAddr = "";
+		String remoteAddr;
 		remoteAddr = request.getHeader("X-FORWARDED-FOR");
-		if (remoteAddr == null || "".equals(remoteAddr)) {
+		if (remoteAddr == null || remoteAddr.isEmpty()) {
 			remoteAddr = request.getRemoteAddr();
 		} else {
 			StringTokenizer tokenizer = new StringTokenizer(remoteAddr, ",");
