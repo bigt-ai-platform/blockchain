@@ -25,10 +25,8 @@ import static net.bigtangle.core.Utils.HEX;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -37,10 +35,8 @@ import com.google.common.math.LongMath;
 
 import net.bigtangle.equihash.EquihashProof;
 import net.bigtangle.params.MainNetParams;
-import net.bigtangle.pool.server.ServerPool;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.utils.MonetaryFormat;
 
 /**
  * <p>
@@ -96,7 +92,6 @@ public abstract class NetworkParameters {
     protected String[] dnsSeeds;
     protected int[] addrSeeds;
 
-    protected Map<Long, Sha256Hash> checkpoints = new HashMap<Long, Sha256Hash>();
     protected transient MessageSerializer defaultSerializer = null;
 
     protected String genesisPub;
@@ -122,7 +117,6 @@ public abstract class NetworkParameters {
     public static final boolean USE_EQUIHASH = false;
     protected int equihashN;
     protected int equihashK;
-    protected ServerPool serverPool;
     /**
      * The version number at the start of the network.
      */
@@ -133,7 +127,7 @@ public abstract class NetworkParameters {
      * A constant shared by the entire network: how large in bytes a block is
      * allowed to be. 
      * It can no be smaller than last value, it will break consensus history. 
-     * 
+     * <p>
      * Start at: 262144 
      */
     public static final int MAX_DEFAULT_BLOCK_SIZE = 1024*1024; // 1MB
@@ -171,9 +165,6 @@ public abstract class NetworkParameters {
     // 100 billions as Value
     public static BigInteger BigtangleCoinTotal = BigInteger.valueOf(LongMath.pow(10, 11 + BIGTANGLE_DECIMAL));
     public static final long TARGET_YEARLY_MINING_PAYOUT = BigtangleCoinTotal.longValue() / 1000;
-
-    // Reward and Difficulty Synchronization
-    public static final long REWARD_INITIAL_TX_REWARD = 10L;
 
     public static final int TARGET_TIMESPAN = 3 * 60 * 60;
     
@@ -216,7 +207,7 @@ public abstract class NetworkParameters {
         coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram())); 
         RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
                 Utils.encodeCompactBits(params.getMaxTargetReward()),
-                new HashSet<Sha256Hash>(), 0L);
+                new HashSet<>(), 0L);
 
         coinbase.setData(rewardInfo.toByteArray());
         add(params, BigtangleCoinTotal, params.genesisPub, coinbase);
@@ -231,15 +222,15 @@ public abstract class NetworkParameters {
         // amount, many public keys
         String[] list = account.split(",");
         Coin base = new Coin(amount, BIGTANGLE_TOKENID);
-        List<ECKey> keys = new ArrayList<ECKey>();
-        for (int i = 0; i < list.length; i++) {
-            keys.add(ECKey.fromPublicOnly(Utils.HEX.decode(list[i].trim())));
+        List<ECKey> keys = new ArrayList<>();
+        for (String s : list) {
+            keys.add(ECKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
         }
         if (keys.size() <= 1) {
             coinbase.addOutput(new TransactionOutput(params, coinbase, base,
                     ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));
         } else {
-            Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript((int) keys.size() - 1, keys);
+            Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(keys.size() - 1, keys);
             coinbase.addOutput(new TransactionOutput(params, coinbase, base, scriptPubKey.getProgram()));
         }
     }
@@ -355,14 +346,6 @@ public abstract class NetworkParameters {
         return acceptableAddressCodes;
     }
 
-    /**
-     * If we are running in testnet-in-a-box mode, we allow connections to nodes
-     * with 0 non-genesis blocks.
-     */
-    public boolean allowEmptyPeerChain() {
-        return true;
-    }
-
     /** Maximum target represents the easiest allowable proof of work. */
     public BigInteger getMaxTarget() {
         return maxTarget;
@@ -392,23 +375,7 @@ public abstract class NetworkParameters {
         return bip32HeaderPriv;
     }
 
-    /**
-     * Returns the number of coins that will be produced in total, on this
-     * network. Where not applicable, a very large number of coins is returned
-     * instead (i.e. the main coin issue for Dogecoin).
-     */
     // public abstract Coin getMaxMoney();
-
-    /**
-     * Any standard (ie pay-to-address) output smaller than this value will most
-     * likely be rejected by the network.
-     */
-    public abstract Coin getMinNonDustOutput();
-
-    /**
-     * The monetary object for this currency.
-     */
-    public abstract MonetaryFormat getMonetaryFormat();
 
     /**
      * Scheme part for URIs, for example "bitcoin".
@@ -416,17 +383,9 @@ public abstract class NetworkParameters {
     public abstract String getUriScheme();
 
     /**
-     * Returns whether this network has a maximum number of coins (finite
-     * supply) or not. Always returns true for Bitcoin, but exists to be
-     * overriden for other networks.
-     */
-    public abstract boolean hasMaxMoney();
-
-    /**
      * Return the default serializer for this network. This is a shared
      * serializer.
-     * 
-     * @return
+     *
      */
     public final MessageSerializer getDefaultSerializer() {
         // Construct a default serializer if we don't have one
@@ -457,16 +416,8 @@ public abstract class NetworkParameters {
      * the given transaction. Enables support for alternative blockchains which
      * enable tests based on different criteria.
      *
-     * @param block
-     *            block the transaction belongs to.
-     * @param transaction
-     *            to determine flags for.
-     * @param height
-     *            height of the block, if known, null otherwise. Returned tests
-     *            should be a safe subset if block height is unknown.
      */
-    public EnumSet<Script.VerifyFlag> getTransactionVerificationFlags(final Block block,
-            final Transaction transaction) {
+    public EnumSet<Script.VerifyFlag> getTransactionVerificationFlags() {
         final EnumSet<Script.VerifyFlag> verifyFlags = EnumSet.noneOf(Script.VerifyFlag.class);
         // if (block.getTimeSeconds() >= NetworkParameters.BIP16_ENFORCE_TIME)
         verifyFlags.add(Script.VerifyFlag.P2SH);
@@ -483,7 +434,7 @@ public abstract class NetworkParameters {
     //initial server seeds to start, those server can register new servers and return other servers
     public abstract   String[]  serverSeeds() ;
     
-    public static enum ProtocolVersion {
+    public enum ProtocolVersion {
         MINIMUM(70000), PONG(60001), BLOOM_FILTER(70000), CURRENT(70001);
 
         private final int bitcoinProtocol;
@@ -499,7 +450,7 @@ public abstract class NetworkParameters {
     
 
     public List<PermissionDomainname> getPermissionDomainnameList() {
-        ArrayList<PermissionDomainname> rootPermission = new ArrayList<PermissionDomainname>();
+        ArrayList<PermissionDomainname> rootPermission = new ArrayList<>();
         for (String s : permissionDomainname) {
             rootPermission.add(new PermissionDomainname(s, ""));
         }

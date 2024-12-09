@@ -49,7 +49,7 @@ public class OrderCancelInfo implements java.io.Serializable {
             
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+           throw new RuntimeException(e);
         }
         return baos.toByteArray();
     }

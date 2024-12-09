@@ -36,18 +36,11 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
     }
 
 
-    /** Returns true if this objects getWork  is higher than the others. */
-    public boolean moreWorkThan( RewardInfo other) {
-        return getWork().compareTo(other.getWork()) > 0;
-    }
-
-    
-    
     /**
      * The number that is one greater than the largest representable SHA-256
      * hash.
      */
-    private static BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
+    private static final BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
 
     /**
      * Returns the work represented by this block.<p>
@@ -68,8 +61,7 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
      * is thrown.
      */
     public BigInteger getDifficultyTargetAsInteger()  {
-        BigInteger target = Utils.decodeCompactBits(difficultyTargetReward);
-        return target;
+        return Utils.decodeCompactBits(difficultyTargetReward);
     }
     
     public static long getSerialversionuid() {
@@ -146,7 +138,7 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw  new RuntimeException(e);
         }
         return baos.toByteArray();
     }

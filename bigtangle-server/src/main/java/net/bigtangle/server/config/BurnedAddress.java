@@ -9,7 +9,7 @@ public class BurnedAddress {
     Long chain;
 
     public static List<BurnedAddress> init() {
-        List<BurnedAddress> re = new ArrayList<BurnedAddress>();
+        List<BurnedAddress> re = new ArrayList<>();
         BurnedAddress a = new BurnedAddress("1718BePa7qEhNb24gyw3xZDvjsrCa6it5H", 549937L);
         re.add(a);
         long chain2 = 552648;
@@ -58,7 +58,7 @@ public class BurnedAddress {
         a = new BurnedAddress("1EjiDsUigp8XZb6ogMrHWcPARU4XGarQLg", chain);
         re.add(a);
                 
-        a = new BurnedAddress("1JnK3FVvVesifNXuoqT6amVFAii8aTV7Lh",   646126l);
+        a = new BurnedAddress("1JnK3FVvVesifNXuoqT6amVFAii8aTV7Lh", 646126L);
         re.add(a);
         
         // for test

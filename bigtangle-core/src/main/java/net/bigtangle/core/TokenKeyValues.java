@@ -9,9 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import net.bigtangle.utils.Json;
 
 public class TokenKeyValues implements java.io.Serializable {
@@ -23,7 +20,7 @@ public class TokenKeyValues implements java.io.Serializable {
 
 	public void addKeyvalue(KeyValue kv) {
 		if (keyvalues == null) {
-			keyvalues = new ArrayList<KeyValue>();
+			keyvalues = new ArrayList<>();
 			keyvalues.add(kv);
 		}else {
 		    keyvalues.add(kv);
@@ -40,17 +37,13 @@ public class TokenKeyValues implements java.io.Serializable {
  
 	}
 
-	public static TokenKeyValues parse(byte[] buf) throws JsonParseException, JsonMappingException, IOException {
+	public static TokenKeyValues parse(byte[] buf) throws IOException {
 		String jsonStr = new String(buf);
 		return Json.jsonmapper().readValue(jsonStr, TokenKeyValues.class);
 	}
 
 	public List<KeyValue> getKeyvalues() {
 		return keyvalues;
-	}
-
-	public void setKeyvalues(List<KeyValue> keyvalues) {
-		this.keyvalues = keyvalues;
 	}
 
 }

@@ -19,9 +19,9 @@ public class Tokensums  extends DataClass implements java.io.Serializable {
     BigInteger order = BigInteger.ZERO;
     BigInteger contract = BigInteger.ZERO;
     //It must be sorted list for calculation hash
-    List<UTXO> utxos = new ArrayList<UTXO>();
-    List<OrderRecord> orders = new ArrayList<OrderRecord>();
-    List<ContractEventRecord> contracts = new ArrayList<ContractEventRecord>();
+    List<UTXO> utxos = new ArrayList<>();
+    List<OrderRecord> orders = new ArrayList<>();
+    List<ContractEventRecord> contracts = new ArrayList<>();
     
 
     public void calculate() {

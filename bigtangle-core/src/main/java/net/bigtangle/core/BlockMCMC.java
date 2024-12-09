@@ -24,7 +24,8 @@ public class BlockMCMC implements Serializable {
 
     // Count of indirect approver blocks
     private long cumulativeWeight;
- 
+
+    //JSON
     public BlockMCMC() {
     }
 

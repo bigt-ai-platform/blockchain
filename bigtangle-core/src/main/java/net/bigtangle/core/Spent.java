@@ -23,14 +23,6 @@ public class Spent extends DataClass {
 	// create time of the block output
 	private long time;
 
-	public void setDefault() {
-		spent = false;
-		confirmed = false;
-		spenderBlockHash = null;
-		time = System.currentTimeMillis() / 1000;
-
-	}
- 
 	public byte[] toByteArray() {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		try {
@@ -54,7 +46,7 @@ public class Spent extends DataClass {
 		confirmed = dis.readBoolean();
 		confirmed = dis.readBoolean();
 		spenderBlockHash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		if (spenderBlockHash.equals(Sha256Hash.ZERO_HASH)) {
+		if (Objects.equals(spenderBlockHash, Sha256Hash.ZERO_HASH)) {
 			spenderBlockHash = null;
 		}
 		time = dis.readLong();

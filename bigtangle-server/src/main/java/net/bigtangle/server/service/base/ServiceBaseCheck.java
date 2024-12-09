@@ -172,7 +172,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				Map<String, Coin> valueOut = new HashMap<String, Coin>();
 
 				final List<Script> prevOutScripts = new LinkedList<Script>();
-				final Set<VerifyFlag> verifyFlags = networkParameters.getTransactionVerificationFlags(block, tx);
+				final Set<VerifyFlag> verifyFlags = networkParameters.getTransactionVerificationFlags();
 				if (!isCoinBase) {
 					for (int index = 0; index < tx.getInputs().size(); index++) {
 						TransactionInput in = tx.getInputs().get(index);
@@ -1162,12 +1162,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		SolidityState difficultyResult = checkRewardDifficulty(block, store);
-		if (!difficultyResult.isSuccessState()) {
+		if (difficultyResult.isSuccessState()) {
 			return difficultyResult;
 		}
 
 		SolidityState referenceResult = checkRewardReferencedBlocks(block, store);
-		if (!referenceResult.isSuccessState()) {
+		if (referenceResult.isSuccessState()) {
 			return referenceResult;
 		}
 
@@ -1206,7 +1206,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// Predecessors must exist and be ok
 			SolidityState predecessorsExist = checkPredecessorsExistAndOk(block, throwExceptions, allRequirements,
 					store);
-			if (!predecessorsExist.isSuccessState()) {
+			if (predecessorsExist.isSuccessState()) {
 				return predecessorsExist;
 			}
 
@@ -1221,7 +1221,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				if (minPredecessorSolidity.getState() == State.MissingCalculation
 						|| minPredecessorSolidity.getState() == State.Success) {
 					SolidityState state = checkRewardBlockPow(block, throwExceptions);
-					if (!state.isSuccessState()) {
+					if (state.isSuccessState()) {
 						return state;
 					}
 				}
@@ -1270,7 +1270,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					throw new InvalidTransactionException("Transaction output value negative");
 				}
 
-				final Set<VerifyFlag> verifyFlags = networkParameters.getTransactionVerificationFlags(block, tx);
+				final Set<VerifyFlag> verifyFlags = networkParameters.getTransactionVerificationFlags();
 				if (verifyFlags.contains(VerifyFlag.P2SH)) {
 					if (sigOps > NetworkParameters.MAX_BLOCK_SIGOPS)
 						throw new SigOpsException();
@@ -1984,7 +1984,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					throw new VerificationException("Referenced blocks are below cutoff height.");
 
 				SolidityState requirementResult = checkRequiredBlocks(rewardInfo, block, store);
-				if (!requirementResult.isSuccessState()) {
+				if (requirementResult.isSuccessState()) {
 					return requirementResult;
 				}
 			}

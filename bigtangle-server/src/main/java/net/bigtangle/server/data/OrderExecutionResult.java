@@ -30,9 +30,9 @@ public class OrderExecutionResult extends Spent {
 	Sha256Hash prevblockhash;
 
 	// referenced new order blocks
-	Set<Sha256Hash> referencedBlocks = new HashSet<>();;
+	Set<Sha256Hash> referencedBlocks = new HashSet<>();
 
-	// coinbase outputTxHash
+    // coinbase outputTxHash
 	Sha256Hash outputTxHash;
 	// all records used in this calculation
 	Set<Sha256Hash> toBeSpent = new HashSet<>();

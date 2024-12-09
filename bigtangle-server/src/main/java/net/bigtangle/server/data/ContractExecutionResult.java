@@ -26,9 +26,9 @@ public class ContractExecutionResult extends Spent {
 	Sha256Hash prevblockhash;
  
 	// referenced new order blocks
-	Set<Sha256Hash> referencedBlocks = new HashSet<>();;
+	Set<Sha256Hash> referencedBlocks = new HashSet<>();
 
-	// this ContractResult produces coinbase outputTxHash
+    // this ContractResult produces coinbase outputTxHash
 	Sha256Hash outputTxHash;
 	// all records used in this calculation of ContractResult
 	Set<Sha256Hash> toBeSpent = new HashSet<>();
@@ -154,10 +154,6 @@ public class ContractExecutionResult extends Spent {
 
 	public Sha256Hash getOutputTxHash() {
 		return outputTxHash;
-	}
-
-	public void setOutputTxHash(Sha256Hash outputTxHash) {
-		this.outputTxHash = outputTxHash;
 	}
 
 	public Transaction getOutputTx() {

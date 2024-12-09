@@ -38,7 +38,7 @@ public class TokensumsMap extends DataClass implements java.io.Serializable {
     
 
     public TokensumsMap() {
-        tokensumsMap = new TreeMap<String, Tokensums>();
+        tokensumsMap = new TreeMap<>();
     }
 
  

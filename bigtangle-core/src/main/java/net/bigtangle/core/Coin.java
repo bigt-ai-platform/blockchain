@@ -79,8 +79,7 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
 	public Coin(final BigInteger satoshis, final String tokenid) {
 		this.value = satoshis;
 		this.tokenid = Utils.HEX.decode(tokenid);
-		;
-	}
+    }
 
 	public static Coin valueOf(final long satoshis) {
 		return new Coin(satoshis, NetworkParameters.BIGTANGLE_TOKENID);
@@ -111,8 +110,7 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
 		if (tokenid == null) {
 			return "";
 		}
-		String hexStr = Utils.HEX.encode(this.tokenid);
-		return hexStr;
+        return Utils.HEX.encode(this.tokenid);
 	}
 
 	public Coin add(final Coin value) {
@@ -244,12 +242,9 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
 		if (!Arrays.equals(tokenid, other.tokenid))
 			return false;
 		if (value == null) {
-			if (other.value != null)
-				return false;
-		} else if (!value.equals(other.value))
-			return false;
-		return true;
-	}
+            return other.value == null;
+		} else return value.equals(other.value);
+    }
 
 	@Override
 	public int compareTo(final Coin other) {

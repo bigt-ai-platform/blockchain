@@ -1045,8 +1045,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		boolean re = checkSpentOrNoConfirm(c, checkNoConfirm, a);
 
 		if (re) {
-			logger.debug("getUTXOSpent true {}\n TransactionOutPoint = {} \n spender = {}", a,
-					getBlock(txout.getBlockHash(), store), getBlock(a.getSpenderBlockHash(), store));
+			try {
+				logger.debug("getUTXOSpent true {}\n TransactionOutPoint = {} \n spender = {}", a,
+						getBlock(txout.getBlockHash(), store), getBlock(a.getSpenderBlockHash(), store));
+			} catch (Exception e) {
+				logger.debug("",e);
+			}
 		}
 
 		return re;

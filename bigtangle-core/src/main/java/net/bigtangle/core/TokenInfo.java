@@ -10,9 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import net.bigtangle.utils.Json;
 
 public class TokenInfo extends DataClass implements java.io.Serializable {
@@ -34,7 +31,7 @@ public class TokenInfo extends DataClass implements java.io.Serializable {
         } 
     }
 
-    public TokenInfo parse(byte[] buf) throws JsonParseException, JsonMappingException, IOException {
+    public TokenInfo parse(byte[] buf) throws IOException {
         String jsonStr = new String(buf);
         return Json.jsonmapper().readValue(jsonStr, TokenInfo.class);
     }

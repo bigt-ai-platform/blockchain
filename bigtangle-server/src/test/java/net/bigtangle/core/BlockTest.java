@@ -55,7 +55,7 @@ public class BlockTest {
     //TODO NO BINARY @Test
     public void testBlockVerification() throws Exception {
         Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
-        block.verify(0);
+        block.verify();
         assertEquals("00000000a6e5eb79dcec11897af55e90cd571a4335383a3ccfbc12ec81085935", block.getHashAsString());
     }
 
@@ -79,19 +79,19 @@ public class BlockTest {
        // block.setDifficultyTarget(Block.CLIENT_DIFFICULTY_TARGET);
         block.solve();
         // Now it should pass.
-        block.verify(0);
+        block.verify();
         // Break the nonce again at the lower difficulty level so we can try
         // solving for it.
         block.setNonce(2);
         try {
-            block.verify(0);
+            block.verify();
             fail();
         } catch (VerificationException e) {
             // Expected to fail as the nonce is no longer correct.
         }
         // Should find an acceptable nonce.
         block.solve();
-        block.verify(0);
+        block.verify();
         assertEquals(block.getNonce(), 5);
     }
 
@@ -104,7 +104,7 @@ public class BlockTest {
         block.transactions.set(0, tx2);
         block.transactions.set(1, tx1);
         try {
-            block.verify(0);
+            block.verify();
             fail();
         } catch (VerificationException e) {
             // We should get here.

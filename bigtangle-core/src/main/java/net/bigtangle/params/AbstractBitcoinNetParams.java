@@ -21,10 +21,7 @@
 package net.bigtangle.params;
 
 import net.bigtangle.core.BitcoinSerializer;
-import net.bigtangle.core.Coin;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Transaction;
-import net.bigtangle.utils.MonetaryFormat;
 
 /**
  * Parameters for Bitcoin-like networks.
@@ -44,16 +41,6 @@ public abstract class AbstractBitcoinNetParams extends NetworkParameters {
 //            final BlockStore blockStore) throws VerificationException, BlockStoreException {
 //    }
 
- 
-    @Override
-    public Coin getMinNonDustOutput() {
-        return Transaction.MIN_NONDUST_OUTPUT;
-    }
-
-    @Override
-    public MonetaryFormat getMonetaryFormat() {
-        return new MonetaryFormat();
-    }
 
     @Override
     public int getProtocolVersionNum(final ProtocolVersion version) {
@@ -70,10 +57,6 @@ public abstract class AbstractBitcoinNetParams extends NetworkParameters {
         return BITCOIN_SCHEME;
     }
 
-    @Override
-    public boolean hasMaxMoney() {
-        return true;
-    }
     @Override
     public Integer getOrderPriceShift(String orderBaseTokens) {
         if (BIGTANGLE_TOKENID_STRING.equals(orderBaseTokens)) {

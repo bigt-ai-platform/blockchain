@@ -31,11 +31,6 @@ public class SpentBlock extends DataClass {
 
 	}
 
-	public void setBlockHashHex(String blockHashHex) {
-		if (!Utils.isBlank(blockHashHex))
-			this.blockHash = Sha256Hash.wrap(blockHashHex);
-	}
-
 	public String getBlockHashHex() {
 		return this.blockHash != null ? Utils.HEX.encode(this.blockHash.getBytes()) : "";
 	}
@@ -66,7 +61,7 @@ public class SpentBlock extends DataClass {
 		confirmed = dis.readBoolean();
 		confirmed = dis.readBoolean();
 		spenderBlockHash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		if (spenderBlockHash.equals(Sha256Hash.ZERO_HASH)) {
+		if (Objects.equals(spenderBlockHash, Sha256Hash.ZERO_HASH)) {
 			spenderBlockHash = null;
 		}
 		time = dis.readLong();

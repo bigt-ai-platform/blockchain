@@ -106,7 +106,7 @@ public class Orderresult extends SpentBlock implements java.io.Serializable {
 
 	@Override
 	public String toString() {
-		return "prevblockhash=" + prevblockhash + ", milestone=" + milestone + "";
+		return "prevblockhash=" + prevblockhash + ", milestone=" + milestone;
 	}
   
 

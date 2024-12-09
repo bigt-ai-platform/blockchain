@@ -202,7 +202,7 @@ public class Token extends SpentBlock implements java.io.Serializable {
     }
 
     public String getTokenFullname() {
-        if (domainName == null || "null".equals(domainName) || "".equals(domainName))
+        if (domainName == null || "null".equals(domainName) || domainName.isEmpty())
             return tokenname;
         else {
             if (getTokentype() == TokenType.domainname.ordinal()) {
@@ -214,7 +214,7 @@ public class Token extends SpentBlock implements java.io.Serializable {
         }
     }
     public String getTokenFullDomainname() {
-        if (domainName == null || "null".equals(domainName) || "".equals(domainName))
+        if (domainName == null || "null".equals(domainName) || domainName.isEmpty())
             return tokenname;
         else {
             if (getTokentype() == TokenType.domainname.ordinal()) {
@@ -281,11 +281,9 @@ public class Token extends SpentBlock implements java.io.Serializable {
             String tokenname, String description, int signnumber, long tokenindex, boolean tokenstop, String domainname,
             String predecessingDomainBlockHash) {
 
-        Token token = buildSimpleTokenInfo(confirmed, prevblockhash, tokenid, tokenname, description, signnumber,
+        return buildSimpleTokenInfo(confirmed, prevblockhash, tokenid, tokenname, description, signnumber,
                 tokenindex, new BigInteger("1"), tokenstop, null, false, null, null, TokenType.domainname.ordinal(), 0,
                 domainname, predecessingDomainBlockHash);
-
-        return token;
     }
 
     public Token(String tokenid, String tokenname) {

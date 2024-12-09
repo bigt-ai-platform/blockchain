@@ -46,7 +46,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
-		if (!solidityState.isSuccessState())
+		if (solidityState.isSuccessState())
 			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState);
 
 		// Solidify referenced blocks
@@ -62,7 +62,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
 				.checkSolidity(newMilestoneBlock, false, store, false);
 
-		if (!solidityState.isSuccessState())
+		if (solidityState.isSuccessState())
 			throw new VerificationException(" .checkSolidity is failed: " + solidityState
 					+ "\n with block = " + newMilestoneBlock);
 

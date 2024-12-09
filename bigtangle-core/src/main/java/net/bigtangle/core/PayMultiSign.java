@@ -18,7 +18,6 @@ public class PayMultiSign implements java.io.Serializable {
     private String toaddress;
 
     private String blockhashHex;
-    private String tokenBlockhashHex;
 
     private byte[] blockhash;
 
@@ -103,14 +102,6 @@ public class PayMultiSign implements java.io.Serializable {
 
     public void setBlockhash(byte[] blockhash) {
         this.blockhash = blockhash;
-    }
-
-    public String getTokenBlockhashHex() {
-        return tokenBlockhashHex;
-    }
-
-    public void setTokenBlockhashHex(String tokenBlockhashHex) {
-        this.tokenBlockhashHex = tokenBlockhashHex;
     }
 
     public long getOutputindex() {

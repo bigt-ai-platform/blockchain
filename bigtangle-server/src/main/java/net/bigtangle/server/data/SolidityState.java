@@ -12,9 +12,9 @@ public class SolidityState {
     private static final SolidityState successState = new SolidityState(State.Success, null, false);
     private static final SolidityState failState = new SolidityState(State.Invalid, null, false);
 
-    private State state;
-    private Sha256Hash missingDependency;
-    private boolean directlyMissing;
+    private final State state;
+    private final Sha256Hash missingDependency;
+    private final boolean directlyMissing;
 
     public SolidityState(State state, Sha256Hash missingDependency, boolean directlyMissing) {
         super();
@@ -32,7 +32,7 @@ public class SolidityState {
     }
 
     public boolean isSuccessState() {
-        return this.state == successState.state;
+        return this.state != successState.state;
     }
 
     public boolean isFailState() {

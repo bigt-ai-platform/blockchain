@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 public class OrderOpenInfo extends DataClass implements java.io.Serializable {
 
@@ -78,30 +79,30 @@ public class OrderOpenInfo extends DataClass implements java.io.Serializable {
 
             dos.writeBoolean(targetTokenid != null);
             if (targetTokenid != null) {
-                dos.writeInt(targetTokenid.getBytes("UTF-8").length);
-                dos.write(targetTokenid.getBytes("UTF-8"));
+                dos.writeInt(targetTokenid.getBytes(StandardCharsets.UTF_8).length);
+                dos.write(targetTokenid.getBytes(StandardCharsets.UTF_8));
             }
 
             dos.writeBoolean(beneficiaryAddress != null);
             if (beneficiaryAddress != null) {
-                dos.writeInt(beneficiaryAddress.getBytes("UTF-8").length);
-                dos.write(beneficiaryAddress.getBytes("UTF-8"));
+                dos.writeInt(beneficiaryAddress.getBytes(StandardCharsets.UTF_8).length);
+                dos.write(beneficiaryAddress.getBytes(StandardCharsets.UTF_8));
             }
             dos.writeBoolean(orderBaseToken != null);
             if (orderBaseToken != null) {
-                dos.writeInt(orderBaseToken.getBytes("UTF-8").length);
-                dos.write(orderBaseToken.getBytes("UTF-8"));
+                dos.writeInt(orderBaseToken.getBytes(StandardCharsets.UTF_8).length);
+                dos.write(orderBaseToken.getBytes(StandardCharsets.UTF_8));
             }
             dos.writeLong(price);
             dos.writeLong(offerValue);
             dos.writeBoolean(offerTokenid != null);
             if (offerTokenid != null) {
-                dos.writeInt(offerTokenid.getBytes("UTF-8").length);
-                dos.write(offerTokenid.getBytes("UTF-8"));
+                dos.writeInt(offerTokenid.getBytes(StandardCharsets.UTF_8).length);
+                dos.write(offerTokenid.getBytes(StandardCharsets.UTF_8));
             }
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+           throw new RuntimeException(e);
         }
         return baos.toByteArray();
     }

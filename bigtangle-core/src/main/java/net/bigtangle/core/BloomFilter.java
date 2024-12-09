@@ -21,17 +21,12 @@
 package net.bigtangle.core;
 
 import com.google.common.base.Objects;
-import com.google.common.collect.Lists;
 
 import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.script.Script;
-import net.bigtangle.script.ScriptChunk;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.Math.*;
@@ -101,7 +96,7 @@ public class BloomFilter extends Message {
      * 
      * <p>In order for filtered block download to function efficiently, the number of matched transactions in any given
      * block should be less than (with some headroom) the maximum size of the MemoryPool used by the Peer
-     * doing the downloading (default is {@link TxConfidenceTable#MAX_SIZE}). See the comment in processBlock(FilteredBlock)
+     * doing the downloading. See the comment in processBlock(FilteredBlock)
      * for more information on this restriction.</p>
      * 
      * <p>randomNonce is a tweak for the hash function used to prevent some theoretical DoS attacks.
@@ -283,78 +278,6 @@ public class BloomFilter extends Message {
         return true;
     }
 
-    /**
-     * The update flag controls how application of the filter to a block modifies the filter. See the enum javadocs
-     * for information on what occurs and when.
-     */
-    public synchronized BloomUpdate getUpdateFlag() {
-        if (nFlags == 0)
-            return BloomUpdate.UPDATE_NONE;
-        else if (nFlags == 1)
-            return BloomUpdate.UPDATE_ALL;
-        else if (nFlags == 2)
-            return BloomUpdate.UPDATE_P2PUBKEY_ONLY;
-        else
-            throw new IllegalStateException("Unknown flag combination");
-    }
-
-    /**
-     * Creates a new FilteredBlock from the given Block, using this filter to select transactions. Matches can cause the
-     * filter to be updated with the matched element, this ensures that when a filter is applied to a block, spends of
-     * matched transactions are also matched. However it means this filter can be mutated by the operation. The returned
-     * filtered block already has the matched transactions associated with it.
-     */
-    public synchronized FilteredBlock applyAndUpdate(Block block) {
-        List<Transaction> txns = block.getTransactions();
-        List<Sha256Hash> txHashes = new ArrayList<Sha256Hash>(txns.size());
-        List<Transaction> matched = Lists.newArrayList();
-        byte[] bits = new byte[(int) Math.ceil(txns.size() / 8.0)];
-        for (int i = 0; i < txns.size(); i++) {
-            Transaction tx = txns.get(i);
-            txHashes.add(tx.getHash());
-            if (applyAndUpdate(tx)) {
-                Utils.setBitLE(bits, i);
-                matched.add(tx);
-            }
-        }
-        PartialMerkleTree pmt = PartialMerkleTree.buildFromLeaves(block.getParams(), bits, txHashes);
-        FilteredBlock filteredBlock = new FilteredBlock(block.getParams(), block.cloneAsHeader(), pmt);
-        for (Transaction transaction : matched)
-            filteredBlock.provideTransaction(transaction);
-        return filteredBlock;
-    }
-
-    public synchronized boolean applyAndUpdate(Transaction tx) {
-        if (contains(tx.getHash().getBytes()))
-            return true;
-        boolean found = false;
-        BloomUpdate flag = getUpdateFlag();
-        for (TransactionOutput output : tx.getOutputs()) {
-            Script script = output.getScriptPubKey();
-            for (ScriptChunk chunk : script.getChunks()) {
-                if (!chunk.isPushData())
-                    continue;
-                if (contains(chunk.data)) {
-                    boolean isSendingToPubKeys = script.isSentToRawPubKey() || script.isSentToMultiSig();
-                    if (flag == BloomUpdate.UPDATE_ALL || (flag == BloomUpdate.UPDATE_P2PUBKEY_ONLY && isSendingToPubKeys))
-                        insert(output.getOutPointFor(null).unsafeBitcoinSerialize());
-                    found = true;
-                }
-            }
-        }
-        if (found) return true;
-        for (TransactionInput input : tx.getInputs()) {
-            if (contains(input.getOutpoint().unsafeBitcoinSerialize())) {
-                return true;
-            }
-            for (ScriptChunk chunk : input.getScriptSig().getChunks()) {
-                if (chunk.isPushData() && contains(chunk.data))
-                    return true;
-            }
-        }
-        return false;
-    }
-    
     @Override
     public synchronized boolean equals(Object o) {
         if (this == o) return true;

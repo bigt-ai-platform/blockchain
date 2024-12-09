@@ -5,18 +5,12 @@
 
 package net.bigtangle.server.core;
 
-import java.io.IOException;
-import java.util.HashSet;
-
-import net.bigtangle.core.Block;
-import net.bigtangle.core.BlockEvaluation;
-import net.bigtangle.core.BlockMCMC;
-import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.RewardInfo;
-import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.TokenInfo;
+import net.bigtangle.core.*;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
+
+import java.io.IOException;
+import java.util.HashSet;
 
 /**
  * Wraps a {@link Block} object with extra data from the db
@@ -92,7 +86,7 @@ public class BlockWrap {
 		// Dynamic conflicts: conflicting transaction outpoints
 		this.getBlock().getTransactions().stream().flatMap(t -> t.getInputs().stream()).filter(in -> !in.isCoinBase())
 				.map(in -> ConflictCandidate.fromTransactionOutpoint(this, in.getOutpoint()))
-				.forEach(c -> blockConflicts.add(c));
+				.forEach(blockConflicts::add);
 
 		addTypeSpecificConflictCandidates(blockConflicts);
 
@@ -104,15 +98,11 @@ public class BlockWrap {
 	 */
 	private void addTypeSpecificConflictCandidates(HashSet<ConflictCandidate> blockConflicts) {
 		switch (this.getBlock().getBlockType()) {
-		case BLOCKTYPE_CROSSTANGLE:
+			case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_USERDATA,
+				 BLOCKTYPE_TRANSFER, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL,
+				 BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-		case BLOCKTYPE_FILE:
-			break;
-		case BLOCKTYPE_GOVERNANCE:
-			break;
-		case BLOCKTYPE_INITIAL:
-			break;
-		case BLOCKTYPE_REWARD:
+			case BLOCKTYPE_REWARD:
 			// Dynamic conflicts: mining rewards spend the previous reward
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(this.getBlock().getTransactions().get(0).getData());
 			blockConflicts.add(ConflictCandidate.fromReward(this, rewardInfo));
@@ -130,13 +120,7 @@ public class BlockWrap {
 				throw new RuntimeException(e);
 			}
 			break;
-		case BLOCKTYPE_TRANSFER:
-			break;
-		case BLOCKTYPE_USERDATA:
-			break;
-		case BLOCKTYPE_CONTRACT_EVENT:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
+			case BLOCKTYPE_CONTRACT_EXECUTE:
 			try {
 				ContractExecutionResult result = new ContractExecutionResult().parse(block.getTransactions().get(0).getData());
 				blockConflicts.add(ConflictCandidate.fromContractExecute(this, result));
@@ -156,14 +140,8 @@ public class BlockWrap {
 				throw new RuntimeException(e);
 			}
 			break;
-		case BLOCKTYPE_ORDER_OPEN:
-			break;
-		case BLOCKTYPE_ORDER_CANCEL:
-			break;
-		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
-			break;
 
-		default:
+			default:
 			throw new RuntimeException("Blocktype not implemented!");
 
 		}

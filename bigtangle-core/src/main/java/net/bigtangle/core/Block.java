@@ -26,7 +26,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -227,7 +226,6 @@ public class Block extends Message {
      *            deserializing of the wire as the length will be provided as
      *            part of the header. If unknown then set to
      *            Message.UNKNOWN_LENGTH
-     * @throws ProtocolException
      */
     public Block(NetworkParameters params, byte[] payloadBytes, int offset, MessageSerializer serializer, int length)
             throws ProtocolException {
@@ -255,7 +253,6 @@ public class Block extends Message {
      *            deserializing of the wire as the length will be provided as
      *            part of the header. If unknown then set to
      *            Message.UNKNOWN_LENGTH
-     * @throws ProtocolException
      */
     public Block(NetworkParameters params, byte[] payloadBytes, int offset, @Nullable Message parent,
             MessageSerializer serializer, int length) throws ProtocolException {
@@ -709,8 +706,8 @@ public class Block extends Message {
     /**
      * Returns true if the PoW of the block is OK
      */
-    public boolean checkProofOfWork(boolean throwException) throws VerificationException {
-        return checkProofOfWork(throwException, getDifficultyTargetAsInteger());
+    public void checkProofOfWork(boolean throwException) throws VerificationException {
+        checkProofOfWork(throwException, getDifficultyTargetAsInteger());
     }
 
     /**
@@ -837,9 +834,9 @@ public class Block extends Message {
         // 2 3 4 4
         // / \ / \ / \
         // t1 t2 t3 t4 t5 t5
-        ArrayList<byte[]> tree = new ArrayList<byte[]>();
+        ArrayList<byte[]> tree = new ArrayList<>();
         if (transactions == null)
-            transactions = new ArrayList<Transaction>();
+            transactions = new ArrayList<>();
         // Start by adding all the hashes of the transactions as leaves of the
         // tree.
         for (Transaction t : transactions) {
@@ -874,7 +871,6 @@ public class Block extends Message {
      * only what is checkable independent of the chain and without a transaction
      * index.
      *
-     * @throws VerificationException
      */
     public void verifyHeader() throws VerificationException {
         // Prove that this block is OK. It might seem that we can just ignore
@@ -928,11 +924,8 @@ public class Block extends Message {
      * Verifies both the header and that the transactions hash to the merkle
      * root.
      *
-     * @param height
-     *            block height, if known, or -1 otherwise.
-     *             if there was an error verifying the block.
      */
-    public void verify(final int height) throws VerificationException {
+    public void verify() throws VerificationException {
         verifyHeader();
         verifyTransactions();
     }
@@ -977,7 +970,7 @@ public class Block extends Message {
     public void addTransaction(Transaction t) {
         unCacheTransactions();
         if (transactions == null) {
-            transactions = new ArrayList<Transaction>();
+            transactions = new ArrayList<>();
         }
         t.setParent(this);
         // cui
@@ -1068,7 +1061,7 @@ public class Block extends Message {
      */
     // return new List<> to avoid check null @Nullable
     public List<Transaction> getTransactions() {
-        return transactions == null ? new ArrayList<Transaction>() : ImmutableList.copyOf(transactions);
+        return transactions == null ? new ArrayList<>() : ImmutableList.copyOf(transactions);
     }
 
     // ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -1080,7 +1073,7 @@ public class Block extends Message {
 
     public void addCoinbaseTransaction(byte[] pubKeyTo, Coin value, TokenInfo tokenInfo, MemoInfo memoInfo) {
         unCacheTransactions();
-        transactions = new ArrayList<Transaction>();
+        transactions = new ArrayList<>();
 
         Transaction coinbase = new Transaction(params);
         if (tokenInfo != null) {
@@ -1114,7 +1107,7 @@ public class Block extends Message {
 
             } else { 
 
-                List<ECKey> keys = new ArrayList<ECKey>();
+                List<ECKey> keys = new ArrayList<>();
                 for (MultiSignAddress multiSignAddress : tokenInfo.getMultiSignAddresses()) {
                     if (multiSignAddress.getTokenHolder() == 1) {
                         ECKey ecKey = ECKey.fromPublicOnly(Utils.HEX.decode(multiSignAddress.getPubKeyHex()));

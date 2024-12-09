@@ -26,14 +26,12 @@ import static net.bigtangle.core.Utils.uint32ToByteStreamLE;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -46,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.primitives.Longs;
 
 import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.core.exception.ScriptException;
@@ -80,22 +77,6 @@ public class Transaction extends ChildMessage {
     public Transaction() {
     }
 
-    /**
-     * A comparator that can be used to sort transactions by their updateTime
-     * field. The ordering goes from most recent into the past.
-     */
-    public static final Comparator<Transaction> SORT_TX_BY_UPDATE_TIME = new Comparator<Transaction>() {
-        @Override
-        public int compare(final Transaction tx1, final Transaction tx2) {
-            final long time1 = tx1.getUpdateTime().getTime();
-            final long time2 = tx2.getUpdateTime().getTime();
-            final int updateTimeComparison = -(Longs.compare(time1, time2));
-            // If time1==time2, compare by tx hash to make comparator consistent
-            // with equals
-            return updateTimeComparison != 0 ? updateTimeComparison : tx1.getHash().compareTo(tx2.getHash());
-        }
-    };
-
     private static final Logger log = LoggerFactory.getLogger(Transaction.class);
 
     /**
@@ -108,31 +89,19 @@ public class Transaction extends ChildMessage {
     public static final BigInteger LOCKTIME_THRESHOLD_BIG = BigInteger.valueOf(LOCKTIME_THRESHOLD);
 
     /**
-     * How many bytes a transaction can be before it won't be relayed anymore.
-     * Currently 100kb.
-     */
-    public static final int MAX_STANDARD_TX_SIZE = 100000;
-
-    /**
      * If feePerKb is lower than this, Bitcoin Core will treat it as if there
      * were no fee.
      */
     public static final Coin REFERENCE_DEFAULT_MIN_TX_FEE = Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID); // 0.05
     // mBTC
 
-    /**
-     * If using this feePerKb, transactions will get confirmed within the next
-     * couple of blocks. This should be adjusted from time to time. Last
-     * adjustment: February 2017.
-     */
-    public static final Coin DEFAULT_TX_FEE = Coin.valueOf(100000, NetworkParameters.BIGTANGLE_TOKENID); // 1
-                                                                                                         // mBTC
+    // mBTC
 
     /**
      * Any standard (ie pay-to-address) output smaller than this value (in
      * satoshis) will most likely be rejected by the network. This is calculated
      * by assuming a standard output will be 34 bytes, and then using the
-     * formula used in {@link TransactionOutput#getMinNonDustValue(Coin)}.
+     * formula used in .
      */
     public static final Coin MIN_NONDUST_OUTPUT = Coin.valueOf(2730, NetworkParameters.BIGTANGLE_TOKENID); // satoshis
 
@@ -142,16 +111,6 @@ public class Transaction extends ChildMessage {
     private ArrayList<TransactionOutput> outputs;
 
     private long lockTime;
-
-    // This is either the time the transaction was broadcast as measured from
-    // the local clock, or the time from the
-    // block in which it was included. Note that this can be changed by re-orgs
-    // so the wallet may update this field.
-    // Old serialized transactions don't have this field, thus null is valid. It
-    // is used for returning an ordered
-    // list of transactions from a wallet, which is helpful for presenting to
-    // users.
-    private Date updatedAt;
 
     // This is an in memory helper only.
     private Sha256Hash hash;
@@ -234,8 +193,8 @@ public class Transaction extends ChildMessage {
     public Transaction(NetworkParameters params) {
         super(params);
         version = 1;
-        inputs = new ArrayList<TransactionInput>();
-        outputs = new ArrayList<TransactionOutput>();
+        inputs = new ArrayList<>();
+        outputs = new ArrayList<>();
         // We don't initialize appearsIn deliberately as it's only useful for
         // transactions stored in the wallet.
         length = 8; // 8 for std fields
@@ -270,18 +229,11 @@ public class Transaction extends ChildMessage {
      *            content.
      * @param offset
      *            The location of the first payload byte within the array.
-     * @param parseRetain
-     *            Whether to retain the backing byte array for quick
-     *            reserialization. If true and the backing byte array is
-     *            invalidated due to modification of a field then the cached
-     *            bytes may be repopulated and retained if the message is
-     *            serialized again in the future.
      * @param length
      *            The length of message if known. Usually this is provided when
      *            deserializing of the wire as the length will be provided as
      *            part of the header. If unknown then set to
      *            Message.UNKNOWN_LENGTH
-     * @throws ProtocolException
      */
     public Transaction(NetworkParameters params, byte[] payload, int offset, @Nullable Message parent,
             MessageSerializer setSerializer, int length) throws ProtocolException {
@@ -313,11 +265,7 @@ public class Transaction extends ChildMessage {
     private int calculateMemoLen() {
         int len = 4;
         if (this.memo != null) {
-            try {
-                len += this.memo.getBytes("UTF-8").length;
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            }
+            len += this.memo.getBytes(StandardCharsets.UTF_8).length;
         }
         return len;
     }
@@ -334,7 +282,7 @@ public class Transaction extends ChildMessage {
      * Used by BitcoinSerializer. The serializer has to calculate a hash for
      * checksumming so to avoid wasting the considerable effort a set method is
      * provided so the serializer can set it.
-     *
+     * <p>
      * No verification is performed on this hash.
      */
     void setHash(Sha256Hash hash) {
@@ -343,22 +291,6 @@ public class Transaction extends ChildMessage {
 
     public String getHashAsString() {
         return getHash().toString();
-    }
-
-    /**
-     * Gets the sum of the inputs, regardless of who owns them.
-     */
-    public Coin getInputSum() {
-        Coin inputTotal = Coin.ZERO;
-
-        for (TransactionInput input : inputs) {
-            Coin inputValue = input.getValue();
-            if (inputValue != null) {
-                inputTotal = inputTotal.add(inputValue);
-            }
-        }
-
-        return inputTotal;
     }
 
     /**
@@ -391,7 +323,7 @@ public class Transaction extends ChildMessage {
         if (appearsInHashes == null) {
             // TODO: This could be a lot more memory efficient as we'll
             // typically only store one element.
-            appearsInHashes = new TreeMap<Sha256Hash, Integer>();
+            appearsInHashes = new TreeMap<>();
         }
         appearsInHashes.put(blockHash, relativityOffset);
     }
@@ -435,21 +367,15 @@ public class Transaction extends ChildMessage {
         return true;
     }
 
-    /**
-     * Returns the earliest time at which the transaction was seen (broadcast or
-     * included into the chain), or the epoch if that information isn't
-     * available.
-     */
-    public Date getUpdateTime() {
-        if (updatedAt == null) {
-            // Older wallets did not store this field. Set to the epoch.
-            updatedAt = new Date(0);
-        }
-        return updatedAt;
-    }
-
     public void setUpdateTime(Date updatedAt) {
-        this.updatedAt = updatedAt;
+        // This is either the time the transaction was broadcast as measured from
+        // the local clock, or the time from the
+        // block in which it was included. Note that this can be changed by re-orgs
+        // so the wallet may update this field.
+        // Old serialized transactions don't have this field, thus null is valid. It
+        // is used for returning an ordered
+        // list of transactions from a wallet, which is helpful for presenting to
+        // users.
         unCache();
     }
 
@@ -480,9 +406,8 @@ public class Transaction extends ChildMessage {
         public final int value;
 
         /**
-         * @param value
          */
-        private SigHash(final int value) {
+        SigHash(final int value) {
             this.value = value;
         }
 
@@ -606,11 +531,7 @@ public class Transaction extends ChildMessage {
         len = readUint32();
         optimalEncodingMessageSize += 4;
         if (len > 0) {
-            try {
-                this.memo = new String(readBytes((int) len), "UTF-8");
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            }
+            this.memo = new String(readBytes((int) len), StandardCharsets.UTF_8);
             optimalEncodingMessageSize += len;
         }
 
@@ -660,10 +581,7 @@ public class Transaction extends ChildMessage {
     /**
      * A human readable version of the transaction useful for debugging. The
      * format is not guaranteed to be stable.
-     * 
-     * @param chain
-     *            If provided, will be used to estimate lock times (if set). Can
-     *            be null.
+     *
      */
     @Override
     public String toString() {
@@ -779,8 +697,8 @@ public class Transaction extends ChildMessage {
     /**
      * Adds an input to this transaction that imports value from the given
      * output. Note that this input is <i>not</i> complete and after every input
-     * is added with {@link #addInput()} and every output is added with
-     * {@link #addOutput()}, a {@link TransactionSigner} must be used to
+     * is added with  and every output is added with
+     * , a {@link TransactionSigner} must be used to
      * finalize the transaction and finish the inputs off. Otherwise it won't be
      * accepted by the network.
      * 
@@ -1121,7 +1039,7 @@ public class Transaction extends ChildMessage {
             if ((sigHashType & 0x1f) == SigHash.NONE.value) {
                 // SIGHASH_NONE means no outputs are signed at all - the
                 // signature is effectively for a "blank cheque".
-                tx.outputs = new ArrayList<TransactionOutput>(0);
+                tx.outputs = new ArrayList<>(0);
                 // The signature isn't broken by new versions of the transaction
                 // issued by other parties.
                 for (int i = 0; i < tx.inputs.size(); i++)
@@ -1152,7 +1070,7 @@ public class Transaction extends ChildMessage {
                 // are deleted, and the outputs before
                 // that position are "nulled out". Unintuitively, the value in a
                 // "null" transaction is set to -1.
-                tx.outputs = new ArrayList<TransactionOutput>(tx.outputs.subList(0, inputIndex + 1));
+                tx.outputs = new ArrayList<>(tx.outputs.subList(0, inputIndex + 1));
                 for (int i = 0; i < inputIndex; i++)
                     tx.outputs.set(i, new TransactionOutput(tx.params, tx, Coin.NEGATIVE_SATOSHI, new byte[] {}));
                 // The signature isn't broken by new versions of the transaction
@@ -1167,7 +1085,7 @@ public class Transaction extends ChildMessage {
                 // broken by changes/additions/removals
                 // of other inputs. For example, this is useful for building
                 // assurance contracts.
-                tx.inputs = new ArrayList<TransactionInput>();
+                tx.inputs = new ArrayList<>();
                 tx.inputs.add(input);
             }
 
@@ -1224,7 +1142,7 @@ public class Transaction extends ChildMessage {
         if (this.memo == null) {
             uint32ToByteStreamLE(0L, stream);
         } else {
-            byte[] membyte = this.memo.getBytes("UTF-8");
+            byte[] membyte = this.memo.getBytes(StandardCharsets.UTF_8);
             uint32ToByteStreamLE(membyte.length, stream);
             stream.write(membyte);
         }
@@ -1296,34 +1214,6 @@ public class Transaction extends ChildMessage {
         return Collections.unmodifiableList(outputs);
     }
 
-    /**
-     * <p>
-     * Returns the list of transacion outputs, whether spent or unspent, that
-     * match a wallet by address or that are watched by a wallet, i.e.,
-     * transaction outputs whose script's address is controlled by the wallet
-     * and transaction outputs whose script is watched by the wallet.
-     * </p>
-     *
-     * @param transactionBag
-     *            The wallet that controls addresses and watches scripts.
-     * @return linked list of outputs relevant to the wallet in this transaction
-     */
-    public List<TransactionOutput> getWalletOutputs(TransactionBag transactionBag) {
-        List<TransactionOutput> walletOutputs = new LinkedList<TransactionOutput>();
-        for (TransactionOutput o : outputs) {
-            if (!o.isMineOrWatched(transactionBag))
-                continue;
-            walletOutputs.add(o);
-        }
-
-        return walletOutputs;
-    }
-
-    /** Randomly re-orders the transaction outputs: good for privacy */
-    public void shuffleOutputs() {
-        Collections.shuffle(outputs);
-    }
-
     /** Same as getInputs().get(index). */
     public TransactionInput getInput(long index) {
         return inputs.get((int) index);
@@ -1384,7 +1274,6 @@ public class Transaction extends ChildMessage {
      * range. Otherwise that there are no coinbase inputs in the tx.</li>
      * </ul>
      *
-     * @throws VerificationException
      */
     public void verify() throws VerificationException {
         /*
@@ -1404,7 +1293,7 @@ public class Transaction extends ChildMessage {
          * VerificationException( "getDataSignature size too large MAX " +
          * NetworkParameters.MAX_TRANSACTION_MEMO_SIZE);
          */
-        HashSet<TransactionOutPoint> outpoints = new HashSet<TransactionOutPoint>();
+        HashSet<TransactionOutPoint> outpoints = new HashSet<>();
         for (TransactionInput input : inputs) {
             if (outpoints.contains(input.getOutpoint()))
                 throw new VerificationException.DuplicatedOutPoint();
@@ -1440,7 +1329,7 @@ public class Transaction extends ChildMessage {
      *
      * <p>
      * To check if this transaction is final at a given height and time, see
-     * {@link Transaction#isFinal(int, long)}
+     * <p>
      * </p>
      */
     public boolean isTimeLocked() {
@@ -1462,26 +1351,6 @@ public class Transaction extends ChildMessage {
             if (input.isOptInFullRBF())
                 return true;
         return false;
-    }
-
-    /**
-     * <p>
-     * Returns true if this transaction is considered finalized and can be
-     * placed in a block. Non-finalized transactions won't be included by miners
-     * and can be replaced with newer versions using sequence numbers. This is
-     * useful in certain types of
-     * <a href="http://en.bitcoin.it/wiki/Contracts">contracts</a>, such as
-     * micropayment channels.
-     * </p>
-     *
-     * <p>
-     * Note that currently the replacement feature is disabled in Bitcoin Core
-     * and will need to be re-activated before this functionality is useful.
-     * </p>
-     */
-    public boolean isFinal(long height, long blockTimeSeconds) {
-        long time = getLockTime();
-        return time < (time < LOCKTIME_THRESHOLD ? height : blockTimeSeconds) || !isTimeLocked();
     }
 
     /**

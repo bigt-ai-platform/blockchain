@@ -22,6 +22,7 @@ package net.bigtangle.core;
 
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -129,7 +130,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
 
     /**
      * Creates a new instance containing the calculated (one-time) hash of the given file's contents.
-     *
+     * <p>
      * The file contents are read fully into memory, so this method should only be used with small files.
      *
      * @param file the file on which the hash value is calculated
@@ -137,17 +138,14 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
      * @throws IOException if an error occurs while reading the file
      */
     public static Sha256Hash of(File file) throws IOException {
-        FileInputStream in = new FileInputStream(file);
-        try {
+        try (FileInputStream in = new FileInputStream(file)) {
             return of(ByteStreams.toByteArray(in));
-        } finally {
-            in.close();
         }
     }
 
     /**
      * Returns a new SHA-256 MessageDigest instance.
-     *
+     * <p>
      * This is a convenience method which wraps the checked
      * exception that can never occur with a RuntimeException.
      *
@@ -268,7 +266,7 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
     }
 
     @Override
-    public int compareTo(final Sha256Hash other) {
+    public int compareTo(@NotNull final Sha256Hash other) {
         for (int i = LENGTH - 1; i >= 0; i--) {
             final int thisByte = this.bytes[i] & 0xff;
             final int otherByte = other.bytes[i] & 0xff;

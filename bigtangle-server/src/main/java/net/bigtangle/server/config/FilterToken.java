@@ -8,7 +8,7 @@ public class FilterToken {
     String tokenid;
 
     public static List<FilterToken> filter() {
-        List<FilterToken> re = new ArrayList<FilterToken>();
+        List<FilterToken> re = new ArrayList<>();
         // ada@etf.com
         FilterToken a = new FilterToken("023e509610e40aa6f95c0579d0ff4a9a488ab0d3077267c1d8f7bbc685041fd974");
         re.add(a);

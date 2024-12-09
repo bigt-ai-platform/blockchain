@@ -50,9 +50,8 @@ public class BlockEvaluation implements Serializable {
 
     public static BlockEvaluation buildInitial(Block block) {
         long currentTimeMillis = System.currentTimeMillis();
-        BlockEvaluation bv = BlockEvaluation.build(block.getHash(), 0, -1, currentTimeMillis, currentTimeMillis, 0,
-                false); 
-        return bv;
+        return BlockEvaluation.build(block.getHash(), 0, -1, currentTimeMillis, currentTimeMillis, 0,
+                false);
     }
 
     public static BlockEvaluation build(Sha256Hash blockhash, long height, long milestone, long milestoneLastUpdateTime,
@@ -70,15 +69,6 @@ public class BlockEvaluation implements Serializable {
         return blockEvaluation;
     }
 
- 
-
-    public String getBlockHexStr() {
-        return Utils.HEX.encode(this.blockHash.getBytes());
-    }
-
-    public void setBlockHexStr(String blockHexStr) {
-        this.blockHash = Sha256Hash.wrap(blockHexStr);
-    }
 
     public Sha256Hash getBlockHash() {
         return blockHash;

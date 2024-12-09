@@ -5,10 +5,6 @@
 
 package net.bigtangle.server.data;
 
-import java.util.Arrays;
-
-import net.bigtangle.core.Utils;
-
 public class ChainBlockQueue {
 
     private byte[] hash;
@@ -16,10 +12,6 @@ public class ChainBlockQueue {
     private long inserttime;
     private long chainlength;
     private boolean orphan;
-
-    public ChainBlockQueue() {
-
-    }
 
     public ChainBlockQueue(byte[] hash, byte[] block, long chainlength, boolean orphan, long inserttime) {
         super();

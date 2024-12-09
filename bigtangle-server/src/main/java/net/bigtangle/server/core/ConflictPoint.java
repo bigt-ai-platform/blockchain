@@ -33,9 +33,9 @@ public class ConflictPoint {
 	@Nullable
 	private OrderExecutionResult connectedOrderExecute;
 
-	private ConflictPoint(ConflictType type, TransactionOutPoint connectedOutpoint, RewardInfo reward,
-			Token connectedToken, Token connectedDomainToken, ContractExecutionResult connectedContracExecute,
-			OrderExecutionResult connectedOrderExecute) {
+	private ConflictPoint(ConflictType type, @org.jetbrains.annotations.Nullable TransactionOutPoint connectedOutpoint, @org.jetbrains.annotations.Nullable RewardInfo reward,
+						  @org.jetbrains.annotations.Nullable Token connectedToken, @org.jetbrains.annotations.Nullable Token connectedDomainToken, @org.jetbrains.annotations.Nullable ContractExecutionResult connectedContracExecute,
+						  @org.jetbrains.annotations.Nullable OrderExecutionResult connectedOrderExecute) {
 		super();
 		this.type = type;
 		this.connectedOutpoint = connectedOutpoint;
@@ -82,52 +82,36 @@ public class ConflictPoint {
 		if (other.type != type)
 			return false;
 
-		switch (type) {
-		case REWARDISSUANCE:
-			return getConnectedReward().getPrevRewardHash().equals(other.getConnectedReward().getPrevRewardHash());
-		case TOKENISSUANCE:
-			return getConnectedToken().getTokenid().equals(other.getConnectedToken().getTokenid())
-					&& getConnectedToken().getTokenindex() == other.getConnectedToken().getTokenindex();
-		case TXOUT:
-			return getConnectedOutpoint().getIndex() == other.getConnectedOutpoint().getIndex()
-					&& getConnectedOutpoint().getHash().equals(other.getConnectedOutpoint().getHash());
-		case DOMAINISSUANCE:
-			return getConnectedDomainToken().getDomainNameBlockHash()
-					.equals(other.getConnectedDomainToken().getDomainNameBlockHash())
-					&& getConnectedDomainToken().getTokenname().equals(other.getConnectedDomainToken().getTokenname())
-					&& getConnectedDomainToken().getTokenindex() == other.getConnectedDomainToken().getTokenindex();
-		case CONTRACTEXECUTE:
-			return getConnectedContractExecute().getPrevblockhash()
-					.equals(other.getConnectedContractExecute().getPrevblockhash());
-		case ORDEREXECUTE:
-			return getConnectedOrderExecute().getPrevblockhash()
-					.equals(other.getConnectedOrderExecute().getPrevblockhash());
-
-		default:
-			throw new RuntimeException("Conflicts not implemented.");
-		}
+        return switch (type) {
+            case REWARDISSUANCE ->
+                    getConnectedReward().getPrevRewardHash().equals(other.getConnectedReward().getPrevRewardHash());
+            case TOKENISSUANCE -> getConnectedToken().getTokenid().equals(other.getConnectedToken().getTokenid())
+                    && getConnectedToken().getTokenindex() == other.getConnectedToken().getTokenindex();
+            case TXOUT -> getConnectedOutpoint().getIndex() == other.getConnectedOutpoint().getIndex()
+                    && getConnectedOutpoint().getHash().equals(other.getConnectedOutpoint().getHash());
+            case DOMAINISSUANCE -> getConnectedDomainToken().getDomainNameBlockHash()
+                    .equals(other.getConnectedDomainToken().getDomainNameBlockHash())
+                    && getConnectedDomainToken().getTokenname().equals(other.getConnectedDomainToken().getTokenname())
+                    && getConnectedDomainToken().getTokenindex() == other.getConnectedDomainToken().getTokenindex();
+            case CONTRACTEXECUTE -> getConnectedContractExecute().getPrevblockhash()
+                    .equals(other.getConnectedContractExecute().getPrevblockhash());
+            case ORDEREXECUTE -> getConnectedOrderExecute().getPrevblockhash()
+                    .equals(other.getConnectedOrderExecute().getPrevblockhash());
+        };
 	}
 
 	@Override
 	public int hashCode() {
-		switch (type) {
-		case REWARDISSUANCE:
-			return Objects.hashCode(type, getConnectedReward().getPrevRewardHash());
-		case TOKENISSUANCE:
-			return Objects.hashCode(type, getConnectedToken().getTokenid(), getConnectedToken().getTokenindex());
-		case TXOUT:
-			return Objects.hashCode(type, getConnectedOutpoint().getIndex(), getConnectedOutpoint().getHash());
-		case DOMAINISSUANCE:
-			return Objects.hashCode(type, getConnectedDomainToken().getDomainNameBlockHash(),
-					getConnectedDomainToken().getTokenname(), getConnectedDomainToken().getTokenindex());
-		case CONTRACTEXECUTE:
-			return Objects.hashCode(type, getConnectedContractExecute().getPrevblockhash());
-		case ORDEREXECUTE:
-			return Objects.hashCode(type, getConnectedOrderExecute().getPrevblockhash());
-
-		default:
-			throw new RuntimeException("Conflicts not implemented.");
-		}
+        return switch (type) {
+            case REWARDISSUANCE -> Objects.hashCode(type, getConnectedReward().getPrevRewardHash());
+            case TOKENISSUANCE ->
+                    Objects.hashCode(type, getConnectedToken().getTokenid(), getConnectedToken().getTokenindex());
+            case TXOUT -> Objects.hashCode(type, getConnectedOutpoint().getIndex(), getConnectedOutpoint().getHash());
+            case DOMAINISSUANCE -> Objects.hashCode(type, getConnectedDomainToken().getDomainNameBlockHash(),
+                    getConnectedDomainToken().getTokenname(), getConnectedDomainToken().getTokenindex());
+            case CONTRACTEXECUTE -> Objects.hashCode(type, getConnectedContractExecute().getPrevblockhash());
+            case ORDEREXECUTE -> Objects.hashCode(type, getConnectedOrderExecute().getPrevblockhash());
+        };
 	}
 
 	public enum ConflictType {
