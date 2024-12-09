@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -345,12 +344,10 @@ public abstract class ServiceBase {
 			FullBlockStore store) throws BlockStoreException {
 		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
-			for (Iterator<PermissionDomainname> iterator = networkParameters.getPermissionDomainnameList()
-					.iterator(); iterator.hasNext();) {
-				PermissionDomainname permissionDomainname = iterator.next();
-				ECKey ecKey = permissionDomainname.getOutKey();
-				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
-			}
+            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
+                ECKey ecKey = permissionDomainname.getOutKey();
+                multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
+            }
             return (PermissionedAddressesResponse) PermissionedAddressesResponse
                     .create("", false, multiSignAddresses);
 		} else {
@@ -526,10 +523,8 @@ public abstract class ServiceBase {
 		// Exception for height 0 (genesis): since prevblock does not exist,
 		// finish payout
 		// calculation
-		if (currentHeight == 0) {
-        }
 
-		// Build transaction outputs sorted by addresses
+        // Build transaction outputs sorted by addresses
 		Transaction tx = new Transaction(networkParameters);
 
 		// Reward the consensus block with the static reward
@@ -538,7 +533,7 @@ public abstract class ServiceBase {
 		// Reward twice: once the consensus block, once the normal block maker
 		// of good quantiles
 		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream()
-				.sorted(Comparator.comparing((Entry<Address, Long> e) -> e.getKey())).toList()) {
+				.sorted(Entry.comparingByKey()).toList()) {
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD),
 					consensusBlockMiner);
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD), entry.getKey());
@@ -665,8 +660,8 @@ public abstract class ServiceBase {
 	}
 
 	public void solidifyBlocks(RewardInfo currRewardInfo, FullBlockStore store) throws BlockStoreException {
-		Comparator<Block> comparator = Comparator.comparingLong((Block b) -> b.getHeight())
-				.thenComparing((Block b) -> b.getHash());
+		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight)
+				.thenComparing(Block::getHash);
 		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			Block block = getBlock(hash, store);

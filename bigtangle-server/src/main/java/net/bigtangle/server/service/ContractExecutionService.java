@@ -173,11 +173,11 @@ public class ContractExecutionService {
 		// add all blocks of dependencies
 
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
-				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, true,
-				referencedOrdertypes, true, store);
+				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
+                referencedOrdertypes, true, store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
-				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength, true,
-				referencedOrdertypes, true, store);
+				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
+                referencedOrdertypes, true, store);
 
 		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
 

@@ -4,10 +4,6 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.Coin;
-import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.Utils;
 import net.bigtangle.utils.Json;
 
 public class JsonMapperTest {
@@ -27,7 +23,7 @@ public class JsonMapperTest {
         
         byteResp = byteListResp.getList().get(0);
         for (byte b : byteResp.getData()) {
-            System.out.println(String.format("%02X", b));
+            System.out.printf("%02X%n", b);
         }
     }
     
@@ -50,4 +46,16 @@ public class JsonMapperTest {
     	coin = Json.jsonmapper().readValue(jsonStr, Coin.class);
     	System.out.println(coin);
     }
+
+    @Test
+    public void testJsonBlockMCMC() throws Exception {
+        BlockMCMC byteListResp =   BlockMCMC.defaultBlockMCMC(Sha256Hash.ZERO_HASH) ;
+
+        String jsonStr = Json.jsonmapper().writeValueAsString(byteListResp);
+
+        System.out.println(jsonStr);
+        Json.jsonmapper().readValue(jsonStr, ByteListResp.class);
+
+    }
+
 }

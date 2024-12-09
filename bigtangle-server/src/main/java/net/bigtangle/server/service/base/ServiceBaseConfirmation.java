@@ -147,8 +147,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	public boolean addReferencedBlockHashesTo(Set<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
-			long prevMilestoneNumber, boolean throwException, List<Block.Type> blocktypes, boolean checkSpentConflict,
-			FullBlockStore store) throws BlockStoreException {
+											  long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict,
+											  FullBlockStore store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
@@ -180,7 +180,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (blocktypes == null) {
 				addBlockWithCheckReferenced(blocks, block, checkSpentConflict, store);
 			} else {
-				for (Block.Type type : blocktypes) {
+				for (Type type : blocktypes) {
 					if (type.equals(block.getBlock().getBlockType())) {
 						addBlockWithCheckReferenced(blocks, block, checkSpentConflict, store);
 					}
@@ -225,8 +225,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			Set<BlockWrap> checkBlocks = new HashSet<>();
 			checkBlocks.add(block);
 			// contract execution, then check all referenced blocks with no conflicts
-			if (Block.Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())
-					|| Block.Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
+			if (Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())
+					|| Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
 				checkBlocks.addAll(getReferrencedBlockWrap(block.getBlock(), store));
 			}
 			check = checkSpentAndConflict(allApprovedNewBlocks, checkBlocks, store);
@@ -407,7 +407,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (checkExists(blocks, block))
 				continue;
 			blocks.add(block);
-			if (Block.Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())) {
+			if (Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())) {
 				List<Contractresult> allRequiredBlockHashes = store
 						.getContractresultWithPrev(block.getBlock().getHash());
 				for (Contractresult req : allRequiredBlockHashes) {
@@ -420,7 +420,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 				}
 			}
-			if (Block.Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
+			if (Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
 				List<Orderresult> allRequiredBlockHashes = store.getOrderresultWithPrev(block.getBlock().getHash());
 				for (Orderresult req : allRequiredBlockHashes) {
 					if (!blockQueueSet.contains(req.getBlockHash())) {
@@ -579,7 +579,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return getUTXOConfirmed(c.getConflictPoint().getConnectedOutpoint(), store);
 		case TOKENISSUANCE:
 			final Token connectedToken = c.getConflictPoint().getConnectedToken();
-			if (connectedToken.getTokenindex() == 0)
+			if ((connectedToken != null ? connectedToken.getTokenindex() : 0) == 0)
 				return true;
 			s = store.getTokenSpent(connectedToken.getPrevblockhash());
 			if (s == null)
@@ -605,7 +605,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return false;
 		case ORDEREXECUTE:
 			final OrderExecutionResult connectedOrderExecute = c.getConflictPoint().getConnectedOrderExecute();
-			Orderresult a = store.getOrderResult(connectedOrderExecute.getPrevblockhash());
+			Orderresult a = store.getOrderResult(connectedOrderExecute != null ? connectedOrderExecute.getPrevblockhash() : null);
 			if (a != null)
 				return a.isConfirmed();
 			return false;
@@ -824,18 +824,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				.groupingBy(ConflictCandidate::getConflictPoint, Collectors.toCollection(conflictTreeSetSupplier)));
 
 		// Sort conflicts among each other by descending max(rating).
-		Comparator<TreeSet<ConflictCandidate>> byDescendingSetRating = getConflictSetComparator()
-				.thenComparingLong((TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getRating())
-				.thenComparingLong(
-						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getCumulativeWeight())
-				.thenComparingLong(
-						(TreeSet<ConflictCandidate> s) -> -s.first().getBlock().getBlockEvaluation().getInsertTime())
-				.thenComparing(
-						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getBlockEvaluation().getBlockHash())
-				.reversed();
-
-		Supplier<TreeSet<TreeSet<ConflictCandidate>>> conflictsTreeSetSupplier = () -> new TreeSet<>(
-				byDescendingSetRating);
+		Supplier<TreeSet<TreeSet<ConflictCandidate>>> conflictsTreeSetSupplier = getSetSupplier();
 
 		TreeSet<TreeSet<ConflictCandidate>> sortedConflicts = conflicts.values().stream()
 				.collect(Collectors.toCollection(conflictsTreeSetSupplier));
@@ -866,6 +855,22 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		losingBlocks.removeAll(winningBlocks);
 
 		return losingBlocks;
+	}
+
+	@NotNull
+	private Supplier<TreeSet<TreeSet<ConflictCandidate>>> getSetSupplier() {
+		Comparator<TreeSet<ConflictCandidate>> byDescendingSetRating = getConflictSetComparator()
+				.thenComparingLong((TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getRating())
+				.thenComparingLong(
+						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getCumulativeWeight())
+				.thenComparingLong(
+						(TreeSet<ConflictCandidate> s) -> -s.first().getBlock().getBlockEvaluation().getInsertTime())
+				.thenComparing(
+						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getBlockEvaluation().getBlockHash())
+				.reversed();
+
+        return () -> new TreeSet<>(
+                byDescendingSetRating);
 	}
 
 	@NotNull
@@ -1041,7 +1046,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// the TransactionOutPoint does not exist
 		if (a == null)
 			return false;
-		//
 		boolean re = checkSpentOrNoConfirm(c, checkNoConfirm, a);
 
 		if (re) {
@@ -1200,9 +1204,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					synchronizationUserData(block.getBlock().getHash(), DataClassName.valueOf(tx.getDataClassName()),
 							tx.getData(), (String) multiSignBy.get("publickey"),
 							block.getBlock().getBlockType().ordinal(), blockStore);
-				else {
-					// TODO delete the data
-				}
+
 			} catch (Exception e) {
 				throw new BlockStoreException("multisign signature error");
 			}
@@ -1297,7 +1299,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						resetConfirmOrderExecuteConflict(block, milestoneNumber, blockStore);
 					}
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmOrderAndTransaction(getBlock(dep, blockStore), confirm, milestoneNumber, blockStore);
+						confirmOrderAndTransaction(getBlock(dep, blockStore), true, milestoneNumber, blockStore);
 					}
 					for (OrderRecord c : check.getToBeSpentRecord()) {
 						c.setConfirmed(true);
@@ -1312,20 +1314,20 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						blockStore.updateOrderBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
 					}
 					// update cancel
-					blockStore.updateOrderCancelSpent(check.getCancelRecords(), block.getHash(), confirm);
+					blockStore.updateOrderCancelSpent(check.getCancelRecords(), block.getHash(), true);
 
 					// update order result
-					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
+					confirmTransaction(block, true, check.getOutputTx(), blockStore);
 					blockStore.updateOrderresultMilestone(block.getHash(), milestoneNumber);
-					blockStore.updateOrderResultConfirmed(block.getHash(), confirm);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), block.getHash(), confirm);
+					blockStore.updateOrderResultConfirmed(block.getHash(), true);
+					blockStore.updateOrderResultSpent(check.getPrevblockhash(), block.getHash(), true);
 
 					// Update the matching
 					addMatchingEventsOrderExecution(check, check.getOutputTx().getHashAsString(),
 							block.getTimeSeconds(), blockStore);
 				} else {
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmOrderAndTransaction(getBlock(dep, blockStore), confirm, -1, blockStore);
+						confirmOrderAndTransaction(getBlock(dep, blockStore), false, -1, blockStore);
 					}
 					for (OrderRecord c : check.getToBeSpentRecord()) {
 						c.setSpent(false);
@@ -1345,19 +1347,19 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 								false, blockStore);
 					}
 					// update cancel
-					blockStore.updateOrderCancelSpent(check.getCancelRecords(), null, confirm);
+					blockStore.updateOrderCancelSpent(check.getCancelRecords(), null, false);
 
 					// update order result
-					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
-					blockStore.updateOrderResultConfirmed(block.getHash(), confirm);
+					confirmTransaction(block, false, check.getOutputTx(), blockStore);
+					blockStore.updateOrderResultConfirmed(block.getHash(), false);
 					blockStore.updateOrderresultMilestone(block.getHash(), -1);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), null, confirm);
+					blockStore.updateOrderResultSpent(check.getPrevblockhash(), null, false);
 				}
 
 				evictTransactionsAndBlockEva(block, blockStore);
 
 			} else {
-				logger.debug("check failed result={} check ={}", result, check.toString());
+				logger.debug("check failed result={} check ={}", result, check != null ? check.toString() : null);
 			}
 
 		} catch (IOException e) {
@@ -1424,7 +1426,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					// toBeSpent consists prev and referenced without canceled
 					// It must set transaction state and milestoneNumber
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmContractEventTransaction(getBlock(dep, blockStore), confirm, milestoneNumber,
+						confirmContractEventTransaction(getBlock(dep, blockStore), true, milestoneNumber,
 								blockStore);
 					}
 					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
@@ -1450,16 +1452,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 					// update ContractResult
 					blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
-					blockStore.updateContractResultConfirmed(block.getHash(), confirm);
-					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
-					blockStore.updateContractResultSpent(check.getPrevblockhash(), block.getHash(), confirm);
+					blockStore.updateContractResultConfirmed(block.getHash(), true);
+					confirmTransaction(block, true, check.getOutputTx(), blockStore);
+					blockStore.updateContractResultSpent(check.getPrevblockhash(), block.getHash(), true);
 
 					// update cancel
-					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), confirm);
+					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), true);
 
 				} else {
 					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmContractEventTransaction(getBlock(dep, blockStore), confirm, -1, blockStore);
+						confirmContractEventTransaction(getBlock(dep, blockStore), false, -1, blockStore);
 					}
 					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
 						c.setConfirmed(false);
@@ -1484,11 +1486,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 					// update ContractResult
 					blockStore.updateContractresultMilestone(block.getHash(), -1);
-					blockStore.updateContractResultConfirmed(block.getHash(), confirm);
-					confirmTransaction(block, confirm, check.getOutputTx(), blockStore);
-					blockStore.updateContractResultSpent(check.getPrevblockhash(), null, confirm);
+					blockStore.updateContractResultConfirmed(block.getHash(), false);
+					confirmTransaction(block, false, check.getOutputTx(), blockStore);
+					blockStore.updateContractResultSpent(check.getPrevblockhash(), null, false);
 					// update cancel
-					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), confirm);
+					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), false);
 					// restore the prev state
 					if (prevblockhash.getContractExecutionResult() != null) {
 						BlockWrap prevBlock = getBlockWrap(result.getPrevblockhash(), blockStore);
@@ -1562,7 +1564,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// Set used other output spent
 		if (confirm) {
 			if (blockStore.getTokenPrevblockhash(block.getBlock().getHash()) != null)
-				blockStore.updateTokenSpent(blockStore.getTokenPrevblockhash(block.getBlock().getHash()), confirm,
+				blockStore.updateTokenSpent(blockStore.getTokenPrevblockhash(block.getBlock().getHash()), true,
 						block.getBlock().getHash());
 		} else {
 			if (blockStore.getTokenPrevblockhash(block.getBlock().getHash()) != null)
@@ -1623,10 +1625,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				// throw new RuntimeException("Attempted to spend an already spent output!");
 				if (confirm)
 					blockStore.updateTransactionOutputSpent(prevOut.getBlockHash(), prevOut.getTxHash(),
-							prevOut.getIndex(), confirm, block.getHash());
+							prevOut.getIndex(), true, block.getHash());
 				else {
 					blockStore.updateTransactionOutputSpent(prevOut.getBlockHash(), prevOut.getTxHash(),
-							prevOut.getIndex(), confirm, null);
+							prevOut.getIndex(), false, null);
 				}
 			}
 		}
@@ -1677,8 +1679,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return;
 
 		// order and contract event are controlled by execution only.
-		if (blockWrap.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EVENT)
-				|| blockWrap.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_ORDER_OPEN)) {
+		if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EVENT)
+				|| blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_OPEN)) {
 			return;
 		}
 
