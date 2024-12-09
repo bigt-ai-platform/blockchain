@@ -67,9 +67,9 @@ import net.bigtangle.utils.Gzip;
  * </p>
  */
 @Service
-public class FullBlockStoreImpl {
+public class BlockStoreService {
 
-	private static final Logger log = LoggerFactory.getLogger(FullBlockStoreImpl.class);
+	private static final Logger log = LoggerFactory.getLogger(BlockStoreService.class);
 
 	@Autowired
 	protected NetworkParameters networkParameters;
@@ -82,7 +82,7 @@ public class FullBlockStoreImpl {
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 
-	public boolean add(Block block, boolean allowUnsolid, FullBlockStore store) throws BlockStoreException {
+	public boolean add(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
 			added = addChain(block, store);
@@ -101,7 +101,7 @@ public class FullBlockStoreImpl {
 	/*
 	 * speedup of sync without updateTransactionOutputSpendPending.
 	 */
-	public void addFromSync(Block block, boolean allowUnsolid, FullBlockStore store) throws BlockStoreException {
+	public void addFromSync(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
 			addChain(block, store);
@@ -111,7 +111,7 @@ public class FullBlockStoreImpl {
 
 	}
 
-	public boolean add(Block block, boolean allowUnsolid, boolean updatechain, FullBlockStore store)
+	public boolean add(Block block, boolean allowUnsolid, boolean updatechain, BlockStoreInterface store)
 			throws BlockStoreException {
 		boolean a = add(block, allowUnsolid, store);
 		if (updatechain) {
@@ -120,8 +120,7 @@ public class FullBlockStoreImpl {
 		return a;
 	}
 
-	public boolean addChain(Block block, FullBlockStore store)
-			throws BlockStoreException {
+	public boolean addChain(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		// Check the block is partially formally valid and fulfills PoW
 		block.verifyHeader();
@@ -143,7 +142,7 @@ public class FullBlockStoreImpl {
 	public void updateChainConnected() throws BlockStoreException {
 		String LOCKID = "chain";
 		int LockTime = 1000000;
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			// log.info("create Reward started");
 			LockObject lock = store.selectLockobject(LOCKID);
@@ -187,7 +186,7 @@ public class FullBlockStoreImpl {
 
 	}
 
-	private void saveChainBlockQueue(Block block, FullBlockStore store, boolean orphan) throws BlockStoreException {
+	private void saveChainBlockQueue(Block block, BlockStoreInterface store, boolean orphan) throws BlockStoreException {
 		// save the block
 		try {
 			store.beginDatabaseBatchWrite();
@@ -208,18 +207,17 @@ public class FullBlockStoreImpl {
 	/*
 	 *  
 	 */
-	public void processChainConnected(FullBlockStore store, boolean updatelowchain, boolean throwException)
+	public void processChainConnected(BlockStoreInterface store, boolean updatelowchain, boolean throwException)
 			throws VerificationException, BlockStoreException {
 		List<ChainBlockQueue> cbs = store.selectChainblockqueue(false, serverConfiguration.getSyncblocks());
 		if (cbs != null && !cbs.isEmpty()) {
 			Stopwatch watch = Stopwatch.createStarted();
-            log.info("selectChainblockqueue with size  {}", cbs.size());
+			log.info("selectChainblockqueue with size  {}", cbs.size());
 			// check only do add if there is longer chain as saved in database
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 			ChainBlockQueue maxFromQuery = cbs.get(cbs.size() - 1);
 			if (!updatelowchain && maxConfirmedReward.getChainLength() > maxFromQuery.getChainlength()) {
-				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery,
-                        maxConfirmedReward);
+				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery, maxConfirmedReward);
 				return;
 			}
 			for (ChainBlockQueue chainBlockQueue : cbs) {
@@ -229,7 +227,7 @@ public class FullBlockStoreImpl {
 					try {
 						saveChainConnected(chainBlockQueue, store);
 					} catch (Exception e) {
-                        log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
+						log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
 					}
 				}
 
@@ -239,7 +237,7 @@ public class FullBlockStoreImpl {
 
 	}
 
-	private void saveChainConnected(ChainBlockQueue chainBlockQueue, FullBlockStore store)
+	private void saveChainConnected(ChainBlockQueue chainBlockQueue, BlockStoreInterface store)
 			throws VerificationException, BlockStoreException {
 		try {
 			// It can be down lock for update of this on database
@@ -250,7 +248,7 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	private void saveChainConnected(Block block, FullBlockStore store)
+	private void saveChainConnected(Block block, BlockStoreInterface store)
 			throws VerificationException, BlockStoreException {
 		try {
 			store.beginDatabaseBatchWrite();
@@ -267,14 +265,14 @@ public class FullBlockStoreImpl {
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 						.solidifyBlocks(currRewardInfo, store);
 			} catch (MissingDependencyException e) {
-                log.warn("Block isFailState. MissingDependencyException{} MissingDependencyException{}", block, e);
+				log.warn("Block isFailState. MissingDependencyException{} MissingDependencyException{}", block, e);
 				return;
 			}
 			SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService).checkChainSolidity(block, true, store);
 
 			if (solidityState.isDirectlyMissing()) {
-                log.debug("Block isDirectlyMissing. saveChainConnected stop to save.{}", block);
+				log.debug("Block isDirectlyMissing. saveChainConnected stop to save.{}", block);
 				// sync the lastest chain from remote start from the -2 rewards
 				// syncBlockService.startSingleProcess(block.getLastMiningRewardBlock()
 				// - 2, false);
@@ -282,7 +280,7 @@ public class FullBlockStoreImpl {
 			}
 
 			if (solidityState.isFailState()) {
-                log.warn("Block isFailState. remove it from ChainBlockQueue.{}", block);
+				log.warn("Block isFailState. remove it from ChainBlockQueue.{}", block);
 				return;
 			}
 			// Inherit solidity from predecessors if they are not solid
@@ -290,7 +288,7 @@ public class FullBlockStoreImpl {
 
 			// Sanity check
 			if (solidityState.isFailState() || solidityState.getState() == State.MissingPredecessor) {
-                log.debug("Block isFailState. remove it from ChainBlockQueue.{}", block);
+				log.debug("Block isFailState. remove it from ChainBlockQueue.{}", block);
 				return;
 			}
 			connectRewardBlock(block, solidityState, store);
@@ -305,18 +303,18 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	private void deleteChainQueue(ChainBlockQueue chainBlockQueue, FullBlockStore store) throws BlockStoreException {
+	private void deleteChainQueue(ChainBlockQueue chainBlockQueue, BlockStoreInterface store) throws BlockStoreException {
 		List<ChainBlockQueue> l = new ArrayList<>();
 		l.add(chainBlockQueue);
 		store.deleteChainBlockQueue(l);
 	}
 
-	public boolean addNonChain(Block block, boolean allowUnsolid, FullBlockStore blockStore)
+	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		return addNonChain(block, allowUnsolid, blockStore, false);
 	}
 
-	public boolean addNonChain(Block block, boolean allowUnsolid, FullBlockStore blockStore,
+	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
 			boolean allowMissingPredecessor) throws BlockStoreException {
 
 //		if( block.getHeight()==9) {
@@ -337,7 +335,7 @@ public class FullBlockStoreImpl {
 				throw e;
 		}
 		if (solidityState.isFailState()) {
-            log.debug("{} block {}", solidityState, block);
+			log.debug("{} block {}", solidityState, block);
 		}
 		// If explicitly wanted (e.g. new block from local clients), this
 		// block must strictly be solid now.
@@ -370,7 +368,7 @@ public class FullBlockStoreImpl {
 		return true;
 	}
 
-	private void connectRewardBlock(final Block block, SolidityState solidityState, FullBlockStore store)
+	private void connectRewardBlock(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
 
 		if (solidityState.isFailState()) {
@@ -405,9 +403,9 @@ public class FullBlockStoreImpl {
 	/**
 	 * Inserts the specified block into the DB
 	 * 
-	 * @param block         the block
-     */
-	private void connect(final Block block, SolidityState solidityState, FullBlockStore store)
+	 * @param block the block
+	 */
+	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
 		store.put(block);
 		cacheBlockService.cacheBlock(block, store);
@@ -436,7 +434,7 @@ public class FullBlockStoreImpl {
 	}
 
 	public String updateTransactionOutputSpendPendingDo(Block block) throws BlockStoreException {
-		FullBlockStore blockStore = storeService.getStore();
+		BlockStoreInterface blockStore = storeService.getStore();
 		try {
 			updateTransactionOutputSpendPending(block, blockStore);
 			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
@@ -454,7 +452,7 @@ public class FullBlockStoreImpl {
 		return "";
 	}
 
-	private void updateTransactionOutputSpendPending(Block block, FullBlockStore blockStore)
+	private void updateTransactionOutputSpendPending(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		for (final Transaction tx : block.getTransactions()) {
 			boolean isCoinBase = tx.isCoinBase();
@@ -475,23 +473,33 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void updateConfirmedDo(FullBlockStore blockStore) throws BlockStoreException {
-		
+	public void updateConfirmedDo(BlockStoreInterface blockStore) throws BlockStoreException {
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
+		unconfirmDo(blockStore, cutoffHeight, maxHeight);
 
-		unconfirmDo(blockStore );
-
-		confirmDo(blockStore );
+		confirmDo(blockStore, cutoffHeight, maxHeight);
 
 	}
 
-	public void confirmDo(FullBlockStore blockStore ) throws BlockStoreException {
+	public void confirmDo(BlockStoreInterface blockStore) throws BlockStoreException {
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
+
+		confirmDo(blockStore, cutoffHeight, maxHeight);
+	}
+
+	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
-			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
 
 			// Now try to find blocks that can be added to the milestone.
 			// DISALLOWS UNSOLID
@@ -515,22 +523,19 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	private void unconfirmDo(FullBlockStore blockStore ) throws BlockStoreException {
+	private void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		try {
 			blockStore.beginDatabaseBatchWrite();
 			// First remove any blocks that should no longer be in the milestone
-			HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
+			// HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
 
 			// Unconfirm anything not confirmed by milestone
-			List<Sha256Hash> wipeBlocks = blockStore.getWhereConfirmedNotMilestone();
+			List<Sha256Hash> wipeBlocks = blockStore.blocksNotMilestoneFromHeigth(cutoffHeight);
 
 			HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 
-			for (BlockEvaluation b : blocksToRemove) {
-				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b.getBlockHash(), blockStore));
-			}
 			for (Sha256Hash b : wipeBlocks) {
 				blocksToRemoveBlocks.add(serviceBase.getBlockWrap(b, blockStore));
 			}
@@ -549,7 +554,7 @@ public class FullBlockStoreImpl {
 	private void updateConfirmed() throws BlockStoreException {
 		String LOCKID = "chain";
 		int LockTime = 1000000;
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			// log.info("create Reward started");
 			LockObject lock = store.selectLockobject(LOCKID);
@@ -568,7 +573,7 @@ public class FullBlockStoreImpl {
 					canrun = true;
 				} else {
 					if (lock.getLocktime() < System.currentTimeMillis() - 2000)
-                        log.info("updateConfirmed running start = {}", Utils.dateTimeFormat(lock.getLocktime()));
+						log.info("updateConfirmed running start = {}", Utils.dateTimeFormat(lock.getLocktime()));
 				}
 			}
 			if (canrun) {
@@ -595,12 +600,12 @@ public class FullBlockStoreImpl {
 		}
 	}
 
-	public void cleanUp(FullBlockStore store) throws BlockStoreException {
+	public void cleanUp(BlockStoreInterface store) throws BlockStoreException {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		cleanUpDo(maxConfirmedReward, store);
 	}
 
-	public void cleanUpDo(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
+	public void cleanUpDo(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
 
 		Block rewardblock = store.get(maxConfirmedReward.getBlockHash());
 		// log.info(" cleanUpDo until block " + "" + rewardblock);
@@ -624,9 +629,9 @@ public class FullBlockStoreImpl {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
-            updateConfirmed();
-            return "";
-        });
+			updateConfirmed();
+			return "";
+		});
 		try {
 			handler.get(3000L, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {

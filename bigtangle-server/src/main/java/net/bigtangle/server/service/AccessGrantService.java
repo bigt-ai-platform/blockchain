@@ -8,7 +8,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class AccessGrantService {
@@ -18,7 +18,7 @@ public class AccessGrantService {
     @Autowired
     protected  StoreService storeService;
     
-    public void addAccessGrant(String pubKey,FullBlockStore store) throws BlockStoreException {
+    public void addAccessGrant(String pubKey,BlockStoreInterface store) throws BlockStoreException {
         byte[] buf = Utils.HEX.decode(pubKey);
         ECKey ecKey = ECKey.fromPublicOnly(buf);
         Address address = ecKey.toAddress(networkParameters); 
@@ -26,7 +26,7 @@ public class AccessGrantService {
     
     }
 
-    public void deleteAccessGrant(String pubKey,FullBlockStore store) throws BlockStoreException 
+    public void deleteAccessGrant(String pubKey,BlockStoreInterface store) throws BlockStoreException 
     {
         byte[] buf = Utils.HEX.decode(pubKey);
         ECKey ecKey = ECKey.fromPublicOnly(buf);
@@ -34,7 +34,7 @@ public class AccessGrantService {
         store .deleteAccessGrant(address.toBase58());
     }
 
-    public int getCountAccessGrantByAddress(String address, FullBlockStore store) {
+    public int getCountAccessGrantByAddress(String address, BlockStoreInterface store) {
         try {
             return store.getCountAccessGrantByAddress(address);
         } catch (Exception e) {

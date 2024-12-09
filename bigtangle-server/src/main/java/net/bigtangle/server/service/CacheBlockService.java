@@ -21,7 +21,7 @@ import net.bigtangle.core.TXReward;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.UTXOProviderException;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Gzip;
 import net.bigtangle.utils.Json;
 
@@ -30,7 +30,7 @@ public class CacheBlockService {
 	private static final Logger logger = LoggerFactory.getLogger(CacheBlockService.class);
 
 	@Cacheable(value = "blocksCache", key = "#blockhash")
-	public byte[] getBlock(Sha256Hash blockhash, FullBlockStore store) throws BlockStoreException {
+	public byte[] getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("read from database and no cache for: " + blockhash);
 		byte[] block = store.getByte(blockhash);
 //		 if(block==null ) {
@@ -40,17 +40,17 @@ public class CacheBlockService {
 	}
 
 	@CachePut(value = "blocksCache", key = "#block.hash")
-	public byte[] cacheBlock(final Block block, FullBlockStore store) throws BlockStoreException {
+	public byte[] cacheBlock(final Block block, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("CachePut " + block.toString());
 		return Gzip.compress(block.unsafeBitcoinSerialize());
 	}
 
 	@CacheEvict(value = "blocksCache", key = "#block.hash")
-	public void evictBlock(final Block block, FullBlockStore store) throws BlockStoreException {
+	public void evictBlock(final Block block, BlockStoreInterface store) throws BlockStoreException {
 		logger.debug("evictBlock {}", block.toString());
 	}
 
-	public TXReward getMaxConfirmedReward(FullBlockStore store) throws BlockStoreException {
+	public TXReward getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
 		try {
 			return new TXReward().parse(getMaxConfirmedRewardByte(store));
@@ -61,7 +61,7 @@ public class CacheBlockService {
 	}
 
 	@Cacheable(value = "reward", key = "#store.getParams.getId")
-	public byte[] getMaxConfirmedRewardByte(FullBlockStore store) throws BlockStoreException {
+	public byte[] getMaxConfirmedRewardByte(BlockStoreInterface store) throws BlockStoreException {
 		// store.getParams().getId()
 		return store.getMaxConfirmedReward().toByteArray();
 	}
@@ -71,7 +71,7 @@ public class CacheBlockService {
 	}
 
 	@Cacheable(value = "accountBalance", key = "#address")
-	public List<Coin> getAccountBalance(String address, FullBlockStore store) throws BlockStoreException {
+	public List<Coin> getAccountBalance(String address, BlockStoreInterface store) throws BlockStoreException {
 		logger.debug("getAccountBalance from database and no cache for: " + address);
 		store.calculateAccount(address, null);
 		List<Coin> accountBalance = store.getAccountBalance(address, null);
@@ -82,12 +82,12 @@ public class CacheBlockService {
 	}
 
 	@CacheEvict(value = "accountBalance", key = "#address")
-	public void evictAccountBalance(String address, FullBlockStore store) throws BlockStoreException {
+	public void evictAccountBalance(String address, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("evictAccountBalance {}", address);
 	}
 
 	@Cacheable(value = "outputs", key = "#address")
-	public List<byte[]> getOpenTransactionOutputs(String address, FullBlockStore store)
+	public List<byte[]> getOpenTransactionOutputs(String address, BlockStoreInterface store)
 			throws UTXOProviderException, JsonProcessingException {
 
 		List<UTXO> utxos = store.getOpenTransactionOutputs(address);
@@ -101,7 +101,7 @@ public class CacheBlockService {
 	}
 
 	@CacheEvict(value = "outputs", key = "#address")
-	public void evictOutputs(String address, FullBlockStore store) throws BlockStoreException {
+	public void evictOutputs(String address, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("evictAccountBalance {}", address);
 	}
 
@@ -121,7 +121,7 @@ public class CacheBlockService {
 	}
 
 	@Cacheable(value = "BlockMCMC", key = "#blockhash")
-	public byte[] getBlockMCMC(Sha256Hash blockhash, FullBlockStore store)
+	public byte[] getBlockMCMC(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException, JsonProcessingException {
 		// store.getParams().getId()
 		return Json.jsonmapper().writeValueAsBytes(store.getMCMC(blockhash));
@@ -132,7 +132,7 @@ public class CacheBlockService {
 	}
 
 	@Cacheable(value = "BlockEvaluation", key = "#blockhash")
-	public byte[] getBlockEvaluation(Sha256Hash blockhash, FullBlockStore store)
+	public byte[] getBlockEvaluation(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException, JsonProcessingException {
 		BlockEvaluation value = store.getBlockEvaluationsByhashs(blockhash);
 

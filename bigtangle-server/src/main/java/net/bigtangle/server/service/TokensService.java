@@ -17,38 +17,38 @@ import net.bigtangle.core.TokenType;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.GetTokensResponse;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class TokensService {
 
-    public AbstractResponse getTokenById(String tokenid, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getTokenById(String tokenid, BlockStoreInterface store) throws BlockStoreException {
         List<Token> tokens = store.getTokenID(tokenid);
         return GetTokensResponse.create(tokens);
     }
 
-    public AbstractResponse getToken(String blockhashString, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getToken(String blockhashString, BlockStoreInterface store) throws BlockStoreException {
         List<Token> tokens = new ArrayList<>();
         tokens.add(store.getTokenByBlockHash(Sha256Hash.wrap(blockhashString)));
         return GetTokensResponse.create(tokens);
     }
 
-    public AbstractResponse getWebTokensList(FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getWebTokensList(BlockStoreInterface store) throws BlockStoreException {
         List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.web.ordinal()));
         return GetTokensResponse.create(list);
     }
-    public AbstractResponse getContractTokensList(FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getContractTokensList(BlockStoreInterface store) throws BlockStoreException {
         List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.contract.ordinal()));
         return GetTokensResponse.create(list);
     }
 
-    public GetTokensResponse searchTokens(String name, FullBlockStore store) throws BlockStoreException {
+    public GetTokensResponse searchTokens(String name, BlockStoreInterface store) throws BlockStoreException {
         List<Token> list = new ArrayList<>(store.getTokensList(name));
         Map<String, BigInteger> map = store.getTokenAmountMap();
         return GetTokensResponse.create(list, map);
     }
 
-    public GetTokensResponse searchExchangeTokens(String name, FullBlockStore store)
+    public GetTokensResponse searchExchangeTokens(String name, BlockStoreInterface store)
             throws BlockStoreException {
         List<Token> list = new ArrayList<>();
         if (name != null && !name.trim().isEmpty()) {

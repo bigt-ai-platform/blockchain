@@ -22,7 +22,7 @@ import net.bigtangle.core.response.PayMultiSignAddressListResponse;
 import net.bigtangle.core.response.PayMultiSignDetailsResponse;
 import net.bigtangle.core.response.PayMultiSignListResponse;
 import net.bigtangle.core.response.PayMultiSignResponse;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 
 @Service
@@ -32,13 +32,13 @@ public class PayMultiSignService {
     @Autowired
     private NetworkParameters networkParameters;
 
-    public AbstractResponse getPayMultiSignDetails(String orderid, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getPayMultiSignDetails(String orderid, BlockStoreInterface store) throws BlockStoreException {
         PayMultiSign payMultiSign =  store.getPayMultiSignWithOrderid(orderid);
         return PayMultiSignDetailsResponse.create(payMultiSign);
     }
  
 
-    public void launchPayMultiSign(byte[] data, FullBlockStore store) throws Exception {
+    public void launchPayMultiSign(byte[] data, BlockStoreInterface store) throws Exception {
         PayMultiSign payMultiSign = convertTransactionDataToPayMultiSign(data);
 
         String hashhex = payMultiSign.getOutputHashHex();
@@ -63,7 +63,7 @@ public class PayMultiSignService {
     }
 
  
-    public AbstractResponse payMultiSign(Map<String, Object> request, FullBlockStore store) throws Exception {
+    public AbstractResponse payMultiSign(Map<String, Object> request, BlockStoreInterface store) throws Exception {
         String orderid = (String) request.get("orderid");
 
         PayMultiSign payMultiSign_ =  store.getPayMultiSignWithOrderid(orderid);
@@ -111,7 +111,7 @@ public class PayMultiSignService {
         return payMultiSign;
     }
 
-    public AbstractResponse getPayMultiSignList(List<String> pubKeys, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getPayMultiSignList(List<String> pubKeys, BlockStoreInterface store) throws BlockStoreException {
         List<PayMultiSign> payMultiSigns = store.getPayMultiSignList(pubKeys);
         List<PayMultiSignExt> payMultiSignExts = new ArrayList<>();
         for (PayMultiSign payMultiSign : payMultiSigns) {
@@ -132,7 +132,7 @@ public class PayMultiSignService {
         return PayMultiSignListResponse.create(payMultiSignExts);
     }
 
-    public AbstractResponse getPayMultiSignAddressList(String orderid, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getPayMultiSignAddressList(String orderid, BlockStoreInterface store) throws BlockStoreException {
         List<PayMultiSignAddress> payMultiSignAddresses =  store.getPayMultiSignAddressWithOrderid(orderid);
         return PayMultiSignAddressListResponse.create(payMultiSignAddresses);
     }

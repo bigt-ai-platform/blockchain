@@ -40,8 +40,8 @@ import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceOrderExecution;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 
 /**
  * <p>
@@ -53,7 +53,7 @@ import net.bigtangle.store.FullBlockStoreImpl;
 public class OrderExecutionService {
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 	@Autowired
 	private BlockService blockService;
 	@Autowired
@@ -84,7 +84,7 @@ public class OrderExecutionService {
 	// createOrderExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
 
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 
 		try {
 			// log.info("create OrderExecution started");
@@ -116,7 +116,7 @@ public class OrderExecutionService {
 
 	}
 
-	public Block createOrderExecution(FullBlockStore store) throws Exception {
+	public Block createOrderExecution(BlockStoreInterface store) throws Exception {
 		Block contractExecution = createOrderExecutionDo(store);
 		if (contractExecution != null) {
 			// log.debug(" createOrder block is created: " + contractExecution);
@@ -132,7 +132,7 @@ public class OrderExecutionService {
 	 * @return the new block or block voted on
      */
 
-	public Block createOrderExecutionDo(FullBlockStore store) throws Exception {
+	public Block createOrderExecutionDo(BlockStoreInterface store) throws Exception {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
@@ -146,7 +146,7 @@ public class OrderExecutionService {
 
 	}
 
-	public Block createOrderExecution(Block block, FullBlockStore store)
+	public Block createOrderExecution(Block block, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 		block.setBlockType(Block.Type.BLOCKTYPE_ORDER_EXECUTE);
 		// Build transaction for block
@@ -154,17 +154,18 @@ public class OrderExecutionService {
 		block.addTransaction(tx);
 
 		// Read previous reward block's data
-		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService); 
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 
-		long cutoffheight = blockService.getRewardCutoffHeight(prevRewardHash, store);
+		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
+
 
 		List<Block.Type> ordertypes = new ArrayList<>();
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+
 		// add all blocks of dependencies
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
@@ -208,7 +209,7 @@ public class OrderExecutionService {
 
 	//
 	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
-			List<Orderresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
+			List<Orderresult> prevNotMilestons, BlockStoreInterface store, ServiceBaseConnect serviceBase)
 			throws BlockStoreException {
 		// find the longest chained execution connected to last milestone
 		for (Orderresult prevNotMilestone : prevNotMilestons) {
@@ -222,7 +223,7 @@ public class OrderExecutionService {
 
 	}
 
-	protected Orderresult getLast(Set<BlockWrap> prevs, FullBlockStore store) throws BlockStoreException {
+	protected Orderresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store) throws BlockStoreException {
 		BlockWrap re = null;
 		for (BlockWrap b : prevs) {
 			if (re == null)

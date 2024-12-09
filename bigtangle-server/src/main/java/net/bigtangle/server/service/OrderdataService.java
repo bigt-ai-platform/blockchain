@@ -15,13 +15,13 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.OrderdataResponse;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class OrderdataService {
 
 	public AbstractResponse getOrderdataList(String address, List<String> addresses, String tokenid,
-											 FullBlockStore store) throws BlockStoreException {
+											 BlockStoreInterface store) throws BlockStoreException {
 		if (addresses == null)
 			addresses = new ArrayList<>();
 		if (address != null && !address.isEmpty()) {
@@ -32,7 +32,7 @@ public class OrderdataService {
 
 	}
 
-	private AbstractResponse getAllOpenOrders(List<String> addresses, String tokenid, FullBlockStore store)
+	private AbstractResponse getAllOpenOrders(List<String> addresses, String tokenid, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<OrderRecord> allOrdersSorted = store.getAllOpenOrdersSorted(addresses, tokenid);
 
@@ -54,7 +54,7 @@ public class OrderdataService {
 		return OrderdataResponse.createOrderRecordResponse(allOrdersSorted, getTokename(allOrdersSorted, store));
 	}
 
-	public Map<String, Token> getTokename(List<OrderRecord> allOrdersSorted, FullBlockStore store)
+	public Map<String, Token> getTokename(List<OrderRecord> allOrdersSorted, BlockStoreInterface store)
 			throws BlockStoreException {
 		Set<String> tokenids = new HashSet<>();
 		for (OrderRecord d : allOrdersSorted) {

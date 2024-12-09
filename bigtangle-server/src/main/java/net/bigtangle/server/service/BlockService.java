@@ -35,8 +35,8 @@ import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.DomainValidator;
 import net.bigtangle.utils.Gzip;
 
@@ -54,7 +54,7 @@ public class BlockService {
 	@Autowired
 	protected NetworkParameters networkParameters;
 	@Autowired
-	FullBlockStoreImpl blockgraph;
+	BlockStoreService blockgraph;
 
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
@@ -66,19 +66,19 @@ public class BlockService {
 
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
-	public Block getBlock(Sha256Hash blockhash, FullBlockStore store) throws BlockStoreException {
+	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		return serviceBase.getBlock(blockhash, store);
 	}
 
-	public BlockWrap getBlockWrap(Sha256Hash blockhash, FullBlockStore store)
+	public BlockWrap getBlockWrap(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException {
 		return new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService).getBlockWrap(blockhash, store);
 	}
 
-	public AbstractResponse searchBlock(Map<String, Object> request, FullBlockStore store) throws BlockStoreException {
+	public AbstractResponse searchBlock(Map<String, Object> request, BlockStoreInterface store) throws BlockStoreException {
 		@SuppressWarnings("unchecked")
 		List<String> address = (List<String>) request.get("address");
 		String lastestAmount = request.get("lastestAmount") == null ? "0" : request.get("lastestAmount").toString();
@@ -88,7 +88,7 @@ public class BlockService {
 		return GetBlockEvaluationsResponse.create(evaluations);
 	}
 
-	public AbstractResponse searchBlockByBlockHashs(Map<String, Object> request, FullBlockStore store)
+	public AbstractResponse searchBlockByBlockHashs(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 		@SuppressWarnings("unchecked")
 		List<String> blockhashs = (List<String>) request.get("blockhashs");
@@ -97,42 +97,43 @@ public class BlockService {
 		return GetBlockEvaluationsResponse.create(evaluations);
 	}
 
-	public void batchBlock(Block block, FullBlockStore store) throws BlockStoreException {
+	public void batchBlock(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		store.insertBatchBlock(block);
 	}
 
-	public void insertMyserverblocks(Sha256Hash prevhash, Sha256Hash hash, Long inserttime, FullBlockStore store)
+	public void insertMyserverblocks(Sha256Hash prevhash, Sha256Hash hash, Long inserttime, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		store.insertMyserverblocks(prevhash, hash, inserttime);
 	}
 
-	public boolean existMyserverblocks(Sha256Hash prevhash, FullBlockStore store) throws BlockStoreException {
+	public boolean existMyserverblocks(Sha256Hash prevhash, BlockStoreInterface store) throws BlockStoreException {
 
 		return store.existMyserverblocks(prevhash);
 	}
 
-	public void deleteMyserverblocks(Sha256Hash prevhash, FullBlockStore store) throws BlockStoreException {
+	public void deleteMyserverblocks(Sha256Hash prevhash, BlockStoreInterface store) throws BlockStoreException {
 
 		store.deleteMyserverblocks(prevhash);
 	}
 
-	public GetBlockListResponse blocksFromChainLength(Long start, Long end, FullBlockStore store)
+	public GetBlockListResponse blocksFromChainLength(Long start, Long end, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return GetBlockListResponse.create(store.blocksFromChainLength(start, end));
 	}
 
-	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, FullBlockStore store)
+	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-		long my = getCurrentCutoffHeight(maxConfirmedReward, store);
+		long my = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService).getCurrentCutoffHeight(maxConfirmedReward, store);
 		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(Math.max(cutoffHeight, my)));
 	}
 
-	public Block getNewBlockPrototype(FullBlockStore store) throws BlockStoreException {
+	public Block getNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
 		Pair<BlockWrap, BlockWrap> tipsToApprove = getValidatedBlockPair(store);
 		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
 				tipsToApprove.getRight().getBlock());
@@ -144,7 +145,7 @@ public class BlockService {
 	/*
 	 * prefer tip from two different previous block. This is modified mcmc
 	 */
-	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(FullBlockStore store) throws BlockStoreException {
+	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(BlockStoreInterface store) throws BlockStoreException {
 		Pair<BlockWrap, BlockWrap> candidate = tipService.getValidatedBlockPair(store);
 
 		if (!candidate.getLeft().equals(candidate.getRight())) {
@@ -159,11 +160,11 @@ public class BlockService {
 		return candidate;
 	}
 
-	public boolean getUTXOSpent(TransactionOutPoint txout, FullBlockStore store) throws BlockStoreException {
+	public boolean getUTXOSpent(TransactionOutPoint txout, BlockStoreInterface store) throws BlockStoreException {
 		return store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex()).isSpent();
 	}
 
-	public UTXO getUTXO(TransactionOutPoint out, FullBlockStore store) throws BlockStoreException {
+	public UTXO getUTXO(TransactionOutPoint out, BlockStoreInterface store) throws BlockStoreException {
 		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
 	}
 
@@ -197,7 +198,7 @@ public class BlockService {
 	}
 
 	public Optional<Block> addConnectedBlock(Block block, boolean allowUnsolid) throws BlockStoreException {
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			if (!store.existBlock(block.getHash())) {
 				try {
@@ -222,7 +223,7 @@ public class BlockService {
 		return Optional.empty();
 	}
 
-	public void adjustHeightRequiredBlocks(Block block, FullBlockStore store)
+	public void adjustHeightRequiredBlocks(Block block, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException {
 		block = adjustPrototype(block, store);
 		long h = calcHeightRequiredBlocks(block, store);
@@ -232,7 +233,7 @@ public class BlockService {
 		}
 	}
 
-	public Block adjustPrototype(Block block, FullBlockStore store) throws BlockStoreException {
+	public Block adjustPrototype(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// two hours for just getBlockPrototype
 		int delaySeconds = 7200;
 
@@ -247,7 +248,7 @@ public class BlockService {
 		return block;
 	}
 
-	public long calcHeightRequiredBlocks(Block block, FullBlockStore store) throws BlockStoreException {
+	public long calcHeightRequiredBlocks(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		Set<Sha256Hash> allrequireds = new HashSet<>();
 		List<Block> result = new ArrayList<>();
@@ -263,44 +264,12 @@ public class BlockService {
 		return height + 1;
 	}
 
-	public long getCurrentMaxHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
-		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
-		if (maxConfirmedReward == null)
-			return NetworkParameters.FORWARD_BLOCK_HORIZON;
-		return store.get(maxConfirmedReward.getBlockHash()).getHeight() + NetworkParameters.FORWARD_BLOCK_HORIZON;
-	}
-
-	public long getCurrentCutoffHeight(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
-		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
-		if (maxConfirmedReward == null)
-			return 0;
-		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
-		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
-		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
-	}
-
-	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, FullBlockStore store) throws BlockStoreException {
-
-		Sha256Hash currPrevRewardHash = prevRewardHash;
-		for (int i = 0; i < NetworkParameters.MILESTONE_CUTOFF; i++) {
-			Block currRewardBlock;
-
-			currRewardBlock = getBlock(currPrevRewardHash, store);
-			RewardInfo currRewardInfo = new RewardInfo()
-					.parseChecked(currRewardBlock.getTransactions().get(0).getData());
-			if (currPrevRewardHash.equals(networkParameters.getGenesisBlock().getHash()))
-				return 0;
-
-			currPrevRewardHash = currRewardInfo.getPrevRewardHash();
-
-		}
-		return store.get(currPrevRewardHash).getHeight();
-	}
+ 
 
 	/*
 	 * failed blocks without conflict for retry
 	 */
-	public AbstractResponse findRetryBlocks(Map<String, Object> request, FullBlockStore store)
+	public AbstractResponse findRetryBlocks(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 		@SuppressWarnings("unchecked")
 		List<String> address = (List<String>) request.get("address");
@@ -311,7 +280,7 @@ public class BlockService {
 		return GetBlockEvaluationsResponse.create(evaluations);
 	}
 
-	public void checkBlockBeforeSave(Block block, FullBlockStore store) throws BlockStoreException {
+	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
 		if (!checkPossibleConflict(block, store))
@@ -333,7 +302,7 @@ public class BlockService {
 	 * Transactions in a block may has spent output, It is not final that the reject
 	 * of the block Return false, if there is possible conflict
 	 */
-	public boolean checkPossibleConflict(Block block, FullBlockStore store) throws BlockStoreException {
+	public boolean checkPossibleConflict(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// All used transaction outputs
 		final List<Transaction> transactions = block.getTransactions();
 		for (final Transaction tx : transactions) {

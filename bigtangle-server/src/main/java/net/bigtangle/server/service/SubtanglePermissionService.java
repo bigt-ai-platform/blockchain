@@ -13,14 +13,14 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.SubtangleResponse;
 import net.bigtangle.server.data.SubtangleStatus;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class SubtanglePermissionService {
 
   
 
-    public boolean savePubkey(String pubkey, String signHex, FullBlockStore store) throws BlockStoreException {
+    public boolean savePubkey(String pubkey, String signHex, BlockStoreInterface store) throws BlockStoreException {
         ECKey key = ECKey.fromPublicOnly(Utils.HEX.decode(pubkey));
 
         byte[] signOutput = Utils.HEX.decode(signHex);
@@ -33,7 +33,7 @@ public class SubtanglePermissionService {
 
     }
 
-    public void updateSubtanglePermission(String pubkey, String signHex, String userdataPubkey, String status, FullBlockStore store)
+    public void updateSubtanglePermission(String pubkey, String signHex, String userdataPubkey, String status, BlockStoreInterface store)
             throws BlockStoreException {
 
             store.updateSubtanglePermission(pubkey, userdataPubkey, status);
@@ -41,19 +41,19 @@ public class SubtanglePermissionService {
 
     }
 
-    public AbstractResponse getSubtanglePermissionList(List<String> pubkeys, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getSubtanglePermissionList(List<String> pubkeys, BlockStoreInterface store) throws BlockStoreException {
 
         List<Map<String, String>> maps = store.getSubtanglePermissionListByPubkeys(pubkeys);
         return SubtangleResponse.createUserDataResponse(maps);
     }
 
-    public AbstractResponse getAllSubtanglePermissionList(  FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getAllSubtanglePermissionList(  BlockStoreInterface store) throws BlockStoreException {
 
         List<Map<String, String>> maps = store.getAllSubtanglePermissionList();
         return SubtangleResponse.createUserDataResponse(maps);
     }
 
-    public AbstractResponse getSubtanglePermissionList(String pubkey, FullBlockStore store) throws BlockStoreException {
+    public AbstractResponse getSubtanglePermissionList(String pubkey, BlockStoreInterface store) throws BlockStoreException {
 
         List<Map<String, String>> maps = store.getSubtanglePermissionListByPubkey(pubkey);
         return SubtangleResponse.createUserDataResponse(maps);

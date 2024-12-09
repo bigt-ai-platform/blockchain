@@ -37,7 +37,7 @@ import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.OutputService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.subtangle.SubtangleConfiguration;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
@@ -47,7 +47,7 @@ import net.bigtangle.wallet.Wallet;
 @Service
 public class SubtangleService {
  
-    public void giveMoneyToTargetAccount(FullBlockStore store) throws Exception {
+    public void giveMoneyToTargetAccount(BlockStoreInterface store) throws Exception {
         ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
                 Utils.HEX.decode(subtangleConfiguration.getPriKeyHex0()),
                 Utils.HEX.decode(subtangleConfiguration.getPubKeyHex0()));
@@ -84,7 +84,7 @@ public class SubtangleService {
         }
     }
  
-    private void giveRemoteMoney(ECKey signKey, Coin amount, UTXO output, FullBlockStore store) throws Exception {
+    private void giveRemoteMoney(ECKey signKey, Coin amount, UTXO output, BlockStoreInterface store) throws Exception {
         TransactionOutput spendableOutput = new FreeStandingTransactionOutput(networkParameters, output);
         Transaction transaction = new Transaction(networkParameters);
 
@@ -106,7 +106,7 @@ public class SubtangleService {
         this.blockSaveService.saveBlock(b, store);
     }
 
-    public void giveMoney(ECKey signKey, Address address, Coin amount, FullBlockStore store) throws Exception {
+    public void giveMoney(ECKey signKey, Address address, Coin amount, BlockStoreInterface store) throws Exception {
         Wallet wallet = Wallet.fromKeys(networkParameters, signKey);
         wallet.setServerURL(subtangleConfiguration.getParentContextRoot());
 
@@ -130,7 +130,7 @@ public class SubtangleService {
         this.blockSaveService.saveBlock(b, store);
     }
 
-    private List<UTXO> getBalancesUTOXList(boolean withZero, ECKey signKey, byte[] tokenid, FullBlockStore store)
+    private List<UTXO> getBalancesUTOXList(boolean withZero, ECKey signKey, byte[] tokenid, BlockStoreInterface store)
             throws BlockStoreException,  DatabindException, JsonProcessingException, IOException {
         Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
         pubKeyHashs.add(signKey.toAddress(this.networkParameters).getHash160());

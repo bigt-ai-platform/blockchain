@@ -14,8 +14,8 @@ import net.bigtangle.core.Block.Type;
 import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.kafka.KafkaMessageProducer;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 
 /**
  * <p>
@@ -31,7 +31,7 @@ public class BlockSaveService {
 	@Autowired
 	protected NetworkParameters networkParameters;
 	@Autowired
-	FullBlockStoreImpl blockgraph;
+	BlockStoreService blockgraph;
 	@Autowired
 	protected KafkaConfiguration kafkaConfiguration;
 	@Autowired
@@ -40,7 +40,7 @@ public class BlockSaveService {
 	protected ServerConfiguration serverConfiguration;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
-	public void saveBlock(Block block, FullBlockStore store) throws Exception {
+	public void saveBlock(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.add(block, false, store);
 		// no broadcastBlock, if there is error of blockgraph.add
 		broadcastBlock(block);

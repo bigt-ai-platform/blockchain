@@ -38,8 +38,8 @@ import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Rating;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.store.FullBlockStoreImpl;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreService;
+import net.bigtangle.store.BlockStoreInterface;
 
 /*
  *  This service offers maintenance functions to update the local mcmc state of the Tangle
@@ -51,7 +51,7 @@ public class MCMCService {
 	private static final Logger log = LoggerFactory.getLogger(MCMCService.class);
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 
 	@Autowired
 	private TipsService tipsService;
@@ -99,7 +99,7 @@ public class MCMCService {
 	}
 
 	public void startSingleProcessDo() throws BlockStoreException {
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			// log.info("mcmcService started");
 			LockObject lock = store.selectLockobject(LOCKID);
@@ -135,12 +135,13 @@ public class MCMCService {
 
 	}
 
-	public void update(FullBlockStore store) throws InterruptedException, ExecutionException, BlockStoreException {
-
+	public void update(BlockStoreInterface store) throws InterruptedException, ExecutionException, BlockStoreException {
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
 		try {
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-			long cutoffHeight = blockService.getCurrentCutoffHeight(maxConfirmedReward, store);
-			long maxHeight = blockService.getCurrentMaxHeight(maxConfirmedReward, store);
+			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
+			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
 			updateWeightAndDepth(cutoffHeight, maxHeight, store);
 			updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
 			deleteMCMC(maxConfirmedReward, store);
@@ -152,7 +153,7 @@ public class MCMCService {
 
 	}
 
-	private void deleteMCMC(TXReward maxConfirmedReward, FullBlockStore store) throws BlockStoreException {
+	private void deleteMCMC(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
 		store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
 	}
 
@@ -162,7 +163,7 @@ public class MCMCService {
 	 *
      */
 	private void updateWeightAndDepth(long cutoffHeight, long maxHeight,
-									  FullBlockStore store) throws BlockStoreException {
+									  BlockStoreInterface store) throws BlockStoreException {
 		// Begin from the highest maintained height blocks and go backwards from
 		// there
 		PriorityQueue<BlockWrap> blockQueue = store.getSolidBlocksInIntervalDescending(cutoffHeight, maxHeight);
@@ -209,7 +210,7 @@ public class MCMCService {
 
 	private void subUpdateWeightAndDepth(PriorityQueue<BlockWrap> blockQueue,
 			HashMap<Sha256Hash, HashSet<Sha256Hash>> approvers, HashMap<Sha256Hash, Long> depths,
-			Sha256Hash currentBlockHash, Sha256Hash approvedBlockHash, FullBlockStore store)
+			Sha256Hash currentBlockHash, Sha256Hash approvedBlockHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		Long currentDepth = depths.get(currentBlockHash);
 		HashSet<Sha256Hash> currentApprovers = approvers.get(currentBlockHash);
@@ -233,7 +234,7 @@ public class MCMCService {
 	 * block. Allows unsolid blocks too.
 	 *
      */
-	private void updateRating(TXReward maxConfirmedReward, long cutoffHeight, long maxHeight, FullBlockStore store)
+	private void updateRating(TXReward maxConfirmedReward, long cutoffHeight, long maxHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Select #tipCount solid tips via MCMC
 		HashMap<Sha256Hash, HashSet<UUID>> selectedTipApprovers = new HashMap<>(
@@ -300,7 +301,7 @@ public class MCMCService {
 	}
 
 	private void subUpdateRating(PriorityQueue<BlockWrap> blockQueue, HashMap<Sha256Hash, HashSet<UUID>> approvers,
-			BlockWrap currentBlock, Sha256Hash prevTrunk, FullBlockStore store) throws BlockStoreException {
+			BlockWrap currentBlock, Sha256Hash prevTrunk, BlockStoreInterface store) throws BlockStoreException {
 		if (!approvers.containsKey(prevTrunk)) {
 			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 					.getBlockWrap(prevTrunk, store);

@@ -104,8 +104,8 @@ import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.TipsService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceContract;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.MonetaryFormat;
 import net.bigtangle.utils.OkHttp3Util;
@@ -135,7 +135,7 @@ public abstract class AbstractIntegrationTest {
 	protected final KeyParameter aesKey = null;
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 	@Autowired
 	protected BlockService blockService;
 	@Autowired
@@ -183,7 +183,7 @@ public abstract class AbstractIntegrationTest {
 	public static String yuanTokenPriv = "8db6bd17fa4a827619e165bfd4b0f551705ef2d549a799e7f07115e5c3abad55";
 
 	protected static ObjectMapper objectMapper = new ObjectMapper();
-	public FullBlockStore store;
+	public BlockStoreInterface store;
 
 	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll, Transaction feeTransaction)
 			throws BlockStoreException, UTXOProviderException, InsufficientMoneyException, IOException,
@@ -1505,7 +1505,7 @@ public abstract class AbstractIntegrationTest {
 		return new BlockWrap(block, BlockEvaluation.buildInitial(block), null, networkParameters);
 	}
 
-	public BlockEvaluation getBlockEvaluation(Sha256Hash hash, FullBlockStore store) throws BlockStoreException {
+	public BlockEvaluation getBlockEvaluation(Sha256Hash hash, BlockStoreInterface store) throws BlockStoreException {
 		return store.getBlockWrap(hash).getBlockEvaluation();
 	}
 
@@ -1661,7 +1661,7 @@ public abstract class AbstractIntegrationTest {
 
 	}
 	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms ,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 		
 		try {
 			blockStore.beginDatabaseBatchWrite();
@@ -1676,7 +1676,7 @@ public abstract class AbstractIntegrationTest {
 		}
 	}
 
-	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, FullBlockStore blockStore)
+	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		try {
 			blockStore.beginDatabaseBatchWrite();

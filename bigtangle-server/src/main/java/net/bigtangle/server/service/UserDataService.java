@@ -22,7 +22,7 @@ import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.UserDataResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ApiCall;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class UserDataService {
@@ -31,7 +31,7 @@ public class UserDataService {
     @Autowired
     ServerConfiguration serverConfiguration;
 
-    public byte[] getUserData(String dataclassname, String pubKey, FullBlockStore store) throws BlockStoreException {
+    public byte[] getUserData(String dataclassname, String pubKey, BlockStoreInterface store) throws BlockStoreException {
         UserData userData = store.queryUserDataWithPubKeyAndDataclassname(dataclassname, pubKey);
         if (userData != null) {
             return userData.getData();
@@ -39,7 +39,7 @@ public class UserDataService {
         return new byte[0];
     }
 
-    public AbstractResponse getUserDataList(int blocktype, List<String> pubKeyList, FullBlockStore store)
+    public AbstractResponse getUserDataList(int blocktype, List<String> pubKeyList, BlockStoreInterface store)
             throws BlockStoreException {
         List<UserData> userDatas = store.getUserDataListWithBlocktypePubKeyList(blocktype, pubKeyList);
         List<String> dataList = new ArrayList<>();

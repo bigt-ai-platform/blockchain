@@ -33,7 +33,7 @@ import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 public class ServiceContract extends ServiceBaseConnect {
 
@@ -43,7 +43,7 @@ public class ServiceContract extends ServiceBaseConnect {
 
 	}
 
-	public ContractExecutionResult executeContract(Block block, FullBlockStore blockStore, String contractid,
+	public ContractExecutionResult executeContract(Block block, BlockStoreInterface blockStore, String contractid,
 			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
 		Token contract = blockStore.getTokenID(contractid).get(0);
 		return executeContract(block, blockStore, contract, prevHash, referencedblocks);
@@ -53,7 +53,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	/*
 	 * the ContractEvent received and do next action
 	 */
-	public ContractExecutionResult executeContract(Block block, FullBlockStore blockStore, Token contract,
+	public ContractExecutionResult executeContract(Block block, BlockStoreInterface blockStore, Token contract,
 			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
 
 		//
@@ -69,7 +69,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	/*
 	 * 
 	 */
-	public ContractExecutionResult lotteryContract(Block block, FullBlockStore store, Token contract,
+	public ContractExecutionResult lotteryContract(Block block, BlockStoreInterface store, Token contract,
 			Contractresult prevContractresult, Set<Sha256Hash> collectedBlocks) throws BlockStoreException {
 
 		// Deterministic randomization
@@ -157,7 +157,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	}
 
 	private void collectWithCancel(Set<Sha256Hash> collectedBlocks, List<ContractEventCancelInfo> cancels,
-								   TreeMap<Sha256Hash, ContractEventRecord> spents, FullBlockStore store) throws BlockStoreException {
+								   TreeMap<Sha256Hash, ContractEventRecord> spents, BlockStoreInterface store) throws BlockStoreException {
 		for (Sha256Hash bHash : collectedBlocks) {
 			Block b = getBlock(bHash, store);
 			if (b.getBlockType() == Type.BLOCKTYPE_CONTRACT_EVENT) {

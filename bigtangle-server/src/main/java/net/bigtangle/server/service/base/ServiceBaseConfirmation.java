@@ -55,7 +55,7 @@ import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 
 public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
@@ -72,7 +72,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Recursively removes the specified block and its approvers from the collection
 	 * if this block is contained in the collection.
 	 */
-	public void removeBlockAndApproversFrom(Collection<BlockWrap> blocks, BlockWrap startingBlock, FullBlockStore store)
+	public void removeBlockAndApproversFrom(Collection<BlockWrap> blocks, BlockWrap startingBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
@@ -107,7 +107,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Recursively adds the specified block and its approvers to the collection if
 	 * the blocks are in the current milestone and not in the collection.
 	 */
-	public void addConfirmedApproversTo(Collection<BlockWrap> blocks, BlockWrap startingBlock, FullBlockStore store)
+	public void addConfirmedApproversTo(Collection<BlockWrap> blocks, BlockWrap startingBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
@@ -148,7 +148,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 */
 	public boolean addReferencedBlockHashesTo(Set<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
 											  long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict,
-											  FullBlockStore store) throws BlockStoreException {
+											  BlockStoreInterface store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
@@ -219,7 +219,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * checkSpentConflict then add this block and its referenced all or nothing
 	 */
 	public void addBlockWithCheckReferenced(Set<BlockWrap> allApprovedNewBlocks, BlockWrap block,
-			boolean checkSpentConflict, FullBlockStore store) throws BlockStoreException {
+			boolean checkSpentConflict, BlockStoreInterface store) throws BlockStoreException {
 		boolean check = true;
 		if (checkSpentConflict) {
 			Set<BlockWrap> checkBlocks = new HashSet<>();
@@ -237,7 +237,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks, FullBlockStore store) {
+	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks, BlockStoreInterface store) {
 		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 
 		allApprovedNewBlocks.addAll(allApproved);
@@ -257,7 +257,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public boolean hasSpentInputs(Set<BlockWrap> allApprovedNewBlocks, FullBlockStore store) {
+	public boolean hasSpentInputs(Set<BlockWrap> allApprovedNewBlocks, BlockStoreInterface store) {
 		return allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
 				.anyMatch(c -> {
 					try {
@@ -272,7 +272,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
 		Set<BlockWrap> re = new HashSet<>();
 		if (prevs.isEmpty())
@@ -305,7 +305,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone, FullBlockStore store)
+	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone, BlockStoreInterface store)
 			throws BlockStoreException {
 		// get all unspents forms a chain, remove others from prevs
 		Set<BlockWrap> re = new HashSet<>();
@@ -354,7 +354,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * return all Execution Blocks not in milestone and chained from headExecution
 	 * to the Execution in milestone or begin.
 	 */
-	public Set<BlockWrap> collectReferencedChaineExecutions(BlockWrap headExecution, FullBlockStore store)
+	public Set<BlockWrap> collectReferencedChaineExecutions(BlockWrap headExecution, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		Set<BlockWrap> re = new HashSet<>();
@@ -386,7 +386,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	public void collectFollowChaineExecutions(BlockWrap startExecution, Set<BlockWrap> blocks, FullBlockStore store)
+	public void collectFollowChaineExecutions(BlockWrap startExecution, Set<BlockWrap> blocks, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
@@ -444,7 +444,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	public boolean addRequiredUnconfirmedBlocksTo(Collection<BlockWrap> blocks, BlockWrap startingBlock,
-			long cutoffHeight, FullBlockStore store) throws BlockStoreException {
+			long cutoffHeight, BlockStoreInterface store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
@@ -492,7 +492,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/*
 	 * return true, if the inputs/prev is spent by other or not confirmed
 	 */
-	public boolean hasSpentDependencies(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+	public boolean hasSpentDependencies(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
 		SpentBlockData s;
 		switch (c.getConflictPoint().getType()) {
@@ -535,7 +535,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return re;
 	}
 
-	private boolean checkContractSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+	private boolean checkContractSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
 		final ContractExecutionResult connectedContracExecute = c.getConflictPoint().getConnectedContractExecute();
 
@@ -554,7 +554,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return false;
 	}
 
-	private boolean checkOrderSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+	private boolean checkOrderSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
 		final OrderExecutionResult connectedContracExecute = c.getConflictPoint().getConnectedOrderExecute();
 		List<Orderresult> allWithPrev = store.getOrderresultWithPrev(connectedContracExecute.getPrevblockhash());
@@ -572,7 +572,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return false;
 	}
 
-	public boolean hasConfirmedDependencies(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+	public boolean hasConfirmedDependencies(ConflictCandidate c, BlockStoreInterface store) throws BlockStoreException {
 		SpentBlockData s;
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
@@ -621,7 +621,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * conflitcs will be if there is other transaction spent my input or my prev
 	 * chained execution or the input/prev is not confirmed.
 	 */
-	public boolean findBlockWithSpentOrUnconfirmedInputs(Set<BlockWrap> blocks, FullBlockStore store) {
+	public boolean findBlockWithSpentOrUnconfirmedInputs(Set<BlockWrap> blocks, BlockStoreInterface store) {
 		// Get all conflict candidates in blocks
 		Stream<ConflictCandidate> candidates = blocks.stream().map(BlockWrap::toConflictCandidates)
 				.flatMap(Collection::stream);
@@ -644,7 +644,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * 
 	 * @param blocksToAdd the set of blocks to add to the current milestone
 	 */
-	public void resolveAllConflicts(TreeSet<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store)
+	public void resolveAllConflicts(TreeSet<BlockWrap> blocksToAdd, long cutoffHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Cutoff: Remove if predecessors neither in milestone nor to be
 		// confirmed
@@ -676,7 +676,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * the predecessors are not confirmed or in blocksToAdd.
 	 *
 	 */
-	private void removeWhereUnconfirmedRequirements(TreeSet<BlockWrap> blocksToAdd, FullBlockStore store)
+	private void removeWhereUnconfirmedRequirements(TreeSet<BlockWrap> blocksToAdd, BlockStoreInterface store)
 			throws BlockStoreException {
 		Iterator<BlockWrap> iterator = blocksToAdd.iterator();
 		while (iterator.hasNext()) {
@@ -696,7 +696,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Remove blocks from blocksToAdd that are currently locally ineligible.
 	 *
 	 */
-	public void removeWhereIneligible(Set<BlockWrap> blocksToAdd, FullBlockStore store) {
+	public void removeWhereIneligible(Set<BlockWrap> blocksToAdd, BlockStoreInterface store) {
 		findWhereCurrentlyIneligible(blocksToAdd).forEach(b -> {
 			try {
 				removeBlockAndApproversFrom(blocksToAdd, b, store);
@@ -722,7 +722,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * conflicts.
 	 *
 	 */
-	public void removeWhereUsedOutputsUnconfirmed(Set<BlockWrap> blocksToAdd, FullBlockStore store) {
+	public void removeWhereUsedOutputsUnconfirmed(Set<BlockWrap> blocksToAdd, BlockStoreInterface store) {
 		// Confirmed blocks are always ok
 		new HashSet<>(blocksToAdd).stream().filter(b -> !b.getBlockEvaluation().isConfirmed())
 				.flatMap(b -> b.toConflictCandidates().stream()).filter(c -> {
@@ -745,7 +745,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				});
 	}
 
-	private void resolveMilestoneConflicts(Set<BlockWrap> blocksToAdd, FullBlockStore store)
+	private void resolveMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
 		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
@@ -770,7 +770,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Resolves conflicts between non-milestone blocks and candidates
 	 *
 	 */
-	private void resolveTemporaryConflicts(Set<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store)
+	private void resolveTemporaryConflicts(Set<BlockWrap> blocksToAdd, long cutoffHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		HashSet<ConflictCandidate> conflictingOutPoints = new HashSet<>();
 		HashSet<BlockWrap> conflictingConfirmedBlocks = new HashSet<>();
@@ -804,7 +804,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *         resolution
 	 */
 	private HashSet<BlockWrap> resolveTemporaryConflicts(Set<ConflictCandidate> conflictingOutPoints,
-			Set<BlockWrap> blocksToAdd, long cutoffHeight, FullBlockStore store) throws BlockStoreException {
+			Set<BlockWrap> blocksToAdd, long cutoffHeight, BlockStoreInterface store) throws BlockStoreException {
 		// Initialize blocks that will/will not survive the conflict resolution
 		HashSet<BlockWrap> initialBlocks = conflictingOutPoints.stream().map(ConflictCandidate::getBlock)
 				.collect(Collectors.toCollection(HashSet::new));
@@ -897,7 +897,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	private void findFixableConflicts(Set<BlockWrap> blocksToAdd, Set<ConflictCandidate> conflictingOutPoints,
-			Set<BlockWrap> conflictingConfirmedBlocks, FullBlockStore store) throws BlockStoreException {
+			Set<BlockWrap> conflictingConfirmedBlocks, BlockStoreInterface store) throws BlockStoreException {
 
 		findUndoableConflicts(blocksToAdd, conflictingOutPoints, conflictingConfirmedBlocks, store);
 		findCandidateConflicts(blocksToAdd, conflictingOutPoints);
@@ -923,7 +923,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	private void findUndoableConflicts(Set<BlockWrap> blocksToAdd, Set<ConflictCandidate> conflictingOutPoints,
-			Set<BlockWrap> conflictingConfirmedBlocks, FullBlockStore store) throws BlockStoreException {
+			Set<BlockWrap> conflictingConfirmedBlocks, BlockStoreInterface store) throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
 		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
 				.flatMap(Collection::stream).collect(Collectors.toList());
@@ -950,7 +950,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	// Returns null if no spending block found
-	private BlockWrap getSpendingBlock(ConflictCandidate c, FullBlockStore store) throws BlockStoreException {
+	private BlockWrap getSpendingBlock(ConflictCandidate c, BlockStoreInterface store) throws BlockStoreException {
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
 			final BlockEvaluation utxoSpender = getUTXOSpender(c.getConflictPoint().getConnectedOutpoint(), store);
@@ -993,7 +993,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void filterSpent(Collection<ConflictCandidate> blockConflicts, FullBlockStore store) {
+	private void filterSpent(Collection<ConflictCandidate> blockConflicts, BlockStoreInterface store) {
 		blockConflicts.removeIf(c -> {
 			try {
 				return !hasSpentDependencies(c, false, store);
@@ -1004,7 +1004,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		});
 	}
 
-	public Set<Sha256Hash> getMissingPredecessors(Block block, FullBlockStore store) throws BlockStoreException {
+	public Set<Sha256Hash> getMissingPredecessors(Block block, BlockStoreInterface store) throws BlockStoreException {
 		Set<Sha256Hash> missingPredecessorBlockHashes = new HashSet<>();
 		final Set<Sha256Hash> allPredecessorBlockHashes = getAllRequiredBlockHashes(block, false);
 		for (Sha256Hash predecessorReq : allPredecessorBlockHashes) {
@@ -1033,7 +1033,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * otherwise there are at least two blocks spent TransactionOutPoint of
 	 * ConflictCandidate c
 	 */
-	public boolean checkUTXOSpent(ConflictCandidate c, boolean checkNoConfirm, FullBlockStore store)
+	public boolean checkUTXOSpent(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
 		TransactionOutPoint txout = c.getConflictPoint().getConnectedOutpoint();
 
@@ -1072,7 +1072,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * @return true if the given set is eligible
 	 */
 	public boolean isEligibleForApprovalSelection(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			FullBlockStore store) {
+			BlockStoreInterface store) {
 		// Currently ineligible blocks are not ineligible. If we find one, we
 		// must stop
 		if (!findWhereCurrentlyIneligible(currentApprovedUnconfirmedBlocks).isEmpty())
@@ -1106,7 +1106,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *         tip selection.
 	 */
 	public boolean isEligibleForApprovalSelection(BlockWrap block, HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			long cutoffHeight, long maxHeight, FullBlockStore store) throws BlockStoreException {
+			long cutoffHeight, long maxHeight, BlockStoreInterface store) throws BlockStoreException {
 		// Any confirmed blocks are always compatible with the current
 		// confirmeds
 		if (block.getBlockEvaluation().isConfirmed())
@@ -1145,7 +1145,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * execution via referenced only.
 	 */
 	protected void confirmBlockTransactionWithType(BlockWrap block, long milestoneNumber, boolean confirmation,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		// confirm transactions
 		for (final Transaction tx : block.getBlock().getTransactions()) {
@@ -1181,7 +1181,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmVOSOrUserData(BlockWrap block, boolean confirmation, FullBlockStore blockStore)
+	private void confirmVOSOrUserData(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		Transaction tx = block.getBlock().getTransactions().get(0);
 		if (tx.getData() != null && tx.getDataSignature() != null) {
@@ -1211,7 +1211,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmOrderMatching(BlockWrap block, boolean confirmation, FullBlockStore blockStore)
+	private void confirmOrderMatching(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		// Get list of consumed orders, virtual order matching tx and newly
 		// generated remaining order book
@@ -1224,7 +1224,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private void confirmOrderMatching(Block block, OrderMatchingResult actualCalculationResult, boolean confirmation,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 		if (confirmation) {
 			confirmOrderMatching(block, actualCalculationResult, blockStore);
 		} else {
@@ -1234,7 +1234,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private void confirmOrderMatching(Block block, OrderMatchingResult actualCalculationResult,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		// All consumed order records are now spent by this block
 		for (OrderRecord o : actualCalculationResult.getSpentOrders()) {
@@ -1254,7 +1254,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				block.getTimeSeconds(), blockStore);
 	}
 
-	private void unconfirmOrderMatching(Block block, OrderMatchingResult matchingResult, FullBlockStore blockStore)
+	private void unconfirmOrderMatching(Block block, OrderMatchingResult matchingResult, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		// All consumed order records are now unspent by this block
@@ -1274,13 +1274,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		removeMatchingEvents(matchingResult.getOutputTx().getHash(), blockStore);
 	}
 
-	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, FullBlockStore blockStore)
+	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		confirmOrderExecute(block, milestoneNumber, confirm, true, blockStore);
 	}
 
 	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, boolean resetConflictConfirm,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
@@ -1370,7 +1370,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/*
 	 * store consistent reads
 	 */
-	public void checkSum(FullBlockStore blockStore) {
+	public void checkSum(BlockStoreInterface blockStore) {
 
 		try {
 			TokensumsMap map = checkToken(blockStore);
@@ -1390,7 +1390,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, FullBlockStore blockStore)
+	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		confirmContractExecute(block, milestoneNumber, confirm, true, blockStore);
 
@@ -1400,7 +1400,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * connect from the contract Execution
 	 */
 	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm, boolean resetConflictConfirm,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
@@ -1513,7 +1513,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * same previous ContractExecute, will be set to revert confirm. Only needed for
 	 * ContractExecute not in reward milestoneNumber = -1
 	 */
-	private void resetConfirmContractExecuteConflict(Block block, long milestoneNumber, FullBlockStore blockStore)
+	private void resetConfirmContractExecuteConflict(Block block, long milestoneNumber, BlockStoreInterface blockStore)
 			throws BlockStoreException, IOException {
 		ContractExecutionResult result = new ContractExecutionResult().parse(block.getTransactions().get(0).getData());
 		List<Contractresult> allWithPrev = blockStore.getContractresultWithPrev(result.getPrevblockhash());
@@ -1531,7 +1531,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * same previous ContractExecute, will be set to revert confirm. Only needed for
 	 * ContractExecute not in reward milestoneNumber = -1
 	 */
-	private void resetConfirmOrderExecuteConflict(Block block, long milestoneNumber, FullBlockStore blockStore)
+	private void resetConfirmOrderExecuteConflict(Block block, long milestoneNumber, BlockStoreInterface blockStore)
 			throws BlockStoreException, IOException {
 		OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 		List<Orderresult> allWithPrev = blockStore.getOrderresultWithPrev(result.getPrevblockhash());
@@ -1544,7 +1544,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmReward(BlockWrap block, boolean confirm, FullBlockStore blockStore) throws BlockStoreException {
+	private void confirmReward(BlockWrap block, boolean confirm, BlockStoreInterface blockStore) throws BlockStoreException {
 		// Set virtual reward tx outputs confirmed
 		confirmVirtualCoinbaseTransaction(block.getBlock(), confirm, blockStore);
 
@@ -1560,7 +1560,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		cacheBlockService.evictMaxConfirmedReward();
 	}
 
-	private void confirmToken(BlockWrap block, boolean confirm, FullBlockStore blockStore) throws BlockStoreException {
+	private void confirmToken(BlockWrap block, boolean confirm, BlockStoreInterface blockStore) throws BlockStoreException {
 		// Set used other output spent
 		if (confirm) {
 			if (blockStore.getTokenPrevblockhash(block.getBlock().getHash()) != null)
@@ -1576,7 +1576,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private void confirmContractEventTransaction(Block block, boolean confirm, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		blockStore.updateBlockEvaluationConfirmed(block.getHash(), confirm);
 		blockStore.updateBlockEvaluationMilestone(block.getHash(), milestoneNumber);
@@ -1585,7 +1585,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private void confirmOrderAndTransaction(Block block, boolean confirm, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		blockStore.updateBlockEvaluationConfirmed(block.getHash(), confirm);
 		blockStore.updateBlockEvaluationMilestone(block.getHash(), milestoneNumber);
@@ -1594,7 +1594,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		evictTransactionsAndBlockEva(block, blockStore);
 	}
 
-	private void confirmTransaction(Block block, boolean confirm, FullBlockStore blockStore)
+	private void confirmTransaction(Block block, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		// un/confirm transactions
@@ -1603,7 +1603,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmTransaction(Block block, boolean confirm, Transaction tx, FullBlockStore blockStore)
+	private void confirmTransaction(Block block, boolean confirm, Transaction tx, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		// Set own outputs confirmation
@@ -1635,7 +1635,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public void evictTransactionsAndBlockEva(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	public void evictTransactionsAndBlockEva(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 
 		for (final Transaction tx : block.getTransactions()) {
 			boolean isCoinBase = tx.isCoinBase();
@@ -1652,14 +1652,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 
-	private void confirmVirtualCoinbaseTransaction(Block block, boolean confirmation, FullBlockStore blockStore)
+	private void confirmVirtualCoinbaseTransaction(Block block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		blockStore.updateAllTransactionOutputsConfirmed(block.getHash(), confirmation);
 	}
 
 	public void unconfirm(Sha256Hash blockHash, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 		BlockWrap blockWrap = getBlockWrap(blockHash, blockStore);
 		unconfirm(blockWrap, traversedBlockHashes, milestoneNumber, blockStore);
 	}
@@ -1673,7 +1673,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * @param confirmation:         confirm and revoke confirm
 	 */
 	public void confirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
-			boolean confirmation, FullBlockStore store) throws BlockStoreException {
+			boolean confirmation, BlockStoreInterface store) throws BlockStoreException {
 		// If already confirmed, return
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
 			return;
@@ -1693,7 +1693,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private void updateBlockConfirm(BlockWrap blockWrap, long milestoneNumber, boolean confirmation,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		store.updateBlockEvaluationConfirmed(blockWrap.getBlockHash(), confirmation);
 
 		store.updateBlockEvaluationMilestone(blockWrap.getBlockHash(), milestoneNumber);
@@ -1704,7 +1704,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	public void unconfirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long milestoneNumber,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 		confirm(blockWrap, traversedBlockHashes, milestoneNumber, false, blockStore);
 	}
 

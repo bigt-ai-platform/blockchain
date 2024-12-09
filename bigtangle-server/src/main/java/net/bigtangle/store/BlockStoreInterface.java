@@ -65,7 +65,7 @@ import net.bigtangle.server.data.Rating;
  * <p>
  * </p>
  */
-public interface  FullBlockStore {
+public interface  BlockStoreInterface {
 
 	/**
 	 * Saves the given block header+extra data. The key isn't specified explicitly
@@ -387,7 +387,7 @@ public interface  FullBlockStore {
 
 	Token getTokensByDomainname(String domainname) throws BlockStoreException;
 
-	List<Sha256Hash> getWhereConfirmedNotMilestone() throws BlockStoreException;
+	List<Sha256Hash>  blocksNotMilestoneFromHeigth(long heigth)  throws BlockStoreException;
 
 	TXReward getRewardConfirmedAtHeight(long chainlength) throws BlockStoreException;
 

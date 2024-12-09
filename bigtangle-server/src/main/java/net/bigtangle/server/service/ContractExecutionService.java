@@ -42,8 +42,8 @@ import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceContract;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 
 /**
  * <p>
@@ -55,7 +55,7 @@ import net.bigtangle.store.FullBlockStoreImpl;
 public class ContractExecutionService {
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 	@Autowired
 	private BlockService blockService;
 	@Autowired
@@ -85,7 +85,7 @@ public class ContractExecutionService {
 	// createContractExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
 
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 
 		try {
 			// log.info("create ContractExecution started");
@@ -117,7 +117,7 @@ public class ContractExecutionService {
 
 	}
 
-	public void createContractExecution(FullBlockStore store) throws Exception {
+	public void createContractExecution(BlockStoreInterface store) throws Exception {
 
 		// select all contractid from the table with unspent event
 		for (Token contract  : getOpenContract(store)) {
@@ -130,7 +130,7 @@ public class ContractExecutionService {
 
 	}
 	//Add valid check
-	public List<Token> getOpenContract(FullBlockStore store) throws Exception {
+	public List<Token> getOpenContract(BlockStoreInterface store) throws Exception {
 	 return store.getTokenTypeList(TokenType.contract.ordinal());
 	
 	}
@@ -140,7 +140,7 @@ public class ContractExecutionService {
 	 * @return the new block or block voted on
      */
 
-	public Block createContractExecution(Token contract, FullBlockStore store) throws Exception {
+	public Block createContractExecution(Token contract, BlockStoreInterface store) throws Exception {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
@@ -150,7 +150,7 @@ public class ContractExecutionService {
 
 	}
 
-	public Block createContractExecution(Block block, Token contract, FullBlockStore store)
+	public Block createContractExecution(Block block, Token contract, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
 		block.setBlockType(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
@@ -159,17 +159,17 @@ public class ContractExecutionService {
 		block.addTransaction(tx);
 		// collect the order block as reference
 		// Read previous reward block's data
-		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService); 
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
-		long cutoffheight = blockService.getRewardCutoffHeight(prevRewardHash, store);
+		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
 
 		List<Block.Type> referencedOrdertypes = new ArrayList<>();
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EVENT);
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
 		// add all blocks of dependencies
 
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
@@ -213,7 +213,7 @@ public class ContractExecutionService {
 
 	//
 	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
-			List<Contractresult> prevNotMilestons, FullBlockStore store, ServiceBaseConnect serviceBase)
+			List<Contractresult> prevNotMilestons, BlockStoreInterface store, ServiceBaseConnect serviceBase)
 			throws BlockStoreException {
 		// find the longest chained execution connected to last milestone
 		for (Contractresult prevNotMilestone : prevNotMilestons) {
@@ -240,7 +240,7 @@ public class ContractExecutionService {
 		return collectNews;
 	}
 
-	protected Contractresult getLast(Set<BlockWrap> prevs, FullBlockStore store)
+	protected Contractresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store)
 			throws BlockStoreException {
 		BlockWrap re = null;
 		for (BlockWrap b : prevs) {

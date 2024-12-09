@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreService;
 
 @Component
 @EnableAsync
@@ -25,7 +25,7 @@ public class UpdateChainService {
     @Autowired
     ServerConfiguration serverConfiguration;
     @Autowired
-    protected FullBlockStoreImpl blockGraph;
+    protected BlockStoreService blockGraph;
     @Autowired
     private ScheduleConfiguration scheduleConfiguration;
     @Async

@@ -15,8 +15,8 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.store.FullBlockStoreImpl;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreService;
+import net.bigtangle.store.BlockStoreInterface;
 
 /**
  * <p>
@@ -27,7 +27,7 @@ import net.bigtangle.store.FullBlockStore;
 public class AVGPriceService {
 
     @Autowired
-    protected FullBlockStoreImpl blockGraph;
+    protected BlockStoreService blockGraph;
     @Autowired
     protected ServerConfiguration serverConfiguration;
 
@@ -50,7 +50,7 @@ public class AVGPriceService {
     // createReward is time boxed and can run parallel.
     public void startSingleProcessCalAdd() throws BlockStoreException {
 
-        FullBlockStore store = storeService.getStore();
+        BlockStoreInterface store = storeService.getStore();
 
         try {
             // log.info("create Reward started");

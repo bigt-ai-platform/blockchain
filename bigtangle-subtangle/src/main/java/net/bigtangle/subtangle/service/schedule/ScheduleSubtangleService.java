@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.server.service.StoreService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.subtangle.SubtangleConfiguration;
 import net.bigtangle.subtangle.service.SubtangleService;
 
@@ -26,7 +26,7 @@ public class ScheduleSubtangleService {
     public void updateSubtangleService() throws BlockStoreException {
         if (subtangleConfiguration.isActive()) {
 
-            FullBlockStore store = storeService.getStore();
+            BlockStoreInterface store = storeService.getStore();
             try {
                 logger.debug(" Start ScheduleSubtangleService: ");
 

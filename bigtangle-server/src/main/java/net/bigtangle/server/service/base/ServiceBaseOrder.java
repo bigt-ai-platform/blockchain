@@ -54,7 +54,7 @@ import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.utils.OrderBook;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBaseOrder extends ServiceBase {
 
@@ -67,7 +67,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	} 
 
 	public void addMatchingEvents(OrderMatchingResult orderMatchingResult, String transactionHash, long matchBlockTime,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		// collect the spend order volumes and ticker to write to database
 		List<MatchResult> matchResultList = new ArrayList<MatchResult>();
 		try {
@@ -91,7 +91,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	}
 
 	public void addMatchingEventsOrderExecution(OrderExecutionResult orderExecutionResult, String transactionHash,
-			long matchBlockTime, FullBlockStore store) throws BlockStoreException {
+			long matchBlockTime, BlockStoreInterface store) throws BlockStoreException {
 		// collect the spend order volumes and ticker to write to database
 		List<MatchResult> matchResultList = new ArrayList<MatchResult>();
 		try {
@@ -124,7 +124,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	}
 
 	public void debugOrderExecutionResult(Block block, OrderExecutionResult check, boolean confirm,
-			FullBlockStore blockStore) throws BlockStoreException, IOException {
+			BlockStoreInterface blockStore) throws BlockStoreException, IOException {
 
 		for (BlockWrap c : getReferrencedBlockWrap(block, blockStore)) {
 			logger.debug("getReferrencedBlockWrap +  confirm =" + confirm);
@@ -176,7 +176,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	}
 
 	protected void insertIntoOrderBooks(OrderRecord o, TreeMap<TradePair, OrderBook> orderBooks,
-			ArrayList<OrderRecord> orderId2Order, long orderId, FullBlockStore blockStore) throws BlockStoreException {
+			ArrayList<OrderRecord> orderId2Order, long orderId, BlockStoreInterface blockStore) throws BlockStoreException {
 
 		Side side = o.getSide();
 		// must be in in base unit ;
@@ -208,7 +208,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	 *         remaining MODIFIED order book
 	 * @throws BlockStoreException
 	 */
-	public OrderMatchingResult generateOrderMatching(Block rewardBlock, FullBlockStore blockStore)
+	public OrderMatchingResult generateOrderMatching(Block rewardBlock, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(rewardBlock.getTransactions().get(0).getData());
@@ -216,7 +216,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 		return generateOrderMatching(rewardBlock, rewardInfo, blockStore);
 	}
 
-	public OrderMatchingResult generateOrderMatching(Block block, RewardInfo rewardInfo, FullBlockStore blockStore)
+	public OrderMatchingResult generateOrderMatching(Block block, RewardInfo rewardInfo, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		TreeMap<ByteBuffer, TreeMap<String, BigInteger>> payouts = new TreeMap<>();
 
@@ -301,7 +301,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	}
 
 	protected void collectOrdersWithCancel(Block block, Set<Sha256Hash> collectedBlocks, List<OrderCancelInfo> cancels,
-			Map<Sha256Hash, OrderRecord> newOrders, Set<OrderRecord> toBeSpentOrders, FullBlockStore blockStore)
+			Map<Sha256Hash, OrderRecord> newOrders, Set<OrderRecord> toBeSpentOrders, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		for (Sha256Hash bHash : collectedBlocks) {
 			BlockWrap b = getBlockWrap(bHash, blockStore);
@@ -546,7 +546,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 		}
 	}
 
-	protected void insertVirtualOrderRecords(Block block, Collection<OrderRecord> orders, FullBlockStore blockStore) {
+	protected void insertVirtualOrderRecords(Block block, Collection<OrderRecord> orders, BlockStoreInterface blockStore) {
 		try {
 
 			blockStore.insertOrder(orders);
@@ -556,7 +556,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			logger.warn("Probably reinserting orders: ", e);
 		}
 	}
-	public void removeMatchingEvents(Sha256Hash h, FullBlockStore store) throws BlockStoreException {
+	public void removeMatchingEvents(Sha256Hash h, BlockStoreInterface store) throws BlockStoreException {
 		store.deleteMatchingEvents(h.toString());
 	}
 
@@ -567,7 +567,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	 * @param block
 	 * @throws BlockStoreException
 	 */
-	public void calculateBlockOrderMatchingResult(Block block, FullBlockStore blockStore)
+	public void calculateBlockOrderMatchingResult(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
 		Transaction tx = null;

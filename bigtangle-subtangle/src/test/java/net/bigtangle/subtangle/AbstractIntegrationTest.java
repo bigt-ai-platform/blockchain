@@ -84,8 +84,8 @@ import net.bigtangle.server.service.RewardService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.TipsService;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.MonetaryFormat;
 import net.bigtangle.utils.OkHttp3Util;
@@ -115,7 +115,7 @@ public abstract class AbstractIntegrationTest {
 	protected final KeyParameter aesKey = null;
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 	@Autowired
 	protected BlockService blockService;
 	@Autowired
@@ -156,7 +156,7 @@ public abstract class AbstractIntegrationTest {
 	public static String yuanTokenPriv = "8db6bd17fa4a827619e165bfd4b0f551705ef2d549a799e7f07115e5c3abad55";
 
 	protected static ObjectMapper objectMapper = new ObjectMapper();
-	public FullBlockStore store;
+	public BlockStoreInterface store;
 
  
 

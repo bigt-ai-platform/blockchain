@@ -62,7 +62,7 @@ import net.bigtangle.utils.Gzip;
  * </p>
  * 
  */
-public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
+public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface {
 
 	private static final String LIMIT_500 = " limit 500 ";
 
@@ -113,22 +113,22 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 			+ "  height, milestone, milestonelastupdate,  inserttime,   solid, confirmed";
 
 	protected final String SELECT_BLOCKS_SQL = " select " + SELECT_BLOCKS_TEMPLATE + " FROM blocks WHERE hash = ?"
-			+ afterSelect();
+			;
 
 	protected final String SELECT_BLOCKS_MILESTONE_SQL = "SELECT block, height FROM blocks WHERE height "
 			+ " >= (select min(height) from blocks where  milestone >= ? and  milestone <=?)"
 			+ " and height <= (select max(height) from blocks where  milestone >= ? and  milestone <=?) "
-			+ afterSelect() + " order by height asc ";
+			 + " order by height asc ";
 
 	protected final String SELECT_MCMC_TEMPLATE = "  hash, rating, depth, cumulativeweight ";
 
 	protected final String SELECT_NOT_INVALID_APPROVER_BLOCKS_SQL = "SELECT " + SELECT_BLOCKS_TEMPLATE
 			+ "  , rating, depth, cumulativeweight "
 			+ "  FROM blocks, mcmc WHERE blocks.hash= mcmc.hash and (prevblockhash = ? or prevbranchblockhash = ?) AND solid >= 0 "
-			+ afterSelect();
+			;
 
 	protected final String SELECT_SOLID_APPROVER_HASHES_SQL = "SELECT hash FROM blocks "
-			+ "WHERE blocks.prevblockhash = ? or blocks.prevbranchblockhash = ?" + afterSelect();
+			+ "WHERE blocks.prevblockhash = ? or blocks.prevbranchblockhash = ?" ;
 
 	protected final String INSERT_BLOCKS_SQL = getInsert() + "  INTO blocks(hash,  height, block,  prevblockhash,"
 			+ "prevbranchblockhash,mineraddress,blocktype,  "
@@ -174,23 +174,23 @@ public abstract class DatabaseFullBlockStoreBase implements FullBlockStore {
 
 	protected final String SELECT_BLOCKS_MCMC_CONFIRM = "SELECT" + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 AND confirmed = false AND height > ?"
-			+ " AND height <= ? AND mcmc.rating >= " + NetworkParameters.CONFIRMATION_UPPER_THRESHOLD + afterSelect();
+			+ " AND height <= ? AND mcmc.rating >= " + NetworkParameters.CONFIRMATION_UPPER_THRESHOLD ;
 
 	protected final String SELECT_BLOCKS_TO_UNCONFIRM_SQL = "SELECT" + SELECT_BLOCKS_TEMPLATE
 			+ "  FROM blocks , mcmc WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 AND confirmed = true AND mcmc.rating < "
-			+ NetworkParameters.CONFIRMATION_LOWER_THRESHOLD + afterSelect();
+			+ NetworkParameters.CONFIRMATION_LOWER_THRESHOLD ;
 
 	protected final String SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL = "SELECT hash "
-			+ "  FROM blocks WHERE milestone >= ? AND milestone <= ?" + afterSelect();
+			+ "  FROM blocks WHERE milestone >= ? AND milestone <= ?" ;
 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
-			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 " + afterSelect();
+			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 " ;
 
-	protected final String SELECT_BLOCKS_CONFIRMED_AND_NOT_MILESTONE_SQL = "SELECT hash "
-			+ "FROM blocks WHERE milestone = -1 AND confirmed = 1 order by height desc " + afterSelect();
+	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
+			+ "FROM blocks WHERE milestone = -1 AND confirmed=true AND height >= ? order by height desc " ;
 
 	protected final String SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL = "SELECT block "
-			+ "FROM blocks WHERE milestone = -1 AND height >= ? " + afterSelect();
+			+ "FROM blocks WHERE milestone = -1 AND height >= ? " ;
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";

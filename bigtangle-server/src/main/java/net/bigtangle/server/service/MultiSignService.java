@@ -35,7 +35,7 @@ import net.bigtangle.core.response.TokenIndexResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.UUIDUtil;
 
@@ -58,7 +58,7 @@ public class MultiSignService {
 	protected ServerConfiguration serverConfiguration;
 	@Autowired
 	private BlockSaveService blockSaveService;
-	public AbstractResponse getMultiSignListWithAddress(final String tokenid, String address, FullBlockStore store)
+	public AbstractResponse getMultiSignListWithAddress(final String tokenid, String address, BlockStoreInterface store)
 			throws BlockStoreException {
 		if (Utils.isBlank(tokenid)) {
 			List<MultiSign> multiSigns = store.getMultiSignListByAddress(address);
@@ -69,14 +69,14 @@ public class MultiSignService {
 		}
 	}
 
-	public AbstractResponse getCountMultiSign(String tokenid, long tokenindex, int sign, FullBlockStore store)
+	public AbstractResponse getCountMultiSign(String tokenid, long tokenindex, int sign, BlockStoreInterface store)
 			throws BlockStoreException {
 		int count = store.countMultiSign(tokenid, tokenindex, sign);
 		return MultiSignResponse.createMultiSignResponse(count);
 	}
 
 	public AbstractResponse getMultiSignListWithTokenid(String tokenid, Integer tokenindex, List<String> addresses,
-			boolean isSign, FullBlockStore store) throws Exception {
+			boolean isSign, BlockStoreInterface store) throws Exception {
 		HashSet<String> a = new HashSet<>();
 		if (addresses != null) {
 			a = new HashSet<>(addresses);
@@ -85,7 +85,7 @@ public class MultiSignService {
 	}
 
 	public AbstractResponse getMultiSignListWithTokenid(String tokenid, Integer tokenindex, Set<String> addresses,
-			boolean isSign, FullBlockStore store) throws Exception {
+			boolean isSign, BlockStoreInterface store) throws Exception {
 		List<MultiSign> multiSigns = store.getMultiSignListByTokenid(tokenid, tokenindex, addresses, isSign);
 		List<Map<String, Object>> multiSignList = new ArrayList<>();
 		for (MultiSign multiSign : multiSigns) {
@@ -121,12 +121,12 @@ public class MultiSignService {
 	@Autowired
 	private NetworkParameters networkParameters;
 
-	public AbstractResponse getNextTokenSerialIndex(String tokenid, FullBlockStore store) throws BlockStoreException {
+	public AbstractResponse getNextTokenSerialIndex(String tokenid, BlockStoreInterface store) throws BlockStoreException {
 		Token tokens = store.getCalMaxTokenIndex(tokenid);
 		return TokenIndexResponse.createTokenSerialIndexResponse(tokens.getTokenindex() + 1, tokens.getBlockHash());
 	}
 
-	public void saveMultiSign(Block block, FullBlockStore store) throws Exception {
+	public void saveMultiSign(Block block, BlockStoreInterface store) throws Exception {
 		// blockService.checkBlockBeforeSave(block);
 		try {
 			store.beginDatabaseBatchWrite();
@@ -184,7 +184,7 @@ public class MultiSignService {
 		}
 	}
 
-	public void deleteMultiSign(Block block, FullBlockStore store) {
+	public void deleteMultiSign(Block block, BlockStoreInterface store) {
 		try {
 
 			Transaction transaction = block.getTransactions().get(0);
@@ -197,7 +197,7 @@ public class MultiSignService {
 		}
 	}
 
-	public void signTokenAndSaveBlock(Block block, FullBlockStore store) throws Exception {
+	public void signTokenAndSaveBlock(Block block, BlockStoreInterface store) throws Exception {
 		try {
 			ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService);
@@ -218,7 +218,7 @@ public class MultiSignService {
 		}
 	}
 
-	private Block checkBlockPrototype(Block oldBlock, FullBlockStore store)
+	private Block checkBlockPrototype(Block oldBlock, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException {
 
 		int time = 60 * 60 * 8;

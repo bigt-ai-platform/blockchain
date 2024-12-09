@@ -27,7 +27,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.utils.OrderBook;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 public class ServiceOrderExecution extends ServiceBaseConnect {
 
@@ -38,7 +38,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 	}
 
     public OrderExecutionResult orderMatching(Block block, Orderresult prev, Set<Sha256Hash> collectedBlocks,
-			FullBlockStore blockStore) throws BlockStoreException {
+			BlockStoreInterface blockStore) throws BlockStoreException {
 		TreeMap<ByteBuffer, TreeMap<String, BigInteger>> payouts = new TreeMap<>();
 
 		// Deterministic randomization

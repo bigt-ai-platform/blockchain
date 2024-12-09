@@ -20,8 +20,8 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.Script;
-import net.bigtangle.store.FullBlockStore;
-import net.bigtangle.store.FullBlockStoreImpl;
+import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.BriefLogFormatter;
 
 /**
@@ -36,8 +36,8 @@ public abstract class AbstractFullPrunedBlockChainTest {
     protected static final NetworkParameters PARAMS = new MainNetParams();
 
     @Autowired
-    protected FullBlockStoreImpl blockgraph;
-    protected FullBlockStore store;
+    protected BlockStoreService blockgraph;
+    protected BlockStoreInterface store;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -46,10 +46,10 @@ public abstract class AbstractFullPrunedBlockChainTest {
  
     }
 
-    public abstract FullBlockStore createStore(NetworkParameters params, int blockCount)
+    public abstract BlockStoreInterface createStore(NetworkParameters params, int blockCount)
             throws BlockStoreException;
 
-    public abstract void resetStore(FullBlockStore store) throws BlockStoreException;
+    public abstract void resetStore(BlockStoreInterface store) throws BlockStoreException;
 
   //  @Test
     public void skipScripts() throws Exception {

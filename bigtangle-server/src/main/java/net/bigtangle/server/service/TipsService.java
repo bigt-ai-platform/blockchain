@@ -35,7 +35,7 @@ import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeExc
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class TipsService {
@@ -60,9 +60,9 @@ public class TipsService {
 	private class RatingTipWalker implements Callable<BlockWrap> {
 		final BlockWrap entryPoint;
 		long maxHeight;
-		final FullBlockStore store;
+		final BlockStoreInterface store;
 
-		public RatingTipWalker(final BlockWrap entryPoint, long maxHeight, FullBlockStore store) {
+		public RatingTipWalker(final BlockWrap entryPoint, long maxHeight, BlockStoreInterface store) {
 			this.entryPoint = entryPoint;
 			this.maxHeight = maxHeight;
 			this.store = store;
@@ -84,7 +84,7 @@ public class TipsService {
 	 * @return A list of rating tips.
      */
 	public Collection<BlockWrap> getRatingTips(TXReward maxConfirmedReward, int count, long maxHeight,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
 
 		List<BlockWrap> entryPoints = getEntryPoints(count, maxConfirmedReward.getChainLength(), store);
@@ -119,7 +119,7 @@ public class TipsService {
 	 * 
 	 * @return Two blockhashes selected via MCMC
      */
-	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(FullBlockStore store) throws BlockStoreException {
+	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(BlockStoreInterface store) throws BlockStoreException {
 
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
 	}
@@ -133,7 +133,7 @@ public class TipsService {
 	 * @throws VerificationException if the given prototype is not compatible with
 	 *                               the current milestone
 	 */
-	public void getValidatedBlockPairCompatibleWithExisting(Block prototype, FullBlockStore store)
+	public void getValidatedBlockPairCompatibleWithExisting(Block prototype, BlockStoreInterface store)
 			throws BlockStoreException {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -151,14 +151,14 @@ public class TipsService {
 	 * 
 	 * @return Two blockhashes selected via MCMC
      */
-	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, FullBlockStore store)
+	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		return getValidatedRewardBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
 				prevRewardHash, store);
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, FullBlockStore store)
+			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		Pair<BlockWrap, BlockWrap> candidate = getValidatedRewardBlockPairDo(maxConfirmedReward,
@@ -177,7 +177,7 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPairDo(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, FullBlockStore store)
+			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
@@ -186,7 +186,7 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			BlockWrap left, BlockWrap right, Sha256Hash prevRewardHash, FullBlockStore store)
+			BlockWrap left, BlockWrap right, Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -218,7 +218,7 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, FullBlockStore store) throws BlockStoreException {
+			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store) throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
 		BlockWrap right = entryPoints.get(1);
@@ -226,7 +226,7 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedUnconfirmedBlocks, BlockWrap left, BlockWrap right, FullBlockStore store)
+			HashSet<BlockWrap> currentApprovedUnconfirmedBlocks, BlockWrap left, BlockWrap right, BlockStoreInterface store)
 			throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -251,7 +251,7 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			BlockWrap left, BlockWrap right, FullBlockStore store, Stopwatch watch, ServiceBaseConnect serviceBase,
+			BlockWrap left, BlockWrap right, BlockStoreInterface store, Stopwatch watch, ServiceBaseConnect serviceBase,
 			long cutoffHeight, long maxHeight) throws BlockStoreException {
 		// Perform next steps
 		BlockWrap nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
@@ -317,7 +317,7 @@ public class TipsService {
 	// Does not redo finding next step if next step was still valid
 	private BlockWrap validateOrPerformValidatedStep(BlockWrap fromBlock,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockWrap potentialNextBlock, long cutoffHeight,
-			long maxHeight, FullBlockStore store) throws BlockStoreException {
+			long maxHeight, BlockStoreInterface store) throws BlockStoreException {
 		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 				.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks, cutoffHeight,
 						maxHeight, store))
@@ -329,7 +329,7 @@ public class TipsService {
 	// Finds a potential approver block to include given the currently approved
 	// blocks
 	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonMilestoneBlocks,
-			long cutoffHeight, long maxHeight, FullBlockStore store) throws BlockStoreException {
+			long cutoffHeight, long maxHeight, BlockStoreInterface store) throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
 		for (Sha256Hash req : store.getSolidApproverBlockHashes(fromBlock.getBlockHash())) {
 			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
@@ -347,7 +347,7 @@ public class TipsService {
 		return result;
 	}
 
-	private BlockWrap getRatingTip(BlockWrap currentBlock, long maxTime, long maxHeight, FullBlockStore store)
+	private BlockWrap getRatingTip(BlockWrap currentBlock, long maxTime, long maxHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Repeatedly perform transitions until the final tip is found
 		List<BlockWrap> approvers = store.getNotInvalidApproverBlocks(currentBlock.getBlock().getHash());
@@ -409,7 +409,7 @@ public class TipsService {
 	 * @param count amount of entry points to get
 	 * @return hashes of the entry points
      */
-	private List<BlockWrap> getEntryPoints(int count, long currChainLength, FullBlockStore store)
+	private List<BlockWrap> getEntryPoints(int count, long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
 		List<Sha256Hash> hashs = getEntryPointCandidates(currChainLength, store);
@@ -425,7 +425,7 @@ public class TipsService {
 		return pullRandomlyByCumulativeWeight(candidates, count);
 	}
 
-	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, FullBlockStore store)
+	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)

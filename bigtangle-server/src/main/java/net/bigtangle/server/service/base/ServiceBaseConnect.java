@@ -51,7 +51,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
@@ -66,7 +66,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	/*
 	 * failed blocks without conflict for retry
 	 */
-	public AbstractResponse findRetryBlocks(Map<String, Object> request, FullBlockStore store)
+	public AbstractResponse findRetryBlocks(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 		@SuppressWarnings("unchecked")
 		List<String> address = (List<String>) request.get("address");
@@ -102,7 +102,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	 * are part of the same chain. return null, if the newChainHead is not complete
 	 * locally.
 	 */
-	public Block findSplit(Block newChainHead, Block oldChainHead, FullBlockStore store) throws BlockStoreException {
+	public Block findSplit(Block newChainHead, Block oldChainHead, BlockStoreInterface store) throws BlockStoreException {
 		Block currentChainCursor = oldChainHead;
 		Block newChainCursor = newChainHead;
 		// Loop until we find the reward block both chains have in common.
@@ -127,13 +127,13 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	}
 
 	@Override
-	protected void connectUTXOs(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	protected void connectUTXOs(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 		connectUTXOs(block, transactions, blockStore);
 	}
 
 	@Override
-	protected void connectUTXOs(Block block, List<Transaction> transactions, FullBlockStore blockStore)
+	protected void connectUTXOs(Block block, List<Transaction> transactions, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		for (final Transaction tx : transactions) {
 			boolean isCoinBase = tx.isCoinBase();
@@ -171,7 +171,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void connectTypeSpecificUTXOs(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	public void connectTypeSpecificUTXOs(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		switch (block.getBlockType()) {
 
 		case BLOCKTYPE_TOKEN_CREATION:
@@ -201,7 +201,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectCancelOrder(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectCancelOrder(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			OrderCancelInfo info = new OrderCancelInfo().parse(block.getTransactions().get(0).getData());
 			OrderCancel record = new OrderCancel(info.getBlockHash());
@@ -212,7 +212,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectContractEventCancel(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectContractEventCancel(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractEventCancelInfo info = new ContractEventCancelInfo()
 					.parse(block.getTransactions().get(0).getData());
@@ -224,7 +224,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void connectOrder(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	public void connectOrder(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			OrderOpenInfo reqInfo = new OrderOpenInfo().parse(block.getTransactions().get(0).getData());
 			// calculate the offervalue for version == 1
@@ -255,7 +255,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectContractEvent(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectContractEvent(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractEventInfo reqInfo = new ContractEventInfo().parse(block.getTransactions().get(0).getData());
 
@@ -270,7 +270,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectContractExecute(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectContractExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
@@ -304,7 +304,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectOrderExecute(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectOrderExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
@@ -334,7 +334,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	private void connectToken(Block block, FullBlockStore blockStore) throws BlockStoreException {
+	private void connectToken(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		Transaction tx = block.getTransactions().get(0);
 		if (tx.getData() != null) {
 			try {
@@ -365,7 +365,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void confirmBlocksSorted(FullBlockStore store, long milestoneNumber, Collection<BlockWrap> blocks,
+	public void confirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
 			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
 		arrayList.sort(new SortbyBlockWrapAsc());
@@ -378,7 +378,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	// Execute must be chained for confirm, unconfirmed execution will force all
 	// following executions unconfirmed
 
-	public void unconfirmBlocksSorted(FullBlockStore store, long milestoneNumber, Collection<BlockWrap> blocks,
+	public void unconfirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
 			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 //		Set<BlockWrap> all = new HashSet<>();
 //		for (BlockWrap b : blocks) {
@@ -418,7 +418,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	 * execution until to last execution in rewards
 	 */
 	public Set<BlockWrap> collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		BlockWrap lastContractExecution = null;
 		Set<BlockWrap> re = new HashSet<>();
 		// get the last EXECUTE
@@ -443,7 +443,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		return re;
 	}
 
-	public Set<BlockWrap> collectExecutionChained(FullBlockStore store, Set<BlockWrap> blocks)
+	public Set<BlockWrap> collectExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks)
 			throws BlockStoreException {
 		Set<BlockWrap> collected = collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE,
 				store);

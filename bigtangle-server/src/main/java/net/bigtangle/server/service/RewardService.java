@@ -42,8 +42,8 @@ import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect.RewardBuilderResult;
 import net.bigtangle.server.service.base.ServiceBaseReward;
-import net.bigtangle.store.FullBlockStoreImpl;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreService;
+import net.bigtangle.store.BlockStoreInterface;
 
 /**
  * <p>
@@ -54,7 +54,7 @@ import net.bigtangle.store.FullBlockStore;
 public class RewardService {
 
 	@Autowired
-	protected FullBlockStoreImpl blockGraph;
+	protected BlockStoreService blockGraph;
 	@Autowired
 	private BlockService blockService;
 	@Autowired
@@ -85,7 +85,7 @@ public class RewardService {
 	// createReward is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
 
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 
 		try {
 			// log.info("create Reward started");
@@ -123,7 +123,7 @@ public class RewardService {
 	 * Runs the reward making logic
 	 */
 
-	public void createReward(FullBlockStore store) throws Exception {
+	public void createReward(BlockStoreInterface store) throws Exception {
 
 		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
 		Block reward = createReward(prevRewardHash, store);
@@ -132,7 +132,7 @@ public class RewardService {
 		}
 	}
 
-	public Block createReward(Sha256Hash prevRewardHash, FullBlockStore store) throws Exception {
+	public Block createReward(Sha256Hash prevRewardHash, BlockStoreInterface store) throws Exception {
 		try {
 			Stopwatch watch = Stopwatch.createStarted();
 			Pair<BlockWrap, BlockWrap> tipsToApprove = tipService.getValidatedRewardBlockPair(prevRewardHash, store);
@@ -148,12 +148,12 @@ public class RewardService {
 	}
 
 	public Block createReward(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
-			FullBlockStore store) throws Exception {
+			BlockStoreInterface store) throws Exception {
 		return createReward(prevRewardHash, prevTrunk, prevBranch, null, store);
 	}
 
 	public Block createReward(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch, Long timeOverride,
-			FullBlockStore store) throws Exception {
+			BlockStoreInterface store) throws Exception {
 
 		Block block = createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, timeOverride, store);
 
@@ -170,13 +170,13 @@ public class RewardService {
 	}
 
 	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
-			FullBlockStore store)
+			BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
 		return createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, null, store);
 	}
 
 	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
-			Long timeOverride, FullBlockStore store)
+			Long timeOverride, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
 		Stopwatch watch = Stopwatch.createStarted();
 		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters,
@@ -251,14 +251,14 @@ public class RewardService {
 		return block;
 	}
 
-	public GetTXRewardResponse getMaxConfirmedReward(FullBlockStore store)
+	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
 
 	}
 
-	public GetTXRewardListResponse getAllConfirmedReward(FullBlockStore store)
+	public GetTXRewardListResponse getAllConfirmedReward(BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return GetTXRewardListResponse.create(store.getAllConfirmedReward());

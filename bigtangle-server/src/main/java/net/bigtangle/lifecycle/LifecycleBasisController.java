@@ -12,7 +12,7 @@ import org.springframework.context.ApplicationContext;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.kafka.AbstractStreamHandler;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.MySQLFullBlockStore;
 
 public abstract class LifecycleBasisController {
@@ -54,7 +54,7 @@ public abstract class LifecycleBasisController {
     private StatusCollector checkDataStore(StatusCollector status) {
 
         try {
-            FullBlockStore repository = findStore();
+            BlockStoreInterface repository = findStore();
             try {
             // only a generic access-test ...
             if (repository == null) {
@@ -102,7 +102,7 @@ public abstract class LifecycleBasisController {
         return bean;
     }
 
-    private FullBlockStore findStore() throws BeansException, BlockStoreException, SQLException {
+    private BlockStoreInterface findStore() throws BeansException, BlockStoreException, SQLException {
         
         MySQLFullBlockStore store = new MySQLFullBlockStore( appContext.getBean(NetworkParameters.class),  
                 appContext.getBean(DataSource.class).getConnection());

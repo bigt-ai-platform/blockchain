@@ -45,8 +45,9 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.store.FullBlockStoreImpl;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
+import net.bigtangle.store.BlockStoreService;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
@@ -64,7 +65,7 @@ public class SyncBlockService {
 	@Autowired
 	protected NetworkParameters networkParameters;
 	@Autowired
-	FullBlockStoreImpl blockgraph;
+	BlockStoreService blockgraph;
 
 	@Autowired
 	private BlockService blockService;
@@ -86,7 +87,7 @@ public class SyncBlockService {
 	// default start sync of chain and non chain data
 	public void startSingleProcess() throws BlockStoreException {
 		TXReward my = null;
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			my = cacheBlockService.getMaxConfirmedReward(store);
 		} finally {
@@ -125,7 +126,7 @@ public class SyncBlockService {
 
 	public void startSingleProcessDo(Long chainlength, boolean nonchain) throws BlockStoreException {
 
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			LockObject lock = store.selectLockobject(LOCKID);
 			boolean canrun = false;
@@ -163,7 +164,7 @@ public class SyncBlockService {
 
 	public void startInit() throws Exception {
 
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		try {
 			log.debug(" Start SyncBlockService startInit: ");
 			cleanupChainBlockQueue(store);
@@ -177,7 +178,7 @@ public class SyncBlockService {
 
 	}
 
-	public void requestPrev(Block block, FullBlockStore store) {
+	public void requestPrev(Block block, BlockStoreInterface store) {
 		try {
 			if (block.getBlockType() == Block.Type.BLOCKTYPE_INITIAL) {
 				return;
@@ -214,7 +215,7 @@ public class SyncBlockService {
 		return System.currentTimeMillis() / 1000 - days * 60 * 24 * 60L;
 	}
 
-	public byte[] requestBlock(Sha256Hash hash, FullBlockStore store) {
+	public byte[] requestBlock(Sha256Hash hash, BlockStoreInterface store) {
 		// block from network peers
 		// log.debug("requestBlock" + hash.toString());
 		String[] re = serverConfiguration.getRequester().split(",");
@@ -251,7 +252,7 @@ public class SyncBlockService {
 	}
 
 	public void requestBlocks(long chainlengthstart, long chainlengthend, String s, List<TXReward> remotes,
-			FullBlockStore store)
+			BlockStoreInterface store)
 			throws IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
@@ -287,7 +288,7 @@ public class SyncBlockService {
 
 	}
 
-	public void requestNonĆhainBlocks(String s, FullBlockStore store)
+	public void requestNonĆhainBlocks(String s, BlockStoreInterface store)
 			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
@@ -355,7 +356,7 @@ public class SyncBlockService {
 		TXReward aTXReward;
 	}
 
-	public void syncChain(Long chainlength, boolean initsync, FullBlockStore store) throws BlockStoreException {
+	public void syncChain(Long chainlength, boolean initsync, BlockStoreInterface store) throws BlockStoreException {
 		// mcmcService.cleanupNonSolidMissingBlocks();
 		String[] re = serverConfiguration.getRequester().split(",");
 		MaxConfirmedReward aMaxConfirmedReward = new MaxConfirmedReward();
@@ -391,7 +392,7 @@ public class SyncBlockService {
 	/*
 	 * sync the remote data that not in chain
 	 */
-	public void syncNonChained(FullBlockStore store) throws BlockStoreException {
+	public void syncNonChained(BlockStoreInterface store) throws BlockStoreException {
 		// mcmcService.cleanupNonSolidMissingBlocks();
 		String[] re = serverConfiguration.getRequester().split(",");
 		for (String s : re) {
@@ -412,7 +413,7 @@ public class SyncBlockService {
 	 * match the block hash to find the sync chain length, then sync the chain data.
 	 */
 	public void syncMaxConfirmedReward(MaxConfirmedReward aMaxConfirmedReward, TXReward my, boolean initsync,
-			FullBlockStore store) throws Exception {
+			BlockStoreInterface store) throws Exception {
 
 		if (my == null || aMaxConfirmedReward.aTXReward == null)
 			return;
@@ -515,16 +516,17 @@ public class SyncBlockService {
 		return null;
 	}
 
-	public void cleanupChainBlockQueue(FullBlockStore blockStore) throws BlockStoreException {
+	public void cleanupChainBlockQueue(BlockStoreInterface blockStore) throws BlockStoreException {
 
 		blockStore.deleteAllChainBlockQueue();
 	}
 
-	public void connectingOrphans(FullBlockStore blockStore) throws BlockStoreException {
+	public void connectingOrphans(BlockStoreInterface blockStore) throws BlockStoreException {
 		List<ChainBlockQueue> orphanBlocks = blockStore.selectChainblockqueue(true,
 				serverConfiguration.getSyncblocks());
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-		long cut = blockService.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService).getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		if (orphanBlocks.size() > 0) {
 			log.debug("Orphan  size = {}", orphanBlocks.size());
 		}
@@ -549,7 +551,7 @@ public class SyncBlockService {
 	 * For each block in ChainBlockQueue as orphan block, see if we can now fit it
 	 * on top of the chain and if so, do so.
 	 */
-	private void tryConnectingOrphans(ChainBlockQueue orphanBlock, long cut, FullBlockStore store)
+	private void tryConnectingOrphans(ChainBlockQueue orphanBlock, long cut, BlockStoreInterface store)
 			throws VerificationException, BlockStoreException {
 		// Look up the blocks previous.
 		Block block = networkParameters.getDefaultSerializer().makeBlock(orphanBlock.getBlock());

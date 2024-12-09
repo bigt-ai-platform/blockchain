@@ -13,7 +13,7 @@ import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class CacheBlockPrototypeService {
@@ -25,7 +25,7 @@ public class CacheBlockPrototypeService {
 	protected NetworkParameters networkParameters;
 
 	@Cacheable(value = "BlockPrototype", key = "#store.getParams.getId")
-	public byte[] getBlockPrototypeByte(FullBlockStore store) throws BlockStoreException, NoBlockException {
+	public byte[] getBlockPrototypeByte(BlockStoreInterface store) throws BlockStoreException, NoBlockException {
 		// logger.debug("blockService.getNewBlockPrototype(store " ) ;
 		return blockService.getNewBlockPrototype(store).unsafeBitcoinSerialize();
 
@@ -36,7 +36,7 @@ public class CacheBlockPrototypeService {
 		// logger.debug("evictBlockPrototypeByte" ) ;
 	}
 
-	public Block getBlockPrototype(FullBlockStore store)
+	public Block getBlockPrototype(BlockStoreInterface store)
 			throws ProtocolException, BlockStoreException, NoBlockException {
 		return networkParameters.getDefaultSerializer().makeBlock(getBlockPrototypeByte(store));
 	}

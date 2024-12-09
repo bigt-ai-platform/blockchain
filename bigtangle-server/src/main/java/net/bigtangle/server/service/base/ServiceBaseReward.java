@@ -24,7 +24,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 public class ServiceBaseReward extends ServiceBaseConnect {
 
@@ -36,7 +36,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseReward.class);
 
-	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, FullBlockStore store)
+	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
@@ -109,7 +109,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	}
 
-	private void checkGeneratedReward(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
+	private void checkGeneratedReward(Block newMilestoneBlock, BlockStoreInterface store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 
@@ -141,7 +141,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	 * check blocks are in not in milestone
 	 */
 	private SolidityState checkReferencedBlockRequirements(Block newMilestoneBlock, long cutoffHeight,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 
@@ -169,7 +169,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private void checkContainsNoRewardBlocks(Block newMilestoneBlock, FullBlockStore store) throws BlockStoreException {
+	private void checkContainsNoRewardBlocks(Block newMilestoneBlock, BlockStoreInterface store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
@@ -189,7 +189,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	 * @return RewardBuilderResult
 	 */
 	public RewardBuilderResult calcRewardBuilderResult(Sha256Hash prevTrunk, Sha256Hash prevBranch,
-			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain, FullBlockStore store)
+			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		BlockWrap prevTrunkBlock = getBlockWrap(prevTrunk, store);
@@ -201,7 +201,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	}
 
 	public RewardBuilderResult calcRewardInfo(boolean contractExecute, BlockWrap prevTrunk, BlockWrap prevBranch,
-			Sha256Hash prevRewardHash, long currentTime, FullBlockStore store) throws BlockStoreException {
+			Sha256Hash prevRewardHash, long currentTime, BlockStoreInterface store) throws BlockStoreException {
 
 		// Read previous reward block's data
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
@@ -265,7 +265,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	 * different chain having higher total work.
 	 * 
 	 */
-	public void handleNewBestChain(Block newChainHead, FullBlockStore store)
+	public void handleNewBestChain(Block newChainHead, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
 		// checkState(lock.isHeldByCurrentThread());
 		// This chain has overtaken the one we currently believe is best.
@@ -325,7 +325,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	private void unconfirmBlocks(FullBlockStore store, long milestoneNumber, List<Sha256Hash> blocksInMilestoneInterval)
+	private void unconfirmBlocks(BlockStoreInterface store, long milestoneNumber, List<Sha256Hash> blocksInMilestoneInterval)
 			throws BlockStoreException {
 		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 		for (Sha256Hash b : blocksInMilestoneInterval) {
@@ -338,7 +338,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	 * Returns the set of contiguous blocks between 'higher' and 'lower'. Higher is
 	 * included, lower is not.
 	 */
-	private LinkedList<Block> getPartialChain(Block higher, Block lower, FullBlockStore store)
+	private LinkedList<Block> getPartialChain(Block higher, Block lower, BlockStoreInterface store)
 			throws BlockStoreException {
 		checkArgument(higher.getHeight() > lower.getHeight(), "higher and lower are reversed");
 		LinkedList<Block> results = new LinkedList<>();
@@ -353,7 +353,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		return results;
 	}
 
-	private Block getChainHead(FullBlockStore store) throws BlockStoreException {
+	private Block getChainHead(BlockStoreInterface store) throws BlockStoreException {
 		return store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 	}
 

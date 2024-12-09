@@ -13,7 +13,7 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.ordermatch.MatchLastdayResult;
 import net.bigtangle.core.response.OrderTickerResponse;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 
 /**
  * This service provides informations on current exchange rates
@@ -28,7 +28,7 @@ public class OrderTickerService {
 
 
 
-    public OrderTickerResponse getLastMatchingEvents(Set<String> tokenIds, String basetoken, FullBlockStore store)
+    public OrderTickerResponse getLastMatchingEvents(Set<String> tokenIds, String basetoken, BlockStoreInterface store)
             throws BlockStoreException {
 
         List<MatchLastdayResult> re = store.getLastMatchingEvents(tokenIds, basetoken);
@@ -37,7 +37,7 @@ public class OrderTickerService {
     }
 
  
-    public Map<String, Token> getTokenameA(List<MatchLastdayResult> res, FullBlockStore store) throws BlockStoreException {
+    public Map<String, Token> getTokenameA(List<MatchLastdayResult> res, BlockStoreInterface store) throws BlockStoreException {
         Set<String> tokenids = new HashSet<>();
         for (MatchLastdayResult d : res) {
             tokenids.add(d.getTokenid());
@@ -54,7 +54,7 @@ public class OrderTickerService {
 
     // @Cacheable("priceticker")
     public OrderTickerResponse getTimeBetweenMatchingEvents(Set<String> tokenids, String basetoken, Long startDate,
-            Long endDate, FullBlockStore store) throws BlockStoreException {
+            Long endDate, BlockStoreInterface store) throws BlockStoreException {
         Iterator<String> iter = tokenids.iterator();
         String first = iter.next();
         List<MatchLastdayResult> re = store.getTimeBetweenMatchingEvents(first, basetoken, startDate, endDate, MAXCOUNT);
@@ -62,7 +62,7 @@ public class OrderTickerService {
     }
 
     public OrderTickerResponse getTimeAVBGBetweenMatchingEvents(Set<String> tokenids, String basetoken, Long startDate,
-            Long endDate, FullBlockStore store) throws BlockStoreException {
+            Long endDate, BlockStoreInterface store) throws BlockStoreException {
         Iterator<String> iter = tokenids.iterator();
         String first = iter.next();
         List<MatchLastdayResult> re = store.getTimeAVGBetweenMatchingEvents(first, basetoken, startDate, endDate, MAXCOUNT);

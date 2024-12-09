@@ -25,7 +25,7 @@ import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.StoreService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Threading;
 
 @Component
@@ -82,7 +82,7 @@ public class BlockBatchService {
     }
 
     private void batchBlocks() throws BlockStoreException, Exception {
-        FullBlockStore store = storeService.getStore();
+        BlockStoreInterface store = storeService.getStore();
         try {
             List<BatchBlock> batchBlocks = store.getBatchBlockList();
             if (batchBlocks.isEmpty()) {

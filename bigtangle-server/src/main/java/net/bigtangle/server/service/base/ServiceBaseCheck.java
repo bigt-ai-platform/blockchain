@@ -83,7 +83,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.ContextPropagatingThreadFactory;
 import net.bigtangle.utils.DomainValidator;
 import net.bigtangle.utils.Json;
@@ -98,7 +98,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseCheck.class);
 
-	private void checCoinbaseTransactionalSolidity(Block block, FullBlockStore store) throws BlockStoreException {
+	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// only reward block and contract can be set coinbase and check by caculation
 		for (final Transaction tx : block.getTransactions()) {
 			if (tx.isCoinBase() && (block.getBlockType() == Type.BLOCKTYPE_REWARD
@@ -111,7 +111,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkFullTransactionalSolidity(Block block, long height, boolean throwExceptions,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		checCoinbaseTransactionalSolidity(block, store);
 
@@ -345,7 +345,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkFullTypeSpecificSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
-			long height, boolean throwExceptions, FullBlockStore store) throws BlockStoreException {
+			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
 		switch (block.getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE:
 			break;
@@ -408,12 +408,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkFullContractEventSolidity(Block block, long height, boolean throwExceptions,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		return checkFormalContractEventSolidity(block, throwExceptions, store);
 	}
 
 	private SolidityState checkFullOrderOpenSolidity(Block block, long height, boolean throwExceptions,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
 		if (transactions.get(0).getData() == null) {
@@ -534,7 +534,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						&& !orderInfo.getTargetTokenid().equals(orderInfo.getOrderBaseToken());
 	}
 
-	public Coin countBurnedToken(Block block, FullBlockStore store) throws BlockStoreException {
+	public Coin countBurnedToken(Block block, BlockStoreInterface store) throws BlockStoreException {
 		Coin burnedCoins = null;
 		for (final Transaction tx : block.getTransactions()) {
 			for (int index = 0; index < tx.getInputs().size(); index++) {
@@ -579,7 +579,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * @return
 	 * @throws BlockStoreException
 	 */
-	public Coin countBurnedToken(Block block, FullBlockStore store, String tokenid) throws BlockStoreException {
+	public Coin countBurnedToken(Block block, BlockStoreInterface store, String tokenid) throws BlockStoreException {
 		Coin burnedCoins = null;
 		for (final Transaction tx : block.getTransactions()) {
 
@@ -621,7 +621,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkFullOrderOpSolidity(Block block, long height, boolean throwExceptions,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		// No output creation
 		if (!block.getTransactions().get(0).getOutputs().isEmpty()) {
@@ -674,7 +674,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkFullRewardSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
-			long height, boolean throwExceptions, FullBlockStore store) throws BlockStoreException {
+			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
 		if (transactions.size() != 1) {
@@ -724,7 +724,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	public SolidityState checkFullTokenSolidity(Block block, long height, boolean throwExceptions, FullBlockStore store)
+	public SolidityState checkFullTokenSolidity(Block block, long height, boolean throwExceptions, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		// TODO (check fee get(1))
@@ -1133,7 +1133,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	public SolidityState checkChainSolidity(Block block, boolean throwExceptions, FullBlockStore store)
+	public SolidityState checkChainSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		// Check the block fulfills PoW as chain
@@ -1188,12 +1188,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * @return SolidityState
 	 * @throws BlockStoreException
 	 */
-	public SolidityState checkSolidity(Block block, boolean throwExceptions, FullBlockStore store)
+	public SolidityState checkSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
 			throws BlockStoreException {
 		return checkSolidity(block, throwExceptions, store, true);
 	}
 
-	public SolidityState checkSolidity(Block block, boolean throwExceptions, FullBlockStore store,
+	public SolidityState checkSolidity(Block block, boolean throwExceptions, BlockStoreInterface store,
 			boolean allowMissingPredecessor) throws BlockStoreException {
 		try {
 			// Check formal correctness of the block
@@ -1404,7 +1404,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions, FullBlockStore store)
+	private SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
@@ -1587,7 +1587,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	public void checkTokenUnique(Block block, FullBlockStore store)
+	public void checkTokenUnique(Block block, BlockStoreInterface store)
 			throws BlockStoreException, JsonParseException, JsonMappingException, IOException {
 		/*
 		 * Token is unique with token name and domain
@@ -1607,7 +1607,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * dependencies.
 	 */
 	private SolidityState checkFullBlockSolidity(Block block, boolean throwExceptions, List<BlockWrap> allPredecessors,
-			boolean allowMissingPredecessor, FullBlockStore store) {
+			boolean allowMissingPredecessor, BlockStoreInterface store) {
 		try {
 			ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 					cacheBlockService);
@@ -1764,7 +1764,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private SolidityState checkPredecessorsExistAndOk(Block block, boolean throwExceptions,
-			List<BlockWrap> allRequirements, FullBlockStore store) throws BlockStoreException {
+			List<BlockWrap> allRequirements, BlockStoreInterface store) throws BlockStoreException {
 		//
 		for (BlockWrap pred : allRequirements) {
 			// final BlockWrap pred = store.getBlockWrap(predecessorReq);
@@ -1781,7 +1781,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	public void checkBlockBeforeSave(Block block, FullBlockStore store) throws BlockStoreException {
+	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
 		if (!checkPossibleConflict(block, store))
@@ -1807,7 +1807,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * Transactions in a block may has spent output, It is not final that the reject
 	 * of the block Return false, if there is possible conflict
 	 */
-	public boolean checkPossibleConflict(Block block, FullBlockStore store) throws BlockStoreException {
+	public boolean checkPossibleConflict(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// All used transaction outputs
 		final List<Transaction> transactions = block.getTransactions();
 		for (final Transaction tx : transactions) {
@@ -1879,7 +1879,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	public SolidityState checkRewardDifficulty(Block rewardBlock, FullBlockStore store) throws BlockStoreException {
+	public SolidityState checkRewardDifficulty(Block rewardBlock, BlockStoreInterface store) throws BlockStoreException {
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(rewardBlock.getTransactions().get(0).getData());
 
 		// Check previous reward blocks exist and get their approved sets
@@ -1900,7 +1900,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	private void checkRewardDifficulty(Block rewardBlock, RewardInfo rewardInfo, Block prevRewardBlock,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		// check difficulty
 		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
@@ -1914,7 +1914,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	public long calculateNextChainDifficulty(Sha256Hash prevRewardHash, long currChainLength, long currentTime,
-			FullBlockStore store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		if (currChainLength % NetworkParameters.INTERVAL != 0) {
 			return store.getRewardDifficulty(prevRewardHash);
@@ -1955,7 +1955,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return Utils.encodeCompactBits(newTarget);
 	}
 
-	public SolidityState checkRewardReferencedBlocks(Block rewardBlock, FullBlockStore store)
+	public SolidityState checkRewardReferencedBlocks(Block rewardBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 		try {
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(rewardBlock.getTransactions().get(0).getData());
@@ -1999,7 +1999,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	/*
 	 * check only if the blocks in database
 	 */
-	private SolidityState checkRequiredBlocks(RewardInfo rewardInfo, BlockWrap block, FullBlockStore store)
+	private SolidityState checkRequiredBlocks(RewardInfo rewardInfo, BlockWrap block, BlockStoreInterface store)
 			throws BlockStoreException {
 		Set<Sha256Hash> requiredBlocks = getAllRequiredBlockHashes(block.getBlock(), false);
 		for (Sha256Hash reqHash : requiredBlocks) {
@@ -2029,14 +2029,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		return Utils.encodeCompactBits(difficultyChain);
 	}
-	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, FullBlockStore store)
+	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
 
 	}
 
-	public GetTXRewardListResponse getAllConfirmedReward(Map<String, Object> request, FullBlockStore store)
+	public GetTXRewardListResponse getAllConfirmedReward(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return GetTXRewardListResponse.create(store.getAllConfirmedReward());

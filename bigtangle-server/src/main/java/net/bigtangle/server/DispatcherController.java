@@ -69,7 +69,7 @@ import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.server.service.TokenDomainnameService;
 import net.bigtangle.server.service.TokensService;
 import net.bigtangle.server.service.UserDataService;
-import net.bigtangle.store.FullBlockStore;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Gzip;
 import net.bigtangle.utils.Json;
 
@@ -152,7 +152,7 @@ public class DispatcherController {
 	public void processDo(@PathVariable("reqCmd") String reqCmd, @RequestBody byte[] contentBytes,
 			HttpServletResponse httpServletResponse, HttpServletRequest httprequest) throws Exception {
 		Stopwatch watch = Stopwatch.createStarted();
-		FullBlockStore store = storeService.getStore();
+		BlockStoreInterface store = storeService.getStore();
 		byte[] bodyByte = new byte[0];
 		try {
 
@@ -639,7 +639,7 @@ public class DispatcherController {
 	}
 
 	private void outputHistory(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			FullBlockStore store)
+			BlockStoreInterface store)
 			throws Exception {
 		String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 		@SuppressWarnings("unchecked")
@@ -653,7 +653,7 @@ public class DispatcherController {
 	}
 
 	private void batchBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			FullBlockStore store) throws Exception {
+			BlockStoreInterface store) throws Exception {
 		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 
 		if (serverConfiguration.getMyserverblockOnly()) {
@@ -675,7 +675,7 @@ public class DispatcherController {
 	}
 
 	private void saveBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			FullBlockStore store) throws Exception {
+			BlockStoreInterface store) throws Exception {
 		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 		// only block with my miner address
 		if (!Arrays.equals(block.getMinerAddress(),
@@ -714,7 +714,7 @@ public class DispatcherController {
 	}
 
 	private boolean checkPermission(HttpServletResponse httpServletResponse, HttpServletRequest httprequest,
-			Stopwatch watch, FullBlockStore store) throws Exception {
+			Stopwatch watch, BlockStoreInterface store) throws Exception {
 		if (!serverConfiguration.getPermissioned()) {
 			return true;
 		}
@@ -766,7 +766,7 @@ public class DispatcherController {
 	}
 
 	public boolean checkAuth(HttpServletRequest httprequest,
-							 FullBlockStore store) {
+							 BlockStoreInterface store) {
 		String header = httprequest.getHeader("accessToken");
 		boolean flag = false;
 		if (header != null && !header.trim().isEmpty()) {
@@ -836,13 +836,13 @@ public class DispatcherController {
 	}
 
 	// server may accept only block from his server
-	public void register(Block block, FullBlockStore store) throws BlockStoreException {
+	public void register(Block block, BlockStoreInterface store) throws BlockStoreException {
 		if (serverConfiguration.getMyserverblockOnly())
 			blockService.insertMyserverblocks(block.getPrevBlockHash(), block.getHash(), System.currentTimeMillis(),
 					store);
 	}
 
-	public void deleteRegisterBlock(Block block, FullBlockStore store) throws BlockStoreException {
+	public void deleteRegisterBlock(Block block, BlockStoreInterface store) throws BlockStoreException {
 		if (serverConfiguration.getMyserverblockOnly()) {
 			blockService.deleteMyserverblocks(block.getPrevBlockHash(), store);
 		}
