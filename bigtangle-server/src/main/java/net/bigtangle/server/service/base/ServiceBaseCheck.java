@@ -1150,12 +1150,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		if (prevBranchBlock == null)
 			SolidityState.from(block.getPrevBranchBlockHash(), true);
 
-		long difficulty = calculateNextBlockDifficulty(block.getRewardInfo());
+		long difficulty = calculateNextBlockDifficulty(getRewardInfo(block));
 		if (difficulty != block.getDifficultyTarget()) {
 			throw new VerificationException("calculateNextBlockDifficulty does not match.");
 		}
 
-		if (block.getLastMiningRewardBlock() != block.getRewardInfo().getChainlength()) {
+		if (block.getLastMiningRewardBlock() != getRewardInfo(block).getChainlength()) {
 			if (throwExceptions)
 				throw new DifficultyConsensusInheritanceException();
 			return SolidityState.getFailState();

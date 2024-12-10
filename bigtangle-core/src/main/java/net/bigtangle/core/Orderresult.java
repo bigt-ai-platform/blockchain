@@ -68,13 +68,18 @@ public class Orderresult extends SpentBlock implements java.io.Serializable {
 		return this;
 	}
 
-	public Orderresult parse(byte[] buf) throws IOException {
+	public Orderresult parse(byte[] buf)   {
+		try {
 		ByteArrayInputStream bain = new ByteArrayInputStream(buf);
 		DataInputStream dis = new DataInputStream(bain);
 		parseDIS(dis);
 		dis.close();
 		bain.close();
 		return this;
+	   } catch (IOException e) {
+           // Cannot happen since checked before
+           throw new RuntimeException(e);
+       }
 	}
 
 	public Sha256Hash getPrevblockhash() {

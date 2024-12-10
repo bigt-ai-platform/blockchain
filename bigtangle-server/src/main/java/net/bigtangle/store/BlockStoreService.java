@@ -6,9 +6,11 @@
 package net.bigtangle.store;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -26,7 +28,6 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
-import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -186,7 +187,8 @@ public class BlockStoreService {
 
 	}
 
-	private void saveChainBlockQueue(Block block, BlockStoreInterface store, boolean orphan) throws BlockStoreException {
+	private void saveChainBlockQueue(Block block, BlockStoreInterface store, boolean orphan)
+			throws BlockStoreException {
 		// save the block
 		try {
 			store.beginDatabaseBatchWrite();
@@ -303,7 +305,8 @@ public class BlockStoreService {
 		}
 	}
 
-	private void deleteChainQueue(ChainBlockQueue chainBlockQueue, BlockStoreInterface store) throws BlockStoreException {
+	private void deleteChainQueue(ChainBlockQueue chainBlockQueue, BlockStoreInterface store)
+			throws BlockStoreException {
 		List<ChainBlockQueue> l = new ArrayList<>();
 		l.add(chainBlockQueue);
 		store.deleteChainBlockQueue(l);
@@ -376,22 +379,23 @@ public class BlockStoreService {
 			return;
 		}
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
-		if (block.getRewardInfo().getPrevRewardHash().equals(head.getHash())) {
+		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
+				cacheBlockService);
+		if (serviceBaseReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
-			new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService)
-					.checkRewardChainConfirmReferenced(block, store);
+			serviceBaseReward.checkRewardChainConfirmReferenced(block, store);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
 
-			boolean haveNewBestChain = block.getRewardInfo().getChainlength() > head.getRewardInfo().getChainlength();
+			boolean haveNewBestChain = serviceBaseReward.getRewardInfo(block).getChainlength() > serviceBaseReward
+					.getRewardInfo(head).getChainlength();
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
 				connect(block, solidityState, store);
-				new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService)
-						.handleNewBestChain(block, store);
+				serviceBaseReward.handleNewBestChain(block, store);
 			} else {
 				// parallel chain, save as unconfirmed
 				connect(block, solidityState, store);
@@ -495,7 +499,8 @@ public class BlockStoreService {
 		confirmDo(blockStore, cutoffHeight, maxHeight);
 	}
 
-	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight) throws BlockStoreException {
+	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+			throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		try {
@@ -510,8 +515,16 @@ public class BlockStoreService {
 
 			// Execute must be chained for confirm
 			// Finally add the resolved new blocks to the confirmed set
+			Set<BlockWrap>	 tobeUnconfirms= new HashSet<>() ;
+			Set<BlockWrap> collectExecutionChained = new HashSet<>() ;
+			 serviceBase.collectExecutionChained(blockStore,  blocksToAdd,collectExecutionChained, tobeUnconfirms) ;
+		
+				serviceBase.unconfirmBlocksSorted(blockStore, -1,
+						tobeUnconfirms,
+						new HashSet<>());
+				
 			serviceBase.confirmBlocksSorted(blockStore, -1,
-					serviceBase.collectExecutionChained(blockStore, Collections.synchronizedSet(blocksToAdd)),
+					collectExecutionChained,
 					new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
@@ -523,7 +536,8 @@ public class BlockStoreService {
 		}
 	}
 
-	private void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight) throws BlockStoreException {
+	private void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+			throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
 		try {

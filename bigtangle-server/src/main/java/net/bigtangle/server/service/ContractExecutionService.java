@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -80,7 +81,7 @@ public class ContractExecutionService {
 	/**
 	 * Scheduled update function that updates the Tangle
 	 *
-     */
+	 */
 
 	// createContractExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -95,7 +96,8 @@ public class ContractExecutionService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()) {
-                log.info(" ContractExecution locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
+				log.info(" ContractExecution locked is fored delete   {} < {}", lock.getLocktime(),
+						System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -117,28 +119,45 @@ public class ContractExecutionService {
 
 	}
 
-	public void createContractExecution(BlockStoreInterface store) throws Exception {
+	public void createContractExecution(BlockStoreInterface blockStore) throws BlockStoreException {
+
+		try {
+			blockStore.beginDatabaseBatchWrite();
+
+			createContractExecutionDo(blockStore);
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	public void createContractExecutionDo(BlockStoreInterface store) throws Exception {
 
 		// select all contractid from the table with unspent event
-		for (Token contract  : getOpenContract(store)) {
+		for (Token contract : getOpenContract(store)) {
 			Block contractExecution = createContractExecution(contract, store);
 			if (contractExecution != null) {
-                log.debug(" contractExecution block is created: {}", contractExecution);
+				log.debug(" contractExecution block is created: {}", contractExecution);
 				blockSaveService.saveBlock(contractExecution, store);
 			}
 		}
 
 	}
-	//Add valid check
+
+	// Add valid check
 	public List<Token> getOpenContract(BlockStoreInterface store) throws Exception {
-	 return store.getTokenTypeList(TokenType.contract.ordinal());
-	
+		return store.getTokenTypeList(TokenType.contract.ordinal());
+
 	}
+
 	/**
 	 * Runs the ContractExecution making logic
 	 * 
 	 * @return the new block or block voted on
-     */
+	 */
 
 	public Block createContractExecution(Token contract, BlockStoreInterface store) throws Exception {
 
@@ -152,6 +171,11 @@ public class ContractExecutionService {
 
 	public Block createContractExecution(Block block, Token contract, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
+		return createContractExecutionDo(block, contract, store);
+	}
+
+	public Block createContractExecutionDo(Block block, Token contract, BlockStoreInterface store)
+			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
 		block.setBlockType(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
 		// Build transaction for block
@@ -161,7 +185,7 @@ public class ContractExecutionService {
 		// Read previous reward block's data
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService); 
+				cacheBlockService);
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
@@ -174,25 +198,26 @@ public class ContractExecutionService {
 
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
-                referencedOrdertypes, true, store);
+				referencedOrdertypes, true, store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
-                referencedOrdertypes, true, store);
+				referencedOrdertypes, true, store);
 
 		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
-
 		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.firstContractresult()
 				: prevMilestone;
 		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contract.getTokenid());
 
 		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(prevNotMilestons,
 				prevMilestoneExecution, store);
-		// take last NotMilestons chain confirmed and set others as not confirmed
+		// take last NotMilestone chain confirmed and set others as not confirmed
+		Set<BlockWrap> tobeunconfirms = collectUnconfirm(prevsNotMilestoneChainedBlocks, prevNotMilestons, store,
+				serviceBase);
+		serviceBase.unconfirmBlocksSorted(store, cutoffheight, tobeunconfirms, new HashSet<>());
 
 		Contractresult lastExecution = prevMilestoneExecution;
 		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
-			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store); 
-			unconfimedNonChained(prevsNotMilestoneChainedBlocks, prevNotMilestons, store, serviceBase);
+			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
 		}
 
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
@@ -211,19 +236,18 @@ public class ContractExecutionService {
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
 	}
 
-	//
-	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
+	protected Set<BlockWrap> collectUnconfirm(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
 			List<Contractresult> prevNotMilestons, BlockStoreInterface store, ServiceBaseConnect serviceBase)
 			throws BlockStoreException {
-		// find the longest chained execution connected to last milestone
+		Set<BlockWrap> re = new HashSet<>();
 		for (Contractresult prevNotMilestone : prevNotMilestons) {
 			if (prevsNotMilestoneChainedBlocks.stream()
 					.noneMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
-				serviceBase.confirmContractExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store),-1,true,
-						store);
+				re.add(serviceBase.getBlockWrap(prevNotMilestone.getBlockHash(), store));
 			}
 
 		}
+		return re;
 
 	}
 
@@ -240,8 +264,7 @@ public class ContractExecutionService {
 		return collectNews;
 	}
 
-	protected Contractresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store)
-			throws BlockStoreException {
+	protected Contractresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store) throws BlockStoreException {
 		BlockWrap re = null;
 		for (BlockWrap b : prevs) {
 			if (re == null)
@@ -271,11 +294,11 @@ public class ContractExecutionService {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
-            // log.debug(" contractExecution block solve started : " + chainTargetFinal + "
-            // \n for block" + block);
-            block.solve(chainTargetFinal);
-            return "";
-        });
+			// log.debug(" contractExecution block solve started : " + chainTargetFinal + "
+			// \n for block" + block);
+			block.solve(chainTargetFinal);
+			return "";
+		});
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);

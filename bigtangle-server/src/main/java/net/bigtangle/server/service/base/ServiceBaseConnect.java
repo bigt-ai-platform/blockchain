@@ -13,7 +13,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -102,7 +101,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	 * are part of the same chain. return null, if the newChainHead is not complete
 	 * locally.
 	 */
-	public Block findSplit(Block newChainHead, Block oldChainHead, BlockStoreInterface store) throws BlockStoreException {
+	public Block findSplit(Block newChainHead, Block oldChainHead, BlockStoreInterface store)
+			throws BlockStoreException {
 		Block currentChainCursor = oldChainHead;
 		Block newChainCursor = newChainHead;
 		// Loop until we find the reward block both chains have in common.
@@ -113,13 +113,38 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		//
 		// findSplit will return block B. oldChainHead = D and newChainHead = G.
 		while (!currentChainCursor.equals(newChainCursor)) {
-			if (currentChainCursor.getRewardInfo().getChainlength() > newChainCursor.getRewardInfo().getChainlength()) {
-				currentChainCursor = store.get(currentChainCursor.getRewardInfo().getPrevRewardHash());
+			if (getRewardInfo(currentChainCursor).getChainlength() > getRewardInfo(newChainCursor).getChainlength()) {
+				currentChainCursor = store.get(getRewardInfo(currentChainCursor).getPrevRewardHash());
 				checkNotNull(currentChainCursor, "Attempt to follow an orphan chain");
 
 			} else {
-				newChainCursor = store.get(newChainCursor.getRewardInfo().getPrevRewardHash());
+				newChainCursor = store.get(getRewardInfo(newChainCursor).getPrevRewardHash());
 				checkNotNull(newChainCursor, "Attempt to follow an orphan chain");
+
+			}
+		}
+		return currentChainCursor;
+	}
+
+	public Block findSplitExecute(Block newChainHead, Block oldChainHead, BlockStoreInterface store)
+			throws BlockStoreException {
+		Block currentChainCursor = oldChainHead;
+		Block newChainCursor = newChainHead;
+		// Loop until we find the reward block both chains have in common.
+		// Example:
+		//
+		// A -> B -> C -> D
+		// *****\--> E -> F -> G
+		//
+		// findSplit will return block B. oldChainHead = D and newChainHead = G.
+		while (!currentChainCursor.equals(newChainCursor)) {
+			if (getExecutionPrev(currentChainCursor, store).getHeight() > getExecutionPrev(newChainCursor, store)
+					.getHeight()) {
+				currentChainCursor = getExecutionPrev(currentChainCursor, store);
+				checkNotNull(currentChainCursor, "Attempt to follow an orphan  execute chain");
+			} else {
+				newChainCursor = getExecutionPrev(newChainCursor, store);
+				checkNotNull(newChainCursor, "Attempt to follow an orphan  execute chain");
 
 			}
 		}
@@ -375,15 +400,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	// Execute must be chained for confirm, unconfirmed execution will force all
-	// following executions unconfirmed
-
 	public void unconfirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
 			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
-//		Set<BlockWrap> all = new HashSet<>();
-//		for (BlockWrap b : blocks) {
-//			collectFollowChaineExecutions(b, all, store);
-//		}
+
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
 		arrayList.sort(new SortbyBlockWrap());
 		for (BlockWrap block : arrayList) {
@@ -413,41 +432,4 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	/*
-	 * contract execution forms chained, it will takes all the chained contract
-	 * execution until to last execution in rewards
-	 */
-	public Set<BlockWrap> collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
-			BlockStoreInterface store) throws BlockStoreException {
-		BlockWrap lastContractExecution = null;
-		Set<BlockWrap> re = new HashSet<>();
-		// get the last EXECUTE
-		for (BlockWrap block : blocks) {
-			if (blocktype.equals(block.getBlock().getBlockType())) {
-				if (lastContractExecution == null) {
-					lastContractExecution = block;
-				} else {
-					if (lastContractExecution.getBlock().getHeight() < block.getBlock().getHeight()) {
-						lastContractExecution = block;
-					}
-				}
-			} else {
-				re.add(block);
-			}
-		}
-		// backward to get all chained EXECUTE until milestone
-		if (lastContractExecution != null) {
-			re.addAll(collectReferencedChaineExecutions(lastContractExecution, store));
-		}
-
-		return re;
-	}
-
-	public Set<BlockWrap> collectExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-		Set<BlockWrap> collected = collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE,
-				store);
-		collected = collectReferencedChainedExecutions(collected, Block.Type.BLOCKTYPE_ORDER_EXECUTE, store);
-		return collected;
-	}
 }

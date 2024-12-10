@@ -27,11 +27,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.ProtocolException;
@@ -46,8 +46,9 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.store.BlockStoreService;
+import net.bigtangle.server.service.base.ServiceBaseReward;
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
@@ -556,6 +557,9 @@ public class SyncBlockService {
 		// Look up the blocks previous.
 		Block block = networkParameters.getDefaultSerializer().makeBlock(orphanBlock.getBlock());
 
+		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
+				cacheBlockService);
+		
 		// remove too old OrphanBlock and cutoff chain length
 		if (System.currentTimeMillis() - orphanBlock.getInserttime() * 1000 > 2 * 60 * 60 * 1000
 				|| block.getLastMiningRewardBlock() < cut) {
@@ -566,14 +570,14 @@ public class SyncBlockService {
 			return;
 		}
 
-		Block prev = store.get(block.getRewardInfo().getPrevRewardHash());
+		Block prev = store.get( serviceBaseReward.getRewardInfo(block).getPrevRewardHash());
 		if (prev == null) {
 
 			// This is still an unconnected/orphan block.
 			// if (log.isDebugEnabled())
 			// log.debug("Orphan block {} is not connectable right now",
 			// orphanBlock.block.getHash());
-			requestBlock(block.getRewardInfo().getPrevRewardHash(), store);
+			requestBlock( serviceBaseReward.getRewardInfo(block).getPrevRewardHash(), store);
 			log.info("syncBlockService orphan {}", block.toString());
 
 		} else {

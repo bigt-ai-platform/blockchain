@@ -130,8 +130,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 				blockSaveService.saveBlock(resultBlock, store);
 				makeRewardBlock(resultBlock);
-                assertNotNull(resultBlock);
-
+      
 				blockSaveService.saveBlock(conflictBlock, store);
 				ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService);
 				Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();

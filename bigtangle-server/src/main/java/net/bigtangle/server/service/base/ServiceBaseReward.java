@@ -43,7 +43,6 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
 		long cutoffHeight = getRewardCutoffHeight(currRewardInfo.getPrevRewardHash(), store);
 
-
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
 		if (solidityState.isSuccessState())
@@ -63,8 +62,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				.checkSolidity(newMilestoneBlock, false, store, false);
 
 		if (solidityState.isSuccessState())
-			throw new VerificationException(" .checkSolidity is failed: " + solidityState
-					+ "\n with block = " + newMilestoneBlock);
+			throw new VerificationException(
+					" .checkSolidity is failed: " + solidityState + "\n with block = " + newMilestoneBlock);
 
 		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
 
@@ -83,14 +82,14 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// findFirstSpentInput(allApprovedNewBlocks);
 
 		if (anySpentInputs) {
-			// solidityState = SolidityState.getFailState();
+			  solidityState = SolidityState.getFailState();
 			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
 		}
 		// If any conflicts exist between the current set of
 		// blocks, no-go
 		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
-				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint)).values().stream()
-				.anyMatch(l -> l.size() > 1);
+				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
+				.values().stream().anyMatch(l -> l.size() > 1);
 		if (anyCandidateConflicts)
 			showConflict(allApprovedNewBlocks);
 
@@ -169,14 +168,14 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private void checkContainsNoRewardBlocks(Block newMilestoneBlock, BlockStoreInterface store) throws BlockStoreException {
+	private void checkContainsNoRewardBlocks(Block newMilestoneBlock, BlockStoreInterface store)
+			throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			BlockWrap block = getBlockWrap(hash, store);
 			if (block.getBlock().getBlockType() == Type.BLOCKTYPE_REWARD)
-				throw new VerificationException(
-						"Reward block referenced block has other reward blocks" + block);
+				throw new VerificationException("Reward block referenced block has other reward blocks" + block);
 		}
 	}
 
@@ -216,16 +215,20 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
-		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes,
-				true, store);
+		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
+				store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true,
 				store);
 
 		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
 				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 
-		Set<BlockWrap> collected = collectExecutionChained(store, blocks);
-
+		Set<BlockWrap> collected = new HashSet<>();
+		Set<BlockWrap> unconfirms = new HashSet<>();
+		collectExecutionChained(store, blocks, collected, unconfirms);
+		for(BlockWrap b : unconfirms) {
+			logger.debug(b.toString());
+		}
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, serviceBase.getHashSet(collected),
 				prevChainLength + 1);
@@ -299,7 +302,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 			// Sanity check:
 			if (!oldBlock.getHash().equals(networkParameters.getGenesisBlock().getHash())) {
 				// Unset the milestone (Chain length) of this one
-				long milestoneNumber = oldBlock.getRewardInfo().getChainlength();
+				long milestoneNumber = getRewardInfo(oldBlock).getChainlength();
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
 						milestoneNumber, store);
 				// Unconfirm anything not in milestone
@@ -315,7 +318,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 			checkRewardChainConfirmReferenced(cursor, store);
 			// if we build a chain longer than head, do a commit, even it may be
 			// failed after this.
-			if (cursor.getRewardInfo().getChainlength() > head.getRewardInfo().getChainlength()) {
+			if (getRewardInfo(cursor).getChainlength() > getRewardInfo(head).getChainlength()) {
 				store.commitDatabaseBatchWrite();
 				store.beginDatabaseBatchWrite();
 			}
@@ -345,8 +348,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		Block cursor = higher;
 		while (true) {
 			results.add(cursor);
-			cursor = checkNotNull(store.get(cursor.getRewardInfo().getPrevRewardHash()),
-					"Ran off the end of the chain");
+			cursor = checkNotNull(store.get(getRewardInfo(cursor).getPrevRewardHash()), "Ran off the end of the chain");
 			if (cursor.equals(lower))
 				break;
 		}

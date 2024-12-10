@@ -677,10 +677,7 @@ public class Block extends Message {
     }
 
     
-    public RewardInfo getRewardInfo() {
-    return new RewardInfo().parseChecked(getTransactions().get(0).getData());
-    }
-    
+
     /**
      * <p>
      * Finds a value of nonce and equihashProof if using Equihash that validates

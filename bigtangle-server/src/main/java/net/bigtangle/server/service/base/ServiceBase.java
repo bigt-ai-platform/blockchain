@@ -25,12 +25,14 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
+import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderRecord;
+import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -74,8 +76,8 @@ public abstract class ServiceBase {
 	protected abstract void connectUTXOs(Block block, List<Transaction> transactions, BlockStoreInterface blockStore)
 			throws BlockStoreException;
 
-	protected abstract void calculateBlockOrderMatchingResult(Block block,
-															  BlockStoreInterface blockStore) throws BlockStoreException;
+	protected abstract void calculateBlockOrderMatchingResult(Block block, BlockStoreInterface blockStore)
+			throws BlockStoreException;
 
 	public ServiceBase(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService) {
@@ -101,15 +103,15 @@ public abstract class ServiceBase {
 	/**
 	 * get domainname token multi sign address
 	 *
-     */
+	 */
 	public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,
 			BlockStoreInterface store) throws BlockStoreException {
 		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHash())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
-            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-                ECKey ecKey = permissionDomainname.getOutKey();
-                multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
-            }
+			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
+				ECKey ecKey = permissionDomainname.getOutKey();
+				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
+			}
 			return multiSignAddresses;
 		} else {
 			Token token = store.queryDomainnameToken(domainNameBlockHash);
@@ -117,8 +119,7 @@ public abstract class ServiceBase {
 				throw new BlockStoreException("token not found");
 
 			final String tokenid = token.getTokenid();
-            return store.getMultiSignAddressListByTokenidAndBlockHashHex(tokenid,
-                    token.getBlockHash());
+			return store.getMultiSignAddressListByTokenidAndBlockHashHex(tokenid, token.getBlockHash());
 		}
 	}
 
@@ -163,10 +164,10 @@ public abstract class ServiceBase {
 		}
 		switch (block.getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
-             BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_CONTRACT_EXECUTE, BLOCKTYPE_ORDER_EXECUTE,
-             BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
+				BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_CONTRACT_EXECUTE, BLOCKTYPE_ORDER_EXECUTE,
+				BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-            case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_REWARD:
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(rewardInfo.getPrevRewardHash());
 			break;
@@ -176,7 +177,7 @@ public abstract class ServiceBase {
 			if (currentToken.getToken().getPrevblockhash() != null)
 				allrequireds.add(currentToken.getToken().getPrevblockhash());
 			break;
-            default:
+		default:
 			throw new RuntimeException("No Implementation");
 		}
 
@@ -235,6 +236,24 @@ public abstract class ServiceBase {
 		}
 	}
 
+	public RewardInfo getRewardInfo(Block block) {
+		return new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+	}
+
+	public Block getExecutionPrev(Block block, BlockStoreInterface store) throws BlockStoreException {
+		return getBlock(getExecutionPrev(block), store);
+	}
+
+	public Sha256Hash getExecutionPrev(Block block) {
+		return switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE ->
+			new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
+		case BLOCKTYPE_ORDER_EXECUTE ->
+			new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
+		default -> throw new RuntimeException("Wrong block.getBlockType()");
+		};
+	}
+
 	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 		long minChainLength = Math.max(0, currChainLength - NetworkParameters.MILESTONE_CUTOFF);
@@ -243,7 +262,7 @@ public abstract class ServiceBase {
 
 	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength,
 			BlockStoreInterface store) throws BlockStoreException {
-        return store.getBlocksInMilestoneInterval(minChainLength, currChainLength);
+		return store.getBlocksInMilestoneInterval(minChainLength, currChainLength);
 
 	}
 
@@ -271,7 +290,7 @@ public abstract class ServiceBase {
 
 	public long getRewardMaxHeight() {
 		return Long.MAX_VALUE;
-    }
+	}
 
 	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, BlockStoreInterface store) throws BlockStoreException {
 
@@ -290,13 +309,12 @@ public abstract class ServiceBase {
 		return getBlock(currPrevRewardHash, store).getHeight();
 	}
 
-	public SolidityState getMinPredecessorSolidity(Block block,
-												   List<BlockWrap> allPredecessors, BlockStoreInterface store, boolean predecessorsSolid)
-			throws BlockStoreException {
+	public SolidityState getMinPredecessorSolidity(Block block, List<BlockWrap> allPredecessors,
+			BlockStoreInterface store, boolean predecessorsSolid) throws BlockStoreException {
 
-        for (BlockWrap predecessor : allPredecessors) {
+		for (BlockWrap predecessor : allPredecessors) {
 			if (predecessor.getBlockEvaluation().getSolid() == 2) {
-            } else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
+			} else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
 				SolidityState solidityState = SolidityState.getSuccessState();
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 						.solidifyBlock(predecessor.getBlock(), solidityState, true, store);
@@ -306,7 +324,7 @@ public abstract class ServiceBase {
 			} else {
 				// TODO check logger.warn("predecessor.getBlockEvaluation().getSolid() = "
 				// + predecessor.getBlockEvaluation().getSolid() + " " + block.toString());
-                // throw new RuntimeException("not implemented");
+				// throw new RuntimeException("not implemented");
 			}
 		}
 
@@ -344,12 +362,11 @@ public abstract class ServiceBase {
 			BlockStoreInterface store) throws BlockStoreException {
 		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
-            for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-                ECKey ecKey = permissionDomainname.getOutKey();
-                multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
-            }
-            return (PermissionedAddressesResponse) PermissionedAddressesResponse
-                    .create("", false, multiSignAddresses);
+			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
+				ECKey ecKey = permissionDomainname.getOutKey();
+				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
+			}
+			return (PermissionedAddressesResponse) PermissionedAddressesResponse.create("", false, multiSignAddresses);
 		} else {
 			Token token = store.getTokenByBlockHash(Sha256Hash.wrap(domainNameBlockHash));
 			final String domainName = token.getTokenname();
@@ -357,8 +374,8 @@ public abstract class ServiceBase {
 			List<MultiSignAddress> multiSignAddresses = this
 					.queryDomainnameTokenMultiSignAddresses(token.getBlockHash(), store);
 
-            return (PermissionedAddressesResponse) PermissionedAddressesResponse
-                    .create(domainName, false, multiSignAddresses);
+			return (PermissionedAddressesResponse) PermissionedAddressesResponse.create(domainName, false,
+					multiSignAddresses);
 		}
 	}
 
@@ -417,7 +434,8 @@ public abstract class ServiceBase {
 		return tx;
 	}
 
-	public long countRewardTXFeeBased(Set<Sha256Hash> candidateBlocks, BlockStoreInterface store) throws BlockStoreException
+	public long countRewardTXFeeBased(Set<Sha256Hash> candidateBlocks, BlockStoreInterface store)
+			throws BlockStoreException
 
 	{
 		long re = 0;
@@ -443,7 +461,7 @@ public abstract class ServiceBase {
 	 * to ensure that the approved blocks result in an eligible reward block.
 	 * 
 	 * @return mining reward transaction
-     */
+	 */
 	public Transaction generateVirtualMiningRewardTX1(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
@@ -453,7 +471,7 @@ public abstract class ServiceBase {
 		// Count how many blocks from miners in the reward interval are approved
 		// and build rewards
 		Queue<BlockWrap> blockQueue = new PriorityQueue<>(
-                Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
 		for (Sha256Hash bHash : candidateBlocks) {
 			blockQueue.add(getBlockWrap(bHash, blockStore));
 		}
@@ -524,7 +542,7 @@ public abstract class ServiceBase {
 		// finish payout
 		// calculation
 
-        // Build transaction outputs sorted by addresses
+		// Build transaction outputs sorted by addresses
 		Transaction tx = new Transaction(networkParameters);
 
 		// Reward the consensus block with the static reward
@@ -532,8 +550,8 @@ public abstract class ServiceBase {
 
 		// Reward twice: once the consensus block, once the normal block maker
 		// of good quantiles
-		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream()
-				.sorted(Entry.comparingByKey()).toList()) {
+		for (Entry<Address, Long> entry : finalRewardCount.entrySet().stream().sorted(Entry.comparingByKey())
+				.toList()) {
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD),
 					consensusBlockMiner);
 			tx.addOutput(Coin.SATOSHI.times(entry.getValue() * NetworkParameters.PER_BLOCK_REWARD), entry.getKey());
@@ -559,8 +577,7 @@ public abstract class ServiceBase {
 
 		long rewarded = 0;
 		for (BlockWrap rewardedBlock : currentHeightBlocks.stream()
-				.sorted(Comparator.comparingLong(b -> snapshotWeights.get(b).size()).reversed())
-				.toList()) {
+				.sorted(Comparator.comparingLong(b -> snapshotWeights.get(b).size()).reversed()).toList()) {
 			if (rewarded >= heightRewardCount)
 				break;
 
@@ -660,8 +677,7 @@ public abstract class ServiceBase {
 	}
 
 	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
-		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight)
-				.thenComparing(Block::getHash);
+		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight).thenComparing(Block::getHash);
 		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			Block block = getBlock(hash, store);
@@ -689,7 +705,8 @@ public abstract class ServiceBase {
 		return store.getOutputConfirmation(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 	}
 
-	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, BlockStoreInterface store) throws BlockStoreException {
+	public BlockEvaluation getUTXOSpender(TransactionOutPoint txout, BlockStoreInterface store)
+			throws BlockStoreException {
 		return store.getTransactionOutputSpender(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 	}
 
@@ -700,7 +717,8 @@ public abstract class ServiceBase {
 		return store.get(maxConfirmedReward.getBlockHash()).getHeight() + NetworkParameters.FORWARD_BLOCK_HORIZON;
 	}
 
-	public long getCurrentCutoffHeight(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
+	public long getCurrentCutoffHeight(TXReward maxConfirmedReward, BlockStoreInterface store)
+			throws BlockStoreException {
 		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
 		if (maxConfirmedReward == null)
 			return 0;
@@ -774,10 +792,145 @@ public abstract class ServiceBase {
 		return store.getTokenAmountMap();
 	}
 
-	private List<UTXO> getOutputs(String tokenid, BlockStoreInterface store)
-			throws UTXOProviderException {
+	private List<UTXO> getOutputs(String tokenid, BlockStoreInterface store) throws UTXOProviderException {
 		// Must be sorted with the key of
 		return store.getOpenAllOutputs(tokenid);
 	}
+
+	/*
+	 * contract execution forms chained, it will takes all the chained contract
+	 * execution until to last execution in rewards
+	 */
+	public void collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
+			Set<BlockWrap> collected, Set<BlockWrap> tobeUnconfirms, BlockStoreInterface store)
+			throws BlockStoreException {
+		BlockWrap lastContractExecution = null;
+
+		// get the last EXECUTE
+		for (BlockWrap block : blocks) {
+			if (blocktype.equals(block.getBlock().getBlockType())) {
+				if (lastContractExecution == null) {
+					lastContractExecution = block;
+				} else {
+					if (lastContractExecution.getBlock().getHeight() < block.getBlock().getHeight()) {
+						lastContractExecution = block;
+					}
+				}
+			} else {
+				collected.add(block);
+			}
+		}
+		// backward to get all chained EXECUTE until milestone
+		if (lastContractExecution != null) {
+			collected.addAll(collectReferencedChaineExecutions(lastContractExecution, store));
+			collectFollowChaineExecutions(lastContractExecution, tobeUnconfirms, store);
+		}
+
+	}
+
+	private void collectFollowChaineExecutions(BlockWrap startExecution, Set<BlockWrap> blocks,
+			BlockStoreInterface store) throws BlockStoreException {
+
+		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+		Set<Sha256Hash> blockQueueSet = new HashSet<>();
+		blockQueue.add(startExecution);
+		blockQueueSet.add(startExecution.getBlockHash());
+
+		while (!blockQueue.isEmpty()) {
+			BlockWrap block = blockQueue.poll();
+			blockQueueSet.remove(block.getBlockHash());
+
+			// no milestone blocks can be here
+			if (block.getBlockEvaluation().getMilestone() > 0) {
+				throw new VerificationException("no milestone block can be here" + block);
+			}
+			// Nothing added if already in set
+			if (checkExists(blocks, block))
+				continue;
+			// not the startExecution
+			if (!startExecution.getBlockHash().equals(block.getBlockHash())) {
+				blocks.add(block);
+			}
+			if (Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())) {
+				List<Contractresult> allRequiredBlockHashes = store
+						.getContractresultWithPrev(block.getBlock().getHash());
+				for (Contractresult req : allRequiredBlockHashes) {
+					if (!blockQueueSet.contains(req.getBlockHash())) {
+						BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
+						blockQueueSet.add(req.getBlockHash());
+						blockQueue.add(pred);
+					}
+
+				}
+			}
+			if (Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
+				List<Orderresult> allRequiredBlockHashes = store.getOrderresultWithPrev(block.getBlock().getHash());
+				for (Orderresult req : allRequiredBlockHashes) {
+					if (!blockQueueSet.contains(req.getBlockHash())) {
+						BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
+						blockQueueSet.add(req.getBlockHash());
+						blockQueue.add(pred);
+					}
+
+				}
+			}
+		}
+
+	}
+
+	public void collectExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks, Set<BlockWrap> collected,
+			Set<BlockWrap> tobeUnconfirms) throws BlockStoreException {
+		collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, collected, tobeUnconfirms,
+				store);
+		collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, collected, tobeUnconfirms,
+				store);
+
+	}
+
+	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) {
+		for (BlockWrap b : allApproved) {
+			if (b.getBlockHash().equals(newBlock.getBlockHash())) {
+				return true;
+			}
+		}
+		return false;
+	}
+	/*
+	 * return all Execution Blocks not in milestone and chained from headExecution
+	 * to the Execution in milestone or begin.
+	 */
+	public Set<BlockWrap> collectReferencedChaineExecutions(BlockWrap headExecution, BlockStoreInterface store)
+			throws BlockStoreException {
+
+		Set<BlockWrap> re = new HashSet<>();
+		boolean brokenChained = true;
+		BlockWrap startingBlock = headExecution;
+		while (startingBlock != null) {
+			re.add(startingBlock);
+			startingBlock = getBlockWrap(getExecutionPrev(startingBlock.getBlock()), store);
+
+			if (startingBlock == null) {
+				brokenChained = false;
+
+			}
+			if (startingBlock != null && Sha256Hash.ZERO_HASH.equals(startingBlock.getBlock().getHash())) {
+				brokenChained = false;
+				// finish at origin or
+				startingBlock = null;
+			}
+			if (startingBlock != null && startingBlock.getBlockEvaluation().getMilestone() > 0) {
+				brokenChained = false;
+				// finish at origin or
+				startingBlock = null;
+			}
+		}
+		if (brokenChained) {
+			return new HashSet<>();
+		} else {
+			return re;
+		}
+	}
+
 
 }

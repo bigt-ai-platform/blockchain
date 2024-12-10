@@ -31,6 +31,7 @@ import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
@@ -57,8 +58,10 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
-		assertEquals(rollingBlock.getRewardInfo().getDifficultyTargetAsInteger(),
-				networkParameters.getGenesisBlock().getRewardInfo().getDifficultyTargetAsInteger());
+		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
+		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger(),
+				 servicebase.getRewardInfo(networkParameters.getGenesisBlock( )).getDifficultyTargetAsInteger());
 	}
 
 	// Test difficulty transition
@@ -82,8 +85,10 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
-		assertEquals(rollingBlock.getRewardInfo().getDifficultyTargetAsInteger().multiply(BigInteger.valueOf(4)),
-				networkParameters.getGenesisBlock().getRewardInfo().getDifficultyTargetAsInteger());
+		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
+		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().multiply(BigInteger.valueOf(4)),
+				servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger());
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way slower -> maximum difficulty change to lower difficulty
@@ -100,8 +105,8 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
 				currentTime, store);
 		blockGraph.updateChain();
-		assertEquals(rollingBlock.getRewardInfo().getDifficultyTargetAsInteger().divide(BigInteger.valueOf(4)),
-				highDifficultyBlock.getRewardInfo().getDifficultyTargetAsInteger());
+		assertEquals(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().divide(BigInteger.valueOf(4)),
+				servicebase.getRewardInfo(highDifficultyBlock).getDifficultyTargetAsInteger());
 	}
 
 	// @Test
@@ -135,8 +140,10 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
-		assertTrue(rollingBlock.getRewardInfo().getDifficultyTargetAsInteger()
-				.compareTo(networkParameters.getGenesisBlock().getRewardInfo().getDifficultyTargetAsInteger()) < 0);
+		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService);
+		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
+				.compareTo(servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger()) < 0);
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
@@ -151,8 +158,8 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
-		assertTrue(rollingBlock.getRewardInfo().getDifficultyTargetAsInteger()
-				.compareTo(highDifficultyBlock.getRewardInfo().getDifficultyTargetAsInteger()) > 0);
+		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
+				.compareTo(servicebase.getRewardInfo(highDifficultyBlock).getDifficultyTargetAsInteger()) > 0);
 	}
 
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
