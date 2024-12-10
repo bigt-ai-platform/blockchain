@@ -558,10 +558,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// Resolve conflicting block combinations:
 		// Disallow conflicts with milestone blocks,
 		// i.e. remove those whose input is already spent by such blocks
-		resolveMilestoneConflicts(blocksToAdd, store);
+		removeMilestoneConflicts(blocksToAdd, store);
 
 		// Then resolve conflicts between non-milestone + new candidates
-		resolveTemporaryConflicts(blocksToAdd, cutoffHeight, store);
+		removeTemporaryConflicts(blocksToAdd, cutoffHeight, store);
 
 		// Remove blocks and their approvers that have at least one input
 		// with its corresponding output no longer confirmed
@@ -642,7 +642,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				});
 	}
 
-	private void resolveMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
+	private void removeMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
 		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
@@ -667,7 +667,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Resolves conflicts between non-milestone blocks and candidates
 	 *
 	 */
-	private void resolveTemporaryConflicts(Set<BlockWrap> blocksToAdd, long cutoffHeight, BlockStoreInterface store)
+	private void removeTemporaryConflicts(Set<BlockWrap> blocksToAdd, long cutoffHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		HashSet<ConflictCandidate> conflictingOutPoints = new HashSet<>();
 		HashSet<BlockWrap> conflictingConfirmedBlocks = new HashSet<>();

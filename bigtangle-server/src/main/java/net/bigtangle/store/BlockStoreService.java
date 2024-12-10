@@ -383,7 +383,7 @@ public class BlockStoreService {
 				cacheBlockService);
 		if (serviceBaseReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
-			serviceBaseReward.checkRewardChainConfirmReferenced(block, store);
+			serviceBaseReward.verifyRewardChainConfirmReferenced(block, store);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.

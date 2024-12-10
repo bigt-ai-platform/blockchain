@@ -36,7 +36,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseReward.class);
 
-	public void checkRewardChainConfirmReferenced(Block newMilestoneBlock, BlockStoreInterface store)
+	public void verifyRewardChainConfirmReferenced(Block newMilestoneBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
@@ -52,7 +52,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		solidifyBlocks(currRewardInfo, store);
 
 		// Ensure the new difficulty and tx is set correctly
-		checkGeneratedReward(newMilestoneBlock, store);
+		checkGeneratedReward(newMilestoneBlock,referrencedBlocks, store);
 
 		// Sanity check: No reward blocks are approved
 		checkContainsNoRewardBlocks(newMilestoneBlock, store);
@@ -82,7 +82,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// findFirstSpentInput(allApprovedNewBlocks);
 
 		if (anySpentInputs) {
-			  solidityState = SolidityState.getFailState();
+			solidityState = SolidityState.getFailState();
 			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
 		}
 		// If any conflicts exist between the current set of
@@ -108,13 +108,13 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	}
 
-	private void checkGeneratedReward(Block newMilestoneBlock, BlockStoreInterface store) throws BlockStoreException {
+	private void checkGeneratedReward(Block newMilestoneBlock,Set<Sha256Hash> referrencedBlocks, BlockStoreInterface store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 
-		RewardBuilderResult result = calcRewardBuilderResult(newMilestoneBlock.getPrevBlockHash(),
+		RewardBuilderResult result = getRewardBuilderResult(newMilestoneBlock.getPrevBlockHash(),
 				newMilestoneBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
-				newMilestoneBlock.getTimeSeconds(), enableOrderMatchExecutionChain(newMilestoneBlock), store);
+				newMilestoneBlock.getTimeSeconds(), enableOrderMatchExecutionChain(newMilestoneBlock),referrencedBlocks, store);
 		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
 			throw new VerificationException("Incorrect difficulty target");
 		}
@@ -182,19 +182,15 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	/**
 	 * Computes RewardBuilderResult here for new reward blocks.
 	 * 
-	 * @param prevTrunk      a predecessor block in the db
-	 * @param prevBranch     a predecessor block in the db
-	 * @param prevRewardHash the predecessor reward
-	 * @return RewardBuilderResult
 	 */
-	public RewardBuilderResult calcRewardBuilderResult(Sha256Hash prevTrunk, Sha256Hash prevBranch,
-			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain, BlockStoreInterface store)
+	public RewardBuilderResult getRewardBuilderResult(Sha256Hash prevTrunk, Sha256Hash prevBranch,
+			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain,Set<Sha256Hash> referenced, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		BlockWrap prevTrunkBlock = getBlockWrap(prevTrunk, store);
 		BlockWrap prevBranchBlock = getBlockWrap(prevBranch, store);
 
-		return calcRewardInfo(ordermatchexecutionChain, prevTrunkBlock, prevBranchBlock, prevRewardHash, currentTime,
+		return calcRewardInfo(ordermatchexecutionChain, prevTrunkBlock, prevBranchBlock, prevRewardHash, currentTime,referenced,
 				store);
 
 	}
@@ -205,33 +201,41 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// Read previous reward block's data
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 
-		// Build transaction for block
-		Transaction tx = new Transaction(networkParameters);
-
-		Set<BlockWrap> blocks = new HashSet<>();
 		long cutoffheight = getRewardCutoffHeight(prevRewardHash, store);
-
 		List<Block.Type> ordertypes = getListedBlockOfType(contractExecute);
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
+
+		Set<BlockWrap> blocks = new HashSet<>();
 		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
 				store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true,
 				store);
 
-		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
-				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
-
 		Set<BlockWrap> collected = new HashSet<>();
 		Set<BlockWrap> unconfirms = new HashSet<>();
 		collectExecutionChained(store, blocks, collected, unconfirms);
-		for(BlockWrap b : unconfirms) {
+		for (BlockWrap b : unconfirms) {
 			logger.debug(b.toString());
 		}
+
+		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
+				serviceBase.getHashSet(collected), store);
+	}
+
+	public RewardBuilderResult calcRewardInfo(boolean contractExecute, BlockWrap prevTrunk, BlockWrap prevBranch,
+			Sha256Hash prevRewardHash, long currentTime, Set<Sha256Hash> referenced, BlockStoreInterface store)
+			throws BlockStoreException {
+
+		// Read previous reward block's data
+		long prevChainLength = store.getRewardChainLength(prevRewardHash); 
+		// Build transaction for block
+		Transaction tx = new Transaction(networkParameters);  
+		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 		// Build the type-specific tx data
-		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, serviceBase.getHashSet(collected),
-				prevChainLength + 1);
+		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, referenced, prevChainLength + 1);
 		tx.setData(rewardInfo.toByteArray());
 		tx.setMemo(new MemoInfo("Reward"));
 		return new RewardBuilderResult(tx, difficultyReward);
@@ -315,7 +319,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// Walk in ascending chronological order.
 		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
 			cursor = it.next();
-			checkRewardChainConfirmReferenced(cursor, store);
+			verifyRewardChainConfirmReferenced(cursor, store);
 			// if we build a chain longer than head, do a commit, even it may be
 			// failed after this.
 			if (getRewardInfo(cursor).getChainlength() > getRewardInfo(head).getChainlength()) {
@@ -328,8 +332,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	private void unconfirmBlocks(BlockStoreInterface store, long milestoneNumber, List<Sha256Hash> blocksInMilestoneInterval)
-			throws BlockStoreException {
+	private void unconfirmBlocks(BlockStoreInterface store, long milestoneNumber,
+			List<Sha256Hash> blocksInMilestoneInterval) throws BlockStoreException {
 		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 		for (Sha256Hash b : blocksInMilestoneInterval) {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
