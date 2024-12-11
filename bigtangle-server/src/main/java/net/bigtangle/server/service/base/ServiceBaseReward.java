@@ -212,7 +212,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true,
 				store);
-
+		serviceBase.removeMilestoneConflicts(blocks,store);
+		
 		Set<BlockWrap> collected = new HashSet<>();
 		Set<BlockWrap> unconfirms = new HashSet<>();
 		collectExecutionChained(store, blocks, collected, unconfirms);

@@ -331,7 +331,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	
 	/**
 	 * Recursively adds the specified block and its approved blocks to the
 	 * collection if the blocks are not in the current milestone and not in the
@@ -447,6 +446,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					return true;
 			}
 		}
+		// the referenced check
+		for (Sha256Hash ref : connectedContracExecute.getReferencedBlocks()) {
+			for (ConflictCandidate r : getBlockWrap(ref, store).toConflictCandidates()) {
+				if (hasSpentDependencies(r, checkNoConfirm, store))
+					return true;
+			}
+		}
 		return false;
 	}
 
@@ -462,6 +468,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				return true;
 			else if (checkNoConfirm) {
 				if (!s.isConfirmed())
+					return true;
+			}
+		}
+		// the referenced check
+		for (Sha256Hash ref : connectedContracExecute.getReferencedBlocks()) {
+			for (ConflictCandidate r : getBlockWrap(ref, store).toConflictCandidates()) {
+				if (hasSpentDependencies(r, checkNoConfirm, store))
 					return true;
 			}
 		}
@@ -642,7 +655,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				});
 	}
 
-	private void removeMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
+	protected void removeMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Find all conflict candidates in blocks to add
 		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
