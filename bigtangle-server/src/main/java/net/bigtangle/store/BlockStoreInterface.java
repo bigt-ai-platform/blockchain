@@ -112,8 +112,7 @@ public interface  BlockStoreInterface {
 	/**
 	 * Adds a {@link net.bigtangle.core.UTXO} to the list of unspent
 	 * TransactionOutputs
-	 */
-	void addUnspentTransactionOutput(UTXO out) throws BlockStoreException;
+	 */ 
 
 	void addUnspentTransactionOutput(List<UTXO> utxos) throws BlockStoreException;
 

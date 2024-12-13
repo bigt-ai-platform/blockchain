@@ -148,4 +148,15 @@ public class CacheBlockService {
 	public synchronized void evictBlockEvaluation() {
 	}
 
+	@Cacheable(value = "utxos", key = "#utxo.hashCode")
+	public   byte[] getTransactionOutput(UTXO utxo, BlockStoreInterface store)
+			throws BlockStoreException, JsonProcessingException { 
+		UTXO u= store.getTransactionOutput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex()); 
+		return u==null?null:Json.jsonmapper().writeValueAsBytes(u) ;
+	}
+	@CacheEvict(value = "utxos", key = "#utxo.hashCode")
+	public void evictTransactionOutput(UTXO utxo, BlockStoreInterface store) throws BlockStoreException {
+	 
+	}
+
 }

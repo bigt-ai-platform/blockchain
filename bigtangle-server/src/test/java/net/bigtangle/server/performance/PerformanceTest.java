@@ -48,6 +48,7 @@ public class PerformanceTest extends ContractTest {
 
 	@Test // the switch to longest chain
 	public void testReorgMiningReward() throws Exception {
+		createUserkey();
 		List<Block> a2 = new ArrayList<Block>();
 		TokensumsMap c = checkSum(null);
 		// second chain
@@ -59,10 +60,10 @@ public class PerformanceTest extends ContractTest {
 		}
 	}
 
-	//@Test
-	public void testCreateUserkey() throws Exception {
-		createUserkey();
-	}
+ 
+ 
+		
+ 
 
 	public void createReward(List<Block> blocksAddedAll) throws Exception {
 

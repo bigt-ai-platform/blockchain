@@ -82,7 +82,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// findFirstSpentInput(allApprovedNewBlocks);
 
 		if (anySpentInputs) {
-			solidityState = SolidityState.getFailState();
+		 	solidityState = SolidityState.getFailState();
 			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
 		}
 		// If any conflicts exist between the current set of
@@ -212,10 +212,15 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true,
 				store);
-		serviceBase.removeMilestoneConflicts(blocks,store);
+		Comparator<BlockWrap> comparator = Comparator.comparingLong((BlockWrap b) -> b.getBlock().getHeight())
+				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
+		TreeSet<BlockWrap> storedBlockHashes = new TreeSet<>(comparator);
+		storedBlockHashes.addAll(blocks);
+	 	serviceBase.resolveAllConflicts(storedBlockHashes, cutoffheight, store);
 		
 		Set<BlockWrap> collected = new HashSet<>();
 		Set<BlockWrap> unconfirms = new HashSet<>();
+		//chained add check conflict inside
 		collectExecutionChained(store, blocks, collected, unconfirms);
 		for (BlockWrap b : unconfirms) {
 			logger.debug(b.toString());

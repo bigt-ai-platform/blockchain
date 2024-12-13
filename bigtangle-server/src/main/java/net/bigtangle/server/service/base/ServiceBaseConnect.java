@@ -191,8 +191,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			}
 			blockStore.addUnspentTransactionOutput(utxos);
-			// calculate balance
-			// TODO blockStore.calculateAccount(utxos);
+			for( UTXO u: utxos ) cacheBlockService.evictTransactionOutput(u, blockStore);
 		}
 	}
 

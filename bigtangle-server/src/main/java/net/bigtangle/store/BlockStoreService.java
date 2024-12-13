@@ -515,17 +515,13 @@ public class BlockStoreService {
 
 			// Execute must be chained for confirm
 			// Finally add the resolved new blocks to the confirmed set
-			Set<BlockWrap>	 tobeUnconfirms= new HashSet<>() ;
-			Set<BlockWrap> collectExecutionChained = new HashSet<>() ;
-			 serviceBase.collectExecutionChained(blockStore,  blocksToAdd,collectExecutionChained, tobeUnconfirms) ;
-		
-				serviceBase.unconfirmBlocksSorted(blockStore, -1,
-						tobeUnconfirms,
-						new HashSet<>());
-				
-			serviceBase.confirmBlocksSorted(blockStore, -1,
-					collectExecutionChained,
-					new HashSet<>());
+			Set<BlockWrap> tobeUnconfirms = new HashSet<>();
+			Set<BlockWrap> collectExecutionChained = new HashSet<>();
+			serviceBase.collectExecutionChained(blockStore, blocksToAdd, collectExecutionChained, tobeUnconfirms);
+
+			serviceBase.unconfirmBlocksSorted(blockStore, -1, tobeUnconfirms, new HashSet<>());
+
+			serviceBase.confirmBlocksSorted(blockStore, -1, collectExecutionChained, new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

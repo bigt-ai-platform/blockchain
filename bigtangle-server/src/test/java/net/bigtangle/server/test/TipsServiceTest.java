@@ -297,7 +297,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey, null);
-		Block confBlock = makeRewardBlock();
+		Block confBlock = makeRewardBlock(block1);
 
 		// Generate two subsequent issuances
 		TokenInfo tokenInfo2 = new TokenInfo();

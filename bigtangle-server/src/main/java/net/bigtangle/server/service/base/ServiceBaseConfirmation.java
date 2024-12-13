@@ -386,6 +386,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/*
 	 * return true, if the inputs/prev is spent by other or not confirmed
+	 * checkNoConfirm is for performance and check spent and unconfirm together or check only spent for chain
 	 */
 	public boolean hasSpentDependencies(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -423,6 +424,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	private boolean checkSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, SpentBlockData s) {
+		boolean re = s.isSpent() && !s.getSpenderBlockHash().equals(c.getBlock().getBlockHash());
+
+		if (checkNoConfirm)
+			re = re || !s.isConfirmed();
+		return re;
+	}
+
+	private boolean checkSpentOrNoConfirm(ConflictCandidate c, boolean checkNoConfirm, UTXO s) {
 		boolean re = s.isSpent() && !s.getSpenderBlockHash().equals(c.getBlock().getBlockHash());
 
 		if (checkNoConfirm)
@@ -945,12 +954,22 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public boolean checkUTXOSpent(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
 		TransactionOutPoint txout = c.getConflictPoint().getConnectedOutpoint();
-
-		SpentBlockData a = store.getTransactionSpentBlock(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+		UTXO u = new UTXO();
+		u.setBlockHash(txout.getBlockHash());
+		u.setHash(txout.getTxHash());
+		u.setIndex(txout.getIndex());
+		UTXO a = null;
+		try {
+			byte[] utxobyte = cacheBlockService.getTransactionOutput(u, store);
+			if (utxobyte != null)
+				a = Json.jsonmapper().readValue(utxobyte, UTXO.class);
+		} catch (Exception e) {
+			logger.debug(" ", e); 
+		}
 		// the TransactionOutPoint does not exist, try do the calculation
 		if (a == null) {
 			solidifyWaiting(getBlock(txout.getBlockHash(), store), store);
-			a = store.getTransactionSpentBlock(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
+			a = store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex());
 		}
 		// the TransactionOutPoint does not exist
 		if (a == null)
