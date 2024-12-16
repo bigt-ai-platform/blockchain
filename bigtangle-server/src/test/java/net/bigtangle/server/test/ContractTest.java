@@ -7,6 +7,8 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.Wallet;
+
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +29,8 @@ public class ContractTest extends AbstractIntegrationTest {
 	public static String yuanTokenPub = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a";
 	public static String yuanTokenPriv = "8db6bd17fa4a827619e165bfd4b0f551705ef2d549a799e7f07115e5c3abad55";
 
-	//public static String lotteryTokenPub = "039aee4f0291991dd71ea0dd3c0e91ef680e769eca0326f1e36b74107aec4ac1f4";
+	// public static String lotteryTokenPub =
+	// "039aee4f0291991dd71ea0dd3c0e91ef680e769eca0326f1e36b74107aec4ac1f4";
 	public static String lotteryTokenPriv = "6cecae9a820844dac41521ddad4f1b5068fdcac59ce28a6dd1ed01a12f782362";
 	public ECKey contractKey = ECKey.fromPrivate(Utils.HEX.decode(lotteryTokenPriv));
 	public int usernumber = 10;
@@ -54,8 +57,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 	}
 
-	private void executionAndCheck()
-			throws Exception {
+	private void executionAndCheck() throws Exception {
 
 		Block resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
 
@@ -68,7 +70,7 @@ public class ContractTest extends AbstractIntegrationTest {
 							store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 			blockSaveService.saveBlock(resultBlock, store);
 			makeRewardBlock(resultBlock);
-            assertNotNull(resultBlock);
+			assertNotNull(resultBlock);
 			TokensumsMap c = checkSum(null);
 			if (!check.getOutputTx().getOutputs().isEmpty()) {
 				Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
@@ -77,9 +79,9 @@ public class ContractTest extends AbstractIntegrationTest {
 				Map<String, BigInteger> endMap = new HashMap<>();
 				check(ulist, endMap);
 				// List<UTXO> utxos = getBalance(false, ulist);
-                assertNotNull(endMap.get(winnerAddress.toString()));
+				assertNotNull(endMap.get(winnerAddress.toString()));
 				c = checkSum(c);
-                assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+				assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 			}
 		}
 	}
@@ -94,7 +96,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<UTXO> ylist = utxos.stream().filter(u -> u.getTokenId().equals(yuanTokenPub)).toList();
 		for (UTXO u : ylist) {
 			// log.debug(u.toString());
-            map.merge(u.getAddress(), u.getValue().getValue(), BigInteger::add);
+			map.merge(u.getAddress(), u.getValue().getValue(), BigInteger::add);
 
 		}
 
@@ -126,11 +128,11 @@ public class ContractTest extends AbstractIntegrationTest {
 			conflictBlock = contractExecutionService
 					.createContractExecution(cacheBlockPrototypeService.getBlockPrototype(store), contracttoken, store);
 			TokensumsMap c = checkSum(null);
-			if (resultBlock != null &&  conflictBlock!=null) {
+			if (resultBlock != null && conflictBlock != null) {
 
 				blockSaveService.saveBlock(resultBlock, store);
 				makeRewardBlock(resultBlock);
-      
+
 				blockSaveService.saveBlock(conflictBlock, store);
 				ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService);
 				Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
@@ -268,15 +270,15 @@ public class ContractTest extends AbstractIntegrationTest {
 					check(ulist, endMap);
 					c = checkSum(c);
 					// List<UTXO> utxos = getBalance(false, ulist);
-                    assertNotNull(endMap.get(winnerAddress.toString()));
+					assertNotNull(endMap.get(winnerAddress.toString()));
 					log.debug("endMap.get(winnerAddress.toString())=" + winnerAddress + " = "
 							+ endMap.get(winnerAddress.toString()));
-                    assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+					assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 
 				}
 			}
-			if(count ==ulist.size()-4) {
-				checkBlock=resultBlock;
+			if (count == ulist.size() - 4) {
+				checkBlock = resultBlock;
 			}
 		}
 		TokensumsMap c = checkSum(null);
@@ -295,8 +297,8 @@ public class ContractTest extends AbstractIntegrationTest {
 			Map<String, BigInteger> endMap = new HashMap<>();
 			check(ulist, endMap);
 			// List<UTXO> utxos = getBalance(false, ulist);
-            assertNotNull(endMap.get(winnerAddress.toString()));
-            assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+			assertNotNull(endMap.get(winnerAddress.toString()));
+			assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 
 		}
 		c = checkSum(c);
@@ -336,7 +338,7 @@ public class ContractTest extends AbstractIntegrationTest {
 						result.getReferencedBlocks());
 				blockSaveService.saveBlock(resultBlock, store);
 				a1.add(resultBlock);
-                assertNotNull(resultBlock);
+				assertNotNull(resultBlock);
 				if (confirm) {
 					serviceContract.confirmContractExecute(resultBlock, -1, confirm, store);
 				}
@@ -348,7 +350,7 @@ public class ContractTest extends AbstractIntegrationTest {
 					// check one of user get the winnerAmount
 					Map<String, BigInteger> endMap = new HashMap<>();
 					check(ulist, endMap);
-                    assertNotNull(endMap.get(winnerAddress.toString()));
+					assertNotNull(endMap.get(winnerAddress.toString()));
 
 					// assertTrue(endMap.get(winnerAddress.toString()).equals(new
 					// BigInteger(winnerAmount)));
@@ -424,12 +426,30 @@ public class ContractTest extends AbstractIntegrationTest {
 		prepare("122000", blocks);
 		for (ECKey key : ulist) {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
-			Block b = w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
 
-			contractExecutionService.createContractExecution(store);
+			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
+
+			Block b2 = contractExecutionService
+					.createContractExecution(store.getTokenTypeList(TokenType.contract.ordinal()).get(0), store);
+			blockSaveService.saveBlock(b2, store);
 			mcmcServiceUpdate();
-			makeRewardBlock(blocks);
 
+			boolean hit2 = false;
+			for (int i = 0; i < 10; i++) {
+				Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
+				log.debug(tips.getLeft().toString());
+				log.debug(tips.getRight().toString());
+				hit2 |= tips.getLeft().getBlockHash().equals(b2.getHash())
+						|| tips.getRight().getBlockHash().equals(b2.getHash());
+
+				if (hit2)
+					break;
+			}
+			assertTrue(hit2);
+
+			makeRewardBlock(blocks);
+			 
+			createDAG("testPay");
 		}
 	}
 
@@ -456,7 +476,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				confirmDo(s.getBlockWrap(resultBlock.getHash(), store), new HashSet<>(), store);
 
 				c = checkSum(c);
-                assertNotNull(resultBlock);
+				assertNotNull(resultBlock);
 
 				if (!check.getOutputTx().getOutputs().isEmpty() && !check.getReferencedBlocks().isEmpty()) {
 					Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
@@ -465,8 +485,8 @@ public class ContractTest extends AbstractIntegrationTest {
 					Map<String, BigInteger> endMap = new HashMap<>();
 					check(ulist, endMap);
 					// List<UTXO> utxos = getBalance(false, ulist);
-                    assertNotNull(endMap.get(winnerAddress.toString()));
-                    assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+					assertNotNull(endMap.get(winnerAddress.toString()));
+					assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 					c = checkSum(c);
 					// unconfirm an execution will not lead to unconfirm execution result
 					unconfirmDo(resultBlock.getHash(), new HashSet<>(), store);
@@ -495,7 +515,7 @@ public class ContractTest extends AbstractIntegrationTest {
 					store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 			blockSaveService.saveBlock(resultBlock, store);
 			makeRewardBlock(resultBlock);
-            assertNotNull(resultBlock);
+			assertNotNull(resultBlock);
 			if (!check.getOutputTx().getOutputs().isEmpty()) {
 				Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey()
 						.getToAddress(networkParameters);
@@ -505,16 +525,16 @@ public class ContractTest extends AbstractIntegrationTest {
 				Map<String, BigInteger> endMap = new HashMap<>();
 				check(ulist, endMap);
 				// List<UTXO> utxos = getBalance(false, ulist);
-                assertNotNull(endMap.get(winnerAddress.toString()));
+				assertNotNull(endMap.get(winnerAddress.toString()));
 
-                assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+				assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 
 				// Unconfirm
 				unconfirmDo(resultBlock.getHash(), new HashSet<>(), store);
 				// Winner Should be unconfirmed now
 				endMap = new HashMap<>();
 				check(ulist, endMap);
-                assertNull(endMap.get(winnerAddress.toString()));
+				assertNull(endMap.get(winnerAddress.toString()));
 			}
 		}
 		checkSum(null);
@@ -534,16 +554,16 @@ public class ContractTest extends AbstractIntegrationTest {
 		makeRewardBlock(resultBlock);
 		ContractExecutionResult result = new ContractExecutionResult()
 				.parse(resultBlock.getTransactions().get(0).getData());
-        assertEquals(1, result.getToBeSpent().size());
-        assertEquals(0, result.getCancelRecords().size());
+		assertEquals(1, result.getToBeSpent().size());
+		assertEquals(0, result.getCancelRecords().size());
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		makeContractEventCancel(event, ulist.get(0), new ArrayList<>(), predecessor);
 
 		resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
 		blockSaveService.saveBlock(resultBlock, store);
 		result = new ContractExecutionResult().parse(resultBlock.getTransactions().get(0).getData());
-        assertEquals(0, result.getToBeSpent().size());
-        assertEquals(1, result.getCancelRecords().size());
+		assertEquals(0, result.getToBeSpent().size());
+		assertEquals(1, result.getCancelRecords().size());
 		checkSum(null);
 	}
 

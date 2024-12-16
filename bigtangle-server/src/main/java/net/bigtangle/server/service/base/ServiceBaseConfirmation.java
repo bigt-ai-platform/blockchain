@@ -93,7 +93,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			blocks.remove(block);
 
 			// Queue all of its approver blocks if not already queued.
-			for (Sha256Hash req : store.getSolidApproverBlockHashes(block.getBlockHash())) {
+			for (Sha256Hash req : store.getApproverBlockHashes(block.getBlockHash())) {
 				if (!blockQueueSet.contains(req)) {
 					BlockWrap pred = getBlockWrap(req, store);
 					blockQueueSet.add(req);
@@ -128,7 +128,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			blocks.add(block);
 
 			// Queue all of its confirmed approver blocks if not already queued.
-			for (Sha256Hash req : store.getSolidApproverBlockHashes(block.getBlockHash())) {
+			for (Sha256Hash req : store.getApproverBlockHashes(block.getBlockHash())) {
 				if (!blockQueueSet.contains(req)) {
 					BlockWrap pred = getBlockWrap(req, store);
 					blockQueueSet.add(req);
@@ -386,7 +386,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/*
 	 * return true, if the inputs/prev is spent by other or not confirmed
-	 * checkNoConfirm is for performance and check spent and unconfirm together or check only spent for chain
+	 * checkNoConfirm is for performance and check spent and unconfirm together or
+	 * check only spent for chain
 	 */
 	public boolean hasSpentDependencies(ConflictCandidate c, boolean checkNoConfirm, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -445,14 +446,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		List<Contractresult> allWithPrev = store.getContractresultWithPrev(connectedContracExecute.getPrevblockhash());
 		for (Contractresult s : allWithPrev) {
-			if (s.getMilestone() > 0 && !s.getBlockHash().equals(c.getBlock().getBlockHash())) {
-				return true;
-			}
-			if (s.isSpent() && !s.getBlockHash().equals(c.getBlock().getBlockHash()))
-				return true;
-			else if (checkNoConfirm) {
-				if (!s.isConfirmed())
+			if (!s.getBlockHash().equals(c.getBlock().getBlockHash())) {
+				if (s.getMilestone() > 0) {
 					return true;
+				}
+				if (s.isSpent())
+					return true;
+				 
 			}
 		}
 		// the referenced check
@@ -962,9 +962,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		try {
 			byte[] utxobyte = cacheBlockService.getTransactionOutput(u, store);
 			if (utxobyte != null)
-				a = Json.jsonmapper().readValue(utxobyte, UTXO.class);
+				a = jsonmapper.readValue(utxobyte, UTXO.class);
 		} catch (Exception e) {
-			logger.debug(" ", e); 
+			logger.debug(" ", e);
 		}
 		// the TransactionOutPoint does not exist, try do the calculation
 		if (a == null) {
@@ -1118,7 +1118,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				@SuppressWarnings("unchecked")
 				List<HashMap<String, Object>>
 
-				multiSignBies = Json.jsonmapper().readValue(tx.getDataSignature(), List.class);
+				multiSignBies =jsonmapper.readValue(tx.getDataSignature(), List.class);
 
 				Map<String, Object> multiSignBy = multiSignBies.get(0);
 				byte[] pubKey = Utils.HEX.decode((String) multiSignBy.get("publickey"));

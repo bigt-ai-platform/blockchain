@@ -826,7 +826,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		String jsonStr = new String(tx.getDataSignature());
 		MultiSignByRequest txSignatures;
 		try {
-			txSignatures = Json.jsonmapper().readValue(jsonStr, MultiSignByRequest.class);
+			txSignatures = jsonmapper.readValue(jsonStr, MultiSignByRequest.class);
 		} catch (IOException e) {
 			if (throwExceptions)
 				throw new MalformedTransactionDataException();
@@ -1577,7 +1577,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// Get signatures from transaction
 		String jsonStr = new String(tx.getDataSignature());
 		try {
-			Json.jsonmapper().readValue(jsonStr, MultiSignByRequest.class);
+			jsonmapper.readValue(jsonStr, MultiSignByRequest.class);
 		} catch (IOException e) {
 			if (throwExceptions)
 				throw new MalformedTransactionDataException();

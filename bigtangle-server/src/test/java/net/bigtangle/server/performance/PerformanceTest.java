@@ -46,8 +46,8 @@ import net.bigtangle.wallet.Wallet;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class PerformanceTest extends ContractTest {
 
-	@Test // the switch to longest chain
-	public void testReorgMiningReward() throws Exception {
+	@Test  
+	public void testReward() throws Exception {
 		createUserkey();
 		List<Block> a2 = new ArrayList<Block>();
 		TokensumsMap c = checkSum(null);

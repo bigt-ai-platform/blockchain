@@ -52,7 +52,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		solidifyBlocks(currRewardInfo, store);
 
 		// Ensure the new difficulty and tx is set correctly
-		checkGeneratedReward(newMilestoneBlock,referrencedBlocks, store);
+		checkGeneratedReward(newMilestoneBlock, referrencedBlocks, store);
 
 		// Sanity check: No reward blocks are approved
 		checkContainsNoRewardBlocks(newMilestoneBlock, store);
@@ -82,7 +82,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// findFirstSpentInput(allApprovedNewBlocks);
 
 		if (anySpentInputs) {
-		 	solidityState = SolidityState.getFailState();
+			solidityState = SolidityState.getFailState();
 			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
 		}
 		// If any conflicts exist between the current set of
@@ -108,13 +108,15 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 
 	}
 
-	private void checkGeneratedReward(Block newMilestoneBlock,Set<Sha256Hash> referrencedBlocks, BlockStoreInterface store) throws BlockStoreException {
+	private void checkGeneratedReward(Block newMilestoneBlock, Set<Sha256Hash> referrencedBlocks,
+			BlockStoreInterface store) throws BlockStoreException {
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 
 		RewardBuilderResult result = getRewardBuilderResult(newMilestoneBlock.getPrevBlockHash(),
 				newMilestoneBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
-				newMilestoneBlock.getTimeSeconds(), enableOrderMatchExecutionChain(newMilestoneBlock),referrencedBlocks, store);
+				newMilestoneBlock.getTimeSeconds(), enableOrderMatchExecutionChain(newMilestoneBlock),
+				referrencedBlocks, store);
 		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
 			throw new VerificationException("Incorrect difficulty target");
 		}
@@ -184,14 +186,14 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 	 * 
 	 */
 	public RewardBuilderResult getRewardBuilderResult(Sha256Hash prevTrunk, Sha256Hash prevBranch,
-			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain,Set<Sha256Hash> referenced, BlockStoreInterface store)
-			throws BlockStoreException {
+			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain, Set<Sha256Hash> referenced,
+			BlockStoreInterface store) throws BlockStoreException {
 
 		BlockWrap prevTrunkBlock = getBlockWrap(prevTrunk, store);
 		BlockWrap prevBranchBlock = getBlockWrap(prevBranch, store);
 
-		return calcRewardInfo(ordermatchexecutionChain, prevTrunkBlock, prevBranchBlock, prevRewardHash, currentTime,referenced,
-				store);
+		return calcRewardInfo(ordermatchexecutionChain, prevTrunkBlock, prevBranchBlock, prevRewardHash, currentTime,
+				referenced, store);
 
 	}
 
@@ -216,11 +218,11 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
 		TreeSet<BlockWrap> storedBlockHashes = new TreeSet<>(comparator);
 		storedBlockHashes.addAll(blocks);
-	 	serviceBase.resolveAllConflicts(storedBlockHashes, cutoffheight, store);
-		
+		serviceBase.removeMilestoneConflicts(storedBlockHashes, store);
+
 		Set<BlockWrap> collected = new HashSet<>();
 		Set<BlockWrap> unconfirms = new HashSet<>();
-		//chained add check conflict inside
+		// chained add check conflict inside
 		collectExecutionChained(store, blocks, collected, unconfirms);
 		for (BlockWrap b : unconfirms) {
 			logger.debug(b.toString());
@@ -235,9 +237,9 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 			throws BlockStoreException {
 
 		// Read previous reward block's data
-		long prevChainLength = store.getRewardChainLength(prevRewardHash); 
+		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 		// Build transaction for block
-		Transaction tx = new Transaction(networkParameters);  
+		Transaction tx = new Transaction(networkParameters);
 		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
 				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 		// Build the type-specific tx data

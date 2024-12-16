@@ -65,7 +65,7 @@ import net.bigtangle.server.data.Rating;
  * <p>
  * </p>
  */
-public interface  BlockStoreInterface {
+public interface BlockStoreInterface {
 
 	/**
 	 * Saves the given block header+extra data. The key isn't specified explicitly
@@ -112,7 +112,7 @@ public interface  BlockStoreInterface {
 	/**
 	 * Adds a {@link net.bigtangle.core.UTXO} to the list of unspent
 	 * TransactionOutputs
-	 */ 
+	 */
 
 	void addUnspentTransactionOutput(List<UTXO> utxos) throws BlockStoreException;
 
@@ -133,176 +133,178 @@ public interface  BlockStoreInterface {
 	 * in any given thread should be ignored and treated as one call.
 	 * </p>
 	 */
-    void beginDatabaseBatchWrite() throws BlockStoreException;
+	void beginDatabaseBatchWrite() throws BlockStoreException;
 
-	 void commitDatabaseBatchWrite() throws BlockStoreException;
+	void commitDatabaseBatchWrite() throws BlockStoreException;
 
-	 void abortDatabaseBatchWrite() throws BlockStoreException;
+	void abortDatabaseBatchWrite() throws BlockStoreException;
 
-	 void defaultDatabaseBatchWrite() throws BlockStoreException;
+	void defaultDatabaseBatchWrite() throws BlockStoreException;
 
-	 void resetStore() throws BlockStoreException;
+	void resetStore() throws BlockStoreException;
 
-	 void deleteStore() throws BlockStoreException;
+	void deleteStore() throws BlockStoreException;
 
-	 void create() throws BlockStoreException;
+	void create() throws BlockStoreException;
 
 	/* Blocks */
-	 List<BlockWrap> getNotInvalidApproverBlocks(Sha256Hash hash) throws BlockStoreException;
+	List<BlockWrap> getNotInvalidApproverBlocks(Sha256Hash hash) throws BlockStoreException;
 
-	 List<Sha256Hash> getSolidApproverBlockHashes(Sha256Hash hash) throws BlockStoreException;
+	List<Sha256Hash> getApproverBlockHashes(Sha256Hash hash) throws BlockStoreException;
 
-	 BlockWrap getBlockWrap(Sha256Hash hash) throws BlockStoreException;
+	BlockWrap getBlockWrap(Sha256Hash hash) throws BlockStoreException;
 
-	 BlockEvaluation getTransactionOutputSpender(Sha256Hash blockHash, Sha256Hash txHash, long index)
+	BlockEvaluation getTransactionOutputSpender(Sha256Hash blockHash, Sha256Hash txHash, long index)
 			throws BlockStoreException;
 
-	 PriorityQueue<BlockWrap> getSolidBlocksInIntervalDescending(long cutoffHeight, long maxHeight)
+	PriorityQueue<BlockWrap> getSolidBlocksInIntervalDescending(long cutoffHeight, long maxHeight)
 			throws BlockStoreException;
 
-	 HashSet<BlockEvaluation> getBlocksToUnconfirm() throws BlockStoreException;
+	HashSet<BlockEvaluation> getBlocksToUnconfirm() throws BlockStoreException;
 
-	 TreeSet<BlockWrap> getBlocksToConfirm(long cutoffHeight, long maxHeight) throws BlockStoreException;
+	TreeSet<BlockWrap> getBlocksToConfirm(long cutoffHeight, long maxHeight) throws BlockStoreException;
 
-	 BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException;
+	PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException;
+	
+	BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException;
 
-	 void updateBlockEvaluationWeightAndDepth(List<DepthAndWeight> depthAndWeight) throws BlockStoreException;
+	List<BlockMCMC> getMCMCDepth(long number) throws BlockStoreException;
 
-	 void updateBlockEvaluationRating(List<Rating> ratings) throws BlockStoreException;
+	void updateBlockEvaluationWeightAndDepth(List<DepthAndWeight> depthAndWeight) throws BlockStoreException;
 
-	 void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
+	void updateBlockEvaluationRating(List<Rating> ratings) throws BlockStoreException;
 
-	 void updateBlockEvaluationMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
+	void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
 
-	 void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException;
+	void updateBlockEvaluationMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
-	 void deleteMCMC(long chainlenght) throws BlockStoreException;
+	void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException;
+
+	void deleteMCMC(long chainlenght) throws BlockStoreException;
 
 	/* TXOs */
-	 void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
+	void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
 			Sha256Hash spenderBlock) throws BlockStoreException;
 
-	 void updateTransactionOutputConfirmed(Sha256Hash blockHash, Sha256Hash txHash, long index, boolean b)
+	void updateTransactionOutputConfirmed(Sha256Hash blockHash, Sha256Hash txHash, long index, boolean b)
 			throws BlockStoreException;
 
-	 void updateAllTransactionOutputsConfirmed(Sha256Hash blockHash, boolean b) throws BlockStoreException;
+	void updateAllTransactionOutputsConfirmed(Sha256Hash blockHash, boolean b) throws BlockStoreException;
 
-	 void updateTransactionOutputSpendPending(List<UTXO> utxos) throws BlockStoreException;
+	void updateTransactionOutputSpendPending(List<UTXO> utxos) throws BlockStoreException;
 
 	OrderRecord getOrder(Sha256Hash blockHash, Sha256Hash issuingMatcherBlockHash) throws BlockStoreException;
 
-	 void insertOrder(Collection<OrderRecord> records) throws BlockStoreException;
+	void insertOrder(Collection<OrderRecord> records) throws BlockStoreException;
 
-	 void insertCancelOrder(OrderCancel orderCancel) throws BlockStoreException;
+	void insertCancelOrder(OrderCancel orderCancel) throws BlockStoreException;
 
 	void updateOrderCancelSpent(Set<Sha256Hash> cancels, Sha256Hash blockhash, Boolean spent)
-			throws BlockStoreException; 
-
-	 void updateOrderConfirmed(Collection<OrderRecord> orderRecords, boolean confirm) throws BlockStoreException;
-
-	 void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException; 
-	
-	 HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)
 			throws BlockStoreException;
 
-	void updateOrderBlockhash(Sha256Hash orderhansh, Sha256Hash collectinghash,boolean confirm, boolean spent,
+	void updateOrderConfirmed(Collection<OrderRecord> orderRecords, boolean confirm) throws BlockStoreException;
+
+	void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException;
+
+	HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)
+			throws BlockStoreException;
+
+	void updateOrderBlockhash(Sha256Hash orderhansh, Sha256Hash collectinghash, boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
-	 void prunedHistoryUTXO(Long maxRewardblock) throws BlockStoreException;
 
-	 void prunedPriceTicker(Long timeInSeconds) throws BlockStoreException;
+	void prunedHistoryUTXO(Long maxRewardblock) throws BlockStoreException;
 
-	 void prunedClosedOrders(Long timeInSeconds) throws BlockStoreException;
+	void prunedPriceTicker(Long timeInSeconds) throws BlockStoreException;
 
-	 void prunedBlocks(Long heigth, Long chain) throws BlockStoreException;
+	void prunedClosedOrders(Long timeInSeconds) throws BlockStoreException;
 
-	 TXReward getMaxConfirmedReward() throws BlockStoreException;
+	void prunedBlocks(Long heigth, Long chain) throws BlockStoreException;
 
-	 List<TXReward> getAllConfirmedReward() throws BlockStoreException;
+	TXReward getMaxConfirmedReward() throws BlockStoreException;
+
+	List<TXReward> getAllConfirmedReward() throws BlockStoreException;
 
 	boolean getRewardConfirmed(Sha256Hash hash) throws BlockStoreException;
 
-	 boolean getRewardSpent(Sha256Hash hash) throws BlockStoreException;
+	boolean getRewardSpent(Sha256Hash hash) throws BlockStoreException;
 
-	 long getRewardChainLength(Sha256Hash hash) throws BlockStoreException;
+	long getRewardChainLength(Sha256Hash hash) throws BlockStoreException;
 
-	 long getRewardDifficulty(Sha256Hash hash) throws BlockStoreException;
+	long getRewardDifficulty(Sha256Hash hash) throws BlockStoreException;
 
-	 void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long difficulty, long chainLength)
+	void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long difficulty, long chainLength)
 			throws BlockStoreException;
 
-	 void updateRewardConfirmed(Sha256Hash hash, boolean b) throws BlockStoreException;
+	void updateRewardConfirmed(Sha256Hash hash, boolean b) throws BlockStoreException;
 
-	 void updateRewardSpent(Sha256Hash hash, boolean b, Sha256Hash spenderHash) throws BlockStoreException;
+	void updateRewardSpent(Sha256Hash hash, boolean b, Sha256Hash spenderHash) throws BlockStoreException;
 
-	 Sha256Hash getRewardSpender(Sha256Hash hash) throws BlockStoreException;
+	Sha256Hash getRewardSpender(Sha256Hash hash) throws BlockStoreException;
 
-	 Sha256Hash getRewardPrevBlockHash(Sha256Hash hash) throws BlockStoreException;
+	Sha256Hash getRewardPrevBlockHash(Sha256Hash hash) throws BlockStoreException;
 
 	/* Token TXOs */
-	 void insertToken(Sha256Hash blockhash, Token tokens) throws BlockStoreException;
+	void insertToken(Sha256Hash blockhash, Token tokens) throws BlockStoreException;
 
-	 Token getTokenByBlockHash(Sha256Hash blockhash) throws BlockStoreException;
+	Token getTokenByBlockHash(Sha256Hash blockhash) throws BlockStoreException;
 
-	 List<Token> getTokenID(String tokenid) throws BlockStoreException;
+	List<Token> getTokenID(String tokenid) throws BlockStoreException;
 
-	 Sha256Hash getTokenPrevblockhash(Sha256Hash blockhash) throws BlockStoreException;
+	Sha256Hash getTokenPrevblockhash(Sha256Hash blockhash) throws BlockStoreException;
 
-	 SpentBlockData getTokenSpent(Sha256Hash blockhash) throws BlockStoreException;
+	SpentBlockData getTokenSpent(Sha256Hash blockhash) throws BlockStoreException;
 
-	 boolean getTokenAnyConfirmed(String tokenid, long tokenindex) throws BlockStoreException;
+	boolean getTokenAnyConfirmed(String tokenid, long tokenindex) throws BlockStoreException;
 
-	 BlockWrap getTokenIssuingConfirmedBlock(String tokenid, long tokenindex) throws BlockStoreException;
+	BlockWrap getTokenIssuingConfirmedBlock(String tokenid, long tokenindex) throws BlockStoreException;
 
-	 BlockWrap getDomainIssuingConfirmedBlock(String domainName, String domainPred, long index)
+	BlockWrap getDomainIssuingConfirmedBlock(String domainName, String domainPred, long index)
 			throws BlockStoreException;
 
-	void updateTokenSpent(Sha256Hash blockhash, boolean b, Sha256Hash spenderBlockHash)
-			throws BlockStoreException;
+	void updateTokenSpent(Sha256Hash blockhash, boolean b, Sha256Hash spenderBlockHash) throws BlockStoreException;
 
-	 void updateTokenConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
+	void updateTokenConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
 
-	 List<OrderRecord> getAllOpenOrdersSorted(List<String> addresses, String tokenid) throws BlockStoreException;
+	List<OrderRecord> getAllOpenOrdersSorted(List<String> addresses, String tokenid) throws BlockStoreException;
 
-	 List<UTXO> getAllAvailableUTXOsSorted() throws BlockStoreException;
+	List<UTXO> getAllAvailableUTXOsSorted() throws BlockStoreException;
 
-	 List<Token> getTokensList(Set<String> tokenids) throws BlockStoreException;
+	List<Token> getTokensList(Set<String> tokenids) throws BlockStoreException;
 
-	 List<Token> getTokenTypeList(int type) throws BlockStoreException;
+	List<Token> getTokenTypeList(int type) throws BlockStoreException;
 
-	 List<Token> getTokensList(String name) throws BlockStoreException;
+	List<Token> getTokensList(String name) throws BlockStoreException;
 
-	 Map<String, BigInteger> getTokenAmountMap() throws BlockStoreException;
+	Map<String, BigInteger> getTokenAmountMap() throws BlockStoreException;
 
-	 List<BlockEvaluationDisplay> getSearchBlockEvaluations(List<String> address, String lastestAmount,
-			long height, long maxblocks) throws BlockStoreException;
+	List<BlockEvaluationDisplay> getSearchBlockEvaluations(List<String> address, String lastestAmount, long height,
+			long maxblocks) throws BlockStoreException;
 
-	 List<Block> findRetryBlocks(long minheight) throws BlockStoreException;
+	List<Block> findRetryBlocks(long minheight) throws BlockStoreException;
 
-	 List<BlockEvaluationDisplay> getSearchBlockEvaluationsByhashs(List<String> blockhashs)
-			throws BlockStoreException;
+	List<BlockEvaluationDisplay> getSearchBlockEvaluationsByhashs(List<String> blockhashs) throws BlockStoreException;
 
-	 BlockEvaluation getBlockEvaluationsByhashs(Sha256Hash blockhashs) throws BlockStoreException;
+	BlockEvaluation getBlockEvaluationsByhashs(Sha256Hash blockhashs) throws BlockStoreException;
 
-	 List<byte[]> blocksFromChainLength(long start, long end) throws BlockStoreException;
+	List<byte[]> blocksFromChainLength(long start, long end) throws BlockStoreException;
 
-	 List<byte[]> blocksFromNonChainHeigth(long heigth) throws BlockStoreException;
+	List<byte[]> blocksFromNonChainHeigth(long heigth) throws BlockStoreException;
 
 	void updateMultiSignBlockBitcoinSerialize(String tokenid, long tokenindex, byte[] bytes) throws BlockStoreException;
 
-	 List<MultiSignAddress> getMultiSignAddressListByTokenidAndBlockHashHex(String tokenid,
-			Sha256Hash prevblockhash) throws BlockStoreException;
+	List<MultiSignAddress> getMultiSignAddressListByTokenidAndBlockHashHex(String tokenid, Sha256Hash prevblockhash)
+			throws BlockStoreException;
 
-	 void insertMultiSignAddress(MultiSignAddress multiSignAddress) throws BlockStoreException;
+	void insertMultiSignAddress(MultiSignAddress multiSignAddress) throws BlockStoreException;
 
-	List<MultiSign> getMultiSignListByTokenid(String tokenid, int tokenindex, Set<String> addresses,
-			boolean isSign) throws BlockStoreException;
+	List<MultiSign> getMultiSignListByTokenid(String tokenid, int tokenindex, Set<String> addresses, boolean isSign)
+			throws BlockStoreException;
 
 	List<OutputsMulti> queryOutputsMultiByHashAndIndex(byte[] hash, long index) throws BlockStoreException;
 
-	 List<MultiSign> getMultiSignListByAddress(String address) throws BlockStoreException;
+	List<MultiSign> getMultiSignListByAddress(String address) throws BlockStoreException;
 
-	 List<MultiSign> getMultiSignListByTokenidAndAddress(String tokenid, String address)
-			throws BlockStoreException;
+	List<MultiSign> getMultiSignListByTokenidAndAddress(String tokenid, String address) throws BlockStoreException;
 
 	int getCountMultiSignAlready(String tokenid, long tokenindex, String address) throws BlockStoreException;
 
@@ -315,7 +317,7 @@ public interface  BlockStoreInterface {
 
 	void deleteMultiSign(String tokenid) throws BlockStoreException;
 
-	 void insertOutputsMulti(OutputsMulti outputsMulti) throws BlockStoreException;
+	void insertOutputsMulti(OutputsMulti outputsMulti) throws BlockStoreException;
 
 	UserData queryUserDataWithPubKeyAndDataclassname(String dataclassname, String pubKey) throws BlockStoreException;
 
@@ -386,7 +388,7 @@ public interface  BlockStoreInterface {
 
 	Token getTokensByDomainname(String domainname) throws BlockStoreException;
 
-	List<Sha256Hash>  blocksNotMilestoneFromHeigth(long heigth)  throws BlockStoreException;
+	List<Sha256Hash> blocksNotMilestoneFromHeigth(long heigth) throws BlockStoreException;
 
 	TXReward getRewardConfirmedAtHeight(long chainlength) throws BlockStoreException;
 
@@ -438,67 +440,61 @@ public interface  BlockStoreInterface {
 
 	void insertContractEvent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
-	 ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash)
-			throws BlockStoreException;
+	ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash) throws BlockStoreException;
 
-	 void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
+	void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
-
-	void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash,boolean confirm, boolean spent,
+	void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash, boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
- 
 
-	 Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
+	Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
 			throws BlockStoreException;
 
 	void insertContractResult(ContractExecutionResult record, Sha256Hash blockhash) throws BlockStoreException;
 
-	 void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
+	void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
 			throws BlockStoreException;
 
-	 void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
+	void updateContractResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
-	 Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
+	Contractresult getContractresult(Sha256Hash blockhash) throws BlockStoreException;
 
-	 List<Contractresult> getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException; 
+	List<Contractresult> getContractresultWithPrev(Sha256Hash prev) throws BlockStoreException;
 
-	 void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
+	void updateOrderResultConfirmed(Sha256Hash contract, boolean confirm) throws BlockStoreException;
 
-	 Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
+	Orderresult getOrderResult(Sha256Hash blockhash) throws BlockStoreException;
 
-	  List<Orderresult> getOrderresultWithPrev(Sha256Hash prevhash) throws BlockStoreException;
+	List<Orderresult> getOrderresultWithPrev(Sha256Hash prevhash) throws BlockStoreException;
 
 	void insertOrderResult(OrderExecutionResult record, Sha256Hash blockhash) throws BlockStoreException;
 
-	 void updateOrderResultSpent(Sha256Hash result, Sha256Hash spentBlock, boolean spent)
-			throws BlockStoreException;
+	void updateOrderResultSpent(Sha256Hash result, Sha256Hash spentBlock, boolean spent) throws BlockStoreException;
 
-	 List<Coin> getAccountBalance(String address, String tokenid) throws BlockStoreException;
+	List<Coin> getAccountBalance(String address, String tokenid) throws BlockStoreException;
 
-	 void calculateAccount(String address, String tokenid) throws BlockStoreException;
+	void calculateAccount(String address, String tokenid) throws BlockStoreException;
 
-	 void insertContractEventCancel(ContractEventCancel contractEventCancel) throws BlockStoreException;
+	void insertContractEventCancel(ContractEventCancel contractEventCancel) throws BlockStoreException;
 
 	void updateContractEventCancelSpent(Set<Sha256Hash> cancels, Sha256Hash blockhash, Boolean spent)
 			throws BlockStoreException;
 
 	Orderresult getMaxMilestoneOrderresult() throws BlockStoreException;
 
-	 List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException;
+	List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException;
 
 	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
-	 Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
+	Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
 
-	 List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid)
-			throws BlockStoreException;
+	List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid) throws BlockStoreException;
 
-	 List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
+	List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
 
 	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
 			throws BlockStoreException;
-
 
 }

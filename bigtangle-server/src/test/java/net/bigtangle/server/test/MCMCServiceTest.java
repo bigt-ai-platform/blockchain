@@ -571,7 +571,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				&& getBlockEvaluation(b8.getHash(), store).isConfirmed());
 		// assertFalse(getBlockEvaluation(b5link.getHash(),
 		// store).isConfirmed());
-
+		createDAG("testUpdate");
 	}
 
 	@Test

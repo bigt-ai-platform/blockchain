@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
@@ -28,6 +29,7 @@ import net.bigtangle.utils.Json;
 @Service
 public class CacheBlockService {
 	private static final Logger logger = LoggerFactory.getLogger(CacheBlockService.class);
+	private static ObjectMapper jsonmapper = Json.jsonmapper();
 
 	@Cacheable(value = "blocksCache", key = "#blockhash")
 	public byte[] getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -93,7 +95,7 @@ public class CacheBlockService {
 		List<UTXO> utxos = store.getOpenTransactionOutputs(address);
 		List<byte[]> re = new ArrayList<>();
 		for (UTXO u : utxos) {
-			re.add(Json.jsonmapper().writeValueAsBytes(u));
+			re.add( jsonmapper .writeValueAsBytes(u));
 		}
 		// logger.debug("getOpenTransactionOutputs from database and no cache for: " +
 		// address + " size " + re.size());
@@ -124,7 +126,7 @@ public class CacheBlockService {
 	public byte[] getBlockMCMC(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException, JsonProcessingException {
 		// store.getParams().getId()
-		return Json.jsonmapper().writeValueAsBytes(store.getMCMC(blockhash));
+		return jsonmapper.writeValueAsBytes(store.getMCMC(blockhash));
 	}
 
 	@CacheEvict(value = "BlockMCMC", allEntries = true)
@@ -149,14 +151,15 @@ public class CacheBlockService {
 	}
 
 	@Cacheable(value = "utxos", key = "#utxo.hashCode")
-	public   byte[] getTransactionOutput(UTXO utxo, BlockStoreInterface store)
-			throws BlockStoreException, JsonProcessingException { 
-		UTXO u= store.getTransactionOutput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex()); 
-		return u==null?null:Json.jsonmapper().writeValueAsBytes(u) ;
+	public byte[] getTransactionOutput(UTXO utxo, BlockStoreInterface store)
+			throws BlockStoreException, JsonProcessingException {
+		UTXO u = store.getTransactionOutput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex());
+		return u == null ? null :  jsonmapper .writeValueAsBytes(u);
 	}
+
 	@CacheEvict(value = "utxos", key = "#utxo.hashCode")
 	public void evictTransactionOutput(UTXO utxo, BlockStoreInterface store) throws BlockStoreException {
-	 
+
 	}
 
 }

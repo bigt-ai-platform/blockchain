@@ -11,16 +11,19 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.Map.Entry;
 
 import javax.annotation.Nullable;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
@@ -47,7 +50,6 @@ import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserData;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
@@ -67,6 +69,7 @@ public abstract class ServiceBase {
 	protected ServerConfiguration serverConfiguration;
 	protected NetworkParameters networkParameters;
 	protected CacheBlockService cacheBlockService;
+	protected ObjectMapper jsonmapper;
 
 	protected abstract void connectTypeSpecificUTXOs(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException, VerificationException;
@@ -85,6 +88,7 @@ public abstract class ServiceBase {
 		this.serverConfiguration = serverConfiguration;
 		this.networkParameters = networkParameters;
 		this.cacheBlockService = cacheBlockService;
+		this.jsonmapper= Json.jsonmapper();
 	}
 
 	public boolean enableFee(Block block) {
@@ -225,12 +229,12 @@ public abstract class ServiceBase {
 			byte[] be = cacheBlockService.getBlockEvaluation(blockhash, store);
 			BlockEvaluation v = BlockEvaluation.buildInitial(block);
 			if (be != null)
-				v = Json.jsonmapper().readValue(be, BlockEvaluation.class);
+				v =  jsonmapper.readValue(be, BlockEvaluation.class);
 			if (v == null)
 				v = BlockEvaluation.buildInitial(block);
 			byte[] blockMCMC = cacheBlockService.getBlockMCMC(blockhash, store);
 
-			return new BlockWrap(block, v, Json.jsonmapper().readValue(blockMCMC, BlockMCMC.class), networkParameters);
+			return new BlockWrap(block, v, jsonmapper.readValue(blockMCMC, BlockMCMC.class), networkParameters);
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}

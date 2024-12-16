@@ -70,7 +70,7 @@ public class TipsService {
 
 		@Override
 		public BlockWrap call() throws Exception {
-            return getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store);
+			return getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store);
 		}
 	}
 
@@ -82,7 +82,7 @@ public class TipsService {
 	 * 
 	 * @param count The number of rating tips.
 	 * @return A list of rating tips.
-     */
+	 */
 	public Collection<BlockWrap> getRatingTips(TXReward maxConfirmedReward, int count, long maxHeight,
 			BlockStoreInterface store) throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
@@ -118,7 +118,7 @@ public class TipsService {
 	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
 	 * 
 	 * @return Two blockhashes selected via MCMC
-     */
+	 */
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(BlockStoreInterface store) throws BlockStoreException {
 
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
@@ -150,7 +150,7 @@ public class TipsService {
 	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
 	 * 
 	 * @return Two blockhashes selected via MCMC
-     */
+	 */
 	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		return getValidatedRewardBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
@@ -167,8 +167,8 @@ public class TipsService {
 			return candidate;
 		}
 		for (int i = 0; i < 5; i++) {
-			Pair<BlockWrap, BlockWrap> paar = getValidatedRewardBlockPairDo(maxConfirmedReward,
-					 new HashSet<>(), prevRewardHash, store);
+			Pair<BlockWrap, BlockWrap> paar = getValidatedRewardBlockPairDo(maxConfirmedReward, new HashSet<>(),
+					prevRewardHash, store);
 			if (!paar.getLeft().equals(paar.getRight())) {
 				return paar;
 			}
@@ -202,10 +202,10 @@ public class TipsService {
 		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
 		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, left, cutoffHeight, prevMilestoneNumber,
-                null, false, store))
+				null, false, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
 		if (!serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, right, cutoffHeight, prevMilestoneNumber,
-                null, false, store))
+				null, false, store))
 			throw new InfeasiblePrototypeException("The given starting points are insolid");
 
 		// Necessary: Initial test if the prototype's
@@ -218,7 +218,8 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store) throws BlockStoreException {
+			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
+			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
 		BlockWrap right = entryPoints.get(1);
@@ -226,8 +227,8 @@ public class TipsService {
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedUnconfirmedBlocks, BlockWrap left, BlockWrap right, BlockStoreInterface store)
-			throws BlockStoreException {
+			HashSet<BlockWrap> currentApprovedUnconfirmedBlocks, BlockWrap left, BlockWrap right,
+			BlockStoreInterface store) throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService);
@@ -331,7 +332,11 @@ public class TipsService {
 	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonMilestoneBlocks,
 			long cutoffHeight, long maxHeight, BlockStoreInterface store) throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
-		for (Sha256Hash req : store.getSolidApproverBlockHashes(fromBlock.getBlockHash())) {
+//		if( fromBlock.getBlock().getHeight()==9)
+//		{
+//		 log.debug(fromBlock.toString());
+//		}
+		for (Sha256Hash req : store.getApproverBlockHashes(fromBlock.getBlockHash())) {
 			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
 					.getBlockWrap(req, store));
 		}
@@ -408,7 +413,7 @@ public class TipsService {
 	 * 
 	 * @param count amount of entry points to get
 	 * @return hashes of the entry points
-     */
+	 */
 	private List<BlockWrap> getEntryPoints(int count, long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
@@ -451,13 +456,13 @@ public class TipsService {
 		for (int i = 0; i < count; i++) {
 			// Randomly select weighted by cumulative weights
 			double selectionRealization = seed.nextDouble() * normalizedBlockWeightSum;
-            for (BlockWrap selectedBlock : candidates) {
-                selectionRealization -= selectedBlock.getMcmc().getCumulativeWeight() / maxBlockWeight;
-                if (selectionRealization <= 0) {
-                    results.add(selectedBlock);
-                    break;
-                }
-            }
+			for (BlockWrap selectedBlock : candidates) {
+				selectionRealization -= selectedBlock.getMcmc().getCumulativeWeight() / maxBlockWeight;
+				if (selectionRealization <= 0) {
+					results.add(selectedBlock);
+					break;
+				}
+			}
 		}
 
 		return results;

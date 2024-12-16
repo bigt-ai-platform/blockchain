@@ -21,6 +21,8 @@ select * FROM contractevent order by  spenderblockhash, collectinghash
 select * FROM contractevent order by   collectinghash, blockhash
 select * FROM contractresult b, mcmc m WHERE  m.hash=b.blockhash
 select * FROM blocks b, mcmc m WHERE  m.hash=b.hash and b.milestone <0
+select * FROM contractresult a, blocks b, mcmc m WHERE  m.hash=b.hash and b.milestone  and a.blockhash=b.hash
+
 select * from orders  where spent=false and confirmed=true order by blockhash;
 select * from orderresult order by inserttime desc ;
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;

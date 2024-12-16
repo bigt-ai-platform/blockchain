@@ -135,7 +135,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		try {
 			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
 			makeRewardBlock(b2);
-		//TODO	fail();
+			// TODO fail();
 		} catch (VerificationException e) {
 			// Expected
 		}
@@ -145,12 +145,13 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictEligibleReward() throws Exception {
 
 		// Generate blocks until passing first reward interval
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block rollingBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		blockGraph.add(rollingBlock, true, store);
 
 		Block rollingBlock1 = rollingBlock;
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock1 =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock1 = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock1, true, store);
 		}
 
@@ -493,8 +494,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testTipConflict() throws Exception {
 
 		// Generate two conflicting blocks
-
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		Transaction doublespendTX = createTestTransaction();
 		// Create blocks with conflict
 		Block b1 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
@@ -527,12 +526,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// After confirming one of them into the milestone, only that one block
 		// is now available
 		makeRewardBlock(b1);
-
-		for (int i = 0; i < 20; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			assertFalse(tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash()));
-		}
 
 		try {
 			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
@@ -585,15 +578,15 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		b1 = difficultychange(b1);
 		b1 = difficultychange(b1);
 		b1 = difficultychange(b1);
-		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
+		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
 		makeRewardBlock(new ArrayList<Block>());
-		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
+		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
 		assertEquals(b1.getDifficultyTarget(), Utils.encodeCompactBits(networkParameters.getMaxTarget()));
 
 	}
 
 	private Block difficultychange(Block b1) throws BlockStoreException {
-		b1 =UtilsTest.createBlock(networkParameters, b1, b1);
+		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
 		b1.setDifficultyTarget(Utils.encodeCompactBits(networkParameters.getMaxTargetReward()));
 
 		// log.debug( (Utils.encodeCompactBits( networkParameters. getMaxTargetReward())

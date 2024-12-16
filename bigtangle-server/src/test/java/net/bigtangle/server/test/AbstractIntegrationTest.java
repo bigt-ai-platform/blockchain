@@ -7,8 +7,15 @@ package net.bigtangle.server.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,10 +23,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.jgrapht.graph.DefaultDirectedGraph;
+import org.jgrapht.graph.DefaultEdge;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -191,7 +201,7 @@ public abstract class AbstractIntegrationTest {
 		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
+			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(feeTransaction);
 			rollingBlock1.solve();
 			blockGraph.add(rollingBlock1, true, store);
@@ -204,7 +214,7 @@ public abstract class AbstractIntegrationTest {
 // add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
+			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(wallet.feeTransaction(null));
 			rollingBlock1.solve();
 			blockGraph.add(rollingBlock1, true, store);
@@ -217,7 +227,7 @@ public abstract class AbstractIntegrationTest {
 		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 
-		rollingBlock1 =Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
+		rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 		rollingBlock1.addTransaction(wallet.feeTransaction(null));
 		rollingBlock1.solve();
 		blockGraph.add(rollingBlock1, true, store);
@@ -266,7 +276,7 @@ public abstract class AbstractIntegrationTest {
 		cacheBlockService.evictAccountBalance();
 		cacheBlockService.evictMaxConfirmedReward();
 		cacheBlockService.evictBlockMCMC();
-		cacheBlockService.evictBlockEvaluation(); 
+		cacheBlockService.evictBlockEvaluation();
 		cacheBlockPrototypeService.evictBlockPrototypeByte();
 	}
 
@@ -417,7 +427,7 @@ public abstract class AbstractIntegrationTest {
 		input.setScriptSig(inputScript);
 
 		// Create block with tx
-		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
+		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
@@ -432,7 +442,7 @@ public abstract class AbstractIntegrationTest {
 		Block block = null;
 
 		// Create and add block
-		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
+		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
 		addedBlocks.add(block);
@@ -446,7 +456,7 @@ public abstract class AbstractIntegrationTest {
 		Block block = null;
 
 		// Create and add block
-		block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
+		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
 		this.blockGraph.add(block, true, store);
 		return block;
@@ -477,11 +487,11 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
-		Block b=orderExecutionService.createOrderExecution(store);
-		//no reward, this order will be not confirmed 
+		Block b = orderExecutionService.createOrderExecution(store);
+		// no reward, this order will be not confirmed
 		// confirm the contract execution
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-				.confirmOrderExecute(b, -1,true, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirmOrderExecute(b, -1,
+				true, store);
 		addedBlocks.add(b);
 	}
 
@@ -579,7 +589,7 @@ public abstract class AbstractIntegrationTest {
 		tx.setDataSignature(buf1);
 
 		// Create block with order
-		Block block =Block.createBlock(networkParameters, predecessor, predecessor);
+		Block block = Block.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
@@ -606,7 +616,7 @@ public abstract class AbstractIntegrationTest {
 		tx.setDataSignature(buf1);
 
 		// Create block with order
-		Block block =UtilsTest.createBlock(networkParameters, predecessor, predecessor);
+		Block block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
@@ -625,12 +635,13 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block makeRewardBlock(List<Block> addedBlocks) throws Exception {
 
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block block = makeRewardBlock(predecessor);
+		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+		Block reward = rewardService.createReward(prevRewardHash, store);
+		blockGraph.updateChain();
 		if (addedBlocks != null)
-			addedBlocks.add(block);
+			addedBlocks.add(reward);
 
-		return block;
+		return reward;
 	}
 
 	protected Block makeOrdermatch() throws Exception {
@@ -639,7 +650,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks) throws Exception {
-	//	mcmcServiceUpdate();
+		// mcmcServiceUpdate();
 		Block b = orderExecutionService.createOrderExecution(store);
 		return rewardWithBlock(addedBlocks, b);
 
@@ -808,7 +819,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block createAndAddNextBlock(Block b1, Block b2) throws VerificationException, BlockStoreException {
-		Block block =UtilsTest.createBlock(networkParameters, b1, b2);
+		Block block = UtilsTest.createBlock(networkParameters, b1, b2);
 		this.blockGraph.add(block, true, store);
 		return block;
 	}
@@ -816,7 +827,7 @@ public abstract class AbstractIntegrationTest {
 	protected Block createAndAddNextBlockWithTransaction(Block b1, Block b2, Transaction prevOut, boolean mcmc)
 			throws VerificationException, BlockStoreException, JsonParseException, JsonMappingException, IOException,
 			UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
-		Block block1 =UtilsTest.createBlock(networkParameters, b1, b2);
+		Block block1 = UtilsTest.createBlock(networkParameters, b1, b2);
 		block1.addTransaction(prevOut);
 		// block1.addTransaction(wallet.feeTransaction(null));
 		block1 = adjustSolve(block1);
@@ -1498,7 +1509,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void mcmc() throws JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
-		mcmcServiceUpdate(); 
+		mcmcServiceUpdate();
 	}
 
 	public BlockWrap defaultBlockWrap(Block block) throws Exception {
@@ -1517,18 +1528,18 @@ public abstract class AbstractIntegrationTest {
 			store.beginDatabaseBatchWrite();
 			TokensumsMap map = checkpointService.checkToken(store);
 			Map<String, Tokensums> r11 = map.getTokensumsMap();
-		
+
 			for (Entry<String, Tokensums> a : r11.entrySet()) {
-				log.debug(a.getValue().toString());	
-				if (!a.getValue().check()) {	
+				log.debug(a.getValue().toString());
+				if (!a.getValue().check()) {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
 				}
 				assertTrue(a.getValue().check(), " " + a.toString());
-				
+
 			}
-		//	log.debug(" checkSum ok ");
+			// log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
 			return map;
 		} finally {
@@ -1542,20 +1553,17 @@ public abstract class AbstractIntegrationTest {
 		Tokensums b = last.getTokensumsMap().get(tokenid);
 		a.getUtxos().stream().forEach(n -> {
 			if (!b.getUtxos().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash())
-					&& p.getTxHash().equals(n.getTxHash())
-					&& p.getIndex()==(n.getIndex())
-					)) {
+					&& p.getTxHash().equals(n.getTxHash()) && p.getIndex() == (n.getIndex()))) {
 				log.debug(" new not in last " + n.toString());
 			}
 		});
 		b.getUtxos().stream().forEach(n -> {
 			if (!a.getUtxos().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash())
-					&& p.getTxHash().equals(n.getTxHash())
-					&& p.getIndex()==(n.getIndex()))) {
+					&& p.getTxHash().equals(n.getTxHash()) && p.getIndex() == (n.getIndex()))) {
 				log.debug(" last not in new " + n.toString());
 			}
 		});
-		
+
 		a.getContracts().stream().forEach(n -> {
 			if (!b.getContracts().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
 				log.debug(" new not in last " + n.toString());
@@ -1566,7 +1574,7 @@ public abstract class AbstractIntegrationTest {
 				log.debug(" last not in new " + n.toString());
 			}
 		});
-		
+
 		a.getOrders().stream().forEach(n -> {
 			if (!b.getOrders().stream().anyMatch(p -> p.getBlockHash().equals(n.getBlockHash()))) {
 				log.debug(" new not in last " + n.toString());
@@ -1577,7 +1585,7 @@ public abstract class AbstractIntegrationTest {
 				log.debug(" last not in new " + n.toString());
 			}
 		});
-		
+
 	}
 
 	public void sell(List<Block> blocksAddedAll) throws Exception {
@@ -1660,13 +1668,14 @@ public abstract class AbstractIntegrationTest {
 		}
 
 	}
-	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms ,
-			BlockStoreInterface blockStore) throws BlockStoreException {
-		
+
+	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms, BlockStoreInterface blockStore)
+			throws BlockStoreException {
+
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			 new ServiceContract(serverConfiguration, networkParameters,
-						cacheBlockService).unconfirm(hash, traversedUnconfirms, -1, blockStore);
+			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService).unconfirm(hash,
+					traversedUnconfirms, -1, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
@@ -1689,7 +1698,7 @@ public abstract class AbstractIntegrationTest {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
-	 
+
 	}
 
 	public List<ECKey> createUserkey() {
@@ -1711,5 +1720,115 @@ public abstract class AbstractIntegrationTest {
 			userkeys.add(key);
 		}
 		return userkeys;
+	}
+
+	// Convert JGraphT Graph to DOT format
+	private String toDot(DefaultDirectedGraph<String, DefaultEdge> dag) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("digraph DAG {\n");
+		for (String vertex : dag.vertexSet()) {
+			sb.append("  \"").append(vertex).append("\";\n");
+		}
+		for (DefaultEdge edge : dag.edgeSet()) {
+			String source = dag.getEdgeSource(edge);
+			String target = dag.getEdgeTarget(edge);
+			sb.append("  \"").append(source).append("\" -> \"").append(target).append("\";\n");
+		}
+		sb.append("}");
+		return sb.toString();
+	}
+
+	private void runDot(String dotFilePath, String svgFilePath) {
+		try {
+			// Construct the command
+			String[] command = { "dot", "-Tsvg", dotFilePath, "-o", svgFilePath };
+			ProcessBuilder pb = new ProcessBuilder(command);
+			Process process = pb.start();
+
+			// Read error stream to handle any errors during dot execution
+			try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+				String line;
+				while ((line = errorReader.readLine()) != null) {
+					System.err.println(line);
+				}
+			}
+			// Wait for the process to complete
+			int exitCode = process.waitFor();
+			if (exitCode != 0) {
+				throw new RuntimeException("Graphviz 'dot' failed with exit code: " + exitCode);
+			}
+		} catch (IOException | InterruptedException e) {
+			throw new RuntimeException("Error running Graphviz dot command", e);
+		}
+	}
+
+	private File createTempFile(String fileExtension, String fileContent) throws IOException {
+		File tempFile = File.createTempFile("dag-", fileExtension);
+		tempFile.deleteOnExit();
+		if (fileContent != null) {
+			try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+				writer.write(fileContent);
+			}
+		}
+		return tempFile;
+	}
+
+	private File createSVGFile(String fileExtension, String fileContent) throws IOException {
+		File tempFile = new File("logs", "Dag" + fileExtension);
+		tempFile.delete();
+		if (fileContent != null) {
+			try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+				writer.write(fileContent);
+			}
+		}
+		return tempFile;
+	}
+
+	public void createDAG(String filename) throws IOException, BlockStoreException {
+		// 1. Create your DAG using JGraphT
+		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
+		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(0, 10000000);
+
+		// Initialize weight and depth of blocks
+		for (BlockWrap block : blockQueue) {
+			dag.addVertex(getVertex(block.getBlockHash()));
+		}
+		for (BlockWrap block : blockQueue) {
+			try {
+				if (block.getBlock().getHeight() > 0) {
+					String b = getVertex(block.getBlockHash());
+					dag.addEdge(b, getVertex(block.getBlock().getPrevBlockHash()));
+
+					dag.addEdge(b, getVertex(block.getBlock().getPrevBranchBlockHash()));
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		// 2. Convert DAG to DOT language format
+		String dotString = toDot(dag);
+		// 3. Generate the Graphviz .dot file
+		File dotFile = createTempFile(".dot", dotString);
+
+		// 4. Execute Graphviz `dot` to generate the SVG output
+		File svgFile = createSVGFile(filename + ".svg", null);
+		runDot(dotFile.getAbsolutePath(), svgFile.getAbsolutePath());
+
+		// 5. Display or process the generated SVG
+		// System.out.println("SVG generated at " + svgFile.getAbsolutePath());
+
+		// Displaying in the browser or a JavaFX WebView or etc is upto you
+		// For now let's display the content as a test
+		String content = Files.readString(Paths.get(svgFile.getAbsolutePath()));
+		// System.out.println(content);
+	}
+
+	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
+		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+				.getBlockWrap(hash, store);
+		return block.getBlock().getHeight() + "/" + block.getMcmc().getDepth() + "/"
+				+ block.getBlockEvaluation().getMilestone() + "/" + block.getBlock().getBlockType() + "/"
+				+ block.getBlockHash().toString().substring(3, 7);
 	}
 }

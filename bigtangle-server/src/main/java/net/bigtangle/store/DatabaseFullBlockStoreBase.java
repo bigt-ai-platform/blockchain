@@ -46,7 +46,6 @@ import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.script.Script;
@@ -125,7 +124,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "  , rating, depth, cumulativeweight "
 			+ "  FROM blocks, mcmc WHERE blocks.hash= mcmc.hash and (prevblockhash = ? or prevbranchblockhash = ?) AND solid >= 0 ";
 
-	protected final String SELECT_SOLID_APPROVER_HASHES_SQL = "SELECT hash FROM blocks "
+	protected final String SELECT_APPROVER_HASHES_SQL = "SELECT hash FROM blocks "
 			+ "WHERE blocks.prevblockhash = ? or blocks.prevbranchblockhash = ?";
 
 	protected final String INSERT_BLOCKS_SQL = getInsert() + "  INTO blocks(hash,  height, block,  prevblockhash,"
@@ -184,6 +183,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 ";
 
+	protected final String SELECT_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
+			+ " FROM blocks WHERE   height >= ? AND height <= ? ";
+	
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
 			+ "FROM blocks WHERE milestone = -1 AND confirmed=true AND height >= ? order by height desc ";
 
@@ -881,6 +883,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 	}
 
+	@Override
 	public BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException {
 
 		try (PreparedStatement s = getConnection()
@@ -894,18 +897,26 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			}
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
-		} catch (ProtocolException e) {
-			// Corrupted database.
-
-			throw new BlockStoreException(e);
-		} catch (VerificationException e) {
-			// Should not be able to happen unless the database contains bad
-			// blocks.
-			throw new BlockStoreException(e);
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
 
+	@Override
+	public List<BlockMCMC> getMCMCDepth(long number) throws BlockStoreException {
+		List<BlockMCMC> blockMCMC = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT " + SELECT_MCMC_TEMPLATE + " from mcmc  order by depth desc limit " + number)) {
+			ResultSet results = s.executeQuery();
+			while (results.next()) {
+				blockMCMC.add(setBlockMCMC(results));
+			}
+			return blockMCMC;
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	@Override
 	public List<BlockWrap> getNotInvalidApproverBlocks(Sha256Hash hash) throws BlockStoreException {
 		List<BlockWrap> storedBlocks = new ArrayList<>();
 
@@ -922,19 +933,17 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				}
 			}
 			return storedBlocks;
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
 		} catch (Exception e) {
-			// Corrupted database.
 			throw new BlockStoreException(e);
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
 
-	public List<Sha256Hash> getSolidApproverBlockHashes(Sha256Hash hash) throws BlockStoreException {
+	@Override
+	public List<Sha256Hash> getApproverBlockHashes(Sha256Hash hash) throws BlockStoreException {
 		List<Sha256Hash> storedBlockHash = new ArrayList<>();
 
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_SOLID_APPROVER_HASHES_SQL)) {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_APPROVER_HASHES_SQL)) {
 			s.setBytes(1, hash.getBytes());
 			s.setBytes(2, hash.getBytes());
 			ResultSet results = s.executeQuery();
@@ -944,15 +953,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			return storedBlockHash;
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
-		} catch (ProtocolException e) {
-			// Corrupted database.
-			throw new BlockStoreException(e);
-		} catch (VerificationException e) {
-			// Should not be able to happen unless the database contains bad
-			// blocks.
-			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 	}
 
 	@Override
@@ -986,10 +987,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setLong(2, index);
 			s.setBytes(3, blockHash.getBytes());
 			ResultSet results = s.executeQuery();
-			if (!results.next()) {
-				return null;
+			if (results.next()) {
+				return setSpentBlock(blockHash, results);
 			}
-			return setSpentBlock(blockHash, results);
+			return null;
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -1427,6 +1428,32 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		// throw new BlockStoreException("Could not close statement");
 	}
 
+
+	@Override
+	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight)
+			throws BlockStoreException {
+		PriorityQueue<BlockWrap> blocksByHeight = new PriorityQueue<>(
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
+
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_BLOCKS_IN_INTERVAL_SQL)) {
+			preparedStatement.setLong(1, cutoffHeight);
+			preparedStatement.setLong(2, maxHeight);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
+
+				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+				if (verifyHeader(block))
+					blocksByHeight.add(
+							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
+			}
+			return blocksByHeight;
+		} catch (Exception ex) {
+			throw new BlockStoreException(ex);
+		}
+		// throw new BlockStoreException("Could not close statement");
+	}
 	@Override
 	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength)
 			throws BlockStoreException {
