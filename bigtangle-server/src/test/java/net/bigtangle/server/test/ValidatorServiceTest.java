@@ -79,7 +79,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block r1 = tipsToApprove.getLeft().getBlock();
 		Block r2 = tipsToApprove.getRight().getBlock();
-		Block b =UtilsTest.createBlock(networkParameters,r2, r1);
+		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		b.setTime(1887836800); //
 		b.solve();
 		try {
@@ -95,7 +95,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block r1 = tipsToApprove.getLeft().getBlock();
 		Block r2 = tipsToApprove.getRight().getBlock();
-		Block b =UtilsTest.createBlock(networkParameters,r2, r1);
+		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		b.setTime(1567836800); //
 		b.addTransaction(wallet.feeTransaction(null));
 		b.solve();
@@ -109,7 +109,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block r1 = tipsToApprove.getLeft().getBlock();
 		Block r2 = tipsToApprove.getRight().getBlock();
-		Block b =UtilsTest.createBlock(networkParameters,r2, r1);
+		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		for (int i = 0; i < 300; i++) {
 			b.setNonce(i);
 			try {
@@ -130,7 +130,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		Sha256Hash sha256Hash1 = getRandomSha256Hash();
 		Sha256Hash sha256Hash2 = getRandomSha256Hash();
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setPrevBlockHash(sha256Hash1);
 		block.setPrevBranchBlockHash(sha256Hash2);
 		block.solve();
@@ -145,7 +146,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		Sha256Hash sha256Hash1 = getRandomSha256Hash();
 		Sha256Hash sha256Hash2 = getRandomSha256Hash();
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setPrevBlockHash(sha256Hash1);
 		block.setPrevBranchBlockHash(sha256Hash2);
 		block.solve();
@@ -166,10 +168,11 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUnsolidBlockReconnectBlock() throws Exception {
 
-		Block depBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block depBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		depBlock.addTransaction(wallet.feeTransaction(null));
 		depBlock.solve();
-		Block block =UtilsTest.createBlock(networkParameters, depBlock, depBlock);
+		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
@@ -182,7 +185,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -190,10 +194,11 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUnsolidMissingPredecessor1() throws Exception {
 
-		Block depBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block depBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		depBlock.addTransaction(wallet.feeTransaction(null));
 		depBlock.solve();
-		Block block =UtilsTest.createBlock(networkParameters, depBlock, depBlock);
+		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
@@ -204,7 +209,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		blockSaveService.saveBlock(depBlock, store);
 
 		// After adding the missing dependency, should be solid
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -212,10 +218,11 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUnsolidMissingPredecessor2() throws Exception {
 
-		Block depBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block depBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		depBlock.addTransaction(wallet.feeTransaction(null));
 		depBlock.solve();
-		Block block =UtilsTest.createBlock(networkParameters, depBlock, depBlock);
+		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
 		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
@@ -228,7 +235,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -238,7 +246,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// use the same input data for other transaction in a block double spent
 		Transaction tx1 = createTestTransaction();
-		Block block1 =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block1 = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block1.addTransaction(tx1);
 		block1.addTransaction(wallet.feeTransaction(null));
 		block1 = adjustSolve(block1);
@@ -279,7 +288,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		blockSaveService.saveBlock(confBlock, store);
 
 		// After adding the missing dependency, should be solid
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.solidifyWaiting(block, store);
 
 		// TODO
 		// assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid()
@@ -367,7 +377,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.solidifyWaiting(block, store);
 
 		// There are prev not there TODO
 		// assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid()
@@ -391,7 +402,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		assertEquals(rollingBlock.getLastMiningRewardBlock() + 1, rewardBlock1.getLastMiningRewardBlock());
 
 		try {
-			Block failingBlock =UtilsTest.createBlock(networkParameters,rollingBlock, networkParameters.getGenesisBlock());
+			Block failingBlock = UtilsTest.createBlock(networkParameters, rollingBlock,
+					networkParameters.getGenesisBlock());
 			failingBlock.setLastMiningRewardBlock(2);
 			failingBlock.addTransaction(wallet.feeTransaction(null));
 			failingBlock.solve();
@@ -402,7 +414,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		}
 
 		try {
-			Block failingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), rollingBlock);
+			Block failingBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					rollingBlock);
 			failingBlock.setLastMiningRewardBlock(2);
 			failingBlock.addTransaction(wallet.feeTransaction(null));
 			failingBlock.solve();
@@ -422,7 +435,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getGenesisBlock();
 
 		// The time is allowed to stay the same
-		rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+		rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 		rollingBlock.setTime(rollingBlock.getTimeSeconds()); // 01/01/2000 @
 		rollingBlock.addTransaction(wallet.feeTransaction(null)); // 12:00am (UTC)
 		rollingBlock.solve();
@@ -430,7 +443,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		makeRewardBlock(rollingBlock);
 		// The time is not allowed to move backwards
 		try {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			rollingBlock.setTime(946684800); // 01/01/2000 @ 12:00am (UTC)
 			rollingBlock.addTransaction(wallet.feeTransaction(null));
 			rollingBlock.solve();
@@ -463,7 +476,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					tx.addInput(input);
 
 					// Check it fails
-					Block rollingBlock =UtilsTest.createBlock(networkParameters,genesisBlock, genesisBlock);
+					Block rollingBlock = UtilsTest.createBlock(networkParameters, genesisBlock, genesisBlock);
 					rollingBlock.setBlockType(type);
 					rollingBlock.addTransaction(tx);
 					rollingBlock.solve();
@@ -487,16 +500,16 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block spenderBlock2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), tx1);
 		// 1 should be confirmed now
-		UTXO utxo1 = blockService.getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock1.getHash()), store);
-		UTXO utxo2 = blockService.getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
+		UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock1.getHash()), store);
+		UTXO utxo2 =getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
 		assertTrue(utxo1.isConfirmed() || utxo2.isConfirmed());
 
 		assertFalse(utxo1.isSpent());
 		assertFalse(utxo2.isSpent());
 
 		// 2 should be unconfirmed
-		utxo1 = blockService.getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock2.getHash()), store);
-		utxo2 = blockService.getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock2.getHash()), store);
+		utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock2.getHash()), store);
+		utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock2.getHash()), store);
 		assertFalse(utxo1.isConfirmed());
 		assertFalse(utxo2.isConfirmed());
 		assertFalse(utxo1.isSpent());
@@ -527,7 +540,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Again but with incorrect input script
 		try {
 			tx1.getInput(0).setScriptSig(new Script(new byte[0]));
-			Block block1 =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			Block block1 = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			block1.addTransaction(tx1);
 			block1 = adjustSolve(block1);
 			this.blockGraph.add(block1, false, store);
@@ -593,7 +607,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			Script inputScript = ScriptBuilder.createInputScript(sig);
 			input.setScriptSig(inputScript);
 			// tx2.getOutput(0).getValue().setValue(tx2.getOutput(0).getValue().getValue().add(BigInteger.valueOf(1)));
-			Block block1 =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			Block block1 = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			block1.addTransaction(tx2);
 
 			block1 = adjustSolve(block1);
@@ -638,7 +653,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Create genesis block
 		try {
-			Block b =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			Block b = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			b.setBlockType(Type.BLOCKTYPE_INITIAL);
 			b.solve();
 			blockGraph.add(b, false, store);
@@ -685,7 +701,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 20; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -712,7 +728,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -752,7 +768,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -779,7 +795,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -826,7 +842,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.add(rollingBlock, true, store);
 		}
 
@@ -901,7 +917,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase without data
@@ -935,7 +952,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase without data
@@ -971,7 +989,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase without data
@@ -1007,7 +1026,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase without data
@@ -1600,7 +1620,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			executors[i].preApply(tokenInfo);
 
 			// Make block including it
-			Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 			// Coinbase with signatures
@@ -1678,7 +1699,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase with signatures
@@ -1932,7 +1954,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenNoTransaction() throws Exception {
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// save block
@@ -1950,7 +1973,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenTransferTransaction() throws Exception {
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Add transfer transaction
@@ -2161,7 +2185,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
 		// Make block including it
-		Block block =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block block = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+				networkParameters.getGenesisBlock());
 		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
 
 		// Coinbase with signatures
@@ -2204,7 +2229,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block block1 = null;
 		{
 			// Create block with order
-			block1 =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			block1 = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 			block1.solve();
 		}
@@ -2283,7 +2309,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		input2.setScriptSig(inputScript2);
 
 		// Create block with order
-		block1 =UtilsTest.createBlock(networkParameters,tokenBlock, tokenBlock);
+		block1 = UtilsTest.createBlock(networkParameters, tokenBlock, tokenBlock);
 		block1.addTransaction(tx);
 		block1.addTransaction(tx2);
 		block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
@@ -2313,7 +2339,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			tx.setDataClassName("OrderOpen");
 
 			// Create block with order
-			block1 =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+			block1 = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
+					networkParameters.getGenesisBlock());
 			block1.addTransaction(tx);
 			block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 			block1.solve();
@@ -2404,7 +2431,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			input2.setScriptSig(inputScript2);
 
 			// Create block with order
-			block1 =UtilsTest.createBlock(networkParameters,tokenBlock, tokenBlock);
+			block1 = UtilsTest.createBlock(networkParameters, tokenBlock, tokenBlock);
 			block1.addTransaction(tx);
 			block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 			block1.solve();
@@ -2476,7 +2503,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			input2.setScriptSig(inputScript2);
 
 			// Create block with order
-			block1 =UtilsTest.createBlock(networkParameters,tokenBlock, tokenBlock);
+			block1 = UtilsTest.createBlock(networkParameters, tokenBlock, tokenBlock);
 			block1.addTransaction(tx);
 			block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 			block1.solve();
@@ -2529,7 +2556,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			input.setScriptSig(inputScript);
 
 			// Create block with order
-			block1 =UtilsTest.createBlock(networkParameters,pre, networkParameters.getGenesisBlock());
+			block1 = UtilsTest.createBlock(networkParameters, pre, networkParameters.getGenesisBlock());
 			block1.addTransaction(tx);
 
 			block1.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
@@ -2566,7 +2593,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			tx.setDataSignature(buf1);
 
 			// Create block with order
-			block2 =UtilsTest.createBlock(networkParameters,pre, pre);
+			block2 = UtilsTest.createBlock(networkParameters, pre, pre);
 			block2.addTransaction(tx);
 			block2.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
 			block2.solve();

@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.UserDataService;
 
@@ -20,9 +19,7 @@ import net.bigtangle.server.service.UserDataService;
 @EnableAsync
 public class ScheduleProtectService {
     private static final Logger logger = LoggerFactory.getLogger(ScheduleProtectService.class);
-
-    @Autowired
-    private ScheduleConfiguration scheduleConfiguration;
+ 
     @Autowired
     ServerConfiguration serverConfiguration;
     @Autowired

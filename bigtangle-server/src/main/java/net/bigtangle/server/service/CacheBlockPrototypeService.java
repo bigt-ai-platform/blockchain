@@ -1,7 +1,5 @@
 package net.bigtangle.server.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -9,7 +7,6 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.ProtocolException;
@@ -17,7 +14,7 @@ import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class CacheBlockPrototypeService {
-	private static final Logger logger = LoggerFactory.getLogger(CacheBlockPrototypeService.class);
+ //	private static final Logger logger = LoggerFactory.getLogger(CacheBlockPrototypeService.class);
 
 	@Autowired
 	protected BlockService blockService;

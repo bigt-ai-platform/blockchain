@@ -39,8 +39,8 @@ import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Rating;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreService;
 
 /*
  *  This service offers maintenance functions to update the local mcmc state of the Tangle
@@ -55,10 +55,8 @@ public class MCMCService {
 	protected BlockStoreService blockGraph;
 
 	@Autowired
-	private TipsService tipsService;
-
-	@Autowired
-	private BlockService blockService;
+	private TipsService tipsService; 
+ 
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired

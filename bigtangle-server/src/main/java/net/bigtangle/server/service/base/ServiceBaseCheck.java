@@ -87,7 +87,6 @@ import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.ContextPropagatingThreadFactory;
 import net.bigtangle.utils.DomainValidator;
-import net.bigtangle.utils.Json;
 
 public class ServiceBaseCheck extends ServiceBaseConnect {
 
@@ -1785,7 +1784,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
-		if (!checkPossibleConflict(block, store))
+		if (!new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).checkPossibleConflict(block, store))
 			throw new ConflictPossibleException("Conflict Possible");
 		checkDomainname(block);
 	}

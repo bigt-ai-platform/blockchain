@@ -79,6 +79,7 @@ import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
@@ -1864,6 +1865,9 @@ public abstract class AbstractIntegrationTest {
 				serviceBase.getBlockWrap(prototype.getHash(), store), cutoffHeight, store))
 			throw new InfeasiblePrototypeException("The given prototype is insolid");
 		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
+	}
+	public UTXO getUTXO(TransactionOutPoint out, BlockStoreInterface store) throws BlockStoreException {
+		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
 	}
 
 }

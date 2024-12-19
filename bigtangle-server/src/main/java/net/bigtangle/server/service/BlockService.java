@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -24,17 +23,11 @@ import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
-import net.bigtangle.core.TokenInfo;
-import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionInput;
-import net.bigtangle.core.TransactionOutPoint;
-import net.bigtangle.core.UTXO;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.exception.VerificationException.ConflictPossibleException;
 import net.bigtangle.core.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.core.exception.VerificationException.UnsolidException;
 import net.bigtangle.core.response.AbstractResponse;
@@ -42,10 +35,10 @@ import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
-import net.bigtangle.utils.DomainValidator;
 import net.bigtangle.utils.Gzip;
 
 /**
@@ -76,16 +69,18 @@ public class BlockService {
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
 		return serviceBase.getBlock(blockhash, store);
 	}
 
-	public BlockWrap getBlockWrap(Sha256Hash blockhash, BlockStoreInterface store)
-			throws BlockStoreException {
-		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).getBlockWrap(blockhash, store);
+	public BlockWrap getBlockWrap(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
+		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.getBlockWrap(blockhash, store);
 	}
 
-	public AbstractResponse searchBlock(Map<String, Object> request, BlockStoreInterface store) throws BlockStoreException {
+	public AbstractResponse searchBlock(Map<String, Object> request, BlockStoreInterface store)
+			throws BlockStoreException {
 		@SuppressWarnings("unchecked")
 		List<String> address = (List<String>) request.get("address");
 		String lastestAmount = request.get("lastestAmount") == null ? "0" : request.get("lastestAmount").toString();
@@ -135,8 +130,8 @@ public class BlockService {
 			throws BlockStoreException {
 
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-		long my = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService,jsonmapper).getCurrentCutoffHeight(maxConfirmedReward, store);
+		long my = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.getCurrentCutoffHeight(maxConfirmedReward, store);
 		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(Math.max(cutoffHeight, my)));
 	}
 
@@ -167,26 +162,18 @@ public class BlockService {
 		return candidate;
 	}
 
-	public boolean getUTXOSpent(TransactionOutPoint txout, BlockStoreInterface store) throws BlockStoreException {
-		return store.getTransactionOutput(txout.getBlockHash(), txout.getTxHash(), txout.getIndex()).isSpent();
-	}
-
-	public UTXO getUTXO(TransactionOutPoint out, BlockStoreInterface store) throws BlockStoreException {
-		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
-	}
-
 	/*
 	 * Block byte[] bytes
 	 */
 	public Optional<Block> addConnectedFromKafka(byte[] key, byte[] bytes) {
 
 		try {
-            logger.debug("addConnectedFromKafka from sendkey:{}", Arrays.toString(key));
+			logger.debug("addConnectedFromKafka from sendkey:{}", Arrays.toString(key));
 			return addConnected(Gzip.decompressOut(bytes), true);
 		} catch (VerificationException e) {
 			return Optional.empty();
 		} catch (Exception e) {
-            logger.debug("addConnectedFromKafka with sendkey:{}", Arrays.toString(key), e);
+			logger.debug("addConnectedFromKafka with sendkey:{}", Arrays.toString(key), e);
 			return Optional.empty();
 		}
 
@@ -200,7 +187,8 @@ public class BlockService {
 		if (bytes == null)
 			return Optional.empty();
 		Block makeBlock = networkParameters.getDefaultSerializer().makeBlock(bytes);
-        logger.debug(" addConnected  Blockhash={} height ={} block: {}", makeBlock.getHashAsString(), makeBlock.getHeight(), makeBlock);
+		logger.debug(" addConnected  Blockhash={} height ={} block: {}", makeBlock.getHashAsString(),
+				makeBlock.getHeight(), makeBlock);
 		return addConnectedBlock(makeBlock, allowUnsolid);
 	}
 
@@ -210,7 +198,7 @@ public class BlockService {
 			if (!store.existBlock(block.getHash())) {
 				try {
 					if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
-                        logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
+						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
 					}
 					blockgraph.add(block, allowUnsolid, store);
 					// removeBlockPrototype(block,store);
@@ -218,7 +206,8 @@ public class BlockService {
 				} catch (ProofOfWorkException | UnsolidException e) {
 					return Optional.empty();
 				} catch (Exception e) {
-                    logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(), block.getHeight(), block, e);
+					logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(),
+							block.getHeight(), block, e);
 					return Optional.empty();
 
 				}
@@ -235,7 +224,7 @@ public class BlockService {
 		block = adjustPrototype(block, store);
 		long h = calcHeightRequiredBlocks(block, store);
 		if (h > block.getHeight()) {
-            logger.debug("adjustHeightRequiredBlocks{} to {}", block, h);
+			logger.debug("adjustHeightRequiredBlocks{} to {}", block, h);
 			block.setHeight(h);
 		}
 	}
@@ -245,7 +234,7 @@ public class BlockService {
 		int delaySeconds = 7200;
 
 		if (block.getTimeSeconds() < System.currentTimeMillis() / 1000 - delaySeconds) {
-            logger.debug("adjustPrototype {}", block);
+			logger.debug("adjustPrototype {}", block);
 			Block newblock = getNewBlockPrototype(store);
 			for (Transaction transaction : block.getTransactions()) {
 				newblock.addTransaction(transaction);
@@ -271,8 +260,6 @@ public class BlockService {
 		return height + 1;
 	}
 
- 
-
 	/*
 	 * failed blocks without conflict for retry
 	 */
@@ -289,63 +276,8 @@ public class BlockService {
 
 	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
-		block.verifyHeader();
-		if (!checkPossibleConflict(block, store))
-			throw new ConflictPossibleException("Conflict Possible");
-		checkDomainname(block);
+		new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.checkBlockBeforeSave(block, store);
 	}
 
-	public void checkDomainname(Block block) {
-        if (Objects.requireNonNull(block.getBlockType()) == Type.BLOCKTYPE_TOKEN_CREATION) {
-            TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-            if (TokenType.domainname.ordinal() == currentToken.getToken().getTokentype()) {
-                if (!DomainValidator.getInstance().isValid(currentToken.getToken().getTokenname()))
-                    throw new VerificationException("Domain name is not valid.");
-            }
-        }
-	}
-
-	/*
-	 * Transactions in a block may has spent output, It is not final that the reject
-	 * of the block Return false, if there is possible conflict
-	 */
-	public boolean checkPossibleConflict(Block block, BlockStoreInterface store) throws BlockStoreException {
-		// All used transaction outputs
-		final List<Transaction> transactions = block.getTransactions();
-		for (final Transaction tx : transactions) {
-			if (!tx.isCoinBase()) {
-				for (int index = 0; index < tx.getInputs().size(); index++) {
-					TransactionInput in = tx.getInputs().get(index);
-
-					UTXO b = store.getTransactionOutput(in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
-							in.getOutpoint().getIndex());
-					if (b != null && b.isConfirmed() && b.isSpent()) {
-						// there is a confirmed output, conflict is very
-						// possible
-						return false;
-					}
-					if (b != null && !b.isConfirmed() && !checkSpendpending(b)) {
-						// there is a not confirmed output, conflict may be
-						// possible
-						// check the time, if the output is stale
-						return false;
-					}
-				}
-			}
-		}
-		return true;
-	}
-
-	/*
-	 * spendpending has timeout for 5 minute return false, if there is spendpending
-	 * and timeout not
-	 */
-	public boolean checkSpendpending(UTXO output) {
-		int SPENTPENDINGTIMEOUT = 300000;
-		if (output.isSpendPending()) {
-			return (System.currentTimeMillis() - output.getSpendPendingTime()) > SPENTPENDINGTIMEOUT;
-		}
-		return true;
-
-	}
 }

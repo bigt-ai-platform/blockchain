@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.ContractExecutionService;
-import net.bigtangle.server.service.RewardService;
 
 @Component
 @EnableAsync
