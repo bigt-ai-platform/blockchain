@@ -148,7 +148,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	public boolean addReferencedBlockHashesTo(Set<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
-			long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict, BlockStoreInterface store)
+			long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict,boolean checkMilestone, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
@@ -179,11 +179,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 			// Add this block and its referenced.
 			if (blocktypes == null) {
-				addBlockWithCheckReferenced(blocks, block, checkSpentConflict, store);
+				addBlockWithCheckReferenced(blocks, block, checkSpentConflict,checkMilestone, store);
 			} else {
 				for (Type type : blocktypes) {
 					if (type.equals(block.getBlock().getBlockType())) {
-						addBlockWithCheckReferenced(blocks, block, checkSpentConflict, store);
+						addBlockWithCheckReferenced(blocks, block, checkSpentConflict,checkMilestone, store);
 					}
 				}
 			}
@@ -211,7 +211,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * checkSpentConflict then add this block and its referenced all or nothing
 	 */
 	public void addBlockWithCheckReferenced(Set<BlockWrap> allApprovedNewBlocks, BlockWrap block,
-			boolean checkSpentConflict, BlockStoreInterface store) throws BlockStoreException {
+			boolean checkSpentConflict,boolean checkMilestone, BlockStoreInterface store) throws BlockStoreException {
 		boolean check = true;
 		if (checkSpentConflict) {
 			Set<BlockWrap> checkBlocks = new HashSet<>();
@@ -221,7 +221,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					|| Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
 				checkBlocks.addAll(getReferrencedBlockWrap(block.getBlock(), store));
 			}
-			check = checkSpentAndConflict(allApprovedNewBlocks, checkBlocks, store);
+			check = checkSpentAndConflict(allApprovedNewBlocks, checkBlocks, checkMilestone,store);
 		}
 		if (check) {
 			allApprovedNewBlocks.add(block);
@@ -229,14 +229,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
-	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks,
+	public boolean checkSpentAndConflict(Set<BlockWrap> allApproved, Set<BlockWrap> newBlocks, boolean checkMilestone,
 			BlockStoreInterface store) {
 		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 
 		allApprovedNewBlocks.addAll(allApproved);
 		allApprovedNewBlocks.addAll(newBlocks);
 
-		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, false, store);
+		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, checkMilestone, store);
 
 		if (anySpentInputs) {
 			return false;
@@ -485,6 +485,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		List<Contractresult> allWithPrev = store.getContractresultWithPrev(connectedContracExecute.getPrevblockhash());
 		for (Contractresult s : allWithPrev) {
+			if (c.getBlock().getBlockHash().equals(s.getBlockHash()))
+				continue;
+
 			if (!c.getBlock().getBlockHash().equals(s.getSpenderBlockHash())) {
 				if (checkMilestone) {
 					if (s.getMilestone() > 0) {
@@ -516,6 +519,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		final OrderExecutionResult connectedContracExecute = c.getConflictPoint().getConnectedOrderExecute();
 		List<Orderresult> allWithPrev = store.getOrderresultWithPrev(connectedContracExecute.getPrevblockhash());
 		for (Orderresult s : allWithPrev) {
+			if (c.getBlock().getBlockHash().equals(s.getBlockHash()))
+				continue;
+			
 			if (!c.getBlock().getBlockHash().equals(s.getSpenderBlockHash())) {
 				if (checkMilestone) {
 					if (s.getMilestone() > 0) {

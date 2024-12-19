@@ -62,6 +62,7 @@ import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrap;
 import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBase {
@@ -87,7 +88,7 @@ public abstract class ServiceBase {
 		this.serverConfiguration = serverConfiguration;
 		this.networkParameters = networkParameters;
 		this.cacheBlockService = cacheBlockService;
-		this.jsonmapper= jsonmapper;
+		this.jsonmapper = jsonmapper;
 	}
 
 	public boolean enableFee(Block block) {
@@ -133,7 +134,7 @@ public abstract class ServiceBase {
 			throws BlockStoreException {
 		List<BlockWrap> result = new ArrayList<>();
 		for (Sha256Hash pred : allBlockHashes)
-			result.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+			result.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 					.getBlockWrap(pred, store));
 		return result;
 	}
@@ -228,7 +229,7 @@ public abstract class ServiceBase {
 			byte[] be = cacheBlockService.getBlockEvaluation(blockhash, store);
 			BlockEvaluation v = BlockEvaluation.buildInitial(block);
 			if (be != null)
-				v =  jsonmapper.readValue(be, BlockEvaluation.class);
+				v = jsonmapper.readValue(be, BlockEvaluation.class);
 			if (v == null)
 				v = BlockEvaluation.buildInitial(block);
 			byte[] blockMCMC = cacheBlockService.getBlockMCMC(blockhash, store);
@@ -319,7 +320,7 @@ public abstract class ServiceBase {
 			if (predecessor.getBlockEvaluation().getSolid() == 2) {
 			} else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
 				SolidityState solidityState = SolidityState.getSuccessState();
-				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 						.solidifyBlock(predecessor.getBlock(), solidityState, true, store);
 				// missingCalculation =
 				// SolidityState.fromMissingCalculation(predecessor.getBlockHash());
@@ -694,8 +695,8 @@ public abstract class ServiceBase {
 
 	public void solidifyWaiting(Block block, BlockStoreInterface store) throws BlockStoreException {
 
-		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-				.checkSolidity(block, false, store, false);
+		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper).checkSolidity(block, false, store, false);
 		// allow here unsolid block, as sync may do only the referenced blocks
 		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
 			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
@@ -807,26 +808,25 @@ public abstract class ServiceBase {
 	public void collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
 			Set<BlockWrap> collected, Set<BlockWrap> tobeUnconfirms, BlockStoreInterface store)
 			throws BlockStoreException {
-		BlockWrap lastContractExecution = null;
 
-		// get the last EXECUTE
+		List<BlockWrap> executions = new ArrayList<>();
 		for (BlockWrap block : blocks) {
 			if (blocktype.equals(block.getBlock().getBlockType())) {
-				if (lastContractExecution == null) {
-					lastContractExecution = block;
-				} else {
-					if (lastContractExecution.getBlock().getHeight() < block.getBlock().getHeight()) {
-						lastContractExecution = block;
-					}
-				}
+				executions.add(block);
 			} else {
 				collected.add(block);
 			}
 		}
 		// backward to get all chained EXECUTE until milestone
-		if (lastContractExecution != null) {
-			collected.addAll(collectReferencedChaineExecutions(lastContractExecution, store));
-			collectFollowChaineExecutions(lastContractExecution, tobeUnconfirms, store);
+		if (!executions.isEmpty()) {
+			executions.sort(new SortbyBlockWrap());
+			for (BlockWrap b : executions) {
+				Set<BlockWrap> take = new HashSet<>();
+				if (collectReferencedChaineExecutions(b, executions, take)) {
+					collected.addAll(take);
+				}
+				// collectFollowChaineExecutions(lastContractExecution, tobeUnconfirms, store);
+			}
 		}
 
 	}
@@ -899,24 +899,20 @@ public abstract class ServiceBase {
 		}
 		return false;
 	}
+
 	/*
 	 * return all Execution Blocks not in milestone and chained from headExecution
 	 * to the Execution in milestone or begin.
 	 */
-	public Set<BlockWrap> collectReferencedChaineExecutions(BlockWrap headExecution, BlockStoreInterface store)
-			throws BlockStoreException {
+	public boolean collectReferencedChaineExecutions(BlockWrap headExecution, List<BlockWrap> collectList,
+			Set<BlockWrap> re) throws BlockStoreException {
 
-		Set<BlockWrap> re = new HashSet<>();
 		boolean brokenChained = true;
 		BlockWrap startingBlock = headExecution;
 		while (startingBlock != null) {
 			re.add(startingBlock);
-			startingBlock = getBlockWrap(getExecutionPrev(startingBlock.getBlock()), store);
+			startingBlock = findBlock(collectList, getExecutionPrev(startingBlock.getBlock()));
 
-			if (startingBlock == null) {
-				brokenChained = false;
-
-			}
 			if (startingBlock != null && Sha256Hash.ZERO_HASH.equals(startingBlock.getBlock().getHash())) {
 				brokenChained = false;
 				// finish at origin or
@@ -928,12 +924,15 @@ public abstract class ServiceBase {
 				startingBlock = null;
 			}
 		}
-		if (brokenChained) {
-			return new HashSet<>();
-		} else {
-			return re;
-		}
+		return brokenChained;
+
 	}
 
-
+	public BlockWrap findBlock(List<BlockWrap> collectList, Sha256Hash blockhash) throws BlockStoreException {
+		for (BlockWrap b : collectList) {
+			if (b.getBlockHash().equals(blockhash))
+				return b;
+		}
+		return null;
+	}
 }

@@ -128,7 +128,6 @@
 						</property>
 					</properties>
 					<argLine>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</argLine>
-					<argLine>--add-exports java.base/sun.nio.ch=ALL-UNNAMED</argLine>
 					<argLine>--add-exports java.base/java.lang=ALL-UNNAMED </argLine>
 				</configuration>
 			</plugin>

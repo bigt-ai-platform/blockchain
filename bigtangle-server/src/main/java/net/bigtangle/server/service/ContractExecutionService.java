@@ -200,10 +200,10 @@ public class ContractExecutionService {
 
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
-				referencedOrdertypes, true, store);
+				referencedOrdertypes, true, false,store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
-				referencedOrdertypes, true, store);
+				referencedOrdertypes, true, false,store);
 
 		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
 		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.firstContractresult()

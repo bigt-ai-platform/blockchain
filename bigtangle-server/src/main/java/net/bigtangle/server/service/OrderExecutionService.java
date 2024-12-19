@@ -170,10 +170,10 @@ public class OrderExecutionService {
 		// add all blocks of dependencies
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
-                ordertypes, true, store);
+                ordertypes, true,false, store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
-                ordertypes, true, store);
+                ordertypes, true,false, store);
 
 		Orderresult prevMilestone = store.getMaxMilestoneOrderresult();
 

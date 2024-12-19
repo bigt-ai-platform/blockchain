@@ -1540,6 +1540,7 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
+					createDAG("checkSumfailed");
 				}
 				assertTrue(a.getValue().check(), " " + a.toString());
 
@@ -1835,8 +1836,8 @@ public abstract class AbstractIntegrationTest {
 	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
 		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.getBlockWrap(hash, store);
-		return block.getBlock().getHeight() + "/" + block.getMcmc().getDepth() + "/"
-				+ block.getBlockEvaluation().getMilestone() + "/" + block.getBlock().getBlockType().ordinal()  + "/"
+		return block.getBlock().getHeight() + "/D" + block.getMcmc().getDepth() + "/M"
+				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal()  + "/"
 				+ block.getBlockHash().toString().substring(3, 7);
 	}
 	

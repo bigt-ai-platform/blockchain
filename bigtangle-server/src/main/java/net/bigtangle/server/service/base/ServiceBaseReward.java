@@ -43,8 +43,8 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 
 		Set<BlockWrap> blocks = new HashSet<>();
 		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
-				store);
-		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true,
+				true, store);
+		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
 				store);
 		Comparator<BlockWrap> comparator = Comparator.comparingLong((BlockWrap b) -> b.getBlock().getHeight())
 				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
