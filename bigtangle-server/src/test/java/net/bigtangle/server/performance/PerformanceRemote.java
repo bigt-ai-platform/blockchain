@@ -18,9 +18,11 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.test.AbstractIntegrationTest;
 import net.bigtangle.wallet.Wallet;
 
@@ -42,7 +44,7 @@ public class PerformanceRemote extends  AbstractIntegrationTest {
 	public void setUp() throws Exception {
 		contextRoot = "http://localhost:8088/";
 		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
-	//	store = storeService.getStore();
+	 	store = storeService.getStore();
 	}
 
 	@Test
@@ -52,8 +54,18 @@ public class PerformanceRemote extends  AbstractIntegrationTest {
 			create(a2);
 		}
 	}
-
-	@SuppressWarnings({"rawtypes", "unchecked"})
+	@Test
+	public void testDAG() throws Exception {
+ 
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+ 
+	ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+	long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
+	long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
+	createDAG("testDAG", cutoffHeight, maxHeight);
+	}
+	
+ 
     public void create(List<Block> a2) throws Exception {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();

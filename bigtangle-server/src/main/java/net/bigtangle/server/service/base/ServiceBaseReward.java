@@ -10,6 +10,8 @@ import net.bigtangle.server.core.ConflictCandidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.MemoInfo;
@@ -29,10 +31,10 @@ import net.bigtangle.store.BlockStoreInterface;
 public class ServiceBaseReward extends ServiceBaseConnect {
 
 	public ServiceBaseReward(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
-	}
+	} 
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseReward.class);
 
@@ -58,7 +60,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		checkContainsNoRewardBlocks(newMilestoneBlock, store);
 
 		// Check: At this point, predecessors must be solid
-		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.checkSolidity(newMilestoneBlock, false, store, false);
 
 		if (solidityState.isSuccessState())
@@ -77,7 +79,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		allApprovedNewBlocks.add(getBlockWrap(newMilestoneBlock.getHash(), store));
 
 		// If anything is already spent, no-go
-		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, store);
+		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, true, store);
 		// Optional<ConflictCandidate> spentInput =
 		// findFirstSpentInput(allApprovedNewBlocks);
 
@@ -90,8 +92,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
 				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
 				.values().stream().anyMatch(l -> l.size() > 1);
-		if (anyCandidateConflicts)
-			showConflict(allApprovedNewBlocks);
+	//	if (anyCandidateConflicts)
+	//		showConflict(allApprovedNewBlocks);
 
 		// Did we fail? Then we stop now and rerun consensus
 		// logic on the new longest chain.
@@ -206,8 +208,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		long cutoffheight = getRewardCutoffHeight(prevRewardHash, store);
 		List<Block.Type> ordertypes = getListedBlockOfType(contractExecute);
 
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
 		Set<BlockWrap> blocks = new HashSet<>();
 		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
@@ -224,9 +225,8 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		Set<BlockWrap> unconfirms = new HashSet<>();
 		// chained add check conflict inside
 		collectExecutionChained(store, blocks, collected, unconfirms);
-		for (BlockWrap b : unconfirms) {
-			logger.debug(b.toString());
-		}
+		//do unconfirm, this is build up process consistent, not verify
+		unconfirmBlocksSorted(store,   unconfirms, new HashSet<>());
 
 		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
 				serviceBase.getHashSet(collected), store);
@@ -240,7 +240,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 		// Build transaction for block
 		Transaction tx = new Transaction(networkParameters);
-		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, referenced, prevChainLength + 1);
@@ -318,7 +318,7 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
 						milestoneNumber, store);
 				// Unconfirm anything not in milestone
-				unconfirmBlocks(store, milestoneNumber, blocksInMilestoneInterval);
+				unconfirmBlocks(store,   blocksInMilestoneInterval);
 			}
 			store.commitDatabaseBatchWrite();
 			store.beginDatabaseBatchWrite();
@@ -340,13 +340,13 @@ public class ServiceBaseReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	private void unconfirmBlocks(BlockStoreInterface store, long milestoneNumber,
+	private void unconfirmBlocks(BlockStoreInterface store ,
 			List<Sha256Hash> blocksInMilestoneInterval) throws BlockStoreException {
 		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 		for (Sha256Hash b : blocksInMilestoneInterval) {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
 		}
-		unconfirmBlocksSorted(store, milestoneNumber, blocksToRemoveBlocks, new HashSet<>());
+		unconfirmBlocksSorted(store,  blocksToRemoveBlocks, new HashSet<>());
 	}
 
 	/**

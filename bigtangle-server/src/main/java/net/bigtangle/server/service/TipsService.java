@@ -23,14 +23,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
-import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -49,6 +48,8 @@ public class TipsService {
 	protected NetworkParameters networkParameters;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
+	@Autowired
+	protected ObjectMapper jsonmapper;
 
 	private static final Random seed = new Random();
 
@@ -124,27 +125,6 @@ public class TipsService {
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
 	}
 
-	/**
-	 * Selects two blocks to approve via MCMC for the given prototype block such
-	 * that the two approved blocks are not conflicting with the prototype block
-	 * itself
-	 *
-	 * @param prototype Existing solid block that is considered when walking
-	 * @throws VerificationException if the given prototype is not compatible with
-	 *                               the current milestone
-	 */
-	public void getValidatedBlockPairCompatibleWithExisting(Block prototype, BlockStoreInterface store)
-			throws BlockStoreException {
-		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
-		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
-		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
-		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks,
-				serviceBase.getBlockWrap(prototype.getHash(), store), cutoffHeight, store))
-			throw new InfeasiblePrototypeException("The given prototype is insolid");
-		getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
-	}
 
 	/**
 	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
@@ -189,8 +169,7 @@ public class TipsService {
 			BlockWrap left, BlockWrap right, Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		long cutoffHeight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
 		long maxHeight = serviceBase.getRewardMaxHeight();
 		long prevMilestoneNumber = store.getRewardChainLength(prevRewardHash);
@@ -217,7 +196,7 @@ public class TipsService {
 				cutoffHeight, maxHeight);
 	}
 
-	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
+	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
@@ -230,8 +209,7 @@ public class TipsService {
 			HashSet<BlockWrap> currentApprovedUnconfirmedBlocks, BlockWrap left, BlockWrap right,
 			BlockStoreInterface store) throws BlockStoreException {
 		Stopwatch watch = Stopwatch.createStarted();
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
 		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
 
@@ -319,7 +297,7 @@ public class TipsService {
 	private BlockWrap validateOrPerformValidatedStep(BlockWrap fromBlock,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockWrap potentialNextBlock, long cutoffHeight,
 			long maxHeight, BlockStoreInterface store) throws BlockStoreException {
-		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks, cutoffHeight,
 						maxHeight, store))
 			return potentialNextBlock;
@@ -337,7 +315,7 @@ public class TipsService {
 //		 log.debug(fromBlock.toString());
 //		}
 		for (Sha256Hash req : store.getApproverBlockHashes(fromBlock.getBlockHash())) {
-			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 					.getBlockWrap(req, store));
 		}
 
@@ -346,7 +324,7 @@ public class TipsService {
 			// Find results until one is valid/eligible
 			result = performTransition(fromBlock, candidates);
 			candidates.remove(result);
-		} while (!new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+		} while (!new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight,
 						store));
 		return result;
@@ -421,8 +399,7 @@ public class TipsService {
 		if (hashs.isEmpty()) {
 			candidates.add(store.getBlockWrap(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()));
 		} else {
-			ServiceBaseConnect serviceBaseConnect = new ServiceBaseConnect(serverConfiguration, networkParameters,
-					cacheBlockService);
+			ServiceBaseConnect serviceBaseConnect = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 			for (Sha256Hash hash : hashs) {
 				candidates.add(serviceBaseConnect.getBlockWrap(hash, store));
 			}
@@ -433,7 +410,7 @@ public class TipsService {
 	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 
-		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.getEntryPointCandidates(currChainLength, store);
 	}
 

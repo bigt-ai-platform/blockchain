@@ -28,6 +28,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.jgrapht.graph.DefaultDirectedGraph;
 import org.jgrapht.graph.DefaultEdge;
 import org.junit.jupiter.api.AfterEach;
@@ -70,6 +71,7 @@ import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancelInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
@@ -85,6 +87,7 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.core.response.GetBalancesResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetTokensResponse;
@@ -181,7 +184,8 @@ public abstract class AbstractIntegrationTest {
 	protected BlockSaveService blockSaveService;
 	@Autowired
 	CheckpointService checkpointService;
-
+	@Autowired
+	protected ObjectMapper jsonmapper;
 	@Autowired
 	protected void prepareContextRoot(@Value("${local.server.port}") int port) {
 		contextRoot = String.format(CONTEXT_ROOT_TEMPLATE, port);
@@ -490,9 +494,14 @@ public abstract class AbstractIntegrationTest {
 		Block b = orderExecutionService.createOrderExecution(store);
 		// no reward, this order will be not confirmed
 		// confirm the contract execution
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirmOrderExecute(b, -1,
-				true, store);
+		if(b!=null) {
+	//	new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).confirmOrderExecute(b, -1,
+	//			true, store);
 		addedBlocks.add(b);
+		}
+		else {
+			log.debug("");
+		}
 	}
 
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
@@ -791,11 +800,6 @@ public abstract class AbstractIntegrationTest {
 
 		List<OrderRecord> allOrdersSorted = store.getAllOpenOrdersSorted(null, null);
 		List<UTXO> allUTXOsSorted = store.getAllAvailableUTXOsSorted();
-		/*
-		 * Map<Block, Boolean> blockConfirmed = new HashMap<>(); for (Block b :
-		 * addedBlocks) { blockConfirmed.put(b,
-		 * blockService.getBlockEvaluation(b.getHash(), store).isConfirmed()); }
-		 */
 		// Redo and assert snapshot equal to new state
 		resetStore();
 		for (Block b : addedBlocks) {
@@ -1674,7 +1678,7 @@ public abstract class AbstractIntegrationTest {
 
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService).unconfirm(hash,
+			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).unconfirm(hash,
 					traversedUnconfirms, -1, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -1689,7 +1693,7 @@ public abstract class AbstractIntegrationTest {
 			throws BlockStoreException {
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).confirm(block,
+			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).confirm(block,
 					traversedConfirms, (long) -1, true, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -1785,9 +1789,12 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void createDAG(String filename) throws IOException, BlockStoreException {
+		createDAG(filename, 0, 10000000);
+	}
+	public void createDAG(String filename, long from, long to ) throws IOException, BlockStoreException {
 		// 1. Create your DAG using JGraphT
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
-		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(0, 10000000);
+		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
 
 		// Initialize weight and depth of blocks
 		for (BlockWrap block : blockQueue) {
@@ -1825,10 +1832,38 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
-		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.getBlockWrap(hash, store);
 		return block.getBlock().getHeight() + "/" + block.getMcmc().getDepth() + "/"
-				+ block.getBlockEvaluation().getMilestone() + "/" + block.getBlock().getBlockType() + "/"
+				+ block.getBlockEvaluation().getMilestone() + "/" + block.getBlock().getBlockType().ordinal()  + "/"
 				+ block.getBlockHash().toString().substring(3, 7);
 	}
+	
+	public  BlockWrap  getBlockWrap(Sha256Hash hash) throws IOException, BlockStoreException {
+	return  new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+				.getBlockWrap(hash, store);
+		}
+	
+	/**
+	 * Selects two blocks to approve via MCMC for the given prototype block such
+	 * that the two approved blocks are not conflicting with the prototype block
+	 * itself
+	 *
+	 * @param prototype Existing solid block that is considered when walking
+	 * @return 
+	 * @throws VerificationException if the given prototype is not compatible with
+	 *                               the current milestone
+	 */
+	public   Pair<BlockWrap, BlockWrap> getValidatedBlockPairCompatibleWithExisting(Block prototype, BlockStoreInterface store)
+			throws BlockStoreException {
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
+		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
+		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks,
+				serviceBase.getBlockWrap(prototype.getHash(), store), cutoffHeight, store))
+			throw new InfeasiblePrototypeException("The given prototype is insolid");
+		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
+	}
+
 }

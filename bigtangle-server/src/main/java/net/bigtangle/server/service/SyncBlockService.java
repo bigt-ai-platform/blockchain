@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
@@ -71,6 +72,9 @@ public class SyncBlockService {
 	@Autowired
 	private BlockService blockService;
 
+	@Autowired
+	protected ObjectMapper jsonmapper;
+	
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 	private static final Logger log = LoggerFactory.getLogger(SyncBlockService.class);
@@ -526,8 +530,7 @@ public class SyncBlockService {
 		List<ChainBlockQueue> orphanBlocks = blockStore.selectChainblockqueue(true,
 				serverConfiguration.getSyncblocks());
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService).getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		if (orphanBlocks.size() > 0) {
 			log.debug("Orphan  size = {}", orphanBlocks.size());
 		}
@@ -557,8 +560,7 @@ public class SyncBlockService {
 		// Look up the blocks previous.
 		Block block = networkParameters.getDefaultSerializer().makeBlock(orphanBlock.getBlock());
 
-		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		
 		// remove too old OrphanBlock and cutoff chain length
 		if (System.currentTimeMillis() - orphanBlock.getInserttime() * 1000 > 2 * 60 * 60 * 1000

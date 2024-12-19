@@ -17,6 +17,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.Coin;
@@ -57,8 +59,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseConnect.class);
 
 	public ServiceBaseConnect(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 
 	}
 
@@ -191,7 +193,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 
 			}
 			blockStore.addUnspentTransactionOutput(utxos);
-			for( UTXO u: utxos ) cacheBlockService.evictTransactionOutput(u, blockStore);
+			for (UTXO u : utxos)
+				cacheBlockService.evictTransactionOutput(u, blockStore);
 		}
 	}
 
@@ -253,7 +256,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			OrderOpenInfo reqInfo = new OrderOpenInfo().parse(block.getTransactions().get(0).getData());
 			// calculate the offervalue for version == 1
 			if (reqInfo.getVersion() == 1) {
-				Coin burned = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+				Coin burned = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 						.countBurnedToken(block, blockStore);
 				reqInfo.setOfferValue(burned.getValue().longValue());
 				reqInfo.setOfferTokenid(burned.getTokenHex());
@@ -299,8 +302,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
 			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
-					cacheBlockService).executeContract(block, blockStore, result.getContracttokenid(), prevblockhash,
+			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).executeContract(block, blockStore, result.getContracttokenid(), prevblockhash,
 							result.getReferencedBlocks());
 			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
 
@@ -332,8 +334,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters,
-					cacheBlockService).orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
+			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
 					&& result.getToBeSpent().equals(check.getToBeSpent())
@@ -399,7 +400,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void unconfirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
+	public void unconfirmBlocksSorted(BlockStoreInterface store, Collection<BlockWrap> blocks,
 			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);

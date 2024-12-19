@@ -1,6 +1,13 @@
 package net.bigtangle.server.service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
@@ -8,12 +15,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.TokenInfo;
@@ -63,19 +71,18 @@ public class BlockService {
 	protected TipsService tipService;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
-
+	@Autowired
+	protected ObjectMapper jsonmapper;
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		return serviceBase.getBlock(blockhash, store);
 	}
 
 	public BlockWrap getBlockWrap(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException {
-		return new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService).getBlockWrap(blockhash, store);
+		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).getBlockWrap(blockhash, store);
 	}
 
 	public AbstractResponse searchBlock(Map<String, Object> request, BlockStoreInterface store) throws BlockStoreException {
@@ -129,7 +136,7 @@ public class BlockService {
 
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		long my = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService).getCurrentCutoffHeight(maxConfirmedReward, store);
+				cacheBlockService,jsonmapper).getCurrentCutoffHeight(maxConfirmedReward, store);
 		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(Math.max(cutoffHeight, my)));
 	}
 

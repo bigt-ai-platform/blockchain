@@ -182,7 +182,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -204,7 +204,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		blockSaveService.saveBlock(depBlock, store);
 
 		// After adding the missing dependency, should be solid
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -228,7 +228,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
@@ -279,7 +279,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		blockSaveService.saveBlock(confBlock, store);
 
 		// After adding the missing dependency, should be solid
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
 
 		// TODO
 		// assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid()
@@ -367,7 +367,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// After adding the missing dependency, should be solid
 
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService).solidifyWaiting(block, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).solidifyWaiting(block, store);
 
 		// There are prev not there TODO
 		// assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid()

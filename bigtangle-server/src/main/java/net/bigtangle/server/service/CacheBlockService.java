@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -29,8 +30,8 @@ import net.bigtangle.utils.Json;
 @Service
 public class CacheBlockService {
 	private static final Logger logger = LoggerFactory.getLogger(CacheBlockService.class);
-	private static ObjectMapper jsonmapper = Json.jsonmapper();
-
+	@Autowired
+	protected ObjectMapper jsonmapper;
 	@Cacheable(value = "blocksCache", key = "#blockhash")
 	public byte[] getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("read from database and no cache for: " + blockhash);

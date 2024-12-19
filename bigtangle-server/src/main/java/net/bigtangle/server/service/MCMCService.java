@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.NetworkParameters;
@@ -72,6 +73,8 @@ public class MCMCService {
 	private StoreService storeService;
 	@Autowired
 	private ScheduleConfiguration scheduleConfiguration;
+	@Autowired
+	protected ObjectMapper jsonmapper;
 
 	public void startSingleProcess() throws BlockStoreException {
 		// ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -136,8 +139,7 @@ public class MCMCService {
 	}
 
 	public void update(BlockStoreInterface store) throws InterruptedException, ExecutionException, BlockStoreException {
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		try {
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
@@ -215,7 +217,7 @@ public class MCMCService {
 		Long currentDepth = depths.get(currentBlockHash);
 		HashSet<Sha256Hash> currentApprovers = approvers.get(currentBlockHash);
 		if (!approvers.containsKey(approvedBlockHash)) {
-			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 					.getBlockWrap(approvedBlockHash, store);
 			if (prevBlock != null) {
 				blockQueue.add(prevBlock);
@@ -303,7 +305,7 @@ public class MCMCService {
 	private void subUpdateRating(PriorityQueue<BlockWrap> blockQueue, HashMap<Sha256Hash, HashSet<UUID>> approvers,
 			BlockWrap currentBlock, Sha256Hash prevTrunk, BlockStoreInterface store) throws BlockStoreException {
 		if (!approvers.containsKey(prevTrunk)) {
-			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 					.getBlockWrap(prevTrunk, store);
 			if (prevBlock != null) {
 				blockQueue.add(prevBlock);

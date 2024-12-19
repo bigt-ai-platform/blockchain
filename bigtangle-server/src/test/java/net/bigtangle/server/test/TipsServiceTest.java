@@ -10,7 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,7 @@ import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
 public class TipsServiceTest extends AbstractIntegrationTest {
@@ -74,12 +77,14 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 			createAndAddNextBlock(b1, b1);
 		}
 		mcmcServiceUpdate();
-
-		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
-			// TODO fail();
-		} catch (VerificationException e) {
-			// Expected
+		// may be b1 is confirmed
+		if (getBlockWrap(b1.getHash()).getBlockEvaluation().isConfirmed()) {
+			try {
+				getValidatedBlockPairCompatibleWithExisting(b2, store);
+				fail();
+			} catch (VerificationException e) {
+				// Expected
+			}
 		}
 	}
 
@@ -104,10 +109,10 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Create blocks with conflict
 		Block b1 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
-				networkParameters.getGenesisBlock(), doublespendTX);
+				networkParameters.getGenesisBlock(), doublespendTX, false);
 
 		Block b2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
-				networkParameters.getGenesisBlock(), doublespendTX);
+				networkParameters.getGenesisBlock(), doublespendTX, false);
 
 		blockGraph.add(b1, false, store);
 		blockGraph.add(b2, true, store);
@@ -132,10 +137,10 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// After confirming one of them into the milestone, only that one block
 		// is now available
 		makeRewardBlock(b1);
+		assertTrue(getBlockWrap(b1.getHash()).getBlockEvaluation().getMilestone() > 0);
 		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
-			makeRewardBlock(b2);
-			// TODO fail();
+			getValidatedBlockPairCompatibleWithExisting(b2, store);
+			fail();
 		} catch (VerificationException e) {
 			// Expected
 		}
@@ -195,7 +200,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 
 		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
+			getValidatedBlockPairCompatibleWithExisting(b2, store);
 			fail();
 		} catch (VerificationException e) {
 			// Expected
@@ -274,7 +279,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 
 		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
+			getValidatedBlockPairCompatibleWithExisting(b2, store);
 			fail();
 		} catch (VerificationException e) {
 			// Expected
@@ -343,18 +348,18 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// After confirming one of them into the milestone, only that one block
 		// is now available
 		makeRewardBlock(b1);
-
-		for (int i = 0; i < 20; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			assertFalse(tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash()));
-		}
-
-		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
-			fail();
-		} catch (VerificationException e) {
-			// Expected
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
+		allApprovedNewBlocks.add(getBlockWrap(b1.getHash()));
+		allApprovedNewBlocks.add(getBlockWrap(b2.getHash()));
+		assertTrue(s.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
+		if (getBlockWrap(b1.getHash()).getBlockEvaluation().isConfirmed()) {
+			try {
+				getValidatedBlockPairCompatibleWithExisting(b2, store);
+				fail();
+			} catch (VerificationException e) {
+				// Expected
+			}
 		}
 	}
 
@@ -416,7 +421,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 
 		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
+			getValidatedBlockPairCompatibleWithExisting(b2, store);
 			fail();
 		} catch (VerificationException e) {
 			// Expected
@@ -483,7 +488,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 
 		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
+			getValidatedBlockPairCompatibleWithExisting(b2, store);
 			fail();
 		} catch (VerificationException e) {
 			// Expected
@@ -526,13 +531,10 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// After confirming one of them into the milestone, only that one block
 		// is now available
 		makeRewardBlock(b1);
+		assertTrue(getBlockWrap(b1.getHash()).getBlockEvaluation().getMilestone() > 0);
+		makeRewardBlock(b2);
 
-		try {
-			tipsService.getValidatedBlockPairCompatibleWithExisting(b2, store);
-			fail();
-		} catch (VerificationException e) {
-			// Expected
-		}
+		assertTrue(getBlockWrap(b2.getHash()).getBlockEvaluation().getMilestone() < 0);
 	}
 
 	@Test

@@ -22,6 +22,7 @@ import java.util.TreeMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
@@ -61,8 +62,8 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseOrder.class);
 
 	public ServiceBaseOrder(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
 	} 
 

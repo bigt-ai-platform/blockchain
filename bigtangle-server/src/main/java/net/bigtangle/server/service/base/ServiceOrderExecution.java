@@ -9,6 +9,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -32,10 +35,10 @@ import net.bigtangle.store.BlockStoreInterface;
 public class ServiceOrderExecution extends ServiceBaseConnect {
 
 	public ServiceOrderExecution(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
-	}
+	} 
 
     public OrderExecutionResult orderMatching(Block block, Orderresult prev, Set<Sha256Hash> collectedBlocks,
 			BlockStoreInterface blockStore) throws BlockStoreException {

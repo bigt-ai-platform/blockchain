@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
@@ -73,6 +74,9 @@ public class RewardService {
 	protected CacheBlockService cacheBlockService;
 	@Autowired
 	private BlockSaveService blockSaveService;
+	@Autowired
+	protected ObjectMapper jsonmapper;
+	
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
 	private final String LOCKID = this.getClass().getName();
@@ -179,8 +183,7 @@ public class RewardService {
 			Long timeOverride, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
 		Stopwatch watch = Stopwatch.createStarted();
-		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
 		Block r1 = prevTrunk.getBlock();
 		Block r2 = prevBranch.getBlock();

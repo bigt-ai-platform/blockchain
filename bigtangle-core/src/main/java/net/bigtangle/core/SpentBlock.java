@@ -59,7 +59,7 @@ public class SpentBlock extends DataClass {
 		super.parseDIS(dis);
 		blockHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		confirmed = dis.readBoolean();
-		confirmed = dis.readBoolean();
+		spent = dis.readBoolean();
 		spenderBlockHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 		if (Objects.equals(spenderBlockHash, Sha256Hash.ZERO_HASH)) {
 			spenderBlockHash = null;

@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
@@ -58,6 +60,9 @@ public class MultiSignService {
 	protected ServerConfiguration serverConfiguration;
 	@Autowired
 	private BlockSaveService blockSaveService;
+	@Autowired
+	protected ObjectMapper jsonmapper;
+	
 	public AbstractResponse getMultiSignListWithAddress(final String tokenid, String address, BlockStoreInterface store)
 			throws BlockStoreException {
 		if (Utils.isBlank(tokenid)) {
@@ -199,8 +204,7 @@ public class MultiSignService {
 
 	public void signTokenAndSaveBlock(Block block, BlockStoreInterface store) throws Exception {
 		try {
-			ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters,
-					cacheBlockService);
+			ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 			serviceBase.checkTokenUnique(block, store);
 			if (serviceBase.checkFullTokenSolidity(block, 0, true, store) == SolidityState.getSuccessState()) {
 				this.saveMultiSign(block, store);

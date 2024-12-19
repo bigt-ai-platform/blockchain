@@ -1182,7 +1182,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 150, addedBlocks);
 		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-
+		
 		// Execute order matching
 		makeOrderExecutionAndReward(addedBlocks);
 
@@ -1192,7 +1192,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// Verify token amount invariance
 		assertCurrentTokenAmountEquals(origTokenAmounts);
-
+		checkSum(null);
 		// Verify deterministic overall execution
 		readdConfirmedBlocksAndAssertDeterministicExecution(addedBlocks);
 	}

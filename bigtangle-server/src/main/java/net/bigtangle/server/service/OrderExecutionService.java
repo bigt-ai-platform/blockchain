@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
@@ -71,7 +72,8 @@ public class OrderExecutionService {
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
 	private BlockSaveService blockSaveService;
-
+	@Autowired
+	protected ObjectMapper jsonmapper;
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
 	private final String LOCKID = this.getClass().getName();
@@ -136,7 +138,7 @@ public class OrderExecutionService {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
-        if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+        if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.enableOrderMatchExecutionChain(b)) {
 
 			return createOrderExecution(b, store);
@@ -154,8 +156,7 @@ public class OrderExecutionService {
 		block.addTransaction(tx);
 
 		// Read previous reward block's data
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService); 
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper); 
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 
@@ -192,8 +193,7 @@ public class OrderExecutionService {
 
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
-		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters,
-				cacheBlockService).orderMatching(block, lastExecution, serviceBase.getHashSet(collectNotSpents), store);
+		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).orderMatching(block, lastExecution, serviceBase.getHashSet(collectNotSpents), store);
 
 		// do not create the execution block, if there is no new referencedblocks and no
 		// match

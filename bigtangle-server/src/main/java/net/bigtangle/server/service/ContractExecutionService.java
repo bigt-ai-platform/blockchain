@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
@@ -74,6 +75,9 @@ public class ContractExecutionService {
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
 	private BlockSaveService blockSaveService;
+	@Autowired
+	protected ObjectMapper jsonmapper;
+	
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
 	private final String LOCKID = this.getClass().getName();
@@ -184,8 +188,7 @@ public class ContractExecutionService {
 		// collect the order block as reference
 		// Read previous reward block's data
 
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
@@ -213,7 +216,7 @@ public class ContractExecutionService {
 		// take last NotMilestone chain confirmed and set others as not confirmed
 		Set<BlockWrap> tobeunconfirms = collectUnconfirm(prevsNotMilestoneChainedBlocks, prevNotMilestons, store,
 				serviceBase);
-		serviceBase.unconfirmBlocksSorted(store, cutoffheight, tobeunconfirms, new HashSet<>());
+		serviceBase.unconfirmBlocksSorted(store,  tobeunconfirms, new HashSet<>());
 
 		Contractresult lastExecution = prevMilestoneExecution;
 		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
@@ -222,7 +225,7 @@ public class ContractExecutionService {
 
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
-		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService)
+		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.executeContract(block, store, contract, lastExecution, serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks

@@ -59,7 +59,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+				cacheBlockService,jsonmapper);
 		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger(),
 				 servicebase.getRewardInfo(networkParameters.getGenesisBlock( )).getDifficultyTargetAsInteger());
 	}
@@ -86,7 +86,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+				cacheBlockService,jsonmapper);
 		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().multiply(BigInteger.valueOf(4)),
 				servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger());
 		Block highDifficultyBlock = rollingBlock;
@@ -141,7 +141,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+				cacheBlockService,jsonmapper);
 		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
 				.compareTo(servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger()) < 0);
 		Block highDifficultyBlock = rollingBlock;

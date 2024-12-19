@@ -8,6 +8,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
@@ -38,10 +41,10 @@ import net.bigtangle.store.BlockStoreInterface;
 public class ServiceContract extends ServiceBaseConnect {
 
 	public ServiceContract(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
 
-	}
+	} 
 
 	public ContractExecutionResult executeContract(Block block, BlockStoreInterface blockStore, String contractid,
 			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {

@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
@@ -91,8 +92,8 @@ import net.bigtangle.utils.Json;
 public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	public ServiceBaseCheck(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
-		super(serverConfiguration, networkParameters, cacheBlockService);
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
+		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 
 	}
 
@@ -708,8 +709,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		// Ensure dependency (prev reward hash) exists
 		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
-		BlockWrap dependency = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-				.getBlockWrap(prevRewardHash, store);
+		BlockWrap dependency = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper).getBlockWrap(prevRewardHash, store);
 		if (dependency == null)
 			return SolidityState.fromPrevReward(prevRewardHash, true);
 
@@ -724,8 +725,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	public SolidityState checkFullTokenSolidity(Block block, long height, boolean throwExceptions, BlockStoreInterface store)
-			throws BlockStoreException {
+	public SolidityState checkFullTokenSolidity(Block block, long height, boolean throwExceptions,
+			BlockStoreInterface store) throws BlockStoreException {
 
 		// TODO (check fee get(1))
 		if (!block.getTransactions().get(0).isCoinBase()) {
@@ -1142,7 +1143,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// Check the chain block formally valid
 		checkFormalBlockSolidity(block, true);
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService);
+				cacheBlockService, jsonmapper);
 		BlockWrap prevTrunkBlock = servicebase.getBlockWrap(block.getPrevBlockHash(), store);
 		BlockWrap prevBranchBlock = servicebase.getBlockWrap(block.getPrevBranchBlockHash(), store);
 		if (prevTrunkBlock == null)
@@ -1200,9 +1201,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			SolidityState formalSolidityResult = checkFormalBlockSolidity(block, throwExceptions);
 			if (formalSolidityResult.isFailState())
 				return formalSolidityResult;
-			final Set<Sha256Hash> allPredecessorBlockHashes = getAllRequiredBlockHashes(block,
+			final Set<Sha256Hash> allReuiredBlockHashes = getAllRequiredBlockHashes(block,
 					!allowMissingPredecessor);
-			List<BlockWrap> allRequirements = getAllBlocksFromHash(  allPredecessorBlockHashes, store);
+			List<BlockWrap> allRequirements = getAllBlocksFromHash(allReuiredBlockHashes, store);
 			// Predecessors must exist and be ok
 			SolidityState predecessorsExist = checkPredecessorsExistAndOk(block, throwExceptions, allRequirements,
 					store);
@@ -1211,8 +1212,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 
 			// Inherit solidity from predecessors if they are not solid
-			SolidityState minPredecessorSolidity = getMinPredecessorSolidity(block, allRequirements,
-					store, !allowMissingPredecessor);
+			SolidityState minPredecessorSolidity = getMinPredecessorSolidity(block, allRequirements, store,
+					!allowMissingPredecessor);
 
 			// For consensus blocks, it works as follows:
 			// If solid == 1 or solid == 2, we also check for PoW now
@@ -1404,8 +1405,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
-			throws BlockStoreException {
+	private SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions,
+			BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
 		if (transactions.get(0).getData() == null) {
@@ -1610,7 +1611,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			boolean allowMissingPredecessor, BlockStoreInterface store) {
 		try {
 			ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-					cacheBlockService);
+					cacheBlockService, jsonmapper);
 			BlockWrap storedPrev = servicebase.getBlockWrap(block.getPrevBlockHash(), store);
 			BlockWrap storedPrevBranch = servicebase.getBlockWrap(block.getPrevBranchBlockHash(), store);
 
@@ -1879,7 +1880,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	public SolidityState checkRewardDifficulty(Block rewardBlock, BlockStoreInterface store) throws BlockStoreException {
+	public SolidityState checkRewardDifficulty(Block rewardBlock, BlockStoreInterface store)
+			throws BlockStoreException {
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(rewardBlock.getTransactions().get(0).getData());
 
 		// Check previous reward blocks exist and get their approved sets
@@ -1976,40 +1978,16 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			long cutoffHeight = getRewardCutoffHeight(prevRewardHash, store);
 
 			for (Sha256Hash hash : rewardInfo.getBlocks()) {
-				BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-						.getBlockWrap(hash, store);
+				BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+						jsonmapper).getBlockWrap(hash, store);
 				if (block == null)
 					return SolidityState.fromReferenced(hash, true);
 				if (block.getBlock().getHeight() <= cutoffHeight && cutoffHeight > 0)
 					throw new VerificationException("Referenced blocks are below cutoff height.");
-
-				SolidityState requirementResult = checkRequiredBlocks(rewardInfo, block, store);
-				if (requirementResult.isSuccessState()) {
-					return requirementResult;
-				}
 			}
 
 		} catch (Exception e) {
 			throw new VerificationException("checkRewardReferencedBlocks not completed:", e);
-		}
-
-		return SolidityState.getSuccessState();
-	}
-
-	/*
-	 * check only if the blocks in database
-	 */
-	private SolidityState checkRequiredBlocks(RewardInfo rewardInfo, BlockWrap block, BlockStoreInterface store)
-			throws BlockStoreException {
-		Set<Sha256Hash> requiredBlocks = getAllRequiredBlockHashes(block.getBlock(), false);
-		for (Sha256Hash reqHash : requiredBlocks) {
-			BlockWrap req = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
-					.getBlockWrap(reqHash, store);
-			// the required block must be in this referenced blocks or in
-			// milestone
-			if (req == null) {
-				// return SolidityState.from(reqHash, true);
-			}
 		}
 
 		return SolidityState.getSuccessState();
@@ -2029,6 +2007,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		return Utils.encodeCompactBits(difficultyChain);
 	}
+
 	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, BlockStoreInterface store)
 			throws BlockStoreException {
 

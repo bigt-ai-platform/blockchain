@@ -63,7 +63,6 @@ import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.utils.Json;
 
 public abstract class ServiceBase {
 	protected ServerConfiguration serverConfiguration;
@@ -83,12 +82,12 @@ public abstract class ServiceBase {
 			throws BlockStoreException;
 
 	public ServiceBase(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService) {
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
 		super();
 		this.serverConfiguration = serverConfiguration;
 		this.networkParameters = networkParameters;
 		this.cacheBlockService = cacheBlockService;
-		this.jsonmapper= Json.jsonmapper();
+		this.jsonmapper= jsonmapper;
 	}
 
 	public boolean enableFee(Block block) {
@@ -134,7 +133,7 @@ public abstract class ServiceBase {
 			throws BlockStoreException {
 		List<BlockWrap> result = new ArrayList<>();
 		for (Sha256Hash pred : allBlockHashes)
-			result.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+			result.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 					.getBlockWrap(pred, store));
 		return result;
 	}
@@ -320,7 +319,7 @@ public abstract class ServiceBase {
 			if (predecessor.getBlockEvaluation().getSolid() == 2) {
 			} else if (predecessor.getBlockEvaluation().getSolid() == 1 && predecessorsSolid) {
 				SolidityState solidityState = SolidityState.getSuccessState();
-				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService)
+				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 						.solidifyBlock(predecessor.getBlock(), solidityState, true, store);
 				// missingCalculation =
 				// SolidityState.fromMissingCalculation(predecessor.getBlockHash());
@@ -695,7 +694,7 @@ public abstract class ServiceBase {
 
 	public void solidifyWaiting(Block block, BlockStoreInterface store) throws BlockStoreException {
 
-		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService)
+		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
 				.checkSolidity(block, false, store, false);
 		// allow here unsolid block, as sync may do only the referenced blocks
 		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
