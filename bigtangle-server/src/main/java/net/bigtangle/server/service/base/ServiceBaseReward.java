@@ -45,22 +45,10 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
 				true, store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
-				store);
-		Comparator<BlockWrap> comparator = Comparator.comparingLong((BlockWrap b) -> b.getBlock().getHeight())
-				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
-		TreeSet<BlockWrap> storedBlockHashes = new TreeSet<>(comparator);
-		storedBlockHashes.addAll(blocks);
-		serviceBase.removeMilestoneConflicts(storedBlockHashes, store);
-
-		Set<BlockWrap> collected = new HashSet<>();
-		Set<BlockWrap> unconfirms = new HashSet<>();
-		// chained add check conflict inside
-		collectExecutionChained(store, blocks, collected, unconfirms);
-		// do unconfirm, this is build up process consistent, not verify
-		unconfirmBlocksSorted(store, unconfirms, new HashSet<>());
-
+				store); 
+	  	serviceBase.checkExecutionChained(store,  blocks , false );
 		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
-				serviceBase.getHashSet(collected), store);
+ 				serviceBase.getHashSet(blocks), store);
 	}
 
 	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {

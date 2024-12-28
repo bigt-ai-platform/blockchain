@@ -246,7 +246,7 @@ public class UTXO extends SpentBlock implements  Serializable {
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(getIndex(), getTxHash());
+        return Objects.hashCode(getIndex(), getTxHash(),getBlockHash());
     }
 
     @Override
@@ -256,7 +256,8 @@ public class UTXO extends SpentBlock implements  Serializable {
         if (o == null || getClass() != o.getClass())
             return false;
         UTXO other = (UTXO) o;
-        return getIndex() == other.getIndex() && getTxHash().equals(other.getTxHash());
+        return getIndex() == other.getIndex() && getTxHash().equals(other.getTxHash())
+        		 && getBlockHash().equals(other.getBlockHash()) ;
     }
 
     public String getMemo() {

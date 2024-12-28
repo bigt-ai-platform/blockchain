@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Random;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -187,6 +189,7 @@ public abstract class AbstractIntegrationTest {
 	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
+
 	@Autowired
 	protected void prepareContextRoot(@Value("${local.server.port}") int port) {
 		contextRoot = String.format(CONTEXT_ROOT_TEMPLATE, port);
@@ -495,12 +498,12 @@ public abstract class AbstractIntegrationTest {
 		Block b = orderExecutionService.createOrderExecution(store);
 		// no reward, this order will be not confirmed
 		// confirm the contract execution
-		if(b!=null) {
-	//	new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).confirmOrderExecute(b, -1,
-	//			true, store);
-		addedBlocks.add(b);
-		}
-		else {
+		if (b != null) {
+			// new ServiceBaseConnect(serverConfiguration, networkParameters,
+			// cacheBlockService,jsonmapper).confirmOrderExecute(b, -1,
+			// true, store);
+			addedBlocks.add(b);
+		} else {
 			log.debug("");
 		}
 	}
@@ -647,7 +650,7 @@ public abstract class AbstractIntegrationTest {
 
 		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
 		Block reward = rewardService.createReward(prevRewardHash, store);
-		blockGraph.updateChain();
+		blockGraph.updateChain(false);
 		if (addedBlocks != null)
 			addedBlocks.add(reward);
 
@@ -1449,7 +1452,7 @@ public abstract class AbstractIntegrationTest {
 				blockService.getBlockWrap(prevBranch, store), store);
 		if (block != null) {
 			blockSaveService.saveBlock(block, store);
-			blockGraph.updateChain();
+			blockGraph.updateChain(false);
 		}
 		return block;
 	}
@@ -1510,7 +1513,7 @@ public abstract class AbstractIntegrationTest {
 
 	public void mcmcServiceUpdate() throws InterruptedException, ExecutionException, BlockStoreException {
 		mcmcService.update(store);
-		blockGraph.updateConfirmedDo(store);
+		blockGraph.confirmDo(store);
 	}
 
 	public void mcmc() throws JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
@@ -1540,10 +1543,12 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
-					createDAG("checkSumfailed");
+					createDAG("failed");
+					createDAGRequired("failedRequired", 0, 10000000);
 				}
 				assertTrue(a.getValue().check(), " " + a.toString());
-
+				createDAG("Ok");
+				createDAGRequired("OKRequired", 0, 10000000);
 			}
 			// log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
@@ -1680,7 +1685,7 @@ public abstract class AbstractIntegrationTest {
 
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).unconfirm(hash,
+			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper).unconfirm(hash,
 					traversedUnconfirms, -1, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -1693,18 +1698,13 @@ public abstract class AbstractIntegrationTest {
 
 	public void confirmDo(BlockWrap block, HashSet<Sha256Hash> traversedConfirms, BlockStoreInterface blockStore)
 			throws BlockStoreException {
-		try {
-			blockStore.beginDatabaseBatchWrite();
-			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).confirm(block,
-					traversedConfirms, (long) -1, true, blockStore);
-			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
-			blockStore.abortDatabaseBatchWrite();
-			throw e;
-		} finally {
-			blockStore.defaultDatabaseBatchWrite();
-		}
-
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore); 
+		 Set<BlockWrap> blocksToAdd = new HashSet< > ();
+		blocksToAdd.add(block);
+		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd );
 	}
 
 	public List<ECKey> createUserkey() {
@@ -1715,11 +1715,12 @@ public abstract class AbstractIntegrationTest {
 				"256f4faea34cbec71ae22d6f6b4ea80bddd5d7ef7c70530be78506b83bed7aea",
 				"6d2538a814150fb28d086dec83a1389d1f4f5583d996883c1cd0972c21d773c1",
 				"8ee39e7c10e31d7cfcf31d99d469b107e78120d84cff23aa38224504413e6b52",
-				"0d59be5cafdf76f40be223c818d7ed61c9c374a973f6356c4a87cc13d610a2e2",
-				"f42955011b4848fd6d26f898f937176a8549f3641000845223cef81078c8b92b",
-				"2212ea2b6bb6479021f994632fa66f891b5953e04db0f5316347de2a45e1d6c2",
-				"0b3451d9dd2d411a177ca3131e0e90c3f028c1534ca886f13af52ac442edd6fa"
-
+				/*
+				 * "0d59be5cafdf76f40be223c818d7ed61c9c374a973f6356c4a87cc13d610a2e2",
+				 * "f42955011b4848fd6d26f898f937176a8549f3641000845223cef81078c8b92b",
+				 * "2212ea2b6bb6479021f994632fa66f891b5953e04db0f5316347de2a45e1d6c2",
+				 * "0b3451d9dd2d411a177ca3131e0e90c3f028c1534ca886f13af52ac442edd6fa"
+				 */
 		};
 		for (String priv : s) {
 			ECKey key = ECKey.fromPrivate(Utils.HEX.decode(priv));
@@ -1780,7 +1781,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	private File createSVGFile(String fileExtension, String fileContent) throws IOException {
-		File tempFile = new File("logs", "Dag" + fileExtension);
+		File tempFile = new File("logs", fileExtension);
 		tempFile.delete();
 		if (fileContent != null) {
 			try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
@@ -1793,11 +1794,12 @@ public abstract class AbstractIntegrationTest {
 	public void createDAG(String filename) throws IOException, BlockStoreException {
 		createDAG(filename, 0, 10000000);
 	}
-	public void createDAG(String filename, long from, long to ) throws IOException, BlockStoreException {
+
+	public void createDAG(String filename, long from, long to) throws IOException, BlockStoreException {
 		// 1. Create your DAG using JGraphT
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
 		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
-
+		dag.addVertex("");
 		// Initialize weight and depth of blocks
 		for (BlockWrap block : blockQueue) {
 			dag.addVertex(getVertex(block.getBlockHash()));
@@ -1834,41 +1836,96 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
-		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.getBlockWrap(hash, store);
+		if (block == null)
+			return "";
 		return block.getBlock().getHeight() + "/D" + block.getMcmc().getDepth() + "/M"
-				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal()  + "/"
-				+ block.getBlockHash().toString().substring(3, 7);
+				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
+				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);
 	}
-	
-	public  BlockWrap  getBlockWrap(Sha256Hash hash) throws IOException, BlockStoreException {
-	return  new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-				.getBlockWrap(hash, store);
+
+	public void createDAGRequired(String filename, long from, long to) throws IOException, BlockStoreException {
+		// 1. Create your DAG using JGraphT
+		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
+		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
+		dag.addVertex("");
+		// Initialize weight and depth of blocks
+		for (BlockWrap block : blockQueue) {
+			dag.addVertex(getVertex(block.getBlockHash()));
 		}
-	
+		for (BlockWrap block : blockQueue) {
+			try {
+				if (block.getBlock().getHeight() > 0) {
+					String b = getVertex(block.getBlockHash());
+					for (Sha256Hash req : new ServiceBaseConnect(serverConfiguration, networkParameters,
+							cacheBlockService, jsonmapper).getAllRequiredBlockHashes(block.getBlock())) {
+						dag.addEdge(b, getVertex(req));
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		// 2. Convert DAG to DOT language format
+		String dotString = toDot(dag);
+		// 3. Generate the Graphviz .dot file
+		File dotFile = createTempFile(".dot", dotString);
+
+		// 4. Execute Graphviz `dot` to generate the SVG output
+		File svgFile = createSVGFile(filename + ".svg", null);
+		runDot(dotFile.getAbsolutePath(), svgFile.getAbsolutePath());
+
+		// 5. Display or process the generated SVG
+		// System.out.println("SVG generated at " + svgFile.getAbsolutePath());
+
+		// Displaying in the browser or a JavaFX WebView or etc is upto you
+		// For now let's display the content as a test
+		String content = Files.readString(Paths.get(svgFile.getAbsolutePath()));
+		// System.out.println(content);
+	}
+
+	public BlockWrap getBlockWrap(Sha256Hash hash) throws IOException, BlockStoreException {
+		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.getBlockWrap(hash, store);
+	}
+
 	/**
 	 * Selects two blocks to approve via MCMC for the given prototype block such
 	 * that the two approved blocks are not conflicting with the prototype block
 	 * itself
 	 *
 	 * @param prototype Existing solid block that is considered when walking
-	 * @return 
+	 * @return
 	 * @throws VerificationException if the given prototype is not compatible with
 	 *                               the current milestone
 	 */
-	public   Pair<BlockWrap, BlockWrap> getValidatedBlockPairCompatibleWithExisting(Block prototype, BlockStoreInterface store)
-			throws BlockStoreException {
+	public Pair<BlockWrap, BlockWrap> getValidatedBlockPairCompatibleWithExisting(Block prototype,
+			BlockStoreInterface store) throws BlockStoreException {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+		long prevMilestoneNumber = store.getRewardChainLength(maxConfirmedReward.getPrevBlockHash());
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
 		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
-		if (!serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks,
-				serviceBase.getBlockWrap(prototype.getHash(), store), cutoffHeight, store))
-			throw new InfeasiblePrototypeException("The given prototype is insolid");
+		BlockWrap blockWrap = serviceBase.getBlockWrap(prototype.getHash(), store);
+		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, store);
+		serviceBase.addReferencedBlockHashesTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight,
+				prevMilestoneNumber, null, false, false, store);
 		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
 	}
+
 	public UTXO getUTXO(TransactionOutPoint out, BlockStoreInterface store) throws BlockStoreException {
 		return store.getTransactionOutput(out.getBlockHash(), out.getTxHash(), out.getIndex());
+	}
+
+	public void checkConflict(Block b1, Block b2) throws IOException, BlockStoreException {
+		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
+		allApprovedNewBlocks.add(getBlockWrap(b1.getHash()));
+		allApprovedNewBlocks.add(getBlockWrap(b2.getHash()));
+		assertTrue(new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
 	}
 
 }

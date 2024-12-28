@@ -187,7 +187,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " FROM blocks WHERE   height >= ? AND height <= ? ";
 	
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
-			+ "FROM blocks WHERE milestone = -1 AND confirmed=true AND height >= ? order by height desc ";
+			+ "FROM blocks WHERE milestone = -1 AND height >= ? order by height desc ";
 
 	protected final String SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL = "SELECT block "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? ";

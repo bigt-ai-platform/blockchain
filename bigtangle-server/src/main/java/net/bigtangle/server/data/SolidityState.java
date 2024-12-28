@@ -31,7 +31,7 @@ public class SolidityState {
         return missingDependency;
     }
 
-    public boolean isSuccessState() {
+    public boolean notSuccessState() {
         return this.state != successState.state;
     }
 

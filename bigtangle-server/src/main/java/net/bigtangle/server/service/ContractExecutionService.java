@@ -36,6 +36,8 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
+import net.bigtangle.core.exception.ProtocolException;
+import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -48,8 +50,8 @@ import net.bigtangle.store.BlockStoreService;
 
 /**
  * <p>
- * A ContractExecutionService provides service for create and validate the
- * contract common execution.
+ * A ContractExecutionService provides service for create and save the contract
+ * execution.
  * </p>
  */
 @Service
@@ -76,15 +78,10 @@ public class ContractExecutionService {
 	private BlockSaveService blockSaveService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
-	
+
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
 	private final String LOCKID = this.getClass().getName();
-
-	/**
-	 * Scheduled update function that updates the Tangle
-	 *
-	 */
 
 	// createContractExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -126,18 +123,16 @@ public class ContractExecutionService {
 
 		try {
 			blockStore.beginDatabaseBatchWrite();
-
-			createContractExecutionDo(blockStore);
+			createContractExecutionSave(blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
-
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
 	}
 
-	public void createContractExecutionDo(BlockStoreInterface store) throws Exception {
+	public void createContractExecutionSave(BlockStoreInterface store) throws Exception {
 
 		// select all contractid from the table with unspent event
 		for (Token contract : getOpenContract(store)) {
@@ -147,22 +142,20 @@ public class ContractExecutionService {
 				blockSaveService.saveBlock(contractExecution, store);
 			}
 		}
-
 	}
 
 	// Add valid check
 	public List<Token> getOpenContract(BlockStoreInterface store) throws Exception {
 		return store.getTokenTypeList(TokenType.contract.ordinal());
-
 	}
 
 	/**
 	 * Runs the ContractExecution making logic
 	 * 
-	 * @return the new block or block voted on
 	 */
 
-	public Block createContractExecution(Token contract, BlockStoreInterface store) throws Exception {
+	public Block createContractExecution(Token contract, BlockStoreInterface store) throws ProtocolException,
+			BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
@@ -181,50 +174,44 @@ public class ContractExecutionService {
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
 		block.setBlockType(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
-		// Build transaction for block
+		// prepare transaction for block
 		Transaction tx = new Transaction(networkParameters);
 		block.addTransaction(tx);
-		// collect the order block as reference
-		// Read previous reward block's data
 
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
 
+		// add only the relevant blocks from the DAG
 		List<Block.Type> referencedOrdertypes = new ArrayList<>();
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EVENT);
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
-
-		// add all blocks of dependencies
-
+		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
+		// add all referenced Blocks
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
-				referencedOrdertypes, true, false,store);
+				referencedOrdertypes, true, false, store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
-				referencedOrdertypes, true, false,store);
+				referencedOrdertypes, true, false, store);
+		Set<BlockWrap> prevsNotMilestoneChainedBlocks = new HashSet<>();
+		BlockWrap prevMilestone = getFromMilestoneChainedExecutions(referencedblocks,
+				Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, prevsNotMilestoneChainedBlocks, contract, store);
 
-		Contractresult prevMilestone = store.getMaxMilestoneContractresult(contract.getTokenid());
-		Contractresult prevMilestoneExecution = prevMilestone == null ? Contractresult.firstContractresult()
-				: prevMilestone;
-		List<Contractresult> prevNotMilestons = store.getConfirmedContractresultNotMilestone(contract.getTokenid());
-
-		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(prevNotMilestons,
-				prevMilestoneExecution, store);
 		// take last NotMilestone chain confirmed and set others as not confirmed
-		Set<BlockWrap> tobeunconfirms = collectUnconfirm(prevsNotMilestoneChainedBlocks, prevNotMilestons, store,
-				serviceBase);
-		serviceBase.unconfirmBlocksSorted(store,  tobeunconfirms, new HashSet<>());
-
-		Contractresult lastExecution = prevMilestoneExecution;
-		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
-			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
+		Contractresult lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
+		if (lastExecution == null) {
+			if (prevMilestone != null)
+				lastExecution = store.getContractresult(prevMilestone.getBlock().getHash());
+			else
+				lastExecution = Contractresult.firstContractresult();
 		}
-
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
-		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper)
 				.executeContract(block, store, contract, lastExecution, serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks
@@ -236,6 +223,39 @@ public class ContractExecutionService {
 		blockService.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
+	}
+
+	/*
+	 * Execution from the blocks must be chained original from milestone.
+	 */
+	public BlockWrap getFromMilestoneChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
+			Set<BlockWrap> prevsNotMilestoneChainedBlocks, Token contract, BlockStoreInterface store)
+			throws BlockStoreException {
+		BlockWrap fromMilestoneChaineExecutions = null;
+		for (BlockWrap block : blocks) {
+			if (blocktype.equals(block.getBlock().getBlockType())) {
+				prevsNotMilestoneChainedBlocks.add(block);
+			}
+		}
+		ServiceContract serviceContract = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper);
+		if (prevsNotMilestoneChainedBlocks.isEmpty()) {
+			Contractresult m = store.getMaxMilestoneContractresult(contract.getTokenid());
+			if (m != null)
+				return serviceContract.getBlockWrap(m.getBlockHash(), store);
+		}
+		for (BlockWrap b : prevsNotMilestoneChainedBlocks) {
+			if (serviceContract.isFirsExecution(b.getBlock())) {
+				return null;
+			}
+			fromMilestoneChaineExecutions = serviceContract.getFromMilestoneChaineExecutions(b,
+					prevsNotMilestoneChainedBlocks, true, store);
+			if (fromMilestoneChaineExecutions == null) {
+				throw new InfeasiblePrototypeException(
+						"Execution from the blocks must be chained original from milestone: " + b.toString());
+			}
+		}
+		return fromMilestoneChaineExecutions;
 	}
 
 	protected Set<BlockWrap> collectUnconfirm(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
@@ -258,9 +278,10 @@ public class ContractExecutionService {
 		Set<BlockWrap> collectNews = new HashSet<>();
 		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
 		for (BlockWrap b : collectedBlocks) {
-			// check height
-			if (!alreadyCollected.contains(b.getBlockHash())) {
-				collectNews.add(b);
+			if (!b.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
+				if (!alreadyCollected.contains(b.getBlockHash())) {
+					collectNews.add(b);
+				}
 			}
 		}
 		return collectNews;
@@ -276,8 +297,10 @@ public class ContractExecutionService {
 					re = b;
 			}
 		}
-
-		return store.getContractresult(re.getBlock().getHash());
+		if (re == null)
+			return null;
+		else
+			return store.getContractresult(re.getBlock().getHash());
 	}
 
 	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {

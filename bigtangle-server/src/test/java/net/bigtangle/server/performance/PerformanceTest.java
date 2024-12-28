@@ -46,7 +46,7 @@ import net.bigtangle.wallet.Wallet;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class PerformanceTest extends ContractTest {
 
-	@Test  
+	@Test
 	public void testReward() throws Exception {
 		createUserkey();
 		List<Block> a2 = new ArrayList<Block>();
@@ -59,11 +59,6 @@ public class PerformanceTest extends ContractTest {
 			c = checkSum(c);
 		}
 	}
-
- 
- 
-		
- 
 
 	public void createReward(List<Block> blocksAddedAll) throws Exception {
 
@@ -100,14 +95,14 @@ public class PerformanceTest extends ContractTest {
 //			 
 //		}
 		try {
-			contractExecution(blocksAddedAll, true);
+			contractExecution(blocksAddedAll);
 		} catch (Exception e) {
 			e.printStackTrace();
-	 
+
 		}
 		try {
 
-		//	checkSum(null);
+			// checkSum(null);
 			return "";
 		} catch (Exception e) {
 			e.printStackTrace();

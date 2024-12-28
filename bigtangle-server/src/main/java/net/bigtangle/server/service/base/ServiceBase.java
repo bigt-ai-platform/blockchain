@@ -28,14 +28,12 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
-import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -53,6 +51,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.core.response.PermissionedAddressesResponse;
 import net.bigtangle.script.Script;
@@ -62,7 +61,6 @@ import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.data.OrderExecutionResult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrap;
 import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBase {
@@ -139,47 +137,74 @@ public abstract class ServiceBase {
 		return result;
 	}
 
+	public Set<Sha256Hash> getPredecessors(Block block) {
+		Set<Sha256Hash> predecessors = new HashSet<>();
+		predecessors.add(block.getPrevBlockHash());
+		predecessors.add(block.getPrevBranchBlockHash());
+		return predecessors;
+	}
+
+	public Set<Sha256Hash> getPredecessorsAndReferenced(Block block) {
+		Set<Sha256Hash> all = getPredecessors(block);
+		all.addAll(getExecuteReferencedBlockHashes(block));
+		return all;
+	}
+
 	/**
-	 * Returns all blocks that must be confirmed if this block is confirmed. All
-	 * transactions related to this block are include as required includePredecessor
-	 * is false = not required the two getPrevBlockHash and getPrevBranchBlockHash
-	 * The sync may does not check this two Predecessors
+	 * Returns all required blocks for this block, all inputs block, previous block
+	 * and referenced blocks
 	 */
+	public Set<Sha256Hash> getAllRequiredBlockHashes(Block block) {
+		return getAllRequiredBlockHashes(block, true);
+	}
 
-	public Set<Sha256Hash> getAllRequiredBlockHashes(Block block, boolean includePredecessor) {
+	public Set<Sha256Hash> getAllRequiredBlockHashes(Block block, boolean withReferenced) {
 		Set<Sha256Hash> allrequireds = new HashSet<>();
-		if (includePredecessor) {
-			allrequireds.add(block.getPrevBlockHash());
-			allrequireds.add(block.getPrevBranchBlockHash());
-		}
 		// All used transaction outputs
-
 		final List<Transaction> transactions = block.getTransactions();
 
 		for (final Transaction tx : transactions) {
 			if (!tx.isCoinBase()) {
 				for (int index = 0; index < tx.getInputs().size(); index++) {
 					TransactionInput in = tx.getInputs().get(index);
-					// due to virtual txs from order/reward
 					allrequireds.add(in.getOutpoint().getBlockHash());
 				}
 			}
-
 		}
 		switch (block.getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
-				BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_CONTRACT_EXECUTE, BLOCKTYPE_ORDER_EXECUTE,
-				BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
+				BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL,
+				BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
 		case BLOCKTYPE_REWARD:
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(rewardInfo.getPrevRewardHash());
+			if (withReferenced)
+				allrequireds.addAll(rewardInfo.getBlocks());
 			break;
 		case BLOCKTYPE_TOKEN_CREATION:
 			TokenInfo currentToken = new TokenInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(Sha256Hash.wrap(currentToken.getToken().getDomainNameBlockHash()));
 			if (currentToken.getToken().getPrevblockhash() != null)
 				allrequireds.add(currentToken.getToken().getPrevblockhash());
+			break;
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult checked = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			if (withReferenced)
+				allrequireds.addAll(checked.getReferencedBlocks());
+			if (!Sha256Hash.ZERO_HASH.equals(checked.getPrevblockhash())) {
+				allrequireds.add(checked.getPrevblockhash());
+			}
+			break;
+		case BLOCKTYPE_ORDER_EXECUTE:
+			OrderExecutionResult checked2 = new OrderExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			if (withReferenced)
+				allrequireds.addAll(checked2.getReferencedBlocks());
+			if (!Sha256Hash.ZERO_HASH.equals(checked2.getPrevblockhash())) {
+				allrequireds.add(checked2.getPrevblockhash());
+			}
 			break;
 		default:
 			throw new RuntimeException("No Implementation");
@@ -190,22 +215,55 @@ public abstract class ServiceBase {
 
 	public Set<BlockWrap> getReferrencedBlockWrap(Block block, BlockStoreInterface store) throws BlockStoreException {
 		Set<BlockWrap> wraps = new HashSet<>();
-		for (Sha256Hash hash : getReferrencedBlockHashes(block)) {
+		for (Sha256Hash hash : getReferencedBlockHashes(block)) {
 			wraps.add(getBlockWrap(hash, store));
 		}
 		return wraps;
 	}
 
-	public Set<Sha256Hash> getReferrencedBlockHashes(Block block) {
-		if (block.getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
-			return new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData())
-					.getReferencedBlocks();
+	public Set<Sha256Hash> getReferencedBlockHashes(Block block) {
+		Set<Sha256Hash> allRefs = new HashSet<>();
+		final List<Transaction> transactions = block.getTransactions();
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_REWARD:
+			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
+			allRefs.addAll(rewardInfo.getBlocks());
+			break;
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult checked = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			allRefs.addAll(checked.getReferencedBlocks());
+			break;
+		case BLOCKTYPE_ORDER_EXECUTE:
+			OrderExecutionResult checked2 = new OrderExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			allRefs.addAll(checked2.getReferencedBlocks());
+			break;
+		default:
+			break;
 		}
-		if (block.getBlockType().equals(Block.Type.BLOCKTYPE_ORDER_EXECUTE)) {
-			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData())
-					.getReferencedBlocks();
+
+		return allRefs;
+	}
+
+	public Set<Sha256Hash> getExecuteReferencedBlockHashes(Block block) {
+		Set<Sha256Hash> allRefs = new HashSet<>();
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult checked = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			allRefs.addAll(checked.getReferencedBlocks());
+			break;
+		case BLOCKTYPE_ORDER_EXECUTE:
+			OrderExecutionResult checked2 = new OrderExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			allRefs.addAll(checked2.getReferencedBlocks());
+			break;
+		default:
+			break;
 		}
-		return new HashSet<>();
+
+		return allRefs;
 	}
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -246,6 +304,10 @@ public abstract class ServiceBase {
 
 	public Block getExecutionPrev(Block block, BlockStoreInterface store) throws BlockStoreException {
 		return getBlock(getExecutionPrev(block), store);
+	}
+
+	public boolean isFirsExecution(Block block) {
+		return Sha256Hash.ZERO_HASH.equals(getExecutionPrev(block));
 	}
 
 	public Sha256Hash getExecutionPrev(Block block) {
@@ -673,7 +735,7 @@ public abstract class ServiceBase {
 
 			break;
 		case Invalid:
-
+			if(block!=null)
 			blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
 			break;
 		}
@@ -802,93 +864,33 @@ public abstract class ServiceBase {
 	}
 
 	/*
-	 * contract execution forms chained, it will takes all the chained contract
-	 * execution until to last execution in rewards
+	 * Execution from the blocks must be chained original from milestone.
 	 */
-	public void collectReferencedChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
-			Set<BlockWrap> collected, Set<BlockWrap> tobeUnconfirms, BlockStoreInterface store)
-			throws BlockStoreException {
+	public void checkChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype, boolean allowConfirmed,
+			BlockStoreInterface store) throws BlockStoreException {
 
 		List<BlockWrap> executions = new ArrayList<>();
 		for (BlockWrap block : blocks) {
 			if (blocktype.equals(block.getBlock().getBlockType())) {
 				executions.add(block);
-			} else {
-				collected.add(block);
 			}
 		}
 		// backward to get all chained EXECUTE until milestone
-		if (!executions.isEmpty()) {
-			executions.sort(new SortbyBlockWrap());
-			for (BlockWrap b : executions) {
-				Set<BlockWrap> take = new HashSet<>();
-				if (collectReferencedChaineExecutions(b, executions, take)) {
-					collected.addAll(take);
-				}
-				// collectFollowChaineExecutions(lastContractExecution, tobeUnconfirms, store);
+
+		for (BlockWrap b : executions) {
+			if (!isFirsExecution(b.getBlock())
+					&& getFromMilestoneChaineExecutions(b, blocks, allowConfirmed, store) == null) {
+				throw new InfeasiblePrototypeException(
+						"Execution from the blocks must be chained original from milestone: " + b.toString());
 			}
 		}
 
 	}
 
-	private void collectFollowChaineExecutions(BlockWrap startExecution, Set<BlockWrap> blocks,
-			BlockStoreInterface store) throws BlockStoreException {
-
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
-		Set<Sha256Hash> blockQueueSet = new HashSet<>();
-		blockQueue.add(startExecution);
-		blockQueueSet.add(startExecution.getBlockHash());
-
-		while (!blockQueue.isEmpty()) {
-			BlockWrap block = blockQueue.poll();
-			blockQueueSet.remove(block.getBlockHash());
-
-			// no milestone blocks can be here
-			if (block.getBlockEvaluation().getMilestone() > 0) {
-				throw new VerificationException("no milestone block can be here" + block);
-			}
-			// Nothing added if already in set
-			if (checkExists(blocks, block))
-				continue;
-			// not the startExecution
-			if (!startExecution.getBlockHash().equals(block.getBlockHash())) {
-				blocks.add(block);
-			}
-			if (Type.BLOCKTYPE_CONTRACT_EXECUTE.equals(block.getBlock().getBlockType())) {
-				List<Contractresult> allRequiredBlockHashes = store
-						.getContractresultWithPrev(block.getBlock().getHash());
-				for (Contractresult req : allRequiredBlockHashes) {
-					if (!blockQueueSet.contains(req.getBlockHash())) {
-						BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
-						blockQueueSet.add(req.getBlockHash());
-						blockQueue.add(pred);
-					}
-
-				}
-			}
-			if (Type.BLOCKTYPE_ORDER_EXECUTE.equals(block.getBlock().getBlockType())) {
-				List<Orderresult> allRequiredBlockHashes = store.getOrderresultWithPrev(block.getBlock().getHash());
-				for (Orderresult req : allRequiredBlockHashes) {
-					if (!blockQueueSet.contains(req.getBlockHash())) {
-						BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
-						blockQueueSet.add(req.getBlockHash());
-						blockQueue.add(pred);
-					}
-
-				}
-			}
-		}
-
-	}
-
-	public void collectExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks, Set<BlockWrap> collected,
-			Set<BlockWrap> tobeUnconfirms) throws BlockStoreException {
-		collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, collected, tobeUnconfirms,
-				store);
-		collectReferencedChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, collected, tobeUnconfirms,
-				store);
-
+	public void checkExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks, boolean allowConfirmed)
+			throws BlockStoreException {
+		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, allowConfirmed, store);
+		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, allowConfirmed, store);
 	}
 
 	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) {
@@ -902,33 +904,43 @@ public abstract class ServiceBase {
 
 	/*
 	 * return all Execution Blocks not in milestone and chained from headExecution
-	 * to the Execution in milestone or begin.
+	 * to the Execution in milestone or begin. confirmed execution will be accepted.
+	 * Return null, if there is no chained to milestone
 	 */
-	public boolean collectReferencedChaineExecutions(BlockWrap headExecution, List<BlockWrap> collectList,
-			Set<BlockWrap> re) throws BlockStoreException {
+	public BlockWrap getFromMilestoneChaineExecutions(BlockWrap headExecution, Set<BlockWrap> collectList,
+			boolean allowConfirmed, BlockStoreInterface store) throws BlockStoreException {
 
-		boolean brokenChained = true;
+		BlockWrap fromMilestone = null;
 		BlockWrap startingBlock = headExecution;
 		while (startingBlock != null) {
-			re.add(startingBlock);
-			startingBlock = findBlock(collectList, getExecutionPrev(startingBlock.getBlock()));
-
-			if (startingBlock != null && Sha256Hash.ZERO_HASH.equals(startingBlock.getBlock().getHash())) {
-				brokenChained = false;
+			Sha256Hash executionPrevHash = getExecutionPrev(startingBlock.getBlock());
+			startingBlock = findBlock(collectList, executionPrevHash);
+			if (startingBlock == null) {
+				BlockWrap t = getBlockWrap(executionPrevHash, store);
+				if (t != null) {
+					if (t.getBlockEvaluation().getMilestone() > 0 || Sha256Hash.ZERO_HASH.equals(executionPrevHash)) {
+						return t;
+					}
+					if (allowConfirmed && t.getBlockEvaluation().isConfirmed()) {
+						startingBlock = t;
+					}
+				}
+			}
+			if (startingBlock != null && isFirsExecution(startingBlock.getBlock())) {
+				fromMilestone = startingBlock;
 				// finish at origin or
-				startingBlock = null;
 			}
 			if (startingBlock != null && startingBlock.getBlockEvaluation().getMilestone() > 0) {
-				brokenChained = false;
+				fromMilestone = startingBlock;
 				// finish at origin or
 				startingBlock = null;
 			}
 		}
-		return brokenChained;
+		return fromMilestone;
 
 	}
 
-	public BlockWrap findBlock(List<BlockWrap> collectList, Sha256Hash blockhash) throws BlockStoreException {
+	public BlockWrap findBlock(Set<BlockWrap> collectList, Sha256Hash blockhash) throws BlockStoreException {
 		for (BlockWrap b : collectList) {
 			if (b.getBlockHash().equals(blockhash))
 				return b;

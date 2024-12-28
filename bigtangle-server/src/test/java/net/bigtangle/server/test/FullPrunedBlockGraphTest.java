@@ -42,8 +42,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				networkParameters.getGenesisBlock(), tx1, false);
 
 		// Should exist now
-		final UTXO utxo1 =getUTXO(tx1.getOutput(0).getOutPointFor(block1.getHash()), store);
-		final UTXO utxo2 =getUTXO(tx1.getOutput(1).getOutPointFor(block1.getHash()), store);
+		final UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(block1.getHash()), store);
+		final UTXO utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(block1.getHash()), store);
 		assertNotNull(utxo1);
 		assertNotNull(utxo2);
 		assertFalse(utxo1.isConfirmed());
@@ -56,8 +56,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	public void testConnectRewardUTXOs() throws Exception {
 
 		// Generate blocks until passing first reward interval
-		 
-		Block rollingBlock1 =  networkParameters.getGenesisBlock() ;
+
+		Block rollingBlock1 = networkParameters.getGenesisBlock();
 
 		// Generate mining reward block
 		Block rewardBlock1 = makeRewardBlock(networkParameters.getGenesisBlock().getHash(), rollingBlock1.getHash(),
@@ -95,7 +95,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			firstIssuance = block1.getHash();
 
 			// Should exist now
-	 
+
 			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 		}
 
@@ -127,14 +127,11 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey3, null);
 
 			// block1 = pullBlockDoMultiSign(tokens.getTokenid(), ecKey1, null);
-	 
-		 
-		 
+
 			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 		}
 	}
 
- 
 	@Test
 	public void testConfirmTransactionalUTXOs() throws Exception {
 
@@ -147,16 +144,16 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		makeRewardBlock();
 
 		// Should be confirmed now
-		final UTXO utxo1 =getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock.getHash()), store);
-		final UTXO utxo2 =getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock.getHash()), store);
+		final UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock.getHash()), store);
+		final UTXO utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock.getHash()), store);
 		assertTrue(utxo1.isConfirmed());
 		assertTrue(utxo2.isConfirmed());
 		assertFalse(utxo1.isSpent());
 		assertFalse(utxo2.isSpent());
 
 		// Further manipulations on prev UTXOs
-		final UTXO origUTXO =getUTXO(networkParameters.getGenesisBlock().getTransactions().get(0)
-				.getOutput(0).getOutPointFor(networkParameters.getGenesisBlock().getHash()), store);
+		final UTXO origUTXO = getUTXO(networkParameters.getGenesisBlock().getTransactions().get(0).getOutput(0)
+				.getOutPointFor(networkParameters.getGenesisBlock().getHash()), store);
 		assertTrue(origUTXO.isConfirmed());
 		assertTrue(origUTXO.isSpent());
 		assertEquals(
@@ -170,7 +167,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// Generate blocks until passing first reward interval
 		List<Block> blocksAddedAll = new ArrayList<Block>();
-		Block rollingBlock1 = addFixedBlocks(  networkParameters.getGenesisBlock(), blocksAddedAll);
+		Block rollingBlock1 = addFixedBlocks(networkParameters.getGenesisBlock(), blocksAddedAll);
 
 		// Generate mining reward block
 		Block rewardBlock1 = makeRewardBlock(networkParameters.getGenesisBlock().getHash(), rollingBlock1.getHash(),
@@ -186,9 +183,9 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertEquals(store.getRewardSpender(networkParameters.getGenesisBlock().getHash()), rewardBlock1.getHash());
 
 		// Check the virtual txs too
-		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-				.generateVirtualMiningRewardTX(rewardBlock1, store);
-		final UTXO utxo1 =getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock1.getHash()), store);
+		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper).generateVirtualMiningRewardTX(rewardBlock1, store);
+		final UTXO utxo1 = getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock1.getHash()), store);
 		assertTrue(utxo1.isConfirmed());
 		assertFalse(utxo1.isSpent());
 	}
@@ -216,8 +213,6 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
 		assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 	}
-
-	 
 
 	@Test
 	public void testConfirmOrderMatchUTXOs2() throws Exception {
@@ -266,13 +261,12 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				networkParameters.getGenesisBlock(), tx11);
 
 		// Confirm
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
-		s.confirm(s.getBlockWrap(block.getHash() , store),
-				new HashSet<>(), (long) -1, true, store);
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		confirmDo(s.getBlockWrap(block.getHash(), store), new HashSet<>() , store);
 
 		// Should be confirmed now
-		final UTXO utxo11 =getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
-		final UTXO utxo21 =getUTXO(tx11.getOutput(1).getOutPointFor(block.getHash()), store);
+		final UTXO utxo11 = getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
+		final UTXO utxo21 = getUTXO(tx11.getOutput(1).getOutPointFor(block.getHash()), store);
 		assertNotNull(utxo11);
 		assertNotNull(utxo21);
 		assertTrue(utxo11.isConfirmed());
@@ -281,12 +275,12 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertFalse(utxo21.isSpent());
 
 		// Unconfirm
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).unconfirm(block.getHash(),
-				new HashSet<>(),-1, store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.unconfirm(block.getHash(), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
-		final UTXO utxo1 =getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
-		final UTXO utxo2 =getUTXO(tx11.getOutput(1).getOutPointFor(block.getHash()), store);
+		final UTXO utxo1 = getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
+		final UTXO utxo2 = getUTXO(tx11.getOutput(1).getOutPointFor(block.getHash()), store);
 		assertNotNull(utxo1);
 		assertNotNull(utxo2);
 		assertFalse(utxo1.isConfirmed());
@@ -295,8 +289,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertFalse(utxo2.isSpent());
 
 		// Further manipulations on prev UTXOs
-		final UTXO origUTXO =getUTXO(networkParameters.getGenesisBlock().getTransactions().get(0)
-				.getOutput(0).getOutPointFor(networkParameters.getGenesisBlock().getHash()), store);
+		final UTXO origUTXO = getUTXO(networkParameters.getGenesisBlock().getTransactions().get(0).getOutput(0)
+				.getOutPointFor(networkParameters.getGenesisBlock().getHash()), store);
 		assertTrue(origUTXO.isConfirmed());
 		assertFalse(origUTXO.isSpent());
 		assertNull(
@@ -305,9 +299,9 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testUnconfirmRewardUTXOs() throws Exception {
- 
+
 		List<Block> blocksAddedAll = new ArrayList<Block>();
-		Block rollingBlock = addFixedBlocks(  networkParameters.getGenesisBlock(), blocksAddedAll);
+		Block rollingBlock = addFixedBlocks(networkParameters.getGenesisBlock(), blocksAddedAll);
 
 		// Generate mining reward block
 		Block rewardBlock11 = makeRewardBlock(rollingBlock);
@@ -317,8 +311,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertFalse(store.getRewardSpent(rewardBlock11.getHash()));
 
 		// Unconfirm
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).unconfirm(rewardBlock11.getHash(),
-				new HashSet<>(), -1,store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.unconfirm(rewardBlock11.getHash(), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
 		assertFalse(store.getRewardConfirmed(rewardBlock11.getHash()));
@@ -330,9 +324,9 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertNull(store.getRewardSpender(networkParameters.getGenesisBlock().getHash()));
 
 		// Check the virtual txs too
-		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-				.generateVirtualMiningRewardTX(rewardBlock11, store);
-		final UTXO utxo1 =getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock11.getHash()), store);
+		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper).generateVirtualMiningRewardTX(rewardBlock11, store);
+		final UTXO utxo1 = getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock11.getHash()), store);
 		assertFalse(utxo1.isConfirmed());
 		assertFalse(utxo1.isSpent());
 	}
@@ -340,6 +334,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	@Test
 	public void testUnconfirmTokenUTXOs() throws Exception {
 
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
 		ECKey outKey = new ECKey();
 		byte[] pubKey = outKey.getPubKey();
@@ -356,25 +351,19 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// This (saveBlock) calls milestoneUpdate currently
 		Block block11 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
- 
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
-		s.confirm(s.getBlockWrap(block11.getHash() , store),
-				new HashSet<>(), (long) -1, true, store);
+		confirmDo(s.getBlockWrap(block11.getHash(), store), new HashSet<>(), store);
 
 		// Should be confirmed now
-		assertTrue(store.getTokenSpent(block11.getHash() ).isConfirmed());
+		assertTrue(store.getTokenSpent(block11.getHash()).isConfirmed());
 		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
 
 		// Unconfirm
-		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).unconfirm(block11.getHash(),
-				new HashSet<>(),-1,store);
+		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.unconfirm(block11.getHash(), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
 		assertFalse(store.getTokenSpent(block11.getHash()).isConfirmed());
 		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
 	}
-
- 
- 
 
 }

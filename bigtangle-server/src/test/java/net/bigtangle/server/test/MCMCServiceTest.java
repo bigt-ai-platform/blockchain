@@ -136,10 +136,9 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey, null);
-		makeRewardBlock();
+		makeRewardBlock(block1);
 		// Generate two subsequent issuances, it can not both are confirmed, but can be
 		// none is confirmed
-
 		Block conflictBlock1, conflictBlock2;
 		{
 			TokenInfo tokenInfo2 = new TokenInfo();
@@ -152,7 +151,6 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 					.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
 			conflictBlock1 = saveTokenUnitTestWithTokenname(tokenInfo2, coinbase2, outKey, null);
 		}
-		mcmcServiceUpdate();
 		{
 			TokenInfo tokenInfo2 = new TokenInfo();
 			Coin coinbase2 = Coin.valueOf(666, pubKey);
@@ -164,13 +162,15 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 					.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
 			conflictBlock2 = saveTokenUnitTestWithTokenname(tokenInfo2, coinbase2, outKey, null);
 		}
+		// check conflict
 		mcmcServiceUpdate();
+		checkConflict(conflictBlock1, conflictBlock2);
+
 		BlockEvaluation blockEvaluation = getBlockEvaluation(conflictBlock1.getHash(), store);
 		BlockEvaluation blockEvaluation2 = getBlockEvaluation(conflictBlock2.getHash(), store);
 
 		assertFalse(blockEvaluation.isConfirmed() && blockEvaluation2.isConfirmed());
 		// assertTrue(blockEvaluation.isConfirmed() || blockEvaluation2.isConfirmed());
-
 		makeRewardBlock();
 
 		blockEvaluation = getBlockEvaluation(conflictBlock1.getHash(), store);

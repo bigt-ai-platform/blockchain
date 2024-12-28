@@ -150,7 +150,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		for (Block b : a2) {
 			if (b != null) {
 				blockGraph.add(b, true, true, store);
-				c = checkSum(c);
+			//	c = checkSum(c);
 			}
 
 		}

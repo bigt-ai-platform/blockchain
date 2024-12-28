@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -348,11 +349,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// After confirming one of them into the milestone, only that one block
 		// is now available
 		makeRewardBlock(b1);
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
-		allApprovedNewBlocks.add(getBlockWrap(b1.getHash()));
-		allApprovedNewBlocks.add(getBlockWrap(b2.getHash()));
-		assertTrue(s.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
+		checkConflict(b1, b2);
 		if (getBlockWrap(b1.getHash()).getBlockEvaluation().isConfirmed()) {
 			try {
 				getValidatedBlockPairCompatibleWithExisting(b2, store);
@@ -362,6 +359,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 			}
 		}
 	}
+
 
 	@Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {

@@ -16,7 +16,8 @@ select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockha
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and a.collectinghash=0x00911194d5d0db7cc4c2098c671434496ee81da207e4d67ee292d9e920e5a926
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   a.confirmed=true and a.spent=false
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash  
-or  a.collectinghash=0x0000000000000000000000000000000000000000000000000000000000000000   
+or  a.collectinghash=0x0000000000000000000000000000000000000000000000000000000000000000    order by collectinghash
+
 select * FROM contractevent order by  spenderblockhash, collectinghash
 select * FROM contractevent order by   collectinghash, blockhash
 select * FROM contractresult b, mcmc m WHERE  m.hash=b.blockhash
@@ -56,6 +57,7 @@ AND confirmed = false   AND mcmc.rating >= 5;
 
 select *  FROM info.blocks where  hash=0x0017a6120fecbf4eb1731def0dd0660c9dc350fed488f104aa3a4dbef27ea9a3;
 select * from outputs where blockhash = 0x0009a0d2309039774e93ab211205a865737ab7f82bd235b6c63519b05d47bf05;
+select * from outputs where hash = 0x0aef356676f4ba274b40c52020e04c9b9e9e4fba1b1da51962278a13ec4d8897;
 
 select * from blocks where blocktype=2 order by height desc limit 500
 select * from blocks where milestone=339 and blocktype=3
@@ -89,7 +91,7 @@ JOIN blocks on blocks.hash=txreward.blockhash WHERE blocks.solid>=1  and
 select  missingdependency, height from unsolidblocks where directlymissing=1
 select * from blocks where hash =373;
 
-select * from blocks where hash=0x0000101170d93a82285f3ca53bc76c633396e042b70053e6b429b8522efc1185;
+select * from blocks where hash=0x0138b2c2db2e4e6ba6ad5d1797b07632bc91b87a8ef07e8a67e097aef8dc3e44;
 
 select * from blocks join outputs on blocks.hash=outputs.blockhash where blocks.hash= 0x000039b6b149700642826b603800cbbbbe73a8b9af24980b3fb9154c2a0119e8;
 select * from blocks where hash=0x00000075491105d21a1654d8f4566dd819c111b100818c07b66a3ae8a8b4de76 ;

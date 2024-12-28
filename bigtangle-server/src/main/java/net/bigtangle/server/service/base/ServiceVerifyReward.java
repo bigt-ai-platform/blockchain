@@ -40,9 +40,9 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	public ServiceVerifyReward(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
-		super(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 
-	} 
+	}
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceVerifyReward.class);
 
@@ -55,7 +55,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		// Check all referenced blocks have their requirements
 		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
-		if (solidityState.isSuccessState())
+		if (solidityState.notSuccessState())
 			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState);
 
 		// Solidify referenced blocks
@@ -68,10 +68,10 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		checkContainsNoRewardBlocks(newMilestoneBlock, store);
 
 		// Check: At this point, predecessors must be solid
-		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.checkSolidity(newMilestoneBlock, false, store, false);
 
-		if (solidityState.isSuccessState())
+		if (solidityState.notSuccessState())
 			throw new VerificationException(
 					" .checkSolidity is failed: " + solidityState + "\n with block = " + newMilestoneBlock);
 
@@ -100,8 +100,8 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
 				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
 				.values().stream().anyMatch(l -> l.size() > 1);
-	//	if (anyCandidateConflicts)
-	//		showConflict(allApprovedNewBlocks);
+		// if (anyCandidateConflicts)
+		// showConflict(allApprovedNewBlocks);
 
 		// Did we fail? Then we stop now and rerun consensus
 		// logic on the new longest chain.
@@ -163,17 +163,11 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			if (block.getBlock().getHeight() < cutoffHeight)
 				throw new VerificationException("Referenced blocks are below cutoff height.");
 
-			Set<Sha256Hash> requiredBlocks = getAllRequiredBlockHashes(block.getBlock(), false);
+			Set<Sha256Hash> requiredBlocks = getAllRequiredBlockHashes(block.getBlock());
 			for (Sha256Hash reqHash : requiredBlocks) {
 				BlockWrap req = getBlockWrap(reqHash, store);
 				if (req == null)
 					return SolidityState.from(reqHash, true);
-
-				if (req.getBlockEvaluation().getMilestone() < 0 && !currRewardInfo.getBlocks().contains(reqHash)) {
-					// FIXME blocks problem with 4046309 throw new
-					// VerificationException("Predecessors are not in
-					// milestone." + req.toString());
-				}
 			}
 		}
 
@@ -206,7 +200,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 				referenced, store);
 
 	}
- 
+
 	public RewardBuilderResult calcRewardInfo(boolean contractExecute, BlockWrap prevTrunk, BlockWrap prevBranch,
 			Sha256Hash prevRewardHash, long currentTime, Set<Sha256Hash> referenced, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -215,8 +209,8 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 		// Build transaction for block
 		Transaction tx = new Transaction(networkParameters);
-		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-				.calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
+		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper).calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 		// Build the type-specific tx data
 		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, referenced, prevChainLength + 1);
 		tx.setData(rewardInfo.toByteArray());
@@ -224,7 +218,6 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		return new RewardBuilderResult(tx, difficultyReward);
 	}
 
- 
 	/**
 	 * Called as part of connecting a block when the new block results in a
 	 * different chain having higher total work.
@@ -268,7 +261,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
 						milestoneNumber, store);
 				// Unconfirm anything not in milestone
-				unconfirmBlocks(store,   blocksInMilestoneInterval);
+				unconfirmBlocks(store, blocksInMilestoneInterval);
 			}
 			store.commitDatabaseBatchWrite();
 			store.beginDatabaseBatchWrite();
@@ -290,13 +283,13 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	private void unconfirmBlocks(BlockStoreInterface store ,
-			List<Sha256Hash> blocksInMilestoneInterval) throws BlockStoreException {
+	private void unconfirmBlocks(BlockStoreInterface store, List<Sha256Hash> blocksInMilestoneInterval)
+			throws BlockStoreException {
 		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
 		for (Sha256Hash b : blocksInMilestoneInterval) {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
 		}
-		unconfirmBlocksSorted(store,  blocksToRemoveBlocks, new HashSet<>());
+		unconfirmBlocksSorted(store, blocksToRemoveBlocks, new HashSet<>());
 	}
 
 	/**

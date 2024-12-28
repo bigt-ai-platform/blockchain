@@ -390,26 +390,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public void confirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
-			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
-		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
-		arrayList.sort(new SortbyBlockWrapAsc());
-		for (BlockWrap approvedBlock : arrayList) {
-			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
-			checkSum(store);
-		}
-	}
 
-	public void unconfirmBlocksSorted(BlockStoreInterface store, Collection<BlockWrap> blocks,
-			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
-
-		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
-		arrayList.sort(new SortbyBlockWrap());
-		for (BlockWrap block : arrayList) {
-			unconfirm(block, traversedConfirms, -1, store);
-			checkSum(store);
-		}
-	}
 
 	public static class SortbyBlock implements Comparator<Block> {
 

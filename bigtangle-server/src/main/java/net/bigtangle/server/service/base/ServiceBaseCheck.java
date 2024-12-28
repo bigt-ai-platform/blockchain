@@ -1162,12 +1162,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		SolidityState difficultyResult = checkRewardDifficulty(block, store);
-		if (difficultyResult.isSuccessState()) {
+		if (difficultyResult.notSuccessState()) {
 			return difficultyResult;
 		}
 
 		SolidityState referenceResult = checkRewardReferencedBlocks(block, store);
-		if (referenceResult.isSuccessState()) {
+		if (referenceResult.notSuccessState()) {
 			return referenceResult;
 		}
 
@@ -1200,14 +1200,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			SolidityState formalSolidityResult = checkFormalBlockSolidity(block, throwExceptions);
 			if (formalSolidityResult.isFailState())
 				return formalSolidityResult;
-			final Set<Sha256Hash> allReuiredBlockHashes = getAllRequiredBlockHashes(block,
-					!allowMissingPredecessor);
+			final Set<Sha256Hash> allReuiredBlockHashes = getAllRequiredBlockHashes(block);
 			List<BlockWrap> allRequirements = getAllBlocksFromHash(allReuiredBlockHashes, store);
-			// Predecessors must exist and be ok
-			SolidityState predecessorsExist = checkPredecessorsExistAndOk(block, throwExceptions, allRequirements,
+			// Required must exist and be ok
+			SolidityState check = checkRequiredAndOk(block, throwExceptions, allRequirements,
 					store);
-			if (predecessorsExist.isSuccessState()) {
-				return predecessorsExist;
+			if (check.notSuccessState()) {
+				return check;
 			}
 
 			// Inherit solidity from predecessors if they are not solid
@@ -1221,7 +1220,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				if (minPredecessorSolidity.getState() == State.MissingCalculation
 						|| minPredecessorSolidity.getState() == State.Success) {
 					SolidityState state = checkRewardBlockPow(block, throwExceptions);
-					if (state.isSuccessState()) {
+					if (state.notSuccessState()) {
 						return state;
 					}
 				}
@@ -1763,7 +1762,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	private SolidityState checkPredecessorsExistAndOk(Block block, boolean throwExceptions,
+	private SolidityState checkRequiredAndOk(Block block, boolean throwExceptions,
 			List<BlockWrap> allRequirements, BlockStoreInterface store) throws BlockStoreException {
 		//
 		for (BlockWrap pred : allRequirements) {
@@ -1784,7 +1783,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
-		if (!new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).checkPossibleConflict(block, store))
+		if (!new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.checkPossibleConflict(block, store))
 			throw new ConflictPossibleException("Conflict Possible");
 		checkDomainname(block);
 	}
