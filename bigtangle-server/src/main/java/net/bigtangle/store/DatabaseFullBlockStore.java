@@ -1625,7 +1625,14 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void prunedClosedOrders(Long beforetime) throws BlockStoreException {
 
 		try (PreparedStatement deleteStatement = getConnection()
-				.prepareStatement(" delete FROM orders WHERE  spent=1 AND validToTime < ? limit 1000 ")) {
+				.prepareStatement("DELETE FROM orders\n"
+						+ "    WHERE blockhash IN (\n"
+						+ "        SELECT blockhash\n"
+						+ "        FROM orders\n"
+						+ "       WHERE spent = true\n"
+						+ "       AND validToTime < ?\n"
+						+ "       LIMIT 1000\n"
+						+ "    ); ")) {
 
 			deleteStatement.setLong(1, beforetime - 100 * NetworkParameters.ORDER_TIMEOUT_MAX);
 			deleteStatement.executeUpdate();
@@ -1683,8 +1690,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void prunedHistoryUTXO(Long maxRewardblock) throws BlockStoreException {
 
 		try (PreparedStatement deleteStatement = getConnection()
-				.prepareStatement(" delete FROM outputs WHERE  spent=1 AND "
-						+ "spenderblockhash in (select hash from blocks where milestone < ? and milestone > 0 ) limit 1000 ")) {
+				.prepareStatement(" delete FROM outputs WHERE  spent=true AND "
+						+ "spenderblockhash in (select hash from blocks where milestone < ? and milestone > 0  limit 1000 ) ")) {
 			deleteStatement.setLong(1, maxRewardblock);
 			deleteStatement.executeUpdate();
 		} catch (SQLException e) {
@@ -2260,7 +2267,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 
 	public void insertAccessPermission(String pubKey, String accessToken) throws BlockStoreException {
-		String sql = "insert into access_permission (pubKey, accessToken, refreshTime) value (?,?,?)";
+		String sql = "insert into access_permission (pubKey, accessToken, refreshTime) values (?,?,?)";
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
 			preparedStatement.setString(1, pubKey);
@@ -2293,7 +2300,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 	@Override
 	public void insertAccessGrant(String address) throws BlockStoreException {
-		String sql = "insert into access_grant (address, createTime) value (?,?)";
+		String sql = "insert into access_grant (address, createTime) VALUES (?,?)" +duplicateInsert();
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
 			preparedStatement.setString(1, address);

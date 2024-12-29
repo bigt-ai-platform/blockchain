@@ -106,7 +106,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private static final String DROP_ACCOUNT_TABLE = "DROP TABLE  IF EXISTS accountBalance";
 	// Queries SQL.
 	protected final String SELECT_SETTINGS_SQL = "SELECT settingvalue FROM settings WHERE name = ?";
-	protected final String INSERT_SETTINGS_SQL = getInsert() + "  INTO settings(name, settingvalue) VALUES(?, ?)";
+	protected final String INSERT_SETTINGS_SQL = getInsert() + "  INTO settings(name, settingvalue) VALUES(?, ?)" +duplicateInsert();
 
 	protected final String SELECT_BLOCKS_TEMPLATE = "  blocks.hash, block,  "
 			+ "  height, milestone, milestonelastupdate,  inserttime,   solid, confirmed";
@@ -130,12 +130,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String INSERT_BLOCKS_SQL = getInsert() + "  INTO blocks(hash,  height, block,  prevblockhash,"
 			+ "prevbranchblockhash,mineraddress,blocktype,  "
 			+ "milestone, milestonelastupdate,  inserttime,  solid, confirmed  )"
-			+ " VALUES(?, ?, ?, ?, ?,?, ?, ?, ?, ? ,  ?, ? )";
+			+ " VALUES(?, ?, ?, ?, ?,?, ?, ?, ?, ? ,  ?, ? )" +duplicateInsert();
 
 	protected final String INSERT_OUTPUTS_SQL = getInsert()
 			+ " INTO outputs (hash, outputindex, coinvalue, scriptbytes, toaddress, addresstargetable,"
 			+ " coinbase, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,time, spendpendingtime, minimumsign)"
-			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)";
+			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)" +duplicateInsert();
 
 	protected final String SELECT_OUTPUTS_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress,"
 			+ " addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, "
@@ -185,7 +185,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String SELECT_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks WHERE   height >= ? AND height <= ? ";
-	
+
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? order by height desc ";
 
@@ -212,16 +212,16 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String INSERT_ORDER_SQL = getInsert()
 			+ "  INTO orders (blockhash, collectinghash, offercoinvalue, offertokenid, confirmed, spent, spenderblockhash, "
 			+ "targetcoinvalue, targettokenid, beneficiarypubkey, validToTime, validFromTime, side, beneficiaryaddress, orderbasetoken, price, tokendecimals) "
-			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,  ?,?,?,?,?,?,?)";
+			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,  ?,?,?,?,?,?,?)" +duplicateInsert();
 
 	protected final String INSERT_OrderCancel_SQL = getInsert()
 			+ " INTO ordercancel (blockhash, orderblockhash, confirmed, spent, spenderblockhash,time) "
-			+ " VALUES (?, ?, ?, ?, ?,?)";
+			+ " VALUES (?, ?, ?, ?, ?,?)" +duplicateInsert();
 
 	protected final String INSERT_CONTRACT_EVENT_SQL = getInsert()
 			+ "  INTO contractevent (blockhash, contracttokenid, confirmed, spent, spenderblockhash, "
 			+ "targetcoinvalue, targettokenid,    beneficiaryaddress, collectinghash) "
-			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)";
+			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)"+duplicateInsert();
 	protected final String CONTRACT_TEMPLATE = " blockhash, collectinghash, contracttokenid, confirmed, spent, spenderblockhash,  "
 			+ "targetcoinvalue, targettokenid,    beneficiaryaddress";
 
@@ -231,23 +231,23 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_CONTRACT_SQL = "SELECT " + CONTRACT_TEMPLATE
 			+ " FROM contractevent WHERE blockhash = ? AND  collectinghash=? ";
 	protected final String SELECT_OPEN_CONTRACT_EVENT_SQL = "SELECT " + CONTRACT_TEMPLATE
-			+ " FROM contractevent WHERE confirmed=1 AND spent=0 AND targettokenid= ? ";
+			+ " FROM contractevent WHERE confirmed=true AND spent=false AND targettokenid= ? ";
 
 	protected final String UPDATE_CONTRACTRESULT_CONFIRMED_SQL = getUpdate() + " contractresult SET confirmed = ? "
 			+ " WHERE blockhash = ?";
 
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
-			+ " contractresult, prevblockhash, inserttime, milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)";
+			+ " contractresult, prevblockhash, inserttime, milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)"+duplicateInsert();
 	protected final String SELECT_CONTRACTRESULT = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
 			+ " contractresult, prevblockhash, inserttime, milestone " + " FROM contractresult ";
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
 	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = 1 and contracttokenid=? and milestone >0 and spent=false order by milestone desc limit 1";
+			+ " WHERE confirmed = true and contracttokenid=? and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = 1 and contracttokenid=? and milestone < 0  order by inserttime desc   ";
+			+ " WHERE confirmed = true and contracttokenid=? and milestone < 0  order by inserttime desc   ";
 
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
@@ -256,15 +256,15 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " WHERE blockhash = ?";
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
 			+ "  INTO orderresult (blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime,  milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?)";
+			+ " orderresult, prevblockhash, inserttime,  milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?)"+duplicateInsert();
 	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
 			+ " orderresult, prevblockhash, inserttime ,  milestone" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = 1  and milestone < 0  order by inserttime desc   ";
+			+ " WHERE confirmed = true  and milestone < 0  order by inserttime desc   ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = 1 and milestone >0 and spent=false order by milestone desc limit 1";
+			+ " WHERE confirmed = true and milestone >0 and spent=false order by milestone desc limit 1";
 	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()
 			+ " orderresult SET milestone = ?   WHERE blockhash = ?";
 
@@ -272,7 +272,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " INTO tokens (blockhash, confirmed, tokenid, tokenindex, amount, "
 			+ "tokenname, description, domainname, signnumber,tokentype, tokenstop,"
 			+ " prevblockhash, spent, spenderblockhash, tokenkeyvalues, revoked,language,classification, decimals, domainpredblockhash) "
-			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?)";
+			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?)"+duplicateInsert();
 
 	protected String SELECT_TOKENS_SQL_TEMPLATE = "SELECT blockhash, confirmed, tokenid, tokenindex, amount, tokenname, description, domainname, signnumber,tokentype, tokenstop ,"
 			+ "tokenkeyvalues, revoked,language,classification,decimals, domainpredblockhash ";
@@ -331,7 +331,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL = getUpdate()
 			+ " mcmc SET cumulativeweight = ?, depth = ? WHERE hash = ?";
 	protected final String INSERT_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL = getInsert()
-			+ " into mcmc ( cumulativeweight  , depth   , hash, rating  ) VALUES (?,?,?, ?)  ";
+			+ " into mcmc ( cumulativeweight  , depth   , hash, rating  ) VALUES (?,?,?, ?)  "+duplicateInsert();
 
 	protected final String SELECT_MCMC_CHAINLENGHT_SQL = "  select mcmc.hash "
 			+ " from blocks, mcmc where mcmc.hash=blocks.hash and milestone < ?  and milestone > 0  ";
@@ -347,12 +347,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_BLOCKEVALUATION_SOLID_SQL = getUpdate() + " blocks SET solid = ? WHERE hash = ?";
 
 	protected final String SELECT_MULTISIGNADDRESS_SQL = "SELECT blockhash, tokenid, address, pubKeyHex, posIndex, tokenHolder FROM multisignaddress WHERE tokenid = ? AND blockhash = ?";
-	protected final String INSERT_MULTISIGNADDRESS_SQL = "INSERT INTO multisignaddress (tokenid, address, pubKeyHex, posIndex,blockhash,tokenHolder) VALUES (?, ?, ?, ?,?,?)";
+	protected final String INSERT_MULTISIGNADDRESS_SQL = "INSERT INTO multisignaddress (tokenid, address, pubKeyHex, posIndex,blockhash,tokenHolder) VALUES (?, ?, ?, ?,?,?)" +duplicateInsert();
 
 	protected final String SELECT_MULTISIGN_ADDRESS_SQL = "SELECT id, tokenid, tokenindex, address, blockhash, sign FROM multisign WHERE address = ? ORDER BY tokenindex ASC";
 	protected final String SELECT_MULTISIGN_TOKENID_ADDRESS_SQL = "SELECT id, tokenid, tokenindex, address, blockhash, sign FROM multisign WHERE tokenid = ? and address = ? ORDER BY tokenindex ASC";
 
-	protected final String INSERT_MULTISIGN_SQL = "INSERT INTO multisign (tokenid, tokenindex, address, blockhash, sign, id) VALUES (?, ?, ?, ?, ?, ?)";
+	protected final String INSERT_MULTISIGN_SQL = "INSERT INTO multisign (tokenid, tokenindex, address, blockhash, sign, id) VALUES (?, ?, ?, ?, ?, ?)"+duplicateInsert();
 	protected final String UPDATE_MULTISIGN_SQL = "UPDATE multisign SET blockhash = ?, sign = ? WHERE tokenid = ? AND tokenindex = ? AND address = ?";
 	protected final String UPDATE_MULTISIGN1_SQL = "UPDATE multisign SET blockhash = ? WHERE tokenid = ? AND tokenindex = ?";
 	protected final String SELECT_COUNT_MULTISIGN_SQL = "SELECT COUNT(*) as count FROM multisign WHERE tokenid = ? AND tokenindex = ? AND address = ? ";
@@ -362,14 +362,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	/* REWARD */
 	protected final String INSERT_TX_REWARD_SQL = getInsert()
-			+ "  INTO txreward (blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength) VALUES (?, ?, ?, ?, ?, ?, ?)";
+			+ "  INTO txreward (blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength) VALUES (?, ?, ?, ?, ?, ?, ?)"+duplicateInsert();
 	protected final String SELECT_TX_REWARD_MAX_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward"
-			+ " WHERE confirmed = 1  order by chainlength desc limit 1";
+			+ " WHERE confirmed = true  order by chainlength desc limit 1";
 	protected final String SELECT_TX_REWARD_CONFIRMED_AT_HEIGHT_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward"
-			+ " WHERE confirmed = 1 AND chainlength=?";
+			+ " WHERE confirmed = true AND chainlength=?";
 	protected final String SELECT_TX_REWARD_ALL_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, "
 			+ "spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward "
-			+ "WHERE confirmed = 1 order by chainlength ";
+			+ "WHERE confirmed = true order by chainlength ";
 
 	protected final String SELECT_TX_REWARD_CONFIRMED_SQL = "SELECT confirmed " + "FROM txreward WHERE blockhash = ?";
 	protected final String SELECT_TX_REWARD_CHAINLENGTH_SQL = "SELECT chainlength "
@@ -385,27 +385,27 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	/* MATCHING EVENTS */
 	protected final String INSERT_MATCHING_EVENT_SQL = getInsert()
-			+ " INTO matching (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)";
+			+ " INTO matching (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)"+duplicateInsert();
 	protected final String SELECT_MATCHING_EVENT = "SELECT txhash, tokenid,basetokenid,  price, executedQuantity, inserttime "
 			+ "FROM matching ";
 	protected final String DELETE_MATCHING_EVENT_BY_HASH = "DELETE FROM matching WHERE txhash = ?";
 	// lastest MATCHING EVENTS
 	protected final String INSERT_MATCHING_EVENT_LAST_SQL = getInsert()
-			+ " INTO matchinglast (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)";
+			+ " INTO matchinglast (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)"+duplicateInsert();
 	protected final String DELETE_MATCHING_EVENT_LAST_BY_KEY = "DELETE FROM matchinglast WHERE tokenid = ? and basetokenid=?";
 
 	/* OTHER */
-	protected final String INSERT_OUTPUTSMULTI_SQL = "insert into outputsmulti (hash, toaddress, outputindex) values (?, ?, ?)";
+	protected final String INSERT_OUTPUTSMULTI_SQL = "insert into outputsmulti (hash, toaddress, outputindex) values (?, ?, ?)"+duplicateInsert();
 	protected final String SELECT_OUTPUTSMULTI_SQL = "select hash, toaddress, outputindex from outputsmulti where hash=? and outputindex=?";
 
 	protected final String SELECT_USERDATA_SQL = "SELECT blockhash, dataclassname, data, pubKey, blocktype FROM userdata WHERE dataclassname = ? and pubKey = ?";
-	protected final String INSERT_USERDATA_SQL = "INSERT INTO userdata (blockhash, dataclassname, data, pubKey, blocktype) VALUES (?, ?, ?, ?, ?)";
+	protected final String INSERT_USERDATA_SQL = "INSERT INTO userdata (blockhash, dataclassname, data, pubKey, blocktype) VALUES (?, ?, ?, ?, ?)"+duplicateInsert();
 	protected final String UPDATE_USERDATA_SQL = "UPDATE userdata SET blockhash = ?, data = ? WHERE dataclassname = ? and pubKey = ?";
 
-	protected final String INSERT_BATCHBLOCK_SQL = "INSERT INTO batchblock (hash, block, inserttime) VALUE (?, ?, ?)";
+	protected final String INSERT_BATCHBLOCK_SQL = "INSERT INTO batchblock (hash, block, inserttime) VALUES (?, ?, ?)"+duplicateInsert();
 	protected final String DELETE_BATCHBLOCK_SQL = "DELETE FROM batchblock WHERE hash = ?";
 	protected final String SELECT_BATCHBLOCK_SQL = "SELECT hash, block, inserttime FROM batchblock order by inserttime ASC";
-	protected final String INSERT_SUBTANGLE_PERMISSION_SQL = "INSERT INTO  subtangle_permission (pubkey, userdataPubkey , status) VALUE (?, ?, ?)";
+	protected final String INSERT_SUBTANGLE_PERMISSION_SQL = "INSERT INTO  subtangle_permission (pubkey, userdataPubkey , status) VALUE (?, ?, ?)"+duplicateInsert();
 
 	protected final String DELETE_SUBTANGLE_PERMISSION_SQL = "DELETE FROM  subtangle_permission WHERE pubkey=?";
 	protected final String UPATE_ALL_SUBTANGLE_PERMISSION_SQL = "UPDATE   subtangle_permission set status=? ,userdataPubkey=? WHERE  pubkey=? ";
@@ -415,12 +415,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_SUBTANGLE_PERMISSION_BY_PUBKEYS_SQL = "SELECT   pubkey, userdataPubkey , status FROM subtangle_permission WHERE 1=1 ";
 
 	protected final String SELECT_OPEN_ORDERS_SORTED_SQL = "SELECT " + ORDER_TEMPLATE
-			+ " FROM orders WHERE confirmed=1 AND spent=0 ";
+			+ " FROM orders WHERE confirmed=true AND spent=false ";
 
 	// TODO remove test
 	protected final String SELECT_AVAILABLE_UTXOS_SORTED_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress, "
 			+ "addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,spendpendingtime, minimumsign, time, hash, outputindex, spenderblockhash "
-			+ " FROM outputs WHERE confirmed=1 AND spent=0 ORDER BY hash, outputindex";
+			+ " FROM outputs WHERE confirmed=true AND spent=false ORDER BY hash, outputindex";
 
 	protected final String SELECT_ORDERCANCEL_SQL = "SELECT blockhash, orderblockhash, confirmed, spent, spenderblockhash,time"
 			+ " FROM ordercancel WHERE 1 = 1";
@@ -428,7 +428,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String ChainBlockQueueColumn = " hash, block, chainlength, orphan, inserttime";
 	protected final String INSERT_CHAINBLOCKQUEUE = getInsert() + "  INTO chainblockqueue (" + ChainBlockQueueColumn
-			+ ") " + " VALUES (?, ?, ?,?,?)";
+			+ ") " + " VALUES (?, ?, ?,?,?)"+duplicateInsert();
 	protected final String SELECT_CHAINBLOCKQUEUE = " select " + ChainBlockQueueColumn + " from chainblockqueue  ";
 
 	protected final String CONTRACTEVENTCANCEL_UPDATE_SPENT_SQL = "UPDATE contracteventcancel SET spent = ?, spenderblockhash=?  WHERE blockhash = ? ";
@@ -479,6 +479,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		return "update ";
 	}
 
+	protected String	duplicateInsert() {
+		return "";
+	}
+	
 	/**
 	 * Get the SQL statements that create the tables (DDL).
 	 * 
@@ -662,19 +666,19 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	 * check version and update the tables
 	 */
 	protected synchronized void updateTables(List<String> sqls) {
+		for (String sql : sqls) {
+			try (Statement s = getConnection().createStatement()) {
 
-		try (Statement s = getConnection().createStatement()) {
-			for (String sql : sqls) {
 				if (log.isDebugEnabled()) {
 					log.debug("DatabaseFullBlockStore :     {}", sql);
 				}
-				s.addBatch(sql);
-			}
-			s.executeBatch();
-		} catch (Exception e) {
-			log.debug("DatabaseFullBlockStore :     ", e);
+				s.execute(sql);
+			} catch (Exception e) {
+				log.debug("DatabaseFullBlockStore :     ", e);
 
+			}
 		}
+		// s.executeBatch();
 
 	}
 
@@ -1428,15 +1432,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		// throw new BlockStoreException("Could not close statement");
 	}
 
-
 	@Override
-	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight)
-			throws BlockStoreException {
+	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException {
 		PriorityQueue<BlockWrap> blocksByHeight = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
 
-		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_BLOCKS_IN_INTERVAL_SQL)) {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_IN_INTERVAL_SQL)) {
 			preparedStatement.setLong(1, cutoffHeight);
 			preparedStatement.setLong(2, maxHeight);
 			ResultSet resultSet = preparedStatement.executeQuery();
@@ -1454,6 +1455,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
+
 	@Override
 	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength)
 			throws BlockStoreException {
@@ -1887,7 +1889,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			preparedStatement.setBoolean(11, tokenstop);
 			preparedStatement.setBytes(12, prevblockhash == null ? null : prevblockhash.getBytes());
 			preparedStatement.setBoolean(13, false);
-			preparedStatement.setString(14, null);
+			preparedStatement.setBytes(14, null);
 			preparedStatement.setBytes(15, tokenkeyvalues);
 			preparedStatement.setBoolean(16, revoked);
 			preparedStatement.setString(17, language);

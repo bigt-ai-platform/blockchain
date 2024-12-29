@@ -26,19 +26,14 @@ server:
  
   
 db:
-  dbtype: ${DBTYPE:mysql}
+  dbtype: ${DBTYPE:postgresql}
   hostname: ${DB_HOSTNAME:localhost}
-  port: ${DB_PORT:3306}
+  port: ${DB_PORT:5432}
   dbName: ${DB_NAME:info}
   username: ${DB_USERNAME:root}
   password: ${DB_PASSWORD:test1234}
 
-spark:
-  appname: ${DBTYPE:bigtangle}
-  home: ${DB_HOSTNAME:localhost}
-  masteruri: ${DB_PORT:local}
-  apppath: ${DB_NAME:/data/deltalake}
-
+ 
 
 
 service:
@@ -58,9 +53,6 @@ kafka:
   topicOutName: ${TOPIC_OUT_NAME:bigtangle}
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
   
-graceful:
-   shutdown:
-     enabled: ${GRACEFULENABLED:false}
        
 management:
   metrics:

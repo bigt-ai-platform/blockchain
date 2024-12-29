@@ -76,7 +76,11 @@
 			<!-- Replace with the version of the MySQL driver you want to use -->
 			<version>${mysql-version}</version>
 		</dependency>
-
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>42.6.0</version> <!-- Or the latest version -->
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
