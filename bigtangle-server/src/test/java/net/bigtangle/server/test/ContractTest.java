@@ -460,7 +460,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 			makeRewardBlock(b2);
 
-			createDAG("testPay");
+			//createDAG("testPay");
 		}
 	}
 

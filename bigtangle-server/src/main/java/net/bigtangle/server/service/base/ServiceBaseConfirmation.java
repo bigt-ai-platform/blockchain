@@ -1077,13 +1077,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return false;
 		boolean re = checkSpentOrNoConfirm(c, checkNoConfirm, checkMilestone, a, store);
 
-		if (re) {
-			try {
-				logger.debug("getUTXOSpent true {}\n TransactionOutPoint = {}  ", a, txout);
-			} catch (Exception e) {
-				// logger.debug("", e);
-			}
-		}
+//		if (re) {
+//			try {
+//				logger.debug("getUTXOSpent true {}\n TransactionOutPoint = {}  ", a, txout);
+//			} catch (Exception e) {
+//				// logger.debug("", e);
+//			}
+//		}
 
 		return re;
 

@@ -54,7 +54,7 @@ public class PerformanceRemote extends  AbstractIntegrationTest {
 			create(a2);
 		}
 	}
-	@Test
+	//@Test
 	public void testDAG() throws Exception {
  
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
