@@ -22,6 +22,7 @@
 package net.bigtangle.core;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -30,127 +31,157 @@ import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.utils.Gzip;
 
 /**
- * Generic interface for classes which serialize/deserialize messages. Implementing
- * classes should be immutable.
+ * Generic interface for classes which serialize/deserialize messages.
+ * Implementing classes should be immutable.
  */
 public abstract class MessageSerializer {
 
-    /**
-     * Reads a message from the given ByteBuffer and returns it.
-     */
-    public abstract Message deserialize(ByteBuffer in) throws ProtocolException, IOException, UnsupportedOperationException;
+	/**
+	 * Reads a message from the given ByteBuffer and returns it.
+	 */
+	public abstract Message deserialize(ByteBuffer in)
+			throws ProtocolException, IOException, UnsupportedOperationException;
 
-  
-    /**
-     * Whether the serializer will produce cached mode Messages
-     */
-    public abstract boolean isParseRetainMode();
+	/**
+	 * Whether the serializer will produce cached mode Messages
+	 */
+	public abstract boolean isParseRetainMode();
 
-   
-    /**
-     * Make an alert message from the payload. Extension point for alternative
-     * serialization format support.
-     */
-    public abstract Message makeAlertMessage(byte[] payloadBytes) throws ProtocolException, UnsupportedOperationException;
+	/**
+	 * Make an alert message from the payload. Extension point for alternative
+	 * serialization format support.
+	 */
+	public abstract Message makeAlertMessage(byte[] payloadBytes)
+			throws ProtocolException, UnsupportedOperationException;
 
+	/**
+	 * Make a block from the payload, using an offset of zero and the payload length
+	 * as block length.
+	 */
+	public final Block makeBlock(byte[] payloadBytes) throws ProtocolException {
+		return makeBlock(payloadBytes, 0, payloadBytes.length);
+	}
 
-    /**
-     * Make a block from the payload, using an offset of zero and the payload
-     * length as block length.
-     */
-    public final Block makeBlock(byte[] payloadBytes) throws ProtocolException {
-        return makeBlock(payloadBytes, 0, payloadBytes.length);
-    }
+	/**
+	 * Make a block from the zipped payload, using an offset of zero and the payload
+	 * length as block length.
+	 * 
+	 * @throws IOException
+	 */
+	public final Block makeZippedBlock(byte[] payloadBytes) throws ProtocolException, IOException {
+		byte[] unzipped = Gzip.decompressOut(payloadBytes);
+		return makeBlock(unzipped, 0, unzipped.length);
+	}
 
-    /**
-     * Make a block from the zipped payload, using an offset of zero and the payload
-     * length as block length.
-     * @throws IOException 
-     */
-    public final Block makeZippedBlock(byte[] payloadBytes) throws ProtocolException, IOException {
-          byte[] unzipped = Gzip.decompressOut(payloadBytes);
-        return makeBlock(unzipped, 0, unzipped.length);
-    }
+	/**
+	 * Make a block from the zipped payload, using an offset of zero and the payload
+	 * length as block length.
+	 * 
+	 * @throws IOException
+	 */
+	public final Block makeZippedBlock(InputStream inputStream) throws ProtocolException, IOException {
+		if (inputStream == null) {
+			return null; // Return null if no value available.
+		}
+		byte[] unzipped = Gzip.decompressOut(inputStream);
+		return makeBlock(unzipped, 0, unzipped.length);
+	}
 
-    
-    /**
-     * Make a block from the payload, using an offset of zero and the provided
-     * length as block length.
-     */
-    public final Block makeBlock(byte[] payloadBytes, int length) throws ProtocolException {
-        return makeBlock(payloadBytes, 0, length);
-    }
+	/**
+	 * Make a block from the payload, using an offset of zero and the provided
+	 * length as block length.
+	 */
+	public final Block makeBlock(byte[] payloadBytes, int length) throws ProtocolException {
+		return makeBlock(payloadBytes, 0, length);
+	}
 
-    /**
-     * Make a block from the payload, using an offset of zero and the provided
-     * length as block length. Extension point for alternative
-     * serialization format support.
-     */
-    public abstract Block makeBlock(final byte[] payloadBytes, final int offset, final int length) throws ProtocolException, UnsupportedOperationException;
+	/**
+	 * Make a block from the payload, using an offset of zero and the provided
+	 * length as block length. Extension point for alternative serialization format
+	 * support.
+	 */
+	public abstract Block makeBlock(final byte[] payloadBytes, final int offset, final int length)
+			throws ProtocolException, UnsupportedOperationException;
 
-    /**
-     * Make an filter message from the payload. Extension point for alternative
-     * serialization format support.
-     */
-    public abstract Message makeBloomFilter(byte[] payloadBytes) throws ProtocolException, UnsupportedOperationException;
- 
-    /**
-     * Make a transaction from the payload. Extension point for alternative
-     * serialization format support.
-     * 
-     * @throws UnsupportedOperationException if this serializer/deserializer
-     * does not support deserialization. This can occur either because it's a dummy
-     * serializer (i.e. for messages with no network parameters), or because
-     * it does not support deserializing transactions.
-     */
-    public abstract Transaction makeTransaction(byte[] payloadBytes, int offset, int length, byte[] hash) throws ProtocolException, UnsupportedOperationException;
+	/**
+	 * Make an filter message from the payload. Extension point for alternative
+	 * serialization format support.
+	 */
+	public abstract Message makeBloomFilter(byte[] payloadBytes)
+			throws ProtocolException, UnsupportedOperationException;
 
-    /**
-     * Make a transaction from the payload. Extension point for alternative
-     * serialization format support.
-     * 
-     * @throws UnsupportedOperationException if this serializer/deserializer
-     * does not support deserialization. This can occur either because it's a dummy
-     * serializer (i.e. for messages with no network parameters), or because
-     * it does not support deserializing transactions.
-     */
-    public final Transaction makeTransaction(byte[] payloadBytes) throws ProtocolException, UnsupportedOperationException {
-        return makeTransaction(payloadBytes, 0);
-    }
+	/**
+	 * Make a transaction from the payload. Extension point for alternative
+	 * serialization format support.
+	 * 
+	 * @throws UnsupportedOperationException if this serializer/deserializer does
+	 *                                       not support deserialization. This can
+	 *                                       occur either because it's a dummy
+	 *                                       serializer (i.e. for messages with no
+	 *                                       network parameters), or because it does
+	 *                                       not support deserializing transactions.
+	 */
+	public abstract Transaction makeTransaction(byte[] payloadBytes, int offset, int length, byte[] hash)
+			throws ProtocolException, UnsupportedOperationException;
 
-    /**
-     * Make a transaction from the payload. Extension point for alternative
-     * serialization format support.
-     * 
-     * @throws UnsupportedOperationException if this serializer/deserializer
-     * does not support deserialization. This can occur either because it's a dummy
-     * serializer (i.e. for messages with no network parameters), or because
-     * it does not support deserializing transactions.
-     */
-    public final Transaction makeTransaction(byte[] payloadBytes, int offset) throws ProtocolException {
-        return makeTransaction(payloadBytes, offset, payloadBytes.length, null);
-    }
+	/**
+	 * Make a transaction from the payload. Extension point for alternative
+	 * serialization format support.
+	 * 
+	 * @throws UnsupportedOperationException if this serializer/deserializer does
+	 *                                       not support deserialization. This can
+	 *                                       occur either because it's a dummy
+	 *                                       serializer (i.e. for messages with no
+	 *                                       network parameters), or because it does
+	 *                                       not support deserializing transactions.
+	 */
+	public final Transaction makeTransaction(byte[] payloadBytes)
+			throws ProtocolException, UnsupportedOperationException {
+		return makeTransaction(payloadBytes, 0);
+	}
 
-    public abstract void seekPastMagicBytes(ByteBuffer in) throws BufferUnderflowException;
+	/**
+	 * Make a transaction from the payload. Extension point for alternative
+	 * serialization format support.
+	 * 
+	 * @throws UnsupportedOperationException if this serializer/deserializer does
+	 *                                       not support deserialization. This can
+	 *                                       occur either because it's a dummy
+	 *                                       serializer (i.e. for messages with no
+	 *                                       network parameters), or because it does
+	 *                                       not support deserializing transactions.
+	 */
+	public final Transaction makeTransaction(byte[] payloadBytes, int offset) throws ProtocolException {
+		return makeTransaction(payloadBytes, offset, payloadBytes.length, null);
+	}
 
-    /**
-     * Writes message to to the output stream.
-     * 
-     * @throws UnsupportedOperationException if this serializer/deserializer
-     * does not support serialization. This can occur either because it's a dummy
-     * serializer (i.e. for messages with no network parameters), or because
-     * it does not support serializing the given message.
-     */
-    public abstract void serialize(String name, byte[] message, OutputStream out) throws IOException, UnsupportedOperationException;
+	public abstract void seekPastMagicBytes(ByteBuffer in) throws BufferUnderflowException;
 
-    /**
-     * Writes message to to the output stream.
-     * 
-     * @throws UnsupportedOperationException if this serializer/deserializer
-     * does not support serialization. This can occur either because it's a dummy
-     * serializer (i.e. for messages with no network parameters), or because
-     * it does not support serializing the given message.
-     */
-    public abstract void serialize(Message message, OutputStream out) throws IOException, UnsupportedOperationException;
-    
+	/**
+	 * Writes message to to the output stream.
+	 * 
+	 * @throws UnsupportedOperationException if this serializer/deserializer does
+	 *                                       not support serialization. This can
+	 *                                       occur either because it's a dummy
+	 *                                       serializer (i.e. for messages with no
+	 *                                       network parameters), or because it does
+	 *                                       not support serializing the given
+	 *                                       message.
+	 */
+	public abstract void serialize(String name, byte[] message, OutputStream out)
+			throws IOException, UnsupportedOperationException;
+
+	/**
+	 * Writes message to to the output stream.
+	 * 
+	 * @throws UnsupportedOperationException if this serializer/deserializer does
+	 *                                       not support serialization. This can
+	 *                                       occur either because it's a dummy
+	 *                                       serializer (i.e. for messages with no
+	 *                                       network parameters), or because it does
+	 *                                       not support serializing the given
+	 *                                       message.
+	 */
+	public abstract void serialize(Message message, OutputStream out) throws IOException, UnsupportedOperationException;
+
 }

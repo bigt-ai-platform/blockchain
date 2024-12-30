@@ -817,17 +817,19 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	public Block get(Sha256Hash hash) throws BlockStoreException {
-
-		try {
-
-			byte[] re = getByte(hash);
-			if (re == null)
+		// log.info("find block hexStr : " + hash.toString());
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_SQL)) {
+			s.setBytes(1, hash.getBytes());
+			ResultSet results = s.executeQuery();
+			if (!results.next()) {
 				return null;
-			return params.getDefaultSerializer().makeZippedBlock(re);
-		} catch (IOException ex) {
-			throw new BlockStoreException(ex);
-		}
+			}
+			return params.getDefaultSerializer().makeZippedBlock(results.getBytes("block"));
 
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
+		// throw new BlockStoreException("Could not close statement");
 	}
 
 	public byte[] getByte(Sha256Hash hash) throws BlockStoreException {
@@ -943,7 +945,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluationNumber(resultSet);
 				BlockMCMC mcmc = setBlockMCMC(resultSet);
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block)) {
 					storedBlocks.add(new BlockWrap(block, blockEvaluation, mcmc, params));
 				}
@@ -1312,7 +1314,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			}
 			BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-			Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+			Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
 			return new BlockWrap(block, blockEvaluation, getMCMC(hash), params);
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
@@ -1388,7 +1390,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
 					storedBlockHashes.add(
 							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
@@ -1432,7 +1434,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
 					blocksByDescendingHeight.add(
 							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
@@ -1456,7 +1458,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBytes("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
 					blocksByHeight.add(
 							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));

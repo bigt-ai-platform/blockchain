@@ -56,7 +56,7 @@ public class PerformanceTest extends ContractTest {
 		prepare("12200", a2);
 		for (int i = 0; i < 12200; i++) {
 			createReward(a2);
-			c = checkSum(c);
+			//c = checkSum(c);
 		}
 	}
 
@@ -88,12 +88,11 @@ public class PerformanceTest extends ContractTest {
 	}
 
 	public String contractAndOrder(List<Block> blocksAddedAll) {
-//		try {
-//			ordermatch(blocksAddedAll);
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//			 
-//		}
+		try {
+			ordermatch(blocksAddedAll);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		try {
 			contractExecution(blocksAddedAll);
 		} catch (Exception e) {
