@@ -16,7 +16,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,10 +54,10 @@ import net.bigtangle.utils.OkHttp3Util;
 
 /**
  * <p>
- * Provides services for sync blocks from remote servers via p2p.
- * sync remote chain data from chainlength, if chainlength = null, then sync the
- * chain data from the total rating with chain 100% For the sync from given
- * checkpoint, the server must be restarted.
+ * Provides services for sync blocks from remote servers via p2p. sync remote
+ * chain data from chainlength, if chainlength = null, then sync the chain data
+ * from the total rating with chain 100% For the sync from given checkpoint, the
+ * server must be restarted.
  * </p>
  */
 @Service
@@ -74,7 +73,7 @@ public class SyncBlockService {
 
 	@Autowired
 	protected ObjectMapper jsonmapper;
-	
+
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 	private static final Logger log = LoggerFactory.getLogger(SyncBlockService.class);
@@ -207,7 +206,7 @@ public class SyncBlockService {
 			if (storedBlock1 == null) {
 				byte[] re = requestBlock(block.getPrevBranchBlockHash(), store);
 				if (re != null) {
-					Block req =  networkParameters.getDefaultSerializer().makeBlock(re);
+					Block req = networkParameters.getDefaultSerializer().makeBlock(re);
 					blockgraph.add(req, true, store);
 				}
 			}
@@ -256,8 +255,7 @@ public class SyncBlockService {
 
 	}
 
-	public void requestBlocks(long chainlengthstart, long chainlengthend, String s, List<TXReward> remotes,
-			BlockStoreInterface store)
+	public void requestBlocks(long chainlengthstart, long chainlengthend, String s, BlockStoreInterface store)
 			throws IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
@@ -285,9 +283,9 @@ public class SyncBlockService {
 //				for (Sha256Hash hash : missing) {
 //					requestBlock(hash, store);
 //				}
-		//		if (anyMatchConfirmedReward(block, remotes)) {
-					blockgraph.addFromSync(block, true, store);
-		//		}
+				// if (anyMatchConfirmedReward(block, remotes)) {
+				blockgraph.addFromSync(block, true, store);
+				// }
 			}
 		}
 
@@ -427,34 +425,13 @@ public class SyncBlockService {
 
 		if (aMaxConfirmedReward.aTXReward.getChainLength() > my.getChainLength()) {
 
-			List<TXReward> remotes = getAllConfirmedReward(aMaxConfirmedReward.server).stream()
-					.filter(a -> a.getSpenderBlockHash() != null).collect(Collectors.toList());
-			log.debug("  remote chain  size  " + remotes.size());
-
-			Collections.sort(remotes, new SortbyChain());
-			List<TXReward> mylist = new ArrayList<TXReward>();
-
-			List<TXReward> allConfirmedReward = store.getAllConfirmedReward();
-//			MissingNumberCheckService missingNumberCheckService = new MissingNumberCheckService();
-//			if (!missingNumberCheckService.check(allConfirmedReward)) {
-//				log.debug("  my chain missing sequence  ");
-//
-//			}
-			for (TXReward t : allConfirmedReward) {
-				if (t.getChainLength() <= my.getChainLength()) {
-					mylist.add(t);
-				}
-			}
-			Collections.sort(mylist, new SortbyChain());
-			TXReward re = findSync(remotes, mylist);
-			log.debug(" start sync remote ChainLength: " + re.getChainLength() + " to: "
+			log.debug(" start sync remote ChainLength: " + my.getChainLength() + " to: "
 					+ aMaxConfirmedReward.aTXReward.getChainLength());
 
-			for (long i = re.getChainLength(); i <= aMaxConfirmedReward.aTXReward
+			for (long i = my.getChainLength(); i <= aMaxConfirmedReward.aTXReward
 					.getChainLength(); i += serverConfiguration.getSyncblocks()) {
 				Stopwatch watch = Stopwatch.createStarted();
-				requestBlocks(i, i + serverConfiguration.getSyncblocks() - 1, aMaxConfirmedReward.server, remotes,
-						store);
+				requestBlocks(i, i + serverConfiguration.getSyncblocks() - 1, aMaxConfirmedReward.server, store);
 				if (initsync) {
 					// log.debug(" updateChain " );
 
@@ -530,7 +507,8 @@ public class SyncBlockService {
 		List<ChainBlockQueue> orphanBlocks = blockStore.selectChainblockqueue(true,
 				serverConfiguration.getSyncblocks());
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		if (orphanBlocks.size() > 0) {
 			log.debug("Orphan  size = {}", orphanBlocks.size());
 		}
@@ -560,8 +538,9 @@ public class SyncBlockService {
 		// Look up the blocks previous.
 		Block block = networkParameters.getDefaultSerializer().makeBlock(orphanBlock.getBlock());
 
-		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
-		
+		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+
 		// remove too old OrphanBlock and cutoff chain length
 		if (System.currentTimeMillis() - orphanBlock.getInserttime() * 1000 > 2 * 60 * 60 * 1000
 				|| block.getLastMiningRewardBlock() < cut) {
@@ -572,14 +551,14 @@ public class SyncBlockService {
 			return;
 		}
 
-		Block prev = store.get( serviceBaseReward.getRewardInfo(block).getPrevRewardHash());
+		Block prev = store.get(serviceBaseReward.getRewardInfo(block).getPrevRewardHash());
 		if (prev == null) {
 
 			// This is still an unconnected/orphan block.
 			// if (log.isDebugEnabled())
 			// log.debug("Orphan block {} is not connectable right now",
 			// orphanBlock.block.getHash());
-			requestBlock( serviceBaseReward.getRewardInfo(block).getPrevRewardHash(), store);
+			requestBlock(serviceBaseReward.getRewardInfo(block).getPrevRewardHash(), store);
 			log.info("syncBlockService orphan {}", block.toString());
 
 		} else {
