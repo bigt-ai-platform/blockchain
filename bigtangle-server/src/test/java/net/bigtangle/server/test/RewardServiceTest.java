@@ -210,10 +210,10 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		resetStore();
 		// replay first chain
 		for (Block b : a1)
-			blockGraph.add(b, true, true, store);
+			 add(b, true, true, store);
 		// add second chain
 		for (Block b : a2)
-			blockGraph.add(b, true, true, store);
+			 add(b, true, true, store);
 
 		// assertFalse(getBlockEvaluation(rewardBlock1.getHash()).isConfirmed());
 		assertTrue(!getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed()  );
@@ -245,22 +245,22 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			resetStore();
 			// add many times to get chain out of order
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 			for (Block b : blocksAddedAll)
-				blockGraph.add(b, true, true, store);
+				add(b, true, true, store);
 			syncBlockService.connectingOrphans(store);
 
 			assertFalse(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
@@ -352,7 +352,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			rollingBlock1 = networkParameters.getDefaultSerializer().makeBlock(data);
 			rollingBlock1.addTransaction(wallet.feeTransaction(null));
 			rollingBlock1.solve();
-			blockGraph.add(rollingBlock1, true, store);
+			blockGraph.addBlock(rollingBlock1, true, store);
 			blocksAddedAll.add(rollingBlock1);
 		}
 		return rollingBlock1;

@@ -164,10 +164,10 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 	public Block getRollingBlock(ECKey outKey) throws Exception {
 
 		Block rollingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 		for (int i = 1; i < networkParameters.getSpendableCoinbaseDepth(); i++) {
 			rollingBlock =UtilsTest.createBlock(networkParameters,rollingBlock, networkParameters.getGenesisBlock());
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 		return rollingBlock;
 	}

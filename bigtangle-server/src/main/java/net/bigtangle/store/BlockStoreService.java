@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -84,7 +83,7 @@ public class BlockStoreService {
 	@Autowired
 	protected ObjectMapper jsonmapper;
 
-	public boolean add(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
+	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
 			added = addChain(block, store);
@@ -113,14 +112,6 @@ public class BlockStoreService {
 
 	}
 
-	public boolean add(Block block, boolean allowUnsolid, boolean updatechain, BlockStoreInterface store)
-			throws BlockStoreException {
-		boolean a = add(block, allowUnsolid, store);
-		if (updatechain) {
-			updateChain();
-		}
-		return a;
-	}
 
 	public boolean addChain(Block block, BlockStoreInterface store) throws BlockStoreException {
 

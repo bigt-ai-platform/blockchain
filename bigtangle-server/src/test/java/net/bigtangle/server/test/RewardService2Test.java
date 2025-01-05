@@ -86,13 +86,13 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		// replay first chain
 		for (Block b : a1) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 		}
 		//checkSum(c);
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 			checkSum(c);
 		}
 
@@ -101,12 +101,12 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		resetStore();
 		for (Block b : a2) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 
 		}
 		for (Block b : a1) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 		}
 
 		// assertTrue(hash.equals(checkpointService.checkToken(store).hash()));
@@ -142,14 +142,14 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		// replay first chain
 		for (Block b : a1) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 		}
 		c = checkSum(null);
 		// replay second chain
 		Collections.shuffle(a2);
 		for (Block b : a2) {
 			if (b != null) {
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 			//	c = checkSum(c);
 			}
 
@@ -179,7 +179,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		Collections.shuffle(a2);
 		for (Block b : a2) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 
 		}
 

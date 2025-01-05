@@ -252,7 +252,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block1.addTransaction(wallet.feeTransaction(null));
 		block1 = adjustSolve(block1);
 		try {
-			this.blockGraph.add(block1, false, store);
+			this.blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (Exception e) {
 			// TODO: handle exception
@@ -323,7 +323,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		resetStore();
 		for (Block b : blocksAddedAll) {
-			blockGraph.add(b, true, store);
+			blockGraph.addBlock(b, true, store);
 		}
 		// Add block allowing unsolids
 		blockService.addConnected(rewardBlock2.bitcoinSerialize(), true);
@@ -336,7 +336,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		blockGraph.updateChain();
 		// After adding the missing dependency, should be solid
-		blockGraph.add(rewardBlock2, true, true, store);
+	 add(rewardBlock2, true, true, store);
 		syncBlockService.connectingOrphans(store);
 		blockGraph.updateChain();
 		assertTrue(store.getBlockWrap(rewardBlock2.getHash()).getBlockEvaluation().getSolid() == 2);
@@ -413,7 +413,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			failingBlock.setLastMiningRewardBlock(2);
 			failingBlock.addTransaction(wallet.feeTransaction(null));
 			failingBlock.solve();
-			blockGraph.add(failingBlock, false, store);
+			blockGraph.addBlock(failingBlock, false, store);
 			fail();
 		} catch (DifficultyConsensusInheritanceException e) {
 			// Expected
@@ -425,7 +425,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			failingBlock.setLastMiningRewardBlock(2);
 			failingBlock.addTransaction(wallet.feeTransaction(null));
 			failingBlock.solve();
-			blockGraph.add(failingBlock, false, store);
+			blockGraph.addBlock(failingBlock, false, store);
 			fail();
 		} catch (DifficultyConsensusInheritanceException e) {
 			// Expected
@@ -445,7 +445,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		rollingBlock.setTime(rollingBlock.getTimeSeconds()); // 01/01/2000 @
 		rollingBlock.addTransaction(wallet.feeTransaction(null)); // 12:00am (UTC)
 		rollingBlock.solve();
-		blockGraph.add(rollingBlock, false, store);
+		blockGraph.addBlock(rollingBlock, false, store);
 		makeRewardBlock(rollingBlock);
 		// The time is not allowed to move backwards
 		try {
@@ -453,7 +453,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			rollingBlock.setTime(946684800); // 01/01/2000 @ 12:00am (UTC)
 			rollingBlock.addTransaction(wallet.feeTransaction(null));
 			rollingBlock.solve();
-			blockGraph.add(rollingBlock, false, store);
+			blockGraph.addBlock(rollingBlock, false, store);
 			fail();
 		} catch (TimeReversionException e) {
 		}
@@ -486,7 +486,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					rollingBlock.setBlockType(type);
 					rollingBlock.addTransaction(tx);
 					rollingBlock.solve();
-					blockGraph.add(rollingBlock, false, store);
+					blockGraph.addBlock(rollingBlock, false, store);
 
 					fail();
 				} catch (CoinbaseDisallowedException | UnsolidException e) {
@@ -550,7 +550,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					networkParameters.getGenesisBlock());
 			block1.addTransaction(tx1);
 			block1 = adjustSolve(block1);
-			this.blockGraph.add(block1, false, store);
+			this.blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (ScriptException e) {
 		}
@@ -618,7 +618,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			block1.addTransaction(tx2);
 
 			block1 = adjustSolve(block1);
-			this.blockGraph.add(block1, false, store);
+			this.blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (InvalidTransactionException e) {
 		}
@@ -663,7 +663,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					networkParameters.getGenesisBlock());
 			b.setBlockType(Type.BLOCKTYPE_INITIAL);
 			b.solve();
-			blockGraph.add(b, false, store);
+			blockGraph.addBlock(b, false, store);
 			fail();
 		} catch (GenesisBlockDisallowedException e) {
 		}
@@ -708,7 +708,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 20; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward block with spending inputs
@@ -719,7 +719,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Should not go through
 		try {
 			rewardBlock.solve();
-			blockGraph.add(rewardBlock, false, store);
+			blockGraph.addBlock(rewardBlock, false, store);
 			fail();
 		} catch (VerificationException e) {
 
@@ -735,7 +735,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward block with spending inputs
@@ -760,7 +760,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(rewardBlock, false, true, store);
+			 add(rewardBlock, false, true, store);
 
 			fail();
 		} catch (TransactionOutputsDisallowedException e) {
@@ -775,7 +775,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward block with additional tx
@@ -787,7 +787,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(rewardBlock, false, true, store);
+			 add(rewardBlock, false, true, store);
 
 			fail();
 		} catch (IncorrectTransactionCountException e) {
@@ -802,7 +802,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward block with malformed tx data
@@ -813,7 +813,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			assertFalse(blockGraph.add(rewardBlock, false, true, store));
+			assertFalse( add(rewardBlock, false, true, store));
 			fail();
 		} catch (RuntimeException e) {
 
@@ -835,7 +835,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(rewardBlock, false, true, store);
+			 add(rewardBlock, false, true, store);
 			fail();
 		} catch (RuntimeException e) {
 		}
@@ -849,7 +849,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		for (int i = 0; i < 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward block with malformed fields
@@ -888,14 +888,14 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		testBlock6.solve();
 		testBlock7.solve();
 
-		blockGraph.add(testBlock3, true, true, store);
+		 add(testBlock3, true, true, store);
 		try {
-			blockGraph.add(testBlock4, false, true, store);
+			 add(testBlock4, false, true, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(testBlock5, false, true, store);
+			 add(testBlock5, false, true, store);
 			fail();
 		} catch (VerificationException e) {
 		}
@@ -936,7 +936,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (MissingTransactionDataException e) {
 		}
@@ -971,7 +971,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (MalformedTransactionDataException e) {
 		}
@@ -1008,7 +1008,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (MissingTransactionDataException e) {
 		}
@@ -1045,7 +1045,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (MalformedTransactionDataException e) {
 		}
@@ -1676,13 +1676,13 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			// Should not go through
 			if (executors[i].expectsException()) {
 				try {
-					blockGraph.add(block, false, store);
+					blockGraph.addBlock(block, false, store);
 					fail("Number " + i + " failed");
 				} catch (VerificationException e) {
 				}
 			} else {
 				// always add
-				blockGraph.add(block, true, store);
+				blockGraph.addBlock(block, true, store);
 			}
 		}
 	}
@@ -1860,97 +1860,97 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Test
 		try {
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block2, false, store);
+			blockGraph.addBlock(block2, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 
 		try {
-			blockGraph.add(block3, false, store);
+			blockGraph.addBlock(block3, false, store);
 			// fail();
 		} catch (VerificationException e) {
 
 		}
 		try {
-			blockGraph.add(block4, false, store);
+			blockGraph.addBlock(block4, false, store);
 			// TODO fail();
 		} catch (VerificationException e) {
 
 		}
 		try {
-			blockGraph.add(block5, false, store);
+			blockGraph.addBlock(block5, false, store);
 			// TODO fail();
 		} catch (VerificationException e) {
 
 		}
 		try {
-			blockGraph.add(block6, false, store);
+			blockGraph.addBlock(block6, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block7, false, store);
+			blockGraph.addBlock(block7, false, store);
 			// TODO fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block8, false, store);
+			blockGraph.addBlock(block8, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block9, false, store);
+			blockGraph.addBlock(block9, false, store);
 			// TODO fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block10, false, store);
+			blockGraph.addBlock(block10, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block11, false, store);
+			blockGraph.addBlock(block11, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block12, false, store);
+			blockGraph.addBlock(block12, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 		try {
-			blockGraph.add(block13, false, store);
+			blockGraph.addBlock(block13, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
 
 		try {
-			blockGraph.add(block14, false, store);
+			blockGraph.addBlock(block14, false, store);
 		} catch (VerificationException e) {
 			fail();
 		}
 		try {
-			blockGraph.add(block15, false, store);
+			blockGraph.addBlock(block15, false, store);
 		} catch (VerificationException e) {
 			fail();
 		}
 		try {
-			blockGraph.add(block16, false, store);
+			blockGraph.addBlock(block16, false, store);
 		} catch (VerificationException e) {
 			fail();
 		}
 		try {
-			blockGraph.add(block17, false, store);
+			blockGraph.addBlock(block17, false, store);
 		} catch (VerificationException e) {
 			fail();
 		}
 		try {
-			blockGraph.add(block18, false, store);
+			blockGraph.addBlock(block18, false, store);
 		} catch (VerificationException e) {
 			fail();
 		}
@@ -1969,7 +1969,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
@@ -1992,7 +1992,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 
 			fail();
 		} catch (NotCoinbaseException e) {
@@ -2028,7 +2028,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (InvalidDependencyException e) {
 		}
@@ -2063,7 +2063,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (InvalidDependencyException e) {
 		}
@@ -2098,7 +2098,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (PreviousTokenDisallowsException e) {
 		}
@@ -2134,7 +2134,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (PreviousTokenDisallowsException e) {
 		}
@@ -2169,7 +2169,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 			fail();
 		} catch (PreviousTokenDisallowsException e) {
 		}
@@ -2222,7 +2222,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block, false, store);
+			blockGraph.addBlock(block, false, store);
 
 			fail();
 		} catch (InvalidTransactionDataException e) {
@@ -2243,7 +2243,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
@@ -2323,7 +2323,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
@@ -2356,7 +2356,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 			block1.addTransaction(wallet.feeTransaction(null));
 			block1.solve();
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (InvalidOrderException e) {
 		}
@@ -2447,7 +2447,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 			// block1.addTransaction(wallet.feeTransaction(null));
 			block1.solve();
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}
@@ -2519,7 +2519,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		try {
 			block1.addTransaction(wallet.feeTransaction(null));
 			block1.solve();
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			fail();
 		} catch (InvalidOrderException e) {
 		}
@@ -2569,7 +2569,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			block1.solve();
 
 			// Should go through
-			blockGraph.add(block1, false, store);
+			blockGraph.addBlock(block1, false, store);
 			makeRewardBlock(block1);
 		}
 
@@ -2607,7 +2607,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Should not go through
 		try {
-			blockGraph.add(block2, false, store);
+			blockGraph.addBlock(block2, false, store);
 			fail();
 		} catch (VerificationException e) {
 		}

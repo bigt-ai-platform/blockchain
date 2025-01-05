@@ -81,8 +81,8 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Block b2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), doublespendTX);
 
-		blockGraph.add(b1, true, store);
-		blockGraph.add(b2, true, store);
+		blockGraph.addBlock(b1, true, store);
+		blockGraph.addBlock(b2, true, store);
 
 		createAndAddNextBlock(b1, b2);
 
@@ -234,7 +234,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Make a fusing block
 		Block rollingBlock = UtilsTest.createBlock(networkParameters, conflictBlock1, conflictBlock2);
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 
 		makeRewardBlock();
 
@@ -266,7 +266,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Sha256Hash genHash = networkParameters.getGenesisBlock().getHash();
 		Block block2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
 		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 
 		mcmcServiceUpdate();
 
@@ -308,7 +308,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Sha256Hash genHash = networkParameters.getGenesisBlock().getHash();
 		Block block2 = saveTokenUnitTest(tokenInfo2, coinbase2, outKey, null, null);
 		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 
 		mcmcServiceUpdate();
 
@@ -384,7 +384,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Make another conflicting issuance that goes through
 		Block block2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, confBlock, confBlock, null, false);
 		Block rollingBlock = UtilsTest.createBlock(networkParameters, block2, block1);
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 
 		// Let block 1 win
 		makeRewardBlock(block1);
@@ -396,7 +396,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		rollingBlock = block2;
 		for (int i = 0; i < 25; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		mcmcServiceUpdate();
@@ -412,7 +412,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getGenesisBlock();
 		for (int i = 0; i < 2 * 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward blocks
@@ -610,7 +610,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getGenesisBlock();
 		for (int i = 1; i < 35; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock, true, store);
+			blockGraph.addBlock(rollingBlock, true, store);
 			makeRewardBlock();
 
 		}

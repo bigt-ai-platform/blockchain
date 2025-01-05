@@ -220,7 +220,7 @@ public abstract class AbstractIntegrationTest {
 			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(feeTransaction);
 			rollingBlock1.solve();
-			blockGraph.add(rollingBlock1, true, store);
+			blockGraph.addBlock(rollingBlock1, true, store);
 			blocksAddedAll.add(rollingBlock1);
 		}
 		return rollingBlock1;
@@ -233,7 +233,7 @@ public abstract class AbstractIntegrationTest {
 			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(wallet.feeTransaction(null));
 			rollingBlock1.solve();
-			blockGraph.add(rollingBlock1, true, store);
+			blockGraph.addBlock(rollingBlock1, true, store);
 			rewardWithBlock(blocksAddedAll, rollingBlock1);
 		}
 		return rollingBlock1;
@@ -246,7 +246,7 @@ public abstract class AbstractIntegrationTest {
 		rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 		rollingBlock1.addTransaction(wallet.feeTransaction(null));
 		rollingBlock1.solve();
-		blockGraph.add(rollingBlock1, true, store);
+		blockGraph.addBlock(rollingBlock1, true, store);
 		return rollingBlock1;
 	}
 
@@ -446,7 +446,7 @@ public abstract class AbstractIntegrationTest {
 		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 
 		// Confirm and return
@@ -460,7 +460,7 @@ public abstract class AbstractIntegrationTest {
 		// Create and add block
 		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 
 		// Confirm and return
@@ -474,7 +474,7 @@ public abstract class AbstractIntegrationTest {
 		// Create and add block
 		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		return block;
 	}
 
@@ -616,7 +616,7 @@ public abstract class AbstractIntegrationTest {
 		block.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
 		block = adjustSolve(block);
 
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 
 		makeOrderExecutionAndReward(addedBlocks);
@@ -643,7 +643,7 @@ public abstract class AbstractIntegrationTest {
 		block.setBlockType(Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 		block = adjustSolve(block);
 
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 
 		return block;
@@ -816,7 +816,7 @@ public abstract class AbstractIntegrationTest {
 		resetStore();
 		for (Block b : addedBlocks) {
 			if (b != null)
-				blockGraph.add(b, true, true, store);
+				 add(b, true, true, store);
 		}
 
 		List<OrderRecord> allOrdersSorted2 = store.getAllOpenOrdersSorted(null, null);
@@ -836,7 +836,7 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block createAndAddNextBlock(Block b1, Block b2) throws VerificationException, BlockStoreException {
 		Block block = UtilsTest.createBlock(networkParameters, b1, b2);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		return block;
 	}
 
@@ -847,7 +847,7 @@ public abstract class AbstractIntegrationTest {
 		block1.addTransaction(prevOut);
 		// block1.addTransaction(wallet.feeTransaction(null));
 		block1 = adjustSolve(block1);
-		this.blockGraph.add(block1, true, store);
+		this.blockGraph.addBlock(block1, true, store);
 		if (mcmc)
 			mcmcServiceUpdate();
 		return block1;
@@ -2054,6 +2054,14 @@ public abstract class AbstractIntegrationTest {
 		allApprovedNewBlocks.add(getBlockWrap(b2.getHash()));
 		assertTrue(new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
+	}
+	public boolean add(Block block, boolean allowUnsolid, boolean updatechain, BlockStoreInterface store)
+			throws BlockStoreException {
+		boolean a = blockGraph.addBlock(block, allowUnsolid, store);
+		if (updatechain) {
+			blockGraph.updateChain();
+		}
+		return a;
 	}
 
 }

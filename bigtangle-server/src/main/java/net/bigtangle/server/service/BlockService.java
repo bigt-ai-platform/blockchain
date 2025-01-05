@@ -200,7 +200,7 @@ public class BlockService {
 					if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
 						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
 					}
-					blockgraph.add(block, allowUnsolid, store);
+					blockgraph.addBlock(block, allowUnsolid, store);
 					// removeBlockPrototype(block,store);
 					return Optional.of(block);
 				} catch (ProofOfWorkException | UnsolidException e) {

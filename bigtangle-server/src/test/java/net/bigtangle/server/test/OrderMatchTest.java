@@ -985,7 +985,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 		makeOrderExecutionAndReward(addedBlocks);
 		showOrders();
@@ -1058,7 +1058,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		block.addTransaction(wallet.feeTransaction(null));
 		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
 		block = adjustSolve(block);
-		this.blockGraph.add(block, true, store);
+		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 		// Execute order matching
 		makeOrderExecutionAndReward(addedBlocks);

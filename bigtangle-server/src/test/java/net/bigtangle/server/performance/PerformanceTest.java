@@ -5,10 +5,7 @@
 package net.bigtangle.server.performance;
 
 import java.io.StringWriter;
-import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -16,31 +13,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import com.google.common.math.LongMath;
-
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.TokensumsMap;
-import net.bigtangle.core.UTXO;
-import net.bigtangle.core.Utils;
-import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
-import net.bigtangle.core.response.GetBalancesResponse;
-import net.bigtangle.core.response.OrderdataResponse;
-import net.bigtangle.params.ReqCmd;
 import net.bigtangle.server.test.ContractTest;
-import net.bigtangle.utils.Json;
-import net.bigtangle.utils.OkHttp3Util;
-import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)

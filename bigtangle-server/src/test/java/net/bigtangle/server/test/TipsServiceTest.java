@@ -68,8 +68,8 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		Block b2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), doublespendTX);
 
-		blockGraph.add(b1, true, store);
-		blockGraph.add(b2, true, store);
+		blockGraph.addBlock(b1, true, store);
+		blockGraph.addBlock(b2, true, store);
 
 		// After confirming one of them into the milestone, only that one block
 		// is now available
@@ -115,8 +115,8 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		Block b2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), doublespendTX, false);
 
-		blockGraph.add(b1, false, store);
-		blockGraph.add(b2, true, store);
+		blockGraph.addBlock(b1, false, store);
+		blockGraph.addBlock(b2, true, store);
 
 		boolean hit1 = false;
 		boolean hit2 = false;
@@ -153,12 +153,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// Generate blocks until passing first reward interval
 		Block rollingBlock = UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock());
-		blockGraph.add(rollingBlock, true, store);
+		blockGraph.addBlock(rollingBlock, true, store);
 
 		Block rollingBlock1 = rollingBlock;
 		for (int i = 0; i < 1 + 1 + 1; i++) {
 			rollingBlock1 = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
-			blockGraph.add(rollingBlock1, true, store);
+			blockGraph.addBlock(rollingBlock1, true, store);
 		}
 
 		// Generate eligible mining reward blocks
@@ -504,9 +504,9 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		Block b2 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), doublespendTX, false);
 
-		blockGraph.add(b1, true, store);
+		blockGraph.addBlock(b1, true, store);
 
-		blockGraph.add(b2, true, store);
+		blockGraph.addBlock(b2, true, store);
 
 		boolean hit1 = false;
 		boolean hit2 = false;
@@ -558,7 +558,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		Block b1 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
 				networkParameters.getGenesisBlock(), doublespendTX);
 
-		blockGraph.add(b1, true, store);
+		blockGraph.addBlock(b1, true, store);
 
 		// After confirming one of them into the milestone, only that one block
 		// is now available
@@ -592,7 +592,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		// log.debug( (Utils.encodeCompactBits( networkParameters. getMaxTargetReward())
 		// - b1.getDifficultyTarget() )+ "" );
 		b1.solve();
-		this.blockGraph.add(b1, true, store);
+		this.blockGraph.addBlock(b1, true, store);
 		return b1;
 	}
 

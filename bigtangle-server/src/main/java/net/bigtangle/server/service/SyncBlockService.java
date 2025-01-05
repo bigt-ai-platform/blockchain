@@ -196,7 +196,7 @@ public class SyncBlockService {
 				byte[] re = requestBlock(block.getPrevBlockHash(), store);
 				if (re != null) {
 					Block req = (Block) networkParameters.getDefaultSerializer().makeBlock(re);
-					blockgraph.add(req, true, store);
+					blockgraph.addBlock(req, true, store);
 				}
 			}
 			Block storedBlock1 = null;
@@ -207,7 +207,7 @@ public class SyncBlockService {
 				byte[] re = requestBlock(block.getPrevBranchBlockHash(), store);
 				if (re != null) {
 					Block req = networkParameters.getDefaultSerializer().makeBlock(re);
-					blockgraph.add(req, true, store);
+					blockgraph.addBlock(req, true, store);
 				}
 			}
 		} catch (Exception e) {
@@ -311,7 +311,7 @@ public class SyncBlockService {
 		for (Block block : sortedBlocks) {
 			// no genesis block and no spend pending set
 			if (block.getHeight() > 0) {
-				blockgraph.add(block, true, store);
+				blockgraph.addBlock(block, true, store);
 			}
 		}
 

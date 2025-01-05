@@ -1919,8 +1919,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		arrayList.sort(new SortbyBlockWrapAsc());
 		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
-			if (checksum)
-				checkSum(store);
+//		 	if (checksum)
+//		 	checkSum(store);
 		}
 	}
 
