@@ -441,6 +441,7 @@ public interface BlockStoreInterface {
 	void insertContractEvent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
 	ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash) throws BlockStoreException;
+	List<ContractEventRecord> getContractEvents(Sha256Hash blockhash ) throws BlockStoreException;
 
 	void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
@@ -488,7 +489,7 @@ public interface BlockStoreInterface {
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
-	Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
+	List<Contractresult> getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
 
 	List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid) throws BlockStoreException;
 

@@ -16,7 +16,11 @@ import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,7 +30,6 @@ import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -56,6 +59,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 import com.google.common.math.LongMath;
 
+import jakarta.activation.DataSource;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
@@ -63,6 +67,8 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
+import net.bigtangle.core.ContractEventRecord;
+import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
@@ -90,7 +96,6 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.core.response.GetBalancesResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetTokensResponse;
@@ -189,6 +194,9 @@ public abstract class AbstractIntegrationTest {
 	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
+
+	@Autowired
+	protected transient javax.sql.DataSource dataSource;
 
 	@Autowired
 	protected void prepareContextRoot(@Value("${local.server.port}") int port) {
@@ -1449,7 +1457,7 @@ public abstract class AbstractIntegrationTest {
 
 	public Block makeRewardBlock(Sha256Hash prevHash, Sha256Hash prevTrunk, Sha256Hash prevBranch) throws Exception {
 		Block block = rewardService.createMiningRewardBlock(prevHash, blockService.getBlockWrap(prevTrunk, store),
-				blockService.getBlockWrap(prevBranch, store), store);
+				blockService.getBlockWrap(prevBranch, store), false, store);
 		if (block != null) {
 			blockSaveService.saveBlock(block, store);
 			blockGraph.updateChain(false);
@@ -1543,12 +1551,13 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
+					checkContractResult(map, a.getKey());
 					createDAG("failed");
-					createDAGRequired("failedRequired", 0, 10000000);
+					createDAGRequired("failedRequired", 0, 10000000, false);
 				}
 				assertTrue(a.getValue().check(), " " + a.toString());
 				createDAG("Ok");
-				createDAGRequired("OKRequired", 0, 10000000);
+				createDAGRequired("OKRequired", 0, 10000000, false);
 			}
 			// log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
@@ -1556,6 +1565,68 @@ public abstract class AbstractIntegrationTest {
 		} finally {
 			store.defaultDatabaseBatchWrite();
 		}
+	}
+
+	public void checkContractResult(TokensumsMap newMap, String tokenid) throws Exception {
+		Tokensums a = newMap.getTokensumsMap().get(tokenid);
+		// checkContract(a);
+		checkUTXOSUM(a);
+	}
+
+	private void checkUTXOSUM(Tokensums a) throws IOException, BlockStoreException {
+		Map<Sha256Hash, List<ContractEventRecord>> maps = new HashMap<>();
+		a.getUtxos().stream().forEach(n -> {
+			try {
+				for (ContractEventRecord contractEventRecord : store.getContractEvents(n.getBlockHash())) {
+
+					List<ContractEventRecord> f = maps.getOrDefault(contractEventRecord.getBlockHash(),
+							new ArrayList<>());
+					f.add(contractEventRecord);
+					maps.put(contractEventRecord.getBlockHash(), f);
+				}
+			} catch (BlockStoreException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		});
+		for (Map.Entry<Sha256Hash, List<ContractEventRecord>> entry : maps.entrySet()) {
+
+			BlockWrap bw = getBlockWrap(entry.getKey());
+
+			boolean spent = true;
+			for (ContractEventRecord c : entry.getValue()) {
+				Contractresult contractresult = store.getContractresult(c.getCollectinghash());
+				if (contractresult.getMilestone() < 0 && bw.getBlockEvaluation().getMilestone() < 0) {
+					spent = false;
+					log.debug(" \n ContractEventRecord :  " + c.toString());
+					log.debug("   execution result:  " + contractresult.toString());
+
+				}
+			}
+			if (!spent) {
+				log.debug(" block:  " + bw);
+			}
+		}
+	}
+
+	private void checkContract(Tokensums a) {
+		a.getContracts().stream().forEach(n -> {
+			// check the execution result
+			try {
+				List<ContractEventRecord> contractEvents = store.getContractEvents(n.getBlockHash());
+				log.debug("all contractevents size=  " + contractEvents.size());
+				for (ContractEventRecord contractEventRecord : contractEvents) {
+					Contractresult contractresult = store.getContractresult(contractEventRecord.getCollectinghash());
+					log.debug(" contractevents:  " + contractEventRecord.toString());
+					log.debug(" execution result:  " + contractresult.toString());
+				}
+
+			} catch (BlockStoreException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		});
 	}
 
 	public void checkSumDiffLog(TokensumsMap newMap, TokensumsMap last, String tokenid)
@@ -1681,14 +1752,24 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void unconfirmDo(Sha256Hash hash, HashSet<Sha256Hash> traversedUnconfirms, BlockStoreInterface blockStore)
-			throws BlockStoreException {
+			throws Exception {
 
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper).unconfirm(hash,
-					traversedUnconfirms, -1, blockStore);
+			ServiceContract serviceBase = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+					jsonmapper);
+			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
+			// if (re.getBlockEvaluation().isConfirmed())
+			blocksToUnconfirm.add(getBlockWrap(hash));
+
+			// serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
+
+			serviceBase.unconfirmBlocksSorted(blockStore,
+					serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm), new HashSet<>(), true);
 			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
+		} catch (
+
+		Exception e) {
 			blockStore.abortDatabaseBatchWrite();
 			throw e;
 		} finally {
@@ -1701,10 +1782,10 @@ public abstract class AbstractIntegrationTest {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore); 
-		 Set<BlockWrap> blocksToAdd = new HashSet< > ();
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		Set<BlockWrap> blocksToAdd = new HashSet<>();
 		blocksToAdd.add(block);
-		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd );
+		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd, true,maxConfirmedReward.getChainLength());
 	}
 
 	public List<ECKey> createUserkey() {
@@ -1715,12 +1796,12 @@ public abstract class AbstractIntegrationTest {
 				"256f4faea34cbec71ae22d6f6b4ea80bddd5d7ef7c70530be78506b83bed7aea",
 				"6d2538a814150fb28d086dec83a1389d1f4f5583d996883c1cd0972c21d773c1",
 				"8ee39e7c10e31d7cfcf31d99d469b107e78120d84cff23aa38224504413e6b52",
-				/*
-				 * "0d59be5cafdf76f40be223c818d7ed61c9c374a973f6356c4a87cc13d610a2e2",
-				 * "f42955011b4848fd6d26f898f937176a8549f3641000845223cef81078c8b92b",
-				 * "2212ea2b6bb6479021f994632fa66f891b5953e04db0f5316347de2a45e1d6c2",
-				 * "0b3451d9dd2d411a177ca3131e0e90c3f028c1534ca886f13af52ac442edd6fa"
-				 */
+
+				"0d59be5cafdf76f40be223c818d7ed61c9c374a973f6356c4a87cc13d610a2e2",
+				"f42955011b4848fd6d26f898f937176a8549f3641000845223cef81078c8b92b",
+				"2212ea2b6bb6479021f994632fa66f891b5953e04db0f5316347de2a45e1d6c2",
+				"0b3451d9dd2d411a177ca3131e0e90c3f028c1534ca886f13af52ac442edd6fa"
+
 		};
 		for (String priv : s) {
 			ECKey key = ECKey.fromPrivate(Utils.HEX.decode(priv));
@@ -1798,6 +1879,32 @@ public abstract class AbstractIntegrationTest {
 	public void createDAG(String filename, long from, long to) throws IOException, BlockStoreException {
 		// 1. Create your DAG using JGraphT
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
+		blockDAGPredecossors(from, to, dag);
+
+		drawDAG(filename, dag);
+	}
+
+	private void drawDAG(String filename, DefaultDirectedGraph<String, DefaultEdge> dag) throws IOException {
+		// 2. Convert DAG to DOT language format
+		String dotString = toDot(dag);
+		// 3. Generate the Graphviz .dot file
+		File dotFile = createTempFile(".dot", dotString);
+
+		// 4. Execute Graphviz `dot` to generate the SVG output
+		File svgFile = createSVGFile(filename + ".svg", null);
+		runDot(dotFile.getAbsolutePath(), svgFile.getAbsolutePath());
+
+		// 5. Display or process the generated SVG
+		// System.out.println("SVG generated at " + svgFile.getAbsolutePath());
+
+		// Displaying in the browser or a JavaFX WebView or etc is upto you
+		// For now let's display the content as a test
+		String content = Files.readString(Paths.get(svgFile.getAbsolutePath()));
+		// System.out.println(content);
+	}
+
+	private void blockDAGPredecossors(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag)
+			throws BlockStoreException, IOException {
 		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
 		dag.addVertex("");
 		// Initialize weight and depth of blocks
@@ -1816,23 +1923,6 @@ public abstract class AbstractIntegrationTest {
 				e.printStackTrace();
 			}
 		}
-
-		// 2. Convert DAG to DOT language format
-		String dotString = toDot(dag);
-		// 3. Generate the Graphviz .dot file
-		File dotFile = createTempFile(".dot", dotString);
-
-		// 4. Execute Graphviz `dot` to generate the SVG output
-		File svgFile = createSVGFile(filename + ".svg", null);
-		runDot(dotFile.getAbsolutePath(), svgFile.getAbsolutePath());
-
-		// 5. Display or process the generated SVG
-		// System.out.println("SVG generated at " + svgFile.getAbsolutePath());
-
-		// Displaying in the browser or a JavaFX WebView or etc is upto you
-		// For now let's display the content as a test
-		String content = Files.readString(Paths.get(svgFile.getAbsolutePath()));
-		// System.out.println(content);
 	}
 
 	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
@@ -1845,10 +1935,64 @@ public abstract class AbstractIntegrationTest {
 				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);
 	}
 
-	public void createDAGRequired(String filename, long from, long to) throws IOException, BlockStoreException {
+	public void createDAGRequired(String filename, long from, long to, boolean withReferenced)
+			throws IOException, BlockStoreException {
 		// 1. Create your DAG using JGraphT
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
+		blocksDAG(from, to, dag, withReferenced);
+
+		drawDAG(filename, dag);
+	}
+
+	public void createExecutionDAGRequired(String filename, long from, long to, boolean withReferenced)
+			throws IOException, BlockStoreException {
+		// 1. Create your DAG using JGraphT
+		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
+		List<Contractresult> s = getContractresults();
+		List<BlockWrap> blocks = new ArrayList<>();
+		for (Contractresult c : s) {
+			blocks.add(getBlockWrap(c.getBlockHash()));
+		}
+		blocksDAG(dag, withReferenced, blocks);
+		drawDAG(filename, dag);
+	}
+
+	public List<Contractresult> getContractresults() throws BlockStoreException {
+
+		List<Contractresult> re = new ArrayList<>();
+		try (PreparedStatement preparedStatement = dataSource.getConnection()
+				.prepareStatement("SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
+						+ " contractresult, prevblockhash, inserttime, milestone " + " FROM contractresult ")) {
+
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				re.add(setContractresult(resultSet));
+			}
+			return re;
+
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
+		// throw new BlockStoreException("Could not close statement");
+	}
+
+	private Contractresult setContractresult(ResultSet resultSet) throws SQLException {
+		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
+				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
+				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getLong("inserttime"));
+
+	}
+
+	private void blocksDAG(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag, boolean withReferenced)
+			throws BlockStoreException, IOException {
 		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
+		blocksDAG(dag, withReferenced, blockQueue);
+	}
+
+	private void blocksDAG(DefaultDirectedGraph<String, DefaultEdge> dag, boolean withReferenced,
+			Collection<BlockWrap> blockQueue) throws IOException, BlockStoreException {
 		dag.addVertex("");
 		// Initialize weight and depth of blocks
 		for (BlockWrap block : blockQueue) {
@@ -1859,7 +2003,8 @@ public abstract class AbstractIntegrationTest {
 				if (block.getBlock().getHeight() > 0) {
 					String b = getVertex(block.getBlockHash());
 					for (Sha256Hash req : new ServiceBaseConnect(serverConfiguration, networkParameters,
-							cacheBlockService, jsonmapper).getAllRequiredBlockHashes(block.getBlock())) {
+							cacheBlockService, jsonmapper)
+							.getAllRequiredBlockHashes(block.getBlock(), withReferenced)) {
 						dag.addEdge(b, getVertex(req));
 					}
 				}
@@ -1867,23 +2012,6 @@ public abstract class AbstractIntegrationTest {
 				e.printStackTrace();
 			}
 		}
-
-		// 2. Convert DAG to DOT language format
-		String dotString = toDot(dag);
-		// 3. Generate the Graphviz .dot file
-		File dotFile = createTempFile(".dot", dotString);
-
-		// 4. Execute Graphviz `dot` to generate the SVG output
-		File svgFile = createSVGFile(filename + ".svg", null);
-		runDot(dotFile.getAbsolutePath(), svgFile.getAbsolutePath());
-
-		// 5. Display or process the generated SVG
-		// System.out.println("SVG generated at " + svgFile.getAbsolutePath());
-
-		// Displaying in the browser or a JavaFX WebView or etc is upto you
-		// For now let's display the content as a test
-		String content = Files.readString(Paths.get(svgFile.getAbsolutePath()));
-		// System.out.println(content);
 	}
 
 	public BlockWrap getBlockWrap(Sha256Hash hash) throws IOException, BlockStoreException {

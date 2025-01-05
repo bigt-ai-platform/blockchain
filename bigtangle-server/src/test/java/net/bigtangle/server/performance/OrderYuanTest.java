@@ -97,7 +97,6 @@ public class OrderYuanTest extends AbstractIntegrationTest {
 
               //  checkSum();
             } catch (Exception e) {
-                // TODO: handle exception
                 log.warn("", e);
                 ;
             }

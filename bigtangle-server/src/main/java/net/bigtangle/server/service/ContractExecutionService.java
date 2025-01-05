@@ -29,7 +29,6 @@ import com.google.common.base.Stopwatch;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Contractresult;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
@@ -37,7 +36,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.NoBlockException;
 import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -197,18 +195,19 @@ public class ContractExecutionService {
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
 				referencedOrdertypes, true, false, store);
 		Set<BlockWrap> prevsNotMilestoneChainedBlocks = new HashSet<>();
-		BlockWrap prevMilestone = getFromMilestoneChainedExecutions(referencedblocks,
+		BlockWrap prevMilestone = serviceBase.getFromMilestoneChainedExecutions(referencedblocks,
 				Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, prevsNotMilestoneChainedBlocks, contract, store);
 
 		// take last NotMilestone chain confirmed and set others as not confirmed
-		Contractresult lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
+		Contractresult lastExecution = serviceBase.getLastContractresult(prevsNotMilestoneChainedBlocks, store);
 		if (lastExecution == null) {
 			if (prevMilestone != null)
 				lastExecution = store.getContractresult(prevMilestone.getBlock().getHash());
 			else
 				lastExecution = Contractresult.firstContractresult();
 		}
-		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
+		Set<BlockWrap> collectNotSpents = serviceBase.collectNotAreadyCollected(referencedblocks,
+				prevsNotMilestoneChainedBlocks);
 
 		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper)
@@ -223,95 +222,6 @@ public class ContractExecutionService {
 		blockService.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
-	}
-
-	/*
-	 * Execution from the blocks must be chained original from milestone.
-	 */
-	public BlockWrap getFromMilestoneChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
-			Set<BlockWrap> prevsNotMilestoneChainedBlocks, Token contract, BlockStoreInterface store)
-			throws BlockStoreException {
-		BlockWrap fromMilestoneChaineExecutions = null;
-		for (BlockWrap block : blocks) {
-			if (blocktype.equals(block.getBlock().getBlockType())) {
-				prevsNotMilestoneChainedBlocks.add(block);
-			}
-		}
-		ServiceContract serviceContract = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper);
-		if (prevsNotMilestoneChainedBlocks.isEmpty()) {
-			Contractresult m = store.getMaxMilestoneContractresult(contract.getTokenid());
-			if (m != null)
-				return serviceContract.getBlockWrap(m.getBlockHash(), store);
-		}
-		for (BlockWrap b : prevsNotMilestoneChainedBlocks) {
-			if (serviceContract.isFirsExecution(b.getBlock())) {
-				return null;
-			}
-			fromMilestoneChaineExecutions = serviceContract.getFromMilestoneChaineExecutions(b,
-					prevsNotMilestoneChainedBlocks, true, store);
-			if (fromMilestoneChaineExecutions == null) {
-				throw new InfeasiblePrototypeException(
-						"Execution from the blocks must be chained original from milestone: " + b.toString());
-			}
-		}
-		return fromMilestoneChaineExecutions;
-	}
-
-	protected Set<BlockWrap> collectUnconfirm(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
-			List<Contractresult> prevNotMilestons, BlockStoreInterface store, ServiceBaseConnect serviceBase)
-			throws BlockStoreException {
-		Set<BlockWrap> re = new HashSet<>();
-		for (Contractresult prevNotMilestone : prevNotMilestons) {
-			if (prevsNotMilestoneChainedBlocks.stream()
-					.noneMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
-				re.add(serviceBase.getBlockWrap(prevNotMilestone.getBlockHash(), store));
-			}
-
-		}
-		return re;
-
-	}
-
-	protected Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
-			throws IOException {
-		Set<BlockWrap> collectNews = new HashSet<>();
-		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
-		for (BlockWrap b : collectedBlocks) {
-			if (!b.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				if (!alreadyCollected.contains(b.getBlockHash())) {
-					collectNews.add(b);
-				}
-			}
-		}
-		return collectNews;
-	}
-
-	protected Contractresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store) throws BlockStoreException {
-		BlockWrap re = null;
-		for (BlockWrap b : prevs) {
-			if (re == null)
-				re = b;
-			else {
-				if (b.getBlock().getHeight() > re.getBlock().getHeight())
-					re = b;
-			}
-		}
-		if (re == null)
-			return null;
-		else
-			return store.getContractresult(re.getBlock().getHash());
-	}
-
-	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {
-		Set<Sha256Hash> collectOrdersNoSpents = new HashSet<>();
-		for (BlockWrap b : prevs) {
-			ContractExecutionResult result = new ContractExecutionResult()
-					.parse(b.getBlock().getTransactions().get(0).getData());
-
-			collectOrdersNoSpents.addAll(result.getReferencedBlocks());
-		}
-		return collectOrdersNoSpents;
 	}
 
 	private Block blockSolve(Block block, final BigInteger chainTargetFinal)

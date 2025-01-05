@@ -246,8 +246,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
-	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = true and contracttokenid=? and milestone >0 and spent=false order by milestone desc limit 1";
+	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT + " WHERE milestone = "
+			+ " ( select milestone  FROM contractresult  "
+			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and milestone >0 order by milestone desc limit 1 ) ";
 	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = true and contracttokenid=? and milestone < 0  order by inserttime desc   ";
 
@@ -429,7 +430,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_OPEN_ORDERS_SORTED_SQL = "SELECT " + ORDER_TEMPLATE
 			+ " FROM orders WHERE confirmed=true AND spent=false ";
 
-	// TODO remove test
 	protected final String SELECT_AVAILABLE_UTXOS_SORTED_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress, "
 			+ "addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,spendpendingtime, minimumsign, time, hash, outputindex, spenderblockhash "
 			+ " FROM outputs WHERE confirmed=true AND spent=false ORDER BY hash, outputindex";

@@ -133,15 +133,15 @@ public class BlockStoreService {
 		return true;
 	}
 
-	
-	public void updateChain() throws BlockStoreException { 
+	public void updateChain() throws BlockStoreException {
 		updateChain(false);
 	}
+
 	/*
 	 * updateChainConnected and updateConfirmed can not run in parallel
 	 */
 	public void updateChain(boolean confirmTimebox) throws BlockStoreException {
-		//first undo the mc confirm for calculation chain confirm
+		// first undo the mc confirm for calculation chain confirm
 		updateChainConnected();
 		if (confirmTimebox)
 			updateConfirmedTimeBoxed();
@@ -485,14 +485,13 @@ public class BlockStoreService {
 		}
 	}
 
- 
 	public void updateUnConfirmedDo(BlockStoreInterface blockStore) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
-		unconfirmDo(blockStore, cutoffHeight, maxHeight); 
+		unconfirmDo(blockStore, cutoffHeight, maxHeight);
 	}
 
 	public void confirmDo(BlockStoreInterface blockStore) throws BlockStoreException {
@@ -502,53 +501,38 @@ public class BlockStoreService {
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, blockStore);
 
-		confirmDo(blockStore, cutoffHeight, maxHeight);
+		confirmDo(blockStore, cutoffHeight, maxHeight, maxConfirmedReward.getChainLength());
 	}
 
-	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight, long prevMilestoneNumber)
 			throws BlockStoreException {
+
+		confirmDo(blockStore, cutoffHeight, blockStore.getBlocksToConfirm(cutoffHeight, maxHeight), true,
+				prevMilestoneNumber);
+	}
+
+	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, Set<BlockWrap> blocksToAdd,
+			boolean resolveConflict, long prevMilestoneNumber) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
 			blockStore.beginDatabaseBatchWrite();
-
-			// Now try to find blocks that can be added to the milestone.
-			// DISALLOWS UNSOLID
-			TreeSet<BlockWrap> blocksToAdd = blockStore.getBlocksToConfirm(cutoffHeight, maxHeight);
-			if (!blocksToAdd.isEmpty()) {
+			Set<BlockWrap> blocks = new HashSet<>();
+			// use the add to filter and check
+			for (BlockWrap b : blocksToAdd) {
+				serviceBase.addReferencedBlockHashesTo(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
+						blockStore);
+			}
+			Set<BlockWrap> toAdd = serviceBase.addUnconfirmBlocksChainedPrev(blockStore, blocks);
+			if (resolveConflict) {
 				// VALIDITY CHECKS, remove the conflicts
 				serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-
-				// Execute must be chained for confirm
-				serviceBase.checkExecutionChained(blockStore, blocksToAdd, true);
-
-				// Finally add the resolved new blocks to the confirmed set
-				serviceBase.confirmBlocksSorted(blockStore, -1, true, blocksToAdd, new HashSet<>());
 			}
-			blockStore.commitDatabaseBatchWrite();
-		} catch (Exception e) {
-			blockStore.abortDatabaseBatchWrite();
-			throw e;
-		} finally {
-			blockStore.defaultDatabaseBatchWrite();
-		}
-	}
-
-	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, Set<BlockWrap> blocksToAdd)
-			throws BlockStoreException {
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService, jsonmapper);
-		try {
-			blockStore.beginDatabaseBatchWrite();
-
-			// VALIDITY CHECKS, remove the conflicts
-			serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-
 			// Execute must be chained for confirm
-			serviceBase.checkExecutionChained(blockStore, blocksToAdd, true);
+			serviceBase.checkExecutionChained(blockStore, toAdd, true);
 
 			// Finally add the resolved new blocks to the confirmed set
-			serviceBase.confirmBlocksSorted(blockStore, -1, true,blocksToAdd, new HashSet<>());
+			serviceBase.confirmBlocksSorted(blockStore, -1, true, toAdd, new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -559,7 +543,7 @@ public class BlockStoreService {
 		}
 	}
 
-	private void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+	public void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
@@ -579,7 +563,9 @@ public class BlockStoreService {
 				blocksToUnconfirm.add(re);
 			}
 			serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
-			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(),true);
+			;
+			serviceBase.unconfirmBlocksSorted(blockStore,
+					serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm), new HashSet<>(), true);
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

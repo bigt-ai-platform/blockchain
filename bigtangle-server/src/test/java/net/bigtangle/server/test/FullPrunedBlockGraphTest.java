@@ -225,19 +225,11 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		// Make a buy order for testKey.getPubKey()s
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		Block block1 = makeBuyOrder(testKey, Utils.HEX.encode(testKey.getPubKey()), 2, 2, addedBlocks);
+		Block block1 = makeAndConfirmBuyOrder(testKey, Utils.HEX.encode(testKey.getPubKey()), 2, 2, addedBlocks);
 
 		// Make a sell order for testKey.getPubKey()s
 		// Open sell order for test tokens
-		Block block3 = makeSellOrder(testKey, testTokenId, 2, 2, addedBlocks);
-
-		// Generate matching block
-		// Execute order matching
-		Block rewardBlock1 = makeOrderExecutionAndReward(addedBlocks);
-
-		// Should be confirmed now
-		assertTrue(store.getRewardConfirmed(rewardBlock1.getHash()));
-		assertFalse(store.getRewardSpent(rewardBlock1.getHash()));
+		Block block3 = makeAndConfirmSellOrder(testKey, testTokenId, 2, 2, addedBlocks);
 
 		// Ensure all consumed order records are now spent
 		OrderRecord order = store.getOrder(block1.getHash(), Sha256Hash.ZERO_HASH);
@@ -262,7 +254,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// Confirm
 		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-		confirmDo(s.getBlockWrap(block.getHash(), store), new HashSet<>() , store);
+		confirmDo(s.getBlockWrap(block.getHash(), store), new HashSet<>(), store);
 
 		// Should be confirmed now
 		final UTXO utxo11 = getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
@@ -276,7 +268,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// Unconfirm
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.unconfirm(block.getHash(), new HashSet<>(), -1, store);
+				.unconfirm(getBlockWrap(block.getHash()), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
 		final UTXO utxo1 = getUTXO(tx11.getOutput(0).getOutPointFor(block.getHash()), store);
@@ -312,7 +304,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// Unconfirm
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.unconfirm(rewardBlock11.getHash(), new HashSet<>(), -1, store);
+				.unconfirm(getBlockWrap(rewardBlock11.getHash()), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
 		assertFalse(store.getRewardConfirmed(rewardBlock11.getHash()));
@@ -359,7 +351,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// Unconfirm
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.unconfirm(block11.getHash(), new HashSet<>(), -1, store);
+				.unconfirm(getBlockWrap(block11.getHash()), new HashSet<>(), -1, store);
 
 		// Should be unconfirmed now
 		assertFalse(store.getTokenSpent(block11.getHash()).isConfirmed());

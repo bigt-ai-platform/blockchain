@@ -304,16 +304,22 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getGenesisBlock();
 
 		// Generate eligible mining reward block
-		Block rewardBlock1 = rewardService.createReward(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+		Block rewardBlock1 = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), null, false, store);
+		blockSaveService.saveBlock(rewardBlock1, store);
 		blockGraph.updateChain();
 
 		// Mining reward block should go through
 		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
 
 		// Generate eligible second mining reward block
-		Block rewardBlock2 = rewardService.createReward(rewardBlock1.getHash(), store);
+ 
+		Block rewardBlock2 = rewardService.createMiningRewardBlock(rewardBlock1.getHash(),
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), null, false, store);
+	
+		blockSaveService.saveBlock(rewardBlock1, store);
 		blockGraph.updateChain();
+
 
 		resetStore();
 		for (Block b : blocksAddedAll) {
@@ -395,8 +401,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getGenesisBlock();
 
 		// Generate eligible mining reward block
-		Block rewardBlock1 = rewardService.createReward(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+		Block rewardBlock1 = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), null, false, store);
 
 		// The consensus number should now be equal to the previous number + 1
 		assertEquals(rollingBlock.getLastMiningRewardBlock() + 1, rewardBlock1.getLastMiningRewardBlock());
@@ -501,7 +507,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				networkParameters.getGenesisBlock(), tx1);
 		// 1 should be confirmed now
 		UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock1.getHash()), store);
-		UTXO utxo2 =getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
+		UTXO utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
 		assertTrue(utxo1.isConfirmed() || utxo2.isConfirmed());
 
 		assertFalse(utxo1.isSpent());
@@ -707,7 +713,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with spending inputs
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget() * 2);
 
 		// Should not go through
@@ -734,7 +740,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with spending inputs
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = rewardBlock.getTransactions().get(0);
 
 		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
@@ -774,7 +780,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with additional tx
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = createTestTransaction();
 		rewardBlock.addTransaction(tx);
 		rewardBlock.solve();
@@ -801,7 +807,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with malformed tx data
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.getTransactions().get(0).setData(null);
 		rewardBlock.solve();
 
@@ -822,7 +828,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with malformed tx data
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.getTransactions().get(0).setData(new byte[] { 2, 3, 4 });
 
 		rewardBlock.solve();
@@ -848,7 +854,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate mining reward block with malformed fields
 		Block rewardBlock = rewardService.createMiningRewardBlock(networkParameters.getGenesisBlock().getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
+				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		blockGraph.updateChain();
 		Block testBlock1 = networkParameters.getDefaultSerializer().makeBlock(rewardBlock.bitcoinSerialize());
 		Block testBlock2 = networkParameters.getDefaultSerializer().makeBlock(rewardBlock.bitcoinSerialize());

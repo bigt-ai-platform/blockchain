@@ -1389,6 +1389,25 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public List<ContractEventRecord> getContractEvents(Sha256Hash hash) throws BlockStoreException {
+		List<ContractEventRecord> list = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement("SELECT " + CONTRACT_TEMPLATE + " FROM contractevent WHERE  blockhash = ?   ")) {
+			preparedStatement.setBytes(1, hash.getBytes());
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			while (resultSet.next()) {
+				list.add(setContractEventRecord(resultSet));
+			}
+			return list;
+
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		// throw new BlockStoreException("Could not close statement");
+	}
+
+	@Override
 	public ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectinghash)
 			throws BlockStoreException {
 
@@ -1624,15 +1643,9 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public void prunedClosedOrders(Long beforetime) throws BlockStoreException {
 
-		try (PreparedStatement deleteStatement = getConnection()
-				.prepareStatement("DELETE FROM orders\n"
-						+ "    WHERE blockhash IN (\n"
-						+ "        SELECT blockhash\n"
-						+ "        FROM orders\n"
-						+ "       WHERE spent = true\n"
-						+ "       AND validToTime < ?\n"
-						+ "       LIMIT 1000\n"
-						+ "    ); ")) {
+		try (PreparedStatement deleteStatement = getConnection().prepareStatement("DELETE FROM orders\n"
+				+ "    WHERE blockhash IN (\n" + "        SELECT blockhash\n" + "        FROM orders\n"
+				+ "       WHERE spent = true\n" + "       AND validToTime < ?\n" + "       LIMIT 1000\n" + "    ); ")) {
 
 			deleteStatement.setLong(1, beforetime - 100 * NetworkParameters.ORDER_TIMEOUT_MAX);
 			deleteStatement.executeUpdate();
@@ -2300,7 +2313,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 	@Override
 	public void insertAccessGrant(String address) throws BlockStoreException {
-		String sql = "insert into access_grant (address, createTime) VALUES (?,?)" +duplicateInsert();
+		String sql = "insert into access_grant (address, createTime) VALUES (?,?)" + duplicateInsert();
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
 			preparedStatement.setString(1, address);
@@ -2894,16 +2907,16 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException {
-
+	public List<Contractresult> getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException {
+		List<Contractresult> re = new ArrayList<>();
 		try (PreparedStatement preparedStatement = getConnection()
 				.prepareStatement(SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL)) {
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
-			if (resultSet.next()) {
-				return setContractresult(resultSet);
+			while (resultSet.next()) {
+				re.add(setContractresult(resultSet));
 			}
-			return null;
+			return re;
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);

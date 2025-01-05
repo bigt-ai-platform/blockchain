@@ -1081,7 +1081,7 @@ public abstract class AbstractIntegrationTest {
 
 	public Block makeRewardBlock(Sha256Hash prevHash, Sha256Hash prevTrunk, Sha256Hash prevBranch) throws Exception {
 		Block block = rewardService.createMiningRewardBlock(prevHash, blockService.getBlockWrap(prevTrunk, store),
-				blockService.getBlockWrap(prevBranch, store), store);
+				blockService.getBlockWrap(prevBranch, store),false, store);
 		if (block != null) {
 			blockSaveService.saveBlock(block, store);
 			blockGraph.updateChain();

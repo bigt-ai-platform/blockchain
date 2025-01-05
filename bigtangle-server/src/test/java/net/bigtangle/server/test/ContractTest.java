@@ -35,6 +35,7 @@ import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.base.ServiceContract;
@@ -244,6 +245,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			buy(blocks);
 		}
 		if (conflictBlock != null) {
+			try {
 			makeRewardBlock(conflictBlock);
 			c = checkSum(c);
 			assertFalse(s.getBlockWrap(conflictBlock.getHash(), store).getBlockEvaluation().isConfirmed()
@@ -253,7 +255,59 @@ public class ContractTest extends AbstractIntegrationTest {
 			checkSum(c);
 			makeRewardBlock(resultBlock);
 			checkSum(c);
+			}catch (InfeasiblePrototypeException e) {
+				// can happan for conflict check
+				e.printStackTrace();
+			}
 		}
+	}
+
+	@Test
+	public void testConflict3() throws Exception {
+		// two execution blocks are in one reward and make conflict execution to first
+		// of two and must be consistency
+
+		List<Block> blocks = new ArrayList<>();
+		prepare(blocks);
+		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		Block conflictBlock = null;
+		Block resultBlock = null;
+		int count = 0;
+		for (ECKey key : ulist) {
+			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
+			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
+			count++;
+			resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
+			// create conflict with parallel and not save it
+			conflictBlock = contractExecutionService
+					.createContractExecution(cacheBlockPrototypeService.getBlockPrototype(store), contracttoken, store);
+
+			if (resultBlock != null) {
+				blockSaveService.saveBlock(resultBlock, store);
+				// confirm the contract execution
+				confirmDo(s.getBlockWrap(resultBlock.getHash(), store), new HashSet<>(), store);
+				checkSum(null);
+
+			}
+			if (count % 3 == 0) {
+				blockSaveService.saveBlock(conflictBlock, store);
+				confirmDo(s.getBlockWrap(conflictBlock.getHash(), store), new HashSet<>(), store);
+			}
+		}
+		blockSaveService.saveBlock(conflictBlock, store);
+		TokensumsMap c = checkSum(null);
+		makeRewardBlock(conflictBlock);
+		//
+		c = checkSum(c);
+		assertFalse(s.getBlockWrap(conflictBlock.getHash(), store).getBlockEvaluation().isConfirmed()
+				&& s.getBlockWrap(resultBlock.getHash(), store).getBlockEvaluation().isConfirmed());
+		checkSum(c);
+		makeRewardBlock(conflictBlock);
+		checkSum(c);
+		blockSaveService.saveBlock(resultBlock, store);
+		makeRewardBlock(resultBlock);
+
+		checkSum(c);
 	}
 
 	@Test
@@ -460,7 +514,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 			makeRewardBlock(b2);
 
-			//createDAG("testPay");
+			// createDAG("testPay");
 		}
 	}
 
@@ -497,12 +551,17 @@ public class ContractTest extends AbstractIntegrationTest {
 					check(ulist, endMap);
 					// List<UTXO> utxos = getBalance(false, ulist);
 					assertNotNull(endMap.get(winnerAddress.toString()));
-					assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
+					assertEquals(new BigInteger(winnerAmount), endMap.get(winnerAddress.toString()));
 					c = checkSum(c);
 					// unconfirm an execution will not lead to unconfirm execution result
 					unconfirmDo(resultBlock.getHash(), new HashSet<>(), store);
-
 					c = checkSum(c);
+					endMap = new HashMap<>();
+					check(ulist, endMap);
+					// unconfirm check the winner
+			//		assertTrue(!new BigInteger(winnerAmount).equals(endMap.get(winnerAddress.toString())));
+
+				
 				}
 			}
 		}

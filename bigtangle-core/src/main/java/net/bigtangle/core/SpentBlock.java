@@ -138,7 +138,7 @@ public class SpentBlock extends DataClass {
 
 	@Override
 	public String toString() {
-		return "SpentBlock [blockHash=" + blockHash + ", confirmed=" + confirmed + ", spent=" + spent
+		return " [blockHash=" + blockHash + ", confirmed=" + confirmed + ", spent=" + spent
 				+ ", spenderBlockHash=" + spenderBlockHash + ", time=" + time + "]";
 	}
 

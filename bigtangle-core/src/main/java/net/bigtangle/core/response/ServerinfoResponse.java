@@ -2,8 +2,6 @@ package net.bigtangle.core.response;
 
 import java.util.List;
 
-import net.bigtangle.core.response.AbstractResponse;
-
 public class ServerinfoResponse extends AbstractResponse {
 	private List<ServerInfo> serverInfoList;
 

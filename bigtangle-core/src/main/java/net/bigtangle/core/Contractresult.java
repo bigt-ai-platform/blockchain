@@ -120,7 +120,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 
 	@Override
 	public String toString() {
-		return "Contractresult [prevblockhash=" + prevblockhash + ", contracttokenid=" + contracttokenid
+		return super.toString() + " [prevblockhash=" + prevblockhash + ", contracttokenid=" + contracttokenid
 				+ ", milestone=" + milestone + "]";
 	}
 

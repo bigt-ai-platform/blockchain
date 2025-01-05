@@ -159,7 +159,7 @@ public class RewardService {
 	public Block createReward(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch, Long timeOverride,
 			BlockStoreInterface store) throws Exception {
 
-		Block block = createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, timeOverride, store);
+		Block block = createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, timeOverride, true, store);
 
 		if (block != null) {
 			// check, if the reward block is too old to avoid conflict.
@@ -173,14 +173,14 @@ public class RewardService {
 		return block;
 	}
 
-	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
+	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch, boolean onlyWithreferenced,
 			BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
-		return createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, null, store);
+		return createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, null,onlyWithreferenced, store);
 	}
 
 	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
-			Long timeOverride, BlockStoreInterface store)
+			Long timeOverride, boolean onlyWithreferenced, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
 		Stopwatch watch = Stopwatch.createStarted();
 		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
@@ -203,6 +203,7 @@ public class RewardService {
 		RewardBuilderResult result = serviceBase.calcRewardInfo(serviceBase.enableOrderMatchExecutionChain(block),
 				prevTrunk, prevBranch, prevRewardHash, currentTime, store);
 
+		 
 		Transaction tx = result.getTx();
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(tx.getData());
 		block.setLastMiningRewardBlock(currRewardInfo.getChainlength());
@@ -220,6 +221,11 @@ public class RewardService {
 			OrderMatchingResult ordermatchresult = serviceBase.generateOrderMatching(block, currRewardInfo, store);
 			currRewardInfo.setOrdermatchingResult(ordermatchresult.getOrderMatchingResultHash());
 			tx.setData(currRewardInfo.toByteArray());
+		}else {
+			if(currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced){
+				log.debug("   no referenced blocks skip createReward  time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));	
+			return null;
+			}
 		}
 		Transaction miningTx = serviceBase.generateVirtualMiningRewardTX(block, store);
 		currRewardInfo.setMiningResult(miningTx.getHash());

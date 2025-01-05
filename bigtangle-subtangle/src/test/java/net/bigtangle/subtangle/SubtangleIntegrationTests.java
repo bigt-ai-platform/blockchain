@@ -88,7 +88,6 @@ public class SubtangleIntegrationTests extends AbstractIntegrationTest {
     }
 
     public void giveMoneySubtangleId(ECKey outKey, long amount, Address toAddressInSubtangle) throws Exception {
-        @SuppressWarnings("deprecation")
         ECKey genesiskey =  ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
                 Utils.HEX.decode(testPub));
 

@@ -20,7 +20,6 @@
 package net.bigtangle.core;
 
 import java.beans.Transient;
-import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.Arrays;
 
@@ -30,7 +29,7 @@ import com.google.common.math.LongMath;
  * Represents a token as Coin value. This class is immutable. Only the bitangle
  * coin has 2 digit decimal.
  */
-public final class Coin implements Monetary, Comparable<Coin>, Serializable {
+public final class Coin implements Monetary, Comparable<Coin> {
 
 	public Coin() {
 	}

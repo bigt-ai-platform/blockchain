@@ -8,9 +8,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -323,7 +321,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			} else {
 				// the ContractExecute can not be reproduced here
 				logger.debug("ContractResult check failed  from result {} compare to check {}", result,
-						check.toString());
+						check==null?"":check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -352,7 +350,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			} else {
 				// the ContractExecute can not be reproduced here
 				logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result,
-						check.toString());
+						check==null?"":check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);

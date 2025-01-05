@@ -81,7 +81,7 @@ public class OrderExecutionService {
 	/**
 	 * Scheduled update function that updates the Tangle
 	 *
-     */
+	 */
 
 	// createOrderExecution is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -96,7 +96,8 @@ public class OrderExecutionService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate()) {
-                log.info(" OrderExecution locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
+				log.info(" OrderExecution locked is fored delete   {} < {}", lock.getLocktime(),
+						System.currentTimeMillis() - 5 * scheduleConfiguration.getMiningrate());
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -132,13 +133,13 @@ public class OrderExecutionService {
 	 * Runs the OrderExecution making logic
 	 * 
 	 * @return the new block or block voted on
-     */
+	 */
 
 	public Block createOrderExecutionDo(BlockStoreInterface store) throws Exception {
 
 		// Stopwatch watch = Stopwatch.createStarted();
 		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
-        if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
+		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.enableOrderMatchExecutionChain(b)) {
 
 			return createOrderExecution(b, store);
@@ -156,12 +157,12 @@ public class OrderExecutionService {
 		block.addTransaction(tx);
 
 		// Read previous reward block's data
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper); 
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
 		long prevChainLength = block.getLastMiningRewardBlock();
 		Set<BlockWrap> referencedblocks = new HashSet<>();
 
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
-
 
 		List<Block.Type> ordertypes = new ArrayList<>();
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
@@ -169,11 +170,11 @@ public class OrderExecutionService {
 
 		// add all blocks of dependencies
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
-				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
-                ordertypes, true,false, store);
+				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, ordertypes,
+				true, false, store);
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
-                ordertypes, true,false, store);
+				ordertypes, true, false, store);
 
 		Orderresult prevMilestone = store.getMaxMilestoneOrderresult();
 
@@ -188,12 +189,13 @@ public class OrderExecutionService {
 		Orderresult lastExecution = prevMilestoneExecution;
 		if (!prevsNotMilestoneChainedBlocks.isEmpty()) {
 			lastExecution = getLast(prevsNotMilestoneChainedBlocks, store);
-			unconfimedNonChained(prevsNotMilestoneChainedBlocks, prevNotMilestons, store, serviceBase);
 		}
 
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
-		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).orderMatching(block, lastExecution, serviceBase.getHashSet(collectNotSpents), store);
+		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper)
+				.orderMatching(block, lastExecution, serviceBase.getHashSet(collectNotSpents), store);
 
 		// do not create the execution block, if there is no new referencedblocks and no
 		// match
@@ -205,22 +207,6 @@ public class OrderExecutionService {
 		blockService.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
-	}
-
-	//
-	protected void unconfimedNonChained(Set<BlockWrap> prevsNotMilestoneChainedBlocks,
-			List<Orderresult> prevNotMilestons, BlockStoreInterface store, ServiceBaseConnect serviceBase)
-			throws BlockStoreException {
-		// find the longest chained execution connected to last milestone
-		for (Orderresult prevNotMilestone : prevNotMilestons) {
-			if (prevsNotMilestoneChainedBlocks.stream()
-					.noneMatch(n -> n.getBlockHash().equals(prevNotMilestone.getBlockHash()))) {
-				serviceBase.confirmOrderExecute(serviceBase.getBlock(prevNotMilestone.getBlockHash(), store), -1,
-						false, store);
-			}
-
-		}
-
 	}
 
 	protected Orderresult getLast(Set<BlockWrap> prevs, BlockStoreInterface store) throws BlockStoreException {
@@ -266,11 +252,11 @@ public class OrderExecutionService {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
-            // log.debug(" contractExecution block solve started : " + chainTargetFinal + "
-            // \n for block" + block);
-            block.solve(chainTargetFinal);
-            return "";
-        });
+			// log.debug(" contractExecution block solve started : " + chainTargetFinal + "
+			// \n for block" + block);
+			block.solve(chainTargetFinal);
+			return "";
+		});
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);
@@ -281,7 +267,7 @@ public class OrderExecutionService {
 		} finally {
 			executor.shutdownNow();
 		}
-        return block;
+		return block;
 	}
 
 }

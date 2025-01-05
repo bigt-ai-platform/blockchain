@@ -45,6 +45,7 @@ import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserData;
 import net.bigtangle.core.Utils;
@@ -320,6 +321,9 @@ public abstract class ServiceBase {
 		};
 	}
 
+	 
+
+	
 	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 		long minChainLength = Math.max(0, currChainLength - NetworkParameters.MILESTONE_CUTOFF);
@@ -450,11 +454,13 @@ public abstract class ServiceBase {
 		if (!isCoinBase) {
 			for (TransactionInput t : tx.getInputs()) {
 				try {
-					if (t.getConnectedOutput().getScriptPubKey().isSentToAddress()) {
+					TransactionOutput connectedOutput = t.getConnectedOutput();
+					if(connectedOutput ==null ) return "";
+					if (connectedOutput.getScriptPubKey().isSentToAddress()) {
 						fromAddress = t.getFromAddress().toBase58();
 					} else {
 						fromAddress = new Address(networkParameters,
-								Utils.sha256hash160(t.getConnectedOutput().getScriptPubKey().getPubKey())).toBase58();
+								Utils.sha256hash160(connectedOutput.getScriptPubKey().getPubKey())).toBase58();
 
 					}
 
@@ -739,6 +745,7 @@ public abstract class ServiceBase {
 			blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
 			break;
 		}
+		if(block!=null )
 		cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 

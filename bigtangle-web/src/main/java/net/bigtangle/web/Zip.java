@@ -63,8 +63,6 @@ public class Zip {
 				// 如果是文件夹，就创建个文件夹
 				if (entry.isDirectory()) {
 					String dirPath = destDirPath + File.separator + entry.getName();
-					File dir = new File(dirPath);
-					boolean mkdirs = dir.mkdirs();
 				} else {
 					// 如果是文件，就先创建一个文件，然后用io流把内容copy过去
 					File targetFile = new File(destDirPath + File.separator + entry.getName());
