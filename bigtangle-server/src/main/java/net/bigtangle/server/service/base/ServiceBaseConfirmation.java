@@ -1797,7 +1797,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		for (BlockWrap block : arrayList) {
 			unconfirm(block, traversedConfirms, -1, store);
 			// if (checksum)
-			checkSum(store);
+		//	checkSum(store);
 		}
 	}
 

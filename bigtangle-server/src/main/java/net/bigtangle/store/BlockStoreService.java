@@ -168,7 +168,7 @@ public class BlockStoreService {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				updateUnConfirmedDo(store);
+				//updateUnConfirmedDo(store);
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {

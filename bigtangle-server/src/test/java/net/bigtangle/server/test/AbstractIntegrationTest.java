@@ -816,7 +816,7 @@ public abstract class AbstractIntegrationTest {
 		resetStore();
 		for (Block b : addedBlocks) {
 			if (b != null)
-				 add(b, true, true, store);
+				add(b, true, true, store);
 		}
 
 		List<OrderRecord> allOrdersSorted2 = store.getAllOpenOrdersSorted(null, null);
@@ -1537,9 +1537,13 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	/*
-	 * store consistent reads
+	 * check sum and create dag
 	 */
 	public TokensumsMap checkSum(TokensumsMap last) throws JsonProcessingException, Exception {
+		return checkSum(last, false);
+	}
+
+	public TokensumsMap checkSum(TokensumsMap last, boolean dag) throws JsonProcessingException, Exception {
 		try {
 			store.beginDatabaseBatchWrite();
 			TokensumsMap map = checkpointService.checkToken(store);
@@ -1556,8 +1560,10 @@ public abstract class AbstractIntegrationTest {
 					createDAGRequired("failedRequired", 0, 10000000, false);
 				}
 				assertTrue(a.getValue().check(), " " + a.toString());
-				createDAG("Ok");
-				createDAGRequired("OKRequired", 0, 10000000, false);
+				if (dag) {
+					createDAG("Ok");
+					createDAGRequired("OKRequired", 0, 10000000, false);
+				}
 			}
 			// log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
@@ -1785,7 +1791,7 @@ public abstract class AbstractIntegrationTest {
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
 		Set<BlockWrap> blocksToAdd = new HashSet<>();
 		blocksToAdd.add(block);
-		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd, true,maxConfirmedReward.getChainLength());
+		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd, true, maxConfirmedReward.getChainLength());
 	}
 
 	public List<ECKey> createUserkey() {
@@ -2055,6 +2061,7 @@ public abstract class AbstractIntegrationTest {
 		assertTrue(new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
 	}
+
 	public boolean add(Block block, boolean allowUnsolid, boolean updatechain, BlockStoreInterface store)
 			throws BlockStoreException {
 		boolean a = blockGraph.addBlock(block, allowUnsolid, store);

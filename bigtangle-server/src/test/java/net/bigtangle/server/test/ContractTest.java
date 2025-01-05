@@ -206,6 +206,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		}
 		blockSaveService.saveBlock(conflictBlock, store);
 		TokensumsMap c = checkSum(null);
+		blockGraph.updateUnConfirmedDo(store);
 		makeRewardBlock(conflictBlock);
 		//
 		c = checkSum(c);
@@ -357,9 +358,10 @@ public class ContractTest extends AbstractIntegrationTest {
 			}
 		}
 		TokensumsMap c = checkSum(null);
-
+		blockGraph.updateUnConfirmedDo(store);
 		// take the check block to reward, all other confirmed execution are
 		makeRewardBlock(checkBlock);
+		
 		c = checkSum(c);
 		ContractExecutionResult result = new ContractExecutionResult()
 				.parse(checkBlock.getTransactions().get(0).getData());
