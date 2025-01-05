@@ -299,9 +299,11 @@ public class ContractTest extends AbstractIntegrationTest {
 				// confirm should not broken the rewarded execution chain
 				confirmDo(s.getBlockWrap(conflictBlock.getHash(), store), new HashSet<>(), store);
 				checkSum(null);
+				assertTrue(!getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().isConfirmed());
 				// reward should not broken the rewarded execution chain
-				rewardWithBlock(blocks, resultBlock);
+				rewardWithBlock(blocks, conflictBlock);
 				checkSum(null);
+				assertTrue(getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().getMilestone() < 0);
 			}
 		}
 
@@ -455,13 +457,13 @@ public class ContractTest extends AbstractIntegrationTest {
 		// replay first chain
 		for (Block b : a1) {
 			if (b != null)
-				 add(b, true, true, store);
+				add(b, true, true, store);
 		}
 		a = checkSum(a);
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
-				 add(b, true, true, store);
+				add(b, true, true, store);
 			a = checkSum(a);
 		}
 
@@ -469,12 +471,12 @@ public class ContractTest extends AbstractIntegrationTest {
 		resetStore();
 		for (Block b : a2) {
 			if (b != null)
-				 add(b, true, true, store);
+				add(b, true, true, store);
 
 		}
 		for (Block b : a1) {
 			if (b != null)
-				 add(b, true, true, store);
+				add(b, true, true, store);
 		}
 
 		// assertTrue(hash.equals(checkpointService.checkToken(store).hash()));
