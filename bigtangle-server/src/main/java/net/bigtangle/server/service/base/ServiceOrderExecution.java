@@ -18,8 +18,8 @@ import java.util.TreeMap;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancelInfo;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -27,7 +27,7 @@ import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
 import net.bigtangle.core.ordermatch.TradePair;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.utils.OrderBook;
 import net.bigtangle.store.BlockStoreInterface;
@@ -125,7 +125,7 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		return new OrderExecutionResult( getOrderRecordHash(toBeSpentOrders), tx.getHash(), tx,
 				prev.getBlockHash(), getOrderRecordHash(cancelledOrders),
 				remainingOrders.keySet(), block.getTimeSeconds(), remainingOrders.values(), toBeSpentOrders,
-				collectedBlocks, tokenId2Events);
+				collectedBlocks, tokenId2Events,prev.getChainlength()+1);
 
 	}
 

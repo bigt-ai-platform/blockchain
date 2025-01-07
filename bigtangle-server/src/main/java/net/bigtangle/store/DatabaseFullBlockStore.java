@@ -30,13 +30,13 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
 import net.bigtangle.core.ContractEventRecord;
-import net.bigtangle.core.Contractresult;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancel;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
@@ -55,9 +55,9 @@ import net.bigtangle.core.ordermatch.MatchResult;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
-import net.bigtangle.server.data.ContractExecutionResult;
+import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.utils.Gzip;
 
 /**
@@ -1444,7 +1444,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
 			preparedStatement.setLong(8, record.getTime());
 			preparedStatement.setLong(9, -1);
-
+			preparedStatement.setLong(10, record.getChainlength());
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {
@@ -1564,7 +1564,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				resultSet.getLong("milestone"), resultSet.getLong("inserttime"));
+				resultSet.getLong("milestone"), resultSet.getLong("chainlength"),  resultSet.getLong("inserttime"));
 
 	}
 
@@ -1572,7 +1572,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"), resultSet.getLong("chainlength"),
 				resultSet.getLong("inserttime"));
 
 	}
@@ -1594,6 +1594,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 					record.getPrevblockhash() != null ? record.getPrevblockhash().getBytes() : null);
 			preparedStatement.setLong(7, record.getTime());
 			preparedStatement.setLong(8, -1);
+			preparedStatement.setLong(9, record.getChainlength());
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {

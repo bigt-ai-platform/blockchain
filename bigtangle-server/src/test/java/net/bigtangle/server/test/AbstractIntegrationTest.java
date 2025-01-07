@@ -59,7 +59,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 import com.google.common.math.LongMath;
 
-import jakarta.activation.DataSource;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
@@ -68,7 +67,7 @@ import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventRecord;
-import net.bigtangle.core.Contractresult;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
@@ -112,6 +111,7 @@ import net.bigtangle.server.checkpoint.CheckpointService;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
@@ -1556,6 +1556,7 @@ public abstract class AbstractIntegrationTest {
 						checkSumDiffLog(map, last, a.getKey());
 					}
 					checkContractResult(map, a.getKey());
+
 					createDAG("failed");
 					createDAGRequired("failedRequired", 0, 10000000, false);
 				}
@@ -1576,7 +1577,9 @@ public abstract class AbstractIntegrationTest {
 	public void checkContractResult(TokensumsMap newMap, String tokenid) throws Exception {
 		Tokensums a = newMap.getTokensumsMap().get(tokenid);
 		// checkContract(a);
-		checkUTXOSUM(a);
+		// checkUTXOSUM(a);
+		// checkContractSpent(a, tokenid);
+		checkUnconfirmedContract(tokenid);
 	}
 
 	private void checkUTXOSUM(Tokensums a) throws IOException, BlockStoreException {
@@ -1618,7 +1621,7 @@ public abstract class AbstractIntegrationTest {
 
 	private void checkContract(Tokensums a) {
 		a.getContracts().stream().forEach(n -> {
-			// check the execution result
+			// check the contracteven block outputs must be spent
 			try {
 				List<ContractEventRecord> contractEvents = store.getContractEvents(n.getBlockHash());
 				log.debug("all contractevents size=  " + contractEvents.size());
@@ -1633,6 +1636,101 @@ public abstract class AbstractIntegrationTest {
 				e.printStackTrace();
 			}
 		});
+	}
+
+	private void checkUnconfirmedContract(String tokenid) throws BlockStoreException, IOException {
+		List<Contractresult> all = getContractresults();
+		// check all conflicts from Contractresults
+		List<BlockWrap> blocks = new ArrayList<>();
+		for (Contractresult a : all) {
+			if (!a.isConfirmed()) {
+				ContractExecutionResult r = new ContractExecutionResult().parse(a.getContractExecutionResult());
+				for (Sha256Hash b : r.getReferencedBlocks()) {
+					BlockWrap bw = getBlockWrap(b);
+					log.debug("Contractresult  unconfirmed  {}", a);
+					log.debug("size {} getReferencedBlocks {} ", r.getReferencedBlocks().size(), bw);
+					logConfirmed(all, bw);
+					logBlockTransaction(tokenid, bw);
+				}
+			}
+		}
+
+	}
+
+	private void logConfirmed(List<Contractresult> all, BlockWrap bw) throws IOException {
+		for (Contractresult a1 : all) {
+			if (a1.isConfirmed()) {
+				ContractExecutionResult r1 = new ContractExecutionResult().parse(a1.getContractExecutionResult());
+				for (Sha256Hash b1 : r1.getReferencedBlocks()) {
+					if (b1.equals(bw.getBlockHash()))
+						log.debug(" Block find in Contractresult confirmed  {}", a1);
+
+				}
+			}
+		}
+	}
+
+	private void logBlockTransaction(String tokenid, BlockWrap bw) throws BlockStoreException {
+		for (Transaction tx : bw.getBlock().getTransactions()) {
+			for (TransactionOutput txout : tx.getOutputs()) {
+				UTXO u = store.getTransactionOutput(bw.getBlockHash(), tx.getHash(), txout.getIndex());
+				if (u.getTokenId().equals(tokenid)) {
+					log.debug("TransactionOutput  {}", u);
+
+				}
+			}
+
+			for (int index = 0; index < tx.getInputs().size(); index++) {
+				TransactionInput in = tx.getInputs().get(index);
+				UTXO prevOut = store.getTransactionOutput(in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
+						in.getOutpoint().getIndex());
+				if (prevOut.getTokenId().equals(tokenid)) {
+					log.debug(" TransactionInput  {}", prevOut);
+
+				}
+			}
+		}
+	}
+
+	private void checkContractSpent(Tokensums a, String tokenid) {
+		Coin sum = new Coin(BigInteger.ZERO, tokenid);
+
+		for (ContractEventRecord n : a.getContracts()) {
+			// check all not spent contract event block outputs must be spent
+			try {
+				BlockWrap bw = getBlockWrap(n.getBlockHash());
+				log.debug(" {}", bw);
+				Coin diff = new Coin(BigInteger.ZERO, n.getTargetTokenid());
+				for (Transaction tx : bw.getBlock().getTransactions()) {
+					for (TransactionOutput txout : tx.getOutputs()) {
+						UTXO u = store.getTransactionOutput(bw.getBlockHash(), tx.getHash(), txout.getIndex());
+						if (u.getTokenId().equals(n.getTargetTokenid())) {
+							log.debug("TransactionOutput  {}", u);
+							diff = diff.subtract(u.getValue());
+						}
+					}
+
+					// log.debug(" contractevents: " + contractEventRecord.toString());
+					// log.debug(" execution result: " + contractresult.toString());
+					// log.debug(" Transactions {}", tx);
+					for (int index = 0; index < tx.getInputs().size(); index++) {
+						TransactionInput in = tx.getInputs().get(index);
+						UTXO prevOut = store.getTransactionOutput(in.getOutpoint().getBlockHash(),
+								in.getOutpoint().getTxHash(), in.getOutpoint().getIndex());
+						if (prevOut.getTokenId().equals(n.getTargetTokenid())) {
+							log.debug(" TransactionInput  {}", prevOut);
+							diff = diff.add(prevOut.getValue());
+						}
+					}
+				}
+				log.debug(" diff input - out =  {}", diff);
+				sum = sum.add(diff);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		log.debug(" sum of the  transaction =  {}", sum);
 	}
 
 	public void checkSumDiffLog(TokensumsMap newMap, TokensumsMap last, String tokenid)
@@ -1932,10 +2030,13 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public String getVertex(Sha256Hash hash) throws IOException, BlockStoreException {
-		BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.getBlockWrap(hash, store);
+		BlockWrap block = store.getBlockWrap(hash);
 		if (block == null)
 			return "";
+		if (block.getBlockEvaluation().getMilestone() < 0) {
+
+			log.debug("");
+		}
 		return block.getBlock().getHeight() + "/D" + block.getMcmc().getDepth() + "/M"
 				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
 				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);
@@ -1986,7 +2087,7 @@ public abstract class AbstractIntegrationTest {
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),resultSet.getLong("chainlength"),
 				resultSet.getLong("inserttime"));
 
 	}

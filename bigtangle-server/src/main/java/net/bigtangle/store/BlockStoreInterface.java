@@ -24,13 +24,13 @@ import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
 import net.bigtangle.core.ContractEventRecord;
-import net.bigtangle.core.Contractresult;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancel;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
@@ -48,10 +48,10 @@ import net.bigtangle.core.ordermatch.MatchResult;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
-import net.bigtangle.server.data.ContractExecutionResult;
+import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.Rating;
 
 /**

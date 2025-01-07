@@ -31,12 +31,12 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.ContractEventRecord;
-import net.bigtangle.core.Contractresult;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Orderresult;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.Token;
@@ -56,9 +56,9 @@ import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
-import net.bigtangle.server.data.ContractExecutionResult;
-import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.OrderMatchingResult;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrapAsc;
@@ -1797,25 +1797,27 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		for (BlockWrap block : arrayList) {
 			unconfirm(block, traversedConfirms, -1, store);
 			// if (checksum)
-		//	checkSum(store);
+			checkSum(store);
 		}
+		
 	}
 
 	/*
 	 * unconfirm chained execution for contract and order, it will add all follow of
-	 * the unconfirmed blocks
+	 * the unconfirmed blocks.
+	 * Execution will be added, only if it is longest than the last confirmed execution
 	 */
 	public Set<BlockWrap> addUnconfirmBlocksChainedFollow(BlockStoreInterface store, Set<BlockWrap> blocks)
 			throws BlockStoreException {
 		Set<BlockWrap> re = new HashSet<>();
-		for (BlockWrap blockWrap : blocks) {
-			re.add(blockWrap);
+		for (BlockWrap blockWrap : blocks) { 
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
 				addFollowerContract(store, blockWrap, re);
 			}
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_EXECUTE)) {
 				addFollowerOrderexecution(store, blockWrap, re);
 			}
+			re.add(blockWrap);
 		}
 		return re;
 	}
@@ -1919,9 +1921,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		arrayList.sort(new SortbyBlockWrapAsc());
 		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
-//		 	if (checksum)
-//		 	checkSum(store);
+//		 	if (checksum) 
 		}
+		checkSum(store);
 	}
 
 	/*

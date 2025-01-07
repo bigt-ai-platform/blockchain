@@ -28,7 +28,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Orderresult;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -38,7 +38,7 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.server.data.OrderExecutionResult;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceOrderExecution;
 import net.bigtangle.store.BlockStoreInterface;

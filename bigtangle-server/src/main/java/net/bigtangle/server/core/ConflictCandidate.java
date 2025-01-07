@@ -7,11 +7,11 @@ package net.bigtangle.server.core;
 
 import com.google.common.base.Objects;
 
+import net.bigtangle.core.ContractExecutionResult;
+import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TransactionOutPoint;
-import net.bigtangle.server.data.ContractExecutionResult;
-import net.bigtangle.server.data.OrderExecutionResult;
 
 public class ConflictCandidate {
 

@@ -112,7 +112,6 @@ public class BlockStoreService {
 
 	}
 
-
 	public boolean addChain(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		// Check the block is partially formally valid and fulfills PoW
@@ -168,7 +167,7 @@ public class BlockStoreService {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				//updateUnConfirmedDo(store);
+				updateUnConfirmedDo(store);
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
@@ -536,6 +535,7 @@ public class BlockStoreService {
 
 	public void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
+
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
@@ -554,9 +554,10 @@ public class BlockStoreService {
 				blocksToUnconfirm.add(re);
 			}
 			serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
-			;
-			serviceBase.unconfirmBlocksSorted(blockStore,
-					serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm), new HashSet<>(), true);
+			Set<BlockWrap> unconfirmBlocksChainedFollow = serviceBase.addUnconfirmBlocksChainedFollow(blockStore,
+					blocksToUnconfirm);
+			log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
+			serviceBase.unconfirmBlocksSorted(blockStore, unconfirmBlocksChainedFollow, new HashSet<>(), true);
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

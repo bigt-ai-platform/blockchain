@@ -1,10 +1,7 @@
-package net.bigtangle.core;
+package net.bigtangle.server.data;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SpentBlock;
 
 public class Contractresult extends SpentBlock implements java.io.Serializable {
 
@@ -18,6 +15,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 	private byte[] contractExecutionResult;
 	private String contracttokenid;
 	private long milestone;
+	private long chainlength;
 
 	// this is for json
 	public Contractresult() {
@@ -26,7 +24,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 
 	public Contractresult(Sha256Hash hash, boolean confirmed, boolean spent, Sha256Hash prevBlockHash,
 			Sha256Hash spenderblockhash, byte[] contractExecutionResult, String contracttokenid, long milestone,
-			long inserttime) {
+			long chainlength, long inserttime) {
 		super();
 		this.setBlockHash(hash);
 		this.setConfirmed(confirmed);
@@ -38,52 +36,11 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 
 		this.contracttokenid = contracttokenid;
 		this.milestone = milestone;
+		this.chainlength = chainlength;
 	}
 
 	public static Contractresult firstContractresult() {
-		return new Contractresult(Sha256Hash.ZERO_HASH, false, false, null, null, null, null, -1, 0L);
-	}
-
-	public byte[] toByteArray() {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		try {
-			DataOutputStream dos = new DataOutputStream(baos);
-			dos.write(super.toByteArray());
-			Utils.writeNBytes(dos, prevblockhash.getBytes());
-			Utils.writeNBytes(dos, contractExecutionResult);
-			Utils.writeNBytesString(dos, contracttokenid);
-			dos.writeLong(milestone);
-			dos.close();
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		return baos.toByteArray();
-	}
-
-	@Override
-	public Contractresult parseDIS(DataInputStream dis) throws IOException {
-		super.parseDIS(dis);
-
-		prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
-		contractExecutionResult = Utils.readNBytes(dis);
-
-		contracttokenid = Utils.readNBytesString(dis);
-		milestone = dis.readLong();
-		return this;
-	}
-
-	public Contractresult parse(byte[] buf) {
-		try {
-			ByteArrayInputStream bain = new ByteArrayInputStream(buf);
-			DataInputStream dis = new DataInputStream(bain);
-			parseDIS(dis);
-			dis.close();
-			bain.close();
-			return this;
-		} catch (IOException e) {
-			// Cannot happen since checked before
-			throw new RuntimeException(e);
-		}
+		return new Contractresult(Sha256Hash.ZERO_HASH, false, false, null, null, null, null, -1, 0, 0L);
 	}
 
 	public Sha256Hash getPrevblockhash() {
@@ -118,10 +75,18 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 		this.milestone = milestone;
 	}
 
+	public long getChainlength() {
+		return chainlength;
+	}
+
+	public void setChainlength(long chainlength) {
+		this.chainlength = chainlength;
+	}
+
 	@Override
 	public String toString() {
 		return super.toString() + " [prevblockhash=" + prevblockhash + ", contracttokenid=" + contracttokenid
-				+ ", milestone=" + milestone + "]";
+				+ ", milestone=" + milestone + ", chainlength=" + chainlength + "]";
 	}
 
 }

@@ -359,6 +359,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash BYTEA,\n" 
             + "    milestone bigint NOT NULL,\n"
+            + "   chainlength bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) )";
    
@@ -371,6 +372,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash BYTEA,\n" 
             + "    milestone bigint NOT NULL,\n"
+            + "   chainlength bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) )";
     private static final String CREATE_CHAINBLOCKQUEUE_TABLE = "CREATE TABLE chainblockqueue (\n" 

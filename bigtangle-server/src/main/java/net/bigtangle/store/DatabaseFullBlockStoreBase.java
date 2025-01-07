@@ -239,10 +239,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
-			+ " contractresult, prevblockhash, inserttime, milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)"
+			+ " contractresult, prevblockhash, inserttime, milestone,chainlength) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?,?)"
 			+ duplicateInsert();
 	protected final String SELECT_CONTRACTRESULT = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-			+ " contractresult, prevblockhash, inserttime, milestone " + " FROM contractresult ";
+			+ " contractresult, prevblockhash, inserttime, milestone, chainlength" + " FROM contractresult ";
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
@@ -259,10 +259,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " WHERE blockhash = ?";
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
 			+ "  INTO orderresult (blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime,  milestone) " + " VALUES (?, ?, ?, ?, ?, ?,?,?)"
+			+ " orderresult, prevblockhash, inserttime,  milestone,chainlength) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)"
 			+ duplicateInsert();
 	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime ,  milestone" + " FROM orderresult ";
+			+ " orderresult, prevblockhash, inserttime ,  milestone, chainlength" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = true  and milestone < 0  order by inserttime desc   ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";

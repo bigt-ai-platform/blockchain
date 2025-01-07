@@ -6,8 +6,6 @@
 package net.bigtangle.server.core;
 
 import net.bigtangle.core.*;
-import net.bigtangle.server.data.ContractExecutionResult;
-import net.bigtangle.server.data.OrderExecutionResult;
 
 import java.io.IOException;
 import java.util.HashSet;

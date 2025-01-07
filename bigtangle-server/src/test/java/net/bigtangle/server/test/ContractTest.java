@@ -25,6 +25,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.NetworkParameters;
@@ -37,7 +38,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.data.ContractExecutionResult;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.Wallet;
 

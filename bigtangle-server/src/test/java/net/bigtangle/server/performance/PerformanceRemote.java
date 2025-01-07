@@ -29,22 +29,21 @@ import net.bigtangle.wallet.Wallet;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 
-public class PerformanceRemote extends  AbstractIntegrationTest {
+public class PerformanceRemote extends AbstractIntegrationTest {
 
 	/*
-	 * run ContractTest.testPay()
-	 * Start the test Server
-	 * run the testProcess
+	 * run ContractTest.testPay() Start the test Server run the testProcess
 	 */
 	public static String lotteryTokenPriv = "6cecae9a820844dac41521ddad4f1b5068fdcac59ce28a6dd1ed01a12f782362";
 	public ECKey contractKey = ECKey.fromPrivate(Utils.HEX.decode(lotteryTokenPriv));
 	String contractAmount = "2500";
 	public BigInteger payContractAmount = new BigInteger(contractAmount);
+
 	@BeforeEach
 	public void setUp() throws Exception {
 		contextRoot = "http://localhost:8088/";
 		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
-	 	store = storeService.getStore();
+		store = storeService.getStore();
 	}
 
 	@Test
@@ -54,19 +53,27 @@ public class PerformanceRemote extends  AbstractIntegrationTest {
 			create(a2);
 		}
 	}
-	//@Test
+
+	@Test
 	public void testDAG() throws Exception {
- 
+
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
- 
-	ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
-	long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
-	long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
-	createDAG("testDAG", cutoffHeight, maxHeight);
+
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
+		long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
+		createDAG("testDAG", cutoffHeight, maxHeight);
 	}
-	
- 
-    public void create(List<Block> a2) throws Exception {
+
+	@Test
+	public void testUnconfirm() throws Exception {
+		//checkSum(null);
+		blockGraph.updateUnConfirmedDo(store);
+		checkSum(null,true);
+	}
+
+	public void create(List<Block> a2) throws Exception {
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
