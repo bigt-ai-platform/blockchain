@@ -1181,11 +1181,12 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
 
 		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 150, addedBlocks);
+		checkSum(null);
 		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-		
+		checkSum(null);
 		// Execute order matching
 		makeOrderExecutionAndReward(addedBlocks);
-
+		checkSum(null);
 		// Verify the tokens changed possession
 		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 150000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 150l);

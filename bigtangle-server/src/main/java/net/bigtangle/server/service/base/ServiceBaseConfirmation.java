@@ -4,6 +4,9 @@
  *******************************************************************************/
 package net.bigtangle.server.service.base;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -11,6 +14,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -37,6 +41,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.Token;
@@ -60,6 +65,7 @@ import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlock;
 import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrapAsc;
 import net.bigtangle.store.BlockStoreInterface;
@@ -169,8 +175,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				continue;
 
 			// Nothing added if already in milestone
-			if (block.getBlockEvaluation().getMilestone() >= 0
-					&& block.getBlockEvaluation().getMilestone() <= prevMilestoneNumber)
+			if (block.getBlockEvaluation().getMilestone() >= 0)
+				// && block.getBlockEvaluation().getMilestone() <= prevMilestoneNumber)
 				continue;
 
 			// Check if the block is in cutoff and not in chain
@@ -313,72 +319,44 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				});
 	}
 
-	public Set<BlockWrap> collectPrevsChain(List<Contractresult> prevs, Contractresult prevMilestone,
+	public Set<BlockWrap> collectPrevsChain(Contractresult prevNotMilestone, Contractresult lastMilestone,
 			BlockStoreInterface store) throws BlockStoreException {
-		// get all unspents forms a chain, remove others from prevs
 		Set<BlockWrap> re = new HashSet<>();
-		if (prevs.isEmpty())
-			return re;
-
-		// find the longest chained execution connected to last milestone
-		for (Contractresult prevNotMilestone : prevs) {
-			re = new HashSet<>();
-			Contractresult startingBlock = prevNotMilestone;
-			while (startingBlock != null) {
+		Contractresult startingBlock = prevNotMilestone;
+		while (startingBlock != null
+				&& !Contractresult.firstContractresult().getBlockHash().equals(startingBlock.getBlockHash())) {
+			if (!startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
 				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-				if (startingBlock.getPrevblockhash().equals(prevMilestone.getBlockHash())) {
-					return re;
-				} else {
-					startingBlock = findPrev(prevs, startingBlock);
-				}
+			}
+			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
+				return re;
+			} else {
+				startingBlock = store.getContractresult(startingBlock.getPrevblockhash());
 			}
 		}
+
 		return re;
 	}
 
-	protected Orderresult findPrev(List<Orderresult> prevs, Orderresult result) {
-
-		for (Orderresult b : prevs) {
-			if (result.getPrevblockhash().equals(b.getBlockHash())) {
-				return b;
-			}
-		}
-		return null;
-
-	}
-
-	public Set<BlockWrap> collectPrevsChain(List<Orderresult> prevs, Orderresult prevMilestone,
+	public Set<BlockWrap> collectPrevsOrderChain(Orderresult prevNotMilestone, Orderresult lastMilestone,
 			BlockStoreInterface store) throws BlockStoreException {
-		// get all unspents forms a chain, remove others from prevs
+
 		Set<BlockWrap> re = new HashSet<>();
-		if (prevs.isEmpty())
-			return re;
 
-		// find the longest chained execution connected to last milestone
-		for (Orderresult prevNotMilestone : prevs) {
-			re = new HashSet<>();
-			Orderresult startingBlock = prevNotMilestone;
-			while (startingBlock != null) {
+		Orderresult startingBlock = prevNotMilestone;
+		while (startingBlock != null
+				&& !Orderresult.zeroOrderresult().getBlockHash().equals(startingBlock.getBlockHash())) {
+			if (!startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
 				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-				if (startingBlock.getPrevblockhash().equals(prevMilestone.getBlockHash())) {
-					return re;
-				} else {
-					startingBlock = findPrev(prevs, startingBlock);
-				}
+			}
+			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
+				return re;
+			} else {
+				startingBlock = store.getOrderResult(startingBlock.getPrevblockhash());
 			}
 		}
+
 		return re;
-	}
-
-	protected Contractresult findPrev(List<Contractresult> prevs, Contractresult result) {
-
-		for (Contractresult b : prevs) {
-			if (result.getPrevblockhash().equals(b.getBlockHash())) {
-				return b;
-			}
-		}
-		return null;
-
 	}
 
 	/**
@@ -1207,9 +1185,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			confirmVOSOrUserData(block, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_CONTRACT_EXECUTE:
+			if (confirmation)
+				handleNewBestExecutionChain(block.getBlock(), blockStore);
 			confirmContractExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_ORDER_EXECUTE:
+			if (confirmation)
+				handleNewBestExecutionChain(block.getBlock(), blockStore);
 			confirmOrderExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
 			break;
 		default:
@@ -1799,20 +1781,28 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// if (checksum)
 			checkSum(store);
 		}
-		
+
 	}
 
 	/*
 	 * unconfirm chained execution for contract and order, it will add all follow of
-	 * the unconfirmed blocks.
-	 * Execution will be added, only if it is longest than the last confirmed execution
+	 * the unconfirmed blocks. Execution will be added, only if it is longest than
+	 * the last confirmed execution
 	 */
 	public Set<BlockWrap> addUnconfirmBlocksChainedFollow(BlockStoreInterface store, Set<BlockWrap> blocks)
 			throws BlockStoreException {
 		Set<BlockWrap> re = new HashSet<>();
-		for (BlockWrap blockWrap : blocks) { 
+		for (BlockWrap blockWrap : blocks) {
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				addFollowerContract(store, blockWrap, re);
+				ContractExecutionResult c = new ContractExecutionResult()
+						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
+				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
+				if (last.getChainlength() < c.getChainlength()) {
+					addFollowerContract(store, blockWrap, re);
+				} else {
+					// skip this block
+					continue;
+				}
 			}
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_EXECUTE)) {
 				addFollowerOrderexecution(store, blockWrap, re);
@@ -1830,13 +1820,23 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			throws BlockStoreException {
 		Set<BlockWrap> re = new HashSet<>();
 		for (BlockWrap blockWrap : blocks) {
-			re.add(blockWrap);
+
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				addExecutionPrev(store, blockWrap, re);
+				ContractExecutionResult c = new ContractExecutionResult()
+						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
+				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
+				if (last.getChainlength() < c.getChainlength()) {
+					addExecutionPrev(store, blockWrap, re);
+				} else {
+					// skip this block
+					continue;
+				}
 			}
 			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_EXECUTE)) {
 				addExecutionPrev(store, blockWrap, re);
 			}
+			// at the end may skip
+			re.add(blockWrap);
 		}
 		return re;
 	}
@@ -1926,47 +1926,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		checkSum(store);
 	}
 
-	/*
-	 * Execution from the blocks must be chained original from milestone.
-	 */
-	public BlockWrap getFromMilestoneChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype,
-			Set<BlockWrap> prevsNotMilestoneChainedBlocks, Token contract, BlockStoreInterface store)
-			throws BlockStoreException {
-		BlockWrap fromMilestoneChaineExecutions = null;
-		for (BlockWrap block : blocks) {
-			if (blocktype.equals(block.getBlock().getBlockType())) {
-				prevsNotMilestoneChainedBlocks.add(block);
-			}
-		}
-
-		if (prevsNotMilestoneChainedBlocks.isEmpty()) {
-			List<Contractresult> m = store.getMaxMilestoneContractresult(contract.getTokenid());
-			if (!m.isEmpty()) {
-				fromMilestoneChaineExecutions = getBlockWrap(m.get(0).getBlockHash(), store);
-				{
-					for (Contractresult c : m) {
-						BlockWrap mc = getBlockWrap(c.getBlockHash(), store);
-						if (mc.getBlock().getHeight() > fromMilestoneChaineExecutions.getBlock().getHeight())
-							fromMilestoneChaineExecutions = mc;
-					}
-				}
-			}
-			return fromMilestoneChaineExecutions;
-		}
-		for (BlockWrap b : prevsNotMilestoneChainedBlocks) {
-			if (isFirsExecution(b.getBlock())) {
-				return null;
-			}
-			fromMilestoneChaineExecutions = getFromMilestoneChaineExecutions(b, prevsNotMilestoneChainedBlocks, true,
-					store);
-			if (fromMilestoneChaineExecutions == null) {
-				throw new InfeasiblePrototypeException(
-						"Execution from the blocks must be chained original from milestone: " + b.toString());
-			}
-		}
-		return fromMilestoneChaineExecutions;
-	}
-
 	public Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
 			throws IOException {
 		Set<BlockWrap> collectNews = new HashSet<>();
@@ -1981,23 +1940,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return collectNews;
 	}
 
-	public Contractresult getLastContractresult(Set<BlockWrap> prevs, BlockStoreInterface store)
-			throws BlockStoreException {
-		BlockWrap re = null;
-		for (BlockWrap b : prevs) {
-			if (re == null)
-				re = b;
-			else {
-				if (b.getBlock().getHeight() > re.getBlock().getHeight())
-					re = b;
-			}
-		}
-		if (re == null)
-			return null;
-		else
-			return store.getContractresult(re.getBlock().getHash());
-	}
-
 	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {
 		Set<Sha256Hash> collectOrdersNoSpents = new HashSet<>();
 		for (BlockWrap b : prevs) {
@@ -2007,6 +1949,163 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			collectOrdersNoSpents.addAll(result.getReferencedBlocks());
 		}
 		return collectOrdersNoSpents;
+	}
+
+	/**
+	 * Called as part of connecting a block when the new block results in a
+	 * different chain having higher total work as longest reward chain.
+	 * 
+	 */
+	public void handleNewBestExecutionChain(Block newChainHead, BlockStoreInterface store)
+			throws BlockStoreException, VerificationException {
+		// checkState(lock.isHeldByCurrentThread());
+		// This chain has overtaken the one we currently believe is best.
+		// Reorganize is required.
+		//
+		// Firstly, calculate the block at which the chain diverged. We only
+		// need to examine the
+		// chain from beyond this block to find differences.
+		Block head = getChainHeadExecution(newChainHead, store);
+
+		if (head == null || getExecutionPrev(newChainHead).equals(head.getHash())
+				|| getExecuteChainlength(newChainHead) <= getExecuteChainlength(head)) {
+			// best execution chain nothing to dod
+			return;
+		}
+
+		final Block splitPoint = findSplit(newChainHead, head, store);
+		if (splitPoint == null) {
+			logger.info(" splitPoint is null, the chain ist not complete: {} ", newChainHead);
+			return;
+		}
+
+		logger.info("Re-organize after split at height {}", splitPoint.getHeight());
+		logger.info("Old Execution chain head: \n {}", head);
+		logger.info("New Execution chain head: \n {}", newChainHead);
+		logger.info("Split at Execution block: \n {}", splitPoint);
+		// Then build a list of all blocks in the old part of the chain and the
+		// new part.
+		LinkedList<Block> oldBlocks = new LinkedList<>();
+		if (!head.getHash().equals(splitPoint.getHash())) {
+			oldBlocks = getPartialChain(head, splitPoint, store);
+		}
+		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
+		// Disconnect each block in the previous best chain that is no
+		// longer in the new best chain from last to begin
+		oldBlocks.sort(new SortbyBlock());
+		for (Block oldBlock : oldBlocks) {
+			// Sanity check:
+			if (!oldBlock.getHash().equals(networkParameters.getGenesisBlock().getHash())) {
+				// Unconfirm
+				unconfirm(getBlockWrap(oldBlock.getHash(), store), new HashSet<Sha256Hash>(), -1, store);
+			}
+		}
+		Block cursor;
+		// Walk in ascending chronological order.
+		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
+			cursor = it.next();
+			confirm(getBlockWrap(cursor.getHash(), store), new HashSet<Sha256Hash>(), -1, true, store);
+			// if we build a chain longer than head, do a commit, even it may be
+			// failed after this.
+			if (getExecuteChainlength(cursor) > getExecuteChainlength(head)) {
+				store.commitDatabaseBatchWrite();
+				store.beginDatabaseBatchWrite();
+			}
+		}
+
+		// Update the pointer to the best known block.
+		// setChainHead(storedNewHead);
+	}
+
+	private Block getChainHeadExecution(Block block, BlockStoreInterface store) throws BlockStoreException {
+
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult c = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			return getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
+		case BLOCKTYPE_ORDER_EXECUTE:
+			return getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
+		case BLOCKTYPE_REWARD:
+			return getBlock(store.getMaxConfirmedReward().getBlockHash(), store);
+		default:
+			throw new RuntimeException("block.getBlockType() is wrong " + block.getBlockType());
+		}
+
+	}
+
+	/**
+	 * Locates the point in the chain at which newBlock and chainHead diverge.
+	 * Returns null if no split point was found (ie they are not part of the same
+	 * chain). Returns newChainHead or chainHead if they don't actually diverge but
+	 * are part of the same chain. return null, if the newChainHead is not complete
+	 * locally.
+	 */
+	public Block findSplit(Block newChainHead, Block oldChainHead, BlockStoreInterface store)
+			throws BlockStoreException {
+		Block currentChainCursor = oldChainHead;
+		Block newChainCursor = newChainHead;
+		// Loop until we find the reward block both chains have in common.
+		// Example:
+		//
+		// A -> B -> C -> D
+		// *****\--> E -> F -> G
+		//
+		// findSplit will return block B. oldChainHead = D and newChainHead = G.
+		while (!currentChainCursor.equals(newChainCursor)) {
+			if (getExecuteChainlength(currentChainCursor) > getExecuteChainlength(newChainCursor)) {
+				currentChainCursor = store.get(getExecutionPrev(currentChainCursor));
+				checkNotNull(currentChainCursor, "Attempt to follow an orphan chain");
+
+			} else {
+				Sha256Hash executionPrev = getExecutionPrev(newChainCursor);
+				if (!Sha256Hash.ZERO_HASH.equals(executionPrev)) {
+					newChainCursor = store.get(executionPrev);
+					checkNotNull(newChainCursor, "Attempt to follow an orphan chain");
+				} else {
+					newChainCursor = currentChainCursor;
+				}
+
+			}
+		}
+		return currentChainCursor;
+	}
+
+	public long getExecuteChainlength(Block block) {
+
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			return new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData())
+					.getChainlength();
+		case BLOCKTYPE_ORDER_EXECUTE:
+			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
+		case BLOCKTYPE_REWARD:
+			return new RewardInfo().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
+		case BLOCKTYPE_INITIAL:
+			return 0;
+
+		default:
+			throw new RuntimeException("block.getBlockType() is wrong " + block.getBlockType());
+		}
+
+	}
+
+	/**
+	 * Returns the set of contiguous blocks between 'higher' and 'lower'. Higher is
+	 * included, lower is not.
+	 */
+	protected LinkedList<Block> getPartialChain(Block higher, Block lower, BlockStoreInterface store)
+			throws BlockStoreException {
+		checkArgument(getExecuteChainlength(higher) > getExecuteChainlength(lower), "higher and lower are reversed");
+		LinkedList<Block> results = new LinkedList<>();
+		Block cursor = higher;
+		while (true) {
+			results.add(cursor);
+			cursor = checkNotNull(store.get(getExecutionPrev(cursor)), "Ran off the end of the chain");
+			if (cursor.equals(lower))
+				break;
+		}
+		return results;
 	}
 
 }

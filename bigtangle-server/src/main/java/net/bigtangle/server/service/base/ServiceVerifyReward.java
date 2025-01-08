@@ -220,7 +220,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	/**
 	 * Called as part of connecting a block when the new block results in a
-	 * different chain having higher total work.
+	 * different chain having higher total work as longest reward chain.
 	 * 
 	 */
 	public void handleNewBestChain(Block newChainHead, BlockStoreInterface store)
@@ -292,23 +292,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		unconfirmBlocksSorted(store, blocksToRemoveBlocks, new HashSet<>());
 	}
 
-	/**
-	 * Returns the set of contiguous blocks between 'higher' and 'lower'. Higher is
-	 * included, lower is not.
-	 */
-	private LinkedList<Block> getPartialChain(Block higher, Block lower, BlockStoreInterface store)
-			throws BlockStoreException {
-		checkArgument(higher.getHeight() > lower.getHeight(), "higher and lower are reversed");
-		LinkedList<Block> results = new LinkedList<>();
-		Block cursor = higher;
-		while (true) {
-			results.add(cursor);
-			cursor = checkNotNull(store.get(getRewardInfo(cursor).getPrevRewardHash()), "Ran off the end of the chain");
-			if (cursor.equals(lower))
-				break;
-		}
-		return results;
-	}
+
 
 	private Block getChainHead(BlockStoreInterface store) throws BlockStoreException {
 		return store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());

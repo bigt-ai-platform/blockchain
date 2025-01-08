@@ -45,10 +45,10 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
 				true, store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
-				store); 
-	  	serviceBase.checkExecutionChained(store,  blocks , false );
+				store);
+		serviceBase.checkExecutionChained(store, blocks, false);
 		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
- 				serviceBase.getHashSet(blocks), store);
+				serviceBase.getHashSet(blocks), store);
 	}
 
 	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {

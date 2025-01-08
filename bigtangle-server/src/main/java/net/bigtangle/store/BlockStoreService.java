@@ -554,10 +554,10 @@ public class BlockStoreService {
 				blocksToUnconfirm.add(re);
 			}
 			serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
-			Set<BlockWrap> unconfirmBlocksChainedFollow = serviceBase.addUnconfirmBlocksChainedFollow(blockStore,
-					blocksToUnconfirm);
-			log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
-			serviceBase.unconfirmBlocksSorted(blockStore, unconfirmBlocksChainedFollow, new HashSet<>(), true);
+//			Set<BlockWrap> unconfirmBlocksChainedFollow = serviceBase.addUnconfirmBlocksChainedFollow(blockStore,
+//					blocksToUnconfirm);
+	//		log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
+			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

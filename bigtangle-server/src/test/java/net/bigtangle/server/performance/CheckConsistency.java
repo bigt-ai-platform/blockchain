@@ -50,7 +50,7 @@ public class CheckConsistency extends AbstractIntegrationTest {
 	@Test
 	public void testChecksum() throws Exception {
 
-		checkSum(null);
+		checkSum(null,true);
 	}
 
 }

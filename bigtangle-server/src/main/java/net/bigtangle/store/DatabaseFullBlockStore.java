@@ -1564,7 +1564,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				resultSet.getLong("milestone"), resultSet.getLong("chainlength"),  resultSet.getLong("inserttime"));
+				resultSet.getLong("milestone"), resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
 
@@ -1572,8 +1572,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"), resultSet.getLong("chainlength"),
-				resultSet.getLong("inserttime"));
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
 
@@ -2908,16 +2908,16 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public List<Contractresult> getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException {
-		List<Contractresult> re = new ArrayList<>();
+	public Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException {
+
 		try (PreparedStatement preparedStatement = getConnection()
 				.prepareStatement(SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL)) {
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
-				re.add(setContractresult(resultSet));
+				return setContractresult(resultSet);
 			}
-			return re;
+			return Contractresult.firstContractresult();
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -2926,19 +2926,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid)
-			throws BlockStoreException {
+	public Contractresult getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException {
 
 		List<Contractresult> re = new ArrayList<>();
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL)) {
+				.prepareStatement(SELECT_CONTRACTRESULT_MAX_CONFIRMED_SQL)) {
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
 
 			while (resultSet.next()) {
-				re.add(setContractresult(resultSet));
+				return setContractresult(resultSet);
 			}
-			return re;
+			return Contractresult.firstContractresult();
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -2953,10 +2952,9 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				.prepareStatement(SELECT_ORDER_RESULT_MAX_MILESTONE_SQL)) {
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
-
 				return setOrderresult(resultSet);
 			} else
-				return null;
+				return Orderresult.zeroOrderresult();
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -2965,18 +2963,15 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException {
+	public Orderresult getMaxConfirmedOrderresult() throws BlockStoreException {
 
-		List<Orderresult> re = new ArrayList<>();
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL)) {
-
+				.prepareStatement(SELECT_ORDERRESULT_MAX_CONFIRMED_SQL)) {
 			ResultSet resultSet = preparedStatement.executeQuery();
-
 			while (resultSet.next()) {
-				re.add(setOrderresult(resultSet));
+				return setOrderresult(resultSet);
 			}
-			return re;
+			return Orderresult.zeroOrderresult();
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);

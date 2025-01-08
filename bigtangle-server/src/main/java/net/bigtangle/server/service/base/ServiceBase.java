@@ -317,13 +317,12 @@ public abstract class ServiceBase {
 			new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
 		case BLOCKTYPE_ORDER_EXECUTE ->
 			new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
+		case BLOCKTYPE_REWARD ->
+			new RewardInfo().parseChecked(block.getTransactions().get(0).getData()).getPrevRewardHash();
 		default -> throw new RuntimeException("Wrong block.getBlockType()");
 		};
 	}
 
-	 
-
-	
 	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 		long minChainLength = Math.max(0, currChainLength - NetworkParameters.MILESTONE_CUTOFF);
@@ -455,7 +454,8 @@ public abstract class ServiceBase {
 			for (TransactionInput t : tx.getInputs()) {
 				try {
 					TransactionOutput connectedOutput = t.getConnectedOutput();
-					if(connectedOutput ==null ) return "";
+					if (connectedOutput == null)
+						return "";
 					if (connectedOutput.getScriptPubKey().isSentToAddress()) {
 						fromAddress = t.getFromAddress().toBase58();
 					} else {
@@ -741,12 +741,12 @@ public abstract class ServiceBase {
 
 			break;
 		case Invalid:
-			if(block!=null)
-			blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
+			if (block != null)
+				blockStore.updateBlockEvaluationSolid(block.getHash(), -1);
 			break;
 		}
-		if(block!=null )
-		cacheBlockService.evictBlockEvaluation(block.getHash());
+		if (block != null)
+			cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 
 	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
@@ -954,4 +954,6 @@ public abstract class ServiceBase {
 		}
 		return null;
 	}
+
+	 
 }

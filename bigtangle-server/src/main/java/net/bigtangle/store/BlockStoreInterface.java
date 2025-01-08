@@ -483,15 +483,15 @@ public interface BlockStoreInterface {
 
 	Orderresult getMaxMilestoneOrderresult() throws BlockStoreException;
 
-	List<Orderresult> getConfirmedOrderresultNotMilestone() throws BlockStoreException;
+	Orderresult getMaxConfirmedOrderresult() throws BlockStoreException;
 
 	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
-	List<Contractresult> getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
+	 Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
 
-	List<Contractresult> getConfirmedContractresultNotMilestone(String contracttokenid) throws BlockStoreException;
+	 Contractresult  getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException;
 
 	List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
 

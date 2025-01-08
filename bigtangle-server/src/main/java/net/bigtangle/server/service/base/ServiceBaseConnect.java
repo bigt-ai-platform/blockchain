@@ -4,11 +4,15 @@
  *******************************************************************************/
 package net.bigtangle.server.service.base;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +38,7 @@ import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderOpenInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.OutputsMulti;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Side;
 import net.bigtangle.core.TokenInfo;
@@ -42,6 +47,7 @@ import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.script.Script;
@@ -92,63 +98,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		public long getDifficulty() {
 			return difficulty;
 		}
-	}
-
-	/**
-	 * Locates the point in the chain at which newBlock and chainHead diverge.
-	 * Returns null if no split point was found (ie they are not part of the same
-	 * chain). Returns newChainHead or chainHead if they don't actually diverge but
-	 * are part of the same chain. return null, if the newChainHead is not complete
-	 * locally.
-	 */
-	public Block findSplit(Block newChainHead, Block oldChainHead, BlockStoreInterface store)
-			throws BlockStoreException {
-		Block currentChainCursor = oldChainHead;
-		Block newChainCursor = newChainHead;
-		// Loop until we find the reward block both chains have in common.
-		// Example:
-		//
-		// A -> B -> C -> D
-		// *****\--> E -> F -> G
-		//
-		// findSplit will return block B. oldChainHead = D and newChainHead = G.
-		while (!currentChainCursor.equals(newChainCursor)) {
-			if (getRewardInfo(currentChainCursor).getChainlength() > getRewardInfo(newChainCursor).getChainlength()) {
-				currentChainCursor = store.get(getRewardInfo(currentChainCursor).getPrevRewardHash());
-				checkNotNull(currentChainCursor, "Attempt to follow an orphan chain");
-
-			} else {
-				newChainCursor = store.get(getRewardInfo(newChainCursor).getPrevRewardHash());
-				checkNotNull(newChainCursor, "Attempt to follow an orphan chain");
-
-			}
-		}
-		return currentChainCursor;
-	}
-
-	public Block findSplitExecute(Block newChainHead, Block oldChainHead, BlockStoreInterface store)
-			throws BlockStoreException {
-		Block currentChainCursor = oldChainHead;
-		Block newChainCursor = newChainHead;
-		// Loop until we find the reward block both chains have in common.
-		// Example:
-		//
-		// A -> B -> C -> D
-		// *****\--> E -> F -> G
-		//
-		// findSplit will return block B. oldChainHead = D and newChainHead = G.
-		while (!currentChainCursor.equals(newChainCursor)) {
-			if (getExecutionPrev(currentChainCursor, store).getHeight() > getExecutionPrev(newChainCursor, store)
-					.getHeight()) {
-				currentChainCursor = getExecutionPrev(currentChainCursor, store);
-				checkNotNull(currentChainCursor, "Attempt to follow an orphan  execute chain");
-			} else {
-				newChainCursor = getExecutionPrev(newChainCursor, store);
-				checkNotNull(newChainCursor, "Attempt to follow an orphan  execute chain");
-
-			}
-		}
-		return currentChainCursor;
 	}
 
 	@Override
@@ -203,10 +152,10 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			connectToken(block, blockStore);
 			break;
 
-		case BLOCKTYPE_CONTRACT_EXECUTE:
+		case BLOCKTYPE_CONTRACT_EXECUTE: 
 			connectContractExecute(block, blockStore);
 			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
+		case BLOCKTYPE_ORDER_EXECUTE: 
 			connectOrderExecute(block, blockStore);
 			break;
 		case BLOCKTYPE_ORDER_OPEN:
@@ -254,8 +203,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			OrderOpenInfo reqInfo = new OrderOpenInfo().parse(block.getTransactions().get(0).getData());
 			// calculate the offervalue for version == 1
 			if (reqInfo.getVersion() == 1) {
-				Coin burned = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-						.countBurnedToken(block, blockStore);
+				Coin burned = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
+						jsonmapper).countBurnedToken(block, blockStore);
 				reqInfo.setOfferValue(burned.getValue().longValue());
 				reqInfo.setOfferTokenid(burned.getTokenHex());
 			}
@@ -300,8 +249,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
 			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).executeContract(block, blockStore, result.getContracttokenid(), prevblockhash,
-							result.getReferencedBlocks());
+			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
+					cacheBlockService, jsonmapper).executeContract(block, blockStore, result.getContracttokenid(),
+							prevblockhash, result.getReferencedBlocks());
 			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
@@ -321,7 +271,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			} else {
 				// the ContractExecute can not be reproduced here
 				logger.debug("ContractResult check failed  from result {} compare to check {}", result,
-						check==null?"":check.toString());
+						check == null ? "" : check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -332,7 +282,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters, cacheBlockService,jsonmapper).orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
+			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters,
+					cacheBlockService, jsonmapper)
+					.orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
 					&& result.getToBeSpent().equals(check.getToBeSpent())
@@ -350,7 +302,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			} else {
 				// the ContractExecute can not be reproduced here
 				logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result,
-						check==null?"":check.toString());
+						check == null ? "" : check.toString());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -388,8 +340,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-
-
 	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
@@ -410,5 +360,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			return a.getBlock().getHeight() >= b.getBlock().getHeight() ? 1 : -1;
 		}
 	}
+
 
 }

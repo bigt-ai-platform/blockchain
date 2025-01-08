@@ -194,24 +194,27 @@ public class ContractExecutionService {
 		serviceBase.addReferencedBlockHashesTo(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
 				referencedOrdertypes, true, false, store);
-		Set<BlockWrap> prevsNotMilestoneChainedBlocks = new HashSet<>();
-		BlockWrap prevMilestone = serviceBase.getFromMilestoneChainedExecutions(referencedblocks,
-				Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, prevsNotMilestoneChainedBlocks, contract, store);
-
-		// take last NotMilestone chain confirmed and set others as not confirmed
-		Contractresult lastExecution = serviceBase.getLastContractresult(prevsNotMilestoneChainedBlocks, store);
-		if (lastExecution == null) {
-			if (prevMilestone != null)
-				lastExecution = store.getContractresult(prevMilestone.getBlock().getHash());
-			else
-				lastExecution = Contractresult.firstContractresult();
+		Contractresult prevMilestoneExecution = store.getMaxMilestoneContractresult(contract.getTokenid());
+		Contractresult lastConfirmedExecution = store.getMaxConfirmedContractresult(contract.getTokenid());
+		// only the lastConfirmedExecution is in the referencedblocks as DAG
+		if (serviceBase.findBlock(referencedblocks, lastConfirmedExecution.getBlockHash()) == null) {
+			if (lastConfirmedExecution.getChainlength() != 0 && lastConfirmedExecution.getMilestone() < 0) {
+				log.debug("lastConfirmedExecution not in referencedblocks {}", referencedblocks.size());
+				// log.debug("lastConfirmedExecution block {}",
+				// blockService.getBlockWrap(lastConfirmedExecution.getBlockHash(), store));
+				return null;
+			}
 		}
+		// take last NotMilestone chain confirmed and set others as not confirmed
+		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(lastConfirmedExecution,
+				prevMilestoneExecution, store);
+
 		Set<BlockWrap> collectNotSpents = serviceBase.collectNotAreadyCollected(referencedblocks,
 				prevsNotMilestoneChainedBlocks);
 
 		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper)
-				.executeContract(block, store, contract, lastExecution, serviceBase.getHashSet(collectNotSpents));
+				jsonmapper).executeContract(block, store, contract, lastConfirmedExecution,
+						serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks
 		if (result == null || (result.getOutputTx().getOutputs().isEmpty() && collectNotSpents.isEmpty()))

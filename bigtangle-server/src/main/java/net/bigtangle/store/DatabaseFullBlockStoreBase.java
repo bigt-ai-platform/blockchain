@@ -239,18 +239,17 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
-			+ " contractresult, prevblockhash, inserttime, milestone,chainlength) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?,?)"
-			+ duplicateInsert();
+			+ " contractresult, prevblockhash, inserttime, milestone,chainlength) "
+			+ " VALUES (?, ?, ?, ?, ?, ?,?,?,?,?)" + duplicateInsert();
 	protected final String SELECT_CONTRACTRESULT = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
 			+ " contractresult, prevblockhash, inserttime, milestone, chainlength" + " FROM contractresult ";
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
-	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT + " WHERE milestone = "
-			+ " ( select milestone  FROM contractresult  "
-			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and milestone >0 order by milestone desc limit 1 ) ";
-	protected final String SELECT_CONTRACTRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = true and contracttokenid=? and milestone < 0  order by inserttime desc   ";
+	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
+			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and milestone >0 order by chainlength desc limit 1 ";
+	protected final String SELECT_CONTRACTRESULT_MAX_CONFIRMED_SQL = SELECT_CONTRACTRESULT
+			+ " WHERE confirmed = true and contracttokenid=?   order by chainlength desc limit 1   ";
 
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
@@ -263,12 +262,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ duplicateInsert();
 	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
 			+ " orderresult, prevblockhash, inserttime ,  milestone, chainlength" + " FROM orderresult ";
-	protected final String SELECT_ORDERRESULT_CONFIRMED_NOTMILESTONE_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true  and milestone < 0  order by inserttime desc   ";
+	protected final String SELECT_ORDERRESULT_MAX_CONFIRMED_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = true   order by chainlength desc limit 1  ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true and milestone >0 and spent=false order by milestone desc limit 1";
+			+ " WHERE confirmed = true and milestone >0 and spent=false order by chainlength desc limit 1";
 	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()
 			+ " orderresult SET milestone = ?   WHERE blockhash = ?";
 

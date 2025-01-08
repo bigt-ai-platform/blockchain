@@ -507,9 +507,7 @@ public abstract class AbstractIntegrationTest {
 		// no reward, this order will be not confirmed
 		// confirm the contract execution
 		if (b != null) {
-			// new ServiceBaseConnect(serverConfiguration, networkParameters,
-			// cacheBlockService,jsonmapper).confirmOrderExecute(b, -1,
-			// true, store);
+			confirmDo(getBlockWrap(b.getHash() ), new HashSet<>(), store);
 			addedBlocks.add(b);
 		} else {
 			log.debug("");
@@ -1674,9 +1672,13 @@ public abstract class AbstractIntegrationTest {
 		for (Transaction tx : bw.getBlock().getTransactions()) {
 			for (TransactionOutput txout : tx.getOutputs()) {
 				UTXO u = store.getTransactionOutput(bw.getBlockHash(), tx.getHash(), txout.getIndex());
-				if (u.getTokenId().equals(tokenid)) {
-					log.debug("TransactionOutput  {}", u);
+				if (u == null)
+					log.debug("TransactionOutput no  UTXO  {}", txout);
+				else {
+					if (u.getTokenId().equals(tokenid)) {
+						log.debug("TransactionOutput  {}", u);
 
+					}
 				}
 			}
 
@@ -2069,7 +2071,8 @@ public abstract class AbstractIntegrationTest {
 		List<Contractresult> re = new ArrayList<>();
 		try (PreparedStatement preparedStatement = dataSource.getConnection()
 				.prepareStatement("SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-						+ " contractresult, prevblockhash, inserttime, milestone " + " FROM contractresult ")) {
+						+ " contractresult, prevblockhash, inserttime, milestone,chainlength "
+						+ " FROM contractresult ")) {
 
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
@@ -2087,8 +2090,8 @@ public abstract class AbstractIntegrationTest {
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),resultSet.getLong("chainlength"),
-				resultSet.getLong("inserttime"));
+				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
 
