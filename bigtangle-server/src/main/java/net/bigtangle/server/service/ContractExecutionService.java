@@ -205,6 +205,8 @@ public class ContractExecutionService {
 				return null;
 			}
 		}
+		//do nothing if no reference
+		if(referencedblocks.isEmpty()) return null;
 		// take last NotMilestone chain confirmed and set others as not confirmed
 		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsChain(lastConfirmedExecution,
 				prevMilestoneExecution, store);

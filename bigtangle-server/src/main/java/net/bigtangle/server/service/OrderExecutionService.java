@@ -188,6 +188,7 @@ public class OrderExecutionService {
 				return null;
 			}
 		}
+		// referencedblocks may be empty, but there are order matching valid from
 		Set<BlockWrap> prevsNotMilestoneChainedBlocks = serviceBase.collectPrevsOrderChain(lastConfirmedExecution,
 				prevMilestoneExecution, store);
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);

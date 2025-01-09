@@ -323,32 +323,34 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			BlockStoreInterface store) throws BlockStoreException {
 		Set<BlockWrap> re = new HashSet<>();
 		Contractresult startingBlock = prevNotMilestone;
+		// prevNotMilestone = lastMilestone
+		if (startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
+			return re;
+		}
 		while (startingBlock != null
 				&& !Contractresult.firstContractresult().getBlockHash().equals(startingBlock.getBlockHash())) {
-			if (!startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
-				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-			}
+			re.add(getBlockWrap(startingBlock.getBlockHash(), store));
 			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
 				return re;
 			} else {
 				startingBlock = store.getContractresult(startingBlock.getPrevblockhash());
 			}
 		}
-
-		return re;
+		// not chained to lastMilestone
+		return new HashSet<>();
 	}
 
 	public Set<BlockWrap> collectPrevsOrderChain(Orderresult prevNotMilestone, Orderresult lastMilestone,
 			BlockStoreInterface store) throws BlockStoreException {
 
 		Set<BlockWrap> re = new HashSet<>();
-
 		Orderresult startingBlock = prevNotMilestone;
+		if (startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
+			return re;
+		}
 		while (startingBlock != null
 				&& !Orderresult.zeroOrderresult().getBlockHash().equals(startingBlock.getBlockHash())) {
-			if (!startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
-				re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-			}
+			re.add(getBlockWrap(startingBlock.getBlockHash(), store));
 			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
 				return re;
 			} else {
