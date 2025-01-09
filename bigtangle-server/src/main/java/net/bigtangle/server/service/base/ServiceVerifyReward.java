@@ -260,11 +260,13 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 				long milestoneNumber = getRewardInfo(oldBlock).getChainlength();
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
 						milestoneNumber, store);
-				// Unconfirm anything not in milestone
+				// all conflicts to this milestone will reset to initial
+				store.resetMilestoneSolid(milestoneNumber);
+				// Unconfirm anything in milestone
 				unconfirmBlocks(store, blocksInMilestoneInterval);
 			}
-			store.commitDatabaseBatchWrite();
-			store.beginDatabaseBatchWrite();
+			// store.commitDatabaseBatchWrite();
+			// store.beginDatabaseBatchWrite();
 		}
 		Block cursor;
 		// Walk in ascending chronological order.
@@ -291,8 +293,6 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		}
 		unconfirmBlocksSorted(store, blocksToRemoveBlocks, new HashSet<>());
 	}
-
-
 
 	private Block getChainHead(BlockStoreInterface store) throws BlockStoreException {
 		return store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());

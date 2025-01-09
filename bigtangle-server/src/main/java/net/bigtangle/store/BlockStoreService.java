@@ -535,6 +535,40 @@ public class BlockStoreService {
 
 	public void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
+		updateMilestoneConflicts(blockStore, cutoffHeight, maxHeight);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+		try {
+			blockStore.beginDatabaseBatchWrite();
+			// First remove any blocks that should no longer be in the milestone
+			// HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
+
+			// Unconfirm anything not confirmed by milestone
+			List<Sha256Hash> wipeBlocks = blockStore.blocksNotMilestoneFromHeigth(cutoffHeight);
+
+			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
+
+			for (Sha256Hash b : wipeBlocks) {
+				BlockWrap re = serviceBase.getBlockWrap(b, blockStore);
+				// if (re.getBlockEvaluation().isConfirmed())
+				blocksToUnconfirm.add(re);
+			}
+			// Set<BlockWrap> unconfirmBlocksChainedFollow =
+			// serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm);
+			// log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
+			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
+
+			blockStore.commitDatabaseBatchWrite();
+		} catch (Exception e) {
+			blockStore.abortDatabaseBatchWrite();
+			throw e;
+		} finally {
+			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	public void updateMilestoneConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+			throws BlockStoreException {
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
@@ -553,12 +587,7 @@ public class BlockStoreService {
 				// if (re.getBlockEvaluation().isConfirmed())
 				blocksToUnconfirm.add(re);
 			}
-			serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
-//			Set<BlockWrap> unconfirmBlocksChainedFollow = serviceBase.addUnconfirmBlocksChainedFollow(blockStore,
-//					blocksToUnconfirm);
-	//		log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
-			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
-
+			serviceBase.updateMilestoneConflicts(blocksToUnconfirm, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();

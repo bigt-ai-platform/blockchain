@@ -180,6 +180,8 @@ public interface BlockStoreInterface {
 
 	void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException;
 
+	void resetMilestoneSolid(long milestone) throws BlockStoreException;
+
 	void deleteMCMC(long chainlenght) throws BlockStoreException;
 
 	/* TXOs */
@@ -441,7 +443,8 @@ public interface BlockStoreInterface {
 	void insertContractEvent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
 	ContractEventRecord getContractEvent(Sha256Hash blockhash, Sha256Hash collectionhash) throws BlockStoreException;
-	List<ContractEventRecord> getContractEvents(Sha256Hash blockhash ) throws BlockStoreException;
+
+	List<ContractEventRecord> getContractEvents(Sha256Hash blockhash) throws BlockStoreException;
 
 	void updateContractEventSpent(Collection<ContractEventRecord> records) throws BlockStoreException;
 
@@ -489,9 +492,9 @@ public interface BlockStoreInterface {
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
-	 Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
+	Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
 
-	 Contractresult  getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException;
+	Contractresult getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException;
 
 	List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
 

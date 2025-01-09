@@ -188,10 +188,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " FROM blocks WHERE   height >= ? AND height <= ? ";
 
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
-			+ "FROM blocks WHERE milestone = -1 AND height >= ? order by height desc ";
-
-	protected final String SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL = "SELECT block "
-			+ "FROM blocks WHERE milestone = -1 AND height >= ? ";
+			+ "FROM blocks WHERE milestone = -1 AND height >= ? AND solid > -1 order by height desc ";
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
@@ -348,6 +345,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_BLOCKEVALUATION_RATING_SQL = getUpdate() + " mcmc SET rating = ? WHERE hash = ?";
 
 	protected final String UPDATE_BLOCKEVALUATION_SOLID_SQL = getUpdate() + " blocks SET solid = ? WHERE hash = ?";
+	protected final String RESETMILISTONE_SOLID_SQL = getUpdate() + " blocks SET solid = 0 WHERE milestone = ?";
 
 	protected final String SELECT_MULTISIGNADDRESS_SQL = "SELECT blockhash, tokenid, address, pubKeyHex, posIndex, tokenHolder FROM multisignaddress WHERE tokenid = ? AND blockhash = ?";
 	protected final String INSERT_MULTISIGNADDRESS_SQL = "INSERT INTO multisignaddress (tokenid, address, pubKeyHex, posIndex,blockhash,tokenHolder) VALUES (?, ?, ?, ?,?,?)"
@@ -814,7 +812,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 
 	}
-
+	@Override
 	public Block get(Sha256Hash hash) throws BlockStoreException {
 		// log.info("find block hexStr : " + hash.toString());
 		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_SQL)) {
@@ -830,7 +828,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
-
+	@Override
 	public byte[] getByte(Sha256Hash hash) throws BlockStoreException {
 
 		// log.info("find block hexStr : " + hash.toString());
@@ -849,7 +847,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
-
+	@Override
 	public List<byte[]> blocksFromChainLength(long start, long end) {
 		// Optimize for chain head
 		List<byte[]> re = new ArrayList<>();
@@ -871,13 +869,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		// throw new BlockStoreException("Could not close statement");
 		return re;
 	}
-
-	public List<byte[]> blocksFromNonChainHeigth(long heigth) {
-		// Optimize for chain head
+	@Override
+	public List<byte[]> blocksFromNonChainHeigth(long heigth) { 
 		List<byte[]> re = new ArrayList<>();
-
-		// log.info("find block hexStr : " + hash.toString());
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_NON_CHAIN_HEIGTH_SQL)) {
+ 
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL)) {
 			s.setLong(1, heigth);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
@@ -1617,6 +1613,16 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			throw new BlockStoreException(e);
 		}
 		// throw new BlockStoreException("Could not close statement");
+	}
+
+	@Override
+	public void resetMilestoneSolid(long milestone) throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(RESETMILISTONE_SOLID_SQL)) {
+			preparedStatement.setLong(1, milestone);
+			preparedStatement.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
 	}
 
 	@Override

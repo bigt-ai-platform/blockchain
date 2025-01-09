@@ -779,6 +779,32 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
+	/*
+	 * all blocks with conflict from milestone will be set as solid= -milestone. At
+	 * revert of the milestone, will be reset solid = 0 as initial all blocks with
+	 * conflicts with milestone block will be not added to DAG process
+	 */
+	public void updateMilestoneConflicts(Set<BlockWrap> blocksToAdd, BlockStoreInterface store)
+			throws BlockStoreException {
+		// Find all conflict candidates in blocks to add
+		List<ConflictCandidate> conflicts = blocksToAdd.stream().map(BlockWrap::toConflictCandidates)
+				.flatMap(Collection::stream).collect(Collectors.toList());
+
+		// Find only those that are spent
+		filterSpent(conflicts, store);
+
+		// Drop any spent by milestone
+		for (ConflictCandidate c : conflicts) {
+			// Find the spending block we are competing with
+			BlockWrap milestoneBlock = getSpendingBlock(c, store);
+			// If it is pruned or a milestone, update solid of the block.
+			if (milestoneBlock != null && milestoneBlock.getBlockEvaluation().getMilestone() != -1) {
+				store.updateBlockEvaluationSolid(c.getBlock().getBlockHash(),
+						-1 * milestoneBlock.getBlockEvaluation().getMilestone());
+			}
+		}
+	}
+
 	/**
 	 * Resolves conflicts between non-milestone blocks and candidates
 	 *
@@ -1004,6 +1030,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
+	/*
+	 * filter all blocks with hastSpentDependency
+	 */
 	private void filterSpent(Collection<ConflictCandidate> blockConflicts, BlockStoreInterface store) {
 		blockConflicts.removeIf(c -> {
 			try {

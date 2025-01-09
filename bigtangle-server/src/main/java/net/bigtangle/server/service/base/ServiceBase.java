@@ -694,34 +694,24 @@ public abstract class ServiceBase {
 		switch (solidityState.getState()) {
 		case MissingCalculation:
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
-
 			// Reward blocks follow different logic: If this is new, run
 			// consensus logic
 			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
 				solidifyReward(block, blockStore);
 				return;
 			}
-			// Insert other blocks into waiting list
-			// insertUnsolidBlock(block, solidityState, blockStore);
 			break;
 		case MissingPredecessor:
 			if (block.getBlockType() == Type.BLOCKTYPE_INITIAL
 					&& getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() > 0) {
 				throw new RuntimeException("Should not happen");
 			}
-
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 0);
-
-			// Insert into waiting list
-			// insertUnsolidBlock(block, solidityState, blockStore);
 			break;
 		case Success:
 			// If already set, nothing to do here...
 			if (getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() == 2)
 				return;
-
-			// TODO don't calculate again, it may already have been calculated
-			// before
 			connectUTXOs(block, blockStore);
 			connectTypeSpecificUTXOs(block, blockStore);
 			calculateBlockOrderMatchingResult(block, blockStore);
@@ -731,7 +721,7 @@ public abstract class ServiceBase {
 				// missing calc
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
 			} else {
-				// Else normal update
+				// normal update
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 2);
 			}
 			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
@@ -955,5 +945,4 @@ public abstract class ServiceBase {
 		return null;
 	}
 
-	 
 }
