@@ -164,8 +164,6 @@ public interface BlockStoreInterface {
 
 	TreeSet<BlockWrap> getBlocksToConfirm(long cutoffHeight, long maxHeight) throws BlockStoreException;
 
-	PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException;
-
 	BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException;
 
 	List<BlockMCMC> getMCMCDepth(long number) throws BlockStoreException;

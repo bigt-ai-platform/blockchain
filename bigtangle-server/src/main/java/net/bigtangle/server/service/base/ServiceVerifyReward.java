@@ -1,8 +1,5 @@
 package net.bigtangle.server.service.base;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;

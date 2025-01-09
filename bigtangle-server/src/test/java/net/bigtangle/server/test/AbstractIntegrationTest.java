@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -2011,7 +2012,7 @@ public abstract class AbstractIntegrationTest {
 
 	private void blockDAGPredecossors(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag)
 			throws BlockStoreException, IOException {
-		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
+		PriorityQueue<BlockWrap> blockQueue =  getBlocks(from, to);
 		dag.addVertex("");
 		// Initialize weight and depth of blocks
 		for (BlockWrap block : blockQueue) {
@@ -2097,7 +2098,7 @@ public abstract class AbstractIntegrationTest {
 
 	private void blocksDAG(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag, boolean withReferenced)
 			throws BlockStoreException, IOException {
-		PriorityQueue<BlockWrap> blockQueue = store.getBlocks(from, to);
+		PriorityQueue<BlockWrap> blockQueue =  getBlocks(from, to);
 		blocksDAG(dag, withReferenced, blockQueue);
 	}
 
@@ -2174,5 +2175,33 @@ public abstract class AbstractIntegrationTest {
 		}
 		return a;
 	}
+ 
+	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException {
+		PriorityQueue<BlockWrap> blocksByHeight = new PriorityQueue<>(
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
 
+		try (PreparedStatement preparedStatement =  dataSource.getConnection().prepareStatement(
+				"select *   FROM blocks WHERE   height >= ? AND height <= ?")) {
+			preparedStatement.setLong(1, cutoffHeight);
+			preparedStatement.setLong(2, maxHeight);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
+
+				Block block = networkParameters.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+			
+					blocksByHeight.add(
+							new BlockWrap(block, blockEvaluation, store.getMCMC(blockEvaluation.getBlockHash()), networkParameters));
+			}
+			return blocksByHeight;
+		} catch (Exception ex) {
+			throw new BlockStoreException(ex);
+		}
+		// throw new BlockStoreException("Could not close statement");
+	}
+	private BlockEvaluation setBlockEvaluation(ResultSet resultSet) throws SQLException {
+		return BlockEvaluation.build(Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
+				resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+				resultSet.getLong("inserttime"), resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
+	}
 }

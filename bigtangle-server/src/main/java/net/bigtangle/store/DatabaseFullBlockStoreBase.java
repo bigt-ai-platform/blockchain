@@ -184,9 +184,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 ";
 
-	protected final String SELECT_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
-			+ " FROM blocks WHERE   height >= ? AND height <= ? ";
-
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? AND solid > -1 order by height desc ";
 
@@ -812,6 +809,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 
 	}
+
 	@Override
 	public Block get(Sha256Hash hash) throws BlockStoreException {
 		// log.info("find block hexStr : " + hash.toString());
@@ -826,8 +824,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
+
 	@Override
 	public byte[] getByte(Sha256Hash hash) throws BlockStoreException {
 
@@ -845,8 +844,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
+
 	@Override
 	public List<byte[]> blocksFromChainLength(long start, long end) {
 		// Optimize for chain head
@@ -866,13 +866,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			log.warn("", ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 		return re;
 	}
+
 	@Override
-	public List<byte[]> blocksFromNonChainHeigth(long heigth) { 
+	public List<byte[]> blocksFromNonChainHeigth(long heigth) {
 		List<byte[]> re = new ArrayList<>();
- 
+
 		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL)) {
 			s.setLong(1, heigth);
 			ResultSet results = s.executeQuery();
@@ -883,7 +884,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			log.warn("", ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 		return re;
 	}
 
@@ -911,7 +912,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -949,7 +950,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -987,7 +988,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1008,7 +1009,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1028,7 +1029,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	protected SpentBlockData setSpentBlock(Sha256Hash blockHash, ResultSet results) throws SQLException {
@@ -1314,7 +1315,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1366,7 +1367,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					//// throw new BlockStoreException("Could not close statement");
+					//
 				}
 			}
 		}
@@ -1394,7 +1395,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1412,7 +1413,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1438,31 +1439,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
-	}
 
-	@Override
-	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException {
-		PriorityQueue<BlockWrap> blocksByHeight = new PriorityQueue<>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
-
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_IN_INTERVAL_SQL)) {
-			preparedStatement.setLong(1, cutoffHeight);
-			preparedStatement.setLong(2, maxHeight);
-			ResultSet resultSet = preparedStatement.executeQuery();
-			while (resultSet.next()) {
-				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
-
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
-				if (verifyHeader(block))
-					blocksByHeight.add(
-							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
-			}
-			return blocksByHeight;
-		} catch (Exception ex) {
-			throw new BlockStoreException(ex);
-		}
-		// throw new BlockStoreException("Could not close statement");
 	}
 
 	@Override
@@ -1482,7 +1459,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	private BlockEvaluation setBlockEvaluationNumber(ResultSet resultSet) throws SQLException {
@@ -1565,7 +1542,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 
 	}
 
@@ -1580,7 +1556,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 
 	}
 
@@ -1599,7 +1574,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1612,7 +1587,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1648,7 +1623,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
+
 				}
 			}
 		}
@@ -1669,7 +1644,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 
 	}
 
@@ -1686,7 +1660,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1699,7 +1673,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1718,7 +1692,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1750,7 +1724,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
+
 				}
 			}
 		}
@@ -1774,7 +1748,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	public Map<String, BigInteger> getTokenAmountMap() throws BlockStoreException {
@@ -1797,7 +1771,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1829,7 +1803,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
+
 				}
 			}
 		}
@@ -1921,7 +1895,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
 				throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1938,7 +1912,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1956,7 +1930,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1970,7 +1944,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -1996,7 +1970,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					// throw new BlockStoreException("Could not close statement");
+
 				}
 			}
 		}
@@ -2017,7 +1991,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2037,7 +2011,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2053,7 +2027,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2067,7 +2041,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2117,7 +2091,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2140,7 +2114,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	@Override
@@ -2176,7 +2150,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		// throw new BlockStoreException("Could not close statement");
+
 	}
 
 	protected String buildINList(Collection<String> datalist) {
@@ -2198,7 +2172,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 
 	}
 
@@ -2213,7 +2186,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		// throw new BlockStoreException("Could not close statement");
 
 	}
 }
