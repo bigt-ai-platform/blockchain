@@ -460,8 +460,9 @@ public class ContractTest extends AbstractIntegrationTest {
 		for (Block b : a1) {
 			if (b != null)
 				add(b, true, true, store);
+			a = checkSum(a);
 		}
-		a = checkSum(a);
+
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)

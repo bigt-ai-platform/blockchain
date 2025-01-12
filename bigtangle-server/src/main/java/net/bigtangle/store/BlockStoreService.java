@@ -519,7 +519,7 @@ public class BlockStoreService {
 				serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
 			}
 			// Execute must be chained for confirm
-			serviceBase.checkExecutionChained(blockStore, toAdd, true);
+			serviceBase.checkExecutionChained(blockStore, toAdd);
 
 			// Finally add the resolved new blocks to the confirmed set
 			serviceBase.confirmBlocksSorted(blockStore, -1, true, toAdd, new HashSet<>());

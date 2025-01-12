@@ -222,6 +222,9 @@ public abstract class ServiceBase {
 		return wraps;
 	}
 
+	/*
+	 * return the chained referenced blocks,
+	 */
 	public Set<Sha256Hash> getReferencedBlockHashes(Block block) {
 		Set<Sha256Hash> allRefs = new HashSet<>();
 		final List<Transaction> transactions = block.getTransactions();
@@ -496,7 +499,7 @@ public abstract class ServiceBase {
 		// Reward the consensus block with the static reward
 		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
 				new Address(networkParameters, block.getMinerAddress()));
-		tx.setMemo(new MemoInfo("Reward"));
+	 	tx.setMemo(new MemoInfo("Reward"));
 		// The input does not really need to be a valid signature, as long
 		// as it has the right general form and is slightly different for
 		// different tx
@@ -863,8 +866,8 @@ public abstract class ServiceBase {
 	/*
 	 * Execution from the blocks must be chained original from milestone.
 	 */
-	public void checkChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype, boolean allowConfirmed,
-			BlockStoreInterface store) throws BlockStoreException {
+	public void checkChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype, BlockStoreInterface store)
+			throws BlockStoreException {
 
 		List<BlockWrap> executions = new ArrayList<>();
 		for (BlockWrap block : blocks) {
@@ -875,8 +878,7 @@ public abstract class ServiceBase {
 		// backward to get all chained EXECUTE until milestone
 
 		for (BlockWrap b : executions) {
-			if (!isFirsExecution(b.getBlock())
-					&& getFromMilestoneChaineExecutions(b, blocks, allowConfirmed, store) == null) {
+			if (!isFirsExecution(b.getBlock()) && getFromMilestoneChaineExecutions(b, blocks, store) == null) {
 				throw new InfeasiblePrototypeException(
 						"Execution from the blocks must be chained original from milestone: " + b.toString());
 			}
@@ -884,10 +886,9 @@ public abstract class ServiceBase {
 
 	}
 
-	public void checkExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks, boolean allowConfirmed)
-			throws BlockStoreException {
-		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, allowConfirmed, store);
-		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, allowConfirmed, store);
+	public void checkExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks) throws BlockStoreException {
+		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, store);
+		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, store);
 	}
 
 	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) {
@@ -900,12 +901,12 @@ public abstract class ServiceBase {
 	}
 
 	/*
-	 * return all Execution Blocks not in milestone and chained from headExecution
-	 * to the Execution in milestone or begin. confirmed execution will be accepted.
+	 * 
+	 * Check Execution is original from milestone or begin. allowConfirmed will
 	 * Return null, if there is no chained to milestone
 	 */
 	public BlockWrap getFromMilestoneChaineExecutions(BlockWrap headExecution, Set<BlockWrap> collectList,
-			boolean allowConfirmed, BlockStoreInterface store) throws BlockStoreException {
+			BlockStoreInterface store) throws BlockStoreException {
 
 		BlockWrap fromMilestone = null;
 		BlockWrap startingBlock = headExecution;
@@ -917,8 +918,7 @@ public abstract class ServiceBase {
 				if (t != null) {
 					if (t.getBlockEvaluation().getMilestone() > 0 || Sha256Hash.ZERO_HASH.equals(executionPrevHash)) {
 						return t;
-					}
-					if (allowConfirmed && t.getBlockEvaluation().isConfirmed()) {
+					} else {
 						startingBlock = t;
 					}
 				}

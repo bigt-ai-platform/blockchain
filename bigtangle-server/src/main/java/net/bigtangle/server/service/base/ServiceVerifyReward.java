@@ -89,7 +89,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// findFirstSpentInput(allApprovedNewBlocks);
 
 		if (anySpentInputs) {
-			solidityState = SolidityState.getFailState();
+		 	solidityState = SolidityState.getFailState();
 			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
 		}
 		// If any conflicts exist between the current set of

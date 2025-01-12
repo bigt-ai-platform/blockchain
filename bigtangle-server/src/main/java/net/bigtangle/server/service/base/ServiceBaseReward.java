@@ -46,7 +46,7 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 				true, store);
 		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
 				store);
-		serviceBase.checkExecutionChained(store, blocks, false);
+		serviceBase.checkExecutionChained(store, blocks );
 		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
 				serviceBase.getHashSet(blocks), store);
 	}
