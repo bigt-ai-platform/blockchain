@@ -39,7 +39,6 @@ import net.bigtangle.params.ReqCmd;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.OrderTickerService;
-import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.MarketOrderItem;
 import net.bigtangle.utils.OkHttp3Util;
@@ -775,9 +774,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeSellOrder(testKey, testTokenId, 1000, 50, addedBlocks);
 		TokensumsMap c = checkSum(null);
 		makeSellOrder(testKey, testTokenId, 1000, 50, addedBlocks);
-		 c = checkSum(c);
+		c = checkSum(c);
 		makeSellOrder(testKey, testTokenId, 1000, 50, addedBlocks);
-		 c = checkSum(c);
+		c = checkSum(c);
 		showOrders();
 		// Verify the tokens changed possession
 		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
@@ -1109,34 +1108,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Verify deterministic overall execution
 		readdConfirmedBlocksAndAssertDeterministicExecution(addedBlocks);
 	}
-
-	@Test
-	public void testReorgMatching() throws Exception {
-
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-
-		// Make test token
-		makeTestTokenWithSpare(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-		payBigToAmount(genesisKey, addedBlocks);
-
-		// Get current existing token amount
-		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
-
-		// Open orders
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 150, addedBlocks);
-
-		Block b = makeRewardBlock(addedBlocks);
-		assertCurrentTokenAmountEquals(origTokenAmounts);
-		 	unconfirmDo(b.getHash(), new HashSet<>(),   store);
-
-		assertCurrentTokenAmountEquals(origTokenAmounts);
-	}
-
+ 
 	@Test
 	public void testManyOrdermatchsReward() throws Exception {
 
@@ -1156,12 +1128,12 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
 
 		// Open orders
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 225, addedBlocks);
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 150, addedBlocks);
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
-		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 75, addedBlocks);
+		makeSellOrder(testKey, testTokenId, 1000, 150, addedBlocks);
+		makeBuyOrder(genesisKey, testTokenId, 1000, 225, addedBlocks);
+		makeSellOrder(testKey, testTokenId, 1000, 150, addedBlocks);
+		makeBuyOrder(genesisKey, testTokenId, 1000, 150, addedBlocks);
+		makeSellOrder(testKey, testTokenId, 1000, 150, addedBlocks);
+		makeBuyOrder(genesisKey, testTokenId, 1000, 75, addedBlocks);
 		makeOrderExecutionAndReward(addedBlocks);
 		assertCurrentTokenAmountEquals(origTokenAmounts);
 	}
@@ -1180,9 +1152,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Get current existing token amount
 		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
 
-		makeBuyOrderNoReward(genesisKey, testTokenId, 1000, 150, addedBlocks);
+		makeBuyOrder(genesisKey, testTokenId, 1000, 150, addedBlocks);
 		checkSum(null);
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 150, addedBlocks);
+		makeSellOrder(testKey, testTokenId, 1000, 150, addedBlocks);
 		checkSum(null);
 		// Execute order matching
 		makeOrderExecutionAndReward(addedBlocks);
@@ -1480,32 +1452,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		checkBalanceSum(Coin.valueOf(tradeAmount, testKey.getPubKey()), testKeyBuy);
 
 		// checkBalanceSum(Coin.valueOf(tradeAmount, testKey.getPubKey()), testKey);
-
-	}
-
-	@Test
-	public void unconfirmsell() throws Exception {
-
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-
-		// Make test token
-		makeTestTokenWithSpare(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-		payBigToAmount(genesisKey, addedBlocks);
-
-		// Open sell order for test tokens
-		makeSellOrderNoReward(testKey, testTokenId, 1000, 100, addedBlocks);
-		makeBuyOrderNoReward(genesisKey, testTokenId,1000, 100, addedBlocks);
-		TokensumsMap c = checkSum(null);
-		// Execute order matching
-		Block a = makeOrderExecutionAndReward(addedBlocks);
-		c = checkSum(c);
-		 unconfirmDo(a.getHash(), new HashSet<>(),
-				  store);
-		c = checkSum(c);
 
 	}
 

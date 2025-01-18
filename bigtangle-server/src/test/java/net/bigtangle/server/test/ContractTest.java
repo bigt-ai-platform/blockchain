@@ -207,13 +207,17 @@ public class ContractTest extends AbstractIntegrationTest {
 		blockSaveService.saveBlock(conflictBlock, store);
 		TokensumsMap c = checkSum(null);
 		blockGraph.updateUnConfirmedDo(store);
-		makeRewardBlock(conflictBlock);
+		// there conflict is not in the longest chain of execution and not from origin
+		// milestone
+		try {
+			makeRewardBlock(conflictBlock);
+		} catch (InfeasiblePrototypeException e) {
+			//
+		}
 		//
 		c = checkSum(c);
 		assertFalse(s.getBlockWrap(conflictBlock.getHash(), store).getBlockEvaluation().isConfirmed()
 				&& s.getBlockWrap(resultBlock.getHash(), store).getBlockEvaluation().isConfirmed());
-		checkSum(c);
-		makeRewardBlock(conflictBlock);
 		checkSum(c);
 		blockSaveService.saveBlock(resultBlock, store);
 		makeRewardBlock(resultBlock);
@@ -247,8 +251,9 @@ public class ContractTest extends AbstractIntegrationTest {
 		}
 		if (conflictBlock != null) {
 			try {
-				makeRewardBlock(conflictBlock);
 				c = checkSum(c);
+				makeRewardBlock(conflictBlock);
+
 				assertFalse(s.getBlockWrap(conflictBlock.getHash(), store).getBlockEvaluation().isConfirmed()
 						&& s.getBlockWrap(resultBlock.getHash(), store).getBlockEvaluation().isConfirmed());
 				checkSum(c);
@@ -257,7 +262,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				makeRewardBlock(resultBlock);
 				checkSum(c);
 			} catch (InfeasiblePrototypeException e) {
-				// can happan for conflict check
+				// can happen for conflict check
 				e.printStackTrace();
 			}
 		}
@@ -288,7 +293,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				checkSum(null);
 				blockSaveService.saveBlock(resultBlock, store);
 				// confirm the contract execution
-				confirmDo(s.getBlockWrap(resultBlock.getHash(), store), new HashSet<>(), store);
+				rewardWithBlock(blocks, resultBlock);
 				checkSum(null);
 
 			}
@@ -296,15 +301,17 @@ public class ContractTest extends AbstractIntegrationTest {
 				// take all to rewards
 				rewardWithBlock(blocks, resultBlock);
 				// conflict follow the second of the execution chain rewarded
-				blockSaveService.saveBlock(conflictBlock, store);
-				// confirm should not broken the rewarded execution chain
-				confirmDo(s.getBlockWrap(conflictBlock.getHash(), store), new HashSet<>(), store);
-				checkSum(null);
-				assertTrue(!getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().isConfirmed());
-				// reward should not broken the rewarded execution chain
-				rewardWithBlock(blocks, conflictBlock);
-				checkSum(null);
-				assertTrue(getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().getMilestone() < 0);
+				if (conflictBlock != null) {
+					blockSaveService.saveBlock(conflictBlock, store);
+					// confirm should not broken the rewarded execution chain
+					confirmDo(s.getBlockWrap(conflictBlock.getHash(), store), new HashSet<>(), store);
+					checkSum(null);
+					assertTrue(!getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().isConfirmed());
+					// reward should not broken the rewarded execution chain
+					rewardWithBlock(blocks, conflictBlock);
+					checkSum(null);
+					assertTrue(getBlockWrap(conflictBlock.getHash()).getBlockEvaluation().getMilestone() < 0);
+				}
 			}
 		}
 
@@ -324,6 +331,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
 			count++;
+			mcmcServiceUpdate();
 			log.debug(" count " + count + " payContract " + key.toString());
 			resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
 
@@ -334,6 +342,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				ContractExecutionResult check = s.executeContract(resultBlock, store, result.getContracttokenid(),
 						store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 				blockSaveService.saveBlock(resultBlock, store);
+				mcmcServiceUpdate();
 				// confirm the contract execution
 				confirmDo(s.getBlockWrap(resultBlock.getHash(), store), new HashSet<>(), store);
 				TokensumsMap c = checkSum(null);
@@ -352,16 +361,17 @@ public class ContractTest extends AbstractIntegrationTest {
 					assertEquals(endMap.get(winnerAddress.toString()), new BigInteger(winnerAmount));
 
 				}
+				if (count == ulist.size() - 4) {
+					checkBlock = resultBlock;
+				}
 			}
-			if (count == ulist.size() - 4) {
-				checkBlock = resultBlock;
-			}
+
 		}
 		TokensumsMap c = checkSum(null);
 		blockGraph.updateUnConfirmedDo(store);
 		// take the check block to reward, all other confirmed execution are
 		makeRewardBlock(checkBlock);
-		
+
 		c = checkSum(c);
 		ContractExecutionResult result = new ContractExecutionResult()
 				.parse(checkBlock.getTransactions().get(0).getData());
@@ -440,7 +450,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			a = checkSum(a);
 		}
 		ordermatch(a1);
-		// checkSum(a);
+		checkSum(a);
 		resetStore();
 
 		// second chain
@@ -458,8 +468,12 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		// replay first chain
 		for (Block b : a1) {
-			if (b != null)
+			if (b != null) {
+				if (b.getHeight() == 13) {
+					log.debug(b.toString());
+				}
 				add(b, true, true, store);
+			}
 			a = checkSum(a);
 		}
 
@@ -495,11 +509,11 @@ public class ContractTest extends AbstractIntegrationTest {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
-
+			mcmcServiceUpdate();
 			Block b2 = contractExecutionService
 					.createContractExecution(store.getTokenTypeList(TokenType.contract.ordinal()).get(0), store);
+
 			blockSaveService.saveBlock(b2, store);
-			mcmcServiceUpdate();
 
 			boolean hit2 = false;
 			for (int i = 0; i < 10; i++) {

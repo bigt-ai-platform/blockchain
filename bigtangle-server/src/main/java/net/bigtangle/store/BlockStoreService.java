@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
@@ -44,6 +45,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
+import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
@@ -513,16 +515,17 @@ public class BlockStoreService {
 				serviceBase.addReferencedBlockHashesTo(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
 						blockStore);
 			}
-			Set<BlockWrap> toAdd = serviceBase.addUnconfirmBlocksChainedPrev(blockStore, blocks);
-			if (resolveConflict) {
-				// VALIDITY CHECKS, remove the conflicts
-				serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-			}
+			// Set<BlockWrap> toAdd = serviceBase.addUnconfirmBlocksChainedPrev(blockStore,
+			// blocks);
+			// if (resolveConflict) {
+			// VALIDITY CHECKS, remove the conflicts
+			// serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
+			// }
 			// Execute must be chained for confirm
-			serviceBase.checkExecutionChained(blockStore, toAdd);
+			serviceBase.checkExecutionChained(blockStore, blocks);
 
 			// Finally add the resolved new blocks to the confirmed set
-			serviceBase.confirmBlocksSorted(blockStore, -1, true, toAdd, new HashSet<>());
+			serviceBase.confirmBlocksSorted(blockStore, -1, true, blocks, new HashSet<>());
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
@@ -540,8 +543,6 @@ public class BlockStoreService {
 				cacheBlockService, jsonmapper);
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			// First remove any blocks that should no longer be in the milestone
-			// HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
 
 			// Unconfirm anything not confirmed by milestone
 			List<Sha256Hash> wipeBlocks = blockStore.blocksNotMilestoneFromHeigth(cutoffHeight);
@@ -549,9 +550,10 @@ public class BlockStoreService {
 			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
 
 			for (Sha256Hash b : wipeBlocks) {
-				BlockWrap re = serviceBase.getBlockWrap(b, blockStore);
-				// if (re.getBlockEvaluation().isConfirmed())
-				blocksToUnconfirm.add(re);
+				BlockWrap block = serviceBase.getBlockWrap(b, blockStore);
+				if (checkChainHeadExecution(block.getBlock(), serviceBase, blockStore)) {
+					blocksToUnconfirm.add(block);
+				}
 			}
 			// Set<BlockWrap> unconfirmBlocksChainedFollow =
 			// serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm);
@@ -565,6 +567,26 @@ public class BlockStoreService {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
+	}
+
+	public boolean checkChainHeadExecution(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)
+			throws BlockStoreException {
+
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult c = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			Block head = serviceBase
+					.getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
+			return head == null || serviceBase.getExecuteChainlength(block) >= serviceBase.getExecuteChainlength(head);
+		case BLOCKTYPE_ORDER_EXECUTE:
+			Block headorder = serviceBase.getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
+			return headorder == null
+					|| serviceBase.getExecuteChainlength(block) >= serviceBase.getExecuteChainlength(headorder);
+		default:
+			return true;
+		}
+
 	}
 
 	public void updateMilestoneConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)

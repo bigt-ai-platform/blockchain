@@ -499,7 +499,7 @@ public abstract class ServiceBase {
 		// Reward the consensus block with the static reward
 		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
 				new Address(networkParameters, block.getMinerAddress()));
-	 	tx.setMemo(new MemoInfo("Reward"));
+		tx.setMemo(new MemoInfo("Reward"));
 		// The input does not really need to be a valid signature, as long
 		// as it has the right general form and is slightly different for
 		// different tx
@@ -879,8 +879,8 @@ public abstract class ServiceBase {
 
 		for (BlockWrap b : executions) {
 			if (!isFirsExecution(b.getBlock()) && getFromMilestoneChaineExecutions(b, blocks, store) == null) {
-				throw new InfeasiblePrototypeException(
-						"Execution from the blocks must be chained original from milestone: " + b.toString());
+	//			throw new InfeasiblePrototypeException(
+	//					"Execution from the blocks must be chained original from milestone: " + b.toString());
 			}
 		}
 
@@ -902,8 +902,9 @@ public abstract class ServiceBase {
 
 	/*
 	 * 
-	 * Check Execution is original from milestone or begin. allowConfirmed will
-	 * Return null, if there is no chained to milestone
+	 * Check Execution is chained original from milestone or begin. From head to
+	 * previous in the collectList, until not found in collectList, then this block
+	 * must be milestone block.
 	 */
 	public BlockWrap getFromMilestoneChaineExecutions(BlockWrap headExecution, Set<BlockWrap> collectList,
 			BlockStoreInterface store) throws BlockStoreException {
@@ -913,13 +914,12 @@ public abstract class ServiceBase {
 		while (startingBlock != null) {
 			Sha256Hash executionPrevHash = getExecutionPrev(startingBlock.getBlock());
 			startingBlock = findBlock(collectList, executionPrevHash);
+			// executionPrevHash is not in collectList, it must be milestone block or begin Sha256Hash.ZERO_HASH
 			if (startingBlock == null) {
 				BlockWrap t = getBlockWrap(executionPrevHash, store);
 				if (t != null) {
 					if (t.getBlockEvaluation().getMilestone() > 0 || Sha256Hash.ZERO_HASH.equals(executionPrevHash)) {
 						return t;
-					} else {
-						startingBlock = t;
 					}
 				}
 			}

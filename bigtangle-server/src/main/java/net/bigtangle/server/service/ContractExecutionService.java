@@ -199,7 +199,7 @@ public class ContractExecutionService {
 		// only the lastConfirmedExecution is in the referencedblocks as DAG
 		if (serviceBase.findBlock(referencedblocks, lastConfirmedExecution.getBlockHash()) == null) {
 			if (lastConfirmedExecution.getChainlength() != 0 && lastConfirmedExecution.getMilestone() < 0) {
-				log.debug("lastConfirmedExecution not in referencedblocks {}", referencedblocks.size());
+			 	log.debug("lastConfirmedExecution not in referencedblocks {}", referencedblocks.size());
 				// log.debug("lastConfirmedExecution block {}",
 				// blockService.getBlockWrap(lastConfirmedExecution.getBlockHash(), store));
 				return null;
