@@ -132,73 +132,30 @@ public class TipsService {
 	 */
 	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, BlockStoreInterface store)
 			throws BlockStoreException {
-		return getValidatedRewardBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
-				prevRewardHash, store);
+		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
+				  store);
 	}
 
-	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, BlockStoreInterface store)
-			throws BlockStoreException {
-
-		Pair<BlockWrap, BlockWrap> candidate = getValidatedRewardBlockPairDo(maxConfirmedReward,
-				currentApprovedNonMilestoneBlocks, prevRewardHash, store);
-		if (!candidate.getLeft().equals(candidate.getRight())) {
-			return candidate;
-		}
-		for (int i = 0; i < 5; i++) {
-			Pair<BlockWrap, BlockWrap> paar = getValidatedRewardBlockPairDo(maxConfirmedReward, new HashSet<>(),
-					prevRewardHash, store);
-			if (!paar.getLeft().equals(paar.getRight())) {
-				return paar;
-			}
-		}
-		return candidate;
-	}
-
-	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPairDo(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, Sha256Hash prevRewardHash, BlockStoreInterface store)
-			throws BlockStoreException {
-		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
-		BlockWrap left = entryPoints.get(0);
-		BlockWrap right = entryPoints.get(1);
-		return getValidatedRewardBlockPair(currentApprovedNonMilestoneBlocks, left, right, prevRewardHash, store);
-	}
-
-	private Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
-			BlockWrap left, BlockWrap right, Sha256Hash prevRewardHash, BlockStoreInterface store)
-			throws BlockStoreException {
-		Stopwatch watch = Stopwatch.createStarted();
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService, jsonmapper);
-		long cutoffHeight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
-		long maxHeight = serviceBase.getRewardMaxHeight();
-		long prevMilestoneNumber = store.getRewardChainLength(prevRewardHash);
-		HashSet<BlockWrap> currentNewMilestoneBlocks = new HashSet<>();
-
-		// Initialize approved blocks
-		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
-		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store);
-		serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, left, cutoffHeight, prevMilestoneNumber, null,
-				false, false, store);
-		serviceBase.addReferencedBlockHashesTo(currentNewMilestoneBlocks, right, cutoffHeight, prevMilestoneNumber,
-				null, false, false, store);
-
-		// Necessary: Initial test if the prototype's
-		// currentApprovedNonMilestoneBlocks are actually valid
-		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
-			throw new InfeasiblePrototypeException("The given prototype is invalid under the current milestone");
-
-		return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
-				cutoffHeight, maxHeight);
-	}
-
+ 
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
 		BlockWrap right = entryPoints.get(1);
-		return getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, left, right, store);
+		Pair<BlockWrap, BlockWrap> candidate = getValidatedBlockPair(maxConfirmedReward,
+				currentApprovedNonMilestoneBlocks, left, right, store);
+		if (!candidate.getLeft().equals(candidate.getRight())) {
+			return candidate;
+		}
+		for (int i = 0; i < 5; i++) {
+			Pair<BlockWrap, BlockWrap> paar = getValidatedBlockPair(maxConfirmedReward,
+					currentApprovedNonMilestoneBlocks, left, right, store);
+			if (!paar.getLeft().equals(paar.getRight())) {
+				return paar;
+			}
+		}
+		return candidate;
 	}
 
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,

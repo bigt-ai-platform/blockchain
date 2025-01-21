@@ -365,7 +365,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (block.getBlock().getHeight() <= cutoffHeight && block.getBlockEvaluation().getMilestone() < 0) {
 				continue;
 			}
-
+			// Check if the block is in calculated conflicts, it follow markov chain 
+			if (  block.getBlockEvaluation().getSolid() < 0 ) {
+				continue;
+			}
 			// Add this block.
 			blocks.add(block);
 

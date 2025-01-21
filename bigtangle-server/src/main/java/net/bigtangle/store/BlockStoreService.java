@@ -25,8 +25,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -45,7 +45,6 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
@@ -589,6 +588,37 @@ public class BlockStoreService {
 
 	}
 
+	/*
+	 * set the execute as obsolete as solid to the chained
+	 */
+	public void updateChainHeadExecutionObsolete(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)
+			throws BlockStoreException {
+
+		int backsteps = 5;
+		switch (block.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult c = new ContractExecutionResult()
+					.parseChecked(block.getTransactions().get(0).getData());
+			Block head = serviceBase
+					.getBlock(store.getMaxMilestoneContractresult(c.getContracttokenid()).getBlockHash(), store);
+
+			if (head != null
+					&& serviceBase.getExecuteChainlength(block) < serviceBase.getExecuteChainlength(head) + backsteps) {
+				store.updateBlockEvaluationSolid(block.getHash(), -1 * serviceBase.getExecuteChainlength(head));
+			}
+			;
+		case BLOCKTYPE_ORDER_EXECUTE:
+			Block headorder = serviceBase.getBlock(store.getMaxMilestoneOrderresult().getBlockHash(), store);
+			if (headorder != null
+					&& serviceBase.getExecuteChainlength(block) < serviceBase.getExecuteChainlength(headorder)
+							+ backsteps) {
+				store.updateBlockEvaluationSolid(block.getHash(), -1 * serviceBase.getExecuteChainlength(headorder));
+			}
+		default:
+		}
+
+	}
+
 	public void updateMilestoneConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
 
@@ -606,7 +636,7 @@ public class BlockStoreService {
 
 			for (Sha256Hash b : wipeBlocks) {
 				BlockWrap re = serviceBase.getBlockWrap(b, blockStore);
-				// if (re.getBlockEvaluation().isConfirmed())
+				updateChainHeadExecutionObsolete(re.getBlock(), serviceBase, blockStore);
 				blocksToUnconfirm.add(re);
 			}
 			serviceBase.updateMilestoneConflicts(blocksToUnconfirm, blockStore);
