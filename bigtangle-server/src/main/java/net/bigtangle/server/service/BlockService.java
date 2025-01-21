@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluationDisplay;
@@ -64,6 +62,8 @@ public class BlockService {
 	protected TipsService tipService;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
+	@Autowired
+	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
@@ -135,33 +135,6 @@ public class BlockService {
 		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(Math.max(cutoffHeight, my)));
 	}
 
-	public Block getNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
-		Pair<BlockWrap, BlockWrap> tipsToApprove = getValidatedBlockPair(store);
-		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
-				tipsToApprove.getRight().getBlock());
-		b.setMinerAddress(Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
-
-		return b;
-	}
-
-	/*
-	 * prefer tip from two different previous block. This is modified mcmc
-	 */
-	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(BlockStoreInterface store) throws BlockStoreException {
-		Pair<BlockWrap, BlockWrap> candidate = tipService.getValidatedBlockPair(store);
-
-		if (!candidate.getLeft().equals(candidate.getRight())) {
-			return candidate;
-		}
-		for (int i = 0; i < 2; i++) {
-			Pair<BlockWrap, BlockWrap> paar = tipService.getValidatedBlockPair(store);
-			if (!paar.getLeft().getBlock().getHash().equals(paar.getRight().getBlock().getHash())) {
-				return paar;
-			}
-		}
-		return candidate;
-	}
-
 	/*
 	 * Block byte[] bytes
 	 */
@@ -229,13 +202,14 @@ public class BlockService {
 		}
 	}
 
-	public Block adjustPrototype(Block block, BlockStoreInterface store) throws BlockStoreException {
+	public Block adjustPrototype(Block block, BlockStoreInterface store)
+			throws BlockStoreException, ProtocolException, NoBlockException {
 		// two hours for just getBlockPrototype
 		int delaySeconds = 7200;
 
 		if (block.getTimeSeconds() < System.currentTimeMillis() / 1000 - delaySeconds) {
 			logger.debug("adjustPrototype {}", block);
-			Block newblock = getNewBlockPrototype(store);
+			Block newblock = cacheBlockPrototypeService.getBlockPrototype(store);
 			for (Transaction transaction : block.getTransactions()) {
 				newblock.addTransaction(transaction);
 			}

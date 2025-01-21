@@ -139,7 +139,7 @@ public class RewardService {
 	public Block createReward(Sha256Hash prevRewardHash, BlockStoreInterface store) throws Exception {
 		try {
 			Stopwatch watch = Stopwatch.createStarted();
-			Pair<BlockWrap, BlockWrap> tipsToApprove = tipService.getValidatedRewardBlockPair(prevRewardHash, store);
+			Pair<BlockWrap, BlockWrap> tipsToApprove = tipService.getValidatedBlockPair(  store);
 			log.debug("  getValidatedRewardBlockPair time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 
 			return createReward(prevRewardHash, tipsToApprove.getLeft(), tipsToApprove.getRight(), store);

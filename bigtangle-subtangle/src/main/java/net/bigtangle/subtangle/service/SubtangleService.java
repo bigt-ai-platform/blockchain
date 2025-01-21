@@ -36,6 +36,7 @@ import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.OutputService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.subtangle.SubtangleConfiguration;
@@ -46,159 +47,158 @@ import net.bigtangle.wallet.Wallet;
 
 @Service
 public class SubtangleService {
- 
-    public void giveMoneyToTargetAccount(BlockStoreInterface store) throws Exception {
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(subtangleConfiguration.getPriKeyHex0()),
-                Utils.HEX.decode(subtangleConfiguration.getPubKeyHex0()));
-        List<ECKey> keys = new ArrayList<>();
-        keys.add(signKey);
 
-        List<UTXO> outputs = this.getRemoteBalances(false, keys);
-        if (outputs.isEmpty()) {
-            return;
-        }
+	public void giveMoneyToTargetAccount(BlockStoreInterface store) throws Exception {
+		ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+				Utils.HEX.decode(subtangleConfiguration.getPriKeyHex0()),
+				Utils.HEX.decode(subtangleConfiguration.getPubKeyHex0()));
+		List<ECKey> keys = new ArrayList<>();
+		keys.add(signKey);
 
-        for (UTXO output : outputs) {
-            try {
-                String blockHashHex = output.getBlockHashHex();
-                Block block = this.getRemoteBlock(blockHashHex);
-                byte[] toAddressInSubtangle = block.getTransactions().get(0).getToAddressInSubtangle();
-                if (toAddressInSubtangle == null) {
-                    continue;
-                }
-                Coin coinbase = output.getValue();
+		List<UTXO> outputs = this.getRemoteBalances(false, keys);
+		if (outputs.isEmpty()) {
+			return;
+		}
 
-                Block b = blockService.getNewBlockPrototype(store);
-                b.setBlockType(Block.Type.BLOCKTYPE_CROSSTANGLE);
-                b.addCoinbaseTransaction(signKey.getPubKey(), coinbase, null, new MemoInfo("SubtangleService"));
-                blockSaveService.saveBlock(b, store);
+		for (UTXO output : outputs) {
+			try {
+				String blockHashHex = output.getBlockHashHex();
+				Block block = this.getRemoteBlock(blockHashHex);
+				byte[] toAddressInSubtangle = block.getTransactions().get(0).getToAddressInSubtangle();
+				if (toAddressInSubtangle == null) {
+					continue;
+				}
+				Coin coinbase = output.getValue();
 
-                Address address = new Address(this.networkParameters, toAddressInSubtangle);
-                this.giveMoney(signKey, address, coinbase, store);
+				Block b = cacheBlockPrototypeService.getBlockPrototype(store);
+				b.setBlockType(Block.Type.BLOCKTYPE_CROSSTANGLE);
+				b.addCoinbaseTransaction(signKey.getPubKey(), coinbase, null, new MemoInfo("SubtangleService"));
+				blockSaveService.saveBlock(b, store);
 
-                this.giveRemoteMoney(signKey, coinbase, output, store);
-            } catch (Exception e) {
-                // e.printStackTrace();
-            }
-        }
-    }
- 
-    private void giveRemoteMoney(ECKey signKey, Coin amount, UTXO output, BlockStoreInterface store) throws Exception {
-        TransactionOutput spendableOutput = new FreeStandingTransactionOutput(networkParameters, output);
-        Transaction transaction = new Transaction(networkParameters);
+				Address address = new Address(this.networkParameters, toAddressInSubtangle);
+				this.giveMoney(signKey, address, coinbase, store);
 
-        ECKey outKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(subtangleConfiguration.getPriKeyHex1()),
-                Utils.HEX.decode(subtangleConfiguration.getPubKeyHex1()));
-        transaction.addOutput(amount, outKey);
+				this.giveRemoteMoney(signKey, coinbase, output, store);
+			} catch (Exception e) {
+				// e.printStackTrace();
+			}
+		}
+	}
 
-        TransactionInput input = transaction.addInput(output.getBlockHash(), spendableOutput);
-        Sha256Hash sighash = transaction.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
-                false);
+	private void giveRemoteMoney(ECKey signKey, Coin amount, UTXO output, BlockStoreInterface store) throws Exception {
+		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(networkParameters, output);
+		Transaction transaction = new Transaction(networkParameters);
 
-        TransactionSignature tsrecsig = new TransactionSignature(signKey.sign(sighash), Transaction.SigHash.ALL, false);
-        Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
-        input.setScriptSig(inputScript);
+		ECKey outKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(subtangleConfiguration.getPriKeyHex1()),
+				Utils.HEX.decode(subtangleConfiguration.getPubKeyHex1()));
+		transaction.addOutput(amount, outKey);
 
-        Block b = blockService.getNewBlockPrototype(store);
-        b.addTransaction(transaction);
-        b.solve();
-        this.blockSaveService.saveBlock(b, store);
-    }
+		TransactionInput input = transaction.addInput(output.getBlockHash(), spendableOutput);
+		Sha256Hash sighash = transaction.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
+				false);
 
-    public void giveMoney(ECKey signKey, Address address, Coin amount, BlockStoreInterface store) throws Exception {
-        Wallet wallet = Wallet.fromKeys(networkParameters, signKey);
-        wallet.setServerURL(subtangleConfiguration.getParentContextRoot());
+		TransactionSignature tsrecsig = new TransactionSignature(signKey.sign(sighash), Transaction.SigHash.ALL, false);
+		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
+		input.setScriptSig(inputScript);
 
-        List<UTXO> utxolist = getBalancesUTOXList(false, signKey, amount.getTokenid(), store).stream()
-                .filter(out -> Utils.HEX.encode(out.getValue().getTokenid())
-                        .equals(Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID)))
-                .filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0).collect(Collectors.toList());
+		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
+		b.addTransaction(transaction);
+		b.solve();
+		this.blockSaveService.saveBlock(b, store);
+	}
 
-        if (utxolist.isEmpty()) {
-            return;
-        }
-        TransactionOutput spendableOutput = new FreeStandingTransactionOutput(networkParameters, utxolist.get(0));
-        Transaction transaction = new Transaction(networkParameters);
-        transaction.addOutput(amount, address);
-        transaction.addOutput(spendableOutput.getValue().subtract(amount), signKey);
-        wallet.signTransaction(transaction, null);
+	public void giveMoney(ECKey signKey, Address address, Coin amount, BlockStoreInterface store) throws Exception {
+		Wallet wallet = Wallet.fromKeys(networkParameters, signKey);
+		wallet.setServerURL(subtangleConfiguration.getParentContextRoot());
 
-        Block b = blockService.getNewBlockPrototype(store);
-        b.addTransaction(transaction);
-        b.solve();
-        this.blockSaveService.saveBlock(b, store);
-    }
+		List<UTXO> utxolist = getBalancesUTOXList(false, signKey, amount.getTokenid(), store).stream()
+				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid())
+						.equals(Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID)))
+				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0).collect(Collectors.toList());
 
-    private List<UTXO> getBalancesUTOXList(boolean withZero, ECKey signKey, byte[] tokenid, BlockStoreInterface store)
-            throws BlockStoreException,  DatabindException, JsonProcessingException, IOException {
-        Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
-        pubKeyHashs.add(signKey.toAddress(this.networkParameters).getHash160());
-        GetBalancesResponse getBalancesResponse = (GetBalancesResponse) walletService.getAccountBalanceInfo(pubKeyHashs,
-                store);
-        List<UTXO> listUTXO = new ArrayList<UTXO>();
-        for (UTXO utxo : getBalancesResponse.getOutputs()) {
-            if (withZero) {
-                listUTXO.add(utxo);
-            } else if (utxo.getValue().getValue().signum() > 0) {
-                listUTXO.add(utxo);
-            }
-        }
-        for (Iterator<UTXO> iterator = listUTXO.iterator(); iterator.hasNext();) {
-            UTXO utxo = iterator.next();
-            if (!Arrays.equals(utxo.getValue().getTokenid(), tokenid)) {
-                iterator.remove();
-            }
-        }
-        return listUTXO;
-    }
+		if (utxolist.isEmpty()) {
+			return;
+		}
+		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(networkParameters, utxolist.get(0));
+		Transaction transaction = new Transaction(networkParameters);
+		transaction.addOutput(amount, address);
+		transaction.addOutput(spendableOutput.getValue().subtract(amount), signKey);
+		wallet.signTransaction(transaction, null);
 
-    @Autowired
-    private OutputService walletService;
+		Block b = cacheBlockPrototypeService.getBlockPrototype(store);
+		b.addTransaction(transaction);
+		b.solve();
+		this.blockSaveService.saveBlock(b, store);
+	}
 
-    @Autowired
-    private BlockService blockService;
-    @Autowired
-    private BlockSaveService blockSaveService;
-    
-    public List<UTXO> getRemoteBalances(boolean withZero, List<ECKey> keys) throws Exception {
-        List<UTXO> listUTXO = new ArrayList<UTXO>();
-        List<String> keyStrHex000 = new ArrayList<String>();
+	private List<UTXO> getBalancesUTOXList(boolean withZero, ECKey signKey, byte[] tokenid, BlockStoreInterface store)
+			throws BlockStoreException, DatabindException, JsonProcessingException, IOException {
+		Set<byte[]> pubKeyHashs = new HashSet<byte[]>();
+		pubKeyHashs.add(signKey.toAddress(this.networkParameters).getHash160());
+		GetBalancesResponse getBalancesResponse = (GetBalancesResponse) walletService.getAccountBalanceInfo(pubKeyHashs,
+				store);
+		List<UTXO> listUTXO = new ArrayList<UTXO>();
+		for (UTXO utxo : getBalancesResponse.getOutputs()) {
+			if (withZero) {
+				listUTXO.add(utxo);
+			} else if (utxo.getValue().getValue().signum() > 0) {
+				listUTXO.add(utxo);
+			}
+		}
+		for (Iterator<UTXO> iterator = listUTXO.iterator(); iterator.hasNext();) {
+			UTXO utxo = iterator.next();
+			if (!Arrays.equals(utxo.getValue().getTokenid(), tokenid)) {
+				iterator.remove();
+			}
+		}
+		return listUTXO;
+	}
 
-        for (ECKey ecKey : keys) {
-            keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
-        }
+	@Autowired
+	private OutputService walletService;
+	@Autowired
+	private BlockSaveService blockSaveService;
+	@Autowired
+	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 
-        String contextRoot = subtangleConfiguration.getParentContextRoot();
-       byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
-                Json.jsonmapper().writeValueAsString(keyStrHex000).getBytes());
+	public List<UTXO> getRemoteBalances(boolean withZero, List<ECKey> keys) throws Exception {
+		List<UTXO> listUTXO = new ArrayList<UTXO>();
+		List<String> keyStrHex000 = new ArrayList<String>();
 
-        GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
+		for (ECKey ecKey : keys) {
+			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
+		}
 
-        for (UTXO utxo : getBalancesResponse.getOutputs()) {
-            if (withZero) {
-                listUTXO.add(utxo);
-            } else if (utxo.getValue().getValue().signum() > 0) {
-                listUTXO.add(utxo);
-            }
-        }
+		String contextRoot = subtangleConfiguration.getParentContextRoot();
+		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
+				Json.jsonmapper().writeValueAsString(keyStrHex000).getBytes());
 
-        return listUTXO;
-    }
+		GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
 
-    public Block getRemoteBlock(String blockHashHex) throws Exception {
-        HashMap<String, Object> requestParam = new HashMap<String, Object>();
-        requestParam.put("hashHex", blockHashHex);
-        String contextRoot = subtangleConfiguration.getParentContextRoot();
-        byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getBlockByHash.name(),
-                Json.jsonmapper().writeValueAsString(requestParam));
-        Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-        return block;
-    }
+		for (UTXO utxo : getBalancesResponse.getOutputs()) {
+			if (withZero) {
+				listUTXO.add(utxo);
+			} else if (utxo.getValue().getValue().signum() > 0) {
+				listUTXO.add(utxo);
+			}
+		}
 
-    @Autowired
-    private NetworkParameters networkParameters;
+		return listUTXO;
+	}
 
-    @Autowired
-    private SubtangleConfiguration subtangleConfiguration;
+	public Block getRemoteBlock(String blockHashHex) throws Exception {
+		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		requestParam.put("hashHex", blockHashHex);
+		String contextRoot = subtangleConfiguration.getParentContextRoot();
+		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getBlockByHash.name(),
+				Json.jsonmapper().writeValueAsString(requestParam));
+		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		return block;
+	}
+
+	@Autowired
+	private NetworkParameters networkParameters;
+
+	@Autowired
+	private SubtangleConfiguration subtangleConfiguration;
 }

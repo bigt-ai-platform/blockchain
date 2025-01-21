@@ -124,18 +124,7 @@ public class TipsService {
 
 		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(), store);
 	}
-
-	/**
-	 * Selects two blocks to approve via MCMC. Disallows unsolid blocks.
-	 * 
-	 * @return Two blockhashes selected via MCMC
-	 */
-	public Pair<BlockWrap, BlockWrap> getValidatedRewardBlockPair(Sha256Hash prevRewardHash, BlockStoreInterface store)
-			throws BlockStoreException {
-		return getValidatedBlockPair(cacheBlockService.getMaxConfirmedReward(store), new HashSet<>(),
-				  store);
-	}
-
+ 
  
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
@@ -349,7 +338,7 @@ public class TipsService {
 		return pullRandomlyByCumulativeWeight(candidates, count);
 	}
 
-	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
+	private List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)

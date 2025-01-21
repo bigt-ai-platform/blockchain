@@ -52,7 +52,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Reward block should include it
 		Pair<BlockWrap, BlockWrap> validatedRewardBlockPair = tipsService
-				.getValidatedRewardBlockPair(networkParameters.getGenesisBlock().getHash(), store);
+				.getValidatedBlockPair(  store); 
 		rewardService.createReward(networkParameters.getGenesisBlock().getHash(), validatedRewardBlockPair.getLeft(),
 				validatedRewardBlockPair.getRight(), store);
 		assertTrue(getBlockEvaluation(rollingBlock1.getHash(), store).getMilestone() == 1);

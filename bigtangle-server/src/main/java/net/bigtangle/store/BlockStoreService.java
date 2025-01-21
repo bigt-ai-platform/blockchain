@@ -411,7 +411,7 @@ public class BlockStoreService {
 	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
 		store.put(block);
-		cacheBlockService.cacheBlock(block, store);
+		cacheBlockService.cachePutBlock(block, store);
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyBlock(block, solidityState, false, store);
 	}

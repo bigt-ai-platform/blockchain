@@ -55,8 +55,8 @@ public class MCMCService {
 	protected BlockStoreService blockGraph;
 
 	@Autowired
-	private TipsService tipsService; 
- 
+	private TipsService tipsService;
+
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired
@@ -81,9 +81,9 @@ public class MCMCService {
 
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
-            startSingleProcessDo();
-            return "finish";
-        });
+			startSingleProcessDo();
+			return "finish";
+		});
 		try {
 			handler.get(scheduleConfiguration.getMcmcrate() * 5, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
@@ -109,7 +109,7 @@ public class MCMCService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else if (lock.getLocktime() < System.currentTimeMillis() - scheduleConfiguration.getMcmcrate() * 100) {
-                log.info("mcmcService   out date delete and insert: {}", Utils.dateTimeFormat(lock.getLocktime()));
+				log.info("mcmcService   out date delete and insert: {}", Utils.dateTimeFormat(lock.getLocktime()));
 				store.deleteLockobject(LOCKID);
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
@@ -137,7 +137,8 @@ public class MCMCService {
 	}
 
 	public void update(BlockStoreInterface store) throws InterruptedException, ExecutionException, BlockStoreException {
-		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
 		try {
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
@@ -147,6 +148,8 @@ public class MCMCService {
 			deleteMCMC(maxConfirmedReward, store);
 			cacheBlockService.evictBlockMCMC();
 			cacheBlockPrototypeService.evictBlockPrototypeByte();
+			// generate new
+			cacheBlockPrototypeService.getBlockPrototype(store);
 		} catch (Exception e) {
 			log.debug("update  ", e);
 		}
@@ -161,9 +164,9 @@ public class MCMCService {
 	 * Update cumulative weight: the amount of blocks a block is approved by. Update
 	 * depth: the longest chain of blocks to a tip. Allows unsolid blocks too.
 	 *
-     */
-	private void updateWeightAndDepth(long cutoffHeight, long maxHeight,
-									  BlockStoreInterface store) throws BlockStoreException {
+	 */
+	private void updateWeightAndDepth(long cutoffHeight, long maxHeight, BlockStoreInterface store)
+			throws BlockStoreException {
 		// Begin from the highest maintained height blocks and go backwards from
 		// there
 		PriorityQueue<BlockWrap> blockQueue = store.getSolidBlocksInIntervalDescending(cutoffHeight, maxHeight);
@@ -215,8 +218,8 @@ public class MCMCService {
 		Long currentDepth = depths.get(currentBlockHash);
 		HashSet<Sha256Hash> currentApprovers = approvers.get(currentBlockHash);
 		if (!approvers.containsKey(approvedBlockHash)) {
-			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-					.getBlockWrap(approvedBlockHash, store);
+			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+					jsonmapper).getBlockWrap(approvedBlockHash, store);
 			if (prevBlock != null) {
 				blockQueue.add(prevBlock);
 				approvers.put(approvedBlockHash, new HashSet<>(currentApprovers));
@@ -233,12 +236,11 @@ public class MCMCService {
 	 * Update rating: the percentage of times that tips selected by MCMC approve a
 	 * block. Allows unsolid blocks too.
 	 *
-     */
+	 */
 	private void updateRating(TXReward maxConfirmedReward, long cutoffHeight, long maxHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 		// Select #tipCount solid tips via MCMC
-		HashMap<Sha256Hash, HashSet<UUID>> selectedTipApprovers = new HashMap<>(
-                NetworkParameters.NUMBER_RATING_TIPS);
+		HashMap<Sha256Hash, HashSet<UUID>> selectedTipApprovers = new HashMap<>(NetworkParameters.NUMBER_RATING_TIPS);
 
 		Collection<BlockWrap> selectedTips = tipsService.getRatingTips(maxConfirmedReward,
 				NetworkParameters.NUMBER_RATING_TIPS, maxHeight, store);
@@ -303,8 +305,8 @@ public class MCMCService {
 	private void subUpdateRating(PriorityQueue<BlockWrap> blockQueue, HashMap<Sha256Hash, HashSet<UUID>> approvers,
 			BlockWrap currentBlock, Sha256Hash prevTrunk, BlockStoreInterface store) throws BlockStoreException {
 		if (!approvers.containsKey(prevTrunk)) {
-			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,jsonmapper)
-					.getBlockWrap(prevTrunk, store);
+			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+					jsonmapper).getBlockWrap(prevTrunk, store);
 			if (prevBlock != null) {
 				blockQueue.add(prevBlock);
 				approvers.put(prevBlock.getBlockHash(), new HashSet<>(approvers.get(currentBlock.getBlockHash())));

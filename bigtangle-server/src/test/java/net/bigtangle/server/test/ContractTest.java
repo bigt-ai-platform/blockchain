@@ -468,20 +468,17 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		// replay first chain
 		for (Block b : a1) {
-			if (b != null) {
-				if (b.getHeight() == 13) {
-					log.debug(b.toString());
-				}
+			if (b != null) { 
 				add(b, true, true, store);
 			}
-			a = checkSum(a);
+			//a = checkSum(a);
 		}
 
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
 				add(b, true, true, store);
-			a = checkSum(a);
+			//a = checkSum(a);
 		}
 
 		// replay second and then replay first

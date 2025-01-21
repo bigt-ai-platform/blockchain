@@ -54,7 +54,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.core.response.PermissionedAddressesResponse;
 import net.bigtangle.script.Script;
