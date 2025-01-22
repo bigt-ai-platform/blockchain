@@ -878,8 +878,9 @@ public abstract class ServiceBase {
 
 		for (BlockWrap b : executions) {
 			if (!isFirsExecution(b.getBlock()) && getFromMilestoneChaineExecutions(b, blocks, store) == null) {
-	//			throw new InfeasiblePrototypeException(
-	//					"Execution from the blocks must be chained original from milestone: " + b.toString());
+				// throw new InfeasiblePrototypeException(
+				// "Execution from the blocks must be chained original from milestone: " +
+				// b.toString());
 			}
 		}
 
@@ -913,7 +914,8 @@ public abstract class ServiceBase {
 		while (startingBlock != null) {
 			Sha256Hash executionPrevHash = getExecutionPrev(startingBlock.getBlock());
 			startingBlock = findBlock(collectList, executionPrevHash);
-			// executionPrevHash is not in collectList, it must be milestone block or begin Sha256Hash.ZERO_HASH
+			// executionPrevHash is not in collectList, it must be milestone block or begin
+			// Sha256Hash.ZERO_HASH
 			if (startingBlock == null) {
 				BlockWrap t = getBlockWrap(executionPrevHash, store);
 				if (t != null) {
@@ -943,5 +945,6 @@ public abstract class ServiceBase {
 		}
 		return null;
 	}
+
 
 }

@@ -486,6 +486,8 @@ public interface BlockStoreInterface {
 
 	Orderresult getMaxConfirmedOrderresult() throws BlockStoreException;
 
+	List<Orderresult> getLowerConfirmedOrderresult(long milestone) throws BlockStoreException;
+
 	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
 
 	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
@@ -493,6 +495,9 @@ public interface BlockStoreInterface {
 	Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
 
 	Contractresult getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException;
+
+	List<Contractresult> getLowerConfirmedContractresult(String contracttokenid, long milestone)
+			throws BlockStoreException;
 
 	List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;
 

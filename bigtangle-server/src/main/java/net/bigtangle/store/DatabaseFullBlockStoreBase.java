@@ -244,6 +244,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and milestone >0 order by chainlength desc limit 1 ";
 	protected final String SELECT_CONTRACTRESULT_MAX_CONFIRMED_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = true and contracttokenid=?   order by chainlength desc limit 1   ";
+	protected final String SELECT_CONTRACTRESULT_LOWER_CONFIRMED_SQL = SELECT_CONTRACTRESULT
+			+ " WHERE milestone < 0 and  confirmed = true and contracttokenid=? and chainlength <=?   ";
 
 	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
 			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
@@ -258,6 +260,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " orderresult, prevblockhash, inserttime ,  milestone, chainlength" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_MAX_CONFIRMED_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = true   order by chainlength desc limit 1  ";
+	protected final String SELECT_ORDERRESULT_LOWER_CONFIRMED_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = true and milestone < 0  and  chainlength  <=?  ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT

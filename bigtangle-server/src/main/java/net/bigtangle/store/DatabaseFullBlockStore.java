@@ -104,7 +104,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -144,7 +144,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -163,7 +163,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -184,7 +184,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			throw new BlockStoreException(ex);
 
 		}
-		
 
 	}
 
@@ -202,7 +201,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	private void setMultisign(List<MultiSign> list, ResultSet resultSet) throws SQLException {
@@ -241,7 +240,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -286,7 +285,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -307,7 +306,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	public int countMultiSign(String tokenid, long tokenindex, int sign) throws BlockStoreException {
@@ -324,7 +323,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -345,7 +344,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -362,7 +361,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -375,7 +374,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -389,7 +388,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -405,7 +404,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -434,7 +433,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -452,7 +451,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -466,7 +465,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -486,7 +485,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			if (!(getDuplicateKeyErrorCode().equals(e.getSQLState())))
 				throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -499,7 +498,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -514,7 +513,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -532,7 +531,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -550,7 +549,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -568,7 +567,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	private TXReward setReward(ResultSet resultSet) throws SQLException {
@@ -590,7 +589,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -606,7 +605,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			if (!(getDuplicateKeyErrorCode().equals(e.getSQLState())))
 				throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	public List<OutputsMulti> queryOutputsMultiByHashAndIndex(byte[] hash, long index) throws BlockStoreException {
@@ -628,7 +627,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
 
 	}
 
@@ -656,7 +654,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -672,7 +670,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -714,7 +712,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -732,7 +730,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -753,7 +751,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -770,7 +768,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -787,7 +785,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -814,7 +812,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -838,7 +836,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -852,7 +850,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -891,7 +889,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -908,7 +906,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -924,7 +922,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			if (!results.next()) {
 				return null;
 			}
- 
+
 			Coin amount = new Coin(new BigInteger(results.getBytes("coinvalue")), results.getString("tokenid"));
 			byte[] scriptBytes = results.getBytes("scriptbytes");
 			boolean coinbase = results.getBoolean("coinbase");
@@ -946,7 +944,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -962,7 +960,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -976,7 +974,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -988,7 +986,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1008,7 +1006,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -1023,7 +1021,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1035,7 +1033,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1051,7 +1049,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1073,7 +1071,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1095,7 +1093,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1121,7 +1119,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1139,7 +1137,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -1156,7 +1154,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -1177,7 +1175,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -1196,7 +1194,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1233,7 +1231,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -1250,7 +1248,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1269,7 +1267,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1299,7 +1297,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -1320,7 +1318,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1341,7 +1339,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1364,7 +1362,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1385,7 +1383,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1404,7 +1402,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1424,7 +1422,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1452,7 +1450,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -1470,7 +1468,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1488,7 +1486,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1504,7 +1502,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1521,7 +1519,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1540,7 +1538,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1557,7 +1555,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	private Orderresult setOrderresult(ResultSet resultSet) throws SQLException {
@@ -1602,7 +1600,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -1620,7 +1618,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1635,7 +1633,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	/*
@@ -1653,8 +1651,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-
-		
 
 	}
 
@@ -1693,8 +1689,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			throw new BlockStoreException(e);
 		}
 
-		
-
 	}
 
 	/*
@@ -1711,8 +1705,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-
-		
 
 	}
 
@@ -1740,7 +1732,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					deleteStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -1787,7 +1779,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			// blocks.
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	private OrderRecord setOrder(ResultSet resultSet) throws SQLException {
@@ -1855,7 +1847,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			// blocks.
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1871,7 +1863,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
 				throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -1898,14 +1890,14 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 			if (p2 != null) {
 				try {
 					p2.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -1923,7 +1915,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
 
 	}
 
@@ -1938,7 +1929,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
 
 	}
 
@@ -1962,7 +1952,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	public void insertMatchingEventLast(List<MatchResult> matchs) throws BlockStoreException {
@@ -1998,7 +1988,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					deleteStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 
@@ -2006,7 +1996,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2054,7 +2044,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2069,7 +2059,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2088,7 +2078,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2107,7 +2097,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2163,7 +2153,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2187,7 +2177,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		// 
+		//
 	}
 
 	@Override
@@ -2205,7 +2195,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2236,7 +2226,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2272,7 +2262,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2291,7 +2281,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2309,7 +2299,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2323,7 +2313,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2336,7 +2326,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2353,7 +2343,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	public List<Block> findRetryBlocks(long minHeigth) throws BlockStoreException {
@@ -2376,7 +2366,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
-		
 
 	}
 
@@ -2398,7 +2387,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				throw new BlockStoreException(e);
 
 		}
-		
+
 	}
 
 	@Override
@@ -2408,7 +2397,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2424,7 +2413,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2448,7 +2437,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					s.close();
 				} catch (SQLException e) {
-					
+
 				}
 		}
 	}
@@ -2468,7 +2457,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2480,7 +2469,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2490,7 +2479,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2509,7 +2498,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2573,7 +2562,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	public void deleteLastdayPrice(MatchResult matchResult) throws BlockStoreException {
@@ -2586,7 +2575,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	public List<Long> selectTimesUntilNow() throws BlockStoreException {
@@ -2615,7 +2604,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2635,7 +2624,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2677,7 +2666,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2706,7 +2695,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2722,7 +2711,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 	@Override
@@ -2761,7 +2750,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2813,7 +2802,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				try {
 					preparedStatement.close();
 				} catch (SQLException e) {
-					
+
 				}
 			}
 		}
@@ -2922,7 +2911,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -2940,7 +2929,28 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
+	}
+
+	@Override
+	public List<Contractresult> getLowerConfirmedContractresult(String contracttokenid, long chainlenght)
+			throws BlockStoreException {
+		List<Contractresult> result = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_CONTRACTRESULT_LOWER_CONFIRMED_SQL)) {
+			preparedStatement.setString(1, contracttokenid);
+			preparedStatement.setLong(2, chainlenght);
+			ResultSet resultSet = preparedStatement.executeQuery();
+
+			while (resultSet.next()) {
+				result.add(setContractresult(resultSet));
+			}
+			return result;
+
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+
 	}
 
 	@Override
@@ -2957,7 +2967,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
-		
+
 	}
 
 	@Override
@@ -2970,6 +2980,24 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				return setOrderresult(resultSet);
 			}
 			return Orderresult.zeroOrderresult();
+
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+		//
+	}
+
+	@Override
+	public List<Orderresult> getLowerConfirmedOrderresult(long chainlength) throws BlockStoreException {
+		List<Orderresult> result = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_ORDERRESULT_LOWER_CONFIRMED_SQL)) {
+			preparedStatement.setLong(1, chainlength);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				result.add(setOrderresult(resultSet));
+			}
+			return result;
 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
@@ -3002,7 +3030,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			// blocks.
 			throw new BlockStoreException(e);
 		}
-		
+
 	}
 
 }

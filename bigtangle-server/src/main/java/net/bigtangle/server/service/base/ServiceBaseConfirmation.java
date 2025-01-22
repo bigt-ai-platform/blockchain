@@ -365,8 +365,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (block.getBlock().getHeight() <= cutoffHeight && block.getBlockEvaluation().getMilestone() < 0) {
 				continue;
 			}
-			// Check if the block is in calculated conflicts, it follow markov chain 
-			if (  block.getBlockEvaluation().getSolid() < 0 ) {
+			// Check if the block is in calculated conflicts, it follow markov chain
+			if (block.getBlockEvaluation().getSolid() < 0) {
 				continue;
 			}
 			// Add this block.
@@ -2010,9 +2010,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (head != null && getExecutionPrev(newChainHead).equals(head.getHash())) {
 			// ok follow the head
 			confirmExecution(getBlockWrap(newChainHead.getHash(), store), milestoneNumber, true, store);
-
+			return;
 		}
+		// there is new best execution chain
+		executionBestChained(newChainHead, milestoneNumber, store, head);
 
+	}
+
+	private void executionBestChained(Block newChainHead, long milestoneNumber, BlockStoreInterface store, Block head)
+			throws BlockStoreException {
 		final Block splitPoint = findSplit(newChainHead, head, store);
 		if (splitPoint == null) {
 			logger.info(" splitPoint is null, the chain ist not complete: {} ", newChainHead);
@@ -2028,6 +2034,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		LinkedList<Block> oldBlocks = new LinkedList<>();
 		if (!head.getHash().equals(splitPoint.getHash())) {
 			oldBlocks = getPartialChain(head, splitPoint, store);
+		}
+		// add other confirmed and not milestone  execution block lower than the newChainHead 
+		for (Sha256Hash h : getLowerExecuteChainlength(newChainHead, store)) {
+			if (findBlockFromHash(oldBlocks, h) == null) {
+				oldBlocks.add(getBlock(h, store));
+			}
 		}
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
 		// Disconnect each block in the previous best chain that is no
@@ -2052,9 +2064,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				store.beginDatabaseBatchWrite();
 			}
 		}
+	}
 
-		// Update the pointer to the best known block.
-		// setChainHead(storedNewHead);
+	private Block findBlockFromHash(List<Block> collectList, Sha256Hash blockhash) throws BlockStoreException {
+		for (Block b : collectList) {
+			if (b.getHash().equals(blockhash))
+				return b;
+		}
+		return null;
 	}
 
 	public boolean checkBestExecutionChain(Block newChainHead, BlockStoreInterface store)
@@ -2152,6 +2169,26 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			throw new RuntimeException("block.getBlockType() is wrong " + block.getBlockType());
 		}
 
+	}
+
+	public List<Sha256Hash> getLowerExecuteChainlength(Block newChainHead, BlockStoreInterface store)
+			throws BlockStoreException {
+		List<Sha256Hash> re = new ArrayList<>();
+		switch (newChainHead.getBlockType()) {
+		case BLOCKTYPE_CONTRACT_EXECUTE:
+			ContractExecutionResult c = new ContractExecutionResult()
+					.parseChecked(newChainHead.getTransactions().get(0).getData());
+			for (Contractresult s : store.getLowerConfirmedContractresult(c.getContracttokenid(),
+					getExecuteChainlength(newChainHead))) {
+				re.add(s.getBlockHash());
+			}
+		case BLOCKTYPE_ORDER_EXECUTE:
+			for (Orderresult s : store.getLowerConfirmedOrderresult(getExecuteChainlength(newChainHead))) {
+				re.add(s.getBlockHash());
+			}
+		default:
+		}
+		return re;
 	}
 
 	/**
