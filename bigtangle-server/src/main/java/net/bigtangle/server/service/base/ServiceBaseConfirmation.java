@@ -155,9 +155,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	/**
-	 * Recursively adds the specified block and its approved as DAG to the
-	 * collection as referenced if the blocks are not in the collection etc. if a
-	 * required block as dependency (not DAG) is missing, raise exception .
+	 * Recursively adds block from the startingBlock and its approved as DAG to the
+	 * collection Set<BlockWrap> blocks as DAG referenced and required block.
+	 * Set<BlockWrap> blocks will be solid and conflict free set.
 	 *
 	 */
 	public void addReferencedBlockHashesTo(Set<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
@@ -177,18 +177,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// Nothing added if already in set
 			if (checkExists(blocks, block))
 				continue;
-
 			// Nothing added if already in milestone
 			if (block.getBlockEvaluation().getMilestone() >= 0)
-				// && block.getBlockEvaluation().getMilestone() <= prevMilestoneNumber)
 				continue;
-
 			// Check if the block is in cutoff and not in chain
 			if (block.getBlock().getHeight() <= cutoffHeight && block.getBlockEvaluation().getMilestone() < 0) {
 				continue;
-
 			}
-
+			// Check if the block is solid,
+			if (block.getBlockEvaluation().getSolid() < 0) {
+				continue;
+			}
 			// Add this block for matched.
 
 			if (matchType(block, blocktypes)) {
@@ -365,7 +364,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (block.getBlock().getHeight() <= cutoffHeight && block.getBlockEvaluation().getMilestone() < 0) {
 				continue;
 			}
-			// Check if the block is in calculated conflicts, it follow markov chain
+			// Check if the block is solid,
 			if (block.getBlockEvaluation().getSolid() < 0) {
 				continue;
 			}
