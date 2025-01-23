@@ -511,7 +511,7 @@ public class BlockStoreService {
 			Set<BlockWrap> blocks = new HashSet<>();
 			// use the add to filter and check
 			for (BlockWrap b : blocksToAdd) {
-				serviceBase.addReferencedBlockHashesTo(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
+				serviceBase.dagBlockHashesFrom(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
 						blockStore);
 			}
 			// Set<BlockWrap> toAdd = serviceBase.addUnconfirmBlocksChainedPrev(blockStore,

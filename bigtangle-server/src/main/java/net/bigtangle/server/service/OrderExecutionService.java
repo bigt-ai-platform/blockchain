@@ -169,10 +169,10 @@ public class OrderExecutionService {
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
 		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_EXECUTE);
 		// add all blocks of dependencies
-		serviceBase.addReferencedBlockHashesTo(referencedblocks,
+		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, ordertypes,
 				true, false, store);
-		serviceBase.addReferencedBlockHashesTo(referencedblocks,
+		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
 				ordertypes, true, false, store);
 

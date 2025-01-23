@@ -42,9 +42,9 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 				cacheBlockService, jsonmapper);
 
 		Set<BlockWrap> blocks = new HashSet<>();
-		serviceBase.addReferencedBlockHashesTo(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
+		serviceBase.dagBlockHashesFrom(blocks, prevBranch, cutoffheight, prevChainLength, ordertypes, true,
 				true, store);
-		serviceBase.addReferencedBlockHashesTo(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
+		serviceBase.dagBlockHashesFrom(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
 				store);
 		serviceBase.checkExecutionChained(store, blocks );
 		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,

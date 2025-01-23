@@ -155,20 +155,22 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	/**
-	 * Recursively adds block from the startingBlock and its approved as DAG to the
-	 * collection Set<BlockWrap> blocks as DAG referenced and required block.
-	 * Set<BlockWrap> blocks will be solid and conflict free set.
+	 * Recursively adds block from the headBlock as DAG to the collection
+	 * Set<BlockWrap> blocks with predecessors and required blocks. Set<BlockWrap>
+	 * blocks will be solid and conflict free set. This is used for build the reward
+	 * chain and execution chains. From a head block to all predecessors and
+	 * required blocks
 	 *
 	 */
-	public void addReferencedBlockHashesTo(Set<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
+	public void dagBlockHashesFrom(Set<BlockWrap> blocks, BlockWrap headBlock, long cutoffHeight,
 			long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict, boolean checkMilestone,
 			BlockStoreInterface store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
 		Set<Sha256Hash> blockQueueSet = new HashSet<>();
-		blockQueue.add(startingBlock);
-		blockQueueSet.add(startingBlock.getBlockHash());
+		blockQueue.add(headBlock);
+		blockQueueSet.add(headBlock.getBlockHash());
 
 		while (!blockQueue.isEmpty()) {
 			BlockWrap block = blockQueue.poll();
@@ -336,10 +338,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	/**
 	 * Recursively adds the specified block and its approved blocks to the
-	 * collection if the blocks are not in the current milestone and not in the
-	 * collection. if a block is missing somewhere, returns false. For check missing
-	 * is not allowed, for build missing is not checked
-	 *
+	 * collection. startingBlock is an approval of a block from blocks, it will add
+	 * other DAG block to the given blocks. The conflict is not check here, will be
+	 * check later. blocks <-- startingBlock --> add predecessors + required inputs
 	 */
 	public void addRequiredUnconfirmedBlocksTo(Collection<BlockWrap> blocks, BlockWrap startingBlock, long cutoffHeight,
 			BlockStoreInterface store) throws BlockStoreException {

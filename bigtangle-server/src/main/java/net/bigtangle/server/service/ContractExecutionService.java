@@ -188,10 +188,10 @@ public class ContractExecutionService {
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
 		// add all referenced Blocks
-		serviceBase.addReferencedBlockHashesTo(referencedblocks,
+		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,
 				referencedOrdertypes, true, false, store);
-		serviceBase.addReferencedBlockHashesTo(referencedblocks,
+		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
 				referencedOrdertypes, true, false, store);
 		Contractresult prevMilestoneExecution = store.getMaxMilestoneContractresult(contract.getTokenid());

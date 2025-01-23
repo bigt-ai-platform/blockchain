@@ -2150,7 +2150,7 @@ public abstract class AbstractIntegrationTest {
 		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
 		BlockWrap blockWrap = serviceBase.getBlockWrap(prototype.getHash(), store);
 		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, store);
-		serviceBase.addReferencedBlockHashesTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight,
+		serviceBase.dagBlockHashesFrom(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight,
 				prevMilestoneNumber, null, false, false, store);
 		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
 	}
