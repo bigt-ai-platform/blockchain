@@ -211,7 +211,9 @@ public interface BlockStoreInterface {
 
 	void updateOrderBlockhash(Sha256Hash orderhansh, Sha256Hash collectinghash, boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
-
+	void updateOrderPrevhash( Sha256Hash collectinghash, boolean confirm, boolean spent,
+			Sha256Hash spentBlock) throws BlockStoreException;
+	
 	void prunedHistoryUTXO(Long maxRewardblock) throws BlockStoreException;
 
 	void prunedPriceTicker(Long timeInSeconds) throws BlockStoreException;
@@ -448,7 +450,10 @@ public interface BlockStoreInterface {
 
 	void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash, boolean confirm, boolean spent,
 			Sha256Hash spentBlock) throws BlockStoreException;
-
+	
+	void updateContractEventPrevhash(Sha256Hash collectinghash, boolean confirm, boolean spent,
+			Sha256Hash spentBlock) throws BlockStoreException;
+	
 	Map<Sha256Hash, ContractEventRecord> getContractEventPrev(String contractid, Sha256Hash prevHash)
 			throws BlockStoreException;
 

@@ -1322,6 +1322,26 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void updateOrderPrevhash(Sha256Hash collectinghash, boolean confirm, boolean spent,
+			Sha256Hash spenderBlockHash) throws BlockStoreException {
+
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(getUpdate()
+				+ " orders SET spent = ?, spenderblockhash = ?, confirmed =? " + " WHERE collectinghash=?   ")) {
+
+			preparedStatement.setBoolean(1, spent);
+			preparedStatement.setBytes(2, spenderBlockHash != null ? spenderBlockHash.getBytes() : null);
+			preparedStatement.setBoolean(3, confirm);
+			preparedStatement.setBytes(4, collectinghash.getBytes());
+
+			preparedStatement.executeUpdate();
+
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+
+	}
+
+	@Override
 	public void updateContractEventBlockhash(Sha256Hash blockhash, Sha256Hash collectinghash, boolean confirm,
 			boolean spent, Sha256Hash spenderBlockHash) throws BlockStoreException {
 
@@ -1334,6 +1354,24 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBoolean(3, confirm);
 			preparedStatement.setBytes(4, collectinghash.getBytes());
 			preparedStatement.setBytes(5, blockhash.getBytes());
+			preparedStatement.executeUpdate();
+
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+
+	}
+
+	@Override
+	public void updateContractEventPrevhash(Sha256Hash collectinghash, boolean confirm, boolean spent,
+			Sha256Hash spenderBlockHash) throws BlockStoreException {
+
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(getUpdate()
+				+ " contractevent SET spent = ?, spenderblockhash = ?, confirmed =? " + " WHERE collectinghash=?   ")) {
+			preparedStatement.setBoolean(1, spent);
+			preparedStatement.setBytes(2, spenderBlockHash != null ? spenderBlockHash.getBytes() : null);
+			preparedStatement.setBoolean(3, confirm);
+			preparedStatement.setBytes(4, collectinghash.getBytes());
 			preparedStatement.executeUpdate();
 
 		} catch (SQLException e) {

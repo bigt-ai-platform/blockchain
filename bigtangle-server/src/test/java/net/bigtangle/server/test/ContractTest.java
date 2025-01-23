@@ -468,17 +468,17 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		// replay first chain
 		for (Block b : a1) {
-			if (b != null) { 
+			if (b != null) {
 				add(b, true, true, store);
 			}
-			//a = checkSum(a);
+			// a = checkSum(a);
 		}
 
 		// replay second chain
 		for (Block b : a2) {
 			if (b != null)
 				add(b, true, true, store);
-			//a = checkSum(a);
+			// a = checkSum(a);
 		}
 
 		// replay second and then replay first
@@ -638,7 +638,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		makeRewardBlock(resultBlock);
 		ContractExecutionResult result = new ContractExecutionResult()
 				.parse(resultBlock.getTransactions().get(0).getData());
-		assertEquals(1, result.getToBeSpent().size());
+
 		assertEquals(0, result.getCancelRecords().size());
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		makeContractEventCancel(event, ulist.get(0), new ArrayList<>(), predecessor);
@@ -646,7 +646,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
 		blockSaveService.saveBlock(resultBlock, store);
 		result = new ContractExecutionResult().parse(resultBlock.getTransactions().get(0).getData());
-		assertEquals(0, result.getToBeSpent().size());
+
 		assertEquals(1, result.getCancelRecords().size());
 		checkSum(null);
 	}

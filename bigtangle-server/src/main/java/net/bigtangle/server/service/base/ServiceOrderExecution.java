@@ -9,11 +9,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.util.Set;
 import java.util.TreeMap;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
@@ -122,9 +121,9 @@ public class ServiceOrderExecution extends ServiceBaseConnect {
 		// Make deterministic tx with proceeds
 		Transaction tx = createOrderPayoutTransaction(block, payouts);
 
-		return new OrderExecutionResult( getOrderRecordHash(toBeSpentOrders), tx.getHash(), tx,
+		return new OrderExecutionResult(   tx.getHash(), tx,
 				prev.getBlockHash(), getOrderRecordHash(cancelledOrders),
-				remainingOrders.keySet(), block.getTimeSeconds(), remainingOrders.values(), toBeSpentOrders,
+				remainingOrders.keySet(), block.getTimeSeconds(), remainingOrders.values(),  
 				collectedBlocks, tokenId2Events,prev.getChainlength()+1);
 
 	}

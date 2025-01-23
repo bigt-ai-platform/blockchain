@@ -246,8 +246,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 							prevblockhash, result.getReferencedBlocks());
 			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
 
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getToBeSpent().equals(check.getToBeSpent())
+			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 
@@ -278,8 +277,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 					cacheBlockService, jsonmapper)
 					.orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
 
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getToBeSpent().equals(check.getToBeSpent())
+			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 				blockStore.insertOrderResult(result, block.getHash());

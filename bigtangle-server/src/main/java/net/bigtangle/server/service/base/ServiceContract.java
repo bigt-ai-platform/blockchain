@@ -8,12 +8,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
@@ -125,10 +124,10 @@ public class ServiceContract extends ServiceBaseConnect {
 				Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(
 						toBeSpent.values(), usedRecords.values());
 				return new ContractExecutionResult(contract.getTokenid(),
-						getContractEventRecordHash(toBeSpent.values()), tx.getHash(), tx,
+						  tx.getHash(), tx,
 						prevContractresult.getBlockHash(), getContractEventRecordHash(cancelledContractEventRecord),
 						getContractEventRecordHash(remainderContractEventRecord), block.getTimeSeconds(),
-						remainderContractEventRecord, getContractEventRecordSet(toBeSpent.values()), collectedBlocks,
+						remainderContractEventRecord,   collectedBlocks,
 						prevContractresult.getChainlength() + 1);
 
 			}
@@ -211,10 +210,10 @@ public class ServiceContract extends ServiceBaseConnect {
 		Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(allRecords.values(),
 				usedRecords.values());
 
-		return new ContractExecutionResult(winner.getContractTokenid(), getContractEventRecordHash(allRecords.values()),
+		return new ContractExecutionResult(winner.getContractTokenid(), 
 				tx.getHash(), tx, prevHash.getBlockHash(), cancels,
 				getContractEventRecordHash(remainderContractEventRecord), winnerBlock.getTimeSeconds(),
-				remainderContractEventRecord, getContractEventRecordSet(allRecords.values()), collectedBlocks,
+				remainderContractEventRecord,  collectedBlocks,
 				prevHash.getChainlength() + 1);
 	}
 

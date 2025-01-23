@@ -1326,27 +1326,21 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					.orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getToBeSpent().equals(check.getToBeSpent())
+
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 				// debugOrderExecutionResult(block, check, confirm, blockStore);
 
 				if (confirm) {
-					for (Sha256Hash dep : check.getToBeSpent()) {
-						confirmOrderAndTransaction(getBlock(dep, blockStore), true, milestoneNumber, blockStore);
-					}
-					for (OrderRecord c : check.getToBeSpentRecord()) {
-						c.setConfirmed(true);
-						c.setSpent(true);
-						c.setSpenderBlockHash(block.getHash());
-					}
-					blockStore.updateOrderSpent(check.getToBeSpentRecord());
-
-					blockStore.updateOrderConfirmed(check.getRemainderOrderRecord(), true);
 
 					for (Sha256Hash ref : check.getReferencedBlocks()) {
 						blockStore.updateOrderBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
+						confirmOrderAndTransaction(getBlock(ref, blockStore), true, milestoneNumber, blockStore);
 					}
+					blockStore.updateOrderPrevhash(check.getPrevblockhash(), true, true, block.getHash());
+
+					blockStore.updateOrderConfirmed(check.getRemainderOrderRecord(), true);
+
 					// update cancel
 					blockStore.updateOrderCancelSpent(check.getCancelRecords(), block.getHash(), true);
 
@@ -1375,15 +1369,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						}
 					}
 
-					for (OrderRecord c : check.getToBeSpentRecord()) {
-						c.setSpent(false);
-						c.setSpenderBlockHash(null);
-					}
-					blockStore.updateOrderSpent(check.getToBeSpentRecord());
+					blockStore.updateOrderPrevhash(check.getPrevblockhash(), false, false, null);
+					mayRestoreprevOrderExecution(blockStore, result, prevblockhash, block);
 
 					blockStore.updateOrderConfirmed(check.getRemainderOrderRecord(), false);
-
-					mayRestoreprevOrderExecution(blockStore, result, prevblockhash, block);
 					// update cancel
 					blockStore.updateOrderCancelSpent(check.getCancelRecords(), null, false);
 
@@ -1442,11 +1431,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	/*
-	 * connect from the contract Execution
+	 * confirmation of the contract Execution
 	 */
 	private void confirmContractExecute(Block block, long milestoneNumber, boolean confirm,
 			BlockStoreInterface blockStore) throws BlockStoreException {
-		updateBlockConfirmOnly(block.getHash(), milestoneNumber, confirm, blockStore);
+
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
@@ -1456,97 +1445,91 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							prevblockhash, result.getReferencedBlocks());
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getToBeSpent().equals(check.getToBeSpent())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())
 					&& result.getCancelRecords().equals(check.getCancelRecords())) {
 
-				if (confirm) {
-					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
-						c.setConfirmed(true);
-						c.setSpent(true);
-						c.setSpenderBlockHash(block.getHash());
-					}
-					blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
-
-					for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-						c.setConfirmed(true);
-						c.setSpent(false);
-						c.setSpenderBlockHash(null);
-						// remainder set the collection hash using block hash, as the calculation of
-						// execution the block hash is done only at solve block.
-						c.setCollectinghash(block.getHash());
-					}
-					blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
-
-					for (Sha256Hash ref : check.getReferencedBlocks()) {
-						blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
-						confirmContractEventTransaction(getBlock(ref, blockStore), true, milestoneNumber, blockStore);
-					}
-
-					// update ContractResult
-					blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
-					blockStore.updateContractResultConfirmed(block.getHash(), true);
-					confirmTransaction(block, true, check.getOutputTx(), blockStore);
-					blockStore.updateContractResultSpent(check.getPrevblockhash(), block.getHash(), true);
-
-					// update cancel
-					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), true);
-
-				} else {
-					Sha256Hash spenderBlockHash = prevblockhash.getSpenderBlockHash();
-					// referenced block can be referenced by conflict block
-					for (Sha256Hash ref : check.getReferencedBlocks()) {
-						ContractEventRecord event = blockStore.getContractEvent(ref, Sha256Hash.ZERO_HASH);
-						BlockWrap refBlock = getBlockWrap(ref, blockStore);
-						if (block.getHash().equals(event.getSpenderBlockHash())) {
-							blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, false, false, null);
-							confirmContractEventTransaction(refBlock.getBlock(), false, -1, blockStore);
-						} else {
-							if (event.getSpenderBlockHash() != null)
-								logger.debug("referenced block can be referenced by other block:" + refBlock.toString()
-										+ "\n spenderBlockHash: " + event.getSpenderBlockHash());
-						}
-					}
-
-					for (ContractEventRecord c : check.getToBeSpentContractEventRecord()) {
-						// Collectionhash Sha256Hash.ZERO_HASH is in check.getReferencedBlocks(),
-						// exclude here
-						// if (!Sha256Hash.ZERO_HASH.equals(c.getCollectinghash())) {
-						c.setConfirmed(false);
-						c.setSpent(false);
-						c.setSpenderBlockHash(null);
-						// }
-					}
-					blockStore.updateContractEventSpent(check.getToBeSpentContractEventRecord());
-
-					for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-						c.setConfirmed(false);
-						c.setSpent(false);
-						c.setSpenderBlockHash(null);
-						// remainder set the collection hash using block hash, as the calculation of
-						// execution the block hash is not fixed.
-						c.setCollectinghash(block.getHash());
-					}
-					blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
-
-					// update ContractResult
-					blockStore.updateContractresultMilestone(block.getHash(), -1);
-					blockStore.updateContractResultConfirmed(block.getHash(), false);
-					confirmTransaction(block, false, check.getOutputTx(), blockStore);
-
-					if (block.getHash().equals(spenderBlockHash)) {
-						blockStore.updateContractResultSpent(check.getPrevblockhash(), null, false);
-					}
-					// update cancel
-					blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), false);
-					// restore the prev state, if this block is spender of the prev
-					mayRestorePrevContractExecution(block, blockStore, prevblockhash);
-				}
+				confirmContractExecuteDo(block, milestoneNumber, confirm, blockStore, prevblockhash, check);
 			}
 
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private void confirmContractExecuteDo(Block block, long milestoneNumber, boolean confirm,
+			BlockStoreInterface blockStore, Contractresult prevblockhash, ContractExecutionResult check)
+			throws BlockStoreException {
+		if (confirm) {
+			for (Sha256Hash ref : check.getReferencedBlocks()) {
+				blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
+				confirmContractEventTransaction(getBlock(ref, blockStore), true, milestoneNumber, blockStore);
+			}
+			blockStore.updateContractEventPrevhash(prevblockhash.getBlockHash(), true, true, block.getHash());
+
+			for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
+				c.setConfirmed(true);
+				c.setSpent(false);
+				c.setSpenderBlockHash(null);
+				// remainder set the collection hash using block hash, as the calculation of
+				// execution the block hash is done only at solve block.
+				c.setCollectinghash(block.getHash());
+			}
+			blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
+
+			// update ContractResult
+			blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
+			blockStore.updateContractResultConfirmed(block.getHash(), true);
+			confirmTransaction(block, true, check.getOutputTx(), blockStore);
+			blockStore.updateContractResultSpent(check.getPrevblockhash(), block.getHash(), true);
+
+			// update cancel
+			blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), true);
+
+		} else {
+			Sha256Hash spenderBlockHash = prevblockhash.getSpenderBlockHash();
+			// referenced block can be referenced by other conflict block, set to
+			// unconfirmed only the block is the spender
+			for (Sha256Hash ref : check.getReferencedBlocks()) {
+				ContractEventRecord event = blockStore.getContractEvent(ref, Sha256Hash.ZERO_HASH);
+				BlockWrap refBlock = getBlockWrap(ref, blockStore);
+				if (block.getHash().equals(event.getSpenderBlockHash())) {
+					blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, false, false, null);
+					confirmContractEventTransaction(refBlock.getBlock(), false, -1, blockStore);
+				} else {
+					if (event.getSpenderBlockHash() != null)
+						logger.debug("referenced block can be referenced by other block:" + refBlock.toString()
+								+ "\n spenderBlockHash: " + event.getSpenderBlockHash());
+				}
+			}
+
+			blockStore.updateContractEventPrevhash(prevblockhash.getBlockHash(), false, false, null);
+			// may restore the prev state,
+			mayRestorePrevContractExecution(block, blockStore, prevblockhash);
+
+			for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
+				c.setConfirmed(false);
+				c.setSpent(false);
+				c.setSpenderBlockHash(null);
+				// remainder set the collection hash using block hash, as the calculation of
+				// execution the block hash is not fixed.
+				c.setCollectinghash(block.getHash());
+			}
+			blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
+
+			// update ContractResult
+			blockStore.updateContractresultMilestone(block.getHash(), -1);
+			blockStore.updateContractResultConfirmed(block.getHash(), false);
+			confirmTransaction(block, false, check.getOutputTx(), blockStore);
+
+			if (block.getHash().equals(spenderBlockHash)) {
+				blockStore.updateContractResultSpent(check.getPrevblockhash(), null, false);
+			}
+			// update cancel
+			blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), false);
+
+		}
+
+		updateBlockConfirmOnly(block.getHash(), milestoneNumber, confirm, blockStore);
 	}
 
 	private void mayRestorePrevContractExecution(Block block, BlockStoreInterface blockStore,
@@ -2035,7 +2018,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (!head.getHash().equals(splitPoint.getHash())) {
 			oldBlocks = getPartialChain(head, splitPoint, store);
 		}
-		// add other confirmed and not milestone  execution block lower than the newChainHead 
+		// add other confirmed and not milestone execution block lower than the
+		// newChainHead
 		for (Sha256Hash h : getLowerExecuteChainlength(newChainHead, store)) {
 			if (findBlockFromHash(oldBlocks, h) == null) {
 				oldBlocks.add(getBlock(h, store));

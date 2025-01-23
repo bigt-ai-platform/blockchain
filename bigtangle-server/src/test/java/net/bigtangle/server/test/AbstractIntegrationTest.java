@@ -1554,7 +1554,7 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
-		//			checkContractResult(map, a.getKey());
+			checkContractResult(map, a.getKey());
 
 					createDAG("failed");
 					createDAGRequired("failedRequired", 0, 10000000, false);
@@ -1575,10 +1575,10 @@ public abstract class AbstractIntegrationTest {
 
 	public void checkContractResult(TokensumsMap newMap, String tokenid) throws Exception {
 		Tokensums a = newMap.getTokensumsMap().get(tokenid);
-		// checkContract(a);
+		  checkContract(a);
 		// checkUTXOSUM(a);
-		// checkContractSpent(a, tokenid);
-		checkUnconfirmedContract(tokenid);
+		  checkContractSpent(a, tokenid);
+	//	checkUnconfirmedContract(tokenid);
 	}
 
 	private void checkUTXOSUM(Tokensums a) throws IOException, BlockStoreException {
@@ -1872,7 +1872,7 @@ public abstract class AbstractIntegrationTest {
 			// serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
 
 			serviceBase.unconfirmBlocksSorted(blockStore,
-					serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm), new HashSet<>(), true);
+					  blocksToUnconfirm, new HashSet<>(), true);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (
 
