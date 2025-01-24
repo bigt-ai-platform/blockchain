@@ -73,10 +73,13 @@ public class RewardService {
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired
+	protected CacheBlockPrototypeService cacheBlockPrototypeService;
+
+	@Autowired
 	private BlockSaveService blockSaveService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
-	
+
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
 	private final String LOCKID = this.getClass().getName();
@@ -84,7 +87,7 @@ public class RewardService {
 	/**
 	 * Scheduled update function that updates the Tangle
 	 *
-     */
+	 */
 
 	// createReward is time boxed and can run parallel.
 	public void startSingleProcess() throws BlockStoreException {
@@ -101,12 +104,13 @@ public class RewardService {
 			} else {
 				long timeout = 15 * scheduleConfiguration.getMiningrate();
 				if (lock.getLocktime() < System.currentTimeMillis() - timeout) {
-                    log.info(" reward locked is fored delete   {} < {}", lock.getLocktime(), System.currentTimeMillis() - timeout);
+					log.info(" reward locked is fored delete   {} < {}", lock.getLocktime(),
+							System.currentTimeMillis() - timeout);
 					store.deleteLockobject(LOCKID);
 					store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 					canrun = true;
 				} else {
-                    log.info("reward running return:  {}", Utils.dateTimeFormat(lock.getLocktime()));
+					log.info("reward running return:  {}", Utils.dateTimeFormat(lock.getLocktime()));
 				}
 			}
 			if (canrun) {
@@ -132,17 +136,19 @@ public class RewardService {
 		Sha256Hash prevRewardHash = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
 		Block reward = createReward(prevRewardHash, store);
 		if (reward != null) {
-            log.debug(" reward block is created: {}", reward);
+			log.debug(" reward block is created: {}", reward);
 		}
 	}
 
 	public Block createReward(Sha256Hash prevRewardHash, BlockStoreInterface store) throws Exception {
 		try {
 			Stopwatch watch = Stopwatch.createStarted();
-			Pair<BlockWrap, BlockWrap> tipsToApprove = tipService.getValidatedBlockPair(  store);
-			log.debug("  getValidatedRewardBlockPair time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-
-			return createReward(prevRewardHash, tipsToApprove.getLeft(), tipsToApprove.getRight(), store);
+			ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters,
+					cacheBlockService, jsonmapper); 
+			Block prototypeblock = cacheBlockPrototypeService.getBlockPrototype(store); 
+			log.debug("  getValidatedRewardBlockPair time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS)); 
+			return createReward(prevRewardHash, serviceBase.getBlockWrap(prototypeblock.getPrevBlockHash(), store),
+					serviceBase.getBlockWrap(prototypeblock.getPrevBranchBlockHash(), store), store);
 		} catch (CutoffException | InfeasiblePrototypeException | NullPointerException e) {
 			// fall back to use prev reward as tip
 			log.debug(" fall back to use prev reward as tip: ", e);
@@ -173,17 +179,18 @@ public class RewardService {
 		return block;
 	}
 
-	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch, boolean onlyWithreferenced,
-			BlockStoreInterface store)
+	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
+			boolean onlyWithreferenced, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
-		return createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, null,onlyWithreferenced, store);
+		return createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, null, onlyWithreferenced, store);
 	}
 
 	public Block createMiningRewardBlock(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch,
 			Long timeOverride, boolean onlyWithreferenced, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException {
 		Stopwatch watch = Stopwatch.createStarted();
-		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,jsonmapper);
+		ServiceBaseReward serviceBase = new ServiceBaseReward(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper);
 
 		Block r1 = prevTrunk.getBlock();
 		Block r2 = prevBranch.getBlock();
@@ -203,7 +210,6 @@ public class RewardService {
 		RewardBuilderResult result = serviceBase.calcRewardInfo(serviceBase.enableOrderMatchExecutionChain(block),
 				prevTrunk, prevBranch, prevRewardHash, currentTime, store);
 
-		 
 		Transaction tx = result.getTx();
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(tx.getData());
 		block.setLastMiningRewardBlock(currRewardInfo.getChainlength());
@@ -221,10 +227,11 @@ public class RewardService {
 			OrderMatchingResult ordermatchresult = serviceBase.generateOrderMatching(block, currRewardInfo, store);
 			currRewardInfo.setOrdermatchingResult(ordermatchresult.getOrderMatchingResultHash());
 			tx.setData(currRewardInfo.toByteArray());
-		}else {
-			if(currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced){
-				log.debug("   no referenced blocks skip createReward  time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));	
-			return null;
+		} else {
+			if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
+				log.debug("   no referenced blocks skip createReward  time {} ms.",
+						watch.elapsed(TimeUnit.MILLISECONDS));
+				return null;
 			}
 		}
 		Transaction miningTx = serviceBase.generateVirtualMiningRewardTX(block, store);
@@ -242,10 +249,10 @@ public class RewardService {
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
-            log.debug(" reward block solve started  : {} \n for block{}", chainTargetFinal, block);
-            block.solve(chainTargetFinal);
-            return "";
-        });
+			log.debug(" reward block solve started  : {} \n for block{}", chainTargetFinal, block);
+			block.solve(chainTargetFinal);
+			return "";
+		});
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
 			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);
@@ -260,15 +267,13 @@ public class RewardService {
 		return block;
 	}
 
-	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store)
-			throws BlockStoreException {
+	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
 		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
 
 	}
 
-	public GetTXRewardListResponse getAllConfirmedReward(BlockStoreInterface store)
-			throws BlockStoreException {
+	public GetTXRewardListResponse getAllConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
 		return GetTXRewardListResponse.create(store.getAllConfirmedReward());
 
