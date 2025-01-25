@@ -29,7 +29,7 @@ public class Gzip {
 		}
 	}
 
-	public static byte[] decompressOut(InputStream bis) throws IOException {
+	public static byte[] decompressOutStream(InputStream bis) throws IOException {
 
 		try (GZIPInputStream gis = new GZIPInputStream(bis); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 

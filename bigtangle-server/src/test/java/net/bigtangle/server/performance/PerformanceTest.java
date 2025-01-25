@@ -38,17 +38,56 @@ public class PerformanceTest extends ContractTest {
 		prepare("12200", a2);
 		for (int i = 0; i < 12200; i++) {
 			createReward(a2);
-			//c = checkSum(c);
+			// c = checkSum(c);
+		}
+	}
+
+	@Test
+	public void testPrepare() throws Exception {
+		List<Block> a2 = new ArrayList<Block>();
+		prepare(a2);
+	
+		for (int i = 0; i < 20; i++) {
+			ExecutorService executor = Executors.newFixedThreadPool(10);
+			@SuppressWarnings("rawtypes")
+			Callable callable = new Callable() {
+				@Override
+				public String call() {
+					try {
+						payUserKeys(ulist, "1", a2);
+						payBigUserKeys(ulist, 1l, a2);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+					return "";
+
+				}
+
+			};
+
+			final Future<String> handler = executor.submit(callable);
+			try {
+				handler.get(30, TimeUnit.MINUTES);
+			} catch (Exception e) {
+				// logger.debug(" process Timeout ");
+				handler.cancel(true);
+				AbstractResponse resp = ErrorResponse.create(100);
+				StringWriter sw = new StringWriter();
+				resp.setMessage(sw.toString());
+			} finally {
+				executor.shutdownNow();
+			}
 		}
 	}
 
 	public void createReward(List<Block> blocksAddedAll) throws Exception {
 
-		ExecutorService executor = Executors.newSingleThreadExecutor();
+		ExecutorService executor = Executors.newFixedThreadPool(10);
 		@SuppressWarnings("rawtypes")
 		Callable callable = new Callable() {
 			@Override
 			public String call() {
+
 				return contractAndOrder(blocksAddedAll);
 			}
 
@@ -71,10 +110,17 @@ public class PerformanceTest extends ContractTest {
 
 	public String contractAndOrder(List<Block> blocksAddedAll) {
 		try {
+			payUserKeys(ulist, "1", blocksAddedAll);
+			payBigUserKeys(ulist, 1l, blocksAddedAll);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		try {
 			ordermatch(blocksAddedAll);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
 		try {
 			contractExecution(blocksAddedAll);
 		} catch (Exception e) {

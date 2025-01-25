@@ -945,7 +945,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluationNumber(resultSet);
 				BlockMCMC mcmc = setBlockMCMC(resultSet);
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block)) {
 					storedBlocks.add(new BlockWrap(block, blockEvaluation, mcmc, params));
 				}
@@ -1314,7 +1314,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			}
 			BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-			Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+			Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 			return new BlockWrap(block, blockEvaluation, getMCMC(hash), params);
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
@@ -1390,7 +1390,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
 					storedBlockHashes.add(
 							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
@@ -1434,7 +1434,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = params.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
 					blocksByDescendingHeight.add(
 							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));

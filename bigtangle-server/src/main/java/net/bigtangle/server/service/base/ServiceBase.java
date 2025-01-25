@@ -4,6 +4,7 @@
  *******************************************************************************/
 package net.bigtangle.server.service.base;
 
+import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -275,7 +276,7 @@ public abstract class ServiceBase {
 		if (re == null)
 			return null;
 		try {
-			return networkParameters.getDefaultSerializer().makeZippedBlock(re);
+			return networkParameters.getDefaultSerializer().makeZippedBlockStream( new ByteArrayInputStream(re));
 		} catch (Exception e) {
 
 			throw new BlockStoreException(e);

@@ -3,6 +3,7 @@ package net.bigtangle.server.performance;
 import java.io.StringWriter;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.response.AbstractResponse;
@@ -66,16 +68,9 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 		createDAG("testDAG", cutoffHeight, maxHeight);
 	}
 
-	@Test
-	public void testUnconfirm() throws Exception {
-		//checkSum(null);
-		blockGraph.updateUnConfirmedDo(store);
-		checkSum(null,true);
-	}
-
 	public void create(List<Block> a2) throws Exception {
 
-		ExecutorService executor = Executors.newSingleThreadExecutor();
+		ExecutorService executor = Executors.newFixedThreadPool(10);
 		@SuppressWarnings("rawtypes")
 		Callable callable = () -> contractAndOrder(a2);
 
@@ -95,12 +90,36 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 	}
 
 	public String contractAndOrder(List<Block> a1) {
+
+		try {
+			payBigUserKeysRepeate(createUserkey(), 1l, a1);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		try {
+			payUserKeys(createUserkey(), 1l, a1);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return "";
+	}
+
+	public String contractAndOrder2(List<Block> a1) {
+
+		try {
+			payBigUserKeysRepeate(createUserkey(), 1l, a1);
+			payUserKeys(createUserkey(), 1l, a1);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
 		try {
 			sell(a1);
 			buy(a1);
 		} catch (Exception e) {
 			e.printStackTrace();
-			return "";
+
 		}
 		try {
 			for (ECKey key : createUserkey()) {
@@ -111,9 +130,40 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 			return "";
 		} catch (Exception e) {
 			e.printStackTrace();
-			return "";
-		}
 
+		}
+		return "";
 	}
 
+	public void payBigUserKeysRepeate(List<ECKey> userkeys, Long repeat, List<Block> blocksAddedAll) throws Exception {
+
+		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
+
+		for (long i = 0; i < repeat; i++) {
+			for (List<ECKey> list : parts) {
+				HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
+				for (ECKey key : list) {
+					giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(5));
+				}
+				Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID,
+						"pay big to user");
+
+			}
+		}
+	}
+
+	public void payUserKeys(List<ECKey> userkeys, long repeated, List<Block> blocksAddedAll) throws Exception {
+
+		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
+		for (long r = 0; r < repeated; r++) {
+			for (List<ECKey> list : parts) {
+				HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
+				for (ECKey key : list) {
+					giveMoneyResult.put(key.toAddress(networkParameters).toString(), payContractAmount);
+				}
+				Block b = wallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), "pay yuan to user");
+
+			}
+		}
+	}
 }

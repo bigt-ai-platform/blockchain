@@ -79,11 +79,11 @@ public abstract class MessageSerializer {
 	 * 
 	 * @throws IOException
 	 */
-	public final Block makeZippedBlock(InputStream inputStream) throws ProtocolException, IOException {
+	public final Block makeZippedBlockStream(InputStream inputStream) throws ProtocolException, IOException {
 		if (inputStream == null) {
 			return null; // Return null if no value available.
 		}
-		byte[] unzipped = Gzip.decompressOut(inputStream);
+		byte[] unzipped = Gzip.decompressOutStream(inputStream);
 		return makeBlock(unzipped, 0, unzipped.length);
 	}
 

@@ -2188,7 +2188,7 @@ public abstract class AbstractIntegrationTest {
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = networkParameters.getDefaultSerializer().makeZippedBlock(resultSet.getBinaryStream("block"));
+				Block block = networkParameters.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 			
 					blocksByHeight.add(
 							new BlockWrap(block, blockEvaluation, store.getMCMC(blockEvaluation.getBlockHash()), networkParameters));
