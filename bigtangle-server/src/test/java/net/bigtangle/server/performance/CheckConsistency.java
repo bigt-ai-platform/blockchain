@@ -52,5 +52,10 @@ public class CheckConsistency extends AbstractIntegrationTest {
 
 		checkSum(null,true);
 	}
+	@Test
+	public void testBalance() throws Exception {
+
+		checkSum(null,true);
+	}
 
 }

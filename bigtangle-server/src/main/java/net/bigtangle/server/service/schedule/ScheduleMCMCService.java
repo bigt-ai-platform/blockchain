@@ -4,6 +4,12 @@
  *******************************************************************************/
 package net.bigtangle.server.service.schedule;
 
+/**
+ * Service responsible for scheduled execution of MCMC (Markov Chain Monte Carlo) processes.
+ * Runs at a configurable fixed delay (default: 500ms) for continuous validation and consensus operations.
+ * Requires milestone activation and service availability to execute.
+ */
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,14 +25,39 @@ import net.bigtangle.server.service.MCMCService;
 @Component
 @EnableAsync
 public class ScheduleMCMCService {
+
+    /**
+     * Logger for tracking service operations and errors
+     */
     private static final Logger logger = LoggerFactory.getLogger(ScheduleMCMCService.class);
+
+    /**
+     * Service handling core MCMC operations and calculations
+     */
     @Autowired
     private MCMCService mcmcService;
+
+    /**
+     * Configuration for scheduling parameters and activation flags
+     */
   
     @Autowired
     private ScheduleConfiguration scheduleConfiguration;
+
+    /**
+     * Server configuration containing runtime parameters and service status
+     */
     @Autowired
     ServerConfiguration serverConfiguration;
+
+    /**
+     * Asynchronously executes the MCMC process at a fixed delay.
+     * The delay is configurable through application properties (service.schedule.mcmcrate)
+     * with a default of 500ms if not specified.
+     * Only executes if:
+     * 1. Milestone activation is enabled
+     * 2. Server service is available
+     */
     
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.mcmcrate:500}")

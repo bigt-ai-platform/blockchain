@@ -4,6 +4,15 @@
  *******************************************************************************/
 package net.bigtangle.server.service.schedule;
 
+/**
+ * Service responsible for initializing and synchronizing the blockchain system.
+ * Handles critical startup tasks including:
+ * - Cryptographic context initialization
+ * - Blockchain milestone synchronization
+ * - Service readiness signaling
+ * - Kafka stream processing initialization
+ */
+
 import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
@@ -28,21 +37,61 @@ import net.bigtangle.server.service.SyncBlockService;
 @EnableAsync
 public class ScheduleInitService {
 
+    /**
+     * Configuration for scheduling parameters and initialization flags
+     */
+
 	@Autowired
 	private ScheduleConfiguration scheduleConfiguration;
 
+    /**
+     * Server configuration containing runtime parameters and settings
+     */
+
 	@Autowired
 	private ServerConfiguration serverConfiguration;
+
+    /**
+     * Network parameters defining blockchain configuration
+     */
 	@Autowired
 	NetworkParameters networkParameters;
+
+    /**
+     * Data source for database connectivity
+     */
 	@Autowired
 	protected transient DataSource dataSource;
 
+    /**
+     * Service for synchronizing blockchain data
+     */
+
 	@Autowired
 	private SyncBlockService syncBlockService;
+
+    /**
+     * Handler for Kafka block streaming operations
+     */
 	@Autowired
 	BlockStreamHandler blockStreamHandler;
+
+    /**
+     * Logger for tracking service operations and errors
+     */
 	private static final Logger logger = LoggerFactory.getLogger(ScheduleInitService.class);
+
+    /**
+     * Asynchronously executes the initialization sequence for the blockchain system.
+     * This method is scheduled to run once after a 5 second delay during application startup.
+     * Performs the following operations:
+     * 1. Initializes cryptographic context
+     * 2. Starts milestone synchronization if enabled
+     * 3. Sets service readiness flag
+     * 4. Starts Kafka stream processing if configured
+     * 
+     * @throws BlockStoreException If there is an error during blockchain synchronization
+     */
 
 	@Async
 	@Scheduled(initialDelay = 5000, fixedDelay = Long.MAX_VALUE, timeUnit = TimeUnit.NANOSECONDS)

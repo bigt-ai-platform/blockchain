@@ -4,6 +4,21 @@
  *******************************************************************************/
 package net.bigtangle.server.service;
 
+/**
+ * Provides tip selection functionality for the blockchain using Markov Chain Monte Carlo (MCMC) methods.
+ * Handles the random walk process for selecting blocks to approve during transaction validation.
+ * 
+ * <p>Key responsibilities include:
+ * <ul>
+ *   <li>Executing MCMC walks to find valid rating tips</li>
+ *   <li>Managing validated block pairs for consensus approval</li>
+ *   <li>Maintaining thread pools for parallel tip selection</li>
+ *   <li>Enforcing consensus rules during tip selection</li>
+ * </ul>
+ *
+ * @Service Indicates this is a Spring framework service component
+ */
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;

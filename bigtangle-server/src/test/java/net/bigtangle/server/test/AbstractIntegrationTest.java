@@ -508,7 +508,7 @@ public abstract class AbstractIntegrationTest {
 		// no reward, this order will be not confirmed
 		// confirm the contract execution
 		if (b != null) {
-			confirmDo(getBlockWrap(b.getHash() ), new HashSet<>(), store);
+			confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
 			addedBlocks.add(b);
 		} else {
 			log.debug("");
@@ -1554,7 +1554,7 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
-			checkContractResult(map, a.getKey());
+					checkContractResult(map, a.getKey());
 
 					createDAG("failed");
 					createDAGRequired("failedRequired", 0, 10000000, false);
@@ -1575,10 +1575,10 @@ public abstract class AbstractIntegrationTest {
 
 	public void checkContractResult(TokensumsMap newMap, String tokenid) throws Exception {
 		Tokensums a = newMap.getTokensumsMap().get(tokenid);
-		  checkContract(a);
+		checkContract(a);
 		// checkUTXOSUM(a);
-		  checkContractSpent(a, tokenid);
-	//	checkUnconfirmedContract(tokenid);
+		checkContractSpent(a, tokenid);
+		// checkUnconfirmedContract(tokenid);
 	}
 
 	private void checkUTXOSUM(Tokensums a) throws IOException, BlockStoreException {
@@ -1871,8 +1871,7 @@ public abstract class AbstractIntegrationTest {
 
 			// serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
 
-			serviceBase.unconfirmBlocksSorted(blockStore,
-					  blocksToUnconfirm, new HashSet<>(), true);
+			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (
 
@@ -2012,7 +2011,7 @@ public abstract class AbstractIntegrationTest {
 
 	private void blockDAGPredecossors(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag)
 			throws BlockStoreException, IOException {
-		PriorityQueue<BlockWrap> blockQueue =  getBlocks(from, to);
+		PriorityQueue<BlockWrap> blockQueue = getBlocks(from, to);
 		dag.addVertex("");
 		// Initialize weight and depth of blocks
 		for (BlockWrap block : blockQueue) {
@@ -2098,7 +2097,7 @@ public abstract class AbstractIntegrationTest {
 
 	private void blocksDAG(long from, long to, DefaultDirectedGraph<String, DefaultEdge> dag, boolean withReferenced)
 			throws BlockStoreException, IOException {
-		PriorityQueue<BlockWrap> blockQueue =  getBlocks(from, to);
+		PriorityQueue<BlockWrap> blockQueue = getBlocks(from, to);
 		blocksDAG(dag, withReferenced, blockQueue);
 	}
 
@@ -2150,8 +2149,8 @@ public abstract class AbstractIntegrationTest {
 		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
 		BlockWrap blockWrap = serviceBase.getBlockWrap(prototype.getHash(), store);
 		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, store);
-		serviceBase.dagBlockHashesFrom(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight,
-				prevMilestoneNumber, null, false, false, store);
+		serviceBase.dagBlockHashesFrom(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, prevMilestoneNumber,
+				null, false, false, store);
 		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
 	}
 
@@ -2175,23 +2174,24 @@ public abstract class AbstractIntegrationTest {
 		}
 		return a;
 	}
- 
+
 	public PriorityQueue<BlockWrap> getBlocks(long cutoffHeight, long maxHeight) throws BlockStoreException {
 		PriorityQueue<BlockWrap> blocksByHeight = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
 
-		try (PreparedStatement preparedStatement =  dataSource.getConnection().prepareStatement(
-				"select *   FROM blocks WHERE   height >= ? AND height <= ?")) {
+		try (PreparedStatement preparedStatement = dataSource.getConnection()
+				.prepareStatement("select *   FROM blocks WHERE   height >= ? AND height <= ?")) {
 			preparedStatement.setLong(1, cutoffHeight);
 			preparedStatement.setLong(2, maxHeight);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
-				Block block = networkParameters.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
-			
-					blocksByHeight.add(
-							new BlockWrap(block, blockEvaluation, store.getMCMC(blockEvaluation.getBlockHash()), networkParameters));
+				Block block = networkParameters.getDefaultSerializer()
+						.makeZippedBlockStream(resultSet.getBinaryStream("block"));
+
+				blocksByHeight.add(new BlockWrap(block, blockEvaluation, store.getMCMC(blockEvaluation.getBlockHash()),
+						networkParameters));
 			}
 			return blocksByHeight;
 		} catch (Exception ex) {
@@ -2199,6 +2199,7 @@ public abstract class AbstractIntegrationTest {
 		}
 		// throw new BlockStoreException("Could not close statement");
 	}
+
 	private BlockEvaluation setBlockEvaluation(ResultSet resultSet) throws SQLException {
 		return BlockEvaluation.build(Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
 				resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
