@@ -276,7 +276,7 @@ public abstract class ServiceBase {
 		if (re == null)
 			return null;
 		try {
-			return networkParameters.getDefaultSerializer().makeZippedBlockStream( new ByteArrayInputStream(re));
+			return networkParameters.getDefaultSerializer().makeZippedBlockStream(new ByteArrayInputStream(re));
 		} catch (Exception e) {
 
 			throw new BlockStoreException(e);
@@ -300,6 +300,13 @@ public abstract class ServiceBase {
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
+	}
+
+	public BlockWrap initBlockWrap(Block block ) throws BlockStoreException {
+
+		return new BlockWrap(block, BlockEvaluation.buildInitial(block), BlockMCMC.defaultBlockMCMC(block.getHash()),
+				networkParameters);
+
 	}
 
 	public RewardInfo getRewardInfo(Block block) {
@@ -946,6 +953,5 @@ public abstract class ServiceBase {
 		}
 		return null;
 	}
-
 
 }

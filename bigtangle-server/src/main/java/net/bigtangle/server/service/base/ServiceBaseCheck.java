@@ -1203,8 +1203,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			final Set<Sha256Hash> allReuiredBlockHashes = getAllRequiredBlockHashes(block);
 			List<BlockWrap> allRequirements = getAllBlocksFromHash(allReuiredBlockHashes, store);
 			// Required must exist and be ok
-			SolidityState check = checkRequiredAndOk(block, throwExceptions, allRequirements,
-					store);
+			SolidityState check = checkRequiredAndOk(block, throwExceptions, allRequirements, store);
 			if (check.notSuccessState()) {
 				return check;
 			}
@@ -1762,8 +1761,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	private SolidityState checkRequiredAndOk(Block block, boolean throwExceptions,
-			List<BlockWrap> allRequirements, BlockStoreInterface store) throws BlockStoreException {
+	private SolidityState checkRequiredAndOk(Block block, boolean throwExceptions, List<BlockWrap> allRequirements,
+			BlockStoreInterface store) throws BlockStoreException {
 		//
 		for (BlockWrap pred : allRequirements) {
 			// final BlockWrap pred = store.getBlockWrap(predecessorReq);
@@ -1783,8 +1782,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
-		if (!new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.checkPossibleConflict(block, store))
+		if (!checkSpentAndConflict(new HashSet<BlockWrap>(), initBlockWrap(block), false, store))
 			throw new ConflictPossibleException("Conflict Possible");
 		checkDomainname(block);
 	}
@@ -1801,37 +1799,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		default:
 			break;
 		}
-	}
-
-	/*
-	 * Transactions in a block may has spent output, It is not final that the reject
-	 * of the block Return false, if there is possible conflict
-	 */
-	public boolean checkPossibleConflict(Block block, BlockStoreInterface store) throws BlockStoreException {
-		// All used transaction outputs
-		final List<Transaction> transactions = block.getTransactions();
-		for (final Transaction tx : transactions) {
-			if (!tx.isCoinBase()) {
-				for (int index = 0; index < tx.getInputs().size(); index++) {
-					TransactionInput in = tx.getInputs().get(index);
-
-					UTXO b = store.getTransactionOutput(in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
-							in.getOutpoint().getIndex());
-					if (b != null && b.isConfirmed() && b.isSpent()) {
-						// there is a confirmed output, conflict is very
-						// possible
-						return false;
-					}
-					if (b != null && !b.isConfirmed() && !checkSpendpending(b)) {
-						// there is a not confirmed output, conflict may be
-						// possible
-						// check the time, if the output is stale
-						return false;
-					}
-				}
-			}
-		}
-		return true;
 	}
 
 	/*

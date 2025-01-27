@@ -258,7 +258,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private boolean checkSpentAndConflict(Set<BlockWrap> allApproved, BlockWrap newBlock, boolean checkMilestone,
+	protected boolean checkSpentAndConflict(Set<BlockWrap> allApproved, BlockWrap newBlock, boolean checkMilestone,
 			BlockStoreInterface store) {
 		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 

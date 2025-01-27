@@ -107,7 +107,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		}
 	}
 
-	private void setcontracttoken() throws BlockStoreException {
+	public void setcontracttoken() throws BlockStoreException {
 		contracttoken = store.getTokenID(contractKey.getPublicKeyAsHex()).get(0);
 	}
 
@@ -776,8 +776,6 @@ public class ContractTest extends AbstractIntegrationTest {
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
 			rewardWithBlock(blocksAddedAll, b);
 		}
-		log.debug("pay user " + usernumber + "  duration minutes " + watch.elapsed(TimeUnit.MINUTES));
-		log.debug("rate  " + usernumber * 1.0 / watch.elapsed(TimeUnit.SECONDS));
 
 	}
 

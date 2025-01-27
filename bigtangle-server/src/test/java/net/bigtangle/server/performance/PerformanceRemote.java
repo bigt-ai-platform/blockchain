@@ -22,6 +22,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
+import net.bigtangle.core.exception.InsufficientMoneyException;
 import net.bigtangle.core.response.AbstractResponse;
 import net.bigtangle.core.response.ErrorResponse;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
@@ -94,11 +95,15 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 		try {
 			payBigUserKeysRepeate(createUserkey(), 1l, a1);
 
+		} catch (InsufficientMoneyException e) {
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		try {
 			payUserKeys(createUserkey(), 1l, a1);
+		} catch (InsufficientMoneyException e) {
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

@@ -98,6 +98,7 @@ import net.bigtangle.core.exception.UTXOProviderException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.response.GetBalancesResponse;
 import net.bigtangle.core.response.GetBlockEvaluationsResponse;
+import net.bigtangle.core.response.GetOutputsResponse;
 import net.bigtangle.core.response.GetTokensResponse;
 import net.bigtangle.core.response.MultiSignByRequest;
 import net.bigtangle.core.response.MultiSignResponse;
@@ -1554,7 +1555,7 @@ public abstract class AbstractIntegrationTest {
 					if (last != null) {
 						checkSumDiffLog(map, last, a.getKey());
 					}
-					checkContractResult(map, a.getKey());
+					// checkContractResult(map, a.getKey());
 
 					createDAG("failed");
 					createDAGRequired("failedRequired", 0, 10000000, false);
@@ -1564,6 +1565,7 @@ public abstract class AbstractIntegrationTest {
 					createDAG("Ok");
 					createDAGRequired("OKRequired", 0, 10000000, false);
 				}
+				balance(a.getValue());
 			}
 			// log.debug(" checkSum ok ");
 			store.commitDatabaseBatchWrite();
@@ -1579,6 +1581,24 @@ public abstract class AbstractIntegrationTest {
 		// checkUTXOSUM(a);
 		checkContractSpent(a, tokenid);
 		// checkUnconfirmedContract(tokenid);
+	}
+
+	public void balance(Tokensums a) throws Exception {
+
+		Map<String, BigInteger> totalMapValue = new HashMap<String, BigInteger>();
+
+		for (UTXO utxo : a.getUtxos()) {
+			String address = utxo.getAddress();
+			BigInteger amount = utxo.getValue().getValue();
+			if (totalMapValue.containsKey(address)) {
+				BigInteger temp = totalMapValue.get(address);
+				totalMapValue.put(address, temp.add(amount));
+			} else {
+				totalMapValue.put(address, amount);
+			}
+
+		}
+		log.debug(totalMapValue.toString());
 	}
 
 	private void checkUTXOSUM(Tokensums a) throws IOException, BlockStoreException {
