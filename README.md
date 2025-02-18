@@ -36,7 +36,7 @@ sh bigtangle.sh
 ```bash
 git clone https://github.com/bigtangle/server.git
 cd server
-mvn clean install
+mvn -DskipTests=true clean install
 java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED net.bigtangle.server.ServerStart
 ```
 
