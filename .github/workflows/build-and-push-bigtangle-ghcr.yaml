@@ -13,7 +13,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  plc-container-ghcr:
+ bigtangle-server-container-ghcr:
     if: github.repository == 'bigtangle/server'
     runs-on: ubuntu-latest
     permissions:
@@ -50,7 +50,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          file: ./help/bigtangle/Dockerfile
+          file: ./helper/bigtangle/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
