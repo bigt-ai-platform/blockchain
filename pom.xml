@@ -140,4 +140,11 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<distributionManagement>
+  <repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/bigtangle/server</url>
+  </repository>
+</distributionManagement>
 </project>
