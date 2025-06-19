@@ -5,8 +5,7 @@
 ```
 git clone https://github.com/bigtangle/server.git
 cd server
-cd helper/bigtangle
-./build
+docker build -t  bigtangle  -f helper/bigtangle/Dockerfile . 
  
 sh helper/testdocker.sh
  

@@ -7,12 +7,12 @@
 # documentation.
 
 name: Java CI with Maven
-
 on:
   push:
-    branches: [ "ordermatch" ]
-  pull_request:
-    branches: [ "ordermatch" ]
+    branches:
+      - main
+      - ordermatch
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,6 +29,27 @@ jobs:
         cache: maven
     - name: Build with Maven
       run: mvn -B package  -DskipTests=true  --file pom.xml
+    - name: Get current project version
+      id: get_version
+      run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if version exists on GitHub Packages
+      id: version_check
+      run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          PACKAGE_URL="https://maven.pkg.github.com/bigtangle/server/net/bigtangle/bigtangle/${VERSION}/bigtangle-${VERSION}.pom"
+          echo "Checking $PACKAGE_URL"
+          if curl --fail --silent --head -u ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} "$PACKAGE_URL"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+    - name: Stop if version already published
+      if: steps.version_check.outputs.exists == 'true'
+      run: echo "Version already published. Skipping deploy." && exit 0
 
     - name: Publish to GitHub Packages Apache Maven
       run: mvn deploy -s $GITHUB_WORKSPACE/.github/workflows/maven-settings.xml -DskipTests
