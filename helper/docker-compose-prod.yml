@@ -1,0 +1,55 @@
+version: '3.8'
+
+networks:
+  bigtangle-bridged-network:
+    driver: bridge
+
+services:
+  bigtangle-postgres:
+    image: postgres:16
+    container_name: bigtangle-postgres
+    hostname: bigtangle-postgres
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: test1234
+      POSTGRES_DB: info
+    volumes:
+      - /data/vm/bigtangle-postgres/var/lib/postgresql/data:/var/lib/postgresql/data
+
+  bigtangle:
+    image: bigtangle:latest
+    container_name: bigtangle
+    hostname: bigtangle
+    networks:
+      - bigtangle-bridged-network
+    links:
+      - bigtangle-postgres
+    ports:
+      - "8088:8088"
+    environment:
+      JAVA_OPTS: "-Ddebug -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
+      DB_PASSWORD: test1234
+      DB_USER: root
+      DB_PORT: 5432
+      SERVER_PORT: 18089
+      DB_NAME: info
+      DB_HOSTNAME: bigtangle-postgres
+      SERVICE_MCMC_RATE: 1000
+      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
+      SERVERMODE: ""
+      BOOT_STRAP_SERVERS: test.kafka.bigtangle.de:9092
+      TOPIC_OUT_NAME: bigtangle
+      CONSUMERIDSUFFIX: bigtangle.${HOSTNAME}
+      REQUESTER: https://test.bigtangle.org:8089
+      SERVICE_MINING_RATE: 36000
+      SERVICE_MINING: "true"
+      SERVICE_MCMC: "true"
+      SERVER_NET: Test
+      SSL: "true"
+      KEYSTORE: /app/bigtangle-server/ca.pkcs12
+    depends_on:
+      - bigtangle-postgres
