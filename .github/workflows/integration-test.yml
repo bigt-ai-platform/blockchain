@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - ordermatch
+      - contract
   workflow_dispatch:
 
 jobs:
@@ -14,8 +14,8 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: root
-          POSTGRES_USER: test1234
+          POSTGRES_DB: testdb
+          POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpassword
         ports:
           - 5432:5432
