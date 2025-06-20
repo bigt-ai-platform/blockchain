@@ -47,3 +47,5 @@ jobs:
 
       - name: Run Maven integration tests
         run: mvn -B package   --file pom.xml
+        env:
+          MAVEN_OPTS: -Xmx4g -Xms1g
