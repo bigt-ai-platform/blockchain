@@ -3,9 +3,7 @@
 FROM ubuntu:22.04 AS builder
 
 
-ARG gitsourceurl
-ARG branch  
-ARG BIGTANGLEVERSION
+
 
 RUN apt-get update
 
@@ -27,9 +25,9 @@ RUN cd secp256k1/ && git checkout jni && ./autogen.sh \
  && ./configure --enable-jni --enable-experimental --enable-module-schnorr --enable-module-ecdh \
  && make &&  cp .libs/libsecp256k1.so /usr/lib/ 
 
-RUN git config --global http.sslVerify false
-RUN  git clone $gitsourceurl  /root/bignetcoin
-RUN cd /root/bignetcoin && git checkout $branch && mvn  -DskipTests=true clean install
+
+COPY . .
+RUN  mvn  -DskipTests=true clean install
 
 
 
@@ -39,8 +37,8 @@ FROM   docker.io/openjdk:17-jdk-slim
 ARG BIGTANGLEVERSION
 RUN ulimit -n 65536
 RUN mkdir -p /app/bigtangle-server/
-COPY   ca.pkcs12   /app/bigtangle-server/
-COPY --from=builder /root/bignetcoin/bigtangle-server/target/bigtangle-server-${BIGTANGLEVERSION}-exec.jar \
+COPY   helper/bigtangle/ca.pkcs12   /app/bigtangle-server/
+COPY --from=builder /bigtangle-server/target/bigtangle-server-*-exec.jar \
      /app/bigtangle-server.jar
  
 COPY --from=builder /usr/lib/libsecp256k1.so  /usr/lib/

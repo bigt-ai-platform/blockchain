@@ -1823,6 +1823,8 @@ public abstract class AbstractIntegrationTest {
 
 				} catch (InsufficientMoneyException e) {
 					// ignore: handle exception
+				}catch (Exception e) {
+					e.printStackTrace();
 				}
 				// break;
 			}

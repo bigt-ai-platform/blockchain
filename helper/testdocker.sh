@@ -1,7 +1,7 @@
 set -x
 docker network create --driver bridge   bigtangle-bridged-network
 
-export BIGTANGLEVERSION=0.3.6
+export BIGTANGLEVERSION=latest
 export DBHOST=test-bigtangle-mysql
 export SERVERHOST=test-bigtangle
 export REQUESTER=https://test.bigtangle.org:8089
@@ -37,7 +37,7 @@ docker  run -d -t --net=bigtangle-bridged-network   --link $DBHOST \
 -e REQUESTER=$REQUESTER -e SERVICE_MINING_RATE=$SERVICE_MINING_RATE \
 -e SERVICE_MINING=$SERVICE_MINING -e SERVICE_MCMC=true \
 -e SERVER_NET=$SERVER_NET -e SSL=$SSL -e KEYSTORE=$KEYSTORE \
--h $SERVERHOST  j0904cui/bigtangle:$BIGTANGLEVERSION
+-h $SERVERHOST   bigtangle:$BIGTANGLEVERSION
 
 docker logs -f   $SERVERHOST 
   

@@ -20,7 +20,8 @@ BigTangle is a distributed blockchain platform implementation featuring:
 ```bash
 git clone https://github.com/bigtangle/server.git
 cd server/helper/bigtangle
-./build
+cd server
+docker build -t  bigtangle  -f helper/bigtangle/Dockerfile . 
 sh helper/testdocker.sh
 ```
 
