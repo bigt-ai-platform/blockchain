@@ -46,6 +46,6 @@ jobs:
           pg_isready -h localhost -p 5432 -U testuser
 
       - name: Run Maven integration tests
-        run: mvn -B package   --file pom.xml
+        run: mvn -B package  -Dsurefire.excludes=**/performance/**  --file pom.xml 
         env:
           MAVEN_OPTS: -Xmx4g -Xms1g

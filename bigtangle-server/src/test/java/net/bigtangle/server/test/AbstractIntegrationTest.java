@@ -2009,7 +2009,7 @@ public abstract class AbstractIntegrationTest {
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
 		blockDAGPredecossors(from, to, dag);
 
-		drawDAG(filename, dag);
+	//	drawDAG(filename, dag);
 	}
 
 	private void drawDAG(String filename, DefaultDirectedGraph<String, DefaultEdge> dag) throws IOException {
@@ -2072,7 +2072,7 @@ public abstract class AbstractIntegrationTest {
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
 		blocksDAG(from, to, dag, withReferenced);
 
-		drawDAG(filename, dag);
+	//	drawDAG(filename, dag);
 	}
 
 	public void createExecutionDAGRequired(String filename, long from, long to, boolean withReferenced)
@@ -2085,7 +2085,7 @@ public abstract class AbstractIntegrationTest {
 			blocks.add(getBlockWrap(c.getBlockHash()));
 		}
 		blocksDAG(dag, withReferenced, blocks);
-		drawDAG(filename, dag);
+	//	drawDAG(filename, dag);
 	}
 
 	public List<Contractresult> getContractresults() throws BlockStoreException {
