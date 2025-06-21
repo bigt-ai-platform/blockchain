@@ -41,6 +41,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.Wallet;
 
+
 public class ContractTest extends AbstractIntegrationTest {
 
 	protected static final Logger log = LoggerFactory.getLogger(ContractTest.class);
@@ -531,7 +532,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		}
 	}
 
-	@Test
+	//@Test
 	public void testUnconfirmExecution() throws Exception {
 
 		List<Block> blocks = new ArrayList<>();

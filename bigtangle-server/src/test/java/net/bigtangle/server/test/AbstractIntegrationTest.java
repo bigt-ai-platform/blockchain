@@ -60,6 +60,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 import com.google.common.math.LongMath;
 
+import io.minio.MinioClient;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Block.Type;
@@ -196,6 +197,9 @@ public abstract class AbstractIntegrationTest {
 	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
+
+	@Autowired
+	protected MinioClient minioClient;
 
 	@Autowired
 	protected transient javax.sql.DataSource dataSource;

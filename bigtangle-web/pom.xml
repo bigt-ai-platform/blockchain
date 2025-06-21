@@ -61,12 +61,6 @@
 		</dependency>
 
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<version>${org.springframework.boot.version}</version>
-		</dependency>
-
 	</dependencies>
 
 
@@ -101,6 +95,7 @@
 			<plugin>
 				<groupId>pl.project13.maven</groupId>
 				<artifactId>git-commit-id-plugin</artifactId>
+				<version>4.0.0</version>
 			</plugin>
 		</plugins>
 	</build>
