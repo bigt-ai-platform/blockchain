@@ -28,10 +28,7 @@ jobs:
         image: fclairamb/minio-github-actions:latest
         env:
           MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: testbigtangle
-          GITHUB_ACTIONS: "true"
-          CI: "true"
+          MINIO_ROOT_PASSWORD: minioadminpassword
         ports:
           - 9000:9000
           - 9001:9001
