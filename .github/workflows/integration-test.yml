@@ -48,14 +48,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Wait for PostgreSQL to be ready
-        run: |
-          for i in $(seq 1 10); do
-            nc -z localhost 5432 && break
-            echo "Waiting for PostgreSQL to be ready..."
-            sleep 5
-          done
-          pg_isready -h localhost -p 5432 -U $POSTGRES_USER
+
 
       - name: Run Maven integration tests
         run: mvn -B package  -Dsurefire.excludes=**/performance/**  --file pom.xml 
