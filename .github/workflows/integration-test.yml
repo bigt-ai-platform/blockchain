@@ -32,12 +32,11 @@ jobs:
         ports:
           - 9000:9000
           - 9001:9001
-        command: ["server", "/data", "--console-address", ":9001"]
-        healthcheck:
-          test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-          interval: 10s
-          timeout: 5s
-          retries: 5
+        options: >-
+          server
+          /data
+          --console-address
+          :9001
 
 
     steps:
@@ -58,7 +57,7 @@ jobs:
             echo "Waiting for PostgreSQL to be ready..."
             sleep 5
           done
-          pg_isready -h localhost -p 5432 -U testuser
+          pg_isready -h localhost -p 5432 -U $POSTGRES_USER
 
       - name: Run Maven integration tests
         run: mvn -B package  -Dsurefire.excludes=**/performance/**  --file pom.xml 
