@@ -52,6 +52,7 @@ import net.bigtangle.script.Script;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.Rating;
+import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.utils.Gzip;
 
 /**
@@ -445,6 +446,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected NetworkParameters params;
 	protected Connection conn;
+	protected MinioService minioService;
 
 	public Connection getConnection() throws SQLException {
 
@@ -457,9 +459,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	 * a hostname and password, and optionally allowing a schema to be specified.
 	 * </p>
 	 */
-	public DatabaseFullBlockStoreBase(NetworkParameters params, Connection conn) {
+	public DatabaseFullBlockStoreBase(NetworkParameters params, Connection conn, MinioService minioService) {
 		this.params = params;
 		this.conn = conn;
+		this.minioService = minioService;
 	}
 
 	public void create() throws BlockStoreException {
@@ -804,9 +807,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public void put(Block block) throws BlockStoreException {
 
 		try {
-
 			BlockEvaluation blockEval = BlockEvaluation.buildInitial(block);
-
+			minioService.put(block);
 			putUpdateStoredBlock(block, blockEval);
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);

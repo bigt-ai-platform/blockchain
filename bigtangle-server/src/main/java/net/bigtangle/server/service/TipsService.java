@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
@@ -114,16 +115,20 @@ public class TipsService {
 		}
 
 		for (Future<BlockWrap> future : ratingTipFutures) {
-			try {
-				ratingTips.add(future.get());
-			} catch (InterruptedException thrownE) {
-				// cancel with timeout
-				// throw new RuntimeException(thrownE); // Shouldn't happen
-			} catch (ExecutionException thrownE) {
-				throw new BlockStoreException(thrownE); // Shouldn't happen
-			}
+		    try {
+		        // Add timeout to prevent indefinite blocking
+		        ratingTips.add(future.get(10, TimeUnit.SECONDS));  // Adjust timeout as needed
+		    } catch (TimeoutException e) {
+		        // Handle timeout
+		        future.cancel(true);  // Interrupt the task
+		        log.error("Task timed out for entry point:  ",   e);
+		    } catch (InterruptedException e) {
+		        Thread.currentThread().interrupt();  // Preserve interrupt status
+		        log.warn("Processing interrupted", e);
+		    } catch (ExecutionException e) {
+		        throw new BlockStoreException(e);
+		    }
 		}
-
 		watch.stop();
 		log.trace("getRatingTips with count {} time {} ms.", count, watch.elapsed(TimeUnit.MILLISECONDS));
 

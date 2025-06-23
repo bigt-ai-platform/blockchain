@@ -415,8 +415,7 @@ public class BlockStoreService {
 	 */
 	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
-		
-		new MinioService(minioConfig, networkParameters).put(block);
+	 
 		store.put(block);
 		cacheBlockService.cachePutBlock(block, store);
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)

@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.server.config.DBStoreConfiguration;
+import net.bigtangle.server.config.MinioConfig;
+import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
@@ -33,6 +35,9 @@ public class StoreService {
     @Autowired
     protected transient DBStoreConfiguration dbStoreConfiguration;
 
+    @Autowired
+    protected  MinioConfig minioConfig;
+    
     /**
      * Creates and returns the appropriate BlockStoreInterface implementation
      * based on configured database type.
@@ -43,9 +48,9 @@ public class StoreService {
     public BlockStoreInterface getStore() throws BlockStoreException {
         try {
             if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-                return new MySQLFullBlockStore(networkParameters, dataSource.getConnection());
+                return new MySQLFullBlockStore(networkParameters, dataSource.getConnection(),new MinioService(minioConfig, networkParameters));
             } else {
-                return new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
+                return new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection(), new MinioService(minioConfig, networkParameters));
             }
         } catch (SQLException e) {
             throw new BlockStoreException(e);

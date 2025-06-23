@@ -12,6 +12,7 @@ import java.util.List;
 
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.server.service.base.MinioService;
  
 
 /**
@@ -407,9 +408,9 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     
     
   
-    public MySQLFullBlockStore(NetworkParameters params, Connection conn)  {
-        super(  params,   conn);
-    }
+    public MySQLFullBlockStore(NetworkParameters params, Connection conn, MinioService minioService )  {
+            super(  params,   conn, minioService);
+        }
 
     @Override
     protected String getDuplicateKeyErrorCode() {

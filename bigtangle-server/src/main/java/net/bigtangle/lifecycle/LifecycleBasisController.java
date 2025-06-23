@@ -12,6 +12,8 @@ import org.springframework.context.ApplicationContext;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.kafka.AbstractStreamHandler;
+import net.bigtangle.server.config.MinioConfig;
+import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.MySQLFullBlockStore;
 
@@ -105,7 +107,8 @@ public abstract class LifecycleBasisController {
     private BlockStoreInterface findStore() throws BeansException, BlockStoreException, SQLException {
         
         MySQLFullBlockStore store = new MySQLFullBlockStore( appContext.getBean(NetworkParameters.class),  
-                appContext.getBean(DataSource.class).getConnection());
+                appContext.getBean(DataSource.class).getConnection(),
+                new MinioService(appContext.getBean(MinioConfig.class), appContext.getBean(NetworkParameters.class)));
       
         return store;
     }
