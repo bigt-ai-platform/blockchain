@@ -5,13 +5,10 @@
 
 package net.bigtangle.params;
 
-import java.math.BigInteger;
-import java.util.Arrays;
+import java.math.BigInteger; 
 
 import com.google.common.collect.ImmutableList;
-
-import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.pool.server.ServerPool;
+ 
 
 /**
  * Parameters for the main production network on which people trade goods and
@@ -19,7 +16,6 @@ import net.bigtangle.pool.server.ServerPool;
  */
 public class TestParams extends AbstractBitcoinNetParams {
 
-  
     public TestParams() {
         super();
 
@@ -40,7 +36,7 @@ public class TestParams extends AbstractBitcoinNetParams {
                                       // base58 to "xprv"
         genesisPub = "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975";
         permissionDomainname = ImmutableList.of(genesisPub);
-  
+
         // Equihash Settings
         equihashN = 100;
         equihashK = 4;
@@ -50,7 +46,7 @@ public class TestParams extends AbstractBitcoinNetParams {
     }
 
     public String[] serverSeeds() {
-        return new String[] {   };
+        return new String[] {};
 
     }
 
@@ -62,7 +58,5 @@ public class TestParams extends AbstractBitcoinNetParams {
         }
         return instance;
     }
-
-  
 
 }

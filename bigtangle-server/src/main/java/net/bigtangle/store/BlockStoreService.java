@@ -40,6 +40,7 @@ import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.exception.VerificationException.GenericInvalidityException;
 import net.bigtangle.core.exception.VerificationException.MissingDependencyException;
 import net.bigtangle.core.exception.VerificationException.UnsolidException;
+import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ChainBlockQueue;
@@ -49,6 +50,7 @@ import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceBaseReward;
@@ -84,6 +86,9 @@ public class BlockStoreService {
 	@Autowired
 	protected ObjectMapper jsonmapper;
 
+	@Autowired
+	protected MinioConfig minioConfig;
+	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
@@ -410,6 +415,8 @@ public class BlockStoreService {
 	 */
 	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
+		
+		new MinioService(minioConfig, networkParameters).put(block);
 		store.put(block);
 		cacheBlockService.cachePutBlock(block, store);
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
