@@ -35,8 +35,8 @@ jobs:
         ports:
           - 9000:9000
           - 9001:9001
-        options: >-
-          --entrypoint minio server /data --console-address :9001
+        command: minio  # Executable
+        args: server /data --console-address ":9001"  # Arguments
 
 
     steps:
