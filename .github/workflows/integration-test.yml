@@ -35,9 +35,9 @@ jobs:
         ports:
           - 9000:9000
           - 9001:9001
-      options: >-
-        --entrypoint "/usr/bin/minio" 
-        -- server /data --console-address :9001
+        options: >-
+          --entrypoint "/usr/bin/minio" 
+          -- server /data --console-address :9001
 
     steps:
       - name: Checkout code
