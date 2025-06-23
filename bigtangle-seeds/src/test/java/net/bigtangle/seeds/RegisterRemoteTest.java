@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.HashMap;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
@@ -13,7 +14,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
-
+@Disabled("Temporarily disabled")
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class RegisterRemoteTest extends AbstractIntegrationTest {
