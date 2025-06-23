@@ -75,7 +75,7 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 		@SuppressWarnings("rawtypes")
 		Callable callable = () -> contractAndOrder(a2);
 
-		final Future handler = executor.submit(callable);
+		final Future<String> handler = executor.submit(callable);
 		try {
 			handler.get(30, TimeUnit.MINUTES);
 		} catch (Exception e) {

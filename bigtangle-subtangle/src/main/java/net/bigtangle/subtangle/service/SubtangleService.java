@@ -35,7 +35,6 @@ import net.bigtangle.params.ReqCmd;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.BlockSaveService;
-import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.OutputService;
 import net.bigtangle.store.BlockStoreInterface;

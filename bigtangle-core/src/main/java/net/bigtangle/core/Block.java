@@ -578,8 +578,10 @@ public class Block extends Message {
 		}
 		if (blockType == Type.BLOCKTYPE_REWARD) {
 			try {
-				RewardInfo rewardInfo = new RewardInfo().parse(getTransactions().get(0).getData());
-				s.append(rewardInfo.toString());
+				if (transactions != null && !transactions.isEmpty()) {
+					RewardInfo rewardInfo = new RewardInfo().parse(getTransactions().get(0).getData());
+					s.append(rewardInfo.toString());
+				}
 			} catch (Exception e) {
 				// ignore throw new RuntimeException(e);
 			}

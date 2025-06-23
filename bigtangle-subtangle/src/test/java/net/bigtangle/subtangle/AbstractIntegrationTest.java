@@ -12,7 +12,6 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -41,7 +40,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
-import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
@@ -62,7 +60,6 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.GetBalancesResponse;
-import net.bigtangle.core.response.GetBlockEvaluationsResponse;
 import net.bigtangle.core.response.GetTokensResponse;
 import net.bigtangle.core.response.MultiSignByRequest;
 import net.bigtangle.core.response.MultiSignResponse;
@@ -923,10 +920,6 @@ public abstract class AbstractIntegrationTest {
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, overrideHash1, overrideHash2);
 		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
 
-		PermissionedAddressesResponse permissionedAddressesResponse = this
-				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
-		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
-
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
 		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
@@ -1102,19 +1095,6 @@ public abstract class AbstractIntegrationTest {
 
 		OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize());
 
-	}
-
-	private List<BlockEvaluationDisplay> getBlockInfos() throws Exception {
-
-		String lastestAmount = "200";
-		Map<String, Object> requestParam = new HashMap<String, Object>();
-
-		requestParam.put("lastestAmount", lastestAmount);
-		byte[] response = OkHttp3Util.postString(contextRoot + "/" + ReqCmd.findBlockEvaluation.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		GetBlockEvaluationsResponse getBlockEvaluationsResponse = Json.jsonmapper().readValue(response,
-				GetBlockEvaluationsResponse.class);
-		return getBlockEvaluationsResponse.getEvaluations();
 	}
 
 	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,

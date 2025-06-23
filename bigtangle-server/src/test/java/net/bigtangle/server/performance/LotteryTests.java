@@ -23,7 +23,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -214,7 +213,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 	public void createUserPayNoThread(ECKey accountKey, List<ECKey> ulist) throws Exception {
 		List<List<ECKey>> parts = Wallet.chopped(ulist, 1000);
-		List<Thread> threads = new ArrayList<Thread>();
 		for (List<ECKey> list : parts) {
 
 			List<Transaction> txs = new ArrayList<Transaction>();
@@ -260,7 +258,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 			for (ECKey key : list) {
 				giveMoneyResult.put(key.toAddress(networkParameters).toString(), winnerAmount);
 			}
-			Block b = wallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), "pay to user");
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
 			makeRewardBlock();
 		}
@@ -278,7 +275,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 			for (ECKey key : list) {
 				giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(10000));
 			}
-			Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
 			makeRewardBlock();
 		}

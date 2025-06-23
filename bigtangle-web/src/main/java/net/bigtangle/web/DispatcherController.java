@@ -86,7 +86,6 @@ public class DispatcherController {
 
 	}
 
-	@SuppressWarnings("unchecked")
 	public void processDo(@PathVariable("reqCmd") String reqCmd, @RequestBody byte[] contentBytes,
 			HttpServletResponse httpServletResponse, HttpServletRequest httprequest) throws Exception {
 		Stopwatch watch = Stopwatch.createStarted();
@@ -205,6 +204,4 @@ public class DispatcherController {
 		}
 		return remoteAddr;
 	}
-
-	private static final String Huobi15Fee = "15";
 }

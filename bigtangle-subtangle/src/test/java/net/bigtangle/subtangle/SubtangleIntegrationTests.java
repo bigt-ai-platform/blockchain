@@ -137,7 +137,7 @@ public class SubtangleIntegrationTests extends AbstractIntegrationTest {
     @Autowired
     private SubtangleConfiguration subtangleConfiguration;
 
-    @SuppressWarnings("deprecation")
+     
    // @Test
     public void testGiveMoney() throws Exception {
         logger.info("subtangle configuration active : " + subtangleConfiguration.isActive());
