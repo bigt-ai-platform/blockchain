@@ -67,28 +67,53 @@ export class ECKey extends VersionedChecksummedBytes {
         if (!this.priv) {
             throw new Error("Private key not available for signing");
         }
-        return this.doSign(hash, this.priv);
-    }
-
-    private doSign(hash: Sha256Hash, privateKey: BigInteger): ECDSASignature {
-        const key = secp256k1.keyFromPrivate(privateKey.toString());
+        
+        // Create elliptic key from private key
+        const key = secp256k1.keyFromPrivate(this.priv.toString());
+        
+        // Sign the hash
         const signature = key.sign(hash.getBytes());
+        
+        // Return as ECDSASignature
         return new ECDSASignature(
             bigInt(signature.r.toString()),
-            bigInt(signature.s.toString())
-        ).toCanonicalised();
+            bigInt(signature.s.toString()),
+            signature.recoveryParam ?? undefined
+        );
     }
 
     public verify(hash: Sha256Hash, signature: ECDSASignature): boolean {
-        return ECKey.verify(hash.getBytes(), signature, this.pub);
+        try {
+            // Create elliptic key from public key
+            const key = secp256k1.keyFromPublic(this.pub);
+            
+            // Create elliptic signature object
+            const ellipticSig = {
+                r: signature.r.toString(16),
+                s: signature.s.toString(16),
+                recoveryParam: signature.recoveryParam
+            };
+            
+            // Verify the signature
+            return key.verify(hash.getBytes(), ellipticSig);
+        } catch (e) {
+            return false;
+        }
     }
 
     public static verify(data: Uint8Array, signature: ECDSASignature, publicKey: Uint8Array): boolean {
-        const key = secp256k1.keyFromPublic(publicKey);
-        return key.verify(data, {
-            r: signature.r.toString(),
-            s: signature.s.toString()
-        });
+        try {
+            // Create elliptic key from public key
+            const key = secp256k1.keyFromPublic(publicKey);
+            
+            // Verify the signature using the r and s values
+            return key.verify(data, {
+                r: signature.r.toString(16),
+                s: signature.s.toString(16)
+            });
+        } catch (e) {
+            return false;
+        }
     }
 
     // =============================================================================================
@@ -129,50 +154,56 @@ export class ECKey extends VersionedChecksummedBytes {
     // Message Signing/Verification
     // =============================================================================================
 
-    public signMessage(message: string): string {
+    public signMessage(message: string): ECDSASignature {
+        if (!this.priv) {
+            throw new Error("Private key not available for signing");
+        }
+        
+        // Format message and create double SHA256 hash (Bitcoin standard)
         const data = Utils.formatMessageForSigning(message);
-        const key = secp256k1.keyFromPrivate(this.getPrivKey().toString());
-        const signature = key.sign(data, 'utf8', { canonical: true });
-        // Convert to Uint8Array before passing to bytesToBase64
-        const der = signature.toDER();
-        return Utils.bytesToBase64(Uint8Array.from(der));
+        const hash = Sha256Hash.twiceOf(data);
+        
+        // Sign the hash
+        return this.sign(hash);
+    }
+
+    public verifyMessage(message: string, signature: ECDSASignature): boolean {
+        // Format message and create double SHA256 hash (Bitcoin standard)
+        const data = Utils.formatMessageForSigning(message);
+        const hash = Sha256Hash.twiceOf(data);
+        
+        // Verify the signature
+        const result = this.verify(hash, signature);
+        
+        // Debug output
+        console.log("Message:", message);
+        console.log("Formatted data:", Utils.bytesToHex(data));
+        console.log("Hash:", hash.toString());
+        console.log("Signature:", signature.r.toString(), signature.s.toString());
+        console.log("Public key:", Utils.bytesToHex(this.pub));
+        console.log("Verification result:", result);
+        
+        return result;
     }
 
     public static signedMessageToKey(message: string, signatureBase64: string): ECKey {
         const data = Utils.formatMessageForSigning(message);
         const signatureBytes = Utils.base64ToBytes(signatureBase64);
+        const signature = ECDSASignature.decodeFromDER(signatureBytes);
+        const hash = Sha256Hash.of(data);
         
-        // Extract header and DER components
-        const header = signatureBytes[0];
-        const rBytes = signatureBytes.slice(1, 33);
-        const sBytes = signatureBytes.slice(33);
-        
-        // Determine compression and recovery ID
-        let compressed = false;
-        let recId = header - 27;
-        if (recId >= 4) {
-            compressed = true;
-            recId -= 4;
+        // Try recovery with different recIds
+        for (let recId = 0; recId < 4; recId++) {
+            try {
+                const key = ECKey.recoverFromSignature(recId, signature, hash, true);
+                if (key) {
+                    return key;
+                }
+            } catch (e) {
+                // Try next recovery ID
+            }
         }
-        
-        // Create ECDSASignature
-        const r = Utils.bytesToBigInteger(rBytes);
-        const s = Utils.bytesToBigInteger(sBytes);
-        const sig = new ECDSASignature(r, s);
-        
-        // Recover the key
-        const key = ECKey.recoverFromSignature(recId, sig, new Sha256Hash(data), compressed);
-        if (!key) {
-            throw new Error("Could not recover public key from signature");
-        }
-        return key;
-    }
-
-    public verifyMessage(message: string, signatureBase64: string): void {
-        const key = ECKey.signedMessageToKey(message, signatureBase64);
-        if (!Utils.arraysEqual(key.getPubKey(), this.pub)) {
-            throw new Error("Signature did not match for message");
-        }
+        throw new Error("Could not recover public key from signature");
     }
 
     // =============================================================================================
@@ -212,11 +243,14 @@ export class ECKey extends VersionedChecksummedBytes {
         message: Sha256Hash, 
         compressed: boolean
     ): ECKey | null {
+        // Clamp recovery ID to valid range (0-3)
+        const clampedRecId = recId & 3;
+        
         // Use elliptic's built-in recovery
         const signature = {
             r: sig.r.toString(16),
             s: sig.s.toString(16),
-            recoveryParam: recId
+            recoveryParam: clampedRecId
         };
         const msgHex = Utils.bytesToHex(message.getBytes());
         const pubKeyPoint = secp256k1.recoverPubKey(msgHex, signature, signature.recoveryParam, 'hex');

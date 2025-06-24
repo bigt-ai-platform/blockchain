@@ -65,10 +65,45 @@ export class Utils {
     }
 
     static formatMessageForSigning(message: string): Uint8Array {
-        // Simplified: Mimic Bitcoin's message signing prefix
+        // Bitcoin message signing format: prefix + VarInt(message length) + message
         const prefix = "Bitcoin Signed Message:\n";
-        const prefixedMessage = prefix + message;
-        return new TextEncoder().encode(prefixedMessage);
+        const prefixBytes = new TextEncoder().encode(prefix);
+        const messageBytes = new TextEncoder().encode(message);
+        
+        // Create VarInt for message length
+        let varIntBytes;
+        const len = messageBytes.length;
+        if (len < 0xFD) {
+            varIntBytes = new Uint8Array([len]);
+        } else if (len <= 0xFFFF) {
+            varIntBytes = new Uint8Array(3);
+            varIntBytes[0] = 0xFD;
+            // Little-endian format
+            varIntBytes[1] = len & 0xFF;
+            varIntBytes[2] = (len >> 8) & 0xFF;
+        } else if (len <= 0xFFFFFFFF) {
+            varIntBytes = new Uint8Array(5);
+            varIntBytes[0] = 0xFE;
+            // Little-endian format
+            for (let i = 0; i < 4; i++) {
+                varIntBytes[1 + i] = (len >> (i * 8)) & 0xFF;
+            }
+        } else {
+            varIntBytes = new Uint8Array(9);
+            varIntBytes[0] = 0xFF;
+            // Little-endian format
+            for (let i = 0; i < 8; i++) {
+                varIntBytes[1 + i] = (len >> (i * 8)) & 0xFF;
+            }
+        }
+        
+        // Combine prefix, VarInt, and message
+        const result = new Uint8Array(prefixBytes.length + varIntBytes.length + messageBytes.length);
+        result.set(prefixBytes, 0);
+        result.set(varIntBytes, prefixBytes.length);
+        result.set(messageBytes, prefixBytes.length + varIntBytes.length);
+        
+        return result;
     }
 
     static twiceOf(data: Uint8Array): Sha256Hash {

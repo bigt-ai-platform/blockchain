@@ -1,7 +1,7 @@
-import { Address } from './Address';
-import { MainNetParams } from './MainNetParams';
-import { Utils } from './Utils';
-import { ECKey } from './ECKey';
+import { Address } from '../Address';
+import { MainNetParams } from '../MainNetParams';
+import { Utils } from '../Utils';
+import { ECKey } from '../ECKey';
 
 describe('Address', () => {
     const params = MainNetParams.get();

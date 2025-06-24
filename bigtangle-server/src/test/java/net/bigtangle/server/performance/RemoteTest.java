@@ -7,12 +7,7 @@ package net.bigtangle.server.performance;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,8 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import org.jgrapht.graph.DefaultDirectedGraph;
-import org.jgrapht.graph.DefaultEdge;
 import org.junit.jupiter.api.BeforeEach;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

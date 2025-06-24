@@ -1,16 +1,16 @@
-import { ECKey } from './ECKey';
-import { TestParams } from './TestParams';
-import { Wallet } from './wallet/Wallet';
-import { Token } from './Token';
-import { TokenType } from './TokenType';
-import { MultiSignAddress } from './MultiSignAddress';
-import { Sha256Hash } from './Sha256Hash';
-import { Block } from './Block';
-import { Utils } from './Utils';
-import { KeyValue } from './KeyValue';
-import { TokenKeyValues } from './TokenKeyValues';
-import { BigInteger } from 'jsbn';
-import { initCoin } from './Coin';
+import { ECKey } from '../ECKey';
+import { TestParams } from '../TestParams';
+import { Wallet } from '../wallet/Wallet';
+import { Token } from '../Token';
+import { TokenType } from '../TokenType';
+import { MultiSignAddress } from '../MultiSignAddress';
+import { Sha256Hash } from '../Sha256Hash';
+import { Block } from '../Block';
+import { Utils } from '../Utils';
+import { KeyValue } from '../KeyValue';
+import { TokenKeyValues } from '../TokenKeyValues';
+import bigInt from 'big-integer';
+import { initCoin } from '../Coin';
 
 initCoin();
 
@@ -28,12 +28,12 @@ describe('RemoteTokenTests', () => {
 
     beforeEach(() => {
         contextRoot = "http://localhost:8088/";
-        wallet = Wallet.fromKeys(TestParams.get(), ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+        wallet = Wallet.fromKeys(TestParams.get(), ECKey.fromPrivate(bigInt(Utils.HEX.decode(testPriv))), contextRoot);
     });
 
     it('test tokens', async () => {
         const domain = "";
-        const fromPrivate = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+        const fromPrivate = ECKey.fromPrivate(bigInt(Utils.HEX.decode(yuanTokenPriv)));
         await testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY", toBigInteger(1000000000n));
     });
 
@@ -42,9 +42,9 @@ describe('RemoteTokenTests', () => {
         try {
             wallet.setServerURL(contextRoot);
             await createToken(key, tokename, decimals, domainname, description, amount, true, null,
-                TokenType.identity, key.getPublicKeyAsHex(), wallet);
-            const signkey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
-            await wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+                TokenType.identity, key.getPubKeyHex(), wallet);
+            const signkey = ECKey.fromPrivate(bigInt(Utils.HEX.decode(testPriv)));
+            await wallet.multiSign(key.getPubKeyHex(), signkey, null);
         } catch (e) {
             console.warn("", e);
         }
@@ -59,7 +59,7 @@ describe('RemoteTokenTests', () => {
         token.setTokenKeyValues(tokenKeyValues);
         token.setTokentype(tokentype);
         const addresses: MultiSignAddress[] = [];
-        addresses.push(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
+        addresses.push(new MultiSignAddress(tokenid, "", key.getPubKeyHex()));
         return w.createToken(key, domainname, increment, token, addresses);
     }
 });

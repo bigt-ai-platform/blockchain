@@ -1,10 +1,10 @@
-import { ECKey } from './ECKey';
-import { Utils } from './Utils';
-import { Sha256Hash } from './Sha256Hash';
-import { ECDSASignature } from './ECDSASignature';
-import { TestParams } from './TestParams';
-import { DumpedPrivateKey } from './DumpedPrivateKey';
-import { EncryptedData } from './EncryptedData';
+import { ECKey } from '../ECKey';
+import { Utils } from '../Utils';
+import { Sha256Hash } from '../Sha256Hash';
+import { ECDSASignature } from '../ECDSASignature';
+import { TestParams } from '../TestParams';
+import { DumpedPrivateKey } from '../DumpedPrivateKey';
+import { EncryptedData } from '../EncryptedData';
 import bigInt from 'big-integer';
 
 // Fixed private key for deterministic tests

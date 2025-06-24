@@ -65,7 +65,7 @@ import net.jcip.annotations.GuardedBy;
 
 /**
  * <p>
- * A WalletBase provide keys and  common service.
+ * A WalletBase provide keys and common service.
  * </p>
  */
 
@@ -94,9 +94,9 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// outside the wallet lock. So don't expose this object directly via any
 	// accessors!
 	@GuardedBy("keyChainGroupLock")
-	protected  KeyChainGroup keyChainGroup;
+	protected KeyChainGroup keyChainGroup;
 
-	protected  NetworkParameters params;
+	protected NetworkParameters params;
 
 	protected volatile WalletFiles vFileManager;
 	// Object that is used to send transactions asynchronously when the wallet
@@ -118,14 +118,11 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// Objects that perform transaction signing. Applied subsequently one after
 	// another
 	@GuardedBy("lock")
-	protected  List<TransactionSigner> signers;
+	protected List<TransactionSigner> signers;
 
-
- 
 	public NetworkParameters getNetworkParameters() {
 		return params;
 	}
-
 
 	/**
 	 * <p>
@@ -160,7 +157,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		}
 	}
 
-
 	// region Key Management
 
 	/**
@@ -177,7 +173,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 			keyChainGroupLock.unlock();
 		}
 	}
-
 
 	/**
 	 * Returns a list of the non-deterministic keys that have been imported into the
@@ -408,9 +403,8 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/**
-	 * Get the type of encryption used for this wallet.
-	 * (This is a convenience method - the encryption type is actually stored in the
-	 * keyCrypter).
+	 * Get the type of encryption used for this wallet. (This is a convenience
+	 * method - the encryption type is actually stored in the keyCrypter).
 	 */
 	public EncryptionType getEncryptionType() {
 		keyChainGroupLock.lock();
@@ -434,7 +428,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	// endregion
 
-    // region Serialization support
+	// region Serialization support
 
 	/** Internal use only. */
 	protected List<Protos.Key> serializeKeyChainGroupToProtobuf() {
@@ -543,7 +537,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Uses protobuf serialization to save the wallet to the given file stream. To
 	 * learn more about this file format, see {@link WalletProtobufSerializer}.
 	 */
-	public abstract void saveToFileStream(OutputStream f) throws IOException  ;
+	public abstract void saveToFileStream(OutputStream f) throws IOException;
 
 	/** Returns the parameters this wallet was created with. */
 	public NetworkParameters getParams() {
@@ -579,82 +573,76 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		 */
 		USE_DUMMY_SIG,
 		/**
-		 * If signature is missing,
-		 * will
-		 * be thrown for P2SH and {@link ECKey.MissingPrivateKeyException} for other tx
-		 * types.
+		 * If signature is missing, will be thrown for P2SH and
+		 * {@link ECKey.MissingPrivateKeyException} for other tx types.
 		 */
 		THROW
 	}
 
-
 	/******************************************************************************************************************/
 
 	public abstract WalletFiles autosaveToFile(File f, long delayTime, TimeUnit timeUnit,
-			@Nullable WalletFiles.Listener eventListener) ;
+			@Nullable WalletFiles.Listener eventListener);
 
+	public void signTransaction(Transaction tx, KeyParameter aesKey, MissingSigsMode missingSigsMode) {
+		lock.lock();
+		try {
 
+			List<TransactionInput> inputs = tx.getInputs();
+			List<TransactionOutput> outputs = tx.getOutputs();
+			checkState(!inputs.isEmpty());
+			checkState(!outputs.isEmpty());
 
-	 
-		public void signTransaction(Transaction tx, KeyParameter aesKey, MissingSigsMode missingSigsMode) {
-			lock.lock();
-			try {
+			KeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
 
-				List<TransactionInput> inputs = tx.getInputs();
-				List<TransactionOutput> outputs = tx.getOutputs();
-				checkState(!inputs.isEmpty());
-				checkState(!outputs.isEmpty());
-
-				KeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-
-				int numInputs = tx.getInputs().size();
-				for (int i = 0; i < numInputs; i++) {
-					TransactionInput txIn = tx.getInput(i);
-					if (txIn.getConnectedOutput() == null) {
-						// Missing connected output, assuming already signed.
-						continue;
-					}
-
-					Script scriptPubKey = txIn.getConnectedOutput().getScriptPubKey();
-					RedeemData redeemData = txIn.getConnectedRedeemData(maybeDecryptingKeyBag);
-					// checkNotNull(redeemData, "Transaction exists in wallet that
-					// we cannot redeem: %s",
-					// txIn.getOutpoint().getHash());
-					if (redeemData != null)
-						txIn.setScriptSig(
-								scriptPubKey.createEmptyInputScript(redeemData.keys.get(0), redeemData.redeemScript));
+			int numInputs = tx.getInputs().size();
+			for (int i = 0; i < numInputs; i++) {
+				TransactionInput txIn = tx.getInput(i);
+				if (txIn.getConnectedOutput() == null) {
+					// Missing connected output, assuming already signed.
+					continue;
 				}
 
-				TransactionSigner.ProposedTransaction proposal = new TransactionSigner.ProposedTransaction(tx);
-				for (TransactionSigner signer : signers) {
-					if (!signer.signInputs(proposal, maybeDecryptingKeyBag))
-						log.info("{} returned false for the tx", signer.getClass().getName());
-				}
-
-				// resolve missing sigs if any
-				new MissingSigResolutionSigner(missingSigsMode).signInputs(proposal, maybeDecryptingKeyBag);
-			} finally {
-				lock.unlock();
+				Script scriptPubKey = txIn.getConnectedOutput().getScriptPubKey();
+				RedeemData redeemData = txIn.getConnectedRedeemData(maybeDecryptingKeyBag);
+				// checkNotNull(redeemData, "Transaction exists in wallet that
+				// we cannot redeem: %s",
+				// txIn.getOutpoint().getHash());
+				if (redeemData != null)
+					txIn.setScriptSig(
+							scriptPubKey.createEmptyInputScript(redeemData.keys.get(0), redeemData.redeemScript));
 			}
-		}
 
-		/**
-		 * <p>
-		 * Given a transaction, attempts to sign it's inputs. This method expects
-		 * transaction to have all necessary inputs connected or they will be ignored.
-		 * </p>
-		 * <p>
-		 * Actual signing is done by pluggable {@link #signers} and it's not guaranteed
-		 * that transaction will be complete in the end.
-		 * </p>
-		 */
-		public void signTransaction(Transaction tx, KeyParameter aesKey) {
-			signTransaction(tx, aesKey, MissingSigsMode.THROW);
+			TransactionSigner.ProposedTransaction proposal = new TransactionSigner.ProposedTransaction(tx);
+			for (TransactionSigner signer : signers) {
+				if (!signer.signInputs(proposal, maybeDecryptingKeyBag))
+					log.info("{} returned false for the tx", signer.getClass().getName());
+			}
+
+			// resolve missing sigs if any
+			new MissingSigResolutionSigner(missingSigsMode).signInputs(proposal, maybeDecryptingKeyBag);
+		} finally {
+			lock.unlock();
 		}
+	}
+
+	/**
+	 * <p>
+	 * Given a transaction, attempts to sign it's inputs. This method expects
+	 * transaction to have all necessary inputs connected or they will be ignored.
+	 * </p>
+	 * <p>
+	 * Actual signing is done by pluggable {@link #signers} and it's not guaranteed
+	 * that transaction will be complete in the end.
+	 * </p>
+	 */
+	public void signTransaction(Transaction tx, KeyParameter aesKey) {
+		signTransaction(tx, aesKey, MissingSigsMode.THROW);
+	}
 
 	// endregion
 
-    // region Wallet maintenance transactions
+	// region Wallet maintenance transactions
 
 	// Wallet maintenance transactions. These transactions may not be directly
 	// connected to a payment the user is
@@ -703,9 +691,9 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * created after T. This can be used to recover from a situation where a set of
 	 * keys is believed to be compromised. You can stop key rotation by calling this
 	 * method again with zero as the argument. Once set up, calling
-	 * {@link  (org.spongycastle.crypto.params.KeyParameter, boolean)}
-	 * will create and possibly send rotation transactions: but it won't be done
-	 * automatically (because you might have to ask for the users password).
+	 * {@link (org.spongycastle.crypto.params.KeyParameter, boolean)} will create
+	 * and possibly send rotation transactions: but it won't be done automatically
+	 * (because you might have to ask for the users password).
 	 * </p>
 	 *
 	 * <p>
@@ -731,30 +719,28 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		encrypt(scrypt, aesKey);
 	}
 
-	 
-
-		/*
-		 * get all keys in the wallet
-		 */
-		public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
-			DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-			List<ECKey> walletKeys = new ArrayList<>();
-			for (ECKey key : getImportedKeys()) {
+	/*
+	 * get all keys in the wallet
+	 */
+	public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
+		DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
+		List<ECKey> walletKeys = new ArrayList<>();
+		for (ECKey key : getImportedKeys()) {
+			ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+			walletKeys.add(ecKey);
+		}
+		for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
+			for (ECKey key : chain.getLeafKeys()) {
 				ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 				walletKeys.add(ecKey);
 			}
-			for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
-				for (ECKey key : chain.getLeafKeys()) {
-					ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
-					walletKeys.add(ecKey);
-				}
-			}
-			return walletKeys;
 		}
+		return walletKeys;
+	}
 
-		public List<ECKey> walletKeys() {
-            return walletKeys(null);
-		}
+	public List<ECKey> walletKeys() {
+		return walletKeys(null);
+	}
 
 	// use the fixed server
 	public void setServerURL(String contextRoot) {
@@ -768,20 +754,20 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	public void setFee(Boolean fee) {
 		this.fee = fee;
 	}
-	 
-		public String getServerURL() {
-			if (serverPool == null) {
-				serverPool = new ServerPool(params);
-			}
-			return serverPool.getServer().getServerurl();
-		}
 
-		public void setServerPool(ServerPool serverPool) {
-			this.serverPool = serverPool;
+	public String getServerURL() {
+		if (serverPool == null) {
+			serverPool = new ServerPool(params);
 		}
+		return serverPool.getServer().getServerurl();
+	}
 
-		public KeyChainGroup getKeyChainGroup() {
-			return this.keyChainGroup;
-		}
+	public void setServerPool(ServerPool serverPool) {
+		this.serverPool = serverPool;
+	}
+
+	public KeyChainGroup getKeyChainGroup() {
+		return this.keyChainGroup;
+	}
 
 }

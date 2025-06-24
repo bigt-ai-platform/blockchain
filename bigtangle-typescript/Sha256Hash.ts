@@ -19,6 +19,10 @@ export class Sha256Hash {
         return new Sha256Hash(Utils.reverseBytes(bytes));
     }
 
+    static of(data: Uint8Array): Sha256Hash {
+        return new Sha256Hash(Sha256Hash.hash(data));
+    }
+
     static hash(input: Uint8Array): Uint8Array {
         const hash = crypto.createHash('sha256');
         hash.update(Buffer.from(input));
@@ -33,12 +37,12 @@ export class Sha256Hash {
         return new Sha256Hash(Sha256Hash.hashTwice(data));
     }
 
-    getBytes(): Uint8Array {
-        return this.bytes;
-    }
-
     getReversedBytes(): Uint8Array {
         return Utils.reverseBytes(this.bytes);
+    }
+
+    getBytes(): Uint8Array {
+        return this.bytes;
     }
 
     toBigInteger(): bigInt.BigInteger {
