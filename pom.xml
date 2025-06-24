@@ -25,12 +25,11 @@
 		<junit.platform.version>1.9.1</junit.platform.version>
 	</properties>
 	<modules>
-		<module>bigtangle-core</module>
-		<module>bigtangle-docker</module>
+		<module>bigtangle-core</module> 
 		<module>bigtangle-server</module>
 		<module>bigtangle-subtangle</module>
-		<module>bigtangle-seeds</module>
-		<module>bigtangle-web</module>
+		<module>bigtangle-seeds</module>	 
+	
 	</modules>
 	<dependencies>
 		<!-- Logging -->

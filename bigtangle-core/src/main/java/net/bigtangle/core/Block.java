@@ -152,7 +152,7 @@ public class Block extends Message {
 		}
 	}
 
-	Block(NetworkParameters params, long setVersion) {
+	public Block(NetworkParameters params, long setVersion) {
 		this(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH, Block.Type.BLOCKTYPE_TRANSFER.ordinal(), 0,
 				Utils.encodeCompactBits(params.getMaxTarget()), 0);
 	}

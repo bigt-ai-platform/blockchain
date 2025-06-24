@@ -9,11 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
@@ -31,14 +28,12 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
 public class TipsServiceTest extends AbstractIntegrationTest {

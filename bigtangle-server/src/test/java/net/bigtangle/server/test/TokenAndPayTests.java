@@ -45,7 +45,6 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.BlockStoreException;
 import net.bigtangle.core.response.MultiSignByRequest;
 import net.bigtangle.core.response.MultiSignResponse;

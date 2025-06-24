@@ -40,7 +40,6 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.UtilsTest;
 import net.bigtangle.core.exception.ScriptException;
 import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.core.exception.VerificationException.CoinbaseDisallowedException;

@@ -10,6 +10,9 @@ logs/
 /.idea/
 
 
+
+/node_modules/
+/bigtangle-typescript/dist/
 /bigtangle-seeds/.settings/org.eclipse.core.resources.prefs
 /bigtangle-subtangle/.settings/org.eclipse.core.resources.prefs
 /bigtangle-seeds/.settings/org.eclipse.jdt.core.prefs
