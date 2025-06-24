@@ -1,10 +1,34 @@
 export class Json {
-    static jsonmapper(): any { // Using 'any' for simplicity, can be replaced with a more specific interface if needed
-        // In a real TypeScript environment, you would use a library like 'class-transformer' or 'json-typescript-mapper'
-        // to handle object mapping similar to Jackson. For now, we'll use a simple approach.
-        return {
-            writeValueAsString: (obj: any) => JSON.stringify(obj, null, 2),
-            readValue: (jsonStr: string, type: any) => JSON.parse(jsonStr) // Simplified, doesn't actually map to type
-        };
-    }
+  public static stringify(obj: any): string {
+    // Create a replacer function to filter out empty and null values
+    const replacer = (key: string, value: any) => {
+      // Exclude null and undefined values
+      if (value === null || value === undefined) {
+        return undefined;
+      }
+      
+      // Exclude empty arrays
+      if (Array.isArray(value) && value.length === 0) {
+        return undefined;
+      }
+      
+      // Exclude empty objects
+      if (typeof value === 'object' && Object.keys(value).length === 0) {
+        return undefined;
+      }
+      
+      return value;
+    };
+
+    // Stringify with pretty printing and sorted keys
+    return JSON.stringify(
+      obj,
+      replacer,
+      2  // Indent with 2 spaces for pretty printing
+    );
+  }
+
+  public static parse(json: string): any {
+    return JSON.parse(json);
+  }
 }
