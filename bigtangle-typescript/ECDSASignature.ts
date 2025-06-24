@@ -6,36 +6,50 @@ const CURVE_ORDER = bigInt('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD2
 const HALF_CURVE_ORDER = CURVE_ORDER.shiftRight(1);
 
 export class ECDSASignature {
-    public readonly r: BigInteger;
-    public readonly s: BigInteger;
+    constructor(
+        public r: BigInteger, 
+        public s: BigInteger, 
+        public recoveryParam?: number
+    ) {}
 
-    constructor(r: BigInteger, s: BigInteger) {
-        this.r = r;
-        this.s = s;
-    }
-
-    public isCanonical(): boolean {
-        return this.s.compare(HALF_CURVE_ORDER) <= 0;
-    }
-
-    public toCanonicalised(): ECDSASignature {
-        if (!this.isCanonical()) {
-            return new ECDSASignature(this.r, CURVE_ORDER.subtract(this.s));
+    toCanonicalised(): ECDSASignature {
+        // Canonicalize the signature by ensuring the S value is not greater than half the curve order
+        if (this.s.greater(HALF_CURVE_ORDER)) {
+            return new ECDSASignature(
+                this.r, 
+                CURVE_ORDER.subtract(this.s),
+                this.recoveryParam
+            );
         }
         return this;
     }
 
-    public encodeToDER(): Uint8Array {
+    // New method to convert signature to DER-encoded base64 string
+    toDerBase64(): string {
+        return Utils.bytesToBase64(this.encodeToDER());
+    }
+    
+    toDER(): Uint8Array {
+        return this.encodeToDER();
+    }
+
+    // New static method to create from DER-encoded base64 string
+    static fromDer(base64: string): ECDSASignature {
+        const bytes = Utils.base64ToBytes(base64);
+        return this.decodeFromDER(bytes);
+    }
+
+    encodeToDER(): Uint8Array {
         // Convert BigIntegers to byte arrays
-        const rBytes = this.r.toArray(256).value;
-        const sBytes = this.s.toArray(256).value;
+        let rBytes = this.r.toArray(256).value;
+        let sBytes = this.s.toArray(256).value;
         
         // Ensure positive integers (DER requires positive)
         if (rBytes[0] & 0x80) {
-            rBytes.unshift(0);
+            rBytes = [0, ...rBytes];
         }
         if (sBytes[0] & 0x80) {
-            sBytes.unshift(0);
+            sBytes = [0, ...sBytes];
         }
         
         const totalLength = 2 + rBytes.length + 2 + sBytes.length;
@@ -59,7 +73,7 @@ export class ECDSASignature {
         return result;
     }
 
-    public static decodeFromDER(bytes: Uint8Array): ECDSASignature {
+    static decodeFromDER(bytes: Uint8Array): ECDSASignature {
         if (bytes[0] !== 0x30) {
             throw new Error("Invalid DER signature format");
         }
@@ -87,7 +101,7 @@ export class ECDSASignature {
         return new ECDSASignature(r, s);
     }
 
-    public equals(other: ECDSASignature): boolean {
+    equals(other: ECDSASignature): boolean {
         return this.r.eq(other.r) && this.s.eq(other.s);
     }
 }

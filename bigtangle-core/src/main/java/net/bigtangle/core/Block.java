@@ -48,8 +48,6 @@ import net.bigtangle.core.exception.VerificationException.MerkleRootMismatchExce
 import net.bigtangle.core.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.core.exception.VerificationException.SigOpsException;
 import net.bigtangle.core.exception.VerificationException.TimeTravelerException;
-import net.bigtangle.equihash.EquihashProof;
-import net.bigtangle.equihash.EquihashSolver;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 
@@ -86,10 +84,7 @@ public class Block extends Message {
 	private long height;
 	// If NetworkParameters.USE_EQUIHASH, this field will contain the PoW
 	// solution
-	/** If null, it means this PoW was not solved yet. */
-	@Nullable
-	private EquihashProof equihashProof;
-
+ 
 	/** If null, it means this object holds only the headers. */
 	@Nullable
 	List<Transaction> transactions;
@@ -294,12 +289,7 @@ public class Block extends Message {
 		blockType = Type.values()[(int) readUint32()];
 		height = readInt64();
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
-		headerBytesValid = serializer.isParseRetainMode();
-
-		// PoW
-		if (NetworkParameters.USE_EQUIHASH)
-			setEquihashProof(EquihashProof.from(readBytes(EquihashProof.BYTE_LENGTH)));
-
+		headerBytesValid = serializer.isParseRetainMode(); 
 		// transactions
 		parseTransactions(cursor);
 		length = cursor - offset;
@@ -335,14 +325,7 @@ public class Block extends Message {
 	}
 
 	void writePoW(OutputStream stream) throws IOException {
-		if (NetworkParameters.USE_EQUIHASH) {
-			if (getEquihashProof() != null) {
-				stream.write(getEquihashProof().serialize());
-			} else {
-				stream.write(EquihashProof.getDummy().serialize());
-				log.warn("serializing block with dummy PoW, ensure that PoW is computed before publishing");
-			}
-		}
+	 
 	}
 
 	private void writeTransactions(OutputStream stream) throws IOException {
@@ -542,8 +525,7 @@ public class Block extends Message {
 		block.difficultyTarget = difficultyTarget;
 		block.lastMiningRewardBlock = lastMiningRewardBlock;
 		block.minerAddress = minerAddress;
-		block.equihashProof = equihashProof;
-
+	 
 		block.blockType = blockType;
 		block.transactions = null;
 		block.hash = getHash();
@@ -645,12 +627,8 @@ public class Block extends Message {
 					return;
 
 				// No, so increment the nonce and try again.
-				setNonce(getNonce() + 1);
-
-				// Find Equihash solution for this configuration
-				if (NetworkParameters.USE_EQUIHASH) {
-					equihashProof = EquihashSolver.calculateProof(params.equihashN, params.equihashK, getHash());
-				}
+				setNonce(getNonce() + 1); 
+		 
 			} catch (VerificationException e) {
 				throw new RuntimeException(e); // Cannot happen.
 			}
@@ -709,17 +687,7 @@ public class Block extends Message {
 		// the difficultyTarget
 		// field is of the right value. This requires us to have the preceeding
 		// blocks.
-
-		// Equihash
-		if (NetworkParameters.USE_EQUIHASH) {
-			if (!EquihashSolver.testProof(params.equihashN, params.equihashK, getHash(), getEquihashProof())) {
-				// Proof of work check failed!
-				if (throwException)
-					throw new ProofOfWorkException();
-				else
-					return false;
-			}
-		} else {
+ 
 			BigInteger h = calculatePoWHash().toBigInteger();
 
 			if (h.compareTo(target) > 0) {
@@ -729,7 +697,7 @@ public class Block extends Message {
 				else
 					return false;
 			}
-		}
+	 
 
 		return true;
 	}
@@ -1142,19 +1110,7 @@ public class Block extends Message {
 		this.blockType = blocktype;
 		this.hash = null;
 	}
-
-	public EquihashProof getEquihashProof() {
-		if (equihashProof != null) {
-			return equihashProof;
-		} else {
-			return EquihashProof.getDummy();
-		}
-	}
-
-	public void setEquihashProof(EquihashProof equihashProof) {
-		this.equihashProof = equihashProof;
-	}
-
+ 
 	public long getDifficultyTarget() {
 		return difficultyTarget;
 	}

@@ -40,7 +40,6 @@ import net.bigtangle.core.response.GetBlockListResponse;
 import net.bigtangle.core.response.GetTXRewardListResponse;
 import net.bigtangle.core.response.GetTXRewardResponse;
 import net.bigtangle.params.ReqCmd;
-import net.bigtangle.server.checkpoint.DockerService;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ChainBlockQueue;
@@ -85,8 +84,7 @@ public class SyncBlockService {
 	protected CacheBlockService cacheBlockService;
 	@Autowired
 	private StoreService storeService;
-	@Autowired
-	private DockerService dockerService;
+	 
 
 	// default start sync of chain and non chain data
 	public void startSingleProcess() throws BlockStoreException {
@@ -446,21 +444,7 @@ public class SyncBlockService {
 		// log.debug(" finish sync " + aMaxConfirmedReward.server + " ");
 	}
 
-	/*
-	 * sql dump and check skeleton of database
-	 */
-	public void checkPointDatabase(long chain) throws IOException, InterruptedException {
-
-		if (chain >= (serverConfiguration.getCheckpoint()) && serverConfiguration.getCheckpoint() > 100000
-				&& chain % (serverConfiguration.getCheckpoint()) == 0) {
-			try {
-				dockerService.dockerExec(dockerService.mysqldumpCheck(chain));
-			} catch (Exception e) {
-				log.debug("", e);
-			}
-		}
-	}
-
+ 
 	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {

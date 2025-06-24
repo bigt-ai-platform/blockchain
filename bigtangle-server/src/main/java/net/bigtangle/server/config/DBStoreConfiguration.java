@@ -5,15 +5,7 @@
 package net.bigtangle.server.config;
 
 import java.io.IOException;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import javax.sql.DataSource;
 
@@ -29,7 +21,6 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.docker.DockerHelper;
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
 
@@ -117,69 +108,6 @@ public class DBStoreConfiguration {
 		config.setLeakDetectionThreshold(300000);
 		logger.debug(config.getJdbcUrl());
 		return new HikariDataSource(config);
-
-	}
-
-	private void createDatabase() throws IOException, InterruptedException, ExecutionException {
-		if (serverConfiguration.getDockerCreateDBHost()) {
-			DockerHelper dockerHelper = new DockerHelper();
-			try {
-
-				// dockerHelper.shellExecute(" service docker start " );
-				String data = " /data/vm/" + serverConfiguration.getDockerDBHost() + "/var/lib/mysql";
-
-				dockerHelper.shellExecute(" mkdir -p  " + data);
-				dockerHelper.shellExecute("   docker run -d  -t " + "-v " + data + ":/var/lib/mysql "
-						+ " -e MYSQL_ROOT_PASSWORD=" + getPassword() + " -e MYSQL_DATABASE=" + getDbName() + " --name="
-						+ serverConfiguration.getDockerDBHost() + "     mysql:8.0.23 ");
-				// check database available
-				logger.debug(" check database connection " + MySQLFullBlockStore.DATABASE_CONNECTION_URL_PREFIX
-						+ hostname + "/" + dbName + "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC");
-				checkConnectionWait(120);
-			} catch (Exception e) {
-				if (e.getMessage().contains("Conflict")) {
-					dockerHelper.shellExecute("docker start " + serverConfiguration.getDockerDBHost());
-					checkConnectionWait(120);
-				} else {
-					logger.warn("", e);
-				}
-			}
-		}
-	}
-
-	private boolean checkConnectionWait() throws InterruptedException, SQLException {
-		boolean rating = false;
-		while (!rating) {
-			try {
-				Properties connectionProps = new Properties();
-				connectionProps.put("user", getUsername());
-				connectionProps.put("password", getPassword());
-
-				DriverManager.getConnection(MySQLFullBlockStore.DATABASE_CONNECTION_URL_PREFIX + hostname + "/" + dbName
-						+ "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC", connectionProps);
-				rating = true;
-			} catch (Exception e) {
-
-				Thread.sleep(1000);
-			}
-		}
-		return rating;
-	}
-
-	// check with maximum timeout
-	public boolean checkConnectionWait(Integer seconds) throws InterruptedException, ExecutionException {
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-		final Future<Boolean> handler = executor.submit(() -> {
-			return checkConnectionWait();
-		});
-		try {
-			return handler.get(seconds, TimeUnit.SECONDS);
-		} catch (TimeoutException e) {
-			handler.cancel(true);
-			return false;
-		} finally {
-			executor.shutdownNow();
-		}
 
 	}
 

@@ -18,7 +18,7 @@ export class DumpedPrivateKey extends VersionedChecksummedBytes {
             tempBytes[keyBytes.length] = 0x01;
             bytesToEncode = tempBytes;
         }
-        super(params.dumpedPrivateKeyHeader, bytesToEncode);
+        super(params.getDumpedPrivateKeyHeader(), bytesToEncode);
         this.compressed = compressed;
     }
 

@@ -147,7 +147,7 @@ export class Base58 {
         }
         const data = decoded.slice(0, decoded.length - 4);
         const checksum = decoded.slice(decoded.length - 4, decoded.length);
-        const actualChecksum = Sha256Hash.hashTwice(data).getBytes().slice(0, 4);
+        const actualChecksum = Sha256Hash.hashTwice(data).slice(0, 4);
         if (!Base58.arraysEqual(checksum, actualChecksum)) {
             throw new AddressFormatException("Checksum does not validate");
         }

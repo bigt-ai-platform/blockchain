@@ -32,9 +32,7 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Objects;
 import com.google.common.math.LongMath;
-
-import net.bigtangle.equihash.EquihashProof;
-import net.bigtangle.params.MainNetParams;
+ import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 
@@ -113,8 +111,7 @@ public abstract class NetworkParameters {
     public static final byte[] BIGTANGLE_TOKENID = HEX.decode(BIGTANGLE_TOKENID_STRING);
     public static final String BIGTANGLE_TOKENNAME = "BIG";
     public static final int BIGTANGLE_DECIMAL = 6;
-    // Use Equihash
-    public static final boolean USE_EQUIHASH = false;
+     
     protected int equihashN;
     protected int equihashK;
     /**
@@ -156,9 +153,7 @@ public abstract class NetworkParameters {
             + 20 // miner address
             + 4 // blockType
             + 8 // height
-            + (USE_EQUIHASH ? EquihashProof.BYTE_LENGTH : 0); // for Equihash
-
-
+  ; 
     // max time of an order in seconds
     public static final long ORDER_TIMEOUT_MAX = 8 * 60 * 60;
 

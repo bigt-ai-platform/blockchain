@@ -21,9 +21,7 @@ package org.bitcoin;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.security.AccessControlException;
-
+ 
 /**
  * This class holds the context reference used in native methods to handle ECDSA operations.
  */
@@ -45,10 +43,7 @@ public class Secp256k1Context {
         } catch (UnsatisfiedLinkError e) {
          //   log.info("", e);
             isEnabled = false;
-        } catch (AccessControlException e) {
-            log.debug("",e);
-            isEnabled = false;
-        }
+        }  
         enabled = isEnabled;
         context = contextRef;
     }
