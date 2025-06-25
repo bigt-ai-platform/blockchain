@@ -16,10 +16,10 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.response.GetBalancesResponse;
-import net.bigtangle.core.response.OrderdataResponse;
 import net.bigtangle.encrypt.ECIESCoder;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetBalancesResponse;
+import net.bigtangle.response.OrderdataResponse;
 
 public class WalletUtil {
     public static void orderMap(OrderdataResponse orderdataResponse, List<MarketOrderItem> orderData,

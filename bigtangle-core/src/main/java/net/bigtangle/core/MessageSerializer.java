@@ -27,7 +27,7 @@ import java.io.OutputStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
-import net.bigtangle.core.exception.ProtocolException;
+import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.utils.Gzip;
 
 /**

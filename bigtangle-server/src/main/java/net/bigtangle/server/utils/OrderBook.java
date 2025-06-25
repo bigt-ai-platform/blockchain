@@ -11,9 +11,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import it.unimi.dsi.fastutil.longs.Long2ObjectRBTreeMap;
 import it.unimi.dsi.fastutil.longs.LongComparators;
 import net.bigtangle.core.Side;
-import net.bigtangle.core.ordermatch.Order;
-import net.bigtangle.core.ordermatch.OrderBookListener;
-import net.bigtangle.core.ordermatch.PriceLevel;
+import net.bigtangle.ordermatch.Order;
+import net.bigtangle.ordermatch.OrderBookListener;
+import net.bigtangle.ordermatch.PriceLevel;
 
 /**
  * An order book.

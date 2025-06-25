@@ -20,8 +20,8 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UserSettingData;
 import net.bigtangle.core.UserSettingDataInfo;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.response.GetTokensResponse;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 

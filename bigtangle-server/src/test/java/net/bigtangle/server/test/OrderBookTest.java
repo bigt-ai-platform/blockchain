@@ -11,11 +11,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Side;
-import net.bigtangle.core.ordermatch.OrderBookEvents;
-import net.bigtangle.core.ordermatch.OrderBookEvents.Add;
-import net.bigtangle.core.ordermatch.OrderBookEvents.Cancel;
-import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
-import net.bigtangle.core.ordermatch.OrderBookEvents.Match;
+import net.bigtangle.ordermatch.OrderBookEvents;
+import net.bigtangle.ordermatch.OrderBookEvents.Add;
+import net.bigtangle.ordermatch.OrderBookEvents.Cancel;
+import net.bigtangle.ordermatch.OrderBookEvents.Event;
+import net.bigtangle.ordermatch.OrderBookEvents.Match;
 import net.bigtangle.server.utils.OrderBook;
 
 public class OrderBookTest {

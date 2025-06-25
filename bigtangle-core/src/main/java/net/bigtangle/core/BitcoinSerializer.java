@@ -34,7 +34,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.exception.ProtocolException;
+import net.bigtangle.exception.ProtocolException;
 
 /**
  * <p>Methods to serialize and de-serialize messages to the Bitcoin network format as defined in

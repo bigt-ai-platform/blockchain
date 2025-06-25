@@ -14,11 +14,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Random;
 
- 
-
-import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.ProtocolException;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.ScriptBuilder;
  

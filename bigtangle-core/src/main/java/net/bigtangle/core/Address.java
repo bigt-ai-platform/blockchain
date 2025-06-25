@@ -27,8 +27,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import javax.annotation.Nullable;
 
-import net.bigtangle.core.exception.AddressFormatException;
-import net.bigtangle.core.exception.WrongNetworkException;
+import net.bigtangle.exception.AddressFormatException;
+import net.bigtangle.exception.WrongNetworkException;
 import net.bigtangle.params.Networks;
 import net.bigtangle.script.Script;
 

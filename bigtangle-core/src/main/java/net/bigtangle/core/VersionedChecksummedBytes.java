@@ -28,7 +28,7 @@ import com.google.common.base.Objects;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedBytes;
 
-import net.bigtangle.core.exception.AddressFormatException;
+import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.utils.Base58;
 
 /**

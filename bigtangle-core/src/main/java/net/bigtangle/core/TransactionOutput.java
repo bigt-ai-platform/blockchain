@@ -37,8 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Objects;
 
-import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.ScriptException;
+import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.wallet.Wallet;

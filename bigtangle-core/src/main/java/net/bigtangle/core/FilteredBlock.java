@@ -30,9 +30,9 @@ import java.util.Map;
 
 import com.google.common.base.Objects;
 
-import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.exception.VerificationException.MerkleRootMismatchException;
+import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.exception.VerificationException;
+import net.bigtangle.exception.VerificationException.MerkleRootMismatchException;
 
 /**
  * <p>A FilteredBlock is used to relay a block with its transactions filtered using a {@link BloomFilter}. It consists

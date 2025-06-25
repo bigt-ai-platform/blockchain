@@ -31,8 +31,8 @@ import javax.annotation.Nullable;
 
 import com.google.common.base.Objects;
 
-import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.ScriptException;
+import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;

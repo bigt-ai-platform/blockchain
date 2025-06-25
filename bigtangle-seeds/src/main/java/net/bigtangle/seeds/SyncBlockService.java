@@ -22,9 +22,9 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.TXReward;
-import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.response.GetTXRewardResponse;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 

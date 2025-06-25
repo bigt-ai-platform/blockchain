@@ -2,7 +2,7 @@ package net.bigtangle.seeds;
 
 import java.util.List;
 
-import net.bigtangle.core.response.AbstractResponse;
+import net.bigtangle.response.AbstractResponse;
 
 public class ServerinfoResponse extends AbstractResponse {
 	private List<ServerInfo> serverInfoList;

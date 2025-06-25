@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.service.base.MinioService;

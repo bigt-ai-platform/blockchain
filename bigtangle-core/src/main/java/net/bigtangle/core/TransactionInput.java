@@ -32,9 +32,9 @@ import javax.annotation.Nullable;
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 
-import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.ScriptException;
-import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.exception.ScriptException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.script.Script;
 import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;

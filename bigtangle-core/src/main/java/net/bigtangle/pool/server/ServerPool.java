@@ -20,10 +20,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.TXReward;
-import net.bigtangle.core.response.GetTXRewardResponse;
-import net.bigtangle.core.response.ServerInfo;
-import net.bigtangle.core.response.ServerinfoResponse;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetTXRewardResponse;
+import net.bigtangle.response.ServerInfo;
+import net.bigtangle.response.ServerinfoResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 

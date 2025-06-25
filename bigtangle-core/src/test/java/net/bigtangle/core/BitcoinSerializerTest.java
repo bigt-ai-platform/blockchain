@@ -20,7 +20,7 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.exception.ProtocolException;
+import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.MainNetParams;
 
 public class BitcoinSerializerTest {

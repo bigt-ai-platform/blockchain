@@ -27,8 +27,8 @@ import com.google.common.base.Preconditions;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.VersionedChecksummedBytes;
-import net.bigtangle.core.exception.AddressFormatException;
-import net.bigtangle.core.exception.WrongNetworkException;
+import net.bigtangle.exception.AddressFormatException;
+import net.bigtangle.exception.WrongNetworkException;
 
 import java.util.Arrays;
 

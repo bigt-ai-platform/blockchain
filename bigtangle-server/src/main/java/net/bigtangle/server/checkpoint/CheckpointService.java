@@ -22,8 +22,8 @@ import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.UTXO;
-import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.exception.UTXOProviderException;
+import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.exception.UTXOProviderException;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.store.BlockStoreInterface;
 

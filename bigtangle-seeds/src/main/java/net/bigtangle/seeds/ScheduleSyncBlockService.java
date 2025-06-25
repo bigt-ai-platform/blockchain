@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 
 @Component
 @EnableAsync

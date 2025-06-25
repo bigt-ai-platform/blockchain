@@ -14,9 +14,9 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
-import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.response.AbstractResponse;
-import net.bigtangle.core.response.GetTokensResponse;
+import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.store.BlockStoreInterface;
 
 @Service

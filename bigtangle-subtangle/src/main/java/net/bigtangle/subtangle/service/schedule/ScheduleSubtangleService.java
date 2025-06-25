@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.subtangle.SubtangleConfiguration;

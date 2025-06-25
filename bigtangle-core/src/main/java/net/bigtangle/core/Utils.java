@@ -57,8 +57,8 @@ import com.google.common.io.Resources;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedLongs;
 
-import net.bigtangle.core.exception.AddressFormatException;
-import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.exception.AddressFormatException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.utils.Base58;
 
 /**

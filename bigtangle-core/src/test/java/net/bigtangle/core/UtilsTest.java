@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Stopwatch;
 
-import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.utils.Gzip;

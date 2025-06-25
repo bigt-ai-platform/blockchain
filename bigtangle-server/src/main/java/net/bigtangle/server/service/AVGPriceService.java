@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.LockObject;

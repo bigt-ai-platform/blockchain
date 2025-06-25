@@ -22,10 +22,10 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.UTXO;
-import net.bigtangle.core.response.GetOutputsResponse;
-import net.bigtangle.core.response.GetTokensResponse;
-import net.bigtangle.core.response.OrderdataResponse;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetOutputsResponse;
+import net.bigtangle.response.GetTokensResponse;
+import net.bigtangle.response.OrderdataResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 

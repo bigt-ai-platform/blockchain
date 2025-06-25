@@ -26,8 +26,8 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.response.AbstractResponse;
-import net.bigtangle.core.response.ErrorResponse;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.response.ErrorResponse;
 import net.bigtangle.server.test.ContractTest;
 import net.bigtangle.wallet.Wallet;
 

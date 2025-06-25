@@ -24,7 +24,7 @@ import com.google.common.base.Preconditions;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Transaction.SigHash;
-import net.bigtangle.core.exception.VerificationException;
+import net.bigtangle.exception.VerificationException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

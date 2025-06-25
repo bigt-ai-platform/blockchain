@@ -39,15 +39,15 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
-import net.bigtangle.core.exception.ProtocolException;
-import net.bigtangle.core.exception.VerificationException;
-import net.bigtangle.core.exception.VerificationException.CoinbaseDisallowedException;
-import net.bigtangle.core.exception.VerificationException.DifficultyTargetException;
-import net.bigtangle.core.exception.VerificationException.LargerThanMaxBlockSize;
-import net.bigtangle.core.exception.VerificationException.MerkleRootMismatchException;
-import net.bigtangle.core.exception.VerificationException.ProofOfWorkException;
-import net.bigtangle.core.exception.VerificationException.SigOpsException;
-import net.bigtangle.core.exception.VerificationException.TimeTravelerException;
+import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.exception.VerificationException;
+import net.bigtangle.exception.VerificationException.CoinbaseDisallowedException;
+import net.bigtangle.exception.VerificationException.DifficultyTargetException;
+import net.bigtangle.exception.VerificationException.LargerThanMaxBlockSize;
+import net.bigtangle.exception.VerificationException.MerkleRootMismatchException;
+import net.bigtangle.exception.VerificationException.ProofOfWorkException;
+import net.bigtangle.exception.VerificationException.SigOpsException;
+import net.bigtangle.exception.VerificationException.TimeTravelerException;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 

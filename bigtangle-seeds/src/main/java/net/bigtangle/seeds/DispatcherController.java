@@ -32,8 +32,8 @@ import com.google.common.base.Stopwatch;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import net.bigtangle.core.response.AbstractResponse;
-import net.bigtangle.core.response.ErrorResponse;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.response.ErrorResponse;
 import net.bigtangle.utils.Gzip;
 import net.bigtangle.utils.Json;
 

@@ -11,7 +11,7 @@ import io.minio.PutObjectArgs;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.utils.Gzip;
 import okhttp3.ConnectionPool;

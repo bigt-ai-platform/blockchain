@@ -10,7 +10,7 @@ import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.AbstractStreamHandler;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.service.base.MinioService;

@@ -7,7 +7,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.store.BlockStoreInterface;
 
 @Service

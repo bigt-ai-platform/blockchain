@@ -17,9 +17,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.exception.ScriptException;
-import net.bigtangle.core.exception.VerificationException;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.exception.ScriptException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;

@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.exception.BlockStoreException;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.service.base.MinioService;
  
 

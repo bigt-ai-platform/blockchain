@@ -13,10 +13,10 @@ import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.exception.BlockStoreException;
-import net.bigtangle.core.response.AbstractResponse;
-import net.bigtangle.core.response.GetDomainTokenResponse;
-import net.bigtangle.core.response.PermissionedAddressesResponse;
+import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.response.GetDomainTokenResponse;
+import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.DomainnameUtil;
 

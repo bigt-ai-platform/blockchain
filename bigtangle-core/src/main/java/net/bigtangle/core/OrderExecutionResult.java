@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
-import net.bigtangle.core.ordermatch.TradePair;
+import net.bigtangle.ordermatch.TradePair;
+import net.bigtangle.ordermatch.OrderBookEvents.Event;
 
 /*
  * OrderExecutionResult provide the results from the execution based on prev results.

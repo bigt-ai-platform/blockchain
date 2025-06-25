@@ -23,9 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.*;
-import net.bigtangle.core.exception.ScriptException;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;

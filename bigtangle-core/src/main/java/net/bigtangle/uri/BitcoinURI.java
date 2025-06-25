@@ -22,7 +22,7 @@ package net.bigtangle.uri;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.exception.AddressFormatException;
+import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.params.AbstractBitcoinNetParams;
 import net.bigtangle.utils.MonetaryFormat;
 

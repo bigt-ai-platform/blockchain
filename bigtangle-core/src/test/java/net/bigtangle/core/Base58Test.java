@@ -14,7 +14,7 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.exception.AddressFormatException;
+import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.utils.Base58;
 
 public class Base58Test  {

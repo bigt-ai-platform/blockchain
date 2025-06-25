@@ -8,8 +8,8 @@ import java.util.Set;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.ordermatch.OrderBookEvents.Event;
-import net.bigtangle.core.ordermatch.TradePair;
+import net.bigtangle.ordermatch.TradePair;
+import net.bigtangle.ordermatch.OrderBookEvents.Event;
 
 public class OrderMatchingResult {
     Set<OrderRecord> spentOrders;

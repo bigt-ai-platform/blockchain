@@ -25,7 +25,7 @@ import com.google.common.primitives.Bytes;
 import com.lambdaworks.crypto.SCrypt;
 
 import net.bigtangle.core.*;
-import net.bigtangle.core.exception.AddressFormatException;
+import net.bigtangle.exception.AddressFormatException;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
