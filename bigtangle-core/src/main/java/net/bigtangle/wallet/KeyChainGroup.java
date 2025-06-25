@@ -609,11 +609,7 @@ public class KeyChainGroup implements KeyBag {
         return ScriptBuilder.createP2SHOutputScript(chain.getRedeemData(followedKey).redeemScript);
     }
 
-    /** Adds a listener for events that are run when keys are added, on the user thread. */
-    public void addEventListener(KeyChainEventListener listener) {
-        addEventListener(listener, Threading.USER_THREAD);
-    }
-
+ 
     /** Adds a listener for events that are run when keys are added, on the given executor. */
     public void addEventListener(KeyChainEventListener listener, Executor executor) {
         checkNotNull(listener);

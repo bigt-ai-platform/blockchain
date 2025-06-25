@@ -52,16 +52,16 @@ public class KafkaMessageProducer {
         // messages can be ordered per a certain property,
         // set a consistent message key and use multiple partitions
         final String key = serveraddress;// UUID.randomUUID().toString();
-        KafkaProducer<String, byte[]> messageProducer = new KafkaProducer<String, byte[]>(producerConfig());
-        ProducerRecord<String, byte[]> producerRecord = null;
-        byte[] bytes = Gzip.compress(data);
-     //   log.debug(" compress  " + bytes.length);
-        producerRecord = new ProducerRecord<String, byte[]>(topic, key, bytes);
-        final Future<RecordMetadata> result = messageProducer.send(producerRecord);
-        RecordMetadata mdata = result.get();
-        log.trace(" sendMessage " + key);
-        messageProducer.close();
-        return mdata != null;
+        try (KafkaProducer<String, byte[]> messageProducer = new KafkaProducer<String, byte[]>(producerConfig())) {
+            ProducerRecord<String, byte[]> producerRecord = null;
+            byte[] bytes = Gzip.compress(data);
+         //   log.debug(" compress  " + bytes.length);
+            producerRecord = new ProducerRecord<String, byte[]>(topic, key, bytes);
+            final Future<RecordMetadata> result = messageProducer.send(producerRecord);
+            RecordMetadata mdata = result.get();
+            log.trace(" sendMessage " + key);
+            return mdata != null;
+        }
 
     }
 

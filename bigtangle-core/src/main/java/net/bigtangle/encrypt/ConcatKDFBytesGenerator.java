@@ -82,6 +82,9 @@ public class ConcatKDFBytesGenerator
     public int generateBytes(byte[] out, int outOff, int len) throws DataLengthException,
             IllegalArgumentException
     {
+        if (shared == null) {
+            throw new IllegalStateException("Shared secret not initialized. Call init() first with valid parameters.");
+        }
         if ((out.length - len) < outOff)
         {
             throw new DataLengthException("output buffer too small");
@@ -145,4 +148,3 @@ public class ConcatKDFBytesGenerator
         return (int)oBytes;
     }
 }
-

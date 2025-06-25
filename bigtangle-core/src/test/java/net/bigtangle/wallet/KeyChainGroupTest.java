@@ -408,7 +408,7 @@ public class KeyChainGroupTest {
 				ran.set(keys.get(0));
 			}
 		};
-		group.addEventListener(listener, Threading.SAME_THREAD);
+ 
 		ECKey key = group.freshKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
 		assertEquals(key, ran.getAndSet(null));
 		ECKey key2 = new ECKey();

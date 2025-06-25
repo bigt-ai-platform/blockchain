@@ -38,7 +38,7 @@ export class BitcoinSerializer extends MessageSerializer {
     private readonly parseRetain: boolean;
 
     constructor(params: NetworkParameters, parseRetain: boolean) {
-        super();
+        super(params, parseRetain);
         this.params = params;
         this.parseRetain = parseRetain;
     }

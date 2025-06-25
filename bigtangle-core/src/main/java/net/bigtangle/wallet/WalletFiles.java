@@ -47,8 +47,7 @@ import net.bigtangle.utils.ContextPropagatingThreadFactory;
 public class WalletFiles {
     private static final Logger log = LoggerFactory.getLogger(WalletFiles.class);
 
-    private final Wallet wallet;
-    private final ScheduledThreadPoolExecutor executor;
+    private final Wallet wallet; 
     private final File file;
     private final AtomicBoolean savePending;
     private final long delay;
@@ -79,12 +78,7 @@ public class WalletFiles {
      * depending on the urgency of the changes.
      */
     public WalletFiles(final Wallet wallet, File file, long delay, TimeUnit delayTimeUnit) {
-        // An executor that starts up threads when needed and shuts them down later.
-        this.executor = new ScheduledThreadPoolExecutor(1, new ContextPropagatingThreadFactory("Wallet autosave thread", Thread.MIN_PRIORITY));
-        this.executor.setKeepAliveTime(5, TimeUnit.SECONDS);
-        this.executor.allowCoreThreadTimeOut(true);
-        this.executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-        this.wallet = checkNotNull(wallet);
+           this.wallet = checkNotNull(wallet);
         // File must only be accessed from the auto-save executor from now on, to avoid simultaneous access.
         this.file = checkNotNull(file);
         this.savePending = new AtomicBoolean();
@@ -105,13 +99,7 @@ public class WalletFiles {
         };
     }
 
-    /**
-     * The given listener will be called on the autosave thread before and after the wallet is saved to disk.
-     */
-    public void setListener(@Nonnull Listener listener) {
-        this.vListener = checkNotNull(listener);
-    }
-
+  
     /** Actually write the wallet file to disk, using an atomic rename when possible. Runs on the current thread. */
     public void saveNow() throws IOException {
         // Can be called by any thread. However the wallet is locked whilst saving, so we can have two saves in flight
@@ -134,20 +122,5 @@ public class WalletFiles {
         log.info("Save completed in {}", watch);
     }
 
-    /** Queues up a save in the background. Useful for not very important wallet changes. */
-    public void saveLater() {
-        if (savePending.getAndSet(true))
-            return;   // Already pending.
-        executor.schedule(saver, delay, delayTimeUnit);
-    }
-
-    /** Shut down auto-saving. */
-    public void shutdownAndWait() {
-        executor.shutdown();
-        try {
-            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS); // forever
-        } catch (InterruptedException x) {
-            throw new RuntimeException(x);
-        }
-    }
+ 
 }

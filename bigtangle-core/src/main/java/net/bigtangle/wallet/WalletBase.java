@@ -203,8 +203,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/**
-	 * Imports the given keys to the wallet. If
-	 * {@link WalletBase#autosaveToFile(java.io.File, long, java.util.concurrent.TimeUnit, net.bigtangle.wallet.WalletFiles.Listener)}
+	 * Imports the given keys to the wallet.  
 	 * has been called, triggers an auto save bypassing the normal coalescing delay
 	 * and event handlers. Returns the number of keys added, after duplicates are
 	 * ignored. The onKeyAdded event will be called for each key in the list that
@@ -580,9 +579,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/******************************************************************************************************************/
-
-	public abstract WalletFiles autosaveToFile(File f, long delayTime, TimeUnit timeUnit,
-			@Nullable WalletFiles.Listener eventListener);
+ 
 
 	public void signTransaction(Transaction tx, KeyParameter aesKey, MissingSigsMode missingSigsMode) {
 		lock.lock();

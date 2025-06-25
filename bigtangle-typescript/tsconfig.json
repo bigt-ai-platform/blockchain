@@ -3,6 +3,7 @@
     "target": "es2020",
     "module": "commonjs",
     "lib": ["es2018", "dom"],
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -11,7 +12,7 @@
     "rootDir": "./",
     "baseUrl": "./",
     "paths": {
-      "net/bigtangle/*": ["net/bigtangle/*"],
+      "net/bigtangle/*": ["src/net/bigtangle/*"],
       "*": ["node_modules/*"]
     }
   },

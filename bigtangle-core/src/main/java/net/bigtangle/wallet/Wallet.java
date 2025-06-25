@@ -197,27 +197,8 @@ public class Wallet extends WalletBase {
 		} finally {
 			lock.unlock();
 		}
-	}
+	} 
  
-
- 
-
-	/******************************************************************************************************************/
-
-	public WalletFiles autosaveToFile(File f, long delayTime, TimeUnit timeUnit,
-			@Nullable WalletFiles.Listener eventListener) {
-		lock.lock();
-		try {
-			checkState(vFileManager == null, "Already auto saving this wallet.");
-			WalletFiles manager = new WalletFiles(this, f, delayTime, timeUnit);
-			if (eventListener != null)
-				manager.setListener(eventListener);
-			vFileManager = manager;
-			return manager;
-		} finally {
-			lock.unlock();
-		}
-	}
 
 	// All Spend Candidates as List<TransactionOutput>
 	public List<FreeStandingTransactionOutput> calculateAllSpendCandidates(KeyParameter aesKey, boolean multisigns)

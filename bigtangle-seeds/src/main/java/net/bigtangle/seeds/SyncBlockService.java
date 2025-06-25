@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,12 +78,7 @@ public class SyncBlockService {
 
 	{
 
-		BufferedReader bufferedReader = null;
-
-		BufferedWriter bufferedWriter = null;
-
 		File distFile = null;
-
 		try {
 
 			distFile = new File(filePath);
@@ -92,27 +86,14 @@ public class SyncBlockService {
 			if (!distFile.getParentFile().exists())
 				distFile.getParentFile().mkdirs();
 
-			bufferedReader = new BufferedReader(new StringReader(Data));
-
-			bufferedWriter = new BufferedWriter(new FileWriter(distFile));
-
-			char buf[] = new char[1024]; // 字符缓冲区
-
-			int len;
-
-			while ((len = bufferedReader.read(buf)) != -1)
-
-			{
-
-				bufferedWriter.write(buf, 0, len);
-
-			}
-
-			bufferedWriter.flush();
-
-			bufferedReader.close();
-
-			bufferedWriter.close();
+			try (BufferedReader bufferedReader = new BufferedReader(new StringReader(Data));
+			     BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(distFile))) {
+			    char buf[] = new char[1024]; // 字符缓冲区
+			    int len;
+			    while ((len = bufferedReader.read(buf)) != -1) {
+			        bufferedWriter.write(buf, 0, len);
+			    }
+			} // resources auto-closed
 
 		} catch (Exception e) {
 			log.error("", e);

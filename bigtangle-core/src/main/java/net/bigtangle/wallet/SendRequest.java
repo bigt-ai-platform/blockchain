@@ -114,13 +114,7 @@ public class SendRequest {
      */
     public KeyParameter aesKey = null;
 
-    /**
-     * If not null, the {@link net.bigtangle.wallet.CoinSelector} to use instead of the wallets default. Coin selectors are
-     * responsible for choosing which transaction outputs (coins) in a wallet to use given the desired send value
-     * amount.
-     */
-    public CoinSelector coinSelector = null;
-
+  
     /**
      * If true (the default), the outputs will be shuffled during completion to randomize the location of the change
      * output, if any. This is normally what you want for privacy reasons but in unit tests it can be annoying
@@ -226,7 +220,7 @@ public class SendRequest {
         helper.add("ensureMinRequiredFee", ensureMinRequiredFee);
         helper.add("signInputs", signInputs);
         helper.add("aesKey", aesKey != null ? "set" : null); // careful to not leak the key
-        helper.add("coinSelector", coinSelector);
+  
         helper.add("shuffleOutputs", shuffleOutputs);
         return helper.toString();
     }
