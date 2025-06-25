@@ -109,10 +109,7 @@ public class UTXO extends SpentBlock implements  Serializable {
         return tokenId;
     }
 
-    public void setTokenId(String tokenid) {
-        this.tokenId = tokenid;
-    }
-
+  
     public void setTokenid(String tokenid) {
         this.tokenId = tokenid;
     }

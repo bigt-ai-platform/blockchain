@@ -5,15 +5,12 @@
 
 package net.bigtangle.pool.server;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
@@ -45,9 +42,6 @@ public class ServerPool {
 
 	private List<ServerState> servers = new ArrayList<ServerState>();
 	private static final Logger log = LoggerFactory.getLogger(ServerPool.class);
-	private ScheduledThreadPoolExecutor houseKeepingExecutorService;
-	private final long HOUSEKEEPING_PERIOD_MS = Long.getLong("net.bigtangle.pool.server.housekeeping.periodMs",
-			SECONDS.toMillis(600));
 	protected final NetworkParameters params;
 	protected String[] fixservers;
 
@@ -119,7 +113,6 @@ public class ServerPool {
 
 	public synchronized void addServer(String s) throws JsonProcessingException, IOException {
 		long time = System.currentTimeMillis();
-		TXReward chain;
 		// chain = getChainNumber(s);
 		ServerState serverState = new ServerState();
 		serverState.setServerurl(s);
@@ -193,18 +186,6 @@ public class ServerPool {
 
 		return aTXRewardResponse.getTxReward();
 
-	}
-
-	/**
-	 * The house keeping task to retire idle connections.
-	 */
-	private class HouseKeeper implements Runnable {
-
-		@Override
-		public void run() {
-			log.debug("HouseKeeper running  checkServers");
-			checkServers(); // Try to maintain minimum connections
-		}
 	}
 
 	public static final class DefaultThreadFactory implements ThreadFactory {

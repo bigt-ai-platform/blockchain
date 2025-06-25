@@ -25,9 +25,6 @@ package net.bigtangle.core;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-
 import javax.annotation.Nullable;
 
 import net.bigtangle.core.exception.AddressFormatException;
@@ -187,21 +184,6 @@ public class Address extends VersionedChecksummedBytes {
         }
         return false;
     }
-
-    /**
-     * This implementation narrows the return type to <code>Address</code>.
-     */
-    @Override
-    public Address clone() throws CloneNotSupportedException {
-        return (Address) super.clone();
-    }
-
-    // Java serialization
-
-    private void writeObject(ObjectOutputStream out) throws IOException {
-        out.defaultWriteObject();
-        out.writeUTF(params.id);
-    }
-
+ 
  
 }

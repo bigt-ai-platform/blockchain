@@ -147,38 +147,15 @@ public class AddressTest {
         assertEquals("3N25saC4dT24RphDAwLtD8LUN4E2gZPJke", address.toString());
     }
 
-    @Test
-    public void cloning() throws Exception {
-        Address a = new Address(testParams, HEX.decode("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc"));
-        Address b = a.clone();
-
-        assertEquals(a, b);
-        assertNotSame(a, b);
-    }
-
+    
     @Test
     public void roundtripBase58() throws Exception {
         String base58 = "17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL";
         assertEquals(base58, Address.fromBase58(null, base58).toBase58());
     }
 
-    @Test
-    public void comparisonCloneEqualTo() throws Exception {
-        Address a = Address.fromBase58(mainParams, "1Dorian4RoXcnBv9hnQ4Y2C1an6NJ4UrjX");
-        Address b = a.clone();
-
-        int result = a.compareTo(b);
-        assertEquals(0, result);
-    }
-
-    @Test
-    public void comparisonEqualTo() throws Exception {
-        Address a = Address.fromBase58(mainParams, "1Dorian4RoXcnBv9hnQ4Y2C1an6NJ4UrjX");
-        Address b = a.clone();
-
-        int result = a.compareTo(b);
-        assertEquals(0, result);
-    }
+     
+ 
 
     @Test
     public void comparisonLessThan() throws Exception {

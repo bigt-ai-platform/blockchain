@@ -382,7 +382,7 @@ public abstract class NetworkParameters {
      * serializer.
      *
      */
-    public final MessageSerializer getDefaultSerializer() {
+    public final  synchronized MessageSerializer getDefaultSerializer() {
         // Construct a default serializer if we don't have one
         if (null == this.defaultSerializer) {
             // Don't grab a lock unless we absolutely need it

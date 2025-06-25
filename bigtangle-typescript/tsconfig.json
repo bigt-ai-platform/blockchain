@@ -9,8 +9,9 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "baseUrl": ".",
+    "baseUrl": "./",
     "paths": {
+      "net/bigtangle/*": ["net/bigtangle/*"],
       "*": ["node_modules/*"]
     }
   },
