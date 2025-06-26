@@ -7,17 +7,17 @@ import { MessageSerializer } from './MessageSerializer';
 import { Buffer } from 'buffer';
 import { VarInt } from './VarInt';
 import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
+import { Message } from './Message';
 
 // Define a simple interface for our output stream
 interface OutputStream {
     write(chunk: Buffer): void;
 }
 
-export class Block {
+export class Block extends Message {
     private static readonly BLOCK_VERSION_GENESIS = 1;
     private static readonly BLOCK_VERSION_AUXPOW = (1 << 8);
 
-    private params: NetworkParameters;
     private version: number = 0;
     private prevBlockHash: Sha256Hash = Sha256Hash.ZERO_HASH;
     private merkleRoot: Sha256Hash = Sha256Hash.ZERO_HASH;
@@ -25,51 +25,57 @@ export class Block {
     private difficultyTarget: number = 0;
     private nonce: number = 0;
     private transactions: Transaction[] = [];
+    
+    // Initialize base Message properties
+    protected payload: Buffer = Buffer.alloc(0);
+    protected offset: number = 0;
+    protected cursor: number = 0;
+    protected length: number = Message.UNKNOWN_LENGTH;
+    protected serializer: any = null;
 
     constructor(params: NetworkParameters, bytes?: Buffer, offset?: number, serializer?: MessageSerializer, length?: number) {
+        super(params, bytes, offset, serializer, length);
         this.params = params;
         
         if (bytes) {
-            this.parse(bytes, offset || 0, serializer, length);
+            this.parse(bytes, offset || 0, length);
         }
     }
 
-    private parse(bytes: Buffer, offset: number, serializer?: MessageSerializer, length?: number): void {
+    protected parse(payload?: Buffer, offset: number = 0, length?: number): void {
+        if (!payload) return;
         // Parse block header
-        this.version = bytes.readUInt32LE(offset);
+        this.version = payload.readUInt32LE(offset);
         offset += 4;
         
-        this.prevBlockHash = Sha256Hash.wrapReversed(bytes.subarray(offset, offset + 32));
+        this.prevBlockHash = Sha256Hash.wrapReversed(payload.subarray(offset, offset + 32));
         offset += 32;
         
-        this.merkleRoot = Sha256Hash.wrapReversed(bytes.subarray(offset, offset + 32));
+        this.merkleRoot = Sha256Hash.wrapReversed(payload.subarray(offset, offset + 32));
         offset += 32;
         
-        this.time = bytes.readUInt32LE(offset);
+        this.time = payload.readUInt32LE(offset);
         offset += 4;
         
-        this.difficultyTarget = bytes.readUInt32LE(offset);
+        this.difficultyTarget = payload.readUInt32LE(offset);
         offset += 4;
         
-        this.nonce = bytes.readUInt32LE(offset);
+        this.nonce = payload.readUInt32LE(offset);
         offset += 4;
 
         // Parse transactions
-        const txCountResult = VarInt.read(bytes, offset);
+        const txCountResult = VarInt.read(payload, offset);
         offset += txCountResult.size;
         
         for (let i = 0; i < txCountResult.value; i++) {
-            const tx = new Transaction(this.params, bytes, offset, serializer);
+            const tx = new Transaction(this.params, payload, offset, this.serializer);
             this.transactions.push(tx);
             offset += tx.getMessageSize();
         }
     }
 
-    public bitcoinSerialize(): Buffer {
+    public bitcoinSerialize(): Uint8Array {
         const out = new UnsafeByteArrayOutputStream();
-        
-        // Cast to any to access toBuffer method
-        const outStream: any = out;
         
         // Serialize header
         const header = Buffer.alloc(80);
@@ -92,13 +98,17 @@ export class Block {
         out.write(header);
 
         // Serialize transactions
-        // Use VarInt.write instead of encode
         VarInt.write(this.transactions.length, out);
         for (const tx of this.transactions) {
-            out.write(tx.bitcoinSerialize());
+            out.write(Buffer.from(tx.bitcoinSerialize()));
         }
 
-        return outStream.toBuffer();
+        return out.toBuffer();
+    }
+    
+    protected bitcoinSerializeToStream(stream: any): void {
+        const bytes = this.bitcoinSerialize();
+        stream.write(Buffer.from(bytes));
     }
 
     public getMessageSize(): number {

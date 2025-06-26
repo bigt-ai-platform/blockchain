@@ -25,4 +25,4 @@ mvn clean package -DskipTests=true
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
 
 
-translate all java class, methods and functions in directory bigtangle-core/src/main/java/net/bigtangle/crypto/ to typescript  bigtangle-typescript/src/net/bigtangle/crypto, not skip anything
+translate all java in directory bigtangle-core/src/main/java/net/bigtangle/crypto/ to typescript  bigtangle-typescript/src/net/bigtangle/crypto

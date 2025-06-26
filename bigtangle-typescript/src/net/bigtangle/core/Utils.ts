@@ -48,4 +48,15 @@ export class Utils {
         const length = input.readUInt32BE();
         return input.toString('utf8', 4, 4 + length);
     }
+
+    public static concatArrays(...arrays: Uint8Array[]): Uint8Array {
+        const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const arr of arrays) {
+            result.set(arr, offset);
+            offset += arr.length;
+        }
+        return result;
+    }
 }

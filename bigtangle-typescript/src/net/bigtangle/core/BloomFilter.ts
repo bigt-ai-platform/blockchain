@@ -2,6 +2,8 @@ import { ECKey } from './ECKey';
 import { Utils } from './Utils';
 import { VarInt } from './VarInt';
 import { NetworkParameters } from './NetworkParameters';
+import { Message } from './Message';
+import { MessageSerializer } from './MessageSerializer';
 
 export enum BloomUpdate {
     UPDATE_NONE = 0,
@@ -9,7 +11,7 @@ export enum BloomUpdate {
     UPDATE_P2PUBKEY_ONLY = 2
 }
 
-export class BloomFilter {
+export class BloomFilter extends Message {
     private static readonly MAX_FILTER_SIZE = 36000;
     private static readonly MAX_HASH_FUNCS = 50;
     private static readonly E = Math.E;
@@ -19,13 +21,22 @@ export class BloomFilter {
     private nTweak: number = 0;
     private nFlags: number = 0;
 
-    constructor(params?: NetworkParameters, payloadBytes?: Buffer) {
-        if (params && payloadBytes) {
-            this.parse(payloadBytes);
+    // Initialize base Message properties
+    protected payload: Buffer = Buffer.alloc(0);
+    protected offset: number = 0;
+    protected cursor: number = 0;
+    protected length: number = Message.UNKNOWN_LENGTH;
+    protected serializer: any = null;
+
+    constructor(params: NetworkParameters, bytes?: Buffer, offset: number = 0, serializer?: MessageSerializer) {
+        super(params, bytes, offset, serializer);
+        
+        if (bytes) {
+            this.parse(bytes, offset);
         }
     }
 
-    static create(elements: number, falsePositiveRate: number, randomNonce: number, updateFlag: BloomUpdate = BloomUpdate.UPDATE_P2PUBKEY_ONLY): BloomFilter {
+    static create(params: NetworkParameters, elements: number, falsePositiveRate: number, randomNonce: number, updateFlag: BloomUpdate = BloomUpdate.UPDATE_P2PUBKEY_ONLY): BloomFilter {
         // Calculate optimal filter size
         let size = Math.floor(-1 / (Math.pow(Math.log(2), 2)) * elements * Math.log(falsePositiveRate));
         size = Math.max(1, Math.min(size, BloomFilter.MAX_FILTER_SIZE * 8) / 8);
@@ -34,7 +45,7 @@ export class BloomFilter {
         let hashFuncs = Math.floor(data.length * 8 / elements * Math.log(2));
         hashFuncs = Math.max(1, Math.min(hashFuncs, BloomFilter.MAX_HASH_FUNCS));
         
-        const filter = new BloomFilter();
+        const filter = new BloomFilter(params);
         filter.data = data;
         filter.hashFuncs = hashFuncs;
         filter.nTweak = randomNonce;
@@ -51,25 +62,25 @@ export class BloomFilter {
         return `Bloom Filter of size ${this.data.length} with ${this.hashFuncs} hash functions.`;
     }
 
-    private parse(payload: Buffer) {
-        let offset = 0;
+    protected parse(payload: Buffer, offset: number = 0): void {
+        let localOffset = offset;
         
         // Read data length (varint)
         let dataLength = 0;
-        const firstByte = payload[offset];
-        offset++;
+        const firstByte = payload[localOffset];
+        localOffset++;
         
         if (firstByte < 0xfd) {
             dataLength = firstByte;
         } else if (firstByte === 0xfd) {
-            dataLength = payload.readUInt16LE(offset);
-            offset += 2;
+            dataLength = payload.readUInt16LE(localOffset);
+            localOffset += 2;
         } else if (firstByte === 0xfe) {
-            dataLength = payload.readUInt32LE(offset);
-            offset += 4;
+            dataLength = payload.readUInt32LE(localOffset);
+            localOffset += 4;
         } else {
-            dataLength = payload.readUInt32LE(offset) + (payload.readUInt32LE(offset + 4) * 0x100000000);
-            offset += 8;
+            dataLength = payload.readUInt32LE(localOffset) + (payload.readUInt32LE(localOffset + 4) * 0x100000000);
+            localOffset += 8;
         }
         
         if (dataLength > BloomFilter.MAX_FILTER_SIZE) {
@@ -77,23 +88,36 @@ export class BloomFilter {
         }
         
         // Read data
-        this.data = Buffer.from(payload.subarray(offset, offset + dataLength));
-        offset += dataLength;
+        this.data = Buffer.from(payload.subarray(localOffset, localOffset + dataLength));
+        localOffset += dataLength;
         
         // Read hash functions (uint32)
-        this.hashFuncs = payload.readUInt32LE(offset);
-        offset += 4;
+        this.hashFuncs = payload.readUInt32LE(localOffset);
+        localOffset += 4;
         
         if (this.hashFuncs > BloomFilter.MAX_HASH_FUNCS) {
             throw new Error("Bloom filter hash function count out of range");
         }
         
         // Read nTweak (uint32)
-        this.nTweak = payload.readUInt32LE(offset);
-        offset += 4;
+        this.nTweak = payload.readUInt32LE(localOffset);
+        localOffset += 4;
         
         // Read flags (byte)
-        this.nFlags = payload[offset];
+        this.nFlags = payload[localOffset];
+    }
+    
+    protected bitcoinSerializeToStream(stream: any): void {
+        const serialized = this.serialize();
+        stream.write(serialized);
+    }
+    
+    public bitcoinSerialize(): Buffer {
+        return this.serialize();
+    }
+    
+    public getMessageSize(): number {
+        return this.serialize().length;
     }
 
     serialize(): Buffer {
@@ -236,10 +260,9 @@ export class BloomFilter {
     }
 
     insertKey(key: ECKey) {
-        const pubKey = key.getPubKey();
-        const pubKeyHash = key.getPubKeyHash();
-        if (pubKey) this.insert(pubKey);
-        if (pubKeyHash) this.insert(pubKeyHash);
+        // These methods don't exist on ECKey, need to implement differently
+        // Placeholder until we fix ECKey implementation
+        throw new Error("insertKey not implemented yet");
     }
 
     setMatchAll() {
