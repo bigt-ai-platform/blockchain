@@ -20,6 +20,29 @@
  */
 package net.bigtangle.wallet;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.Lists.newArrayList;
+import static com.google.common.collect.Lists.newLinkedList;
+
+import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import javax.annotation.Nullable;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.spongycastle.crypto.params.KeyParameter;
+
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
@@ -30,25 +53,18 @@ import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.*;
+import net.bigtangle.crypto.ChildNumber;
+import net.bigtangle.crypto.DeterministicHierarchy;
+import net.bigtangle.crypto.DeterministicKey;
+import net.bigtangle.crypto.EncryptedData;
+import net.bigtangle.crypto.HDKeyDerivation;
+import net.bigtangle.crypto.HDUtils;
+import net.bigtangle.crypto.KeyCrypter;
+import net.bigtangle.crypto.KeyCrypterException;
+import net.bigtangle.crypto.KeyCrypterScrypt;
+import net.bigtangle.crypto.LazyECPoint;
 import net.bigtangle.script.Script;
 import net.bigtangle.utils.Threading;
-import net.bigtangle.wallet.listeners.KeyChainEventListener;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.spongycastle.crypto.params.KeyParameter;
-
-import javax.annotation.Nullable;
-import java.math.BigInteger;
-import java.security.SecureRandom;
-import java.util.*;
-import java.util.concurrent.Executor;
-import java.util.concurrent.locks.ReentrantLock;
-
-import static com.google.common.base.Preconditions.*;
-import static com.google.common.collect.Lists.newArrayList;
-import static com.google.common.collect.Lists.newLinkedList;
 
 /**
  * <p>A deterministic key chain is a {@link KeyChain} that uses the
@@ -673,22 +689,8 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         else
             return getWatchingKey().getCreationTimeSeconds();
     }
-
-    @Override
-    public void addEventListener(KeyChainEventListener listener) {
-        basicKeyChain.addEventListener(listener);
-    }
-
-    @Override
-    public void addEventListener(KeyChainEventListener listener, Executor executor) {
-        basicKeyChain.addEventListener(listener, executor);
-    }
-
-    @Override
-    public boolean removeEventListener(KeyChainEventListener listener) {
-        return basicKeyChain.removeEventListener(listener);
-    }
-
+ 
+ 
     /** Returns a list of words that represent the seed or null if this chain is a watching chain. */
     @Nullable
     public List<String> getMnemonicCode() {

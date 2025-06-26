@@ -21,24 +21,41 @@
 
 package net.bigtangle.wallet;
 
-import com.google.common.collect.*;
-import com.google.protobuf.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
-import net.bigtangle.core.*;
-import net.bigtangle.crypto.*;
-import net.bigtangle.script.*;
-import net.bigtangle.utils.*;
-import net.bigtangle.wallet.listeners.KeyChainEventListener;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
-import org.slf4j.*;
-import org.spongycastle.crypto.params.*;
+import javax.annotation.Nullable;
 
-import javax.annotation.*;
-import java.security.*;
-import java.util.*;
-import java.util.concurrent.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.spongycastle.crypto.params.KeyParameter;
 
-import static com.google.common.base.Preconditions.*;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.protobuf.ByteString;
+
+import net.bigtangle.core.Address;
+import net.bigtangle.core.BloomFilter;
+import net.bigtangle.core.ECKey;
+import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.ChildNumber;
+import net.bigtangle.crypto.DeterministicKey;
+import net.bigtangle.crypto.HDUtils;
+import net.bigtangle.crypto.KeyCrypter;
+import net.bigtangle.crypto.LinuxSecureRandom;
+import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 
 /**
  * <p>A KeyChainGroup is used by the {@link net.bigtangle.wallet.Wallet} and
@@ -139,9 +156,7 @@ public class KeyChainGroup implements KeyBag {
      */
     public void addAndActivateHDChain(DeterministicKeyChain chain) {
         log.info("Creating and activating a new HD chain: {}", chain);
-        for (ListenerRegistration<KeyChainEventListener> registration : basic.getListeners())
-            chain.addEventListener(registration.listener, registration.executor);
-        if (lookaheadSize >= 0)
+           if (lookaheadSize >= 0)
             chain.setLookaheadSize(lookaheadSize);
         if (lookaheadThreshold >= 0)
             chain.setLookaheadThreshold(lookaheadThreshold);
@@ -247,12 +262,7 @@ public class KeyChainGroup implements KeyBag {
     /** Returns the key chain that's used for generation of fresh/current keys. This is always the newest HD chain. */
     public final DeterministicKeyChain getActiveKeyChain() {
         if (chains.isEmpty()) {
-            if (basic.numKeys() > 0) {
-                log.warn("No HD chain present but random keys are: you probably deserialized an old wallet.");
-                // If called from the wallet (most likely) it'll try to upgrade us, as it knows the rotation time
-                // but not the password.
-                throw new DeterministicUpgradeRequiredException();
-            }
+           
             // Otherwise we have no HD chains and no random keys: we are a new born! So a random seed is fine.
             createAndActivateNewHDChain();
         }
@@ -490,8 +500,7 @@ public class KeyChainGroup implements KeyBag {
      *
      * @throws net.bigtangle.crypto.KeyCrypterException Thrown if the wallet encryption fails for some reason,
      *         leaving the group unchanged.
-     * @throws DeterministicUpgradeRequiredException Thrown if there are random keys but no HD chain.
-     */
+      */
     public void encrypt(KeyCrypter keyCrypter, KeyParameter aesKey) {
         checkNotNull(keyCrypter);
         checkNotNull(aesKey);
@@ -610,23 +619,6 @@ public class KeyChainGroup implements KeyBag {
     }
 
  
-    /** Adds a listener for events that are run when keys are added, on the given executor. */
-    public void addEventListener(KeyChainEventListener listener, Executor executor) {
-        checkNotNull(listener);
-        checkNotNull(executor);
-        basic.addEventListener(listener, executor);
-        for (DeterministicKeyChain chain : chains)
-            chain.addEventListener(listener, executor);
-    }
-
-    /** Removes a listener for events that are run when keys are added. */
-    public boolean removeEventListener(KeyChainEventListener listener) {
-        checkNotNull(listener);
-        for (DeterministicKeyChain chain : chains)
-            chain.removeEventListener(listener);
-        return basic.removeEventListener(listener);
-    }
-
     /** Returns a list of key protobufs obtained by merging the chains. */
     public List<Protos.Key> serializeToProtobuf() {
         List<Protos.Key> result;
@@ -669,76 +661,7 @@ public class KeyChainGroup implements KeyBag {
         extractFollowingKeychains(chains);
         return new KeyChainGroup(params, basicKeyChain, chains, currentKeys, crypter);
     }
-
-    /**
-     * If the key chain contains only random keys and no deterministic key chains, this method will create a chain
-     * based on the oldest non-rotating private key (i.e. the seed is derived from the old wallet).
-     *
-     * @param keyRotationTimeSecs If non-zero, UNIX time for which keys created before this are assumed to be
-     *                            compromised or weak, those keys will not be used for deterministic upgrade.
-     * @param aesKey If non-null, the encryption key the keychain is encrypted under. If the keychain is encrypted
-     *               and this is not supplied, an exception is thrown letting you know you should ask the user for
-     *               their password, turn it into a key, and then try again.
-     * @throws java.lang.IllegalStateException if there is already a deterministic key chain present or if there are
-     *                                         no random keys (i.e. this is not an upgrade scenario), or if aesKey is
-     *                                         provided but the wallet is not encrypted.
-     * @throws java.lang.IllegalArgumentException if the rotation time specified excludes all keys.
-     * @throws DeterministicUpgradeRequiresPassword if the key chain group is encrypted
-     *         and you should provide the users encryption key.
-     * @return the DeterministicKeyChain that was created by the upgrade.
-     */
-    public DeterministicKeyChain upgradeToDeterministic(long keyRotationTimeSecs, @Nullable KeyParameter aesKey) throws DeterministicUpgradeRequiresPassword, AllRandomKeysRotating {
-        checkState(basic.numKeys() > 0);
-        checkArgument(keyRotationTimeSecs >= 0);
-        // Subtract one because the key rotation time might have been set to the creation time of the first known good
-        // key, in which case, that's the one we want to find.
-        ECKey keyToUse = basic.findOldestKeyAfter(keyRotationTimeSecs - 1);
-        if (keyToUse == null)
-            throw new AllRandomKeysRotating();
-
-        if (keyToUse.isEncrypted()) {
-            if (aesKey == null) {
-                // We can't auto upgrade because we don't know the users password at this point. We throw an
-                // exception so the calling code knows to abort the load and ask the user for their password, they can
-                // then try loading the wallet again passing in the AES key.
-                //
-                // There are a few different approaches we could have used here, but they all suck. The most obvious
-                // is to try and be as lazy as possible, running in the old random-wallet mode until the user enters
-                // their password for some other reason and doing the upgrade then. But this could result in strange
-                // and unexpected UI flows for the user, as well as complicating the job of wallet developers who then
-                // have to support both "old" and "new" UI modes simultaneously, switching them on the fly. Given that
-                // this is a one-off transition, it seems more reasonable to just ask the user for their password
-                // on startup, and then the wallet app can have all the widgets for accessing seed words etc active
-                // all the time.
-                throw new DeterministicUpgradeRequiresPassword();
-            }
-            keyToUse = keyToUse.decrypt(aesKey);
-        } else if (aesKey != null) {
-            throw new IllegalStateException("AES Key was provided but wallet is not encrypted.");
-        }
-
-        if (chains.isEmpty()) {
-            log.info("Auto-upgrading pre-HD wallet to HD!");
-        } else {
-            log.info("Wallet with existing HD chain is being re-upgraded due to change in key rotation time.");
-        }
-        log.info("Instantiating new HD chain using oldest non-rotating private key (address: {})", keyToUse.toAddress(params));
-        byte[] entropy = checkNotNull(keyToUse.getSecretBytes());
-        // Private keys should be at least 128 bits long.
-        checkState(entropy.length >= DeterministicSeed.DEFAULT_SEED_ENTROPY_BITS / 8);
-        // We reduce the entropy here to 128 bits because people like to write their seeds down on paper, and 128
-        // bits should be sufficient forever unless the laws of the universe change or ECC is broken; in either case
-        // we all have bigger problems.
-        entropy = Arrays.copyOfRange(entropy, 0, DeterministicSeed.DEFAULT_SEED_ENTROPY_BITS / 8);    // final argument is exclusive range.
-        checkState(entropy.length == DeterministicSeed.DEFAULT_SEED_ENTROPY_BITS / 8);
-        String passphrase = ""; // FIXME allow non-empty passphrase
-        DeterministicKeyChain chain = new DeterministicKeyChain(entropy, passphrase, keyToUse.getCreationTimeSeconds());
-        if (aesKey != null) {
-            chain = chain.toEncrypted(checkNotNull(basic.getKeyCrypter()), aesKey);
-        }
-        chains.add(chain);
-        return chain;
-    }
+ 
 
     /** Returns true if the group contains random keys but no HD chains. */
     public boolean isDeterministicUpgradeRequired() {

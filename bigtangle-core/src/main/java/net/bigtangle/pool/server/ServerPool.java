@@ -47,18 +47,7 @@ public class ServerPool {
 
 	public ServerPool(NetworkParameters params) {
 		this.params = params;
-		/*
-		 * DefaultThreadFactory threadFactory = new DefaultThreadFactory(" housekeeper",
-		 * true); this.houseKeepingExecutorService = new ScheduledThreadPoolExecutor(1,
-		 * threadFactory, new ThreadPoolExecutor.DiscardPolicy());
-		 * this.houseKeepingExecutorService.
-		 * setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-		 * this.houseKeepingExecutorService.setRemoveOnCancelPolicy(true);
-		 * 
-		 * this.houseKeepingExecutorService.scheduleWithFixedDelay(new HouseKeeper(),
-		 * 0L, HOUSEKEEPING_PERIOD_MS, MILLISECONDS);
-		 */
-		// init(params);
+
 		try {
 			HashMap<String, String> requestParam = new HashMap<String, String>();
 			byte[] data = OkHttp3Util.post(params.serverSeeds()[0] + ReqCmd.serverinfolist.name(),
@@ -152,7 +141,7 @@ public class ServerPool {
 		for (String s : serverCandidates) {
 			try {
 				addServer(s);
-			} catch ( Exception e) {
+			} catch (Exception e) {
 				log.debug(e.toString());
 			}
 		}
@@ -186,24 +175,6 @@ public class ServerPool {
 
 		return aTXRewardResponse.getTxReward();
 
-	}
-
-	public static final class DefaultThreadFactory implements ThreadFactory {
-
-		private final String threadName;
-		private final boolean daemon;
-
-		public DefaultThreadFactory(String threadName, boolean daemon) {
-			this.threadName = threadName;
-			this.daemon = daemon;
-		}
-
-		@Override
-		public Thread newThread(Runnable r) {
-			Thread thread = new Thread(r, threadName);
-			thread.setDaemon(daemon);
-			return thread;
-		}
 	}
 
 	public List<ServerState> getServers() {

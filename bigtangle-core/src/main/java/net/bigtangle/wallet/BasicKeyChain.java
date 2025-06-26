@@ -28,7 +28,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.crypto.*;
 import net.bigtangle.utils.ListenerRegistration;
 import net.bigtangle.utils.Threading;
-import net.bigtangle.wallet.listeners.KeyChainEventListener;
+ 
 
 import org.spongycastle.crypto.params.KeyParameter;
 
@@ -54,8 +54,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
     @Nullable private final KeyCrypter keyCrypter;
     private boolean isWatching;
 
-    private final CopyOnWriteArrayList<ListenerRegistration<KeyChainEventListener>> listeners;
-
+    
     public BasicKeyChain() {
         this(null);
     }
@@ -64,7 +63,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         this.keyCrypter = crypter;
         hashToKeys = new LinkedHashMap<ByteString, ECKey>();
         pubkeyToKeys = new LinkedHashMap<ByteString, ECKey>();
-        listeners = new CopyOnWriteArrayList<ListenerRegistration<KeyChainEventListener>>();
+   
     }
 
     /** Returns the {@link KeyCrypter} in use or null if the key chain is not encrypted. */
@@ -87,7 +86,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
                 checkState(keyCrypter == null);   // We will refuse to encrypt an empty key chain.
                 final ECKey key = new ECKey();
                 importKeyLocked(key);
-                queueOnKeysAdded(ImmutableList.of(key));
+         
             }
             return hashToKeys.values().iterator().next();
         } finally {
@@ -110,7 +109,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
 
                 ImmutableList<ECKey> immutableKeys = ImmutableList.copyOf(keys);
                 importKeysLocked(immutableKeys);
-                queueOnKeysAdded(immutableKeys);
+        
             }
 
             List<ECKey> keysToReturn = new ArrayList<ECKey>();
@@ -155,8 +154,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
                 actuallyAdded.add(key);
                 importKeyLocked(key);
             }
-            if (actuallyAdded.size() > 0)
-                queueOnKeysAdded(actuallyAdded);
+  
             return actuallyAdded.size();
         } finally {
             lock.unlock();
@@ -201,7 +199,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             checkKeyEncryptionStateMatches(key);
             if (hasKey(key)) return;
             importKeyLocked(key);
-            queueOnKeysAdded(ImmutableList.of(key));
+        
         } finally {
             lock.unlock();
         }
@@ -286,11 +284,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             lock.unlock();
         }
     }
-
-    public List<ListenerRegistration<KeyChainEventListener>> getListeners() {
-        return new ArrayList<ListenerRegistration<KeyChainEventListener>>(listeners);
-    }
-
+ 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //
     // Serialization support
@@ -397,40 +391,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // Event listener support
-    //
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    @Override
-    public void addEventListener(KeyChainEventListener listener) {
-        addEventListener(listener, Threading.USER_THREAD);
-    }
-
-    @Override
-    public void addEventListener(KeyChainEventListener listener, Executor executor) {
-        listeners.add(new ListenerRegistration<KeyChainEventListener>(listener, executor));
-    }
-
-    @Override
-    public boolean removeEventListener(KeyChainEventListener listener) {
-        return ListenerRegistration.removeFromList(listener, listeners);
-    }
-
-    private void queueOnKeysAdded(final List<ECKey> keys) {
-        checkState(lock.isHeldByCurrentThread());
-        for (final ListenerRegistration<KeyChainEventListener> registration : listeners) {
-            registration.executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    registration.listener.onKeysAdded(keys);
-                }
-            });
-        }
-    }
-
+ 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //
     // Encryption support

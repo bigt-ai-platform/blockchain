@@ -162,11 +162,7 @@ public class WalletProtobufSerializer {
             }
         }
 
-        if (wallet.getKeyRotationTime() != null) {
-            long timeSecs = wallet.getKeyRotationTime().getTime() / 1000;
-            walletBuilder.setKeyRotationTime(timeSecs);
-        } 
-
+   
         for (Map.Entry<String, ByteString> entry : wallet.getTags().entrySet()) {
             Protos.Tag.Builder tag = Protos.Tag.newBuilder().setTag(entry.getKey()).setData(entry.getValue());
             walletBuilder.addTags(tag);

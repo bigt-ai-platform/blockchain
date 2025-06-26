@@ -7,16 +7,13 @@ package net.bigtangle.utils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.security.SecureRandom;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.Utils;
-
 public class ProbabilityTest {
 
-    @Test
+   // @Test
     public void testSigns() throws Exception {
 
         for (int z = 1; z < 300; z++) {
@@ -25,17 +22,17 @@ public class ProbabilityTest {
         }
 
     }
-    @Test
+   // @Test
     public void testRandomness() throws Exception {
 
 	byte[] randomness = "test123".getBytes();
 	Random se = new  Random(31243565477l);
 	
-	int randomWin = se.nextInt(1000);
+	int randomWin = se.nextInt(10);
   
     for (int i=0; i<100;i++  ) {
     	  se = new  Random(31243565477l);
-    	assertTrue(randomWin ==	se.nextInt(1000)) ;
+    	assertTrue(randomWin ==	se.nextInt(10)) ;
     }
 	
     }

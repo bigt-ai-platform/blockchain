@@ -21,7 +21,7 @@ package net.bigtangle.wallet;
 
 import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.wallet.listeners.KeyChainEventListener;
+ 
 
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -57,15 +57,7 @@ public interface KeyChain {
     /** Returns a list of keys serialized to the bitcoinj protobuf format. */
     List<Protos.Key> serializeToProtobuf();
 
-    /** Adds a listener for events that are run when keys are added, on the user thread. */
-    void addEventListener(KeyChainEventListener listener);
-
-    /** Adds a listener for events that are run when keys are added, on the given executor. */
-    void addEventListener(KeyChainEventListener listener, Executor executor);
-
-    /** Removes a listener for events that are run when keys are added. */
-    boolean removeEventListener(KeyChainEventListener listener);
-
+ 
     /** Returns the number of keys this key chain manages. */
     int numKeys();
 

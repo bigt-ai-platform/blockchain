@@ -20,7 +20,6 @@
  */
 package net.bigtangle.wallet;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -29,9 +28,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.Nullable;
@@ -97,16 +94,8 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	protected KeyChainGroup keyChainGroup;
 
 	protected NetworkParameters params;
-
-	protected volatile WalletFiles vFileManager;
-	// Object that is used to send transactions asynchronously when the wallet
-	// requires it.
-
-	// UNIX time in seconds. Money controlled by keys created before this time
-	// will be automatically respent to a key
-	// that was created after it. Useful when you believe some keys have been
-	// compromised.
-	protected volatile long vKeyRotationTimestamp;
+ 
+ 
 
 	// The wallet version. This is an int that can be used to track breaking
 	// changes in the wallet format.
@@ -203,11 +192,10 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/**
-	 * Imports the given keys to the wallet.  
-	 * has been called, triggers an auto save bypassing the normal coalescing delay
-	 * and event handlers. Returns the number of keys added, after duplicates are
-	 * ignored. The onKeyAdded event will be called for each key in the list that
-	 * was not already present.
+	 * Imports the given keys to the wallet. has been called, triggers an auto save
+	 * bypassing the normal coalescing delay and event handlers. Returns the number
+	 * of keys added, after duplicates are ignored. The onKeyAdded event will be
+	 * called for each key in the list that was not already present.
 	 */
 	public int importKeys(final List<ECKey> keys) {
 		// API usage check.
@@ -219,7 +207,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+	 
 		return result;
 	}
 
@@ -245,7 +233,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+	 
 		return result;
 	}
 
@@ -327,7 +315,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+ 
 	}
 
 	/**
@@ -348,7 +336,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+ 
 	}
 
 	/**
@@ -366,7 +354,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+ 
 	}
 
 	/**
@@ -384,7 +372,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		} finally {
 			keyChainGroupLock.unlock();
 		}
-		saveNow();
+	 
 	}
 
 	/**
@@ -516,23 +504,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		saveToFile(temp, f);
 	}
 
-	public void saveNow() {
-		WalletFiles files = vFileManager;
-		if (files != null) {
-			try {
-				files.saveNow(); // This calls back into saveToFile().
-			} catch (IOException e) {
-				// Can't really do much at this point, just let the API user
-				// know.
-				log.error("Failed to save wallet to disk!", e);
-				Thread.UncaughtExceptionHandler handler = Threading.uncaughtExceptionHandler;
-				if (handler != null)
-					handler.uncaughtException(Thread.currentThread(), e);
-			}
-		}
-	}
-
-	/**
+	/*
 	 * Uses protobuf serialization to save the wallet to the given file stream. To
 	 * learn more about this file format, see {@link WalletProtobufSerializer}.
 	 */
@@ -579,7 +551,6 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/******************************************************************************************************************/
- 
 
 	public void signTransaction(Transaction tx, KeyParameter aesKey, MissingSigsMode missingSigsMode) {
 		lock.lock();
@@ -655,54 +626,8 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// auto-approve transactions that send from our own
 	// keys back to our own keys.
 
-	/**
-	 * When a key rotation time is set, and money controlled by keys created before
-	 * the given timestamp T will be automatically respent to any key that was
-	 * created after T. This can be used to recover from a situation where a set of
-	 * keys is believed to be compromised. Once the time is set transactions will be
-	 * created and broadcast immediately. New coins that come in after calling this
-	 * method will be automatically respent immediately. The rotation time is
-	 * persisted to the wallet. You can stop key rotation by calling this method
-	 * again with zero as the argument.
-	 */
-	public void setKeyRotationTime(Date time) {
-		setKeyRotationTime(time.getTime() / 1000);
-	}
-
-	/**
-	 * Returns the key rotation time, or null if unconfigured. See
-	 * {@link #setKeyRotationTime(Date)} for a description of the field.
-	 */
-	public @Nullable Date getKeyRotationTime() {
-		final long keyRotationTimestamp = vKeyRotationTimestamp;
-		if (keyRotationTimestamp != 0)
-			return new Date(keyRotationTimestamp * 1000);
-		else
-			return null;
-	}
-
-	/**
-	 * <p>
-	 * When a key rotation time is set, any money controlled by keys created before
-	 * the given timestamp T will be automatically respent to any key that was
-	 * created after T. This can be used to recover from a situation where a set of
-	 * keys is believed to be compromised. You can stop key rotation by calling this
-	 * method again with zero as the argument. Once set up, calling
-	 * {@link (org.spongycastle.crypto.params.KeyParameter, boolean)} will create
-	 * and possibly send rotation transactions: but it won't be done automatically
-	 * (because you might have to ask for the users password).
-	 * </p>
-	 *
-	 * <p>
-	 * The given time cannot be in the future.
-	 * </p>
-	 */
-	public void setKeyRotationTime(long unixTimeSeconds) {
-		checkArgument(unixTimeSeconds <= Utils.currentTimeSeconds(), "Given time (%s) cannot be in the future.",
-				Utils.dateTimeFormat(unixTimeSeconds * 1000));
-		vKeyRotationTimestamp = unixTimeSeconds;
-		saveNow();
-	}
+ 
+ 
 
 	public void changePassword(String password, String oldPassword) {
 

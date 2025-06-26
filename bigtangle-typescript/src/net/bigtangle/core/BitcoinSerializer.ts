@@ -34,17 +34,31 @@ export class BitcoinSerializer extends MessageSerializer {
         [BloomFilter, "filterload"]
     ]);
 
-    private readonly params: NetworkParameters;
-    private readonly parseRetain: boolean;
+    // Remove duplicate params declaration
 
     constructor(params: NetworkParameters, parseRetain: boolean) {
         super(params, parseRetain);
-        this.params = params;
-        this.parseRetain = parseRetain;
     }
 
-    serialize(name: string, message: Buffer, out: WriteableStream): void {
+    serialize(message: Message): Buffer {
+        const name = BitcoinSerializer.names.get(message.constructor);
+        if (!name) {
+            throw new Error(`BitcoinSerializer doesn't currently know how to serialize ${message.constructor.name}`);
+        }
+        const buffer = message.bitcoinSerialize();
+        const chunks: Buffer[] = [];
+        this.serializeToStream(name, Buffer.from(buffer), chunks);
+        return Buffer.concat(chunks);
+    }
+
+    private serializeToStream(name: string, message: Buffer, out: Buffer[]): void {
+        // Convert to Buffer for header operations
         const header = Buffer.alloc(4 + COMMAND_LEN + 4 + 4);
+        const messageBuffer = Buffer.from(message);
+        
+        // Calculate checksum from message buffer
+        const hash = Sha256Hash.hashTwice(messageBuffer);
+        const checksum = hash.toBuffer().subarray(0, 4);
         // Use getPacketMagic() if available, otherwise fallback to constant
         const packetMagic = (this.params as any).getPacketMagic ? 
             (this.params as any).getPacketMagic() : 
@@ -59,26 +73,11 @@ export class BitcoinSerializer extends MessageSerializer {
         // Write message length
         header.writeUInt32LE(message.length, 4 + COMMAND_LEN);
 
-        // Calculate and write checksum
-        const hash = Sha256Hash.hashTwice(message);
-        const checksum = hash.slice(0, 4);
-        // Copy checksum to header
-        for (let i = 0; i < 4; i++) {
-            header[4 + COMMAND_LEN + 4 + i] = checksum[i];
-        }
-
-        // Write header and message
-        out.write(header);
-        out.write(message);
+        // Write header and message to chunks
+        out.push(header);
+        out.push(messageBuffer);
     }
 
-    serializeMessage(message: Message, out: any): void {
-        const name = BitcoinSerializer.names.get(message.constructor);
-        if (!name) {
-            throw new Error(`BitcoinSerializer doesn't currently know how to serialize ${message.constructor.name}`);
-        }
-        this.serialize(name, message.bitcoinSerialize(), out);
-    }
 
     deserialize(inBuffer: Buffer): Message {
         const newBuffer = this.seekPastMagicBytes(inBuffer);
@@ -107,7 +106,7 @@ export class BitcoinSerializer extends MessageSerializer {
             throw new ProtocolException(`Checksum failed to verify`);
         }
 
-        return this.makeMessage(header.command, header.size, payloadBytes, hash, header.checksum);
+        return this.makeMessage(header.command, header.size, payloadBytes, hash.toBuffer(), header.checksum);
     }
 
     private makeMessage(command: string, length: number, payloadBytes: Buffer, hash: Buffer, checksum: Buffer): Message {
@@ -138,7 +137,7 @@ export class BitcoinSerializer extends MessageSerializer {
 
     makeTransaction(payloadBytes: Buffer, offset: number, length: number, hash: Buffer): Transaction {
         // Create transaction without setting hash for now
-        return new Transaction(this.params, payloadBytes, offset, null, this, length);
+        return new Transaction(this.params, payloadBytes, offset, this);
     }
 
     seekPastMagicBytes(inBuffer: Buffer): Buffer {
@@ -168,11 +167,11 @@ export class BitcoinSerializer extends MessageSerializer {
     }
 
     isParseRetainMode(): boolean {
-        return this.parseRetain;
+        return this.parseLazy; // Use base class property
     }
 
-    makeBloomFilter(payloadBytes: Buffer): BloomFilter {
-        return new BloomFilter(this.params, payloadBytes);
+    makeBloomFilter(payloadBytes: Uint8Array): BloomFilter {
+        return new BloomFilter(this.params, Buffer.from(payloadBytes), 0, this);
     }
 
     deserializeHeader(inBuffer: Buffer): BitcoinPacketHeader {
