@@ -11,7 +11,7 @@ import org.spongycastle.util.encoders.Hex;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.encrypt.ECIESCoder;
+import net.bigtangle.crypto.ECIESCoder;
 
  
 public class ECKeyEncryptTest extends AbstractIntegrationTest {

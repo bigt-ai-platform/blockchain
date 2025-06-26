@@ -15,7 +15,7 @@ import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Utils;
-import net.bigtangle.encrypt.ECIESCoder;
+import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.exception.NoSignedDataException;
 
 public class SignedData extends DataClass implements java.io.Serializable {

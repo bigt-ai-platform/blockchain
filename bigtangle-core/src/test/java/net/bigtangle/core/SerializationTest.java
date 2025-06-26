@@ -23,7 +23,7 @@ import org.spongycastle.crypto.InvalidCipherTextException;
 import net.bigtangle.apps.data.IdentityCore;
 import net.bigtangle.apps.data.IdentityData;
 import net.bigtangle.apps.data.SignedData;
-import net.bigtangle.encrypt.ECIESCoder;
+import net.bigtangle.crypto.ECIESCoder;
 
 public class SerializationTest {
 

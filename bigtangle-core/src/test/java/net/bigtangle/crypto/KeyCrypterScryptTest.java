@@ -21,7 +21,6 @@ import org.slf4j.LoggerFactory;
 import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.Utils;
-import net.bigtangle.utils.BriefLogFormatter;
 import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Protos.ScryptParameters;
 
@@ -44,8 +43,7 @@ public class KeyCrypterScryptTest {
         Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder()
                 .setSalt(ByteString.copyFrom(KeyCrypterScrypt.randomSalt()));
         scryptParameters = scryptParametersBuilder.build();
-
-        BriefLogFormatter.init();
+ 
     }
 
     @Test

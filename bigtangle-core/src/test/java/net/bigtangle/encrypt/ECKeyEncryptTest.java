@@ -8,6 +8,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.ECKey;
+import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.params.TestParams;
 
 public class ECKeyEncryptTest {

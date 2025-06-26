@@ -32,7 +32,6 @@ import net.bigtangle.params.MainNetParams;
 import net.bigtangle.script.Script;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
-import net.bigtangle.utils.BriefLogFormatter;
 
 /**
  * We don't do any wallet tests here, we leave that to {@link ChainSplitTest}
@@ -51,8 +50,6 @@ public abstract class AbstractFullPrunedBlockChainTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-
-        BriefLogFormatter.init();
  
     }
 

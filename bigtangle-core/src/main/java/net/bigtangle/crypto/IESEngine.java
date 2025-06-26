@@ -3,7 +3,7 @@
  *  
  *******************************************************************************/
 
-package net.bigtangle.encrypt;
+package net.bigtangle.crypto;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

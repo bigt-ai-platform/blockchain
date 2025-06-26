@@ -36,7 +36,6 @@ import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.MnemonicCode;
 import net.bigtangle.params.MainNetParams;
-import net.bigtangle.utils.BriefLogFormatter;
 
 public class KeyChainGroupTest {
 	// Number of initial keys in this tests HD wallet, including interior keys.
@@ -49,7 +48,7 @@ public class KeyChainGroupTest {
 
 	@BeforeEach
 	public void setup() {
-		BriefLogFormatter.init();
+ 
 		Utils.setMockClock();
 		group = new KeyChainGroup(PARAMS);
 		group.setLookaheadSize(LOOKAHEAD_SIZE); // Don't want slow tests.

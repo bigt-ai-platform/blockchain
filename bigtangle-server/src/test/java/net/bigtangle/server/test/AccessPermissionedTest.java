@@ -12,7 +12,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
-import net.bigtangle.encrypt.ECIESCoder;
+import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.SessionRandomNumResponse;
 import net.bigtangle.utils.Json;

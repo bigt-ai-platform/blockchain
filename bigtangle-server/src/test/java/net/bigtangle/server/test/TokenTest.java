@@ -45,7 +45,7 @@ import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.encrypt.ECIESCoder;
+import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;

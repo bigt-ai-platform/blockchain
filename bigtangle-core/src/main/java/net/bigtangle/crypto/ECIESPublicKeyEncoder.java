@@ -3,7 +3,7 @@
  *  
  *******************************************************************************/
 
-package net.bigtangle.encrypt;
+package net.bigtangle.crypto;
 
 import org.spongycastle.crypto.KeyEncoder;
 import org.spongycastle.crypto.params.AsymmetricKeyParameter;

@@ -43,7 +43,6 @@ import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.MainNetParams;
-import net.bigtangle.utils.BriefLogFormatter;
 import net.bigtangle.utils.DumpedPrivateKey;
 import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Protos.ScryptParameters;
@@ -62,8 +61,7 @@ public class ECKeyTest {
 				.setSalt(ByteString.copyFrom(KeyCrypterScrypt.randomSalt()));
 		ScryptParameters scryptParameters = scryptParametersBuilder.build();
 		keyCrypter = new KeyCrypterScrypt(scryptParameters);
-
-		BriefLogFormatter.init();
+ 
 	}
 
 	@Test

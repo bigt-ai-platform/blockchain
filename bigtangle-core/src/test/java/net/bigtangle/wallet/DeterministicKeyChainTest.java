@@ -33,9 +33,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
-import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.params.MainNetParams;
-import net.bigtangle.utils.BriefLogFormatter;
 
 public class DeterministicKeyChainTest {
 	private DeterministicKeyChain chain;
@@ -43,7 +41,7 @@ public class DeterministicKeyChainTest {
 
 	@BeforeEach
 	public void setup() {
-		BriefLogFormatter.init();
+	 
 		// You should use a random seed instead. The secs constant comes from the unit
 		// test file, so we can compare
 		// serialized data properly.

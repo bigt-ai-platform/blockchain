@@ -23,11 +23,6 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.params.MainNetParams;
-import net.bigtangle.utils.BriefLogFormatter;
-import net.bigtangle.wallet.Protos;
-import net.bigtangle.wallet.UnreadableWalletException;
-import net.bigtangle.wallet.Wallet;
-import net.bigtangle.wallet.WalletProtobufSerializer;
 
 public class WalletProtobufSerializerTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();
@@ -41,7 +36,7 @@ public class WalletProtobufSerializerTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
-		BriefLogFormatter.initVerbose();
+ 
 
 		myWatchedKey = new ECKey();
 		myWallet = Wallet.fromKeys(PARAMS, myWatchedKey);
