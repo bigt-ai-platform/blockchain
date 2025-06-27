@@ -70,8 +70,30 @@ export class ECKey {
         return this.pub.encode(true); // Compressed public key
     }
 
+    /**
+     * Gets the raw public key value. This appears in transaction scriptSigs.
+     * Note: This is not the same as the pubKeyHash/address.
+     */
+    public getPubKey(): Uint8Array {
+        return this.getPubKeyBytes();
+    }
+
+    /**
+     * Gets the public key in the form of an elliptic curve point object.
+     */
     public getPubKeyPoint(): ECPoint | null {
         return this.pub;
+    }
+
+    /**
+     * Gets the private key as a BigInteger.
+     * Throws if the private key is not available.
+     */
+    public getPrivKey(): BigInteger {
+        if (!this.priv) {
+            throw new Error("Private key is not available");
+        }
+        return this.priv;
     }
 
     public getPubKeyHash(): Uint8Array {

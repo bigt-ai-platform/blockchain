@@ -25,6 +25,7 @@ const OP_ELSE = 0x67;
 const OP_ENDIF = 0x68;
 const OP_CHECKLOCKTIMEVERIFY = 0xb1;
 const OP_DROP = 0x75;
+const OP_CHECKSIGVERIFY = 0xad;
 const OP_CODESEPARATOR = 0xab; // Used in Script.removeAllInstancesOfOp
 
 export class ScriptBuilder {

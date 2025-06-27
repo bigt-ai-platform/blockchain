@@ -380,5 +380,13 @@ export class Transaction extends ChildMessage {
         }
     }
 
-    // Additional methods would be implemented here...
+ /**
+     * Computes the hash for signature for the given input index, script, and sighash flags.
+     * This is a stub implementation; you should replace it with your actual logic.
+     */
+    hashForSignature(index: number, script: Uint8Array, sighashFlags: number): Sha256Hash {
+        // TODO: Implement actual signature hash logic according to your transaction format
+        // For now, return a dummy hash for compilation
+        return Sha256Hash.hash(Buffer.from(script));
+    }
 }

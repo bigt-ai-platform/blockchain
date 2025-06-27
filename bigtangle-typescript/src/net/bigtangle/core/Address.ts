@@ -75,4 +75,14 @@ export class Address {
                this.version === other.version && 
                this.hash160.equals(other.hash160);
     }
+  compareTo(other: Address): number {
+    const thisBytes = this.getHash160();
+    const otherBytes = other.getHash160();
+    for (let i = 0; i < Math.min(thisBytes.length, otherBytes.length); i++) {
+        if (thisBytes[i] !== otherBytes[i]) {
+            return thisBytes[i] - otherBytes[i];
+        }
+    }
+    return thisBytes.length - otherBytes.length;
+  }
 }
