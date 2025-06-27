@@ -1,28 +1,31 @@
+import { AbstractResponse } from './AbstractResponse';
 import { MatchLastdayResult } from '../ordermatch/MatchLastdayResult';
-import { Token } from '../Token';
+import { Token } from '../core/Token';
 
-export class OrderTickerResponse {
-    private tickers: MatchLastdayResult[];
-    private tokennames: Map<string, Token>; // Map<String, Token> in Java
+export class OrderTickerResponse extends AbstractResponse {
+    private tickers: MatchLastdayResult[] | null = null;
+    private tokennames: Map<string, Token> | null = null;
 
-    constructor(tickers: MatchLastdayResult[], tokennames: Map<string, Token>) {
-        this.tickers = tickers;
-        this.tokennames = tokennames;
+    public static createOrderRecordResponse(tickers: MatchLastdayResult[], tokennames: Map<string, Token>): OrderTickerResponse {
+        const res = new OrderTickerResponse();
+        res.tickers = tickers;
+        res.tokennames = tokennames;
+        return res;
     }
 
-    getTickers(): MatchLastdayResult[] {
+    public getTickers(): MatchLastdayResult[] | null {
         return this.tickers;
     }
 
-    setTickers(tickers: MatchLastdayResult[]): void {
+    public setTickers(tickers: MatchLastdayResult[] | null): void {
         this.tickers = tickers;
     }
 
-    getTokennames(): Map<string, Token> {
+    public getTokennames(): Map<string, Token> | null {
         return this.tokennames;
     }
 
-    setTokennames(tokennames: Map<string, Token>): void {
+    public setTokennames(tokennames: Map<string, Token> | null): void {
         this.tokennames = tokennames;
     }
 }

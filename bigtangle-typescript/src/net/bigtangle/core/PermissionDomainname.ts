@@ -1,25 +1,42 @@
+import { Utils } from '../utils/Utils';
+import { ECKey } from './ECKey';
+
 export class PermissionDomainname {
-    private domain: string;
-    private tokenid: string;
+    private pubKeyHex: string | null = null;
+    private priKeyHex: string | null = null;
 
-    constructor(domain: string, tokenid: string) {
-        this.domain = domain;
-        this.tokenid = tokenid;
+    constructor(pubKeyHex?: string, priKeyHex?: string) {
+        if (pubKeyHex) this.pubKeyHex = pubKeyHex;
+        if (priKeyHex) this.priKeyHex = priKeyHex;
     }
 
-    getDomain(): string {
-        return this.domain;
+    public getPubKeyHex(): string | null {
+        return this.pubKeyHex;
     }
 
-    setDomain(domain: string): void {
-        this.domain = domain;
+    public setPubKeyHex(pubKeyHex: string | null): void {
+        this.pubKeyHex = pubKeyHex;
     }
 
-    getTokenid(): string {
-        return this.tokenid;
+    public getPriKeyHex(): string | null {
+        return this.priKeyHex;
     }
 
-    setTokenid(tokenid: string): void {
-        this.tokenid = tokenid;
+    public setPriKeyHex(priKeyHex: string | null): void {
+        this.priKeyHex = priKeyHex;
+    }
+
+    public getPriKeyBuf(): Uint8Array {
+        return this.priKeyHex ? Utils.HEX.decode(this.priKeyHex) : new Uint8Array();
+    }
+
+    public getPubKeyBuf(): Uint8Array {
+        return this.pubKeyHex ? Utils.HEX.decode(this.pubKeyHex) : new Uint8Array();
+    }
+
+    public getOutKey(): ECKey {
+        const pubKey = this.getPubKeyBuf();
+        const outKey = ECKey.fromPublicOnly(pubKey);
+        return outKey;
     }
 }

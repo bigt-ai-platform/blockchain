@@ -1,34 +1,21 @@
+import { ObjectMapper, SerializationFeature, DeserializationFeature } from 'jackson-js';
+
 export class Json {
-  public static stringify(obj: any): string {
-    // Create a replacer function to filter out empty and null values
-    const replacer = (key: string, value: any) => {
-      // Exclude null and undefined values
-      if (value === null || value === undefined) {
-        return undefined;
-      }
-      
-      // Exclude empty arrays
-      if (Array.isArray(value) && value.length === 0) {
-        return undefined;
-      }
-      
-      // Exclude empty objects
-      if (typeof value === 'object' && Object.keys(value).length === 0) {
-        return undefined;
-      }
-      
-      return value;
-    };
+    public static jsonmapper(): ObjectMapper {
+        const mapper = new ObjectMapper();
+ 
 
-    // Stringify with pretty printing and sorted keys
-    return JSON.stringify(
-      obj,
-      replacer,
-      2  // Indent with 2 spaces for pretty printing
-    );
-  }
+        // The jackson-js library does not support ordering map entries by keys.
+        // mapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+        
+        // The jackson-js library does not support setting a date format.
+        // const outputFormat = new SimpleDateFormat("dd MMM yyyy");
+        // mapper.setDateFormat(outputFormat);
 
-  public static parse(json: string): any {
-    return JSON.parse(json);
-  }
+        // The jackson-js library does not support setting serialization inclusion.
+        // mapper.setSerializationInclusion(Include.NON_EMPTY);
+        // mapper.setSerializationInclusion(Include.NON_NULL);
+
+        return mapper;
+    }
 }

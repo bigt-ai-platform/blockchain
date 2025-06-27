@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 import * as Utils from './Utils';
 import { Constants } from './Constants';
 
-export class Coin implements Monetary, Comparable<Coin> {
+export class Coin implements IMonetary, IComparable<Coin> {
     private static readonly serialVersionUID: bigint = 551802452657362699n;
 
     // Static constants
@@ -154,10 +154,10 @@ export class Coin implements Monetary, Comparable<Coin> {
     }
 }
 
-interface Comparable<T> {
+interface IComparable<T> {
     compareTo(other: T): number;
 }
 
-interface Monetary {
+interface IMonetary {
     getValue(): bigint;
 }

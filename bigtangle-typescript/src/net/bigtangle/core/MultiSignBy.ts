@@ -1,55 +1,55 @@
 export class MultiSignBy {
-    private tokenid: string;
-    private tokenindex: number;
-    private address: string;
-    private publickey: string;
-    private signature: string;
+    private tokenid: string | null = null;
+    private tokenindex: number = 0;
+    private address: string | null = null;
+    private publickey: string | null = null;
+    private signature: string | null = null;
 
-    constructor(tokenid: string = "", tokenindex: number = 0, address: string = "", publickey: string = "", signature: string = "") {
-        this.tokenid = tokenid;
-        this.tokenindex = tokenindex;
-        this.address = address;
-        this.publickey = publickey;
-        this.signature = signature;
-    }
-
-    getTokenid(): string {
+    public getTokenid(): string | null {
         return this.tokenid;
     }
 
-    setTokenid(tokenid: string): void {
+    public setTokenid(tokenid: string | null): void {
         this.tokenid = tokenid;
     }
 
-    getTokenindex(): number {
+    public getTokenindex(): number {
         return this.tokenindex;
     }
 
-    setTokenindex(tokenindex: number): void {
+    public setTokenindex(tokenindex: number): void {
         this.tokenindex = tokenindex;
     }
 
-    getAddress(): string {
+    public getAddress(): string | null {
         return this.address;
     }
 
-    setAddress(address: string): void {
+    public setAddress(address: string | null): void {
         this.address = address;
     }
 
-    getPublickey(): string {
+    constructor() {
+    }
+
+    public getPublickey(): string | null {
         return this.publickey;
     }
 
-    setPublickey(publickey: string): void {
+    public setPublickey(publickey: string | null): void {
         this.publickey = publickey;
     }
 
-    getSignature(): string {
+    public getSignature(): string | null {
         return this.signature;
     }
 
-    setSignature(signature: string): void {
+    public setSignature(signature: string | null): void {
         this.signature = signature;
+    }
+
+    public toString(): string {
+        return `MultiSignBy [tokenid=${this.tokenid}, tokenindex=${this.tokenindex}, address=${this.address}` +
+               `, publickey=${this.publickey}, signature=${this.signature}]`;
     }
 }

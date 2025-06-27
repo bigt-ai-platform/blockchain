@@ -1,13 +1,11 @@
 export class BlockStoreException extends Error {
-    cause?: Error;
-
-    constructor(message?: string | Error, cause?: Error) {
-        if (message instanceof Error) {
-            cause = message;
-            message = undefined;
-        }
+    constructor(message?: string, cause?: Error) {
         super(message);
-        this.name = 'BlockStoreException';
-        if (cause) this.cause = cause;
+        this.name = "BlockStoreException";
+        Object.setPrototypeOf(this, BlockStoreException.prototype);
+        if (cause) {
+            this.cause = cause;
+        }
     }
+    public cause?: Error;
 }

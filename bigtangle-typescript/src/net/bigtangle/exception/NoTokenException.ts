@@ -1,8 +1,7 @@
-// TypeScript translation of NoTokenException.java
-
 export class NoTokenException extends Error {
-    constructor() {
-        super();
-        this.name = 'NoTokenException';
+    constructor(message?: string) {
+        super(message);
+        this.name = "NoTokenException";
+        Object.setPrototypeOf(this, NoTokenException.prototype);
     }
 }

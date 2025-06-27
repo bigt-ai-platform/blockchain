@@ -1,11 +1,11 @@
-import { NetworkParameters } from './NetworkParameters';
-import { Sha256Hash } from './Sha256Hash';
-import { Address } from './Address';
-import { ECKey } from './ECKey';
-import { Transaction } from './Transaction';
-import { TransactionSignature } from './TransactionSignature';
-import { ScriptException, ProtocolException } from './exception/Exceptions';
-import { Utils } from './Utils';
+import { NetworkParameters } from '../core/NetworkParameters';
+import { Sha256Hash } from '../core/Sha256Hash';
+import { Address } from '../core/Address';
+import { ECKey } from '../core/ECKey';
+import { Transaction } from '../core/Transaction';
+import { TransactionSignature } from '../crypto/TransactionSignature';
+import { ScriptException, ProtocolException } from '../exception/Exceptions';
+import { Utils } from '../utils/Utils';
 import { ScriptChunk } from './ScriptChunk';
 import {
     OP_0, OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4, OP_1NEGATE, OP_1, OP_2, OP_3, OP_4, OP_5, OP_6, OP_7, OP_8, OP_9, OP_10, OP_11, OP_12, OP_13, OP_14, OP_15, OP_16,
@@ -18,9 +18,9 @@ import {
     OP_CHECKLOCKTIMEVERIFY, OP_NOP1, OP_NOP3, OP_NOP4, OP_NOP5, OP_NOP6, OP_NOP7, OP_NOP8, OP_NOP9, OP_NOP10, OP_INVALIDOPCODE,
     getOpCodeName, getPushDataName, getOpCode
 } from './ScriptOpCodes';
-import { BigInteger } from 'jsbn';
-import { DataOutputStream } from './utils/DataOutputStream';
-import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
+import { BigInteger } from '../core/BigInteger';
+import { DataOutputStream } from '../utils/DataOutputStream';
+import { UnsafeByteArrayOutputStream } from '../core/UnsafeByteArrayOutputStream';
 
 /**
  * <p>Programs embedded inside transactions that control redemption of payments.</p>

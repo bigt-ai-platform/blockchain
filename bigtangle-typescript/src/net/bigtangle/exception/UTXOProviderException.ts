@@ -1,13 +1,11 @@
-// TypeScript translation of UTXOProviderException.java
-
 export class UTXOProviderException extends Error {
     constructor(message?: string, cause?: Error) {
+        super(message);
+        this.name = "UTXOProviderException";
+        Object.setPrototypeOf(this, UTXOProviderException.prototype);
         if (cause) {
-            super(message ? `${message}: ${cause.message}` : cause.message);
-            (this as any).cause = cause;
-        } else {
-            super(message);
+            this.cause = cause;
         }
-        this.name = 'UTXOProviderException';
     }
+    public cause?: Error;
 }

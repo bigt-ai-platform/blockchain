@@ -1,8 +1,7 @@
-// TypeScript translation of NoSignedDataException.java
-
 export class NoSignedDataException extends Error {
-    constructor() {
-        super();
-        this.name = 'NoSignedDataException';
+    constructor(message?: string) {
+        super(message);
+        this.name = "NoSignedDataException";
+        Object.setPrototypeOf(this, NoSignedDataException.prototype);
     }
 }

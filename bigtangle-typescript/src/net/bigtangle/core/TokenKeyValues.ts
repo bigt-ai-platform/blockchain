@@ -1,23 +1,17 @@
 import { KeyValue } from './KeyValue';
-import { Json } from './utils/Json';
+import { Json } from '../utils/Json';
 
 export class TokenKeyValues {
-    keyvalues: KeyValue[];
+    private keyvalues: KeyValue[] | null = null;
 
-    constructor() {
-        this.keyvalues = [];
-    }
-
-    addKeyvalue(kv: KeyValue): void {
-        if (this.keyvalues == null) {
+    public addKeyvalue(kv: KeyValue): void {
+        if (this.keyvalues === null) {
             this.keyvalues = [];
-            this.keyvalues.push(kv);
-        } else {
-            this.keyvalues.push(kv);
         }
+        this.keyvalues.push(kv);
     }
 
-    toByteArray(): Uint8Array {
+    public toByteArray(): Uint8Array {
         try {
             const jsonStr = Json.jsonmapper().writeValueAsString(this);
             return new TextEncoder().encode(jsonStr);
@@ -26,12 +20,12 @@ export class TokenKeyValues {
         }
     }
 
-    static parse(buf: Uint8Array): TokenKeyValues {
-        const jsonStr = new TextDecoder().decode(buf);
+    public static parse(buf: Uint8Array): TokenKeyValues {
+        const jsonStr = new TextDecoder('utf-8').decode(buf);
         return Json.jsonmapper().readValue(jsonStr, TokenKeyValues);
     }
 
-    getKeyvalues(): KeyValue[] {
+    public getKeyvalues(): KeyValue[] | null {
         return this.keyvalues;
     }
 }

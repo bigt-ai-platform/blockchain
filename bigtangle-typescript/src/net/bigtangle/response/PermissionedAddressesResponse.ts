@@ -1,31 +1,40 @@
-import { MultiSignAddress } from '../MultiSignAddress';
+import { AbstractResponse } from './AbstractResponse';
+import { MultiSignAddress } from '../core/MultiSignAddress';
 
-export class PermissionedAddressesResponse {
-    private multiSignAddresses: MultiSignAddress[];
-    private domainName: string;
+export class PermissionedAddressesResponse extends AbstractResponse {
+    private multiSignAddresses: MultiSignAddress[] | null = null;
+    private domainName: string | null = null;
+    private isRootPermissioned: boolean = false;
 
-    constructor(multiSignAddresses: MultiSignAddress[], domainName: string) {
-        this.multiSignAddresses = multiSignAddresses;
-        this.domainName = domainName;
+    public static create(domainName: string, isRootPermissioned: boolean, multiSignAddresses: MultiSignAddress[]): PermissionedAddressesResponse {
+        const res = new PermissionedAddressesResponse();
+        res.domainName = domainName;
+        res.isRootPermissioned = isRootPermissioned;
+        res.multiSignAddresses = multiSignAddresses;
+        return res;
     }
 
-    getMultiSignAddresses(): MultiSignAddress[] {
+    public getMultiSignAddresses(): MultiSignAddress[] | null {
         return this.multiSignAddresses;
     }
 
-    setMultiSignAddresses(multiSignAddresses: MultiSignAddress[]): void {
+    public setMultiSignAddresses(multiSignAddresses: MultiSignAddress[] | null): void {
         this.multiSignAddresses = multiSignAddresses;
     }
 
-    getDomainName(): string {
+    public isRootPermissioned(): boolean {
+        return this.isRootPermissioned;
+    }
+
+    public setRootPermissioned(isRootPermissioned: boolean): void {
+        this.isRootPermissioned = isRootPermissioned;
+    }
+
+    public getDomainName(): string | null {
         return this.domainName;
     }
 
-    setDomainName(domainName: string): void {
+    public setDomainName(domainName: string | null): void {
         this.domainName = domainName;
-    }
-
-    isEmpty(): boolean {
-        return this.multiSignAddresses == null || this.multiSignAddresses.length === 0;
     }
 }

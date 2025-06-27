@@ -1,4 +1,4 @@
-import { BigInteger } from 'jsbn'; // Import BigInteger as a value
+import { BigInteger } from '../core/BigInteger'; // Import BigInteger as a value
 
 // Placeholder for SpongyCastle ECPoint
 // In a real application, this would wrap an actual elliptic curve point object.

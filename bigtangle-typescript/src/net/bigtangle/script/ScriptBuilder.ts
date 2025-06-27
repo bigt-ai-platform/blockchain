@@ -1,10 +1,10 @@
 import { ScriptChunk } from './ScriptChunk';
 import { Script } from './Script';
-import { Address } from './Address';
-import { ECKey } from './ECKey';
-import { Utils } from './Utils';
-import { TransactionSignature } from './TransactionSignature';
-import { BigInteger } from 'jsbn';
+import { Address } from '../core/Address';
+import { ECKey } from '../core/ECKey';
+import { Utils } from '../utils/Utils';
+import { TransactionSignature } from '../crypto/TransactionSignature';
+import { BigInteger } from '../core/BigInteger';
 
 // Re-export ScriptOpCodes from Script.ts or define them here if not in Script.ts
 // For now, assuming they will be defined in Script.ts or a separate ScriptOpCodes.ts

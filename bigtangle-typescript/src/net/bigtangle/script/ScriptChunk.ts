@@ -2,9 +2,9 @@ import {
     OP_0, OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4, OP_1NEGATE, OP_1, OP_16,
     getOpCodeName, getPushDataName
 } from './ScriptOpCodes';
-import { Utils } from './Utils';
+import { Utils } from '../utils/Utils';
 import { Script } from './Script'; // Import Script for static methods and constants
-import { DataOutputStream } from './utils/DataOutputStream'; // For OutputStream equivalent
+import { DataOutputStream } from '../utils/DataOutputStream'; // For OutputStream equivalent
 
 /**
  * A script element that is either a data push (signature, pubkey, etc) or a non-push (logic, numeric, etc) operation.

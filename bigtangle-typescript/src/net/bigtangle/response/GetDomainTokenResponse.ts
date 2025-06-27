@@ -1,17 +1,20 @@
-import { Token } from '../Token';
+import { AbstractResponse } from './AbstractResponse';
+import { Token } from '../core/Token';
 
-export class GetDomainTokenResponse {
-    private domainNameToken: Token;
+export class GetDomainTokenResponse extends AbstractResponse {
+    private domainNameToken: Token | null = null;
 
-    constructor(domainNameToken: Token) {
-        this.domainNameToken = domainNameToken;
-    }
-
-    getdomainNameToken(): Token {
+    public getdomainNameToken(): Token | null {
         return this.domainNameToken;
     }
 
-    setdomainNameToken(domainNameToken: Token): void {
+    public setdomainNameToken(domainNameToken: Token | null): void {
         this.domainNameToken = domainNameToken;
+    }
+    
+    public static createGetDomainBlockHashResponse(domainNameToken: Token): GetDomainTokenResponse {
+        const res = new GetDomainTokenResponse();
+        res.domainNameToken = domainNameToken;
+        return res;
     }
 }

@@ -1,17 +1,25 @@
-import { Token } from '../Token';
+import { AbstractResponse } from './AbstractResponse';
+import { Token } from '../core/Token';
+import { BigInteger } from '../core/BigInteger';
 
-export class GetTokensResponse {
-    private tokens: Token[];
+export class GetTokensResponse extends AbstractResponse {
+    private tokens: Token[] | null = null;
+    private amountMap: Map<string, BigInteger> | null = null;
 
-    constructor(tokens: Token[]) {
-        this.tokens = tokens;
+    public static create(tokens: Token[], amountMap?: Map<string, BigInteger>): GetTokensResponse {
+        const res = new GetTokensResponse();
+        res.tokens = tokens;
+        if (amountMap) {
+            res.amountMap = amountMap;
+        }
+        return res;
     }
 
-    getTokens(): Token[] {
+    public getTokens(): Token[] | null {
         return this.tokens;
     }
 
-    setTokens(tokens: Token[]): void {
-        this.tokens = tokens;
+    public getAmountMap(): Map<string, BigInteger> | null {
+        return this.amountMap;
     }
 }

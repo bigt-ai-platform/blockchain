@@ -1,25 +1,22 @@
-export class TokenIndexResponse {
-    private tokenindex: number;
-    private blockhash: string; // Assuming blockhash is a hex string
+import { AbstractResponse } from './AbstractResponse';
+import { Sha256Hash } from '../core/Sha256Hash';
 
-    constructor(tokenindex: number, blockhash: string) {
-        this.tokenindex = tokenindex;
-        this.blockhash = blockhash;
-    }
+export class TokenIndexResponse extends AbstractResponse {
+    private tokenindex: number = 0;
+    private blockhash: Sha256Hash | null = null;
 
-    getTokenindex(): number {
+    public getTokenindex(): number {
         return this.tokenindex;
     }
 
-    setTokenindex(tokenindex: number): void {
-        this.tokenindex = tokenindex;
-    }
-
-    getBlockhash(): string {
+    public getBlockhash(): Sha256Hash | null {
         return this.blockhash;
     }
 
-    setBlockhash(blockhash: string): void {
-        this.blockhash = blockhash;
+    public static createTokenSerialIndexResponse(tokenindex: number, blockhash: Sha256Hash): TokenIndexResponse {
+        const res = new TokenIndexResponse();
+        res.tokenindex = tokenindex;
+        res.blockhash = blockhash;
+        return res;
     }
 }

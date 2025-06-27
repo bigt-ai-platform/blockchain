@@ -1,6 +1,6 @@
 import { MessageSerializer } from './MessageSerializer';
 import { NetworkParameters } from './NetworkParameters';
-import { ProtocolException } from './exception/Exceptions';
+import { ProtocolException } from '../exception/Exceptions';
 import { Message } from './Message';
 import { Block } from './Block';
 import { Transaction } from './Transaction';
@@ -34,46 +34,40 @@ export class BitcoinSerializer extends MessageSerializer {
         [BloomFilter, "filterload"]
     ]);
 
-    // Remove duplicate params declaration
-
     constructor(params: NetworkParameters, parseRetain: boolean) {
         super(params, parseRetain);
     }
 
-    serialize(message: Message): Buffer {
+    public serializeMessage(message: Message): Buffer {
         const name = BitcoinSerializer.names.get(message.constructor);
         if (!name) {
             throw new Error(`BitcoinSerializer doesn't currently know how to serialize ${message.constructor.name}`);
         }
         const buffer = message.bitcoinSerialize();
         const chunks: Buffer[] = [];
-        this.serializeToStream(name, Buffer.from(buffer), chunks);
+        this.serialize(name, Buffer.from(buffer), chunks);
         return Buffer.concat(chunks);
     }
 
-    private serializeToStream(name: string, message: Buffer, out: Buffer[]): void {
-        // Convert to Buffer for header operations
+    public serialize(name: string, message: Buffer, out: Buffer[]): void {
         const header = Buffer.alloc(4 + COMMAND_LEN + 4 + 4);
         const messageBuffer = Buffer.from(message);
         
-        // Calculate checksum from message buffer
         const hash = Sha256Hash.hashTwice(messageBuffer);
         const checksum = hash.toBuffer().subarray(0, 4);
-        // Use getPacketMagic() if available, otherwise fallback to constant
+
         const packetMagic = (this.params as any).getPacketMagic ? 
             (this.params as any).getPacketMagic() : 
-            0xf9beb4d9; // Default mainnet magic
+            0xf9beb4d9;
         header.writeUInt32BE(packetMagic, 0);
 
-        // Write command name
         for (let i = 0; i < name.length && i < COMMAND_LEN; i++) {
             header[4 + i] = name.charCodeAt(i) & 0xFF;
         }
 
-        // Write message length
         header.writeUInt32LE(message.length, 4 + COMMAND_LEN);
+        header.write(checksum.toString('hex'), 4 + COMMAND_LEN + 4, 4, 'hex');
 
-        // Write header and message to chunks
         out.push(header);
         out.push(messageBuffer);
     }
@@ -131,21 +125,29 @@ export class BitcoinSerializer extends MessageSerializer {
         return new AlertMessage(this.params, payloadBytes);
     }
 
-    makeBlock(payloadBytes: Buffer, offset: number, length: number): Block {
+    public makeBlock(payloadBytes: Buffer): Block;
+    public makeBlock(payloadBytes: Buffer, offset: number, length: number): Block;
+    public makeBlock(payloadBytes: Buffer, offset?: number, length?: number): Block {
+        if (offset === undefined) {
+            return new Block(this.params, payloadBytes, 0, this, payloadBytes.length);
+        }
         return new Block(this.params, payloadBytes, offset, this, length);
     }
 
-    makeTransaction(payloadBytes: Buffer, offset: number, length: number, hash: Buffer): Transaction {
-        // Create transaction without setting hash for now
-        return new Transaction(this.params, payloadBytes, offset, this);
+    public makeTransaction(payloadBytes: Buffer, offset: number, length: number, hash: Buffer | null): Transaction {
+        const tx = new Transaction(this.params, payloadBytes, offset, this);
+        if (hash) {
+            tx.setHash(Sha256Hash.wrap(hash));
+        }
+        return tx;
     }
 
-    seekPastMagicBytes(inBuffer: Buffer): Buffer {
+    public seekPastMagicBytes(inBuffer: Buffer): Buffer {
         let magicCursor = 3;
         let position = 0;
         const magic = (this.params as any).getPacketMagic ? 
             (this.params as any).getPacketMagic() : 
-            0xf9beb4d9; // Default mainnet magic
+            0xf9beb4d9;
         
         while (position < inBuffer.length) {
             const b = inBuffer[position];
@@ -155,7 +157,6 @@ export class BitcoinSerializer extends MessageSerializer {
                 magicCursor--;
                 position++;
                 if (magicCursor < 0) {
-                    // Found magic bytes, return the buffer starting after magic bytes
                     return inBuffer.subarray(position);
                 }
             } else {
@@ -166,12 +167,12 @@ export class BitcoinSerializer extends MessageSerializer {
         throw new Error("Magic bytes not found");
     }
 
-    isParseRetainMode(): boolean {
-        return this.parseLazy; // Use base class property
+    public isParseRetainMode(): boolean {
+        return this.parseRetain;
     }
 
-    makeBloomFilter(payloadBytes: Uint8Array): BloomFilter {
-        return new BloomFilter(this.params, Buffer.from(payloadBytes), 0, this);
+    public makeBloomFilter(payloadBytes: Buffer): BloomFilter {
+        return new BloomFilter(this.params, payloadBytes, 0, this);
     }
 
     deserializeHeader(inBuffer: Buffer): BitcoinPacketHeader {

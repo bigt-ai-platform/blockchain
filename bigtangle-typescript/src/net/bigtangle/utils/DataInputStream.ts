@@ -1,41 +1,60 @@
+import { Buffer } from 'buffer';
+
 export class DataInputStream {
-    private buffer: Uint8Array;
-    private offset: number;
+    private buffer: Buffer;
+    private position: number;
 
-    constructor(buffer: Uint8Array) {
+    constructor(buffer: Buffer) {
         this.buffer = buffer;
-        this.offset = 0;
+        this.position = 0;
     }
 
-    readBoolean(): boolean {
-        if (this.offset + 1 > this.buffer.length) {
-            throw new Error("EOF");
-        }
-        return this.buffer[this.offset++] !== 0;
+    public read(buffer: Buffer, offset: number, length: number): number {
+        const bytesRead = this.buffer.copy(buffer, offset, this.position, this.position + length);
+        this.position += bytesRead;
+        return bytesRead;
     }
 
-    readInt(): number {
-        if (this.offset + 4 > this.buffer.length) {
-            throw new Error("EOF");
-        }
-        const value = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.offset, 4).getInt32(0, false); // Big-endian
-        this.offset += 4;
-        return value;
+    public readBoolean(): boolean {
+        return this.readByte() !== 0;
     }
 
-    readFully(buf: Uint8Array): void {
-        if (this.offset + buf.length > this.buffer.length) {
-            throw new Error("EOF");
-        }
-        for (let i = 0; i < buf.length; i++) {
-            buf[i] = this.buffer[this.offset++];
+    public readByte(): number {
+        const val = this.buffer.readUInt8(this.position);
+        this.position += 1;
+        return val;
+    }
+
+    public readInt(): number {
+        const val = this.buffer.readInt32BE(this.position);
+        this.position += 4;
+        return val;
+    }
+
+    public readLong(): number {
+        const val = this.buffer.readBigInt64BE(this.position);
+        this.position += 8;
+        return Number(val);
+    }
+
+    public readBytes(length: number): Buffer {
+        const buf = this.buffer.slice(this.position, this.position + length);
+        this.position += length;
+        return buf;
+    }
+
+    public readNBytesString(): string | null {
+        const hasValue = this.readBoolean();
+        if (hasValue) {
+            const length = this.readInt();
+            const buf = this.readBytes(length);
+            return buf.toString('utf-8');
+        } else {
+            return null;
         }
     }
 
-    readByte(): number {
-        if (this.offset + 1 > this.buffer.length) {
-            throw new Error("EOF");
-        }
-        return this.buffer[this.offset++];
+    public close(): void {
+        // No-op
     }
 }

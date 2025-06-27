@@ -1,9 +1,17 @@
 export enum DataClassName {
+    TOKEN = "TOKEN",
+    PAYMULTISIGN = "PAYMULTISIGN",
+    CONTACTINFO = "CONTACTINFO",
+    MYHOMEADDRESS = "MYHOMEADDRESS",
+    UPLOADFILE = "UPLOADFILE",
+    VOS = "VOS",
+    SERVERURL = "SERVERURL",
+    LANG = "LANG",
+    BlockSolveType = "BlockSolveType",
     UserSettingDataInfo = "UserSettingDataInfo",
-    OrderOpen = "OrderOpen",
-    OrderCancel = "OrderCancel",
-    ContractEventInfo = "ContractEventInfo",
-    ContractEventCancelInfo = "ContractEventCancelInfo",
-    TOKEN = "Token", // Added TOKEN
-    // Add other data class names as needed
+    OrderOpenInfo = "OrderOpenInfo",
+    IdentityData = "IdentityData",
+    KeyValueList = "KeyValueList",
+    Prescription = "Prescription",
+    Certificate = "Certificate",
 }

@@ -1,21 +1,19 @@
-import { MultiSignBy } from '../MultiSignBy';
+import { MultiSignBy } from '../core/MultiSignBy';
 
 export class MultiSignByRequest {
-    private multiSignBies: MultiSignBy[];
+    private multiSignBies: MultiSignBy[] = [];
 
-    constructor(multiSignBies: MultiSignBy[]) {
-        this.multiSignBies = multiSignBies;
-    }
-
-    static create(multiSignBies: MultiSignBy[]): MultiSignByRequest {
-        return new MultiSignByRequest(multiSignBies);
-    }
-
-    getMultiSignBies(): MultiSignBy[] {
+    public getMultiSignBies(): MultiSignBy[] {
         return this.multiSignBies;
     }
 
-    setMultiSignBies(multiSignBies: MultiSignBy[]): void {
+    public setMultiSignBies(multiSignBies: MultiSignBy[]): void {
         this.multiSignBies = multiSignBies;
+    }
+    
+    public static create(multiSignBies: MultiSignBy[]): MultiSignByRequest {
+        const res = new MultiSignByRequest();
+        res.multiSignBies = multiSignBies;
+        return res;
     }
 }

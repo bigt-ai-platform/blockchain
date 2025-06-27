@@ -1,52 +1,60 @@
-import { Utils } from './Utils';
-import { DataInputStream } from './utils/DataInputStream';
-import { DataOutputStream } from './utils/DataOutputStream';
+import { Utils } from '../utils/Utils';
+import { DataInputStream } from '../utils/DataInputStream';
+import { DataOutputStream } from '../utils/DataOutputStream';
+import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
 
 export class KeyValue {
-    key: string;
-    value: string;
+    private key: string;
+    private value: string;
 
     constructor(key: string = '', value: string = '') {
         this.key = key;
         this.value = value;
     }
 
-    getKey(): string {
+    public getKey(): string {
         return this.key;
     }
 
-    setKey(key: string): void {
+    public setKey(key: string): void {
         this.key = key;
     }
 
-    getValue(): string {
+    public getValue(): string {
         return this.value;
     }
 
-    setValue(value: string): void {
+    public setValue(value: string): void {
         this.value = value;
     }
 
-    toByteArray(): Uint8Array {
-        const baos = new DataOutputStream();
+    public toByteArray(): Uint8Array {
+        const baos = new UnsafeByteArrayOutputStream();
+        const dos = new DataOutputStream();
         try {
-            Utils.writeNBytesString(baos, this.key);
-            Utils.writeNBytesString(baos, this.value);
-            return baos.toByteArray();
+            dos.writeNBytesString(this.key);
+            dos.writeNBytesString(this.value);
+            dos.close();
         } catch (e: any) {
             throw new Error(e);
         }
+        return baos.toByteArray();
     }
 
-    parseDIS(dis: DataInputStream): KeyValue {
-        this.key = Utils.readNBytesString(dis);
-        this.value = Utils.readNBytesString(dis);
+    public parseDIS(dis: DataInputStream): KeyValue {
+        this.key = dis.readNBytesString() ?? '';
+        this.value = dis.readNBytesString() ?? '';
         return this;
     }
 
-    parse(buf: Uint8Array): KeyValue {
-        const bain = new DataInputStream(buf);
-        this.parseDIS(bain);
+    public parse(buf: Uint8Array): KeyValue {
+        const bain = new DataInputStream(Buffer.from(buf));
+        try {
+            this.parseDIS(bain);
+            bain.close();
+        } catch (e: any) {
+            throw new Error(e);
+        }
         return this;
     }
 }

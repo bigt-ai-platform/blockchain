@@ -1,33 +1,61 @@
+import { Buffer } from 'buffer';
+
 export class DataOutputStream {
-    private buffer: number[];
+    private buffer: Buffer;
+    private position: number;
 
     constructor() {
-        this.buffer = [];
+        this.buffer = Buffer.alloc(0);
+        this.position = 0;
     }
 
-    writeBoolean(value: boolean): void {
-        this.buffer.push(value ? 1 : 0);
+    public write(buffer: Buffer): void {
+        this.buffer = Buffer.concat([this.buffer, buffer]);
+        this.position += buffer.length;
     }
 
-    writeInt(value: number): void {
-        // Write as big-endian
-        this.buffer.push((value >> 24) & 0xFF);
-        this.buffer.push((value >> 16) & 0xFF);
-        this.buffer.push((value >> 8) & 0xFF);
-        this.buffer.push(value & 0xFF);
+    public writeBoolean(val: boolean): void {
+        const buf = Buffer.alloc(1);
+        buf.writeUInt8(val ? 1 : 0, 0);
+        this.write(buf);
     }
 
-    write(buf: Uint8Array): void {
-        for (let i = 0; i < buf.length; i++) {
-            this.buffer.push(buf[i]);
+    public writeByte(val: number): void {
+        const buf = Buffer.alloc(1);
+        buf.writeUInt8(val, 0);
+        this.write(buf);
+    }
+
+    public writeInt(val: number): void {
+        const buf = Buffer.alloc(4);
+        buf.writeInt32BE(val, 0);
+        this.write(buf);
+    }
+
+    public writeLong(val: number): void {
+        const buf = Buffer.alloc(8);
+        buf.writeBigInt64BE(BigInt(val), 0);
+        this.write(buf);
+    }
+
+    public writeBytes(buffer: Buffer): void {
+        this.write(buffer);
+    }
+
+    public writeNBytesString(val: string | null): void {
+        this.writeBoolean(val !== null);
+        if (val !== null) {
+            const buf = Buffer.from(val, 'utf-8');
+            this.writeInt(buf.length);
+            this.write(buf);
         }
     }
 
-    writeByte(value: number): void {
-        this.buffer.push(value & 0xFF);
+    public toByteArray(): Buffer {
+        return this.buffer;
     }
 
-    toByteArray(): Uint8Array {
-        return new Uint8Array(this.buffer);
+    public close(): void {
+        // No-op
     }
 }

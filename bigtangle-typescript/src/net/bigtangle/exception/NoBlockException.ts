@@ -1,8 +1,7 @@
-// TypeScript translation of NoBlockException.java
-
 export class NoBlockException extends Error {
-    constructor() {
-        super();
-        this.name = 'NoBlockException';
+    constructor(message?: string) {
+        super(message);
+        this.name = "NoBlockException";
+        Object.setPrototypeOf(this, NoBlockException.prototype);
     }
 }

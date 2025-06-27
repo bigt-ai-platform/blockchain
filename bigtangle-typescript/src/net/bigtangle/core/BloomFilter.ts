@@ -21,19 +21,8 @@ export class BloomFilter extends Message {
     private nTweak: number = 0;
     private nFlags: number = 0;
 
-    // Initialize base Message properties
-    protected payload: Buffer = Buffer.alloc(0);
-    protected offset: number = 0;
-    protected cursor: number = 0;
-    protected length: number = Message.UNKNOWN_LENGTH;
-    protected serializer: any = null;
-
     constructor(params: NetworkParameters, bytes?: Buffer, offset: number = 0, serializer?: MessageSerializer) {
         super(params, bytes, offset, serializer);
-        
-        if (bytes) {
-            this.parse(bytes, offset);
-        }
     }
 
     static create(params: NetworkParameters, elements: number, falsePositiveRate: number, randomNonce: number, updateFlag: BloomUpdate = BloomUpdate.UPDATE_P2PUBKEY_ONLY): BloomFilter {
@@ -62,24 +51,24 @@ export class BloomFilter extends Message {
         return `Bloom Filter of size ${this.data.length} with ${this.hashFuncs} hash functions.`;
     }
 
-    protected parse(payload: Buffer, offset: number = 0): void {
-        let localOffset = offset;
+    protected parse(): void {
+        let localOffset = this.offset;
         
         // Read data length (varint)
         let dataLength = 0;
-        const firstByte = payload[localOffset];
+        const firstByte = this.payload[localOffset];
         localOffset++;
         
         if (firstByte < 0xfd) {
             dataLength = firstByte;
         } else if (firstByte === 0xfd) {
-            dataLength = payload.readUInt16LE(localOffset);
+            dataLength = this.payload.readUInt16LE(localOffset);
             localOffset += 2;
         } else if (firstByte === 0xfe) {
-            dataLength = payload.readUInt32LE(localOffset);
+            dataLength = this.payload.readUInt32LE(localOffset);
             localOffset += 4;
         } else {
-            dataLength = payload.readUInt32LE(localOffset) + (payload.readUInt32LE(localOffset + 4) * 0x100000000);
+            dataLength = this.payload.readUInt32LE(localOffset) + (this.payload.readUInt32LE(localOffset + 4) * 0x100000000);
             localOffset += 8;
         }
         
@@ -88,11 +77,11 @@ export class BloomFilter extends Message {
         }
         
         // Read data
-        this.data = Buffer.from(payload.subarray(localOffset, localOffset + dataLength));
+        this.data = Buffer.from(this.payload.subarray(localOffset, localOffset + dataLength));
         localOffset += dataLength;
         
         // Read hash functions (uint32)
-        this.hashFuncs = payload.readUInt32LE(localOffset);
+        this.hashFuncs = this.payload.readUInt32LE(localOffset);
         localOffset += 4;
         
         if (this.hashFuncs > BloomFilter.MAX_HASH_FUNCS) {
@@ -100,11 +89,12 @@ export class BloomFilter extends Message {
         }
         
         // Read nTweak (uint32)
-        this.nTweak = payload.readUInt32LE(localOffset);
+        this.nTweak = this.payload.readUInt32LE(localOffset);
         localOffset += 4;
         
         // Read flags (byte)
-        this.nFlags = payload[localOffset];
+        this.nFlags = this.payload[localOffset];
+        this.length = localOffset - this.offset;
     }
     
     protected bitcoinSerializeToStream(stream: any): void {

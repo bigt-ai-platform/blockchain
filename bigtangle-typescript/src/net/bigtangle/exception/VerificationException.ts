@@ -1,340 +1,335 @@
 export class VerificationException extends Error {
-    constructor(message?: string, cause?: Throwable) {
+    constructor(message?: string, cause?: Error) {
         super(message);
         this.name = "VerificationException";
+        Object.setPrototypeOf(this, VerificationException.prototype);
         if (cause) {
             this.cause = cause;
         }
-        Object.setPrototypeOf(this, VerificationException.prototype);
     }
-    cause?: Throwable;
-}
+    public cause?: Error;
 
-// Placeholder for Throwable, if it's not a standard Error
-interface Throwable extends Error {}
-
-export namespace VerificationException {
-    export class InfeasiblePrototypeException extends VerificationException {
+    public static InfeasiblePrototypeException = class InfeasiblePrototypeException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InfeasiblePrototypeException";
             Object.setPrototypeOf(this, InfeasiblePrototypeException.prototype);
         }
-    }
+    };
 
-    export class LargerThanMaxBlockSize extends VerificationException {
+    public static LargerThanMaxBlockSize = class LargerThanMaxBlockSize extends VerificationException {
         constructor() {
             super("Message larger than MAX_BLOCK_SIZE");
             this.name = "LargerThanMaxBlockSize";
             Object.setPrototypeOf(this, LargerThanMaxBlockSize.prototype);
         }
-    }
+    };
 
-    export class DuplicatedOutPoint extends VerificationException {
+    public static DuplicatedOutPoint = class DuplicatedOutPoint extends VerificationException {
         constructor() {
             super("Duplicated outpoint");
             this.name = "DuplicatedOutPoint";
             Object.setPrototypeOf(this, DuplicatedOutPoint.prototype);
         }
-    }
+    };
 
-    export class NegativeValueOutput extends VerificationException {
+    public static NegativeValueOutput = class NegativeValueOutput extends VerificationException {
         constructor() {
             super("Transaction output negative");
             this.name = "NegativeValueOutput";
             Object.setPrototypeOf(this, NegativeValueOutput.prototype);
         }
-    }
+    };
 
-    export class ExcessiveValue extends VerificationException {
+    public static ExcessiveValue = class ExcessiveValue extends VerificationException {
         constructor() {
             super("Total transaction output value greater than possible");
             this.name = "ExcessiveValue";
             Object.setPrototypeOf(this, ExcessiveValue.prototype);
         }
-    }
+    };
 
-    export class CoinbaseScriptSizeOutOfRange extends VerificationException {
+    public static CoinbaseScriptSizeOutOfRange = class CoinbaseScriptSizeOutOfRange extends VerificationException {
         constructor() {
             super("Coinbase script size out of range");
             this.name = "CoinbaseScriptSizeOutOfRange";
             Object.setPrototypeOf(this, CoinbaseScriptSizeOutOfRange.prototype);
         }
-    }
+    };
 
-    export class BlockVersionOutOfDate extends VerificationException {
+    public static BlockVersionOutOfDate = class BlockVersionOutOfDate extends VerificationException {
         constructor(version: number) {
             super(`Block version #${version} is outdated.`);
             this.name = "BlockVersionOutOfDate";
             Object.setPrototypeOf(this, BlockVersionOutOfDate.prototype);
         }
-    }
+    };
 
-    export class UnexpectedCoinbaseInput extends VerificationException {
+    public static UnexpectedCoinbaseInput = class UnexpectedCoinbaseInput extends VerificationException {
         constructor() {
             super("Coinbase input as input in non-coinbase transaction");
             this.name = "UnexpectedCoinbaseInput";
             Object.setPrototypeOf(this, UnexpectedCoinbaseInput.prototype);
         }
-    }
+    };
 
-    export class GenericInvalidityException extends VerificationException {
+    public static GenericInvalidityException = class GenericInvalidityException extends VerificationException {
         constructor() {
             super("Shouldn't happen. This block is invalid.");
             this.name = "GenericInvalidityException";
             Object.setPrototypeOf(this, GenericInvalidityException.prototype);
         }
-    }
+    };
 
-    export class GenesisBlockDisallowedException extends VerificationException {
+    public static GenesisBlockDisallowedException = class GenesisBlockDisallowedException extends VerificationException {
         constructor() {
             super("Genesis blocks not allowed");
             this.name = "GenesisBlockDisallowedException";
             Object.setPrototypeOf(this, GenesisBlockDisallowedException.prototype);
         }
-    }
+    };
 
-    export class TimeReversionException extends VerificationException {
+    public static TimeReversionException = class TimeReversionException extends VerificationException {
         constructor() {
             super("Timestamps are reversing!");
             this.name = "TimeReversionException";
             Object.setPrototypeOf(this, TimeReversionException.prototype);
         }
-    }
+    };
 
-    export class DifficultyConsensusInheritanceException extends VerificationException {
+    public static DifficultyConsensusInheritanceException = class DifficultyConsensusInheritanceException extends VerificationException {
         constructor() {
             super("Difficulty and consensus not inherited correctly");
             this.name = "DifficultyConsensusInheritanceException";
             Object.setPrototypeOf(this, DifficultyConsensusInheritanceException.prototype);
         }
-    }
+    };
 
-    export class IncorrectTransactionCountException extends VerificationException {
+    public static IncorrectTransactionCountException = class IncorrectTransactionCountException extends VerificationException {
         constructor() {
             super("Incorrect tx count");
             this.name = "IncorrectTransactionCountException";
             Object.setPrototypeOf(this, IncorrectTransactionCountException.prototype);
         }
-    }
+    };
 
-    export class TransactionInputsDisallowedException extends VerificationException {
+    public static TransactionInputsDisallowedException = class TransactionInputsDisallowedException extends VerificationException {
         constructor() {
             super("TX has inputs");
             this.name = "TransactionInputsDisallowedException";
             Object.setPrototypeOf(this, TransactionInputsDisallowedException.prototype);
         }
-    }
+    };
 
-    export class TransactionOutputsDisallowedException extends VerificationException {
+    public static TransactionOutputsDisallowedException = class TransactionOutputsDisallowedException extends VerificationException {
         constructor() {
             super("TX has outputs");
             this.name = "TransactionOutputsDisallowedException";
             Object.setPrototypeOf(this, TransactionOutputsDisallowedException.prototype);
         }
-    }
+    };
 
-    export class MalformedTransactionDataException extends VerificationException {
+    public static MalformedTransactionDataException = class MalformedTransactionDataException extends VerificationException {
         constructor() {
             super("Incorrect data format");
             this.name = "MalformedTransactionDataException";
             Object.setPrototypeOf(this, MalformedTransactionDataException.prototype);
         }
-    }
+    };
 
-    export class MissingDependencyException extends VerificationException {
+    public static MissingDependencyException = class MissingDependencyException extends VerificationException {
         constructor() {
             super("No dependency defined");
             this.name = "MissingDependencyException";
             Object.setPrototypeOf(this, MissingDependencyException.prototype);
         }
-    }
+    };
 
-    export class UnsolidException extends VerificationException {
+    public static UnsolidException = class UnsolidException extends VerificationException {
         constructor() {
             super("Not solid. Server disallows unsolid blocks.");
             this.name = "UnsolidException";
             Object.setPrototypeOf(this, UnsolidException.prototype);
         }
-    }
+    };
 
-    export class InvalidDependencyException extends VerificationException {
+    public static InvalidDependencyException = class InvalidDependencyException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InvalidDependencyException";
             Object.setPrototypeOf(this, InvalidDependencyException.prototype);
         }
-    }
+    };
 
-    export class InvalidTransactionDataException extends VerificationException {
+    public static InvalidTransactionDataException = class InvalidTransactionDataException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InvalidTransactionDataException";
             Object.setPrototypeOf(this, InvalidTransactionDataException.prototype);
         }
-    }
+    };
 
-    export class NotCoinbaseException extends VerificationException {
+    public static NotCoinbaseException = class NotCoinbaseException extends VerificationException {
         constructor() {
             super("TX is not coinbase! ");
             this.name = "NotCoinbaseException";
             Object.setPrototypeOf(this, NotCoinbaseException.prototype);
         }
-    }
+    };
 
-    export class CoinbaseDisallowedException extends VerificationException {
+    public static CoinbaseDisallowedException = class CoinbaseDisallowedException extends VerificationException {
         constructor() {
             super("TX is coinbase! ");
             this.name = "CoinbaseDisallowedException";
             Object.setPrototypeOf(this, CoinbaseDisallowedException.prototype);
         }
-    }
+    };
 
-    export class MissingTransactionDataException extends VerificationException {
+    public static MissingTransactionDataException = class MissingTransactionDataException extends VerificationException {
         constructor() {
             super("Missing required transaction data! ");
             this.name = "MissingTransactionDataException";
             Object.setPrototypeOf(this, MissingTransactionDataException.prototype);
         }
-    }
+    };
 
-    export class InvalidTokenOutputException extends VerificationException {
+    public static InvalidTokenOutputException = class InvalidTokenOutputException extends VerificationException {
         constructor() {
             super("Invalid tokens were generated");
             this.name = "InvalidTokenOutputException";
             Object.setPrototypeOf(this, InvalidTokenOutputException.prototype);
         }
-    }
+    };
 
-    export class PreviousTokenDisallowsException extends VerificationException {
+    public static PreviousTokenDisallowsException = class PreviousTokenDisallowsException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "PreviousTokenDisallowsException";
             Object.setPrototypeOf(this, PreviousTokenDisallowsException.prototype);
         }
-    }
+    };
 
-    export class MissingSignatureException extends VerificationException {
+    public static MissingSignatureException = class MissingSignatureException extends VerificationException {
         constructor() {
             super("Signature missing");
             this.name = "MissingSignatureException";
             Object.setPrototypeOf(this, MissingSignatureException.prototype);
         }
-    }
+    };
 
-    export class InvalidSignatureException extends VerificationException {
+    public static InvalidSignatureException = class InvalidSignatureException extends VerificationException {
         constructor() {
             super("Some signatures are not valid here");
             this.name = "InvalidSignatureException";
             Object.setPrototypeOf(this, InvalidSignatureException.prototype);
         }
-    }
+    };
 
-    export class InsufficientSignaturesException extends VerificationException {
+    public static InsufficientSignaturesException = class InsufficientSignaturesException extends VerificationException {
         constructor() {
             super("Not enough signatures");
             this.name = "InsufficientSignaturesException";
             Object.setPrototypeOf(this, InsufficientSignaturesException.prototype);
         }
-    }
+    };
 
-    export class SigOpsException extends VerificationException {
+    public static SigOpsException = class SigOpsException extends VerificationException {
         constructor() {
             super("Block had too many Signature Operations");
             this.name = "SigOpsException";
             Object.setPrototypeOf(this, SigOpsException.prototype);
         }
-    }
+    };
 
-    export class MerkleRootMismatchException extends VerificationException {
+    public static MerkleRootMismatchException = class MerkleRootMismatchException extends VerificationException {
         constructor() {
             super("Merkle hashes do not match");
             this.name = "MerkleRootMismatchException";
             Object.setPrototypeOf(this, MerkleRootMismatchException.prototype);
         }
-    }
+    };
 
-    export class ProofOfWorkException extends VerificationException {
+    public static ProofOfWorkException = class ProofOfWorkException extends VerificationException {
         constructor() {
             super("Hash is higher than target");
             this.name = "ProofOfWorkException";
             Object.setPrototypeOf(this, ProofOfWorkException.prototype);
         }
-    }
+    };
 
-    export class TimeTravelerException extends VerificationException {
+    public static TimeTravelerException = class TimeTravelerException extends VerificationException {
         constructor() {
             super("Block too far in future");
             this.name = "TimeTravelerException";
             Object.setPrototypeOf(this, TimeTravelerException.prototype);
         }
-    }
-
-    export class InvalidTransactionException extends VerificationException {
+    };
+    
+    public static InvalidTransactionException = class InvalidTransactionException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InvalidTransactionException";
             Object.setPrototypeOf(this, InvalidTransactionException.prototype);
         }
-    }
-
-    export class DifficultyTargetException extends VerificationException {
+    };
+    
+    public static DifficultyTargetException = class DifficultyTargetException extends VerificationException {
         constructor() {
             super("Difficulty target is bad");
             this.name = "DifficultyTargetException";
             Object.setPrototypeOf(this, DifficultyTargetException.prototype);
         }
-    }
-
-    export class InvalidOrderException extends VerificationException {
+    };
+    
+    public static InvalidOrderException = class InvalidOrderException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InvalidOrderException";
             Object.setPrototypeOf(this, InvalidOrderException.prototype);
         }
-    }
-    export class CutoffException extends VerificationException {
+    };
+    public static CutoffException = class CutoffException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "CutoffException";
             Object.setPrototypeOf(this, CutoffException.prototype);
         }
-    }
-    export class ConflictPossibleException extends VerificationException {
+    };
+    public static ConflictPossibleException = class ConflictPossibleException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "ConflictPossibleException";
             Object.setPrototypeOf(this, ConflictPossibleException.prototype);
         }
-    }
-    export class OrderImpossibleException extends VerificationException {
+    };
+    public static OrderImpossibleException = class OrderImpossibleException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "OrderImpossibleException";
             Object.setPrototypeOf(this, OrderImpossibleException.prototype);
         }
-    }
-
-    export class OrderWithRemainderException extends VerificationException {
+    };
+    
+    public static OrderWithRemainderException = class OrderWithRemainderException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "OrderWithRemainderException";
             Object.setPrototypeOf(this, OrderWithRemainderException.prototype);
         }
-    }
-
-    export class NoFeeException extends VerificationException {
+    };
+    
+    public static NoFeeException = class NoFeeException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "NoFeeException";
             Object.setPrototypeOf(this, NoFeeException.prototype);
         }
-    }
-    export class InputOutputMatchException extends VerificationException {
+    };
+    public static InputOutputMatchException = class InputOutputMatchException extends VerificationException {
         constructor(message: string) {
             super(message);
             this.name = "InputOutputMatchException";
             Object.setPrototypeOf(this, InputOutputMatchException.prototype);
         }
-    }
+    };
 }

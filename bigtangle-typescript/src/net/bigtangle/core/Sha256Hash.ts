@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 import { Utils } from './Utils';
 
 export class Sha256Hash {
-    private readonly bytes: Buffer;
+        bytes: Buffer;
 
     private constructor(bytes: Buffer) {
         if (bytes.length !== 32) {
@@ -26,6 +26,9 @@ export class Sha256Hash {
     public static wrap(hash: Buffer): Sha256Hash {
         return new Sha256Hash(hash);
     }
+    public static of(contents: Buffer): Sha256Hash {
+        return Sha256Hash.hash(contents);
+    }
 
     public static wrapReversed(hash: Buffer): Sha256Hash {
         return new Sha256Hash(Buffer.from(Utils.reverseBytes(hash)));
@@ -47,9 +50,14 @@ export class Sha256Hash {
         return this.bytes.equals(other.bytes);
     }
 
-    public getReversedBytes(): Buffer {
+    public getBytes(): Buffer {
+        return Buffer.from( this.bytes);
+    }
+
+        public getReversedBytes(): Buffer {
         return Buffer.from(Utils.reverseBytes(this.bytes));
     }
+
 
     public getHash(): Sha256Hash {
         return this;
