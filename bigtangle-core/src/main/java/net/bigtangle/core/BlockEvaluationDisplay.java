@@ -3,12 +3,12 @@ package net.bigtangle.core;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import net.bigtangle.core.Block.Type;
+ 
 import net.bigtangle.utils.ProbabilityBlock;
 
 public class BlockEvaluationDisplay extends BlockEvaluation {
 
-    private Type blockType;
+    private BlockType blockType;
 
     /*
      * the latest chain number
@@ -37,11 +37,11 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
         super(other);
     }
 
-    public Type getBlockType() {
+    public BlockType getBlockType() {
         return blockType;
     }
 
-    public void setBlockType(Type blockType) {
+    public void setBlockType(BlockType blockType) {
         this.blockType = blockType;
     }
 
@@ -62,7 +62,7 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
     }
 
     public void setBlockTypeInt(int blocktype) {
-        setBlockType(Type.values()[blocktype]);
+        setBlockType(BlockType.values()[blocktype]);
     }
 
   

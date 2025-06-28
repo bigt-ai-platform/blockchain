@@ -1,13 +1,13 @@
-import { NetworkParameters } from '../core/NetworkParameters';
-import { Sha256Hash } from '../core/Sha256Hash';
-import { Address } from '../core/Address';
-import { ECKey } from '../core/ECKey';
-import { Transaction } from '../core/Transaction';
-import { TransactionSignature } from '../crypto/TransactionSignature';
-import { ScriptException } from '../exception/ScriptException';
-import { Utils } from '../utils/Utils';
-import { ScriptChunk } from './ScriptChunk';
-import { BigInteger } from '../core/BigInteger';
+import { NetworkParameters } from '../core/NetworkParameters.js';
+import { Sha256Hash } from '../core/Sha256Hash.js';
+import { Address } from '../core/Address.js';
+import { ECKey } from '../core/ECKey.js';
+import { Transaction } from '../core/Transaction.js';
+import { TransactionSignature } from '../crypto/TransactionSignature.js';
+import { ScriptException } from '../exception/ScriptException.js';
+import { Utils } from '../utils/Utils.js';
+import { ScriptChunk } from './ScriptChunk.js';
+import { BigInteger } from '../core/BigInteger.js';
 import {
     OP_0, OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4, OP_1NEGATE, OP_1, OP_2, OP_3, OP_4, OP_5, OP_6, OP_7, OP_8, OP_9, OP_10, OP_11, OP_12, OP_13, OP_14, OP_15, OP_16,
     OP_NOP, OP_IF, OP_NOTIF, OP_VERIF, OP_VERNOTIF, OP_ELSE, OP_ENDIF, OP_VERIFY, OP_RETURN,
@@ -17,9 +17,9 @@ import {
     OP_1ADD, OP_1SUB, OP_2MUL, OP_2DIV, OP_NEGATE, OP_ABS, OP_NOT, OP_0NOTEQUAL, OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_MOD, OP_LSHIFT, OP_RSHIFT, OP_BOOLAND, OP_BOOLOR, OP_NUMEQUAL, OP_NUMEQUALVERIFY, OP_NUMNOTEQUAL, OP_LESSTHAN, OP_GREATERTHAN, OP_LESSTHANOREQUAL, OP_GREATERTHANOREQUAL, OP_MIN, OP_MAX, OP_WITHIN,
     OP_RIPEMD160, OP_SHA1, OP_SHA256, OP_HASH160, OP_HASH256, OP_CODESEPARATOR, OP_CHECKSIG, OP_CHECKSIGVERIFY, OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY,
     OP_CHECKLOCKTIMEVERIFY, OP_NOP1, OP_NOP3, OP_NOP4, OP_NOP5, OP_NOP6, OP_NOP7, OP_NOP8, OP_NOP9, OP_NOP10, OP_INVALIDOPCODE,
-} from './ScriptOpCodes';
-import { DataOutputStream } from '../utils/DataOutputStream';
-import { UnsafeByteArrayOutputStream } from '../core/UnsafeByteArrayOutputStream';
+} from './ScriptOpCodes.js';
+import { DataOutputStream } from '../utils/DataOutputStream.js';
+import { UnsafeByteArrayOutputStream } from '../core/UnsafeByteArrayOutputStream.js';
 
 /**
  * <p>Programs embedded inside transactions that control redemption of payments.</p>
@@ -106,12 +106,13 @@ export class Script {
         if (this.program != null && this.program.length > 0) {
             return new Uint8Array(this.program);
         }
-        const bos = new UnsafeByteArrayOutputStream();
+        // const bos = new UnsafeByteArrayOutputStream();
         const dos = new DataOutputStream();
         for (const chunk of this.chunks) {
             chunk.write(dos);
         }
-        this.program = bos.toByteArray();
+        // this.program = bos.toByteArray();
+        this.program = dos.toByteArray();
         return this.program;
     }
 
@@ -1569,6 +1570,7 @@ export class Script {
         } catch (e: any) {
             throw new Error(e);   // Should not happen unless we were given a totally broken transaction.
         }
+       
         if (this.getProgram().length > 10000 || scriptPubKey.getProgram().length > 10000) {
             throw new ScriptException("Script larger than 10,000 bytes");
         }

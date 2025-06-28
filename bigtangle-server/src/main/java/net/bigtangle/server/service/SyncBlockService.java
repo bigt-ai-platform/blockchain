@@ -27,7 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -182,7 +182,7 @@ public class SyncBlockService {
 
 	public void requestPrev(Block block, BlockStoreInterface store) {
 		try {
-			if (block.getBlockType() == Block.Type.BLOCKTYPE_INITIAL) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 				return;
 			}
 
@@ -245,7 +245,7 @@ public class SyncBlockService {
 	}
 
 	public boolean anyMatchConfirmedReward(Block block, List<TXReward> remotes) {
-		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 			return remotes.stream().anyMatch(s -> s.getBlockHash().equals(block.getHash()));
 		} else {
 			return true;

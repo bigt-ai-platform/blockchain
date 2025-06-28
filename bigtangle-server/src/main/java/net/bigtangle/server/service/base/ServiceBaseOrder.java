@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -305,7 +305,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			BlockWrap b = getBlockWrap(bHash, blockStore);
 			if (b == null)
 				throw new MissingDependencyException();
-			if (b.getBlock().getBlockType() == Type.BLOCKTYPE_ORDER_OPEN) {
+			if (b.getBlock().getBlockType() == BlockType.BLOCKTYPE_ORDER_OPEN) {
 
 				OrderRecord order = blockStore.getOrder(b.getBlock().getHash(), Sha256Hash.ZERO_HASH);
 				// order is null, write it to
@@ -318,7 +318,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 					newOrders.put(b.getBlock().getHash(), OrderRecord.cloneOrderRecord(order));
 					toBeSpentOrders.add(order);
 				}
-			} else if (b.getBlock().getBlockType() == Type.BLOCKTYPE_ORDER_CANCEL) {
+			} else if (b.getBlock().getBlockType() == BlockType.BLOCKTYPE_ORDER_CANCEL) {
 				OrderCancelInfo info = new OrderCancelInfo()
 						.parseChecked(b.getBlock().getTransactions().get(0).getData());
 				cancels.add(info);

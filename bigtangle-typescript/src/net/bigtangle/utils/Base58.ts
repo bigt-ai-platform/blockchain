@@ -84,11 +84,14 @@ export class Base58 {
         
         const data = decoded.slice(0, decoded.length - 4);
         const checksum = decoded.slice(decoded.length - 4);
-        
-        const hash = Sha256Hash.hashTwice(data);
+
+        // Ensure data is a Buffer if Sha256Hash.hashTwice expects Buffer, otherwise keep as Uint8Array
+        // @ts-ignore
+        const hash = Sha256Hash.hashTwice(Buffer.from(data));
         const expectedChecksum = hash.slice(0, 4);
-        
-        if (!Utils.bytesEqual(checksum, expectedChecksum)) {
+
+        // Use Utils.arraysEqual instead of non-existent bytesEqual
+        if (!Utils.arraysEqual(checksum, expectedChecksum)) {
             throw new Error('Checksum does not match');
         }
         

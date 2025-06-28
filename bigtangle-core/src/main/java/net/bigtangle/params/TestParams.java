@@ -36,13 +36,9 @@ public class TestParams extends AbstractBitcoinNetParams {
                                       // base58 to "xprv"
         genesisPub = "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975";
         permissionDomainname = ImmutableList.of(genesisPub);
+ 
 
-        // Equihash Settings
-        equihashN = 100;
-        equihashK = 4;
-
-        genesisBlock = createGenesis(this);
-
+ 
     }
 
     public String[] serverSeeds() {

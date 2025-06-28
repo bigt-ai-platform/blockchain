@@ -80,7 +80,7 @@ public class Block extends Message {
 	private long lastMiningRewardBlock; // last approved reward blocks max
 	private long nonce;
 	private byte[] minerAddress; // Utils.sha256hash160
-	private Type blockType;
+	private BlockType blockType;
 	private long height;
 	// If NetworkParameters.USE_EQUIHASH, this field will contain the PoW
 	// solution
@@ -103,57 +103,14 @@ public class Block extends Message {
 	// (which Message needs)
 	protected int optimalEncodingMessageSize;
 
-	/**
-	 * To add new BLOCKTYPES to implement type specific function The order can not
-	 * be changed for history! enum cardinal is saved in database. It can be added
-	 * new at the end of enum Type
-	 */
-	public enum Type {
-		BLOCKTYPE_INITIAL(false, Integer.MAX_VALUE, false), // Genesis block
-		BLOCKTYPE_TRANSFER(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Default
-		BLOCKTYPE_REWARD(false, NetworkParameters.MAX_REWARD_BLOCK_SIZE, false), // Rewards
-		BLOCKTYPE_TOKEN_CREATION(true, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // tokenissuance
-		BLOCKTYPE_USERDATA(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // User-defined-data
-		BLOCKTYPE_CONTRACT_EVENT(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Smart-contracts
-		BLOCKTYPE_GOVERNANCE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Governance
-		BLOCKTYPE_FILE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // User-defined-file
-		BLOCKTYPE_CONTRACT_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Smart-contracts execution
-		BLOCKTYPE_CROSSTANGLE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // mainnet to permissioned
-		BLOCKTYPE_ORDER_OPEN(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // new-order
-		BLOCKTYPE_ORDER_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // cancel-order
-		BLOCKTYPE_ORDER_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
-		BLOCKTYPE_CONTRACTEVENT_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false); // Order execution
-
-		private final boolean allowCoinbaseTransaction;
-		private final int maxSize;
-		private final boolean requiresCalculation;
-
-		Type(boolean allowCoinbaseTransaction, int maxSize, boolean requiresCalculation) {
-			this.allowCoinbaseTransaction = allowCoinbaseTransaction;
-			this.maxSize = maxSize;
-			this.requiresCalculation = requiresCalculation;
-		}
-
-		public boolean allowCoinbaseTransaction() {
-			return allowCoinbaseTransaction;
-		}
-
-		public int getMaxBlockSize() {
-			return maxSize;
-		}
-
-		public boolean requiresCalculation() {
-			return requiresCalculation;
-		}
-	}
-
+ 
 	public Block(NetworkParameters params, long setVersion) {
-		this(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH, Block.Type.BLOCKTYPE_TRANSFER.ordinal(), 0,
+		this(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH, BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0,
 				Utils.encodeCompactBits(params.getMaxTarget()), 0);
 	}
 
 	public static Block createBlock(NetworkParameters networkParameters, Block r1, Block r2) {
-		Block block = new Block(networkParameters, r1.getHash(), r2.getHash(), Block.Type.BLOCKTYPE_TRANSFER.ordinal(),
+		Block block = new Block(networkParameters, r1.getHash(), r2.getHash(), BlockType.BLOCKTYPE_TRANSFER.ordinal(),
 				Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
 				Math.max(r1.getLastMiningRewardBlock(), r2.getLastMiningRewardBlock()),
 				r1.getLastMiningRewardBlock() > r2.getLastMiningRewardBlock() ? r1.getDifficultyTarget()
@@ -176,7 +133,7 @@ public class Block extends Message {
 		this.prevBlockHash = prevBlockHash;
 		this.prevBranchBlockHash = prevBranchBlockHash;
 
-		this.blockType = Type.values()[blocktype];
+		this.blockType = BlockType.values()[blocktype];
 		this.minerAddress = new byte[20];
 		length = NetworkParameters.HEADER_SIZE;
 		this.transactions = new ArrayList<>();
@@ -238,7 +195,7 @@ public class Block extends Message {
 
 	public boolean isBLOCKTYPE_INITIAL() {
 
-		return getBlockType() == Type.BLOCKTYPE_INITIAL;
+		return getBlockType() == BlockType.BLOCKTYPE_INITIAL;
 
 	}
 
@@ -286,7 +243,7 @@ public class Block extends Message {
 		lastMiningRewardBlock = readInt64();
 		nonce = readUint32();
 		minerAddress = readBytes(20);
-		blockType = Type.values()[(int) readUint32()];
+		blockType = BlockType.values()[(int) readUint32()];
 		height = readInt64();
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
 		headerBytesValid = serializer.isParseRetainMode(); 
@@ -558,7 +515,7 @@ public class Block extends Message {
 				s.append(tx);
 			}
 		}
-		if (blockType == Type.BLOCKTYPE_REWARD) {
+		if (blockType == BlockType.BLOCKTYPE_REWARD) {
 			try {
 				if (transactions != null && !transactions.isEmpty()) {
 					RewardInfo rewardInfo = new RewardInfo().parse(getTransactions().get(0).getData());
@@ -568,7 +525,7 @@ public class Block extends Message {
 				// ignore throw new RuntimeException(e);
 			}
 		}
-		if (blockType == Type.BLOCKTYPE_ORDER_OPEN) {
+		if (blockType == BlockType.BLOCKTYPE_ORDER_OPEN) {
 
 			try {
 				OrderOpenInfo info = new OrderOpenInfo().parse(transactions.get(0).getData());
@@ -577,7 +534,7 @@ public class Block extends Message {
 				// ignore throw new RuntimeException(e);
 			}
 		}
-		if (blockType == Type.BLOCKTYPE_TOKEN_CREATION) {
+		if (blockType == BlockType.BLOCKTYPE_TOKEN_CREATION) {
 
 			try {
 				TokenInfo info = new TokenInfo().parse(transactions.get(0).getData());
@@ -587,7 +544,7 @@ public class Block extends Message {
 			}
 
 		}
-		if (blockType == Type.BLOCKTYPE_CONTRACT_EXECUTE) {
+		if (blockType == BlockType.BLOCKTYPE_CONTRACT_EXECUTE) {
 
 			try {
 				ContractExecutionResult info = new ContractExecutionResult().parse(transactions.get(0).getData());
@@ -597,7 +554,7 @@ public class Block extends Message {
 			}
 
 		}
-		if (blockType == Type.BLOCKTYPE_ORDER_EXECUTE) {
+		if (blockType == BlockType.BLOCKTYPE_ORDER_EXECUTE) {
 
 			try {
 				OrderExecutionResult info = new OrderExecutionResult().parse(transactions.get(0).getData());
@@ -669,7 +626,7 @@ public class Block extends Message {
 	 */
 	public boolean checkProofOfWork(boolean throwException, BigInteger target) throws VerificationException {
 		// No PoW for genesis block
-		if (getBlockType() == Block.Type.BLOCKTYPE_INITIAL) {
+		if (getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 			return true;
 		}
 
@@ -1097,15 +1054,16 @@ public class Block extends Message {
 		this.hash = null;
 	}
 
-	public Type getBlockType() {
+	public BlockType getBlockType() {
 		return blockType;
 	}
 
 	public void setBlockType(long blocktype) {
-		setBlockType(Type.values()[(int) blocktype]);
+		blockType=BlockType.values()[(int) blocktype];
+		setBlockType(blockType);
 	}
 
-	public void setBlockType(Type blocktype) {
+	public void setBlockType(BlockType blocktype) {
 		unCacheHeader();
 		this.blockType = blocktype;
 		this.hash = null;

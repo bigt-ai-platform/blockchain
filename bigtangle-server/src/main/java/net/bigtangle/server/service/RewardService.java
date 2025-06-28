@@ -23,6 +23,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -201,7 +202,7 @@ public class RewardService {
 
 		Block block = Block.createBlock(networkParameters, r1, r2);
 
-		block.setBlockType(Block.Type.BLOCKTYPE_REWARD);
+		block.setBlockType(BlockType.BLOCKTYPE_REWARD);
 		block.setHeight(Math.max(prevRewardBlock.getHeight(), Math.max(r1.getHeight(), r2.getHeight())) + 1);
 		block.setMinerAddress(
 				Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());

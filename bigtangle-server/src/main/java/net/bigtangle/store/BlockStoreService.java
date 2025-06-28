@@ -25,7 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.GenericInvalidityException;
@@ -91,7 +91,7 @@ public class BlockStoreService {
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
-		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 			added = addChain(block, store);
 		} else {
 			added = addNonChain(block, allowUnsolid, store);
@@ -110,7 +110,7 @@ public class BlockStoreService {
 	 */
 	public void addFromSync(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 
-		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 			addChain(block, store);
 		} else {
 			addNonChain(block, allowUnsolid, store, true);

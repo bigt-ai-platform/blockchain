@@ -1,10 +1,12 @@
-import { DataClass } from './DataClass';
-import { Sha256Hash } from './Sha256Hash';
-import { BigIntegerJSBN as BigIntegerJSBNJSBN } from 'jsbn';
-import { Utils } from '../utils/Utils';
-import { DataInputStream } from '../utils/DataInputStream';
-import { DataOutputStream } from '../utils/DataOutputStream';
-import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
+import { DataClass } from './DataClass.js';
+import { Sha256Hash } from './Sha256Hash.js';
+// If you have jsbn installed and available as an ES module, use the following import:
+import { BigInteger } from 'jsbn';
+// Otherwise, if jsbn is not available, consider using another BigInteger library such as 'big-integer' or 'bn.js'
+import { Utils } from '../utils/Utils.js';
+import { DataInputStream } from '../utils/DataInputStream.js';
+import { DataOutputStream } from '../utils/DataOutputStream.js';
+import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream.js';
 
 export class RewardInfo extends DataClass {
     private chainlength: number = 0;
@@ -27,14 +29,14 @@ export class RewardInfo extends DataClass {
         if (chainlength !== undefined) this.chainlength = chainlength;
     }
 
-    private static readonly LARGEST_HASH = new BigIntegerJSBN("1").shiftLeft(256);
+    private static readonly LARGEST_HASH = new BigInteger("1").shiftLeft(256);
 
-    public getWork(): BigIntegerJSBN {
+    public getWork(): BigInteger {
         const target = this.getDifficultyTargetAsInteger();
-        return RewardInfo.LARGEST_HASH.divide(target.add(BigIntegerJSBN.ONE));
+        return RewardInfo.LARGEST_HASH.divide(target.add(BigInteger.ONE));
     }
 
-    public getDifficultyTargetAsInteger(): BigIntegerJSBN {
+    public getDifficultyTargetAsInteger(): BigInteger {
         return Utils.decodeCompactBits(this.difficultyTargetReward);
     }
     

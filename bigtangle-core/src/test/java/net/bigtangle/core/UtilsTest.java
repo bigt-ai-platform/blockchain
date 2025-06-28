@@ -33,8 +33,9 @@ public class UtilsTest {
 	@Test
 	public void testSolve() throws Exception {
 		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(TestParams.get(), TestParams.get().getGenesisBlock(),
-					TestParams.get().getGenesisBlock());
+			Block block =UtilsTest.createBlock(TestParams.get(),
+					Utils.createGenesis( TestParams.get()) ,
+					Utils.createGenesis( TestParams.get()));
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
@@ -47,8 +48,8 @@ public class UtilsTest {
 	public void testSolveMain() throws Exception {
 
 		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(MainNetParams.get(), MainNetParams.get().getGenesisBlock(),
-					MainNetParams.get().getGenesisBlock());
+			Block block =UtilsTest.createBlock(MainNetParams.get(),	Utils.createGenesis( MainNetParams.get() ),
+					Utils.createGenesis(MainNetParams.get() ));
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
@@ -61,8 +62,9 @@ public class UtilsTest {
 	public void testSolveMainReward() throws Exception {
 
 		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(MainNetParams.get(), MainNetParams.get().getGenesisBlock(),
-					MainNetParams.get().getGenesisBlock());
+			Block block =UtilsTest.createBlock(MainNetParams.get(),
+					Utils.createGenesis(MainNetParams.get() ),
+					Utils.createGenesis(	MainNetParams.get() ));
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();

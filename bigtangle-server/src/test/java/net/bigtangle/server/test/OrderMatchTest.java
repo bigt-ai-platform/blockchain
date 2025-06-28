@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.NetworkParameters;
@@ -981,7 +981,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
 		block = adjustSolve(block);
 		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
@@ -1054,7 +1054,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
 		block.addTransaction(tx);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
 		block = adjustSolve(block);
 		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);

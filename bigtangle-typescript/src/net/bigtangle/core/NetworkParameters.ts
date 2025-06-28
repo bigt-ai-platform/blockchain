@@ -1,18 +1,24 @@
 import { Block } from './Block';
 import { Sha256Hash } from './Sha256Hash';
-import { Coin } from './Coin';
-import { Script } from '../script/Script';
+ 
 import { ScriptBuilder } from '../script/ScriptBuilder';
 import { Utils } from '../utils/Utils';
 import { BitcoinSerializer } from './BitcoinSerializer'; // Import BitcoinSerializer directly
-
+import { BigInteger } from './BigInteger';
+import { ProtocolVersion } from './ProtocolVersion';
+import { Transaction } from './Transaction';
+import { TransactionInput } from './TransactionInput';
+import { RewardInfo } from './RewardInfo';
+import { ECKey } from './ECKey';
+import { TransactionOutput } from './TransactionOutput';
+import { Coin } from './Coin';
 export abstract class NetworkParameters {
     static readonly ID_MAINNET = 'Mainnet';
     static readonly ID_UNITTESTNET = 'Test';
     protected    defaultSerializer: any;
     protected genesisBlock: Block | null = null;
-    protected maxTarget: bigint = 0n;
-    protected maxTargetReward: bigint = 0n;
+    protected maxTarget: BigInteger = new BigInteger('0');
+    protected maxTargetReward: BigInteger = new BigInteger('0');
     protected packetMagic: number = 0;
     protected addressHeader: number = 0;
     protected p2shHeader: number = 0;
@@ -29,8 +35,7 @@ export abstract class NetworkParameters {
 
     protected genesisPub: string = '';
     protected permissionDomainname: string[] = [];
-    protected equihashN: number = 0;
-    protected equihashK: number = 0;
+  
 
     static readonly CONFIRMATION_UPPER_THRESHOLD_PERCENT = 51;
     static readonly CONFIRMATION_LOWER_THRESHOLD_PERCENT = 45;
@@ -56,13 +61,12 @@ export abstract class NetworkParameters {
     static readonly MILESTONE_CUTOFF = 40;
     static readonly FORWARD_BLOCK_HORIZON = NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 2 * 2;
 
-    constructor() {}
-
     getId(): string { return this.id; }
     getSpendableCoinbaseDepth(): number { return this.spendableCoinbaseDepth; }
     getDnsSeeds(): string[] { return this.dnsSeeds; }
     getAddrSeeds(): number[] { return this.addrSeeds; }
-    getGenesisBlock(): Block | null { return this.genesisBlock; }
+    getGenesisBlock(): Block | null { return NetworkParameters.createGenesis(this); }
+   
     getPacketMagic(): number { return this.packetMagic; }
     getAddressHeader(): number { return this.addressHeader; }
     getP2SHHeader(): number { return this.p2shHeader; }
@@ -74,8 +78,7 @@ export abstract class NetworkParameters {
     getBip32HeaderPub(): number { return this.bip32HeaderPub; }
     getBip32HeaderPriv(): number { return this.bip32HeaderPriv; }
     getSubsidyDecreaseBlockCount(): number { return this.subsidyDecreaseBlockCount; }
-    getEquihashN(): number { return this.equihashN; }
-    getEquihashK(): number { return this.equihashK; }
+ 
     getPermissionDomainname(): string[] { return this.permissionDomainname; }
     getGenesisPub(): string { return this.genesisPub; }
     getDefaultSerializer(): any {
@@ -93,7 +96,6 @@ export abstract class NetworkParameters {
     getForwardBlockHorizon(): number { return NetworkParameters.FORWARD_BLOCK_HORIZON; }
 
     static createGenesis(params: NetworkParameters): Block {
-        const BigInteger = require('../utils/BigInteger').BigInteger;
         const genesisBlock = new Block(
             params,
             (Sha256Hash as any).ZERO_HASH, // adapt as needed
@@ -105,19 +107,18 @@ export abstract class NetworkParameters {
         );
         genesisBlock.setTime(1532896109);
         genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(new BigInteger(params.getMaxTarget().toString())));
-        const coinbase = new (require('./Transaction').Transaction)(params);
-        const inputBuilder = new (require('../script/ScriptBuilder').ScriptBuilder)();
-        coinbase.addInput(new (require('./TransactionInput').TransactionInput)(params, coinbase, Buffer.from(inputBuilder.build().getProgram())));
-        const rewardInfo = new (require('./RewardInfo').RewardInfo)((Sha256Hash as any).ZERO_HASH, Utils.encodeCompactBits(new BigInteger(params.getMaxTargetReward().toString())), new Set(), 0);
+        const coinbase = new Transaction(params);
+        const inputBuilder = new ScriptBuilder();
+        coinbase.addInput(new TransactionInput(params, coinbase, Buffer.from(inputBuilder.build().getProgram())));
+        const rewardInfo = new RewardInfo((Sha256Hash as any).ZERO_HASH, Utils.encodeCompactBits(new BigInteger(params.getMaxTargetReward().toString())), new Set(), 0);
         coinbase.setData(Buffer.from(rewardInfo.toByteArray()));
         // Add the coinbase output to the transaction
-        const ECKey = require('../crypto/ECKey').ECKey;
         const scriptPubKey = ScriptBuilder.createOutputScript(ECKey.fromPublic(params.genesisPub));
-        coinbase.addOutput(new (require('./TransactionOutput').TransactionOutput)(
+        coinbase.addOutput(new TransactionOutput(
             params,
             coinbase,
-            BigInt(NetworkParameters.BigtangleCoinTotal.toString()),
-            scriptPubKey
+            new Coin(BigInt(NetworkParameters.BigtangleCoinTotal.toString()), Buffer.from(NetworkParameters.BIGTANGLE_TOKENID_STRING)),
+            Buffer.from(scriptPubKey.getProgram())
         ));
         genesisBlock.addTransaction(coinbase);
         genesisBlock.setNonce(0);
@@ -139,20 +140,16 @@ export abstract class NetworkParameters {
     // Static utility: add
     static add(params: NetworkParameters, amount: bigint, account: string, coinbase: any): void {
         const list = account.split(',');
-        const Coin = require('./Coin').Coin;
-        const ECKey = require('../crypto/ECKey').ECKey;
-        const ScriptBuilder = require('../script/ScriptBuilder').ScriptBuilder;
-        const TransactionOutput = require('./TransactionOutput').TransactionOutput;
-        const base = new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID_STRING);
+        const base = new Coin(amount, Buffer.from(NetworkParameters.BIGTANGLE_TOKENID_STRING));
         const keys: any[] = [];
         for (const s of list) {
             keys.push(ECKey.fromPublicOnly((Utils as any).HEX.decode(s.trim())));
         }
         if (keys.length <= 1) {
-            coinbase.addOutput(new TransactionOutput(params, coinbase, base, ScriptBuilder.createOutputScript(keys[0]).getProgram()));
+            coinbase.addOutput(new TransactionOutput(params, coinbase, base, Buffer.from(ScriptBuilder.createOutputScript(keys[0]).getProgram())));
         } else {
             const scriptPubKey = ScriptBuilder.createMultiSigOutputScript(keys.length - 1, keys);
-            coinbase.addOutput(new TransactionOutput(params, coinbase, base, scriptPubKey.getProgram()));
+            coinbase.addOutput(new TransactionOutput(params, coinbase, base, Buffer.from(scriptPubKey.getProgram())));
         }
     }
 
@@ -182,13 +179,18 @@ export abstract class NetworkParameters {
         // This is a simplification; adapt as needed for your Script.VerifyFlag
         return new Set(['P2SH', 'CHECKLOCKTIMEVERIFY']);
     }
+getSerializer(parseRetain: boolean): BitcoinSerializer {
+    return new BitcoinSerializer(this, parseRetain);
+}
+    getProtocolVersionNum( ): number {
+        return ProtocolVersion.CURRENT; // Replace with the correct property, e.g., BITCOIN, if it exists
+    }
 
     // Abstract methods
     abstract getUriScheme(): string;
-    abstract getSerializer(parseRetain: boolean): any;
-    abstract getProtocolVersionNum(version: any): number;
+    
+   
     abstract serverSeeds(): string[];
     abstract getOrderPriceShift(orderBaseTokens: string): number;
-
     // Static utility methods (createGenesis, add, fromID, etc.) can be added as needed
 }

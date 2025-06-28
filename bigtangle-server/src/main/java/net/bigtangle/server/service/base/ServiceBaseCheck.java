@@ -29,7 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventInfo;
 import net.bigtangle.core.ECKey;
@@ -101,9 +101,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// only reward block and contract can be set coinbase and check by caculation
 		for (final Transaction tx : block.getTransactions()) {
-			if (tx.isCoinBase() && (block.getBlockType() == Type.BLOCKTYPE_REWARD
-					|| block.getBlockType() == Type.BLOCKTYPE_CONTRACT_EXECUTE
-					|| block.getBlockType() == Type.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (tx.isCoinBase() && (block.getBlockType() == BlockType.BLOCKTYPE_REWARD
+					|| block.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EXECUTE
+					|| block.getBlockType() == BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				throw new InvalidTransactionException("coinbase is not allowed ");
 			}
 		}
@@ -161,9 +161,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// pro block check fee
 			boolean checkFee = false;
-			if (block.getBlockType().equals(Block.Type.BLOCKTYPE_REWARD)
-					|| block.getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)
-					|| block.getBlockType().equals(Block.Type.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (block.getBlockType().equals(BlockType.BLOCKTYPE_REWARD)
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				checkFee = true;
 			}
 			for (final Transaction tx : block.getTransactions()) {
@@ -714,8 +714,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.fromPrevReward(prevRewardHash, true);
 
 		// Ensure dependency (prev reward hash) is valid predecessor
-		if (dependency.getBlock().getBlockType() != Type.BLOCKTYPE_INITIAL
-				&& dependency.getBlock().getBlockType() != Type.BLOCKTYPE_REWARD) {
+		if (dependency.getBlock().getBlockType() != BlockType.BLOCKTYPE_INITIAL
+				&& dependency.getBlock().getBlockType() != BlockType.BLOCKTYPE_REWARD) {
 			if (throwExceptions)
 				throw new InvalidDependencyException("Predecessor is not reward or genesis");
 			return SolidityState.getFailState();
@@ -804,7 +804,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		Token prevDomain = null;
 
 		if (!currentToken.getToken().getDomainNameBlockHash()
-				.equals(networkParameters.getGenesisBlock().getHashAsString())) {
+				.equals(Utils.createGenesis(networkParameters ).getHashAsString())) {
 
 			prevDomain = store.getTokenByBlockHash(Sha256Hash.wrap(currentToken.getToken().getDomainNameBlockHash()));
 			if (prevDomain == null) {
@@ -907,7 +907,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 			// Any first time issuances also require the domain signatures
 			List<MultiSignAddress> prevDomainPermissionedAddresses = queryDomainnameTokenMultiSignAddresses(
-					prevDomain == null ? networkParameters.getGenesisBlock().getHash() : prevDomain.getBlockHash(),
+					prevDomain == null ? Utils.createGenesis(networkParameters ).getHash() : prevDomain.getBlockHash(),
 					store);
 			SolidityState domainPermission = checkDomainPermission(prevDomainPermissionedAddresses,
 					txSignatures.getMultiSignBies(), 1,
@@ -1215,7 +1215,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// For consensus blocks, it works as follows:
 			// If solid == 1 or solid == 2, we also check for PoW now
 			// since it is possible to do so
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 				if (minPredecessorSolidity.getState() == State.MissingCalculation
 						|| minPredecessorSolidity.getState() == State.Success) {
 					SolidityState state = checkRewardBlockPow(block, throwExceptions);
@@ -1624,7 +1624,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (storedPrevBranch == null && !allowMissingPredecessor) {
 				return SolidityState.from(block.getPrevBranchBlockHash(), true);
 			}
-			if (block.getBlockType() == Block.Type.BLOCKTYPE_INITIAL) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 				if (throwExceptions)
 					throw new GenesisBlockDisallowedException();
 				return SolidityState.getFailState();
@@ -1637,7 +1637,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			 * VerificationException("Wrong height"); return SolidityState.getFailState(); }
 			 */
 			// Disallow someone burning other people's orders
-			if (block.getBlockType() != Type.BLOCKTYPE_ORDER_OPEN) {
+			if (block.getBlockType() != BlockType.BLOCKTYPE_ORDER_OPEN) {
 				for (Transaction tx : block.getTransactions())
 					if (tx.getDataClassName() != null && tx.getDataClassName().equals("OrderOpen")) {
 						if (throwExceptions)
@@ -1656,7 +1656,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 				// Check difficulty and latest consensus block is passed through
 				// correctly
-				if (block.getBlockType() != Block.Type.BLOCKTYPE_REWARD) {
+				if (block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
 					if (storedPrev.getBlock().getLastMiningRewardBlock() >= storedPrevBranch.getBlock()
 							.getLastMiningRewardBlock()) {
 						if (block.getLastMiningRewardBlock() != storedPrev.getBlock().getLastMiningRewardBlock()
@@ -1722,14 +1722,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				return SolidityState.getFailState();
 			}
 
-			if (block.getBlockType() == Block.Type.BLOCKTYPE_INITIAL) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 				if (throwExceptions)
 					throw new GenesisBlockDisallowedException();
 				return SolidityState.getFailState();
 			}
 
 			// Disallow someone burning other people's orders
-			if (block.getBlockType() != Type.BLOCKTYPE_ORDER_OPEN) {
+			if (block.getBlockType() != BlockType.BLOCKTYPE_ORDER_OPEN) {
 				for (Transaction tx : block.getTransactions())
 					if (tx.getDataClassName() != null && tx.getDataClassName().equals("OrderOpen")) {
 						if (throwExceptions)
@@ -1858,8 +1858,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		Block prevRewardBlock = store.get(prevRewardHash);
 		if (prevRewardBlock == null)
 			return SolidityState.fromPrevReward(prevRewardHash, true);
-		if (prevRewardBlock.getBlockType() != Type.BLOCKTYPE_REWARD
-				&& prevRewardBlock.getBlockType() != Type.BLOCKTYPE_INITIAL)
+		if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_REWARD
+				&& prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_INITIAL)
 			throw new VerificationException("Previous reward block is not reward block.");
 
 		checkRewardDifficulty(rewardBlock, rewardInfo, prevRewardBlock, store);
@@ -1936,8 +1936,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			Block prevRewardBlock = store.get(prevRewardHash);
 			if (prevRewardBlock == null)
 				return SolidityState.fromPrevReward(prevRewardHash, true);
-			if (prevRewardBlock.getBlockType() != Type.BLOCKTYPE_REWARD
-					&& prevRewardBlock.getBlockType() != Type.BLOCKTYPE_INITIAL)
+			if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_REWARD
+					&& prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_INITIAL)
 				throw new VerificationException("Previous reward block is not reward block.");
 
 			// Get all blocks approved by previous reward blocks

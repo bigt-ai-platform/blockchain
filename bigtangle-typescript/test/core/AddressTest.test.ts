@@ -1,14 +1,13 @@
-
+import { describe, test, expect } from 'vitest';
 import { Buffer } from 'buffer';
-import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
-import { Address } from '../../src/net/bigtangle/core/Address';
-import { Utils } from '../../src/net/bigtangle/utils/Utils';
-// Update the import path to where AddressFormatException is actually exported
-import { AddressFormatException } from '../../src/net/bigtangle/exception/AddressFormatException';
-import { ScriptBuilder } from '../../src/net/bigtangle/script/ScriptBuilder';
-import { ECKey } from '../../src/net/bigtangle/core/ECKey';
-import { DumpedPrivateKey } from '../../src/net/bigtangle/utils/DumpedPrivateKey';
-import { Script } from '../../src/net/bigtangle/script/Script';
+import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams.js';
+import { Address } from '../../src/net/bigtangle/core/Address.js';
+import { Utils } from '../../src/net/bigtangle/utils/Utils.js';
+import { AddressFormatException } from '../../src/net/bigtangle/exception/AddressFormatException.js';
+import { ScriptBuilder } from '../../src/net/bigtangle/script/ScriptBuilder.js';
+import { ECKey } from '../../src/net/bigtangle/core/ECKey.js';
+import { DumpedPrivateKey } from '../../src/net/bigtangle/utils/DumpedPrivateKey.js';
+import { TestNetParams } from '../../src/net/bigtangle/core/TestNetParams.js';
 
 describe('AddressTest', () => {
     const testParams = MainNetParams.get();
@@ -31,7 +30,7 @@ describe('AddressTest', () => {
 
     test('decoding', () => {
         const a = Address.fromBase58(
-            testParams,
+            new TestNetParams(),
             'n4eA2nbYqErp7H6jebchxAN59DmNpksexv',
         );
         expect(Utils.HEX.encode(a.getHash160())).toBe(
@@ -119,11 +118,22 @@ describe('AddressTest', () => {
         ).getKey();
         key3 = ECKey.fromPrivate(key3.getPrivKeyBytes());
 
+        // Print private and public key hex for each key
         const keys = [key1, key2, key3];
+        keys.forEach((k, i) => {
+            console.log(`key${i+1} priv:`, Buffer.from(k.getPrivKeyBytes()).toString('hex'));
+            console.log(`key${i+1} pub:`, Buffer.from(k.getPubKey()).toString('hex'));
+        });
         // Create the redeem script for a 2-of-3 multisig (assuming you have a helper for this)
         const redeemScript = ScriptBuilder.createMultiSigOutputScript(2, keys);
+        const redeemScriptHex = Buffer.from(redeemScript.getProgram()).toString('hex');
         const p2shHash = Utils.sha256hash160(redeemScript.getProgram());
+        const p2shHashHex = Buffer.from(p2shHash).toString('hex');
+        // Debug output
+        console.log('Redeem script hex:', redeemScriptHex);
+        console.log('P2SH hash160 hex:', p2shHashHex);
         const address = Address.fromP2SHHash(mainParams, Buffer.from(p2shHash));
+        console.log('P2SH address:', address.toString());
         expect(address.toString()).toBe('3N25saC4dT24RphDAwLtD8LUN4E2gZPJke');
     });
 

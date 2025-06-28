@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.Sha256Hash;
@@ -151,7 +152,7 @@ public class OrderExecutionService {
 
 	public Block createOrderExecution(Block block, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
-		block.setBlockType(Block.Type.BLOCKTYPE_ORDER_EXECUTE);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_EXECUTE);
 		// Build transaction for block
 		Transaction tx = new Transaction(networkParameters);
 		block.addTransaction(tx);
@@ -164,10 +165,10 @@ public class OrderExecutionService {
 
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
 
-		List<Block.Type> ordertypes = new ArrayList<>();
-		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
-		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
-		ordertypes.add(Block.Type.BLOCKTYPE_ORDER_EXECUTE);
+		List<BlockType> ordertypes = new ArrayList<>();
+		ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
+		ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
+		ordertypes.add(BlockType.BLOCKTYPE_ORDER_EXECUTE);
 		// add all blocks of dependencies
 		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, ordertypes,
@@ -214,7 +215,7 @@ public class OrderExecutionService {
 		Set<BlockWrap> collectNews = new HashSet<>();
 		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
 		for (BlockWrap b : collectedBlocks) {
-			if (!b.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (!b.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				if (!alreadyCollected.contains(b.getBlockHash())) {
 					collectNews.add(b);
 				}

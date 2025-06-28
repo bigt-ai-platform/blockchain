@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { KeyChainGroup } from '../../src/net/bigtangle/wallet/KeyChainGroup';
 import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
@@ -14,6 +13,7 @@ import { RedeemData } from '../../src/net/bigtangle/wallet/RedeemData';
 import { KeyCrypterScrypt } from '../../src/net/bigtangle/crypto/KeyCrypterScrypt';
 import { BloomFilter } from '../../src/net/bigtangle/core/BloomFilter';
 import { Utils } from '../../src/net/bigtangle/utils/Utils';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('KeyChainGroupTest', () => {
     const LOOKAHEAD_SIZE = 5;

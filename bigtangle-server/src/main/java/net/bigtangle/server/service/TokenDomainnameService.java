@@ -35,7 +35,7 @@ public class TokenDomainnameService {
 
     public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,BlockStoreInterface store)
             throws BlockStoreException {
-        if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
+        if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ) .getHashAsString())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();
@@ -61,7 +61,7 @@ public class TokenDomainnameService {
      */
     public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,BlockStoreInterface store)
             throws BlockStoreException {
-        if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHash())) {
+        if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHash())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();

@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { Script } from '../../src/net/bigtangle/script/Script';
 import { ScriptBuilder } from '../../src/net/bigtangle/script/ScriptBuilder';
@@ -12,6 +11,7 @@ import { Sha256Hash } from '../../src/net/bigtangle/core/Sha256Hash';
 import { TransactionSignature } from '../../src/net/bigtangle/crypto/TransactionSignature';
 import { OP_0 } from '../../src/net/bigtangle/script/ScriptOpCodes';
 import { ScriptException } from '../../src/net/bigtangle/exception';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('ScriptTest', () => {
     const sigProg =
@@ -38,7 +38,7 @@ describe('ScriptTest', () => {
     });
 
     test('testMultiSig', () => {
-        const keys = [new ECKey(), new ECKey(), new ECKey()];
+        const keys = [ECKey.fromPrivate(new BigInteger('1')), ECKey.fromPrivate(new BigInteger('2')), ECKey.fromPrivate(new BigInteger('3'))];
         expect(
             ScriptBuilder.createMultiSigOutputScript(2, keys).isSentToMultiSig(),
         ).toBe(true);
@@ -46,11 +46,11 @@ describe('ScriptTest', () => {
         expect(script.isSentToMultiSig()).toBe(true);
         const pubkeys: ECKey[] = [];
         for (const key of keys) {
-            pubkeys.push(ECKey.fromPublicOnly(key.getPubKeyPoint()));
+            pubkeys.push(ECKey.fromPublic(key.getPubKeyPoint()));
         }
         expect(script.getPubKeys()).toEqual(pubkeys);
         expect(
-            ScriptBuilder.createOutputScript(new ECKey()).isSentToMultiSig(),
+            ScriptBuilder.createOutputScript(ECKey.fromPrivate(new BigInteger('4'))).isSentToMultiSig(),
         ).toBe(false);
         try {
             Script.createMultiSigOutputScript(4, keys);

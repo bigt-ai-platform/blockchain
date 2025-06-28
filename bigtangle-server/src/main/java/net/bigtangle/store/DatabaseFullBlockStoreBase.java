@@ -705,23 +705,24 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private void createNewStore(NetworkParameters params) throws BlockStoreException {
 		try {
 
-			saveNewStore(params.getGenesisBlock());
-			saveGenesisTransactionOutput(params.getGenesisBlock());
+			Block genesisBlock = Utils.createGenesis( params );
+			saveNewStore(genesisBlock);
+			saveGenesisTransactionOutput(genesisBlock);
 
 			// Just fill the tables with some valid data
 			// Reward output table
-			insertReward(params.getGenesisBlock().getHash(), Sha256Hash.ZERO_HASH,
+			insertReward(genesisBlock.getHash(), Sha256Hash.ZERO_HASH,
 					Utils.encodeCompactBits(params.getMaxTargetReward()), 0);
-			updateRewardConfirmed(params.getGenesisBlock().getHash(), true);
+			updateRewardConfirmed(genesisBlock.getHash(), true);
 
 			// create bigtangle Token output table
 			Token bigtangle = Token.genesisToken(params);
 			insertToken(bigtangle.getBlockHash(), bigtangle);
-			updateTokenConfirmed(params.getGenesisBlock().getHash(), true);
+			updateTokenConfirmed(genesisBlock.getHash(), true);
 
 			// insert MCMC table
 			ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<>();
-			depthAndWeight.add(new DepthAndWeight(params.getGenesisBlock().getHash(), 1, 0));
+			depthAndWeight.add(new DepthAndWeight(genesisBlock.getHash(), 1, 0));
 			updateBlockEvaluationWeightAndDepth(depthAndWeight);
 
 		} catch (VerificationException e) {

@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { BasicKeyChain } from '../../src/net/bigtangle/wallet/BasicKeyChain';
 import { ECKey } from '../../src/net/bigtangle/core/ECKey';
@@ -8,6 +7,7 @@ import { KeyCrypterScrypt } from '../../src/net/bigtangle/crypto/KeyCrypterScryp
 import { UnreadableWalletException } from '../../src/net/bigtangle/wallet/UnreadableWalletException';
 import { BloomFilter } from '../../src/net/bigtangle/core/BloomFilter';
 import { Utils } from '../../src/net/bigtangle/utils/Utils';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('BasicKeyChainTest', () => {
     let chain: BasicKeyChain;
@@ -19,16 +19,16 @@ describe('BasicKeyChainTest', () => {
     test('importKeys', () => {
         const now = Utils.currentTimeSeconds();
         Utils.setMockClock();
-        const key1 = new ECKey();
+        const key1 = ECKey.fromPrivate(new BigInteger('1'));
         Utils.rollMockClock(86400);
-        const key2 = new ECKey();
+        const key2 = ECKey.fromPrivate(new BigInteger('1'));
         const keys = [key1, key2];
 
         expect(chain.importKeys(keys)).toBe(2);
         expect(chain.numKeys()).toBe(2);
         expect(chain.getEarliestKeyCreationTime()).toBe(now);
 
-        const newKey = new ECKey();
+        const newKey = ECKey.fromPrivate(new BigInteger('1'));
         keys.push(newKey);
         expect(chain.importKeys(keys)).toBe(1);
         expect(chain.importKeys(keys)).toBe(0);
@@ -41,7 +41,7 @@ describe('BasicKeyChainTest', () => {
     });
 
     test('removeKey', () => {
-        const key = new ECKey();
+        const key = ECKey.fromPrivate(new BigInteger('1'));
         chain.importKeys(key);
         expect(chain.numKeys()).toBe(1);
         expect(chain.removeKey(key)).toBe(true);
@@ -57,7 +57,7 @@ describe('BasicKeyChainTest', () => {
 
     test('checkPasswordNotEncrypted', () => {
         expect(() => {
-            const keys = [new ECKey(), new ECKey()];
+            const keys = [ECKey.fromPrivate(new BigInteger('1')), ECKey.fromPrivate(new BigInteger('1'))];
             chain.importKeys(keys);
             chain.checkPassword('test');
         }).toThrow();
@@ -65,7 +65,7 @@ describe('BasicKeyChainTest', () => {
 
     test('doubleEncryptFails', () => {
         expect(() => {
-            const keys = [new ECKey(), new ECKey()];
+            const keys = [ECKey.fromPrivate(new BigInteger('1')), ECKey.fromPrivate(new BigInteger('1'))];
             chain.importKeys(keys);
             chain = chain.toEncrypted('foo');
             chain.toEncrypted('foo');
@@ -73,7 +73,7 @@ describe('BasicKeyChainTest', () => {
     });
 
     test('encryptDecrypt', () => {
-        const key1 = new ECKey();
+        const key1 = ECKey.fromPrivate(new BigInteger('1'));
         chain.importKeys(key1, new ECKey());
         const PASSWORD = 'foobar';
         chain = chain.toEncrypted(PASSWORD);

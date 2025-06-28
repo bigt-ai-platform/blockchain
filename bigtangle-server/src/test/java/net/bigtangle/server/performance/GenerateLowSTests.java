@@ -72,7 +72,7 @@ public class GenerateLowSTests {
         final TransactionOutput output = new TransactionOutput(params, inputTransaction, Coin.ZERO, key.toAddress(params));
 
         inputTransaction.addOutput(output);
-        outputTransaction.addInput(params.getGenesisBlock().getHash(), output);
+        outputTransaction.addInput(Utils.createGenesis(params).getHash(), output);
         outputTransaction.addOutput(Coin.ZERO, new ECKey(secureRandom).toAddress(params));
 
         addOutputs(outputTransaction, bag);

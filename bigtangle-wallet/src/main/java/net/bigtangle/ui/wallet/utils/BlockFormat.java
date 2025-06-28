@@ -13,7 +13,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.ui.wallet.Main;

@@ -4,10 +4,7 @@
  *******************************************************************************/
 package net.bigtangle.server.test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -29,12 +26,5 @@ public class DeleteTablesTest extends AbstractIntegrationTest {
         store.deleteStore();
     }
 
-    @Test
-    @Disabled
-    // must fix for testnet and mainnet
-    public void testGenesisBlockHash() throws Exception {
-        assertTrue(networkParameters.getGenesisBlock().getHash().toString()
-                .equals("f3f9fbb12f3a24e82f04ed3f8afe1dac7136830cd953bd96b25b1371cd11215c"));
-
-    }
+     
 }

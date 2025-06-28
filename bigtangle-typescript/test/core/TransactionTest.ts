@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
 import { Address } from '../../src/net/bigtangle/core/Address';
@@ -19,10 +18,11 @@ import { Script } from '../../src/net/bigtangle/script/Script';
 import { MemoInfo } from '../../src/net/bigtangle/core/MemoInfo';
 import { UTXO } from '../../src/net/bigtangle/core/UTXO';
 import { Utils } from '../../src/net/bigtangle/utils/Utils';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('TransactionTest', () => {
     const PARAMS = MainNetParams.get();
-    const ADDRESS = new ECKey().toAddress(PARAMS);
+    const ADDRESS = ECKey.fromPrivate(new BigInteger('1')).toAddress(PARAMS);
 
     let tx: Transaction;
 

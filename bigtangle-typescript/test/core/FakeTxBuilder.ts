@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { NetworkParameters } from '../../src/net/bigtangle/core/NetworkParameters';
 import { Transaction } from '../../src/net/bigtangle/core/Transaction';
@@ -14,6 +13,7 @@ import { TransactionSignature } from '../../src/net/bigtangle/crypto/Transaction
 import { Block } from '../../src/net/bigtangle/core/Block';
 import { UtilsTest } from './UtilsTest';
 import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 export class FakeTxBuilder {
     /** Create a fake transaction, without change. */
@@ -21,7 +21,7 @@ export class FakeTxBuilder {
         return FakeTxBuilder.createFakeTxWithoutChangeAddress(
             params,
             Coin.COIN,
-            new ECKey().toAddress(params),
+            ECKey.fromPrivate(new BigInteger('1')).toAddress(params),
         );
     }
 
@@ -33,7 +33,7 @@ export class FakeTxBuilder {
         const prevTx = FakeTxBuilder.createFakeTx(
             params,
             Coin.COIN,
-            new ECKey().toAddress(params),
+            ECKey.fromPrivate(new BigInteger('1')).toAddress(params),
         );
         const tx = new Transaction(params);
         tx.addOutput(output);
@@ -56,7 +56,7 @@ export class FakeTxBuilder {
             params,
             tx,
             Coin.COIN.multiply(50),
-            new ECKey().toAddress(params),
+            ECKey.fromPrivate(new BigInteger('1')).toAddress(params),
         );
         tx.addOutput(outputToMe);
 
@@ -185,7 +185,7 @@ export class FakeTxBuilder {
             params,
             value,
             to,
-            new ECKey().toAddress(params),
+            ECKey.fromPrivate(new BigInteger('1')).toAddress(params),
         );
     }
 

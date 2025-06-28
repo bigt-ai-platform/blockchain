@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.InfeasiblePrototypeException;
@@ -163,7 +163,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	public void dagBlockHashesFrom(Set<BlockWrap> blocks, BlockWrap headBlock, long cutoffHeight,
-			long prevMilestoneNumber, List<Type> blocktypes, boolean checkSpentConflict, boolean checkMilestone,
+			long prevMilestoneNumber, List<BlockType> blocktypes, boolean checkSpentConflict, boolean checkMilestone,
 			BlockStoreInterface store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
@@ -222,10 +222,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return false;
 	}
 
-	private boolean matchType(BlockWrap block, List<Type> blocktypes) {
+	private boolean matchType(BlockWrap block, List<BlockType> blocktypes) {
 		if (blocktypes == null)
 			return true;
-		for (Type type : blocktypes) {
+		for (BlockType type : blocktypes) {
 			if (type.equals(block.getBlock().getBlockType())) {
 				return true;
 			}
@@ -713,7 +713,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	private Set<BlockWrap> findWhereCurrentlyIneligible(Set<BlockWrap> blocksToAdd) {
-		return blocksToAdd.stream().filter(b -> b.getBlock().getBlockType() == Type.BLOCKTYPE_REWARD)
+		return blocksToAdd.stream().filter(b -> b.getBlock().getBlockType() == BlockType.BLOCKTYPE_REWARD)
 				.collect(Collectors.toSet());
 	}
 
@@ -1743,8 +1743,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return;
 
 		// order and contract event are controlled by execution only.
-		if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EVENT)
-				|| blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_OPEN)) {
+		if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EVENT)
+				|| blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_OPEN)) {
 			return;
 		}
 
@@ -1806,7 +1806,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			throws BlockStoreException {
 		Set<BlockWrap> re = new HashSet<>();
 		for (BlockWrap blockWrap : blocks) {
-			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
+			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
 				ContractExecutionResult c = new ContractExecutionResult()
 						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
 				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
@@ -1817,7 +1817,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					continue;
 				}
 			}
-			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				addFollowerOrderexecution(store, blockWrap, re);
 			}
 			re.add(blockWrap);
@@ -1834,7 +1834,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		Set<BlockWrap> re = new HashSet<>();
 		for (BlockWrap blockWrap : blocks) {
 
-			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
+			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
 				ContractExecutionResult c = new ContractExecutionResult()
 						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
 				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
@@ -1845,7 +1845,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					continue;
 				}
 			}
-			if (blockWrap.getBlock().getBlockType().equals(Type.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				addExecutionPrev(store, blockWrap, re);
 			}
 			// at the end may skip
@@ -1944,7 +1944,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		Set<BlockWrap> collectNews = new HashSet<>();
 		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
 		for (BlockWrap b : collectedBlocks) {
-			if (!b.getBlock().getBlockType().equals(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE)) {
+			if (!b.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
 				if (!alreadyCollected.contains(b.getBlockHash())) {
 					collectNews.add(b);
 				}
@@ -2031,7 +2031,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		oldBlocks.sort(new SortbyBlock());
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
-			if (!oldBlock.getHash().equals(networkParameters.getGenesisBlock().getHash())) {
+			if (!oldBlock.getHash().equals(Utils.createGenesis(networkParameters) .getHash())) {
 				// Unconfirm
 				confirmExecution(getBlockWrap(oldBlock.getHash(), store), -1, false, store);
 			}

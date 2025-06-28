@@ -27,6 +27,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
 import net.bigtangle.core.ContractEventRecord;
@@ -1709,9 +1710,9 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 					.prepareStatement("  select distinct( blocks.hash) from  blocks  , outputs "
 							+ " where spenderblockhash = blocks.hash    "
 							+ "  and blocks.milestone < ? and blocks.milestone > 0  " + " and ( blocks.blocktype = "
-							+ Block.Type.BLOCKTYPE_TRANSFER.ordinal() + " or blocks.blocktype = "
-							+ Block.Type.BLOCKTYPE_ORDER_OPEN.ordinal() + " or blocks.blocktype = "
-							+ Block.Type.BLOCKTYPE_REWARD.ordinal() + "  ) limit 1000 ");
+							+ BlockType.BLOCKTYPE_TRANSFER.ordinal() + " or blocks.blocktype = "
+							+ BlockType.BLOCKTYPE_ORDER_OPEN.ordinal() + " or blocks.blocktype = "
+							+ BlockType.BLOCKTYPE_REWARD.ordinal() + "  ) limit 1000 ");
 			// preparedStatement.setLong(1, height);
 			preparedStatement.setLong(1, chain);
 

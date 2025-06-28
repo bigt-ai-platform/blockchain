@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluationDisplay;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -170,7 +170,7 @@ public class BlockService {
 		try {
 			if (!store.existBlock(block.getHash())) {
 				try {
-					if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+					if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
 					}
 					blockgraph.addBlock(block, allowUnsolid, store);

@@ -60,8 +60,7 @@ public abstract class NetworkParameters {
 
     /** Unit test network. */
     public static final String ID_UNITTESTNET = "Test";
-
-    protected Block genesisBlock;
+ 
     protected BigInteger maxTarget;
     protected BigInteger maxTargetReward;
     protected long packetMagic; // Indicates message origin network and is used
@@ -192,43 +191,7 @@ public abstract class NetworkParameters {
     protected NetworkParameters() {
     }
 
-    public static Block createGenesis(NetworkParameters params) {
-        Block genesisBlock = new Block(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-                Block.Type.BLOCKTYPE_INITIAL.ordinal(), 0, 0, Utils.encodeCompactBits(params.getMaxTarget()));
-        genesisBlock.setTime(1532896109L); 
-        genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 
-        Transaction coinbase = new Transaction(params);
-        final ScriptBuilder inputBuilder = new ScriptBuilder();
-        coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram())); 
-        RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
-                Utils.encodeCompactBits(params.getMaxTargetReward()),
-                new HashSet<>(), 0L);
-
-        coinbase.setData(rewardInfo.toByteArray());
-        add(params, BigtangleCoinTotal, params.genesisPub, coinbase);
-        genesisBlock.addTransaction(coinbase);
-        genesisBlock.setNonce(0);
-        genesisBlock.setHeight(0);
-        return genesisBlock;
-
-    }
-
-    public static void add(NetworkParameters params, BigInteger amount, String account, Transaction coinbase) {
-        // amount, many public keys
-        String[] list = account.split(",");
-        Coin base = new Coin(amount, BIGTANGLE_TOKENID);
-        List<ECKey> keys = new ArrayList<>();
-        for (String s : list) {
-            keys.add(ECKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
-        }
-        if (keys.size() <= 1) {
-            coinbase.addOutput(new TransactionOutput(params, coinbase, base,
-                    ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));
-        } else {
-            Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(keys.size() - 1, keys);
-            coinbase.addOutput(new TransactionOutput(params, coinbase, base, scriptPubKey.getProgram()));
-        }
-    }
+   
 
     /**
      * A Java package style string acting as unique ID for these parameters
@@ -282,21 +245,7 @@ public abstract class NetworkParameters {
         return addrSeeds;
     }
 
-    /**
-     * <p>
-     * Genesis block for this chain.
-     * </p>
-     *
-     * <p>
-     * The first block in every chain is a well known constant shared between
-     * all Bitcoin implemenetations. For a block to be valid, it must be
-     * eventually possible to work backwards to the genesis block by following
-     * the prevBlockHash pointers in the block headers.
-     * </p>
-     */
-    public Block getGenesisBlock() {
-        return genesisBlock;
-    }
+ 
 
     /** The header bytes that identify the start of a packet on this network. */
     public long getPacketMagic() {

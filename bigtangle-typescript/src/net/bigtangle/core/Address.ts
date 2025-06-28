@@ -1,7 +1,9 @@
 import { Buffer } from 'buffer';
-import { Utils } from './Utils';
-import { NetworkParameters } from './NetworkParameters';
-import { Sha256Hash } from './Sha256Hash';
+import { Utils } from './Utils.js';
+import { NetworkParameters } from './NetworkParameters.js';
+import { Sha256Hash } from './Sha256Hash.js';
+import { AddressFormatException } from '../exception/AddressFormatException.js';
+import { WrongNetworkException } from '../exception/WrongNetworkException.js';
 
 export class Address {
     private readonly params: NetworkParameters;
@@ -35,19 +37,25 @@ export class Address {
     }
 
     public static fromBase58(params: NetworkParameters, base58: string): Address {
-        const bytes = Utils.base58ToBytes(base58);
+        let bytes: Uint8Array;
+        try {
+            bytes = Utils.base58ToBytes(base58);
+        } catch (e) {
+            throw new AddressFormatException(e instanceof Error ? e.message : String(e));
+        }
         if (bytes.length !== 25) {
-            throw new Error('Address has wrong length');
+            throw new AddressFormatException('Address has wrong length');
         }
 
         const version = bytes[0] & 0xFF;
         if (!Address.isAcceptableVersion(params, version)) {
-            throw new Error('Wrong network version');
+            throw new WrongNetworkException(version, params.getAcceptableAddressCodes());
         }
 
-        const checksum = Sha256Hash.hashTwice(Buffer.from(bytes.slice(0, 21))).toBuffer().slice(0, 4);
+        // Use .toBuffer() to get Buffer, then .subarray(0, 4) for checksum
+        const checksum = Sha256Hash.hashTwice(Buffer.from(bytes.slice(0, 21))).toBuffer().subarray(0, 4);
         if (!Buffer.from(bytes.slice(21, 25)).equals(checksum)) {
-            throw new Error('Checksum does not validate');
+            throw new AddressFormatException('Checksum does not validate');
         }
 
         return new Address(params, version, Buffer.from(bytes.slice(1, 21)));

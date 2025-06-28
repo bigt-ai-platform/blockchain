@@ -10,7 +10,7 @@ module.exports = {
     ]
   },
   testMatch: [
-    "**/test/**/*.test.ts"
+    "**/test/**/*Test.ts"
   ],
   moduleNameMapper: {
     '^big-integer$': 'big-integer'

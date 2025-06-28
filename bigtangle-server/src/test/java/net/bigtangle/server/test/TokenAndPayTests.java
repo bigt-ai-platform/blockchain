@@ -29,6 +29,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -162,10 +163,10 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 	// @Before
 	public Block getRollingBlock(ECKey outKey) throws Exception {
 
-		Block rollingBlock =UtilsTest.createBlock(networkParameters, networkParameters.getGenesisBlock(), networkParameters.getGenesisBlock());
+		Block rollingBlock =UtilsTest.createBlock(networkParameters, Utils.createGenesis(networkParameters), Utils.createGenesis(networkParameters));
 		blockGraph.addBlock(rollingBlock, true, store);
 		for (int i = 1; i < networkParameters.getSpendableCoinbaseDepth(); i++) {
-			rollingBlock =UtilsTest.createBlock(networkParameters,rollingBlock, networkParameters.getGenesisBlock());
+			rollingBlock =UtilsTest.createBlock(networkParameters,rollingBlock, Utils.createGenesis(networkParameters));
 			blockGraph.addBlock(rollingBlock, true, store);
 		}
 		return rollingBlock;
@@ -375,7 +376,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 
 		String tokenid = Utils.HEX.encode(keys.get(0).getPubKeyHash());
 		int amount = 100000000;
@@ -398,7 +399,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = Utils.HEX.encode(keys.get(0).getPubKeyHash());
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -420,7 +421,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = Utils.HEX.encode(keys.get(0).getPubKeyHash());
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -428,7 +429,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		TokenInfo tokenInfo = new TokenInfo();
 		Token tokens = Token.buildSimpleTokenInfo(true, null, tokenid, UUID.randomUUID().toString(),
 				UUID.randomUUID().toString(), -1, 0, basecoin.getValue(), false, 0,
-				networkParameters.getGenesisBlock().getHashAsString());
+				Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		block.addCoinbaseTransaction(keys.get(0).getPubKey(), basecoin, tokenInfo, null);
@@ -448,7 +449,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = Utils.HEX.encode(keys.get(0).getPubKeyHash());
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -457,7 +458,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 		Token tokens = Token.buildSimpleTokenInfo(true, null, tokenid, UUID.randomUUID().toString(),
 				UUID.randomUUID().toString(), 3, 0, basecoin.getValue(), false, 0,
-				networkParameters.getGenesisBlock().getHashAsString());
+				Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		block.addCoinbaseTransaction(keys.get(0).getPubKey(), basecoin, tokenInfo, null);
@@ -477,7 +478,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = Utils.HEX.encode(keys.get(0).getPubKeyHash());
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -494,7 +495,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 				UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(), false,
-				0, networkParameters.getGenesisBlock().getHashAsString());
+				0, Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		block.addCoinbaseTransaction(keys.get(0).getPubKey(), basecoin, tokenInfo, null);
@@ -514,7 +515,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = keys.get(0).getPublicKeyAsHex();
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -531,7 +532,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 				UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(), false,
-				0, networkParameters.getGenesisBlock().getHashAsString());
+				0, Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(0).getPublicKeyAsHex()));
@@ -555,7 +556,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 			byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 					Json.jsonmapper().writeValueAsString(requestParam));
 			Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-			block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+			block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 			// Tokenid with keys.get(0) is already used in setup
 			String tokenid = keys.get(5).getPublicKeyAsHex();
 			int amount = 100000000;
@@ -573,7 +574,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 			Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 					UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(),
-					false, 0, networkParameters.getGenesisBlock().getHashAsString());
+					false, 0, Utils.createGenesis(networkParameters).getHashAsString());
 			tokenInfo.setToken(tokens);
 
 			tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(0).getPublicKeyAsHex()));
@@ -639,7 +640,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 			byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 					Json.jsonmapper().writeValueAsString(requestParam));
 			Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-			block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+			block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 
 			String tokenid = keys.get(5).getPublicKeyAsHex();
 			int amount = 100000000;
@@ -656,7 +657,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 			Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 					UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(),
-					false, 0, networkParameters.getGenesisBlock().getHashAsString());
+					false, 0, Utils.createGenesis(networkParameters).getHashAsString());
 			tokenInfo.setToken(tokens);
 
 			tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(0).getPublicKeyAsHex()));
@@ -728,7 +729,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		String tokenid = keys.get(5).getPublicKeyAsHex();
 		int amount = 100000000;
 		Coin basecoin = Coin.valueOf(amount, tokenid);
@@ -745,7 +746,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 				UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(), false,
-				0, networkParameters.getGenesisBlock().getHashAsString());
+				0, Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(0).getPublicKeyAsHex()));
@@ -810,7 +811,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 			Coin basecoin = Coin.valueOf(100000L, pubKey);
 
 			Token tokens = Token.buildSimpleTokenInfo(true, null, tokenid, "test", "test", 2, 0, basecoin.getValue(),
-					false, 0, networkParameters.getGenesisBlock().getHashAsString());
+					false, 0, Utils.createGenesis(networkParameters).getHashAsString());
 			tokenInfo.setToken(tokens);
 
 			// add MultiSignAddress item
@@ -832,7 +833,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 			byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 					Json.jsonmapper().writeValueAsString(requestParam));
 			Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-			block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+			block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 			block.addCoinbaseTransaction(outKey.getPubKey(), basecoin, tokenInfo, null);
 
 			Transaction transaction = block.getTransactions().get(0);
@@ -882,7 +883,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		long tokenindex1 = 1;
 		Token tokens = Token.buildSimpleTokenInfo(true, null, tokenid, UUID.randomUUID().toString(),
 				UUID.randomUUID().toString(), 3, tokenindex1, basecoin.getValue(), false, 0,
-				networkParameters.getGenesisBlock().getHashAsString());
+				Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		ECKey key1 = keys.get(0);
@@ -898,7 +899,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(key1.getPubKey(), basecoin, tokenInfo, null);
 		block.solve();
 
@@ -1030,7 +1031,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid,
 				UUID.randomUUID().toString(), UUID.randomUUID().toString(), 3, tokenindex_, basecoin.getValue(), false,
-				0, networkParameters.getGenesisBlock().getHashAsString());
+				0, Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		ECKey key1 = keys.get(0);

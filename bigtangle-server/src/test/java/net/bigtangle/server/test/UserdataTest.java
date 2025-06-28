@@ -6,22 +6,20 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Contact;
 import net.bigtangle.core.ContactInfo;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.Token;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UserSettingData;
 import net.bigtangle.core.UserSettingDataInfo;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.ReqCmd;
-import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
@@ -109,7 +107,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-        block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+        block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
         ECKey outKey = new ECKey();
 
         Transaction transaction = new Transaction(networkParameters);
@@ -135,7 +133,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-        block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+        block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
         ECKey outKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
         makeTestToken(outKey, BigInteger.valueOf(1000 * 1000), new ArrayList<>(), 0);
 

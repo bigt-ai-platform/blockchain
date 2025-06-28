@@ -1,4 +1,4 @@
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../core/NetworkParameters';
 
 export class TestParams extends NetworkParameters {
     constructor() {

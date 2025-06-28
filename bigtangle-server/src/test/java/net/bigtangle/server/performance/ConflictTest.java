@@ -38,8 +38,8 @@ public class ConflictTest extends AbstractIntegrationTest {
 
         for (int i = 0; i < 10; i++) {
 
-            Block b1 = createAndAddNextBlockWithTransaction(networkParameters.getGenesisBlock(),
-                    networkParameters.getGenesisBlock(), doublespendTX);
+            Block b1 = createAndAddNextBlockWithTransaction(Utils.createGenesis(networkParameters),
+                    Utils.createGenesis(networkParameters), doublespendTX);
             blockGraph.addBlock(b1, true, store);
           
             // add blocks and want to get fast resolve of double spending

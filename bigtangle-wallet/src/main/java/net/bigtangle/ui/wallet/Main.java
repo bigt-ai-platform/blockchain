@@ -62,7 +62,7 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.Contact;
 import net.bigtangle.core.ContactInfo;
@@ -285,7 +285,7 @@ public class Main extends Application {
         byte[] data = OkHttp3Util.postAndGetBlock(CONTEXT_ROOT + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = Main.params.getDefaultSerializer().makeBlock(data);
-        block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+        block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
         List<ECKey> issuedKeys = Main.walletAppKit.wallet().walletKeys(getAesKey());
 

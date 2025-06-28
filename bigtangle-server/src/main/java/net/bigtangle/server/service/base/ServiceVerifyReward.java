@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.core.MemoInfo;
@@ -22,6 +22,7 @@ import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.Utils;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
@@ -177,7 +178,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			BlockWrap block = getBlockWrap(hash, store);
-			if (block.getBlock().getBlockType() == Type.BLOCKTYPE_REWARD)
+			if (block.getBlock().getBlockType() == BlockType.BLOCKTYPE_REWARD)
 				throw new VerificationException("Reward block referenced block has other reward blocks" + block);
 		}
 	}
@@ -252,7 +253,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		oldBlocks.sort(new SortbyBlock());
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
-			if (!oldBlock.getHash().equals(networkParameters.getGenesisBlock().getHash())) {
+			if (!oldBlock.getHash().equals(Utils.createGenesis(networkParameters ).getHash())) {
 				// Unset the milestone (Chain length) of this one
 				long milestoneNumber = getRewardInfo(oldBlock).getChainlength();
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,

@@ -16,8 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
-import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventRecord;
@@ -31,6 +30,7 @@ import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.Utils;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.Contractresult;
@@ -163,7 +163,7 @@ public class ServiceContract extends ServiceBaseConnect {
 			TreeMap<Sha256Hash, ContractEventRecord> spents, BlockStoreInterface store) throws BlockStoreException {
 		for (Sha256Hash bHash : collectedBlocks) {
 			Block b = getBlock(bHash, store);
-			if (b.getBlockType() == Type.BLOCKTYPE_CONTRACT_EVENT) {
+			if (b.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EVENT) {
 
 				ContractEventRecord event = store.getContractEvent(b.getHash(), Sha256Hash.ZERO_HASH);
 				// order is null, write it to
@@ -176,7 +176,7 @@ public class ServiceContract extends ServiceBaseConnect {
 					ContractEventRecord cloneOrderRecord = ContractEventRecord.cloneOrderRecord(event);
 					spents.put(b.getHash(), cloneOrderRecord);
 				}
-			} else if (b.getBlockType() == Type.BLOCKTYPE_CONTRACTEVENT_CANCEL) {
+			} else if (b.getBlockType() == BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL) {
 				ContractEventCancelInfo info = new ContractEventCancelInfo()
 						.parseChecked(b.getTransactions().get(0).getData());
 				cancels.add(info);

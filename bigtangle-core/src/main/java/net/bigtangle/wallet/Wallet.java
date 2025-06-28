@@ -45,7 +45,7 @@ import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
@@ -288,7 +288,7 @@ public class Wallet extends WalletBase {
 		// +1 for domain name or super domain
 		token.setSignnumber(token.getSignnumber() + 1);
 		Block block = getTip();
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(pubKeyTo, basecoin, tokenInfo, memoInfo);
 
 		Transaction transaction = block.getTransactions().get(0);
@@ -802,7 +802,7 @@ public class Wallet extends WalletBase {
 		Block block = getTip();
 
 		block.addTransaction(tx);
-		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
 
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(orderBaseToken)) {
 			block.addTransaction(feeTransaction(aesKey, candidates));
@@ -918,7 +918,7 @@ public class Wallet extends WalletBase {
 		signTransaction(tx, aesKey);
 		Block block = getTip();
 		block.addTransaction(tx);
-		block.setBlockType(Type.BLOCKTYPE_ORDER_OPEN);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
 			block.addTransaction(feeTransaction(aesKey, candidates));
 		}
@@ -951,7 +951,7 @@ public class Wallet extends WalletBase {
 		Block block = getTip();
 
 		block.addTransaction(tx);
-		block.setBlockType(Type.BLOCKTYPE_ORDER_CANCEL);
+		block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
 		if (getFee())
 			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
 		return solveAndPost(block);
@@ -984,7 +984,7 @@ public class Wallet extends WalletBase {
 		Block block = getTip();
 
 		block.addTransaction(tx);
-		block.setBlockType(Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+		block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 		if (getFee())
 			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
 		return solveAndPost(block);
@@ -1029,7 +1029,7 @@ public class Wallet extends WalletBase {
 		signTransaction(tx, aesKey);
 		Block block = getTip();
 		block.addTransaction(tx);
-		block.setBlockType(Type.BLOCKTYPE_CONTRACT_EVENT);
+		block.setBlockType(BlockType.BLOCKTYPE_CONTRACT_EVENT);
 
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenId)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
@@ -1212,7 +1212,7 @@ public class Wallet extends WalletBase {
 		if (getFee()) {
 			block.addTransaction(feeTransaction(aesKey));
 		}
-		block.setBlockType(Type.BLOCKTYPE_USERDATA);
+		block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 		return solveAndPost(block);
 	}
 
@@ -1403,7 +1403,7 @@ public class Wallet extends WalletBase {
 		token.setPrevblockhash(tokenIndexResponse.getBlockhash());
 		token.setTokenstop(!increment);
 		TokenInfo tokenInfo = new TokenInfo();
-		// tokens.setTokentype(TokenType.currency.ordinal());
+		// tokens.setTokentype(TokenBlockType.currency.ordinal());
 		tokenInfo.setToken(token);
 		tokenInfo.setMultiSignAddresses(addresses);
         return saveToken(tokenInfo, new Coin(token.getAmount(), tokenid), key, null, pubkeyTo, memoInfo);
@@ -1438,7 +1438,7 @@ public class Wallet extends WalletBase {
 
 	/*
 	 * if a block is failed due to rating without conflict, it can be retried by
-	 * setting new BlockPrototype.
+	 * setting new BlockProtoBlockType.
 	 */
 	public Block retryBlocks(Block oldBlock) throws IOException {
 

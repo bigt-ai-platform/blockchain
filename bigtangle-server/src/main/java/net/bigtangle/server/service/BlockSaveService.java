@@ -9,8 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.kafka.KafkaMessageProducer;
 import net.bigtangle.server.config.ServerConfiguration;
@@ -44,7 +44,7 @@ public class BlockSaveService {
 		blockgraph.addBlock(block, false, store);
 		// no broadcastBlock, if there is error of blockgraph.add
 		broadcastBlock(block);
-		if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 			cacheBlockPrototypeService.evictBlockPrototypeByte();
 		}
 	}

@@ -24,9 +24,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
@@ -109,7 +109,7 @@ public abstract class ServiceBase {
 	 */
 	public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,
 			BlockStoreInterface store) throws BlockStoreException {
-		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHash())) {
+		if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHash())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
 				ECKey ecKey = permissionDomainname.getOutKey();
@@ -379,7 +379,7 @@ public abstract class ServiceBase {
 			currRewardBlock = getBlock(currPrevRewardHash, store);
 			RewardInfo currRewardInfo = new RewardInfo()
 					.parseChecked(currRewardBlock.getTransactions().get(0).getData());
-			if (currPrevRewardHash.equals(networkParameters.getGenesisBlock().getHash()))
+			if (currPrevRewardHash.equals(Utils.createGenesis(networkParameters ).getHash()))
 				return 0;
 
 			currPrevRewardHash = currRewardInfo.getPrevRewardHash();
@@ -439,7 +439,7 @@ public abstract class ServiceBase {
 
 	public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,
 			BlockStoreInterface store) throws BlockStoreException {
-		if (domainNameBlockHash.equals(networkParameters.getGenesisBlock().getHashAsString())) {
+		if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHashAsString())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
 				ECKey ecKey = permissionDomainname.getOutKey();
@@ -523,10 +523,10 @@ public abstract class ServiceBase {
 		long re = 0;
 		for (Sha256Hash s : candidateBlocks) {
 			Block t = getBlock(s, store);
-			if (t.getBlockType() == Block.Type.BLOCKTYPE_CONTRACT_EXECUTE) {
+			if (t.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EXECUTE) {
 				re = re + new ContractExecutionResult().parseChecked(t.getTransactions().get(0).getData())
 						.getReferencedBlocks().size();
-			} else if (t.getBlockType() == Block.Type.BLOCKTYPE_ORDER_EXECUTE) {
+			} else if (t.getBlockType() == BlockType.BLOCKTYPE_ORDER_EXECUTE) {
 
 				re = re + new OrderExecutionResult().parseChecked(t.getTransactions().get(0).getData())
 						.getReferencedBlocks().size();
@@ -706,13 +706,13 @@ public abstract class ServiceBase {
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
 			// Reward blocks follow different logic: If this is new, run
 			// consensus logic
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 				solidifyReward(block, blockStore);
 				return;
 			}
 			break;
 		case MissingPredecessor:
-			if (block.getBlockType() == Type.BLOCKTYPE_INITIAL
+			if (block.getBlockType() == BlockType.BLOCKTYPE_INITIAL
 					&& getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() > 0) {
 				throw new RuntimeException("Should not happen");
 			}
@@ -726,7 +726,7 @@ public abstract class ServiceBase {
 			connectTypeSpecificUTXOs(block, blockStore);
 			calculateBlockOrderMatchingResult(block, blockStore);
 
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD && !setMilestoneSuccess) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD && !setMilestoneSuccess) {
 				// If we don't want to set the milestone success, initialize as
 				// missing calc
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
@@ -734,7 +734,7 @@ public abstract class ServiceBase {
 				// normal update
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 2);
 			}
-			if (block.getBlockType() == Type.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
 				solidifyReward(block, blockStore);
 				return;
 			}
@@ -873,7 +873,7 @@ public abstract class ServiceBase {
 	/*
 	 * Execution from the blocks must be chained original from milestone.
 	 */
-	public void checkChainedExecutions(Set<BlockWrap> blocks, Block.Type blocktype, BlockStoreInterface store)
+	public void checkChainedExecutions(Set<BlockWrap> blocks, BlockType blocktype, BlockStoreInterface store)
 			throws BlockStoreException {
 
 		List<BlockWrap> executions = new ArrayList<>();
@@ -895,8 +895,8 @@ public abstract class ServiceBase {
 	}
 
 	public void checkExecutionChained(BlockStoreInterface store, Set<BlockWrap> blocks) throws BlockStoreException {
-		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_CONTRACT_EXECUTE, store);
-		checkChainedExecutions(blocks, Block.Type.BLOCKTYPE_ORDER_EXECUTE, store);
+		checkChainedExecutions(blocks, BlockType.BLOCKTYPE_CONTRACT_EXECUTE, store);
+		checkChainedExecutions(blocks, BlockType.BLOCKTYPE_ORDER_EXECUTE, store);
 	}
 
 	public boolean checkExists(Set<BlockWrap> allApproved, BlockWrap newBlock) {

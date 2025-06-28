@@ -23,31 +23,40 @@ export interface BlockTypeConfig {
     requiresCalculation: boolean;
 }
 
-export const BlockTypeConfigs: { [key in BlockType]: BlockTypeConfig } = {
-    [BlockType.BLOCKTYPE_INITIAL]: { allowCoinbaseTransaction: false, maxSize: Number.MAX_SAFE_INTEGER, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_TRANSFER]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_REWARD]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_REWARD_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_TOKEN_CREATION]: { allowCoinbaseTransaction: true, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_USERDATA]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_CONTRACT_EVENT]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_GOVERNANCE]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_FILE]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_CONTRACT_EXECUTE]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_CROSSTANGLE]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_ORDER_OPEN]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_ORDER_CANCEL]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_ORDER_EXECUTE]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-    [BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL]: { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false },
-};
+function getBlockTypeConfig(type: BlockType): BlockTypeConfig {
+    switch (type) {
+        case BlockType.BLOCKTYPE_INITIAL:
+            return { allowCoinbaseTransaction: false, maxSize: Number.MAX_SAFE_INTEGER, requiresCalculation: false };
+        case BlockType.BLOCKTYPE_TRANSFER:
+            return { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false };
+        case BlockType.BLOCKTYPE_REWARD:
+            return { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_REWARD_BLOCK_SIZE, requiresCalculation: false };
+        case BlockType.BLOCKTYPE_TOKEN_CREATION:
+            return { allowCoinbaseTransaction: true, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false };
+        case BlockType.BLOCKTYPE_USERDATA:
+        case BlockType.BLOCKTYPE_CONTRACT_EVENT:
+        case BlockType.BLOCKTYPE_GOVERNANCE:
+        case BlockType.BLOCKTYPE_FILE:
+        case BlockType.BLOCKTYPE_CONTRACT_EXECUTE:
+        case BlockType.BLOCKTYPE_CROSSTANGLE:
+        case BlockType.BLOCKTYPE_ORDER_OPEN:
+        case BlockType.BLOCKTYPE_ORDER_CANCEL:
+        case BlockType.BLOCKTYPE_ORDER_EXECUTE:
+        case BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL:
+            return { allowCoinbaseTransaction: false, maxSize: NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, requiresCalculation: false };
+        default:
+            throw new Error('Unknown BlockType');
+    }
+}
 
 export function allowCoinbaseTransaction(type: BlockType): boolean {
-    return BlockTypeConfigs[type].allowCoinbaseTransaction;
+    return getBlockTypeConfig(type).allowCoinbaseTransaction;
 }
 
 export function getMaxBlockSize(type: BlockType): number {
-    return BlockTypeConfigs[type].maxSize;
+    return getBlockTypeConfig(type).maxSize;
 }
 
 export function requiresCalculation(type: BlockType): boolean {
-    return BlockTypeConfigs[type].requiresCalculation;
+    return getBlockTypeConfig(type).requiresCalculation;
 }

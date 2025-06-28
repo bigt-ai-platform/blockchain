@@ -21,6 +21,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -66,7 +67,7 @@ public class SubtangleTests extends AbstractIntegrationTest {
         byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-        block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+        block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
         block.addCoinbaseTransaction(ecKey.getPubKey(), basecoin, tokenInfo,new MemoInfo("coinbase"));
 
         Transaction transaction = block.getTransactions().get(0);

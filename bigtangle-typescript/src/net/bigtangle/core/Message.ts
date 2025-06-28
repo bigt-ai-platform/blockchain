@@ -1,5 +1,5 @@
 import { NetworkParameters } from './NetworkParameters';
-// import { ProtocolException } from './exception/Exceptions';
+ import { ProtocolVersion } from './ProtocolVersion';
 import { ProtocolException } from '../exception/Exceptions';
 import { MessageSerializer } from './MessageSerializer';
 import { Sha256Hash } from './Sha256Hash';
@@ -21,10 +21,10 @@ export abstract class Message {
     public static readonly UNKNOWN_LENGTH = -1;
 
     // The offset is how many bytes into the provided byte array this message payload starts at.
-    protected offset: number;
+    protected offset: number = 0;
     // The cursor keeps track of where we are in the byte array as we parse it.
     // Note that it's relative to the start of the array NOT the start of the message payload.
-    protected cursor: number;
+    protected cursor: number = 0;
 
     public length: number = Message.UNKNOWN_LENGTH;
 
@@ -42,9 +42,8 @@ export abstract class Message {
         this.params = params;
         this.serializer = serializer || params.getDefaultSerializer();
         this.payload = payload || Buffer.alloc(0);
-        this.cursor = this.offset = offset || 0;
-        this.length = length !== undefined ? length : Message.UNKNOWN_LENGTH;
-        this.protocolVersion = params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.CURRENT);
+        // Set protocolVersion from params or default to 1 if not available
+        this.protocolVersion = params.getProtocolVersionNum()
 
         if (payload) {
             this.parse();

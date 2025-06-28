@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Token;
@@ -171,7 +172,7 @@ public class ContractExecutionService {
 	public Block createContractExecutionDo(Block block, Token contract, BlockStoreInterface store)
 			throws BlockStoreException, NoBlockException, InterruptedException, ExecutionException, IOException {
 
-		block.setBlockType(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
+		block.setBlockType(BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
 		// prepare transaction for block
 		Transaction tx = new Transaction(networkParameters);
 		block.addTransaction(tx);
@@ -183,10 +184,10 @@ public class ContractExecutionService {
 		long cutoffheight = serviceBase.getCurrentCutoffHeight(cacheBlockService.getMaxConfirmedReward(store), store);
 
 		// add only the relevant blocks from the DAG
-		List<Block.Type> referencedOrdertypes = new ArrayList<>();
-		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EVENT);
-		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
-		referencedOrdertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
+		List<BlockType> referencedOrdertypes = new ArrayList<>();
+		referencedOrdertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);
+		referencedOrdertypes.add(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+		referencedOrdertypes.add(BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
 		// add all referenced Blocks
 		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength,

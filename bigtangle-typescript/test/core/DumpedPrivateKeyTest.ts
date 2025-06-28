@@ -1,7 +1,7 @@
-
 import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
 import { DumpedPrivateKey } from '../../src/net/bigtangle/utils/DumpedPrivateKey';
 import { ECKey } from '../../src/net/bigtangle/core/ECKey';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('DumpedPrivateKeyTest', () => {
     const MAINNET = MainNetParams.get();
@@ -14,7 +14,7 @@ describe('DumpedPrivateKeyTest', () => {
     });
 
     test('cloning', () => {
-        const a = new DumpedPrivateKey(MAINNET, new ECKey().getPrivKeyBytes(), true);
+        const a = new DumpedPrivateKey(MAINNET, ECKey.fromPrivate(new BigInteger('1')).getPrivKeyBytes(), true);
         const b = a.clone();
 
         expect(a).toEqual(b);

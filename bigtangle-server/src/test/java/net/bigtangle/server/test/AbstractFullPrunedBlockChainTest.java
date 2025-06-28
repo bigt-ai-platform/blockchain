@@ -26,6 +26,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
@@ -66,16 +67,16 @@ public abstract class AbstractFullPrunedBlockChainTest {
         // to the full StoredUndoableBlock's lying around (ie memory leaks)
  
         // Build some blocks on genesis block to create a spendable output
-        Block rollingBlock =   UtilsTest.createBlock(PARAMS,  PARAMS.getGenesisBlock(), PARAMS.getGenesisBlock());
+        Block rollingBlock =   UtilsTest.createBlock(PARAMS,  Utils.createGenesis(PARAMS), Utils.createGenesis(PARAMS));
     
         blockgraph.addBlock(rollingBlock, true,store);
         TransactionOutput spendableOutput = rollingBlock.getTransactions().get(0).getOutput(0);
         for (int i = 1; i < PARAMS.getSpendableCoinbaseDepth(); i++) {
-            rollingBlock =UtilsTest.createBlock(PARAMS,rollingBlock, PARAMS.getGenesisBlock());
+            rollingBlock =UtilsTest.createBlock(PARAMS,rollingBlock, Utils.createGenesis(PARAMS));
             blockgraph.addBlock(rollingBlock, true,store);
         }
 
-        rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, PARAMS.getGenesisBlock());
+        rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, Utils.createGenesis(PARAMS));
         Transaction t = new Transaction(PARAMS);
         t.addOutput(new TransactionOutput(PARAMS, t, Coin.COIN.multiply(50), new byte[] {}));
         TransactionInput input = t.addInput(rollingBlock.getHash(), spendableOutput);
@@ -109,17 +110,17 @@ public abstract class AbstractFullPrunedBlockChainTest {
  
 
         // Build some blocks on genesis block to create a spendable output
-        Block rollingBlock =UtilsTest.createBlock(PARAMS, PARAMS.getGenesisBlock(), PARAMS.getGenesisBlock());
+        Block rollingBlock =UtilsTest.createBlock(PARAMS, Utils.createGenesis(PARAMS), Utils.createGenesis(PARAMS));
         blockgraph.addBlock(rollingBlock, true,store);
         TransactionOutPoint spendableOutput = new TransactionOutPoint(PARAMS, 0, rollingBlock.getHash(),
                 rollingBlock.getTransactions().get(0).getHash());
         byte[] spendableOutputScriptPubKey = rollingBlock.getTransactions().get(0).getOutputs().get(0).getScriptBytes();
         for (int i = 1; i < PARAMS.getSpendableCoinbaseDepth(); i++) {
-            rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, PARAMS.getGenesisBlock());
+            rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, Utils.createGenesis(PARAMS));
             blockgraph.addBlock(rollingBlock, true,store);
         }
 
-            rollingBlock =UtilsTest.createBlock(PARAMS, rollingBlock, PARAMS.getGenesisBlock());
+            rollingBlock =UtilsTest.createBlock(PARAMS, rollingBlock, Utils.createGenesis(PARAMS));
 
         Transaction t = new Transaction(PARAMS);
         // Entirely invalid scriptPubKey
@@ -150,16 +151,16 @@ public abstract class AbstractFullPrunedBlockChainTest {
  
 
         // Build some blocks on genesis block to create a spendable output
-        Block rollingBlock =UtilsTest.createBlock(PARAMS, PARAMS.getGenesisBlock(), PARAMS.getGenesisBlock());
+        Block rollingBlock =UtilsTest.createBlock(PARAMS, Utils.createGenesis(PARAMS), Utils.createGenesis(PARAMS));
         blockgraph.addBlock(rollingBlock, true,store);
         Transaction transaction = rollingBlock.getTransactions().get(0);
         TransactionOutPoint spendableOutput = new TransactionOutPoint(PARAMS, 0, rollingBlock.getHash(), transaction.getHash());
         byte[] spendableOutputScriptPubKey = transaction.getOutputs().get(0).getScriptBytes();
         for (int i = 1; i < PARAMS.getSpendableCoinbaseDepth(); i++) {
-            rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, PARAMS.getGenesisBlock());
+            rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, Utils.createGenesis(PARAMS));
             blockgraph.addBlock(rollingBlock, true,store);
         }
-        rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, PARAMS.getGenesisBlock());
+        rollingBlock = UtilsTest.createBlock(PARAMS,rollingBlock, Utils.createGenesis(PARAMS));
 
         // Create bitcoin spend of 1 BTA.
         ECKey toKey = new ECKey();

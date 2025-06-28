@@ -24,7 +24,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.MapValueFactory;
 import javafx.stage.FileChooser;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.Block.Type;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.response.UserDataResponse;
 import net.bigtangle.core.Contact;
 import net.bigtangle.core.ContactInfo;
@@ -193,7 +193,7 @@ public class UserdataController {
         byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = Main.params.getDefaultSerializer().makeBlock(data);
-        block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+        block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
         List<ECKey> issuedKeys = Main.walletAppKit.wallet().walletKeys(Main.getAesKey());
 
@@ -252,7 +252,7 @@ public class UserdataController {
                     Json.jsonmapper().writeValueAsString(requestParam));
 
             Block block = Main.params.getDefaultSerializer().makeBlock(data);
-            block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+            block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
             Transaction coinbase = new Transaction(Main.params);
 
@@ -311,7 +311,7 @@ public class UserdataController {
             byte[] data = OkHttp3Util.postAndGetBlock(CONTEXT_ROOT + ReqCmd.getTip.name(),
                     Json.jsonmapper().writeValueAsString(requestParam));
             Block block = Main.params.getDefaultSerializer().makeBlock(data);
-            block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+            block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
             List<ECKey> issuedKeys = Main.walletAppKit.wallet().walletKeys(Main.getAesKey());
 
@@ -367,7 +367,7 @@ public class UserdataController {
                     Json.jsonmapper().writeValueAsString(requestParam));
 
             Block block = Main.params.getDefaultSerializer().makeBlock(data);
-            block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+            block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
             Transaction coinbase = new Transaction(Main.params);
 
@@ -549,7 +549,7 @@ public class UserdataController {
             for (ECKey ecKey : Main.walletAppKit.wallet().walletKeys(Main.getAesKey())) {
                 pubKeyList.add(ecKey.getPublicKeyAsHex());
             }
-            Type blocktype = Block.Type.BLOCKTYPE_USERDATA;
+            Type blocktype = BlockType.BLOCKTYPE_USERDATA;
             HashMap<String, Object> requestParam = new HashMap<String, Object>();
             requestParam.put("blocktype", blocktype);
             requestParam.put("pubKeyList", pubKeyList);
@@ -619,7 +619,7 @@ public class UserdataController {
         for (ECKey ecKey : Main.walletAppKit.wallet().walletKeys(Main.getAesKey())) {
             pubKeyList.add(ecKey.getPublicKeyAsHex());
         }
-        Type blocktype = Block.Type.BLOCKTYPE_USERDATA;
+        Type blocktype = BlockType.BLOCKTYPE_USERDATA;
         HashMap<String, Object> requestParam = new HashMap<String, Object>();
         requestParam.put("blocktype", blocktype);
         requestParam.put("pubKeyList", pubKeyList);
@@ -682,7 +682,7 @@ public class UserdataController {
             byte[] data = OkHttp3Util.postAndGetBlock(CONTEXT_ROOT + ReqCmd.getTip.name(),
                     Json.jsonmapper().writeValueAsString(requestParam));
             Block block = Main.params.getDefaultSerializer().makeBlock(data);
-            block.setBlockType(Block.Type.BLOCKTYPE_USERDATA);
+            block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 
             List<ECKey> issuedKeys = Main.walletAppKit.wallet().walletKeys(Main.getAesKey());
 

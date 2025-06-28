@@ -1,10 +1,10 @@
-import { ScriptChunk } from './ScriptChunk';
-import { Script } from './Script';
-import { Address } from '../core/Address';
-import { ECKey } from '../core/ECKey';
-import { Utils } from '../utils/Utils';
-import { TransactionSignature } from '../crypto/TransactionSignature';
-import { BigInteger } from '../core/BigInteger';
+import { ScriptChunk } from './ScriptChunk.js';
+import { Script } from './Script.js';
+import { Address } from '../core/Address.js';
+import { ECKey } from '../core/ECKey.js';
+import { Utils } from '../utils/Utils.js';
+import { TransactionSignature } from '../crypto/TransactionSignature.js';
+import { BigInteger } from '../core/BigInteger.js';
 
 // Re-export ScriptOpCodes from Script.ts or define them here if not in Script.ts
 // For now, assuming they will be defined in Script.ts or a separate ScriptOpCodes.ts
@@ -167,18 +167,8 @@ export class ScriptBuilder {
         }
         const builder = new ScriptBuilder();
         builder.smallNum(threshold);
-        // Sort pubkeys lexicographically before adding to script
-        const sortedPubkeys = [...pubkeys].sort((a, b) => {
-            const pubA = a.getPubKey();
-            const pubB = b.getPubKey();
-            for (let i = 0; i < Math.min(pubA.length, pubB.length); i++) {
-                if (pubA[i] !== pubB[i]) {
-                    return pubA[i] - pubB[i];
-                }
-            }
-            return pubA.length - pubB.length;
-        });
-        for (const key of sortedPubkeys) {
+        // Use the order as given (do not sort)
+        for (const key of pubkeys) {
             builder.data(key.getPubKey());
         }
         builder.smallNum(pubkeys.length);

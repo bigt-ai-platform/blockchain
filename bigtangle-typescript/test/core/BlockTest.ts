@@ -1,21 +1,25 @@
 
 import { Buffer } from 'buffer';
-import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams';
-import { Block } from '../../src/net/bigtangle/core/Block';
-import { Transaction } from '../../src/net/bigtangle/core/Transaction';
-import { TransactionInput } from '../../src/net/bigtangle/core/TransactionInput';
-import { TransactionOutput } from '../../src/net/bigtangle/core/TransactionOutput';
-import { Coin } from '../../src/net/bigtangle/core/Coin';
-import { ScriptOpCodes } from '../../src/net/bigtangle/script/ScriptOpCodes';
-import { TransactionOutPoint } from '../../src/net/bigtangle/core/TransactionOutPoint';
-import { Sha256Hash } from '../../src/net/bigtangle/core/Sha256Hash';
-import { UtilsTest } from './UtilsTest';
+import { MainNetParams } from '../../src/net/bigtangle/params/MainNetParams.js';
+import { Transaction } from '../../src/net/bigtangle/core/Transaction.js';
+import { TransactionInput } from '../../src/net/bigtangle/core/TransactionInput.js';
+import { TransactionOutput } from '../../src/net/bigtangle/core/TransactionOutput.js';
+import { Coin } from '../../src/net/bigtangle/core/Coin.js';
+// Adjust the import to match the actual export from ScriptOpCodes.js
+import * as ScriptOpCodes from '../../src/net/bigtangle/script/ScriptOpCodes.js';
+import { TransactionOutPoint } from '../../src/net/bigtangle/core/TransactionOutPoint.js';
+import { Sha256Hash } from '../../src/net/bigtangle/core/Sha256Hash.js';
+import { UtilsTest } from './UtilsTest.js';
 
 describe('BlockTest', () => {
     const PARAMS = MainNetParams.get();
 
     test('testWork', () => {
-        const work = PARAMS.getGenesisBlock().getWork();
+        const genesisBlock = PARAMS.getGenesisBlock();
+        if (!genesisBlock) {
+            throw new Error('Genesis block is null');
+        }
+        const work = genesisBlock.getWork();
         // This number is printed by Bitcoin Core at startup as the calculated
         // value of chainWork on testnet:
         //

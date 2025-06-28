@@ -1,4 +1,3 @@
-
 import { Buffer } from 'buffer';
 import { ECKey } from '../../src/net/bigtangle/core/ECKey';
 import { Sha256Hash } from '../../src/net/bigtangle/core/Sha256Hash';
@@ -11,6 +10,7 @@ import { KeyCrypter } from '../../src/net/bigtangle/crypto/KeyCrypter';
 import { EncryptedData } from '../../src/net/bigtangle/crypto/EncryptedData';
 import { Transaction } from '../../src/net/bigtangle/core/Transaction';
 import { TransactionSignature } from '../../src/net/bigtangle/crypto/TransactionSignature';
+import { BigInteger } from '../../src/net/bigtangle/core/BigInteger';
 
 describe('ECKeyTest', () => {
     const PASSWORD1 = 'my hovercraft has eels';
@@ -108,7 +108,7 @@ describe('ECKeyTest', () => {
         const message = 'Hello World!';
         const hash = Sha256Hash.of(Buffer.from(message));
         const sig = key.sign(hash);
-        const pubKeyOnly = ECKey.fromPublicOnly(key.getPubKeyPoint());
+        const pubKeyOnly = ECKey.fromPublic(key.getPubKeyPoint());
         let found = false;
         for (let i = 0; i < 4; i++) {
             const key2 = ECKey.recoverFromSignature(i, sig, hash, true);
@@ -252,7 +252,7 @@ describe('ECKeyTest', () => {
         const message = 'Goodbye Jupiter!';
         const hash = Sha256Hash.of(Buffer.from(message));
         const sig = encryptedKey.sign(hash, aesKey);
-        const pubKeyOnly = ECKey.fromPublicOnly(unencryptedKey.getPubKeyPoint());
+        const pubKeyOnly = ECKey.fromPublic(unencryptedKey.getPubKeyPoint());
         let found = false;
         for (let i = 0; i < 4; i++) {
             const key2 = ECKey.recoverFromSignature(i, sig, hash, true);

@@ -41,7 +41,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 	// @Test
 	public void testDifficultyTransition1() throws Exception {
 
-		long currentTime = networkParameters.getGenesisBlock().getTimeSeconds();
+		long currentTime = Utils.createGenesis(networkParameters).getTimeSeconds();
 
 		// Reward exactly on target -> no difficulty change
 
@@ -61,17 +61,17 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService,jsonmapper);
 		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger(),
-				 servicebase.getRewardInfo(networkParameters.getGenesisBlock( )).getDifficultyTargetAsInteger());
+				 servicebase.getRewardInfo(Utils.createGenesis(networkParameters)).getDifficultyTargetAsInteger());
 	}
 
 	// Test difficulty transition
 	// @Test
 	public void testDifficultyTransition2() throws Exception {
 		ECKey genesiskey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
-		long currentTime = networkParameters.getGenesisBlock().getTimeSeconds();
+		long currentTime = Utils.createGenesis(networkParameters).getTimeSeconds();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		Block rollingBlock = networkParameters.getGenesisBlock();
+		Block rollingBlock = Utils.createGenesis(networkParameters);
 		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
 			currentTime += NetworkParameters.TARGET_SPACING / 8;
 
@@ -88,7 +88,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService,jsonmapper);
 		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().multiply(BigInteger.valueOf(4)),
-				servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger());
+				servicebase.getRewardInfo(Utils.createGenesis(networkParameters)).getDifficultyTargetAsInteger());
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way slower -> maximum difficulty change to lower difficulty
@@ -125,10 +125,10 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 	// @Test
 	public void testDifficultyTransition3() throws Exception {
 
-		long currentTime = networkParameters.getGenesisBlock().getTimeSeconds();
+		long currentTime = Utils.createGenesis(networkParameters).getTimeSeconds();
 
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		Block rollingBlock = networkParameters.getGenesisBlock();
+		Block rollingBlock = Utils.createGenesis(networkParameters);
 		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
 			currentTime += NetworkParameters.TARGET_SPACING / 2;
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
@@ -143,7 +143,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService,jsonmapper);
 		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
-				.compareTo(servicebase.getRewardInfo(networkParameters.getGenesisBlock()).getDifficultyTargetAsInteger()) < 0);
+				.compareTo(servicebase.getRewardInfo(Utils.createGenesis(networkParameters)).getDifficultyTargetAsInteger()) < 0);
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
@@ -167,7 +167,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock1 = addBlocks(5, blocksAddedAll);
 
 		// Generate mining reward block
-		Block rewardBlock1 = makeRewardBlock(networkParameters.getGenesisBlock().getHash());
+		Block rewardBlock1 = makeRewardBlock(Utils.createGenesis(networkParameters).getHash());
 		blockGraph.updateChain();
 		blocksAddedAll.add(rewardBlock1);
 
@@ -183,7 +183,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 	public Block createReward2(List<Block> blocksAddedAll) throws Exception {
 		addBlocks(5, blocksAddedAll);
 		// Generate mining reward blocks
-		Block rewardBlock2 = makeRewardBlock(networkParameters.getGenesisBlock().getHash());
+		Block rewardBlock2 = makeRewardBlock(Utils.createGenesis(networkParameters).getHash());
 		blockGraph.updateChain();
 		blocksAddedAll.add(rewardBlock2); 
 		Block rewardBlock3 = makeRewardBlock(rewardBlock2.getHash());
@@ -288,7 +288,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
 		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getMilestone() == 1);
 
-		// Block rollingBlock1 = addFixedBlocks(5, networkParameters.getGenesisBlock(),
+		// Block rollingBlock1 = addFixedBlocks(5, Utils.createGenesis(networkParameters),
 		// blocksAddedAll);
 
 		// Generate more mining reward blocks
@@ -319,7 +319,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			rewardBlock2 = makeRewardBlock(rewardBlock2.getHash());
 		}
 	
-		Block rollingBlock2 = addFixedBlocks(1, networkParameters.getGenesisBlock(), blocksAddedAll,
+		Block rollingBlock2 = addFixedBlocks(1, Utils.createGenesis(networkParameters), blocksAddedAll,
 				wallet.feeTransaction(null));
 	 
 		// rewardBlock3 takes the long block graph behind cutoff

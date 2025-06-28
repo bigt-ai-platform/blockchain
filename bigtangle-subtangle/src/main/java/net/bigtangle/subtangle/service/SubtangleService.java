@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.DatabindException;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MemoInfo;
@@ -70,7 +71,7 @@ public class SubtangleService {
 				Coin coinbase = output.getValue();
 
 				Block b = cacheBlockPrototypeService.getBlockPrototype(store);
-				b.setBlockType(Block.Type.BLOCKTYPE_CROSSTANGLE);
+				b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 				b.addCoinbaseTransaction(signKey.getPubKey(), coinbase, null, new MemoInfo("SubtangleService"));
 				blockSaveService.saveBlock(b, store);
 

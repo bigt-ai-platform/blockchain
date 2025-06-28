@@ -40,6 +40,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
@@ -279,7 +280,7 @@ public abstract class AbstractIntegrationTest {
 		Coin coinbase = new Coin(amount, testKey.getPubKey());
 		// BigInteger amount = coinbase.getValue();
 		Token tokens = Token.buildSimpleTokenInfo(true, null, testKey.getPublicKeyAsHex(), testKey.getPublicKeyAsHex(),
-				"", 1, 0, amount, true, decimal, networkParameters.getGenesisBlock().getHashAsString());
+				"", 1, 0, amount, true, decimal, Utils.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
@@ -624,12 +625,12 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, networkParameters.getGenesisBlock().getHashAsString(),
+		return testCreateToken(outKey, tokennameName, Utils.createGenesis(networkParameters).getHashAsString(),
 				blocksAddedAll);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName) throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, networkParameters.getGenesisBlock().getHashAsString(), null);
+		return testCreateToken(outKey, tokennameName, Utils.createGenesis(networkParameters).getHashAsString(), null);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, String domainpre, List<Block> blocksAddedAll)
@@ -753,7 +754,7 @@ public abstract class AbstractIntegrationTest {
 		;
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid, "test", "test", 3,
-				tokenindex_, amount, false, 0, networkParameters.getGenesisBlock().getHashAsString());
+				tokenindex_, amount, false, 0, Utils.createGenesis(networkParameters).getHashAsString());
 		KeyValue kv = new KeyValue();
 		kv.setKey("testkey");
 		kv.setKey("testvalue");
@@ -782,7 +783,7 @@ public abstract class AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(keys.get(2).getPubKey(), basecoin, tokenInfo, new MemoInfo("coinbase"));
 		block = adjustSolve(block);
 
@@ -860,7 +861,7 @@ public abstract class AbstractIntegrationTest {
 		Sha256Hash prevblockhash = tokenIndexResponse.getBlockhash();
 
 		Token tokens = Token.buildSimpleTokenInfo(true, prevblockhash, tokenid, "test", "test", 3, tokenindex_,
-				basecoin.getValue(), false, 0, networkParameters.getGenesisBlock().getHashAsString());
+				basecoin.getValue(), false, 0, Utils.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		ECKey key1 = keys.get(1);
@@ -955,7 +956,7 @@ public abstract class AbstractIntegrationTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-		block.setBlockType(Block.Type.BLOCKTYPE_TOKEN_CREATION);
+		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 
 		if (overrideHash1 != null && overrideHash2 != null) {
 			block.setPrevBlockHash(overrideHash1.getHash());

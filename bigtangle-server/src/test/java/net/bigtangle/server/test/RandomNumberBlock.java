@@ -22,7 +22,7 @@ public class RandomNumberBlock extends AbstractIntegrationTest {
 
 	public void createRandomNumber(List<Block> a1, List<Integer> rnumbers) throws Exception {
 
-		Block r1 = networkParameters.getGenesisBlock();
+		Block r1 = Utils.createGenesis(networkParameters);
 
 		r1 = createReward(r1, a1);
 

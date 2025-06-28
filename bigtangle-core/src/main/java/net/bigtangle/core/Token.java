@@ -262,7 +262,7 @@ public class Token extends SpentBlock implements java.io.Serializable {
         Token genesisToken = Token.buildSimpleTokenInfo(true, null, NetworkParameters.BIGTANGLE_TOKENID_STRING,
                 NetworkParameters.BIGTANGLE_TOKENNAME, "BigTangle Currency", 1, 0, NetworkParameters.BigtangleCoinTotal,
                 true, NetworkParameters.BIGTANGLE_DECIMAL, "");
-        genesisToken.setBlockHash(params.getGenesisBlock().getHash());
+        genesisToken.setBlockHash(	Utils.createGenesis(params ).getHash());
         genesisToken.setTokentype(TokenType.currency.ordinal());
         return genesisToken;
 

@@ -1,15 +1,13 @@
 package net.bigtangle.server.service.base;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.exception.BlockStoreException;
@@ -36,7 +34,7 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 
 		long cutoffheight = getRewardCutoffHeight(prevRewardHash, store);
-		List<Block.Type> ordertypes = getListedBlockOfType(contractExecute);
+		List<BlockType> ordertypes = getListedBlockOfType(contractExecute);
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
@@ -51,27 +49,27 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 				serviceBase.getHashSet(blocks), store);
 	}
 
-	private List<Block.Type> getListedBlockOfType(boolean contractExecute) {
-		List<Block.Type> ordertypes = new ArrayList<>();
+	private List<BlockType> getListedBlockOfType(boolean contractExecute) {
+		List<BlockType> ordertypes = new ArrayList<>();
 
-		ordertypes.add(Block.Type.BLOCKTYPE_INITIAL);
-		ordertypes.add(Block.Type.BLOCKTYPE_TRANSFER);
-		ordertypes.add(Block.Type.BLOCKTYPE_TOKEN_CREATION);
-		ordertypes.add(Block.Type.BLOCKTYPE_FILE);
-		ordertypes.add(Block.Type.BLOCKTYPE_USERDATA);
-		// Reward can not be as Referenced ordertypes.add(Block.Type.BLOCKTYPE_REWARD);
-		ordertypes.add(Block.Type.BLOCKTYPE_GOVERNANCE);
-		ordertypes.add(Block.Type.BLOCKTYPE_CROSSTANGLE);
+		ordertypes.add(BlockType.BLOCKTYPE_INITIAL);
+		ordertypes.add(BlockType.BLOCKTYPE_TRANSFER);
+		ordertypes.add(BlockType.BLOCKTYPE_TOKEN_CREATION);
+		ordertypes.add(BlockType.BLOCKTYPE_FILE);
+		ordertypes.add(BlockType.BLOCKTYPE_USERDATA);
+		// Reward can not be as Referenced ordertypes.add(BlockType.BLOCKTYPE_REWARD);
+		ordertypes.add(BlockType.BLOCKTYPE_GOVERNANCE);
+		ordertypes.add(BlockType.BLOCKTYPE_CROSSTANGLE);
 
 		if (contractExecute) {
 			// exclude order open , cancel
-			ordertypes.add(Block.Type.BLOCKTYPE_ORDER_EXECUTE);
-			ordertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EXECUTE);
+			ordertypes.add(BlockType.BLOCKTYPE_ORDER_EXECUTE);
+			ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
 		} else {
-			ordertypes.add(Block.Type.BLOCKTYPE_ORDER_OPEN);
-			ordertypes.add(Block.Type.BLOCKTYPE_ORDER_CANCEL);
-			ordertypes.add(Block.Type.BLOCKTYPE_CONTRACT_EVENT);
-			ordertypes.add(Block.Type.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+			ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
+			ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
+			ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);
+			ordertypes.add(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 
 		}
 		return ordertypes;

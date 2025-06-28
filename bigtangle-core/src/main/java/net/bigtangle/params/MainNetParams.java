@@ -57,10 +57,7 @@ public class MainNetParams extends AbstractBitcoinNetParams {
 
         permissionDomainname = ImmutableList.of("0222c35110844bf00afd9b7f08788d79ef6edc0dce19be6182b44e07501e637a58");
      
-        // Equihash Settings
-        equihashN = 100;
-        equihashK = 4;
-
+       
         id = ID_MAINNET;
         subsidyDecreaseBlockCount = 210000;
         spendableCoinbaseDepth = 100;
@@ -75,8 +72,7 @@ public class MainNetParams extends AbstractBitcoinNetParams {
         // };
 
         addrSeeds = new int[] {};
-
-        genesisBlock = createGenesis(this);
+ 
         // seeds for servers
 
     }

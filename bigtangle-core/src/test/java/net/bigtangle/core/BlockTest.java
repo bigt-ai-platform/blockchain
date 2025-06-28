@@ -44,7 +44,7 @@ public class BlockTest {
 
     @Test
     public void testWork() throws Exception {
-        BigInteger work = PARAMS.getGenesisBlock().getWork();
+        BigInteger work = Utils.createGenesis(   PARAMS ).getWork();
         // This number is printed by Bitcoin Core at startup as the calculated
         // value of chainWork on testnet:
         //
@@ -135,7 +135,7 @@ public class BlockTest {
     @Test
     public void testUpdateLength() {
         NetworkParameters params = MainNetParams.get();
-        Block block = UtilsTest.createBlock(PARAMS,params.getGenesisBlock(), params.getGenesisBlock());
+        Block block = UtilsTest.createBlock(PARAMS,Utils.createGenesis(params) , Utils.createGenesis(params) );
        // assertEquals(block.bitcoinSerialize().length, block.length);
         final int origBlockLen = block.length;
         Transaction tx = new Transaction(params);
