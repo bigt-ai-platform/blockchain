@@ -1,5 +1,5 @@
 import { KeyValue } from './KeyValue';
-import { Json } from '../utils/Json';
+import { ObjectMapper, SerializationFeature, DeserializationFeature } from 'jackson-js';
 
 /*
  * help to set memo string as key value list
@@ -35,14 +35,21 @@ export class MemoInfo {
     }
 
     public toJson(): string {
-        return Json.jsonmapper().writeValueAsString(this);
+        return JSON.stringify(this);
     }
 
     public static parse(jsonStr: string | null): MemoInfo | null {
         if (jsonStr === null) {
             return null;
         }
-        return Json.jsonmapper().readValue(jsonStr, MemoInfo);
+
+const objectMapper = new ObjectMapper();
+
+const memoInfo = objectMapper.parse<MemoInfo>(
+    jsonStr,
+    { mainCreator: () => [MemoInfo] }
+);
+return memoInfo;
     }
 
     /*
@@ -53,9 +60,9 @@ export class MemoInfo {
             if (jsonStr === null) {
                 return null;
             }
-            const m = Json.jsonmapper().readValue(jsonStr, MemoInfo);
+            const m = MemoInfo.parse(jsonStr);
             let s = "";
-            if (m.getKv()) {
+            if (m && m.getKv()) {
                 for (const keyvalue of m.getKv()!) {
                     if (MemoInfo.valueDisplay(keyvalue) !== null && keyvalue.getKey() !== null && keyvalue.getKey() !== "null"
                         && keyvalue.getKey().length > 0) {

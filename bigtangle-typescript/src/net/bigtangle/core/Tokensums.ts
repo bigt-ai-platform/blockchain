@@ -1,20 +1,19 @@
 import { DataClass } from './DataClass';
-import { BigIntegerJSBN as BigIntegerJSBNJSBN } from 'jsbn';
+import { BigInteger  } from 'jsbn';
 import { UTXO } from './UTXO';
 import { OrderRecord } from './OrderRecord';
 import { ContractEventRecord } from './ContractEventRecord';
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../params/NetworkParameters';
 import { Utils } from '../utils/Utils';
-import { DataInputStream } from '../utils/DataInputStream';
 import { DataOutputStream } from '../utils/DataOutputStream';
 import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
 
 export class Tokensums extends DataClass {
     public tokenid: string | null = null;
-    public initial: BigIntegerJSBN = BigIntegerJSBN.ZERO;
-    public unspent: BigIntegerJSBN = BigIntegerJSBN.ZERO;
-    public order: BigIntegerJSBN = BigIntegerJSBN.ZERO;
-    public contract: BigIntegerJSBN = BigIntegerJSBN.ZERO;
+    public initial: BigInteger = BigInteger.ZERO;
+    public unspent: BigInteger = BigInteger.ZERO;
+    public order: BigInteger = BigInteger.ZERO;
+    public contract: BigInteger = BigInteger.ZERO;
     public utxos: UTXO[] = [];
     public orders: OrderRecord[] = [];
     public contracts: ContractEventRecord[] = [];
@@ -28,7 +27,10 @@ export class Tokensums extends DataClass {
     public calcOutputs(): void {
         for (const u of this.utxos) {
             if (u.isConfirmed() && !u.isSpent()) {
-                this.unspent = this.unspent.add(u.getValue().getValue());
+                const valueObj = u.getValue();
+                if (valueObj !== null) {
+                    this.unspent = this.unspent.add(new BigInteger(valueObj.getValue().toString()));
+                }
             } 
         }
     }
@@ -36,7 +38,7 @@ export class Tokensums extends DataClass {
     public ordersum(): void {
         for (const orderRecord of this.orders) {
             if (orderRecord.getOfferTokenid() === this.tokenid) {
-                this.order = this.order.add(new BigIntegerJSBN(orderRecord.getOfferValue().toString()));
+                this.order = this.order.add(new BigInteger(orderRecord.getOfferValue().toString()));
             }
         }
     }
@@ -44,7 +46,7 @@ export class Tokensums extends DataClass {
     public contractsum(): void {
         for (const c of this.contracts) {
             if (c.getTargetTokenid() === this.tokenid) {
-                this.contract = this.contract.add(c.getTargetValue() || BigIntegerJSBN.ZERO);
+                this.contract = this.contract.add(c.getTargetValue() ?? BigInteger.ZERO);
             }
         }
     }
@@ -67,20 +69,20 @@ export class Tokensums extends DataClass {
 
     public toByteArray(): Uint8Array {
         const baos = new UnsafeByteArrayOutputStream();
-        const dos = new DataOutputStream(baos);
+        const dos = new DataOutputStream();
         try {
-            dos.write(super.toByteArray());
-            dos.writeNBytesString(this.tokenid || "");
-            dos.writeBytes(Utils.bigIntToBytes(this.initial, 32)); // Assuming 32 bytes for BigIntegerJSBN
-            dos.writeBytes(Utils.bigIntToBytes(this.unspent, 32));
-            dos.writeBytes(Utils.bigIntToBytes(this.order, 32));
+            dos.write(Buffer.from(super.toByteArray()));
+            dos.writeNBytesString(this.tokenid ?? "");
+            dos.writeBytes(Buffer.from(Utils.bigIntToBytes(this.initial, 32)));
+            dos.writeBytes(Buffer.from(Utils.bigIntToBytes(this.unspent, 32)));
+            dos.writeBytes(Buffer.from(Utils.bigIntToBytes(this.order, 32)));
             dos.writeInt(this.utxos.length);
             for (const c of this.utxos) {
-                dos.write(c.toByteArray());
+                dos.write(Buffer.from(c.toByteArray()));
             }
             dos.writeInt(this.orders.length);
             for (const c of this.orders) {
-                dos.write(c.toByteArray());
+                dos.write(Buffer.from(c.toByteArray()));
             }
             dos.close();
         } catch (e: any) {
@@ -89,7 +91,7 @@ export class Tokensums extends DataClass {
         return baos.toByteArray();
     }
  
-    public unspentOrderSum(): BigIntegerJSBN {
+    public unspentOrderSum(): BigInteger {
         return this.unspent.add(this.order);
     }
 
@@ -101,27 +103,27 @@ export class Tokensums extends DataClass {
         this.tokenid = tokenid;
     }
 
-    public getInitial(): BigIntegerJSBN {
+    public getInitial(): BigInteger {
         return this.initial;
     }
 
-    public setInitial(initial: BigIntegerJSBN): void {
+    public setInitial(initial: BigInteger): void {
         this.initial = initial;
     }
 
-    public getUnspent(): BigIntegerJSBN {
+    public getUnspent(): BigInteger {
         return this.unspent;
     }
 
-    public setUnspent(unspent: BigIntegerJSBN): void {
+    public setUnspent(unspent: BigInteger): void {
         this.unspent = unspent;
     }
 
-    public getOrder(): BigIntegerJSBN {
+    public getOrder(): BigInteger {
         return this.order;
     }
 
-    public setOrder(order: BigIntegerJSBN): void {
+    public setOrder(order: BigInteger): void {
         this.order = order;
     }
 
@@ -141,11 +143,11 @@ export class Tokensums extends DataClass {
         this.orders = orders;
     }
 
-    public getContract(): BigIntegerJSBN {
+    public getContract(): BigInteger {
         return this.contract;
     }
 
-    public setContract(contract: BigIntegerJSBN): void {
+    public setContract(contract: BigInteger): void {
         this.contract = contract;
     }
 

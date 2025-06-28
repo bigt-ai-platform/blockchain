@@ -1,6 +1,6 @@
 import { Message } from './Message';
 import { Block } from './Block';
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../params/NetworkParameters';
 import { ProtocolException } from '../exception/Exceptions';
 import { VarInt } from './VarInt';
 import { MessageSerializer } from './MessageSerializer';
@@ -34,7 +34,7 @@ export class HeadersMessage extends Message {
     protected bitcoinSerializeToStream(stream: any): void {
         VarInt.write(this.blockHeaders.length, stream);
         for (const header of this.blockHeaders) {
-            header.bitcoinSerializeToStream(stream); // Use the correct serialization method
+            stream.write(header.bitcoinSerialize()); // Serialize header and write to stream
             stream.write(Buffer.from([0])); // Trailing null byte
         }
     }

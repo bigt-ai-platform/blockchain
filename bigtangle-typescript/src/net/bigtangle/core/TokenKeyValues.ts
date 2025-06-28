@@ -13,7 +13,7 @@ export class TokenKeyValues {
 
     public toByteArray(): Uint8Array {
         try {
-            const jsonStr = Json.jsonmapper().writeValueAsString(this);
+            const jsonStr = JSON.stringify(this);
             return new TextEncoder().encode(jsonStr);
         } catch (e: any) {
             throw new Error(e);
@@ -22,7 +22,12 @@ export class TokenKeyValues {
 
     public static parse(buf: Uint8Array): TokenKeyValues {
         const jsonStr = new TextDecoder('utf-8').decode(buf);
-        return Json.jsonmapper().readValue(jsonStr, TokenKeyValues);
+        const obj = JSON.parse(jsonStr);
+        const instance = new TokenKeyValues();
+        if (obj.keyvalues) {
+            instance['keyvalues'] = obj.keyvalues;
+        }
+        return instance;
     }
 
     public getKeyvalues(): KeyValue[] | null {
