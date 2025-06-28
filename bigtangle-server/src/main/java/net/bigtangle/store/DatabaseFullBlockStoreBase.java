@@ -43,6 +43,7 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.UTXOProviderException;
@@ -705,7 +706,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private void createNewStore(NetworkParameters params) throws BlockStoreException {
 		try {
 
-			Block genesisBlock = Utils.createGenesis( params );
+			Block genesisBlock = UtilGeneseBlock.createGenesis( params );
 			saveNewStore(genesisBlock);
 			saveGenesisTransactionOutput(genesisBlock);
 

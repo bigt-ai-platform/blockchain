@@ -38,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -869,42 +868,6 @@ public class Utils {
 		return null;
 	}
 	
-	 public static Block createGenesis(NetworkParameters params) {
-	        Block genesisBlock = new Block(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-	        		BlockType.BLOCKTYPE_INITIAL.ordinal(), 0, 0, Utils.encodeCompactBits(params.getMaxTarget()));
-	        genesisBlock.setTime(1532896109L); 
-	        genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 
-	        Transaction coinbase = new Transaction(params);
-	        final ScriptBuilder inputBuilder = new ScriptBuilder();
-	        coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram())); 
-	        RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
-	                Utils.encodeCompactBits(params.getMaxTargetReward()),
-	                new HashSet<>(), 0L);
-
-	        coinbase.setData(rewardInfo.toByteArray());
-	        add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
-	        genesisBlock.addTransaction(coinbase);
-	        genesisBlock.setNonce(0);
-	        genesisBlock.setHeight(0);
-	        return genesisBlock;
-
-	    }
-
-	    public static void add(NetworkParameters params, BigInteger amount, String account, Transaction coinbase) {
-	        // amount, many public keys
-	        String[] list = account.split(",");
-	        Coin base = new Coin(amount,NetworkParameters. BIGTANGLE_TOKENID);
-	        List<ECKey> keys = new ArrayList<>();
-	        for (String s : list) {
-	            keys.add(ECKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
-	        }
-	        if (keys.size() <= 1) {
-	            coinbase.addOutput(new TransactionOutput(params, coinbase, base,
-	                    ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));
-	        } else {
-	            Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(keys.size() - 1, keys);
-	            coinbase.addOutput(new TransactionOutput(params, coinbase, base, scriptPubKey.getProgram()));
-	        }
-	    }
+	 
 
 }

@@ -22,7 +22,7 @@ import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.Utils;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
@@ -253,7 +253,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		oldBlocks.sort(new SortbyBlock());
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
-			if (!oldBlock.getHash().equals(Utils.createGenesis(networkParameters ).getHash())) {
+			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
 				// Unset the milestone (Chain length) of this one
 				long milestoneNumber = getRewardInfo(oldBlock).getChainlength();
 				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,

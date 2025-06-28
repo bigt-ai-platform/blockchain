@@ -26,6 +26,7 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.NetworkParameters;
@@ -42,7 +43,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		List<Block> blocksAddedAll = new ArrayList<Block>();
 		Block rollingBlock1 = addFixedBlocks(NetworkParameters.FORWARD_BLOCK_HORIZON + 10,
-				Utils.createGenesis(networkParameters), blocksAddedAll, wallet.feeTransaction(null));
+				UtilGeneseBlock.createGenesis(networkParameters), blocksAddedAll, wallet.feeTransaction(null));
 
 		// MCMC should not update this far out
 		makeRewardBlock();
@@ -52,7 +53,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// Reward block should include it
 		Pair<BlockWrap, BlockWrap> validatedRewardBlockPair = tipsService
 				.getValidatedBlockPair(  store); 
-		rewardService.createReward(Utils.createGenesis(networkParameters).getHash(), validatedRewardBlockPair.getLeft(),
+		rewardService.createReward(UtilGeneseBlock.createGenesis(networkParameters).getHash(), validatedRewardBlockPair.getLeft(),
 				validatedRewardBlockPair.getRight(), store);
 		assertTrue(getBlockEvaluation(rollingBlock1.getHash(), store).getMilestone() == 1);
 	}
@@ -75,10 +76,10 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		input.setScriptSig(inputScript);
 
 		// Create blocks with conflict
-		Block b1 = createAndAddNextBlockWithTransaction(Utils.createGenesis(networkParameters),
-				Utils.createGenesis(networkParameters), doublespendTX);
-		Block b2 = createAndAddNextBlockWithTransaction(Utils.createGenesis(networkParameters),
-				Utils.createGenesis(networkParameters), doublespendTX);
+		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
+		Block b2 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 
 		blockGraph.addBlock(b1, true, store);
 		blockGraph.addBlock(b2, true, store);
@@ -104,15 +105,15 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testConflictReward() throws Exception {
 
 		// Generate blocks until passing first reward interval
-		Block rollingBlock = Utils.createGenesis(networkParameters);
+		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 
 		// Generate eligible mining reward blocks
-		Block b1 = rewardService.createMiningRewardBlock(Utils.createGenesis(networkParameters).getHash(),
+		Block b1 = rewardService.createMiningRewardBlock(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock),null,false, store);
 		blockSaveService.saveBlock(b1, store);
 		blockGraph.updateChain();
 
-		Block b2 = rewardService.createMiningRewardBlock(Utils.createGenesis(networkParameters).getHash(),
+		Block b2 = rewardService.createMiningRewardBlock(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock),null, false, store);
 		blockSaveService.saveBlock(b2, store);
 		blockGraph.updateChain();
@@ -134,7 +135,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(false, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), false, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -148,7 +149,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 			Coin coinbase2 = Coin.valueOf(666, pubKey);
 
 			Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey), "Test",
-					"Test", 1, 1, coinbase2.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+					"Test", 1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 			tokenInfo2.setToken(tokens2);
 			tokenInfo2.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -159,7 +160,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 			Coin coinbase2 = Coin.valueOf(666, pubKey);
 
 			Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey), "Test",
-					"Test", 1, 1, coinbase2.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+					"Test", 1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 			tokenInfo2.setToken(tokens2);
 			tokenInfo2.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -203,7 +204,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(false, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), false, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -214,7 +215,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase2 = Coin.valueOf(666, pubKey);
 
 		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey), "Test", "Test", 1,
-				1, coinbase2.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo2.setToken(tokens2);
 		tokenInfo2.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -225,7 +226,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase3 = Coin.valueOf(666, pubKey);
 
 		Token tokens3 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey), "Test", "Test", 1,
-				1, coinbase3.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				1, coinbase3.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo3.setToken(tokens3);
 		tokenInfo3.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens3.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -253,7 +254,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(false, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
@@ -286,7 +287,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(true, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
@@ -299,7 +300,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase2 = Coin.valueOf(6666, pubKey);
 
 		Token tokens2 = Token.buildSimpleTokenInfo(true, null, Utils.HEX.encode(pubKey), "Test2", "Test2", 1, 0,
-				coinbase2.getValue(), false, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase2.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo2.setToken(tokens2);
 		tokenInfo2.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
@@ -338,13 +339,13 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		input.setScriptSig(inputScript);
 
 		// Create blocks with a conflict
-		Block b1 = createAndAddNextBlockWithTransaction(Utils.createGenesis(networkParameters),
-				Utils.createGenesis(networkParameters), doublespendTX);
+		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 		makeRewardBlock();
 
 		assertTrue(getBlockEvaluation(b1.getHash(), store).isConfirmed());
-		Block b2 = createAndAddNextBlockWithTransaction(Utils.createGenesis(networkParameters),
-				Utils.createGenesis(networkParameters), doublespendTX);
+		Block b2 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 		Block b3 = createAndAddNextBlock(b1, b2);
 		for (int i = 0; i < 15; i++) {
 			createAndAddNextBlock(b3, b3);
@@ -371,7 +372,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(false, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
@@ -408,17 +409,17 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testUpdateConflictingConsensusMilestoneCandidates() throws Exception {
 
 		// Generate blocks until passing second reward interval
-		Block rollingBlock = Utils.createGenesis(networkParameters);
+		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 		for (int i = 0; i < 2 * 1 + 1 + 1; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.addBlock(rollingBlock, true, store);
 		}
 
 		// Generate mining reward blocks
-		Block rewardBlock1 = rewardService.createReward(Utils.createGenesis(networkParameters).getHash(),
+		Block rewardBlock1 = rewardService.createReward(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
 		blockGraph.updateChain();
-		Block rewardBlock2 = rewardService.createReward(Utils.createGenesis(networkParameters).getHash(),
+		Block rewardBlock2 = rewardService.createReward(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), store);
 		blockGraph.updateChain();
 		Block invalidBlock = createAndAddNextBlock(rewardBlock1, rewardBlock2);
@@ -436,8 +437,8 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUpdate() throws Exception {
 
-		Block b1 = createAndAddNextBlock(Utils.createGenesis(networkParameters), Utils.createGenesis(networkParameters));
-		Block b2 = createAndAddNextBlock(Utils.createGenesis(networkParameters), Utils.createGenesis(networkParameters));
+		Block b1 = createAndAddNextBlock(UtilGeneseBlock.createGenesis(networkParameters), UtilGeneseBlock.createGenesis(networkParameters));
+		Block b2 = createAndAddNextBlock(UtilGeneseBlock.createGenesis(networkParameters), UtilGeneseBlock.createGenesis(networkParameters));
 		Block b3 = createAndAddNextBlock(b1, b2);
 
 		Block b5 = createAndAddNextBlock(b3, b3);
@@ -476,7 +477,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		mcmcServiceUpdate();
 
 		// Check heights (handmade tests)
-		assertEquals(0, getBlockEvaluation(Utils.createGenesis(networkParameters).getHash(), store).getHeight());
+		assertEquals(0, getBlockEvaluation(UtilGeneseBlock.createGenesis(networkParameters).getHash(), store).getHeight());
 		assertEquals(1, getBlockEvaluation(b1.getHash(), store).getHeight());
 		assertEquals(1, getBlockEvaluation(b2.getHash(), store).getHeight());
 		assertEquals(2, getBlockEvaluation(b3.getHash(), store).getHeight());
@@ -565,7 +566,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		for (int i = 0; i < 1; i++) {
 			rollingBlock = createAndAddNextBlock(rollingBlock, rollingBlock);
 		}
-		rewardService.createReward(Utils.createGenesis(networkParameters).getHash(), defaultBlockWrap(rollingBlock),
+		rewardService.createReward(UtilGeneseBlock.createGenesis(networkParameters).getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), store);
 
 		makeRewardBlock();
@@ -589,7 +590,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
 		Token tokens = Token.buildSimpleTokenInfo(true, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), true, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				coinbase.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		tokenInfo.setToken(tokens);
@@ -606,7 +607,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
 
 		// Remove it from the confirmed
-		Block rollingBlock = Utils.createGenesis(networkParameters);
+		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 		for (int i = 1; i < 35; i++) {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			blockGraph.addBlock(rollingBlock, true, store);

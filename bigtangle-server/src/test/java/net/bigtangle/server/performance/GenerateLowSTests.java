@@ -19,6 +19,7 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
@@ -72,7 +73,7 @@ public class GenerateLowSTests {
         final TransactionOutput output = new TransactionOutput(params, inputTransaction, Coin.ZERO, key.toAddress(params));
 
         inputTransaction.addOutput(output);
-        outputTransaction.addInput(Utils.createGenesis(params).getHash(), output);
+        outputTransaction.addInput(UtilGeneseBlock.createGenesis(params).getHash(), output);
         outputTransaction.addOutput(Coin.ZERO, new ECKey(secureRandom).toAddress(params));
 
         addOutputs(outputTransaction, bag);

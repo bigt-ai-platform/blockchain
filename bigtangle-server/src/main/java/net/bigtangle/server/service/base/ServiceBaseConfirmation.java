@@ -57,6 +57,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
@@ -2031,7 +2032,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		oldBlocks.sort(new SortbyBlock());
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
-			if (!oldBlock.getHash().equals(Utils.createGenesis(networkParameters) .getHash())) {
+			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters) .getHash())) {
 				// Unconfirm
 				confirmExecution(getBlockWrap(oldBlock.getHash(), store), -1, false, store);
 			}

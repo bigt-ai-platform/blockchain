@@ -7,6 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 
 public class RandomNumberBlock extends AbstractIntegrationTest {
@@ -22,7 +23,7 @@ public class RandomNumberBlock extends AbstractIntegrationTest {
 
 	public void createRandomNumber(List<Block> a1, List<Integer> rnumbers) throws Exception {
 
-		Block r1 = Utils.createGenesis(networkParameters);
+		Block r1 = UtilGeneseBlock.createGenesis(networkParameters);
 
 		r1 = createReward(r1, a1);
 

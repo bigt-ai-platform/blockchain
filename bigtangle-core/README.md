@@ -25,7 +25,7 @@ mvn clean package -DskipTests=true
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
  
 
-translate     bigtangle-core/src/main/java/net/bigtangle/core/N.java to typescript bigtangle-typescript/src/net/bigtangle/params/
+translate  all java and methods from   bigtangle-core/src/main/java/net/bigtangle/params/ to typescript bigtangle-typescript/src/net/bigtangle/params/
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
 bigtangle-typescript/src/net/bigtangle/utils

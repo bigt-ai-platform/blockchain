@@ -11,6 +11,7 @@ import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
@@ -35,7 +36,7 @@ public class TokenDomainnameService {
 
     public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,BlockStoreInterface store)
             throws BlockStoreException {
-        if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ) .getHashAsString())) {
+        if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ) .getHashAsString())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();
@@ -61,7 +62,7 @@ public class TokenDomainnameService {
      */
     public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,BlockStoreInterface store)
             throws BlockStoreException {
-        if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHash())) {
+        if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
                 ECKey ecKey = permissionDomainname.getOutKey();

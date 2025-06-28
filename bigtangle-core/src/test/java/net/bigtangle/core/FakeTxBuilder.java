@@ -37,7 +37,7 @@ public class FakeTxBuilder {
         Transaction prevTx = FakeTxBuilder.createFakeTx(params, Coin.COIN, new ECKey().toAddress(params));
         Transaction tx = new Transaction(params);
         tx.addOutput(output);
-        tx.addInput(Utils.createGenesis(params) .getHash(), prevTx.getOutput(0));
+        tx.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevTx.getOutput(0));
         return tx;
     }
 
@@ -75,7 +75,7 @@ public class FakeTxBuilder {
         TransactionOutput prevOut = new TransactionOutput(params, prevTx, value, to);
         prevTx.addOutput(prevOut);
         // Connect it.
-        t.addInput(Utils.createGenesis(params) .getHash(), prevOut).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
+        t.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
         // Fake signature.
         // Serialize/deserialize to ensure internal state is stripped, as if it
         // had been read from the wire.
@@ -113,7 +113,7 @@ public class FakeTxBuilder {
                 Coin.valueOf(split, NetworkParameters.BIGTANGLE_TOKENID), to);
         prevTx1.addOutput(prevOut1);
         // Connect it.
-        t.addInput(Utils.createGenesis(params) .getHash(), prevOut1).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
+        t.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut1).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
         // Fake signature.
 
         // Do it again
@@ -121,7 +121,7 @@ public class FakeTxBuilder {
         TransactionOutput prevOut2 = new TransactionOutput(params, prevTx2,
                 Coin.valueOf(value.getValue().longValue() - split, NetworkParameters.BIGTANGLE_TOKENID), to);
         prevTx2.addOutput(prevOut2);
-        t.addInput(Utils.createGenesis(params) .getHash(), prevOut2).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
+        t.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut2).setScriptSig(ScriptBuilder.createInputScript(TransactionSignature.dummy()));
 
         // Serialize/deserialize to ensure internal state is stripped, as if it
         // had been read from the wire.
@@ -156,7 +156,7 @@ public class FakeTxBuilder {
         TransactionOutput prevOut = new TransactionOutput(params, prevTx, value, to);
         prevTx.addOutput(prevOut);
         // Connect it.
-        t.addInput(Utils.createGenesis(params) .getHash(), prevOut);
+        t.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut);
         // Serialize/deserialize to ensure internal state is stripped, as if it
         // had been read from the wire.
         return roundTripTransaction(params, t);
@@ -189,8 +189,8 @@ public class FakeTxBuilder {
         prevTx.addOutput(prevOut);
 
         // Connect up the txes
-        prevTx.addInput(Utils.createGenesis(params) .getHash(), feederOut);
-        t.addInput(Utils.createGenesis(params) .getHash(), prevOut);
+        prevTx.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), feederOut);
+        t.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut);
 
         // roundtrip the tx so that they are just like they would be from the
         // wire
@@ -233,10 +233,10 @@ public class FakeTxBuilder {
         doubleSpends.t1 = new Transaction(params);
         TransactionOutput o1 = new TransactionOutput(params, doubleSpends.t1, value, to);
         doubleSpends.t1.addOutput(o1);
-        doubleSpends.t1.addInput(Utils.createGenesis(params) .getHash(), prevOut);
+        doubleSpends.t1.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut);
 
         doubleSpends.t2 = new Transaction(params);
-        doubleSpends.t2.addInput(Utils.createGenesis(params) .getHash(), prevOut);
+        doubleSpends.t2.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevOut);
         TransactionOutput o2 = new TransactionOutput(params, doubleSpends.t2, value, someBadGuy);
         doubleSpends.t2.addOutput(o2);
 

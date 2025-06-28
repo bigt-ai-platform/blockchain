@@ -96,6 +96,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.BlockStoreException;
@@ -440,7 +441,7 @@ public abstract class AbstractIntegrationTest {
 		Coin coinbase = new Coin(amount, testKey.getPubKey());
 		// BigInteger amount = coinbase.getValue();
 		Token tokens = Token.buildSimpleTokenInfo(true, null, testKey.getPublicKeyAsHex(), testKey.getPublicKeyAsHex(),
-				"", 1, 0, amount, true, decimal, Utils.createGenesis(networkParameters).getHashAsString());
+				"", 1, 0, amount, true, decimal, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
@@ -1037,12 +1038,12 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, Utils.createGenesis(networkParameters).getHashAsString(),
+		return testCreateToken(outKey, tokennameName, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(),
 				blocksAddedAll);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName) throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, Utils.createGenesis(networkParameters).getHashAsString(), null);
+		return testCreateToken(outKey, tokennameName, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(), null);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, String domainpre, List<Block> blocksAddedAll)
@@ -1171,7 +1172,7 @@ public abstract class AbstractIntegrationTest {
 		;
 
 		Token tokens = Token.buildSimpleTokenInfo(true, tokenIndexResponse.getBlockhash(), tokenid, "test", "test", 3,
-				tokenindex_, amount, false, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				tokenindex_, amount, false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		KeyValue kv = new KeyValue();
 		kv.setKey("testkey");
 		kv.setKey("testvalue");
@@ -1278,7 +1279,7 @@ public abstract class AbstractIntegrationTest {
 		Sha256Hash prevblockhash = tokenIndexResponse.getBlockhash();
 
 		Token tokens = Token.buildSimpleTokenInfo(true, prevblockhash, tokenid, "test", "test", 3, tokenindex_,
-				basecoin.getValue(), false, 0, Utils.createGenesis(networkParameters).getHashAsString());
+				basecoin.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
 		ECKey key1 = keys.get(1);

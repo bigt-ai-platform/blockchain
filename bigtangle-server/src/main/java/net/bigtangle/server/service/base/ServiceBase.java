@@ -50,6 +50,7 @@ import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserData;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.UTXOProviderException;
@@ -109,7 +110,7 @@ public abstract class ServiceBase {
 	 */
 	public List<MultiSignAddress> queryDomainnameTokenMultiSignAddresses(Sha256Hash domainNameBlockHash,
 			BlockStoreInterface store) throws BlockStoreException {
-		if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHash())) {
+		if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
 				ECKey ecKey = permissionDomainname.getOutKey();
@@ -379,7 +380,7 @@ public abstract class ServiceBase {
 			currRewardBlock = getBlock(currPrevRewardHash, store);
 			RewardInfo currRewardInfo = new RewardInfo()
 					.parseChecked(currRewardBlock.getTransactions().get(0).getData());
-			if (currPrevRewardHash.equals(Utils.createGenesis(networkParameters ).getHash()))
+			if (currPrevRewardHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash()))
 				return 0;
 
 			currPrevRewardHash = currRewardInfo.getPrevRewardHash();
@@ -439,7 +440,7 @@ public abstract class ServiceBase {
 
 	public PermissionedAddressesResponse queryDomainnameTokenPermissionedAddresses(String domainNameBlockHash,
 			BlockStoreInterface store) throws BlockStoreException {
-		if (domainNameBlockHash.equals(Utils.createGenesis(networkParameters ).getHashAsString())) {
+		if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHashAsString())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
 				ECKey ecKey = permissionDomainname.getOutKey();

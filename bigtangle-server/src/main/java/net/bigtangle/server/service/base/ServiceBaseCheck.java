@@ -48,6 +48,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
@@ -804,7 +805,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		Token prevDomain = null;
 
 		if (!currentToken.getToken().getDomainNameBlockHash()
-				.equals(Utils.createGenesis(networkParameters ).getHashAsString())) {
+				.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHashAsString())) {
 
 			prevDomain = store.getTokenByBlockHash(Sha256Hash.wrap(currentToken.getToken().getDomainNameBlockHash()));
 			if (prevDomain == null) {
@@ -907,7 +908,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 			// Any first time issuances also require the domain signatures
 			List<MultiSignAddress> prevDomainPermissionedAddresses = queryDomainnameTokenMultiSignAddresses(
-					prevDomain == null ? Utils.createGenesis(networkParameters ).getHash() : prevDomain.getBlockHash(),
+					prevDomain == null ? UtilGeneseBlock.createGenesis(networkParameters ).getHash() : prevDomain.getBlockHash(),
 					store);
 			SolidityState domainPermission = checkDomainPermission(prevDomainPermissionedAddresses,
 					txSignatures.getMultiSignBies(), 1,
