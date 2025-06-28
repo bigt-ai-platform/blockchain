@@ -43,6 +43,7 @@ import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.DumpedPrivateKey;
 import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Protos.ScryptParameters;

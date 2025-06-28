@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.params.NetworkParameters;
 
  
 public class DeleteTablesTest extends AbstractIntegrationTest {

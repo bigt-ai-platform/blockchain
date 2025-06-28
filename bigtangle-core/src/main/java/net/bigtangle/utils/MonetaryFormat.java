@@ -33,7 +33,7 @@ import java.util.Locale;
 
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.Monetary;
-import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * <p>

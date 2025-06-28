@@ -24,6 +24,7 @@ import net.bigtangle.apps.data.IdentityCore;
 import net.bigtangle.apps.data.IdentityData;
 import net.bigtangle.apps.data.SignedData;
 import net.bigtangle.crypto.ECIESCoder;
+import net.bigtangle.params.NetworkParameters;
 
 public class SerializationTest {
 

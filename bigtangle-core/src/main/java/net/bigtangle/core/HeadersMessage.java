@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
 
 import java.io.IOException;
 import java.io.OutputStream;

@@ -25,6 +25,8 @@ import java.util.Arrays;
 
 import com.google.common.math.LongMath;
 
+import net.bigtangle.params.NetworkParameters;
+
 /**
  * Represents a token as Coin value. This class is immutable. Only the bitangle
  * coin has 2 digit decimal.

@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.ScriptOpCodes;
 //TODO no binary blockBytes
 @Disabled

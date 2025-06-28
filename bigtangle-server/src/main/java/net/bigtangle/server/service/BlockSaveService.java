@@ -10,9 +10,9 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.kafka.KafkaMessageProducer;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;

@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * This test is adapted from Armory's BIP 32 tests.

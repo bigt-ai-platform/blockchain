@@ -33,6 +33,7 @@ import com.google.common.base.Objects;
 
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.ScriptException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;

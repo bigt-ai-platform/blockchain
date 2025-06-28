@@ -14,10 +14,10 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.store.BlockStoreInterface;

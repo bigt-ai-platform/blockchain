@@ -25,6 +25,7 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 
 import net.bigtangle.core.*;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Base58;
 
 import org.spongycastle.crypto.params.KeyParameter;

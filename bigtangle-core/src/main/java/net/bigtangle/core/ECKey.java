@@ -83,6 +83,7 @@ import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.LazyECPoint;
 import net.bigtangle.crypto.LinuxSecureRandom;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.DumpedPrivateKey;
 import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Wallet;

@@ -60,6 +60,7 @@ import com.google.common.primitives.UnsignedLongs;
 
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.utils.Base58;

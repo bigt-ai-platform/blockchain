@@ -27,13 +27,13 @@ import com.google.common.collect.Lists;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 
 public class DeterministicKeyChainTest {
 	private DeterministicKeyChain chain;

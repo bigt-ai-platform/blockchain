@@ -22,6 +22,7 @@ package net.bigtangle.core;
 import javax.annotation.Nullable;
 
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * <p>Represents a Message type that can be contained within another Message.  ChildMessages that have a cached

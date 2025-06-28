@@ -12,6 +12,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import net.bigtangle.params.NetworkParameters;
+
 public class OrderOpenInfo extends DataClass implements java.io.Serializable {
 
     private static final long FROMTIME = System.currentTimeMillis() / 1000 - 5;

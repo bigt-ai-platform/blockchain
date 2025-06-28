@@ -6,6 +6,7 @@
 package net.bigtangle.server.core;
 
 import net.bigtangle.core.*;
+import net.bigtangle.params.NetworkParameters;
 
 import java.io.IOException;
 import java.util.HashSet;

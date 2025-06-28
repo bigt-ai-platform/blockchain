@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableList;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.DeterministicKey;
@@ -36,6 +35,7 @@ import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.MnemonicCode;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 
 public class KeyChainGroupTest {
 	// Number of initial keys in this tests HD wallet, including interior keys.

@@ -31,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.params.ProtocolVersion;
 
 /**
  * <p>A Message is a data structure that can be serialized/deserialized using the Bitcoin serialization format.
@@ -113,12 +115,12 @@ public abstract class Message {
     
 
     protected Message(NetworkParameters params, byte[] payload, int offset) throws ProtocolException {
-        this(params, payload, offset, params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.CURRENT),
+        this(params, payload, offset, params.getProtocolVersionNum( ProtocolVersion.CURRENT),
              params.getDefaultSerializer(), UNKNOWN_LENGTH);
     }
 
     protected Message(NetworkParameters params, byte[] payload, int offset, MessageSerializer serializer, int length) throws ProtocolException {
-        this(params, payload, offset, params.getProtocolVersionNum(NetworkParameters.ProtocolVersion.CURRENT),
+        this(params, payload, offset, params.getProtocolVersionNum( ProtocolVersion.CURRENT),
              serializer, length);
     }
 

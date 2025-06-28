@@ -23,6 +23,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.utils.Gzip;
 
@@ -68,7 +69,7 @@ public class UtilsTest {
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
-			block.solve(MainNetParams.get().maxTargetReward);
+			block.solve(MainNetParams.get().getMaxTargetReward());
 			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
 	}

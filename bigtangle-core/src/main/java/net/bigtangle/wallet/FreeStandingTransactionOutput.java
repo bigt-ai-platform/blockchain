@@ -4,10 +4,10 @@
  *******************************************************************************/
 package net.bigtangle.wallet;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.params.NetworkParameters;
 
 public class FreeStandingTransactionOutput extends TransactionOutput {
     

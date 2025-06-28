@@ -6,6 +6,8 @@ package net.bigtangle.core;
 
 import java.math.BigInteger;
 
+import net.bigtangle.params.NetworkParameters;
+
 public class Token extends SpentBlock implements java.io.Serializable {
 
     private static final long serialVersionUID = 6992138619113601243L;

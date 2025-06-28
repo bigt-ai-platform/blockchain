@@ -23,6 +23,7 @@ package net.bigtangle.core;
 import com.google.common.base.Objects;
 
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
 
 import java.io.IOException;
 import java.io.OutputStream;

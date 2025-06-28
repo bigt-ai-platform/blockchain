@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.WrongNetworkException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.Networks;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
@@ -113,7 +114,7 @@ public class AddressTest {
     public void p2shAddress() throws Exception {
         // Test that we can construct P2SH addresses
         Address mainNetP2SHAddress = Address.fromBase58(MainNetParams.get(), "35b9vsyH1KoFT5a5KtrKusaCcPLkiSo1tU");
-        assertEquals(mainNetP2SHAddress.version, MainNetParams.get().p2shHeader);
+        assertEquals(mainNetP2SHAddress.version, MainNetParams.get().getP2SHHeader());
         assertTrue(mainNetP2SHAddress.isP2SHAddress());
 //        Address testNetP2SHAddress = Address.fromBase58(MainNetParams.get(), "2MuVSxtfivPKJe93EC1Tb9UhJtGhsoWEHCe");
 //        assertEquals(testNetP2SHAddress.version, MainNetParams.get().p2shHeader);

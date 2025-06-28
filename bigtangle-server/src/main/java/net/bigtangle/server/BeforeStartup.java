@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
-import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ServerConfiguration;

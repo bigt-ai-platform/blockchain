@@ -15,7 +15,6 @@ import java.util.TreeMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancelInfo;
 import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
@@ -25,6 +24,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.ordermatch.TradePair;
 import net.bigtangle.ordermatch.OrderBookEvents.Event;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;

@@ -8,12 +8,12 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MultiSignAddress;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.GetDomainTokenResponse;
 import net.bigtangle.response.PermissionedAddressesResponse;

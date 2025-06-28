@@ -10,8 +10,8 @@ import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 
 public class UtilsTest {
 

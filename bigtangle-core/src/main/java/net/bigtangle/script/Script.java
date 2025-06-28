@@ -28,6 +28,7 @@ import net.bigtangle.core.*;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.ScriptException;
+import net.bigtangle.params.NetworkParameters;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

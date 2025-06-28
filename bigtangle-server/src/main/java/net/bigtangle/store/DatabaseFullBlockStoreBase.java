@@ -35,7 +35,6 @@ import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
@@ -48,6 +47,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.UTXOProviderException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
@@ -697,7 +697,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	/**
 	 * Create a new store for the given
-	 * {@link net.bigtangle.core.NetworkParameters}.
+	 * {@link net.bigtangle.params.NetworkParameters}.
 	 * 
 	 * @param params The network.
 	 * @throws BlockStoreException If the store couldn't be created.

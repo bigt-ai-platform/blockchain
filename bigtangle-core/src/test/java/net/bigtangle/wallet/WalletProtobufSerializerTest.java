@@ -21,8 +21,8 @@ import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 
 public class WalletProtobufSerializerTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();

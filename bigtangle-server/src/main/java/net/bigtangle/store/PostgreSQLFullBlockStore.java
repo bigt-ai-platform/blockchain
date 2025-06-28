@@ -10,8 +10,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.service.base.MinioService;
  
 

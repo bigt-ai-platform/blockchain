@@ -29,6 +29,7 @@ import javax.annotation.Nullable;
 
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.WrongNetworkException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.Networks;
 import net.bigtangle.script.Script;
 
@@ -143,7 +144,7 @@ public class Address extends VersionedChecksummedBytes {
      */
     public boolean isP2SHAddress() {
         final NetworkParameters parameters = getParameters();
-        return parameters != null && this.version == parameters.p2shHeader;
+        return parameters != null && this.version == parameters.getP2SHHeader();
     }
 
     /**

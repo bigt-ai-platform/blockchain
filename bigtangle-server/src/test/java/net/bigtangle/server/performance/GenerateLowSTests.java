@@ -16,7 +16,6 @@ import static net.bigtangle.script.ScriptOpCodes.getOpCodeName;
 
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
@@ -24,6 +23,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.script.ScriptChunk;

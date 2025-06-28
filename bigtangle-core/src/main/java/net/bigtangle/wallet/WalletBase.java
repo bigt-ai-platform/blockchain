@@ -42,7 +42,6 @@ import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
@@ -51,6 +50,7 @@ import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.KeyCrypterScrypt;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.pool.server.ServerPool;
 import net.bigtangle.script.Script;
 import net.bigtangle.signers.MissingSigResolutionSigner;

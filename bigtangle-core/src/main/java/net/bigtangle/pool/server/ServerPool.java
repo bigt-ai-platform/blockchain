@@ -17,8 +17,8 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.TXReward;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.response.ServerInfo;

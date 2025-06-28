@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * Alerts are signed messages that are broadcast on the peer-to-peer network if they match a hard-coded signing key.

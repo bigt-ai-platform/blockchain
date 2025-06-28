@@ -19,8 +19,8 @@ import org.springframework.context.annotation.Configuration;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
 

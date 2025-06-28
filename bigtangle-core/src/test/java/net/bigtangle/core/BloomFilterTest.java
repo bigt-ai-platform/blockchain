@@ -14,6 +14,7 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.DumpedPrivateKey;
 import net.bigtangle.wallet.KeyChainGroup;
 

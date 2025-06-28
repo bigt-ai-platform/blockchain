@@ -21,7 +21,6 @@ import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
@@ -29,6 +28,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.UTXOProviderException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.GetOutputsResponse;

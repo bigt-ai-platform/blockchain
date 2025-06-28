@@ -51,7 +51,6 @@ import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicHierarchy;
@@ -63,6 +62,7 @@ import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.LazyECPoint;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.utils.Threading;
 
@@ -82,9 +82,9 @@ import net.bigtangle.utils.Threading;
  * A watching wallet is not instantiated using the public part of the master key as you may imagine. Instead, you
  * need to take the account key (first child of the master key) and provide the public part of that to the watching
  * wallet instead. You can do this by calling {@link #getWatchingKey()} and then serializing it with
- * {@link net.bigtangle.crypto.DeterministicKey#serializePubB58(net.bigtangle.core.NetworkParameters)}. The resulting "xpub..." string encodes
+ * {@link net.bigtangle.crypto.DeterministicKey#serializePubB58(net.bigtangle.params.NetworkParameters)}. The resulting "xpub..." string encodes
  * sufficient information about the account key to create a watching chain via
- * {@link net.bigtangle.crypto.DeterministicKey#deserializeB58(net.bigtangle.crypto.DeterministicKey, String, net.bigtangle.core.NetworkParameters)}
+ * {@link net.bigtangle.crypto.DeterministicKey#deserializeB58(net.bigtangle.crypto.DeterministicKey, String, net.bigtangle.params.NetworkParameters)}
  * (with null as the first parameter) and then
  * {@link DeterministicKeyChain#DeterministicKeyChain(net.bigtangle.crypto.DeterministicKey)}.</p>
  *

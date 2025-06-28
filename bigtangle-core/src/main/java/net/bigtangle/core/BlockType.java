@@ -1,5 +1,7 @@
 package net.bigtangle.core;
 
+import net.bigtangle.params.NetworkParameters;
+
 public enum BlockType {
 	/**
 	 * To add new BLOCKTYPES to implement type specific function The order can not

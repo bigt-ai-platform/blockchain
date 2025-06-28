@@ -48,6 +48,7 @@ import net.bigtangle.exception.VerificationException.MerkleRootMismatchException
 import net.bigtangle.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.exception.VerificationException.SigOpsException;
 import net.bigtangle.exception.VerificationException.TimeTravelerException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 

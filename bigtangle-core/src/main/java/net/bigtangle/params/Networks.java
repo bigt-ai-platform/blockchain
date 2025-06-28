@@ -22,8 +22,6 @@ package net.bigtangle.params;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 
-import net.bigtangle.core.NetworkParameters;
-
 import java.util.Collection;
 import java.util.Set;
 

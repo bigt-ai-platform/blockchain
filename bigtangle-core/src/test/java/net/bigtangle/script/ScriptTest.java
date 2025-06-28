@@ -45,7 +45,6 @@ import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Transaction.SigHash;
@@ -58,6 +57,7 @@ import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script.VerifyFlag;
 import net.bigtangle.utils.DumpedPrivateKey;
 

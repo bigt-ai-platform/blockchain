@@ -56,7 +56,6 @@ import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancelInfo;
 import net.bigtangle.core.OrderOpenInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -79,6 +78,7 @@ import net.bigtangle.exception.VerificationException.InvalidTransactionDataExcep
 import net.bigtangle.exception.VerificationException.OrderImpossibleException;
 import net.bigtangle.exception.VerificationException.OrderWithRemainderException;
 import net.bigtangle.ordermatch.MatchLastdayResult;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.pool.server.ServerPool;
 import net.bigtangle.response.GetDomainTokenResponse;

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 
 public class MessageTest {
 

@@ -28,7 +28,6 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
@@ -36,6 +35,7 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.response.GetTXRewardListResponse;

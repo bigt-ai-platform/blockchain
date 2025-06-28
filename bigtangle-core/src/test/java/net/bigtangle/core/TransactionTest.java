@@ -21,6 +21,7 @@ import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 

@@ -9,9 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.AbstractStreamHandler;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.store.BlockStoreInterface;

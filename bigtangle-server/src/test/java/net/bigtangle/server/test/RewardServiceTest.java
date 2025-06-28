@@ -23,12 +23,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.UTXOProviderException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.server.service.base.ServiceBaseConnect;

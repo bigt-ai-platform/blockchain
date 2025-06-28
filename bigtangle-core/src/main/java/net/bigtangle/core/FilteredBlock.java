@@ -33,6 +33,7 @@ import com.google.common.base.Objects;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.MerkleRootMismatchException;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * <p>A FilteredBlock is used to relay a block with its transactions filtered using a {@link BloomFilter}. It consists

@@ -7,6 +7,8 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.bigtangle.params.NetworkParameters;
+
 public class Tokensums  extends DataClass implements java.io.Serializable {
     /**
      * 

@@ -33,6 +33,7 @@ import com.google.common.base.Objects;
 
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 
 /**
  * <p>A data structure that contains proofs of block inclusion for one or more transactions, in an efficient manner.</p>

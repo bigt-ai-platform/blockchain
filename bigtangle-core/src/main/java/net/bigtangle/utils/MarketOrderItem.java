@@ -5,9 +5,9 @@ import java.util.Date;
 import java.util.Map;
 
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Token;
+import net.bigtangle.params.NetworkParameters;
 
 public class MarketOrderItem implements java.io.Serializable {
 

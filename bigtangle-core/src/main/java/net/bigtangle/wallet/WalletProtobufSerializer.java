@@ -33,11 +33,11 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.WireFormat;
 
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterScrypt;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.wallet.Protos.Wallet.EncryptionType;
 
 /**

@@ -28,10 +28,8 @@ import com.google.common.collect.ImmutableList;
  * Parameters for the main production network on which people trade goods and
  * services.
  */
-public class MainNetParams extends AbstractBitcoinNetParams {
-    public static final int MAINNET_MAJORITY_WINDOW = 1000;
-    public static final int MAINNET_MAJORITY_REJECT_BLOCK_OUTDATED = 950;
-    public static final int MAINNET_MAJORITY_ENFORCE_BLOCK_UPGRADE = 750;
+public class MainNetParams extends NetworkParameters {
+ 
 
     public MainNetParams() {
         super();
@@ -59,21 +57,11 @@ public class MainNetParams extends AbstractBitcoinNetParams {
      
        
         id = ID_MAINNET;
-        subsidyDecreaseBlockCount = 210000;
+      
         spendableCoinbaseDepth = 100;
 
         dnsSeeds = new String[] {};
-        // httpSeeds = new HttpDiscovery.Details[] {
-        // // Andreas Schildbach
-        // new HttpDiscovery.Details(
-        // ECKey.fromPublicOnly(Utils.HEX.decode("0238746c59d46d5408bf8b1d0af5740fe1a6e1703fcb56b2953f0b965c740d256f")),
-        // URI.create("http://httpseed.bitcoin.schildbach.de/peers")
-        // )
-        // };
-
-        addrSeeds = new int[] {};
- 
-        // seeds for servers
+       
 
     }
 

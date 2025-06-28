@@ -3,7 +3,7 @@ package net.bigtangle.core;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
- 
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.ProbabilityBlock;
 
 public class BlockEvaluationDisplay extends BlockEvaluation {

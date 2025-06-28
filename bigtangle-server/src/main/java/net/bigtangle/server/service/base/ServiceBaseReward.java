@@ -8,9 +8,9 @@ import java.util.Set;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.CacheBlockService;

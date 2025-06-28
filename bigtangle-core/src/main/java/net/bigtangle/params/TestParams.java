@@ -14,7 +14,7 @@ import com.google.common.collect.ImmutableList;
  * Parameters for the main production network on which people trade goods and
  * services.
  */
-public class TestParams extends AbstractBitcoinNetParams {
+public class TestParams extends NetworkParameters {
 
     public TestParams() {
         super();

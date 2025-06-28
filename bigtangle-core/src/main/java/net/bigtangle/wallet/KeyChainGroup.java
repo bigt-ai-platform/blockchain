@@ -47,13 +47,13 @@ import com.google.protobuf.ByteString;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.HDUtils;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.LinuxSecureRandom;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 

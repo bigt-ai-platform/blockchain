@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.params.NetworkParameters;
 
 public class MonetaryFormatTest {
 

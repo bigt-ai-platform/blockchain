@@ -27,7 +27,6 @@ import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.OrderCancel;
 import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
@@ -45,6 +44,7 @@ import net.bigtangle.exception.UTXOProviderException;
 import net.bigtangle.ordermatch.AVGMatchResult;
 import net.bigtangle.ordermatch.MatchLastdayResult;
 import net.bigtangle.ordermatch.MatchResult;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
@@ -87,7 +87,7 @@ public interface BlockStoreInterface {
 	void close() throws BlockStoreException;
 
 	/**
-	 * Get the {@link net.bigtangle.core.NetworkParameters} of this store.
+	 * Get the {@link net.bigtangle.params.NetworkParameters} of this store.
 	 * 
 	 * @return The network params.
 	 */

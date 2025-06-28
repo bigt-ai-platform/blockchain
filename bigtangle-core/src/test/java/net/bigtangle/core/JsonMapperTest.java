@@ -4,6 +4,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Json;
 
 public class JsonMapperTest {

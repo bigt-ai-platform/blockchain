@@ -18,6 +18,7 @@ import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.ScriptBuilder;
  
 
