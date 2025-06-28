@@ -20,50 +20,14 @@
  */
 package net.bigtangle.core;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
-import java.net.URL;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
-import java.util.TimeZone;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 
-import org.spongycastle.crypto.digests.RIPEMD160Digest;
-
-import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
-import com.google.common.io.BaseEncoding;
-import com.google.common.io.Resources;
-import com.google.common.primitives.Ints;
-import com.google.common.primitives.UnsignedLongs;
-
-import net.bigtangle.exception.AddressFormatException;
-import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.utils.Base58;
 
 /**
  * A collection of various utility methods that are helpful for working with the
@@ -103,7 +67,7 @@ public class UtilGeneseBlock {
 		            new HashSet<>(), 0L);
 		
 		    coinbase.setData(rewardInfo.toByteArray());
-		    Utils.add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
+		    add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
 		    genesisBlock.addTransaction(coinbase);
 		    genesisBlock.setNonce(0);
 		    genesisBlock.setHeight(0);
