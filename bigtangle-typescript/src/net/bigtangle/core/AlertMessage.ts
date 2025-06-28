@@ -1,5 +1,5 @@
 import { Message } from './Message';
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../params/NetworkParameters';
 import { ProtocolException } from '../exception/Exceptions';
 import { ECKey } from './ECKey';
 import { Sha256Hash } from './Sha256Hash';

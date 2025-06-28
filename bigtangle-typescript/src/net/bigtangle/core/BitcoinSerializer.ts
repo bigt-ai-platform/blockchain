@@ -1,5 +1,5 @@
 import { MessageSerializer } from './MessageSerializer';
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../params/NetworkParameters';
 import { ProtocolException } from '../exception/Exceptions';
 import { Message } from './Message';
 import { Block } from './Block';
@@ -168,7 +168,7 @@ export class BitcoinSerializer extends MessageSerializer {
     }
 
     public isParseRetainMode(): boolean {
-        return this.parseRetain;
+        return typeof this.parseRetain !== 'undefined' ? !!this.parseRetain : false;
     }
 
     public makeBloomFilter(payloadBytes: Buffer): BloomFilter {

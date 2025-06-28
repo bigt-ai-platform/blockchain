@@ -1,22 +1,27 @@
+// Utility class to hold all registered NetworkParameters types
+// Adapted from Java: net.bigtangle.params.Networks
+
 import { NetworkParameters } from './NetworkParameters';
 import { MainNetParams } from './MainNetParams';
 
 export class Networks {
-    private static networks: NetworkParameters[] = [MainNetParams.get()];
+    private static networks: Set<NetworkParameters> = new Set([MainNetParams.get()]);
 
-    public static get(): NetworkParameters[] {
-        return Networks.networks;
+    static get(): Set<NetworkParameters> {
+        return this.networks;
     }
 
-    public static register(network: NetworkParameters): void {
-        Networks.registerAll([network]);
+    static register(network: NetworkParameters): void {
+        this.networks.add(network);
     }
 
-    public static registerAll(networks: NetworkParameters[]): void {
-        Networks.networks = [...Networks.networks, ...networks];
+    static registerMany(networks: NetworkParameters[]): void {
+        for (const net of networks) {
+            this.networks.add(net);
+        }
     }
 
-    public static unregister(network: NetworkParameters): void {
-        Networks.networks = Networks.networks.filter(p => p !== network);
+    static unregister(network: NetworkParameters): void {
+        this.networks.delete(network);
     }
 }

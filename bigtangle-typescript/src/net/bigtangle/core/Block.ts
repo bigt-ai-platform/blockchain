@@ -1,12 +1,10 @@
-import { Message } from './Message';
-import { NetworkParameters } from './NetworkParameters';
+import { Message, TransactionInput, TransactionOutput } from './Message';
+import { NetworkParameters } from '../params/NetworkParameters';
 import {  VerificationException } from '../exception/VerificationException';
 
 import { MessageSerializer } from './MessageSerializer';
 import { Sha256Hash } from './Sha256Hash';
 import { Transaction } from './Transaction';
-import { TransactionInput } from './TransactionInput';
-import { TransactionOutput } from './TransactionOutput';
 import { VarInt } from './VarInt';
 import { UnsafeByteArrayOutputStream } from './UnsafeByteArrayOutputStream';
 import { Utils } from '../utils/Utils';
@@ -18,7 +16,7 @@ import { Coin } from './Coin';
 import { TokenInfo } from './TokenInfo';
 import { MemoInfo } from './MemoInfo';
 import { DataClassName } from './DataClassName';
-import { BlockType, BlockTypeConfigs, allowCoinbaseTransaction as blockTypeAllowCoinbaseTransaction, getMaxBlockSize as blockTypeGetMaxBlockSize } from './BlockType';
+import { BlockType,   allowCoinbaseTransaction as blockTypeAllowCoinbaseTransaction, getMaxBlockSize as blockTypeGetMaxBlockSize } from './BlockType';
 export class Block extends Message {
     private static readonly log = console;
 
@@ -485,7 +483,7 @@ export class Block extends Message {
         coinbase.setMemo(memoInfo ? memoInfo.toString() : null);
         const inputBuilder = new ScriptBuilder();
         inputBuilder.data(Buffer.from([Block.txCounter, (Block.txCounter++ >> 8)]));
-        coinbase.addInput(new TransactionInput(this.params, coinbase, Buffer.from(inputBuilder.build().getProgram())));
+        coinbase.addInput(new TransactionInput(this.params, coinbase, inputBuilder.build().getProgram()));  
         if (tokenInfo === null) {
             coinbase.addOutput(new TransactionOutput(this.params, coinbase, value, Buffer.from(ScriptBuilder.createOutputScript(ECKey.fromPublic(pubKeyTo)).getProgram())));
         } else {

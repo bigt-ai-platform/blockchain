@@ -1,4 +1,4 @@
-import { NetworkParameters } from './NetworkParameters';
+import { NetworkParameters } from '../params/NetworkParameters';
 
 export enum BlockType {
     BLOCKTYPE_INITIAL,
