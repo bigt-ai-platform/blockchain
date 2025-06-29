@@ -1,0 +1,19 @@
+version: '3.8'
+
+networks:
+  bigtangle-bridged-network:
+    driver: bridge
+
+services:
+  bigtangle-seeds:
+    image: bigtangle:latest
+    container_name: bigtangle
+    hostname: bigtangle
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "8089:8089"
+    environment:
+      SSL: "true"
+      KEYSTORE: /app/bigtangle-server/ca.pkcs12
+
