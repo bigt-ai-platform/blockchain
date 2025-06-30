@@ -26,7 +26,7 @@ import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.ScriptOpCodes;
 //TODO no binary blockBytes
-@Disabled
+ 
 public class BlockTest {
     private static final NetworkParameters PARAMS = MainNetParams.get();
 

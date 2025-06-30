@@ -45,7 +45,7 @@ public class DispatcherController {
 
 	public static List<ServerInfo> serverinfoList;
 	public static String PATH = "./logs/serverinfo.json";
-	@Autowired
+	//@Autowired
 	//protected SyncBlockService syncBlockService;
 
 	@SuppressWarnings("unchecked")

@@ -25,10 +25,14 @@ mvn clean package -DskipTests=true
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
  
 
-translate  all   methods from   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/wallet/MarriedKeyChain.java to src/net/bigtangle/wallet/
+translate  all   methods from   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/wallet/DeterministicKeyChain.java to src/net/bigtangle/wallet/
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
 bigtangle-typescript/src/net/bigtangle/utils
 bigtangle-typescript/src/net/bigtangle/exception
 bigtangle-typescript/src/net/bigtangle/params
 bigtangle-typescript/src/net/bigtangle/script
+ 
+
+translate /home/jcui/git/server/bigtangle-core/src/test/java/net/bigtangle/core/VarIntTest.java to test/core/VarIntTest.ts
+

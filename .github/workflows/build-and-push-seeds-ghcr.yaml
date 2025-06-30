@@ -1,19 +1,20 @@
 name: build-and-push-seeds-ghcr
+
 on:
   push:
     branches:
       - main
       - contract
   workflow_dispatch:
+
 env:
   REGISTRY: ghcr.io
   USERNAME: ${{ github.actor }}
   PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-  # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
- bigtangle-seeds-container-ghcr:
+  bigtangle-seeds-container-ghcr:
     if: github.repository == 'bigtangle/server'
     runs-on: ubuntu-latest
     permissions:
@@ -35,6 +36,12 @@ jobs:
           username: ${{ env.USERNAME }}
           password: ${{ env.PASSWORD }}
 
+      - name: Extract Maven POM version
+        id: get_version
+        run: |
+          VERSION=$(xmllint --xpath "/*[local-name()='project']/*[local-name()='version']/text()" pom.xml)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v4
@@ -42,7 +49,9 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,enable=true,priority=100,prefix=bigtangle-seeds:,suffix=,format=long
+            type=sha,enable=true,priority=100,prefix=bigtangle-seeds:,format=long
+            bigtangle-seeds:latest
+            bigtangle-seeds:${{ env.VERSION }}
 
       - name: Build and push Docker image
         id: build-and-push

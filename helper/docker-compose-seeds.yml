@@ -6,14 +6,14 @@ networks:
 
 services:
   bigtangle-seeds:
-    image: bigtangle:latest
-    container_name: bigtangle
-    hostname: bigtangle
+    image: ghcr.io/bigtangle/server:bigtangle-seeds-96c4e0c9a7d5d928551daa08a8946fdacea4b915
+    container_name: bigtangle-seeds
+    hostname: bigtangle-seeds
     networks:
       - bigtangle-bridged-network
     ports:
       - "8089:8089"
     environment:
       SSL: "true"
-      KEYSTORE: /app/bigtangle-server/ca.pkcs12
+      KEYSTORE: /app/bigtangle-seeds/ca.pkcs12
 
