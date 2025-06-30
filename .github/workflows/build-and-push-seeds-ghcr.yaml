@@ -1,4 +1,4 @@
-name: build-and-push-bigtangle-ghcr
+name: build-and-push-seeds-ghcr
 on:
   push:
     branches:
@@ -13,7 +13,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
- bigtangle-server-container-ghcr:
+ bigtangle-seeds-container-ghcr:
     if: github.repository == 'bigtangle/server'
     runs-on: ubuntu-latest
     permissions:
