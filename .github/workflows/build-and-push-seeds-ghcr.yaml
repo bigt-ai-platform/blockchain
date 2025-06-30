@@ -43,6 +43,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.USERNAME }}
           password: ${{ env.PASSWORD }}
+      # Get sanitized branch name
+      - name: Get branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | tr -cd '[:alnum:]._-' | tr '[:upper:]' '[:lower:]' | cut -c1-128)
+          echo "Original branch: $BRANCH_NAME"
+          echo "Sanitized branch: $SANITIZED_BRANCH"
+          echo "branch_name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Extract Docker metadata
         id: meta
@@ -51,8 +60,8 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ steps.maven-version.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=bigtangle-seeds-${{ steps.branch.outputs.branch_name }}-${{ steps.maven-version.outputs.version }}
+            type=raw,valuebigtangle-seeds-${{ steps.branch.outputs.branch_name }}-latest
             type=sha,enable=true,priority=100,prefix=bigtangle-seeds:,suffix=,format=long
 
       - name: Build and push Docker image
