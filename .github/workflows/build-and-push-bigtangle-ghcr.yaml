@@ -9,11 +9,10 @@ env:
   REGISTRY: ghcr.io
   USERNAME: ${{ github.actor }}
   PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-  # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
- bigtangle-server-container-ghcr:
+  bigtangle-server-container-ghcr:
     if: github.repository == 'bigtangle/server'
     runs-on: ubuntu-latest
     permissions:
@@ -24,6 +23,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required to get full commit history for version detection
+
+      # Extract version from pom.xml
+      - name: Get Maven version
+        id: maven-version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "Extracted version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup Docker buildx
         uses: docker/setup-buildx-action@v1
@@ -34,6 +43,15 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.USERNAME }}
           password: ${{ env.PASSWORD }}
+      # Get sanitized branch name
+      - name: Get branch name
+        id: branch
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | tr -cd '[:alnum:]._-' | tr '[:upper:]' '[:lower:]' | cut -c1-128)
+          echo "Original branch: $BRANCH_NAME"
+          echo "Sanitized branch: $SANITIZED_BRANCH"
+          echo "branch_name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Extract Docker metadata
         id: meta
@@ -42,7 +60,9 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha,enable=true,priority=100,prefix=bigtangle:,suffix=,format=long
+            type=raw,value=bigtangle-server-${{ steps.branch.outputs.branch_name }}-${{ steps.maven-version.outputs.version }}
+            type=raw,value=bigtangle-server-${{ steps.branch.outputs.branch_name }}-latest
+            type=sha,enable=true,priority=100,prefix=bigtangle-server:,suffix=,format=long
 
       - name: Build and push Docker image
         id: build-and-push
@@ -50,7 +70,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          file: ./helper/bigtangle/Dockerfile
+          file: ./helper/seeds/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
