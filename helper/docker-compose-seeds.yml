@@ -6,7 +6,7 @@ networks:
 
 services:
   bigtangle-seeds:
-    image: ghcr.io/bigtangle/server:latest
+    image: ghcr.io/bigtangle/server:bigtangle-seeds-contract-latest
 
     container_name: bigtangle-seeds
     hostname: bigtangle-seeds
