@@ -36,3 +36,6 @@ bigtangle-typescript/src/net/bigtangle/script
 
 translate /home/jcui/git/server/bigtangle-core/src/test/java/net/bigtangle/core/VarIntTest.java to test/core/VarIntTest.ts
 
+git config user.name "j0904"
+git config user.email ""
+

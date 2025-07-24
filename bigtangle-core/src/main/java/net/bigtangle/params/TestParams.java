@@ -25,8 +25,8 @@ public class TestParams extends NetworkParameters {
         maxTargetReward = maxTarget.subtract(new BigInteger("100"));
 
         dumpedPrivateKeyHeader = 128;
-        addressHeader = 0;
-        p2shHeader = 5;
+        addressHeader = 111;
+        p2shHeader = 196;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
 
         packetMagic = 0xf9beb4d9L;

@@ -44,6 +44,7 @@ import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.params.TestParams;
 import net.bigtangle.utils.DumpedPrivateKey;
 import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Protos.ScryptParameters;
@@ -114,6 +115,16 @@ public class ECKeyTest {
 		// TODO check why assertTrue(key.verify(Sha256Hash.ZERO_HASH.getBytes(), sig));
 	}
 
+	@Test
+	public void testKey() throws Exception {
+	  String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
+		assertTrue( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(TestParams.get()).toBase58()
+				.equals("mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"));
+		assertTrue( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58()
+				.equals("14a4YnkmSCBGUqcmN2PX3tzxFthrDmyDXE"));
+	//	log.debug( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58());
+	}
+	
 	// @Test
 	public void base58Encoding() throws Exception {
 		String addr = "mqAJmaxMcG5pPHHc3H3NtyXzY7kGbJLuMF";

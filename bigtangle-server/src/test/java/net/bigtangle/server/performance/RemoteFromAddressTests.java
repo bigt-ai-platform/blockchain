@@ -25,8 +25,10 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.params.TestParams;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.server.test.FromAddressTests;
 import net.bigtangle.utils.Json;
@@ -48,13 +50,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 		yuanWallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)),
 				contextRoot);
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
-		BigInteger b = BigInteger.ZERO;
-		for (Coin coin : list) {
-			if (coin.isBIG()) {
-				b = coin.getValue();
-			}
-		}
-
+	 
 		payBigTo(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)),
 				Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
 
@@ -73,6 +69,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 
 		}
 	}
+
 
 	private void createUserPay(ECKey accountKey) throws Exception {
 		List<ECKey> ulist = payKeys();
