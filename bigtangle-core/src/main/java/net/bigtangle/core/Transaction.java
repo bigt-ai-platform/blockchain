@@ -727,7 +727,7 @@ public class Transaction extends ChildMessage {
      */
     public TransactionInput addInput(Sha256Hash spendBlockHash, Sha256Hash spendTxHash, long outputIndex,
             Script script) {
-        return addInput(new TransactionInput(params, this, script.getProgram(),
+        return addInput(  TransactionInput.fromOutpoint(params, this, script.getProgram(),
                 new TransactionOutPoint(params, outputIndex, spendBlockHash, spendTxHash)));
     }
 
@@ -747,7 +747,7 @@ public class Transaction extends ChildMessage {
             SigHash sigHash, boolean anyoneCanPay) throws ScriptException {
         // Verify the API user didn't try to do operations out of order.
         checkState(!outputs.isEmpty(), "Attempting to sign tx without outputs.");
-        TransactionInput input = new TransactionInput(params, this, new byte[] {}, prevOut);
+        TransactionInput input =   TransactionInput.fromOutpoint(params, this, new byte[] {}, prevOut);
         addInput(input);
         Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, sigHash, anyoneCanPay);
         ECKey.ECDSASignature ecSig = sigKey.sign(hash);

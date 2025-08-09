@@ -41,364 +41,396 @@ import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;
 
 /**
- * <p>A transfer of coins from one address to another creates a transaction in which the outputs
- * can be claimed by the recipient in the input of another transaction. You can imagine a
- * transaction as being a module which is wired up to others, the inputs of one have to be wired
- * to the outputs of another. The exceptions are coinbase transactions, which create new coins.</p>
+ * <p>
+ * A transfer of coins from one address to another creates a transaction in
+ * which the outputs can be claimed by the recipient in the input of another
+ * transaction. You can imagine a transaction as being a module which is wired
+ * up to others, the inputs of one have to be wired to the outputs of another.
+ * The exceptions are coinbase transactions, which create new coins.
+ * </p>
  * 
- * <p>Instances of this class are not safe for use by multiple threads.</p>
+ * <p>
+ * Instances of this class are not safe for use by multiple threads.
+ * </p>
  */
 public class TransactionInput extends ChildMessage {
-    /** Magic sequence number that indicates there is no sequence number. */
-    public static final long NO_SEQUENCE = 0xFFFFFFFFL;
-    private static final byte[] EMPTY_ARRAY = new byte[0];
-    // Magic outpoint index that indicates the input is in fact unconnected.
-    private static final long UNCONNECTED = 0xFFFFFFFFL;
+	/** Magic sequence number that indicates there is no sequence number. */
+	public static final long NO_SEQUENCE = 0xFFFFFFFFL;
+	private static final byte[] EMPTY_ARRAY = new byte[0];
+	// Magic outpoint index that indicates the input is in fact unconnected.
+	private static final long UNCONNECTED = 0xFFFFFFFFL;
 
-    // Allows for altering transactions after they were broadcast. Values below NO_SEQUENCE-1 mean it can be altered.
-    private long sequence;
-    // Data needed to connect to the output of the transaction we're gathering coins from.
-    private TransactionOutPoint outpoint;
-    // The "script bytes" might not actually be a script. In coinbase transactions where new coins are minted there
-    // is no input transaction, so instead the scriptBytes contains some extra stuff (like a rollover nonce) that we
-    // don't care about much. The bytes are turned into a Script object (cached below) on demand via a getter.
-    private byte[] scriptBytes;
-    // The Script object obtained from parsing scriptBytes. Only filled in on demand and if the transaction is not
-    // coinbase.
-    private WeakReference<Script> scriptSig;
-    /** Value of the output connected to the input, if known. This field does not participate in equals()/hashCode(). */
-    @Nullable
-    private Coin value;
+	// Allows for altering transactions after they were broadcast. Values below
+	// NO_SEQUENCE-1 mean it can be altered.
+	private long sequence;
+	// Data needed to connect to the output of the transaction we're gathering coins
+	// from.
+	private TransactionOutPoint outpoint;
+	// The "script bytes" might not actually be a script. In coinbase transactions
+	// where new coins are minted there
+	// is no input transaction, so instead the scriptBytes contains some extra stuff
+	// (like a rollover nonce) that we
+	// don't care about much. The bytes are turned into a Script object (cached
+	// below) on demand via a getter.
+	private byte[] scriptBytes;
+	// The Script object obtained from parsing scriptBytes. Only filled in on demand
+	// and if the transaction is not
+	// coinbase.
+	private WeakReference<Script> scriptSig;
+	/**
+	 * Value of the output connected to the input, if known. This field does not
+	 * participate in equals()/hashCode().
+	 */
+	@Nullable
+	private Coin value;
 
-    /**
-     * Creates an input that connects to nothing - used only in creation of coinbase transactions.
-     */
-    public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] scriptBytes) {
-        this(params, parentTransaction, scriptBytes, new TransactionOutPoint(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
-    }
+	/**
+	 * Creates an input that connects to nothing - used only in creation of coinbase
+	 * transactions.
+	 */
+	public static TransactionInput fromScriptBytes(NetworkParameters params, @Nullable Transaction parentTransaction,
+			byte[] scriptBytes) {
+		return fromOutpoint(params, parentTransaction, scriptBytes,
+				new TransactionOutPoint(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
+	}
 
-    public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] scriptBytes,
-                            TransactionOutPoint outpoint) {
-        this(params, parentTransaction, scriptBytes, outpoint, null);
-    }
+	public static TransactionInput fromOutpoint(NetworkParameters params, @Nullable Transaction parentTransaction,
+			byte[] scriptBytes, TransactionOutPoint outpoint) {
+		return new TransactionInput(params, parentTransaction, scriptBytes, outpoint, null);
+	}
 
-    public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] scriptBytes,
-            TransactionOutPoint outpoint, @Nullable Coin value) {
-        super(params);
-        this.scriptBytes = scriptBytes;
-        this.outpoint = outpoint;
-        this.sequence = NO_SEQUENCE;
-        this.value = value;
-        setParent(parentTransaction);
-        length = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
-    }
+	public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] scriptBytes,
+			TransactionOutPoint outpoint, @Nullable Coin value) {
+		super(params);
+		this.scriptBytes = scriptBytes;
+		this.outpoint = outpoint;
+		this.sequence = NO_SEQUENCE;
+		this.value = value;
+		setParent(parentTransaction);
+		length = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
+	}
 
-    /**
-     * Creates an UNSIGNED input that links to the given output
-     */
-    TransactionInput(NetworkParameters params, Transaction parentTransaction, TransactionOutput output, Sha256Hash blockHash) {
-        super(params);
-        long outputIndex = output.getIndex();
-        if(output.getParentTransaction() != null ) {
-            outpoint = new TransactionOutPoint(params, outputIndex, blockHash, output.getParentTransaction());
-        } else {
-            outpoint = new TransactionOutPoint(params, blockHash, output);
-        }
-        scriptBytes = EMPTY_ARRAY;
-        sequence = NO_SEQUENCE;
-        setParent(parentTransaction);
-        this.value = output.getValue();
-        length = 41;
-    }
-
-    /**
-     * Deserializes an input message. This is usually part of a transaction message.
-     */
-    public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] payload, int offset) throws ProtocolException {
-        super(params, payload, offset);
-        setParent(parentTransaction);
-        this.value = null;
-    }
-
-    /**
-     * Deserializes an input message. This is usually part of a transaction message.
-     * @param params NetworkParameters object.
-     * @param payload Bitcoin protocol formatted byte array containing message content.
-     * @param offset The location of the first payload byte within the array.
-     * @param serializer the serializer to use for this message.
-     * @throws ProtocolException
-     */
-    public TransactionInput(NetworkParameters params, Transaction parentTransaction, byte[] payload, int offset, MessageSerializer serializer)
-            throws ProtocolException {
-        super(params, payload, offset, parentTransaction, serializer, UNKNOWN_LENGTH);
-        this.value = null;
-    }
-
-    @Override
-    protected void parse() throws ProtocolException {
-        outpoint = new TransactionOutPoint(params, payload, cursor, this, serializer);
-        cursor += outpoint.getMessageSize();
-        int scriptLen = (int) readVarInt();
-        length = cursor - offset + scriptLen + 4;
-        scriptBytes = readBytes(scriptLen);
-        sequence = readUint32();
-        if (readUint32() == 1) {
-            outpoint.connectedOutput = new TransactionOutput(params, (Transaction) this.parent, payload, cursor);
-            cursor += outpoint.connectedOutput.getMessageSize();
-        }
-    }
-
-    @Override
-    protected void bitcoinSerializeToStream(OutputStream stream) throws IOException {
-        outpoint.bitcoinSerialize(stream);
-        stream.write(new VarInt(scriptBytes.length).encode());
-        stream.write(scriptBytes);
-        Utils.uint32ToByteStreamLE(sequence, stream);
-        Utils.uint32ToByteStreamLE(this.outpoint.connectedOutput != null ? 1 : 0, stream);
-        if (this.outpoint.connectedOutput != null) {
-            this.outpoint.connectedOutput.bitcoinSerializeToStream(stream);
-        }
-    }
-
-    /**
-     * Coinbase transactions have special inputs with hashes of zero. If this is such an input, returns true.
-     */
-    public boolean isCoinBase() {
-        return outpoint.isCoinBase();  // -1 but all is serialized to the wire as unsigned int.
-    }
-
-    /**
-     * Returns the script that is fed to the referenced output (scriptPubKey) script in order to satisfy it: usually
-     * contains signatures and maybe keys, but can contain arbitrary data if the output script accepts it.
-     */
-    public Script getScriptSig() throws ScriptException {
-        // Transactions that generate new coins don't actually have a script. Instead this
-        // parameter is overloaded to be something totally different.
-        Script script = scriptSig == null ? null : scriptSig.get();
-        if (script == null) {
-            script = new Script(scriptBytes);
-            scriptSig = new WeakReference<Script>(script);
-        }
-        return script;
-    }
-
-    /** Set the given program as the scriptSig that is supposed to satisfy the connected output script. */
-    public void setScriptSig(Script scriptSig) {
-        this.scriptSig = new WeakReference<Script>(checkNotNull(scriptSig));
-        // TODO: This should all be cleaned up so we have a consistent internal representation.
-        setScriptBytes(scriptSig.getProgram());
-    }
-
-    /**
-     * Convenience method that returns the from address of this input by parsing the scriptSig. The concept of a
-     * "from address" is not well defined in Bitcoin and you should not assume that senders of a transaction can
-     * actually receive coins on the same address they used to sign (e.g. this is not true for shared wallets).
-     */
-    public Address getFromAddress() throws ScriptException {
-        if (isCoinBase()) {
-            throw new ScriptException(
-                    "This is a coinbase transaction which generates new coins. It does not have a from address.");
-        }
-        return getScriptSig().getFromAddress(params);
-    }
-
-    /**
-     * Sequence numbers allow participants in a multi-party transaction signing protocol to create new versions of the
-     * transaction independently of each other. Newer versions of a transaction can replace an existing version that's
-     * in nodes memory pools if the existing version is time locked. See the Contracts page on the Bitcoin wiki for
-     * examples of how you can use this feature to build contract protocols.
-     */
-    public long getSequenceNumber() {
-        return sequence;
-    }
-
-    /**
-     * Sequence numbers allow participants in a multi-party transaction signing protocol to create new versions of the
-     * transaction independently of each other. Newer versions of a transaction can replace an existing version that's
-     * in nodes memory pools if the existing version is time locked. See the Contracts page on the Bitcoin wiki for
-     * examples of how you can use this feature to build contract protocols.
-     */
-    public void setSequenceNumber(long sequence) {
-        unCache();
-        this.sequence = sequence;
-    }
-
-    /**
-     * @return The previous output transaction reference, as an OutPoint structure.  This contains the 
-     * data needed to connect to the output of the transaction we're gathering coins from.
-     */
-    public TransactionOutPoint getOutpoint() {
-        return outpoint;
-    }
-
-    /**
-     * The "script bytes" might not actually be a script. In coinbase transactions where new coins are minted there
-     * is no input transaction, so instead the scriptBytes contains some extra stuff (like a rollover nonce) that we
-     * don't care about much. The bytes are turned into a Script object (cached below) on demand via a getter.
-     * @return the scriptBytes
-     */
-    public byte[] getScriptBytes() {
-        return scriptBytes;
-    }
-
-    /** Clear input scripts, e.g. in preparation for signing. */
-    public void clearScriptBytes() {
-        setScriptBytes(TransactionInput.EMPTY_ARRAY);
-    }
-
-    /**
-     * @param scriptBytes the scriptBytes to set
-     */
-    void setScriptBytes(byte[] scriptBytes) {
-        unCache();
-        this.scriptSig = null;
-        int oldLength = length;
-        this.scriptBytes = scriptBytes;
-        // 40 = previous_outpoint (36) + sequence (4)
-        int newLength = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
-        adjustLength(newLength - oldLength);
-    }
-
-    /**
-     * @return The Transaction that owns this input.
-     */
-    public Transaction getParentTransaction() {
-        return (Transaction) parent;
-    }
-
-    /**
-     * @return Value of the output connected to this input, if known. Null if unknown.
-     */
-    @Nullable
-    public Coin getValue() {
-        return value;
-    }
-
-    /**
-     * Alias for getOutpoint().getConnectedRedeemData(keyBag)
-     * @see TransactionOutPoint#getConnectedRedeemData(net.bigtangle.wallet.KeyBag)
-     */
-    @Nullable
-    public RedeemData getConnectedRedeemData(KeyBag keyBag) throws ScriptException {
-        return getOutpoint().getConnectedRedeemData(keyBag);
-    }
-
-
-    public enum ConnectMode {
-        DISCONNECT_ON_CONFLICT,
-        ABORT_ON_CONFLICT
-    }
-
-    /**
-     * @return true if this transaction's sequence number is set (ie it may be a part of a time-locked transaction)
-     */
-    public boolean hasSequence() {
-        return sequence != NO_SEQUENCE;
-    }
-
-    /**
-     * Returns whether this input will cause a transaction to opt into the
-     * <a href="https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki">full replace-by-fee </a> semantics.
-     */
-    public boolean isOptInFullRBF() {
-        return sequence < NO_SEQUENCE - 1;
-    }
-
-    /**
-     * For a connected transaction, runs the script against the connected pubkey and verifies they are correct.
-     * @throws ScriptException if the script did not verify.
-     * @throws VerificationException If the outpoint doesn't match the given output.
-     */
-    public void verify() throws VerificationException {
-        final Transaction fromTx = getOutpoint().fromTx;
-        long spendingIndex = getOutpoint().getIndex();
-        checkNotNull(fromTx, "Not connected");
-        final TransactionOutput output = fromTx.getOutput((int) spendingIndex);
-        verify(output);
-    }
-
-    /**
-     * Verifies that this input can spend the given output. Note that this input must be a part of a transaction.
-     * Also note that the consistency of the outpoint will be checked, even if this input has not been connected.
-     *
-     * @param output the output that this input is supposed to spend.
-     * @throws ScriptException If the script doesn't verify.
-     * @throws VerificationException If the outpoint doesn't match the given output.
-     */
-    public void verify(TransactionOutput output) throws VerificationException {
-        if (output.parent != null) {
-            if (!getOutpoint().getHash().equals(Sha256Hash.of( Utils.addAll(
-                    output.getParentTransaction().getParentBlock().getHash().getBytes(), output.getParentTransaction().getHash().getBytes()))))
-                throw new VerificationException("This input does not refer to the tx containing the output.");
-            if (getOutpoint().getIndex() != output.getIndex())
-                throw new VerificationException("This input refers to a different output on the given tx.");
-        }
-        Script pubKey = output.getScriptPubKey();
-        int myIndex = getParentTransaction().getInputs().indexOf(this);
-        Script r = getScriptSig();
-        r.correctlySpends(getParentTransaction(), (long) myIndex, pubKey, Script.ALL_VERIFY_FLAGS);
-    }
-
-    /**
-     * Returns the connected output, assuming the input was connected with
-     * {@link TransactionInput#connect(TransactionOutput)} or variants at some point. If it wasn't connected, then
-     * this method returns null.
-     */
-    @Nullable
-    public TransactionOutput getConnectedOutput() {
-        return getOutpoint().getConnectedOutput();
-    }
-
-    /**
-     * Returns the connected transaction, assuming the input was connected with
-     * {@link TransactionInput#connect(TransactionOutput)} or variants at some point. If it wasn't connected, then
-     * this method returns null.
-     */
-    @Nullable
-    public Transaction getConnectedTransaction() {
-        return getOutpoint().fromTx;
-    }
-
-    /** Returns a copy of the input detached from its containing transaction, if need be. */
-    public TransactionInput duplicateDetached() {
-        return new TransactionInput(params, null, bitcoinSerialize(), 0);
-    }
+	/**
+	 * Creates an UNSIGNED input that links to the given output
+	 */
+	TransactionInput(NetworkParameters params, Transaction parentTransaction, TransactionOutput output,
+			Sha256Hash blockHash) {
+		super(params);
+		long outputIndex = output.getIndex();
+		if (output.getParentTransaction() != null) {
+			outpoint = new TransactionOutPoint(params, outputIndex, blockHash, output.getParentTransaction());
+		} else {
+			outpoint = new TransactionOutPoint(params, blockHash, output);
+		}
+		scriptBytes = EMPTY_ARRAY;
+		sequence = NO_SEQUENCE;
+		setParent(parentTransaction);
+		this.value = output.getValue();
+		length = 41;
+	}
 
  
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TransactionInput other = (TransactionInput) o;
-        return sequence == other.sequence && parent == other.parent
-            && outpoint.equals(other.outpoint) && Arrays.equals(scriptBytes, other.scriptBytes);
-    }
+	/**
+	 * Deserializes an input message. This is usually part of a transaction message.
+	 * 
+	 * @param params     NetworkParameters object.
+	 * @param payload    Bitcoin protocol formatted byte array containing message
+	 *                   content.
+	 * @param offset     The location of the first payload byte within the array.
+	 * @param serializer the serializer to use for this message.
+	 * @throws ProtocolException
+	 */
+	public TransactionInput(NetworkParameters params, Transaction parentTransaction, byte[] payload, int offset,
+			MessageSerializer serializer) throws ProtocolException {
+		super(params, payload, offset, parentTransaction, serializer, UNKNOWN_LENGTH);
+		this.value = null;
+	}
 
-    @Override
-    public int hashCode() {
-        return Objects.hashCode(sequence, outpoint, Arrays.hashCode(scriptBytes));
-    }
+	@Override
+	protected void parse() throws ProtocolException {
+		outpoint = new TransactionOutPoint(params, payload, cursor, this, serializer);
+		cursor += outpoint.getMessageSize();
+		int scriptLen = (int) readVarInt();
+		length = cursor - offset + scriptLen + 4;
+		scriptBytes = readBytes(scriptLen);
+		sequence = readUint32();
+		if (readUint32() == 1) {
+			outpoint.connectedOutput = new TransactionOutput(params, (Transaction) this.parent, payload, cursor,
+					serializer);
+			cursor += outpoint.connectedOutput.getMessageSize();
+		}
+	}
 
-    /**
-     * Returns a human readable debug string.
-     */
-    @Override
-    public String toString() {
-        StringBuilder s = new StringBuilder("TxIn");
-        try {
-            if (isCoinBase()) {
-                s.append(": COINBASE");
-            } else {
-                s.append(" for [").append(outpoint).append("]: ").append(getScriptSig());
-                String flags = Joiner.on(", ").skipNulls().join(
-                        hasSequence() ? "sequence: " + Long.toHexString(sequence) : null,
-                        isOptInFullRBF() ? "opts into full RBF" : null);
-                if (!flags.isEmpty())
-                    s.append(" (").append(flags).append(')');
-            }
-            return s.toString();
-        } catch (ScriptException e) {
-            throw new RuntimeException(e);
-        }
-    }
+	@Override
+	protected void bitcoinSerializeToStream(OutputStream stream) throws IOException {
+		outpoint.bitcoinSerialize(stream);
+		stream.write(new VarInt(scriptBytes.length).encode());
+		stream.write(scriptBytes);
+		Utils.uint32ToByteStreamLE(sequence, stream);
+		Utils.uint32ToByteStreamLE(this.outpoint.connectedOutput != null ? 1 : 0, stream);
+		if (this.outpoint.connectedOutput != null) {
+			this.outpoint.connectedOutput.bitcoinSerializeToStream(stream);
+		}
+	}
+
+	/**
+	 * Coinbase transactions have special inputs with hashes of zero. If this is
+	 * such an input, returns true.
+	 */
+	public boolean isCoinBase() {
+		return outpoint.isCoinBase(); // -1 but all is serialized to the wire as unsigned int.
+	}
+
+	/**
+	 * Returns the script that is fed to the referenced output (scriptPubKey) script
+	 * in order to satisfy it: usually contains signatures and maybe keys, but can
+	 * contain arbitrary data if the output script accepts it.
+	 */
+	public Script getScriptSig() throws ScriptException {
+		// Transactions that generate new coins don't actually have a script. Instead
+		// this
+		// parameter is overloaded to be something totally different.
+		Script script = scriptSig == null ? null : scriptSig.get();
+		if (script == null) {
+			script = new Script(scriptBytes);
+			scriptSig = new WeakReference<Script>(script);
+		}
+		return script;
+	}
+
+	/**
+	 * Set the given program as the scriptSig that is supposed to satisfy the
+	 * connected output script.
+	 */
+	public void setScriptSig(Script scriptSig) {
+		this.scriptSig = new WeakReference<Script>(checkNotNull(scriptSig));
+		// TODO: This should all be cleaned up so we have a consistent internal
+		// representation.
+		setScriptBytes(scriptSig.getProgram());
+	}
+
+	/**
+	 * Convenience method that returns the from address of this input by parsing the
+	 * scriptSig. The concept of a "from address" is not well defined in Bitcoin and
+	 * you should not assume that senders of a transaction can actually receive
+	 * coins on the same address they used to sign (e.g. this is not true for shared
+	 * wallets).
+	 */
+	public Address getFromAddress() throws ScriptException {
+		if (isCoinBase()) {
+			throw new ScriptException(
+					"This is a coinbase transaction which generates new coins. It does not have a from address.");
+		}
+		return getScriptSig().getFromAddress(params);
+	}
+
+	/**
+	 * Sequence numbers allow participants in a multi-party transaction signing
+	 * protocol to create new versions of the transaction independently of each
+	 * other. Newer versions of a transaction can replace an existing version that's
+	 * in nodes memory pools if the existing version is time locked. See the
+	 * Contracts page on the Bitcoin wiki for examples of how you can use this
+	 * feature to build contract protocols.
+	 */
+	public long getSequenceNumber() {
+		return sequence;
+	}
+
+	/**
+	 * Sequence numbers allow participants in a multi-party transaction signing
+	 * protocol to create new versions of the transaction independently of each
+	 * other. Newer versions of a transaction can replace an existing version that's
+	 * in nodes memory pools if the existing version is time locked. See the
+	 * Contracts page on the Bitcoin wiki for examples of how you can use this
+	 * feature to build contract protocols.
+	 */
+	public void setSequenceNumber(long sequence) {
+		unCache();
+		this.sequence = sequence;
+	}
+
+	/**
+	 * @return The previous output transaction reference, as an OutPoint structure.
+	 *         This contains the data needed to connect to the output of the
+	 *         transaction we're gathering coins from.
+	 */
+	public TransactionOutPoint getOutpoint() {
+		return outpoint;
+	}
+
+	/**
+	 * The "script bytes" might not actually be a script. In coinbase transactions
+	 * where new coins are minted there is no input transaction, so instead the
+	 * scriptBytes contains some extra stuff (like a rollover nonce) that we don't
+	 * care about much. The bytes are turned into a Script object (cached below) on
+	 * demand via a getter.
+	 * 
+	 * @return the scriptBytes
+	 */
+	public byte[] getScriptBytes() {
+		return scriptBytes;
+	}
+
+	/** Clear input scripts, e.g. in preparation for signing. */
+	public void clearScriptBytes() {
+		setScriptBytes(TransactionInput.EMPTY_ARRAY);
+	}
+
+	/**
+	 * @param scriptBytes the scriptBytes to set
+	 */
+	void setScriptBytes(byte[] scriptBytes) {
+		unCache();
+		this.scriptSig = null;
+		int oldLength = length;
+		this.scriptBytes = scriptBytes;
+		// 40 = previous_outpoint (36) + sequence (4)
+		int newLength = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
+		adjustLength(newLength - oldLength);
+	}
+
+	/**
+	 * @return The Transaction that owns this input.
+	 */
+	public Transaction getParentTransaction() {
+		return (Transaction) parent;
+	}
+
+	/**
+	 * @return Value of the output connected to this input, if known. Null if
+	 *         unknown.
+	 */
+	@Nullable
+	public Coin getValue() {
+		return value;
+	}
+
+	/**
+	 * Alias for getOutpoint().getConnectedRedeemData(keyBag)
+	 * 
+	 * @see TransactionOutPoint#getConnectedRedeemData(net.bigtangle.wallet.KeyBag)
+	 */
+	@Nullable
+	public RedeemData getConnectedRedeemData(KeyBag keyBag) throws ScriptException {
+		return getOutpoint().getConnectedRedeemData(keyBag);
+	}
+
+	public enum ConnectMode {
+		DISCONNECT_ON_CONFLICT, ABORT_ON_CONFLICT
+	}
+
+	/**
+	 * @return true if this transaction's sequence number is set (ie it may be a
+	 *         part of a time-locked transaction)
+	 */
+	public boolean hasSequence() {
+		return sequence != NO_SEQUENCE;
+	}
+
+	/**
+	 * Returns whether this input will cause a transaction to opt into the
+	 * <a href="https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki">full
+	 * replace-by-fee </a> semantics.
+	 */
+	public boolean isOptInFullRBF() {
+		return sequence < NO_SEQUENCE - 1;
+	}
+
+	/**
+	 * For a connected transaction, runs the script against the connected pubkey and
+	 * verifies they are correct.
+	 * 
+	 * @throws ScriptException       if the script did not verify.
+	 * @throws VerificationException If the outpoint doesn't match the given output.
+	 */
+	public void verify() throws VerificationException {
+		final Transaction fromTx = getOutpoint().fromTx;
+		long spendingIndex = getOutpoint().getIndex();
+		checkNotNull(fromTx, "Not connected");
+		final TransactionOutput output = fromTx.getOutput((int) spendingIndex);
+		verify(output);
+	}
+
+	/**
+	 * Verifies that this input can spend the given output. Note that this input
+	 * must be a part of a transaction. Also note that the consistency of the
+	 * outpoint will be checked, even if this input has not been connected.
+	 *
+	 * @param output the output that this input is supposed to spend.
+	 * @throws ScriptException       If the script doesn't verify.
+	 * @throws VerificationException If the outpoint doesn't match the given output.
+	 */
+	public void verify(TransactionOutput output) throws VerificationException {
+		if (output.parent != null) {
+			if (!getOutpoint().getHash().equals(
+					Sha256Hash.of(Utils.addAll(output.getParentTransaction().getParentBlock().getHash().getBytes(),
+							output.getParentTransaction().getHash().getBytes()))))
+				throw new VerificationException("This input does not refer to the tx containing the output.");
+			if (getOutpoint().getIndex() != output.getIndex())
+				throw new VerificationException("This input refers to a different output on the given tx.");
+		}
+		Script pubKey = output.getScriptPubKey();
+		int myIndex = getParentTransaction().getInputs().indexOf(this);
+		Script r = getScriptSig();
+		r.correctlySpends(getParentTransaction(), (long) myIndex, pubKey, Script.ALL_VERIFY_FLAGS);
+	}
+
+	/**
+	 * Returns the connected output, assuming the input was connected with
+	 * {@link TransactionInput#connect(TransactionOutput)} or variants at some
+	 * point. If it wasn't connected, then this method returns null.
+	 */
+	@Nullable
+	public TransactionOutput getConnectedOutput() {
+		return getOutpoint().getConnectedOutput();
+	}
+
+	/**
+	 * Returns the connected transaction, assuming the input was connected with
+	 * {@link TransactionInput#connect(TransactionOutput)} or variants at some
+	 * point. If it wasn't connected, then this method returns null.
+	 */
+	@Nullable
+	public Transaction getConnectedTransaction() {
+		return getOutpoint().fromTx;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o)
+			return true;
+		if (o == null || getClass() != o.getClass())
+			return false;
+		TransactionInput other = (TransactionInput) o;
+		return sequence == other.sequence && parent == other.parent && outpoint.equals(other.outpoint)
+				&& Arrays.equals(scriptBytes, other.scriptBytes);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hashCode(sequence, outpoint, Arrays.hashCode(scriptBytes));
+	}
+
+	/**
+	 * Returns a human readable debug string.
+	 */
+	@Override
+	public String toString() {
+		StringBuilder s = new StringBuilder("TxIn");
+		try {
+			if (isCoinBase()) {
+				s.append(": COINBASE");
+			} else {
+				s.append(" for [").append(outpoint).append("]: ").append(getScriptSig());
+				String flags = Joiner.on(", ").skipNulls().join(
+						hasSequence() ? "sequence: " + Long.toHexString(sequence) : null,
+						isOptInFullRBF() ? "opts into full RBF" : null);
+				if (!flags.isEmpty())
+					s.append(" (").append(flags).append(')');
+			}
+			return s.toString();
+		} catch (ScriptException e) {
+			throw new RuntimeException(e);
+		}
+	}
 }

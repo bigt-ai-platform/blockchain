@@ -257,7 +257,7 @@ public class ScriptTest {
 		// Check that OP_0 doesn't NPE and pushes an empty stack frame.
 		Transaction tx = new Transaction(PARAMS);
 		;
-		tx.addInput(new TransactionInput(PARAMS, tx, new byte[] {}));
+		tx.addInput(  TransactionInput.fromScriptBytes(PARAMS, tx, new byte[] {}));
 		Script script = new ScriptBuilder().smallNum(0).build();
 
 		LinkedList<byte[]> stack = new LinkedList<byte[]>();

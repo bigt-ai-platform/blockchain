@@ -993,7 +993,7 @@ public class Block extends Message {
 		// Here we will do things a bit differently so a new address isn't
 		// needed every time. We'll put a simple
 		// counter in the scriptSig so every transaction has a different hash.
-		coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram()));
+		coinbase.addInput(  TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram()));
 		if (tokenInfo == null) {
 			coinbase.addOutput(new TransactionOutput(params, coinbase, value,
 					ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));

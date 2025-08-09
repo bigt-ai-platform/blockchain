@@ -477,7 +477,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					// as it has the right general form and is slightly
 					// different for
 					// different tx
-					TransactionInput input = new TransactionInput(networkParameters, tx, Script
+					TransactionInput input =   TransactionInput.fromScriptBytes(networkParameters, tx, Script
 							.createInputScript(genesisBlock.getHash().getBytes(), genesisBlock.getHash().getBytes()));
 					tx.addInput(input);
 

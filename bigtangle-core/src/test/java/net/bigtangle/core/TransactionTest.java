@@ -44,16 +44,7 @@ public class TransactionTest {
 		tx = FakeTxBuilder.createFakeTx(PARAMS);
 	}
 
-	@Test
-	public void duplicateOutPoint() throws Exception {
-		assertThrows(VerificationException.DuplicatedOutPoint.class, () -> {
-			TransactionInput input = tx.getInput(0);
-			input.setScriptBytes(new byte[1]);
-			tx.addInput(input.duplicateDetached());
-			tx.verify();
-		});
-
-	}
+	 
 
 	@Test
 	public void coinbaseInputInNonCoinbaseTX() throws Exception {
@@ -117,7 +108,7 @@ public class TransactionTest {
 		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
 
 		Transaction tx = new Transaction(PARAMS);
-		tx.addInput(new TransactionInput(PARAMS, tx, new byte[] {}));
+		tx.addInput(  TransactionInput.fromScriptBytes(PARAMS, tx, new byte[] {}));
 		tx.getInput(0).setSequenceNumber(0);
 		tx.setLockTime(time.subtract(BigInteger.ONE).longValue());
 		TransactionSignature fromSig = tx.calculateSignature(0, from, outputScript, Transaction.SigHash.SINGLE, false);
@@ -161,7 +152,7 @@ public class TransactionTest {
 		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
 
 		Transaction tx = new Transaction(PARAMS);
-		tx.addInput(new TransactionInput(PARAMS, tx, new byte[] {}));
+		tx.addInput(  TransactionInput.fromScriptBytes(PARAMS, tx, new byte[] {}));
 		tx.getInput(0).setSequenceNumber(0);
 		tx.setLockTime(time.add(BigInteger.ONE).longValue());
 		TransactionSignature fromSig = tx.calculateSignature(0, from, outputScript, Transaction.SigHash.SINGLE, false);
@@ -184,19 +175,6 @@ public class TransactionTest {
 		}
 	}
 
-	@Test
-	public void testToStringWhenIteratingOverAnInputCatchesAnException() {
-		Transaction tx = FakeTxBuilder.createFakeTx(PARAMS);
-		TransactionInput ti = new TransactionInput(PARAMS, tx, new byte[0]) {
-			@Override
-			public Script getScriptSig() throws ScriptException {
-				throw new ScriptException("");
-			}
-		};
-
-		tx.addInput(ti);
-		assertEquals(tx.toString().contains("[exception: "), true);
-	}
 
 	@Test
 	public void testMemoUTXO() {

@@ -61,7 +61,7 @@ public class UtilGeneseBlock {
 		    genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 
 		    Transaction coinbase = new Transaction(params);
 		    final ScriptBuilder inputBuilder = new ScriptBuilder();
-		    coinbase.addInput(new TransactionInput(params, coinbase, inputBuilder.build().getProgram())); 
+		    coinbase.addInput(  TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram())); 
 		    RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
 		            Utils.encodeCompactBits(params.getMaxTargetReward()),
 		            new HashSet<>(), 0L);

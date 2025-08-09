@@ -511,7 +511,7 @@ public abstract class ServiceBase {
 		// The input does not really need to be a valid signature, as long
 		// as it has the right general form and is slightly different for
 		// different tx
-		TransactionInput input = new TransactionInput(networkParameters, tx, Script
+		TransactionInput input =   TransactionInput.fromScriptBytes(networkParameters, tx, Script
 				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
 		tx.addInput(input);
 		return tx;
@@ -643,7 +643,7 @@ public abstract class ServiceBase {
 		// The input does not really need to be a valid signature, as long
 		// as it has the right general form and is slightly different for
 		// different tx
-		TransactionInput input = new TransactionInput(networkParameters, tx, Script
+		TransactionInput input =   TransactionInput.fromScriptBytes(networkParameters, tx, Script
 				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
 		tx.addInput(input);
 		tx.setMemo(new MemoInfo("MiningRewardTX"));

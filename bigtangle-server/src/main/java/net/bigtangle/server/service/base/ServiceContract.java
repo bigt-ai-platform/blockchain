@@ -278,7 +278,7 @@ public class ServiceContract extends ServiceBaseConnect {
 		}
 
 		// The coinbase input does not really need to be a valid signature
-		TransactionInput input = new TransactionInput(networkParameters, tx, Script
+		TransactionInput input =   TransactionInput.fromScriptBytes(networkParameters, tx, Script
 				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
 		tx.addInput(input);
 		tx.setMemo(new MemoInfo("contractExecution"));

@@ -75,10 +75,7 @@ public abstract class Message {
         serializer = params.getDefaultSerializer();
     }
 
-    protected Message(NetworkParameters params, byte[] payload, int offset, int protocolVersion) throws ProtocolException {
-        this(params, payload, offset, protocolVersion, params.getDefaultSerializer(), UNKNOWN_LENGTH);
-    }
-
+ 
     /**
      * 
      * @param params NetworkParameters object.

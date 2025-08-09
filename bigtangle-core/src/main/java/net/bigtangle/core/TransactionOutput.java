@@ -86,17 +86,7 @@ public class TransactionOutput extends ChildMessage {
 
     private String description;
 
-    /**
-     * Deserializes a transaction output message. This is usually part of a
-     * transaction message.
-     */
-    public TransactionOutput(NetworkParameters params, @Nullable Transaction parent, byte[] payload, int offset)
-            throws ProtocolException {
-        super(params, payload, offset);
-        setParent(parent);
-        availableForSpending = true;
-    }
-
+ 
     /**
      * Deserializes a transaction output message. This is usually part of a
      * transaction message.
