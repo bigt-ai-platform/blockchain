@@ -426,7 +426,7 @@ public class TransactionOutput extends ChildMessage {
      * detached.
      */
     public TransactionOutPoint getOutPointFor(Sha256Hash containingBlockHash) {
-        return new TransactionOutPoint(params, getIndex(), containingBlockHash, getParentTransaction());
+        return   TransactionOutPoint.fromTx(params, getIndex(), containingBlockHash, getParentTransaction());
     }
 
     /**

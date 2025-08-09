@@ -91,7 +91,7 @@ public class TransactionInput extends ChildMessage {
 	public static TransactionInput fromScriptBytes(NetworkParameters params, @Nullable Transaction parentTransaction,
 			byte[] scriptBytes) {
 		return fromOutpoint(params, parentTransaction, scriptBytes,
-				new TransactionOutPoint(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
+				TransactionOutPoint.fromTx(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
 	}
 
 	public static TransactionInput fromOutpoint(NetworkParameters params, @Nullable Transaction parentTransaction,
@@ -118,9 +118,9 @@ public class TransactionInput extends ChildMessage {
 		super(params);
 		long outputIndex = output.getIndex();
 		if (output.getParentTransaction() != null) {
-			outpoint = new TransactionOutPoint(params, outputIndex, blockHash, output.getParentTransaction());
+			outpoint =   TransactionOutPoint.fromTx(params, outputIndex, blockHash, output.getParentTransaction());
 		} else {
-			outpoint = new TransactionOutPoint(params, blockHash, output);
+			outpoint = TransactionOutPoint.fromOutput(params, blockHash, output);
 		}
 		scriptBytes = EMPTY_ARRAY;
 		sequence = NO_SEQUENCE;
@@ -129,7 +129,6 @@ public class TransactionInput extends ChildMessage {
 		length = 41;
 	}
 
- 
 	/**
 	 * Deserializes an input message. This is usually part of a transaction message.
 	 * 
