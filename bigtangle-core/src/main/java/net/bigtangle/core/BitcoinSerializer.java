@@ -67,7 +67,7 @@ public class BitcoinSerializer extends MessageSerializer {
     
      
         names.put(HeadersMessage.class, "headers");
-        names.put(BloomFilter.class, "filterload");
+    
         names.put(FilteredBlock.class, "merkleblock"); 
     }
 
@@ -186,9 +186,7 @@ public class BitcoinSerializer extends MessageSerializer {
             message = makeTransaction(payloadBytes, 0, length, hash);
         }    else if (command.equals("alert")) {
             return makeAlertMessage(payloadBytes);
-        } else if (command.equals("filterload")) {
-            return makeBloomFilter(payloadBytes);
-        }   else {
+        } else    {
             log.warn("No support for deserializing message with name {}", command);
           throw new RuntimeException("UnknownMessage") ;
         }
@@ -301,16 +299,6 @@ public class BitcoinSerializer extends MessageSerializer {
             System.arraycopy(header, cursor, checksum, 0, 4);
             cursor += 4;
         }
-    }
-
-
-    /**
-     * Make an filter message from the payload. Extension point for alternative
-     * serialization format support.
-     */
-    @Override
-    public Message makeBloomFilter(byte[] payloadBytes) throws ProtocolException {
-        return new BloomFilter(params, payloadBytes);
     }
 
  

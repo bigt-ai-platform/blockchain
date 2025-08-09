@@ -103,13 +103,7 @@ public abstract class MessageSerializer {
 	public abstract Block makeBlock(final byte[] payloadBytes, final int offset, final int length)
 			throws ProtocolException, UnsupportedOperationException;
 
-	/**
-	 * Make an filter message from the payload. Extension point for alternative
-	 * serialization format support.
-	 */
-	public abstract Message makeBloomFilter(byte[] payloadBytes)
-			throws ProtocolException, UnsupportedOperationException;
-
+ 
 	/**
 	 * Make a transaction from the payload. Extension point for alternative
 	 * serialization format support.

@@ -26,8 +26,8 @@ import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.common.hash.BloomFilter;
 
-import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.KeyCrypter;
@@ -233,22 +233,7 @@ public class BasicKeyChainTest {
 		assertFalse(chain.findKeyFromPubKey(pub.getPubKey()).hasPrivKey());
 	}
 
-	@Test
-	public void bloom() throws Exception {
-		ECKey key1 = new ECKey();
-		ECKey key2 = new ECKey();
-		chain.importKeys(key1, key2);
-		assertEquals(2, chain.numKeys());
-		assertEquals(4, chain.numBloomFilterEntries());
-		BloomFilter filter = chain.getFilter(4, 0.001, 100);
-		assertTrue(filter.contains(key1.getPubKey()));
-		assertTrue(filter.contains(key1.getPubKeyHash()));
-		assertTrue(filter.contains(key2.getPubKey()));
-		assertTrue(filter.contains(key2.getPubKeyHash()));
-		ECKey key3 = new ECKey();
-		assertFalse(filter.contains(key3.getPubKey()));
-	}
-
+ 
 	@Test
 	public void keysBeforeAndAfter() throws Exception {
 		Utils.setMockClock();

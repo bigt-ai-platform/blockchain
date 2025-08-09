@@ -19,12 +19,11 @@
  */
 package net.bigtangle.wallet;
 
-import net.bigtangle.core.BloomFilter;
-import net.bigtangle.core.ECKey;
+import java.util.List;
+
  
 
-import java.util.List;
-import java.util.concurrent.Executor;
+import net.bigtangle.core.ECKey;
 
 /**
  * <p>A KeyChain is a class that stores a collection of keys for a {@link net.bigtangle.wallet.Wallet}. Key chains
@@ -74,17 +73,5 @@ public interface KeyChain {
      */
     long getEarliestKeyCreationTime();
 
-    /**
-     * <p>Gets a bloom filter that contains all of the public keys from this chain, and which will provide the given
-     * false-positive rate if it has size elements. Keep in mind that you will get 2 elements in the bloom filter for
-     * each key in the key chain, for the public key and the hash of the public key (address form). For this reason
-     * size should be <i>at least</i> 2x the result of {@link #numKeys()}.</p>
-     *
-     * <p>This is used to generate a {@link BloomFilter} which can be {@link BloomFilter#merge(BloomFilter)}d with
-     * another. It could also be used if you have a specific target for the filter's size.</p>
-     *
-     * <p>See the docs for {@link net.bigtangle.core.BloomFilter#BloomFilter(int, double, long)} for a brief
-     * explanation of anonymity when using bloom filters, and for the meaning of these parameters.</p>
-     */
-    BloomFilter getFilter(int size, double falsePositiveRate, long tweak);
+ 
 }

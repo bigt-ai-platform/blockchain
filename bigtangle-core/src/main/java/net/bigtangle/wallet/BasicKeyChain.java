@@ -39,7 +39,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 
-import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.crypto.EncryptableItem;
 import net.bigtangle.crypto.EncryptedData;
@@ -524,25 +523,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // Bloom filtering support
-    //
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-    @Override
-    public BloomFilter getFilter(int size, double falsePositiveRate, long tweak) {
-        lock.lock();
-        try {
-            BloomFilter filter = new BloomFilter(size, falsePositiveRate, tweak);
-            for (ECKey key : hashToKeys.values())
-                filter.insert(key);
-            return filter;
-        } finally {
-            lock.unlock();
-        }
-    }
+  
 
     @Override
     public int numBloomFilterEntries() {

@@ -49,7 +49,6 @@ import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 import com.google.protobuf.ByteString;
 
-import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
@@ -1043,18 +1042,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         return numKeys() * 2;
     }
 
-    @Override
-    public BloomFilter getFilter(int size, double falsePositiveRate, long tweak) {
-        lock.lock();
-        try {
-            checkArgument(size >= numBloomFilterEntries());
-            maybeLookAhead();
-            return basicKeyChain.getFilter(size, falsePositiveRate, tweak);
-        } finally {
-            lock.unlock();
-        }
-
-    }
+ 
 
     /**
      * <p>The number of public keys we should pre-generate on each path before they are requested by the app. This is

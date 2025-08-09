@@ -45,7 +45,6 @@ import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
@@ -598,16 +597,7 @@ public class KeyChainGroup implements KeyBag {
         return result;
     }
 
-    public BloomFilter getBloomFilter(int size, double falsePositiveRate, long nTweak) {
-        BloomFilter filter = new BloomFilter(size, falsePositiveRate, nTweak);
-        if (basic.numKeys() > 0)
-            filter.merge(basic.getFilter(size, falsePositiveRate, nTweak));
-
-        for (DeterministicKeyChain chain : chains) {
-            filter.merge(chain.getFilter(size, falsePositiveRate, nTweak));
-        }
-        return filter;
-    }
+ 
 
     /** {@inheritDoc} */
     public boolean isRequiringUpdateAllBloomFilter() {

@@ -19,18 +19,10 @@
  */
 package net.bigtangle.wallet;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
-
-import net.bigtangle.core.BloomFilter;
-import net.bigtangle.core.ECKey;
-import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.DeterministicKey;
-import net.bigtangle.crypto.KeyCrypter;
-import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.script.Script;
-import net.bigtangle.script.ScriptBuilder;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.Lists.newArrayList;
 
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
@@ -39,10 +31,18 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
-import static com.google.common.collect.Lists.newArrayList;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.hash.BloomFilter;
+import com.google.protobuf.ByteString;
+
+import net.bigtangle.core.ECKey;
+import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.DeterministicKey;
+import net.bigtangle.crypto.KeyCrypter;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 
 /**
  * <p>A multi-signature keychain using synchronized HD keys (a.k.a HDM)</p>
@@ -279,22 +279,7 @@ public class MarriedKeyChain extends DeterministicKeyChain {
         return marriedKeysRedeemData.get(bytes);
     }
 
-    @Override
-    public BloomFilter getFilter(int size, double falsePositiveRate, long tweak) {
-        lock.lock();
-        BloomFilter filter;
-        try {
-            filter = new BloomFilter(size, falsePositiveRate, tweak);
-            for (Map.Entry<ByteString, RedeemData> entry : marriedKeysRedeemData.entrySet()) {
-                filter.insert(entry.getKey().toByteArray());
-                filter.insert(entry.getValue().redeemScript.getProgram());
-            }
-        } finally {
-            lock.unlock();
-        }
-        return filter;
-    }
-
+  
     @Override
     public int numBloomFilterEntries() {
         maybeLookAhead();

@@ -24,9 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.hash.BloomFilter;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.BloomFilter;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
@@ -308,30 +308,7 @@ public class KeyChainGroupTest {
 		assertFalse(checkNotNull(group.findKeyFromPubKey(key.getPubKey())).isEncrypted());
 	}
 
-	// @Test
-	public void bloom() throws Exception {
-		ECKey key1 = group.freshKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		ECKey key2 = new ECKey();
-		BloomFilter filter = group.getBloomFilter(group.getBloomFilterElementCount(), 0.001,
-				(long) (Math.random() * Long.MAX_VALUE));
-		assertTrue(filter.contains(key1.getPubKeyHash()));
-		assertTrue(filter.contains(key1.getPubKey()));
-		assertFalse(filter.contains(key2.getPubKey()));
-		// Check that the filter contains the lookahead buffer and threshold zone.
-		for (int i = 0; i < LOOKAHEAD_SIZE + group.getLookaheadThreshold(); i++) {
-			ECKey k = group.freshKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-			assertTrue(filter.contains(k.getPubKeyHash()));
-		}
-		// We ran ahead of the lookahead buffer.
-		assertFalse(filter.contains(group.freshKey(KeyChain.KeyPurpose.RECEIVE_FUNDS).getPubKey()));
-		group.importKeys(key2);
-		filter = group.getBloomFilter(group.getBloomFilterElementCount(), 0.001,
-				(long) (Math.random() * Long.MAX_VALUE));
-		assertTrue(filter.contains(key1.getPubKeyHash()));
-		assertTrue(filter.contains(key1.getPubKey()));
-		assertTrue(filter.contains(key2.getPubKey()));
-	}
-
+ 
 	@Test
 	public void findRedeemScriptFromPubHash() throws Exception {
 		group = createMarriedKeyChainGroup();
@@ -350,29 +327,7 @@ public class KeyChainGroupTest {
 				group.freshAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS).getHash160()) != null);
 	}
 
-	@Test
-	public void bloomFilterForMarriedChains() throws Exception {
-		group = createMarriedKeyChainGroup();
-		int bufferSize = group.getLookaheadSize() + group.getLookaheadThreshold();
-		int expected = bufferSize * 2 /* chains */ * 2 /* elements */;
-		assertEquals(expected, group.getBloomFilterElementCount());
-		Address address1 = group.freshAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		assertEquals(expected, group.getBloomFilterElementCount());
-		BloomFilter filter = group.getBloomFilter(expected + 2, 0.001, (long) (Math.random() * Long.MAX_VALUE));
-		assertTrue(filter.contains(address1.getHash160()));
-
-		Address address2 = group.freshAddress(KeyChain.KeyPurpose.CHANGE);
-		assertTrue(filter.contains(address2.getHash160()));
-
-		// Check that the filter contains the lookahead buffer.
-		for (int i = 0; i < bufferSize - 1 /* issued address */; i++) {
-			Address address = group.freshAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-			assertTrue(filter.contains(address.getHash160()), "key " + i);
-		}
-		// We ran ahead of the lookahead buffer.
-		assertFalse(filter.contains(group.freshAddress(KeyChain.KeyPurpose.RECEIVE_FUNDS).getHash160()));
-	}
-
+ 
 	@Test
 	public void earliestKeyTime() throws Exception {
 		long now = Utils.currentTimeSeconds(); // mock

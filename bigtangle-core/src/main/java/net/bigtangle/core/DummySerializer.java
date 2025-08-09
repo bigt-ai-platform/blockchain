@@ -59,11 +59,7 @@ class DummySerializer extends MessageSerializer {
         throw new UnsupportedOperationException(DEFAULT_EXCEPTION_MESSAGE);
     }
 
-    @Override
-    public Message makeBloomFilter(byte[] payloadBytes) throws UnsupportedOperationException {
-        throw new UnsupportedOperationException(DEFAULT_EXCEPTION_MESSAGE);
-    }
-
+  
    
     @Override
     public Transaction makeTransaction(byte[] payloadBytes, int offset, int length, byte[] hash) throws UnsupportedOperationException {

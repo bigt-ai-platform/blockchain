@@ -68,10 +68,7 @@ public abstract class Message {
     protected int protocolVersion;
 
     protected NetworkParameters params;
-
-    protected Message() {
-        serializer = DummySerializer.DEFAULT;
-    }
+ 
 
     protected Message(NetworkParameters params) {
         this.params = params;

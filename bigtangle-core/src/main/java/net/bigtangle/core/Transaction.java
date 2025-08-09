@@ -74,10 +74,7 @@ public class Transaction extends ChildMessage {
 
     // private static final long serialVersionUID = -1834484825483010857L;
 
-    @SuppressWarnings("deprecation")
-    public Transaction() {
-    }
-
+ 
     private static final Logger log = LoggerFactory.getLogger(Transaction.class);
 
     /**
