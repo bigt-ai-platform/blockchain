@@ -473,9 +473,9 @@ public abstract class AbstractIntegrationTest {
 				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid()).equals(tokenId))
 				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0).collect(Collectors.toList());
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, beneficiary));
+		tx.addOutput(  TransactionOutput.fromCoinKey(networkParameters, tx, amount, beneficiary));
 		tx.addOutput(
-				new TransactionOutput(networkParameters, tx, spendableOutput.getValue().subtract(amount), fromKey));
+				  TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount), fromKey));
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 
 		// Sign
@@ -921,8 +921,8 @@ public abstract class AbstractIntegrationTest {
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction tx = new Transaction(networkParameters);
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, genesiskey));
-		tx.addOutput(new TransactionOutput(networkParameters, tx,
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, genesiskey));
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 				spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), genesiskey));
 		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);

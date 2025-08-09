@@ -70,7 +70,7 @@ public class GenerateLowSTests {
 
         final Transaction outputTransaction = new Transaction(params);
         final Transaction inputTransaction = new Transaction(params);
-        final TransactionOutput output = new TransactionOutput(params, inputTransaction, Coin.ZERO, key.toAddress(params));
+        final TransactionOutput output =   TransactionOutput.fromAddress(params, inputTransaction, Coin.ZERO, key.toAddress(params));
 
         inputTransaction.addOutput(output);
         outputTransaction.addInput(UtilGeneseBlock.createGenesis(params).getHash(), output);

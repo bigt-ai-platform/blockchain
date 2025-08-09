@@ -499,27 +499,7 @@ public abstract class AbstractIntegrationTest {
 		return adjust;
 	}
 
-	protected Transaction createTestTransaction() throws Exception {
-
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		List<UTXO> outputs = getBalance(false, genesiskey);
-		UTXO output = getLargeUTXO(outputs);
-		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
-		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
-		Transaction tx = new Transaction(networkParameters);
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, genesiskey));
-		tx.addOutput(new TransactionOutput(networkParameters, tx,
-				spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), genesiskey));
-		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
-		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-
-		TransactionSignature tsrecsig = new TransactionSignature(genesiskey.sign(sighash), Transaction.SigHash.ALL,
-				false);
-		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
-		input.setScriptSig(inputScript);
-		return tx;
-	}
+ 
 
 	protected UTXO getLargeUTXO(List<UTXO> outputs) {
 		UTXO a = outputs.get(0);

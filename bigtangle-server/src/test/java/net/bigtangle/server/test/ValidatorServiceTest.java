@@ -578,8 +578,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					outputs.get(0));
 			Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 			Transaction tx2 = new Transaction(networkParameters);
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2, amount, testKey));
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2,
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2, amount, testKey));
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2,
 					spendableOutput.getValue().subtract(amount).subtract(amount), testKey));
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
@@ -603,8 +603,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					outputs.get(0));
 			Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 			Transaction tx2 = new Transaction(networkParameters);
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2, amount, testKey));
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2,
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2, amount, testKey));
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2,
 					spendableOutput.getValue().subtract(Coin.FEE_DEFAULT), testKey));
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
@@ -637,9 +637,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					outputs.get(0));
 			Coin amount = Coin.valueOf(-1, NetworkParameters.BIGTANGLE_TOKENID);
 			Transaction tx2 = new Transaction(networkParameters);
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2, amount, testKey));
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2, amount, testKey));
 			tx2.addOutput(
-					new TransactionOutput(networkParameters, tx2, spendableOutput.getValue().minus(amount), testKey));
+					TransactionOutput.fromCoinKey(networkParameters, tx2, spendableOutput.getValue().minus(amount), testKey));
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
@@ -682,9 +682,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					outputs.get(0));
 			Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 			Transaction tx2 = new Transaction(networkParameters);
-			tx2.addOutput(new TransactionOutput(networkParameters, tx2, amount, testKey));
+			tx2.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx2, amount, testKey));
 			tx2.addOutput(
-					new TransactionOutput(networkParameters, tx2, spendableOutput.getValue().minus(amount), testKey));
+					TransactionOutput.fromCoinKey(networkParameters, tx2, spendableOutput.getValue().minus(amount), testKey));
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 
 			ScriptBuilder scriptBuilder = new ScriptBuilder();
@@ -747,9 +747,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, testKey));
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, testKey));
 		tx.addOutput(
-				new TransactionOutput(networkParameters, tx, spendableOutput.getValue().subtract(amount), testKey));
+				TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount), testKey));
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
@@ -2287,10 +2287,10 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.collect(Collectors.toList());
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
-		// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+		// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 		// amount, testKey));
 		tx.addOutput(
-				new TransactionOutput(networkParameters, tx, spendableOutput.getValue().subtract(amount), testKey));
+				TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount), testKey));
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
@@ -2304,10 +2304,10 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				.collect(Collectors.toList());
 		TransactionOutput spendableOutput2 = new FreeStandingTransactionOutput(this.networkParameters, outputs2.get(0));
 		Coin amount2 = Coin.valueOf(2, testKey.getPubKey());
-		// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+		// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 		// amount2, testKey));
 		tx2.addOutput(
-				new TransactionOutput(networkParameters, tx2, spendableOutput2.getValue().subtract(amount2), testKey));
+				TransactionOutput.fromCoinKey(networkParameters, tx2, spendableOutput2.getValue().subtract(amount2), testKey));
 		TransactionInput input2 = tx2.addInput(outputs2.get(0).getBlockHash(), spendableOutput2);
 		Sha256Hash sighash2 = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 		TransactionSignature sig2 = new TransactionSignature(testKey.sign(sighash2), Transaction.SigHash.ALL, false);
@@ -2404,9 +2404,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			UTXO output = getLargeUTXO(outputs);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
 			Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
-			// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+			// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 			// amount, testKey));
-			tx.addOutput(new TransactionOutput(networkParameters, tx,
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 					spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), testKey));
 
 			// Create burning 2 "test"
@@ -2416,9 +2416,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionOutput spendableOutput2 = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs2.get(0));
 			Coin amount2 = Coin.valueOf(2, testKey.getPubKey());
-			// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+			// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 			// amount2, testKey));
-			tx.addOutput(new TransactionOutput(networkParameters, tx, spendableOutput2.getValue().subtract(amount2),
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput2.getValue().subtract(amount2),
 					testKey));
 
 			TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
@@ -2494,9 +2494,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionOutput spendableOutput2 = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs2.get(0));
 			Coin amount2 = Coin.valueOf(2, testKey.getPubKey());
-			// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+			// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 			// amount2, testKey));
-			tx.addOutput(new TransactionOutput(networkParameters, tx, spendableOutput2.getValue().subtract(amount2),
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput2.getValue().subtract(amount2),
 					testKey));
 
 			TransactionInput input2 = tx.addInput(outputs2.get(0).getBlockHash(), spendableOutput2);
@@ -2549,9 +2549,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
 
-			// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
+			// BURN: tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 			// amount, testKey));
-			tx.addOutput(new TransactionOutput(networkParameters, tx,
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
 					spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), testKey));
 			TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,

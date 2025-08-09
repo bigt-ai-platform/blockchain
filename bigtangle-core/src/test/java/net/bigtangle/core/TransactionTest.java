@@ -91,7 +91,7 @@ public class TransactionTest {
 		int length = tx.length;
 
 		// add basic transaction input, check the length
-		tx.addOutput(new TransactionOutput(PARAMS, null, Coin.COIN, ADDRESS));
+		tx.addOutput(  TransactionOutput.fromAddress(PARAMS, null, Coin.COIN, ADDRESS));
 		length += getCombinedLength(tx.getOutputs());
 
 		// add basic output, check the length

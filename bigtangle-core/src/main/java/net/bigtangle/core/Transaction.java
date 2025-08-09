@@ -844,7 +844,7 @@ public class Transaction extends ChildMessage {
      * transaction, and returns the new output.
      */
     public TransactionOutput addOutput(Coin value, Address address) {
-        return addOutput(new TransactionOutput(params, this, value, address));
+        return addOutput(  TransactionOutput.fromAddress(params, this, value, address));
     }
 
     /**
@@ -853,7 +853,7 @@ public class Transaction extends ChildMessage {
      * output.
      */
     public TransactionOutput addOutput(Coin value, ECKey pubkey) {
-        return addOutput(new TransactionOutput(params, this, value, pubkey));
+        return addOutput(  TransactionOutput.fromCoinKey(params, this, value, pubkey));
     }
 
     /**

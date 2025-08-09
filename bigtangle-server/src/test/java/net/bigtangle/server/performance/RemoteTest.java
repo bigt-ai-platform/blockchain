@@ -45,13 +45,10 @@ import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
-import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.VerificationException;
@@ -66,15 +63,12 @@ import net.bigtangle.response.MultiSignResponse;
 import net.bigtangle.response.OrderdataResponse;
 import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.response.TokenIndexResponse;
-import net.bigtangle.script.Script;
-import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.MonetaryFormat;
 import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.utils.UUIDUtil;
-import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
   
@@ -271,28 +265,7 @@ public abstract class RemoteTest {
 		adjust.solve();
 		return adjust;
 	}
-
-	protected Transaction createTestTransaction() throws Exception {
-
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		List<UTXO> outputs = getBalance(false, genesiskey);
-		UTXO output = getLargeUTXO(outputs);
-		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
-		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
-		Transaction tx = new Transaction(networkParameters);
-		tx.addOutput(new TransactionOutput(networkParameters, tx, amount, genesiskey));
-		tx.addOutput(new TransactionOutput(networkParameters, tx,
-				spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), genesiskey));
-		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
-		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-
-		TransactionSignature tsrecsig = new TransactionSignature(genesiskey.sign(sighash), Transaction.SigHash.ALL,
-				false);
-		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
-		input.setScriptSig(inputScript);
-		return tx;
-	}
+ 
 
 	protected UTXO getLargeUTXO(List<UTXO> outputs) {
 		UTXO a = outputs.get(0);

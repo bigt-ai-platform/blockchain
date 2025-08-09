@@ -25,17 +25,24 @@ mvn clean package -DskipTests=true
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
  
 
-translate  all   methods from   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/wallet/DeterministicKeyChain.java to src/net/bigtangle/wallet/
+translate     /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Block.java to src/net/bigtangle/core/Transaction.ts
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
 bigtangle-typescript/src/net/bigtangle/utils
 bigtangle-typescript/src/net/bigtangle/exception
 bigtangle-typescript/src/net/bigtangle/params
 bigtangle-typescript/src/net/bigtangle/script
+use java compatible  parse and serialization
  
-
-translate /home/jcui/git/server/bigtangle-core/src/test/java/net/bigtangle/core/VarIntTest.java to test/core/VarIntTest.ts
+  npm test and fix,   parse and serialization must follow java code /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/  with same name and diretorcy in ts. 
+    
+ all bigint to byte and from byte  use src/net/bigtangle/utils/Utils.ts
+BitcoinSerializer
+translate /home/jcui/git/server/bigtangle-core/src/test/java/net/bigtangle/core/TransactionTest.java to test/core/TransactionTest.ts
 
 git config user.name "j0904"
-git config user.email ""
+git config user.email "j0904@localhost.com"
 
+
+change all constructors TransactionOutput(...) other than  one in /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOuput.java 
+to different methods in the form  public static TransactionOutput.from...
