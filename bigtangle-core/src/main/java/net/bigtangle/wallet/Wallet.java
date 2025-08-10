@@ -24,7 +24,6 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.ConnectException;
@@ -181,20 +180,7 @@ public class Wallet extends WalletBase {
 		}
 	}
 
-	/**
-	 * Uses protobuf serialization to save the wallet to the given file stream. To
-	 * learn more about this file format, see {@link WalletProtobufSerializer}.
-	 */
-	public void saveToFileStream(OutputStream f) throws IOException {
-		lock.lock();
-		try {
-			new WalletProtobufSerializer().writeWallet(this, f);
-		} finally {
-			lock.unlock();
-		}
-	} 
  
-
 	// All Spend Candidates as List<TransactionOutput>
 	public List<FreeStandingTransactionOutput> calculateAllSpendCandidates(KeyParameter aesKey, boolean multisigns)
 			throws IOException {

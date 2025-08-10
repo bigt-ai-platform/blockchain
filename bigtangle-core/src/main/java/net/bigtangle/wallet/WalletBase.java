@@ -23,10 +23,6 @@ package net.bigtangle.wallet;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
@@ -45,7 +41,6 @@ import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
-import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
@@ -427,89 +422,10 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		}
 	}
 
-	/**
-	 * 
-	 * Saves the wallet first to the given temp file, then renames to the dest file.
-	 */
-	public void saveToFile(File temp, File destFile) throws IOException {
-		FileOutputStream stream = null;
-		lock.lock();
-		try {
-			stream = new FileOutputStream(temp);
-			saveToFileStream(stream);
-			// Attempt to force the bits to hit the disk. In reality the OS or
-			// hard disk itself may still decide
-			// to not write through to physical media for at least a few
-			// seconds, but this is the best we can do.
-			stream.flush();
-			stream.getFD().sync();
-			stream.close();
-			stream = null;
-			if (Utils.isWindows()) {
-				// Work around an issue on Windows whereby you can't rename over
-				// existing files.
-				File canonical = destFile.getCanonicalFile();
-				if (canonical.exists() && !canonical.delete())
-					throw new IOException("Failed to delete canonical wallet file for replacement with autosave");
-				if (temp.renameTo(canonical))
-					return; // else fall through.
-				throw new IOException("Failed to rename " + temp + " to " + canonical);
-			} else if (!temp.renameTo(destFile)) {
-				throw new IOException("Failed to rename " + temp + " to " + destFile);
-			}
-		} catch (RuntimeException e) {
-			log.error("Failed whilst saving wallet", e);
-			throw e;
-		} finally {
-			lock.unlock();
-			if (stream != null) {
-				stream.close();
-			}
-			if (temp.exists()) {
-				log.warn("Temp file still exists after failed save.");
-			}
-		}
-	}
+ 
+ 
 
-	/**
-	 * Saves the wallet first to the given temp file, then renames to the dest file.
-	 */
-	public void saveTo(OutputStream stream) throws IOException {
-
-		lock.lock();
-		try {
-			saveToFileStream(stream);
-			stream.flush();
-
-			stream.close();
-			stream = null;
-		} finally {
-			lock.unlock();
-			if (stream != null) {
-				stream.close();
-			}
-		}
-
-	}
-
-	/**
-	 * Uses protobuf serialization to save the wallet to the given file. To learn
-	 * more about this file format, see {@link WalletProtobufSerializer}. Writes out
-	 * first to a temporary file in the same directory and then renames once
-	 * written.
-	 */
-	public void saveToFile(File f) throws IOException {
-		File directory = f.getAbsoluteFile().getParentFile();
-		File temp = File.createTempFile("wallet", null, directory);
-		saveToFile(temp, f);
-	}
-
-	/*
-	 * Uses protobuf serialization to save the wallet to the given file stream. To
-	 * learn more about this file format, see {@link WalletProtobufSerializer}.
-	 */
-	public abstract void saveToFileStream(OutputStream f) throws IOException;
-
+  
 	/** Returns the parameters this wallet was created with. */
 	public NetworkParameters getParams() {
 		return params;

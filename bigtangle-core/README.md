@@ -25,7 +25,7 @@ mvn clean package -DskipTests=true
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
  
 
-translate     /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOutPoint.java to src/net/bigtangle/core/TransactionOutPoint.ts
+translate   parse and serialization from  /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Block.java to src/net/bigtangle/core/Block.ts
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
 bigtangle-typescript/src/net/bigtangle/utils
