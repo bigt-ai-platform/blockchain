@@ -73,19 +73,33 @@ public class PartialMerkleTree extends Message {
     // txids and internal hashes
     private List<Sha256Hash> hashes;
     
-    public PartialMerkleTree(NetworkParameters params, byte[] payloadBytes, int offset) throws ProtocolException {
-        super(params, payloadBytes, offset);
-    }
-
+  
+    
+    public PartialMerkleTree(NetworkParameters params) {
+ 	   super(params);
+  }
+ public  void setPartialMerkleTree(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
+	 PartialMerkleTree a = new PartialMerkleTree(params);
+	 
+    a.setValues3(params, payloadBytes, 0);
+ }
+ 
+ public  void setPartialMerkleTree(NetworkParameters params, byte[] payloadBytes,   int offset ) throws ProtocolException {
+	 PartialMerkleTree a = new PartialMerkleTree(params);
+	 
+    a.setValues3(params, payloadBytes, offset );
+ }
+ 
+ 
     /**
      * Constructs a new PMT with the given bit set (little endian) and the raw list of hashes including internal hashes,
      * taking ownership of the list.
      */
-    public PartialMerkleTree(NetworkParameters params, byte[] bits, List<Sha256Hash> hashes, int origTxCount) {
-        super(params);
-        this.matchedChildBits = bits;
-        this.hashes = hashes;
-        this.transactionCount = origTxCount;
+    public  void setPartialMerkleTree(NetworkParameters params, byte[] bits, List<Sha256Hash> hashes, int origTxCount) {
+    	 PartialMerkleTree a = new PartialMerkleTree(params);
+        a.matchedChildBits = bits;
+        a.hashes = hashes;
+        a.transactionCount = origTxCount;
     }
 
     /**
@@ -104,7 +118,9 @@ public class PartialMerkleTree extends Message {
         for (int i = 0; i < bitList.size(); i++)
             if (bitList.get(i))
                 Utils.setBitLE(bits, i);
-        return new PartialMerkleTree(params, bits, hashes, allLeafHashes.size());
+        PartialMerkleTree a = new PartialMerkleTree(params);
+        a. setPartialMerkleTree(params, bits, hashes, allLeafHashes.size());
+         return a;
     }
 
     @Override

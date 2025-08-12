@@ -359,7 +359,7 @@ public class ScriptTest {
 			int index = input.get(1).asInt();
 			String script = input.get(2).asText();
 			Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
-			scriptPubKeys.put(new TransactionOutPoint(PARAMS, index, Sha256Hash.ZERO_HASH, sha256Hash),
+			scriptPubKeys.put(  TransactionOutPoint.fromTransactionOutPoint4(PARAMS, index, Sha256Hash.ZERO_HASH, sha256Hash),
 					parseScriptString(script));
 		}
 		return scriptPubKeys;

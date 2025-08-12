@@ -70,26 +70,20 @@ public abstract class Message {
     protected NetworkParameters params;
  
 
-    protected Message(NetworkParameters params) {
+    public Message(NetworkParameters params) {
         this.params = params;
         serializer = params.getDefaultSerializer();
     }
-
  
-    /**
-     * 
-     * @param params NetworkParameters object.
-     * @param payload Bitcoin protocol formatted byte array containing message content.
-     * @param offset The location of the first payload byte within the array.
-     * @param protocolVersion Bitcoin protocol version.
-     * @param serializer the serializer to use for this message.
-     * @param length The length of message payload if known.  Usually this is provided when deserializing of the wire
-     * as the length will be provided as part of the header.  If unknown then set to Message.UNKNOWN_LENGTH
-     * @throws ProtocolException
-     */
-    protected Message(NetworkParameters params, byte[] payload, int offset, int protocolVersion, MessageSerializer serializer, int length) throws ProtocolException {
+
+    protected void setValues3(NetworkParameters params, byte[] payload, int offset) throws ProtocolException {
+       setValues5(params, payload, offset,    params.getDefaultSerializer(),  UNKNOWN_LENGTH);
+        
+    }
+
+    protected void setValues5(NetworkParameters params, byte[] payload, int offset, MessageSerializer serializer, int length) throws ProtocolException {
         this.serializer = serializer;
-        this.protocolVersion = protocolVersion;
+        this.protocolVersion = params.getProtocolVersionNum(ProtocolVersion.CURRENT);
         this.params = params;
         this.payload = payload;
         this.cursor = this.offset = offset;
@@ -105,19 +99,8 @@ public abstract class Message {
         if (!serializer.isParseRetainMode())
             this.payload = null;
     }
-
     
-
-    protected Message(NetworkParameters params, byte[] payload, int offset) throws ProtocolException {
-        this(params, payload, offset, params.getProtocolVersionNum( ProtocolVersion.CURRENT),
-             params.getDefaultSerializer(), UNKNOWN_LENGTH);
-    }
-
-    protected Message(NetworkParameters params, byte[] payload, int offset, MessageSerializer serializer, int length) throws ProtocolException {
-        this(params, payload, offset, params.getProtocolVersionNum( ProtocolVersion.CURRENT),
-             serializer, length);
-    }
-
+ 
     // These methods handle the serialization/deserialization using the custom Bitcoin protocol.
 
     protected abstract void parse() throws ProtocolException;

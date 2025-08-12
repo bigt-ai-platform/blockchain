@@ -48,9 +48,16 @@ public class HeadersMessage extends Message {
 
     private List<Block> blockHeaders;
 
-    public HeadersMessage(NetworkParameters params, byte[] payload) throws ProtocolException {
-        super(params, payload, 0);
-    }
+   
+    public HeadersMessage(NetworkParameters params) {
+ 	   super(params);
+  }
+ public  void setHeadersMessage(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
+ 	AlertMessage a = new AlertMessage(params);
+	 
+    a.setValues3(params, payloadBytes, 0);
+ }
+ 
 
     public HeadersMessage(NetworkParameters params, Block... headers) throws ProtocolException {
         super(params);

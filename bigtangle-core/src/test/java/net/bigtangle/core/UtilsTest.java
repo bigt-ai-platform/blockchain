@@ -128,7 +128,7 @@ public class UtilsTest {
      * the specified other Block.
      */
     public static Block createNextBlock(Block prevBlock, Block branchBlock, final long version, byte[] mineraddress) {
-        Block b = new Block(prevBlock.getParams(), version);
+        Block b =   Block.setBlock2(prevBlock.getParams(), version);
 
         b.setMinerAddress(mineraddress);
         b.setPrevBlockHash(prevBlock.getHash());

@@ -44,5 +44,51 @@ git config user.name "j0904"
 git config user.email "j0904@localhost.com"
 
 
-change all constructors TransactionOutPoint  other than  TransactionOutPoint() in /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOutPoint.java 
-to different methods in the form  public static TransactionOutPoint.from... and change the references call
+keep only Message(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Message.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+
+keep only Block(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Block.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+
+keep only TransactionOutPoint(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOutPoint.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+ 
+keep only TransactionInput(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionInput.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+ 
+ keep only TransactionOutput(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOutput.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+ 
+ keep only Transaction(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Transaction.java 
+change other constructors to different instance methods in the form  setValues(...) 
+change the references call and remove those constructors
+   
+
+   
+   I need to analyze the task and understand what needs to be done:
+
+1. For several Java classes in the bigtangle-core module, I need to:
+
+   - Keep only the constructor that takes NetworkParameters params
+   - Change all other constructors to instance methods named setValues(...)
+   - Update all references to use these new methods instead of the removed constructors
+
+The classes I need to modify are:
+
+- Message.java
+- Block.java
+- TransactionOutPoint.java
+- TransactionInput.java
+- TransactionOutput.java
+- Transaction.java
+
+Let me start by examining the first file mentioned - Message.java - to understand its current structure and what changes need to be made.
+
+I'll help you modify these Java classes to keep only the NetworkParameters constructor and convert other constructors to setValues methods. Let me start by examining the Message.java file.
+   
+   

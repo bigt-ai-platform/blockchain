@@ -22,16 +22,20 @@ public class MessageTest {
 			NetworkParameters params = MainNetParams.get();
 			VarInt length = new VarInt(Integer.MAX_VALUE);
 			byte[] payload = length.encode();
-			new VarStrMessage(params, payload);
+			  VarStrMessage.from (params, payload);
 		});
 
 	}
 
 	static class VarStrMessage extends Message {
-		public VarStrMessage(NetworkParameters params, byte[] payload) {
-			super(params, payload, 0);
+		public VarStrMessage(NetworkParameters params ) {
+			super(params );
 		}
-
+		public static  VarStrMessage from(NetworkParameters params, byte[] payload) {
+			VarStrMessage message = new VarStrMessage(params);
+			message.setValues3(params, payload, 0);
+			return message;
+		}
 		@Override
 		protected void parse() throws ProtocolException {
 			readStr();
@@ -45,16 +49,20 @@ public class MessageTest {
 			NetworkParameters params = MainNetParams.get();
 			VarInt length = new VarInt(Integer.MAX_VALUE);
 			byte[] payload = length.encode();
-			new VarBytesMessage(params, payload);
+			  VarBytesMessage. from(params, payload);
 		});
 
 	}
 
 	static class VarBytesMessage extends Message {
-		public VarBytesMessage(NetworkParameters params, byte[] payload) {
-			super(params, payload, 0);
+		public VarBytesMessage(NetworkParameters params ) {
+			super(params );
 		}
-
+		public static VarBytesMessage from(NetworkParameters params, byte[] payload) {
+			VarBytesMessage message = new VarBytesMessage(params);
+			message.setValues3(params, payload, 0);
+			return message;
+		}
 		@Override
 		protected void parse() throws ProtocolException {
 			readByteArray();

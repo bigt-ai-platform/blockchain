@@ -21,7 +21,6 @@ package net.bigtangle.core;
 
 import javax.annotation.Nullable;
 
-import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.NetworkParameters;
 
 /**
@@ -40,16 +39,8 @@ public abstract class ChildMessage extends Message {
         super(params);
     }
  
-    public ChildMessage(NetworkParameters params, byte[] payload, int offset) throws ProtocolException {
-        super(params, payload, offset);
-    }
-
-    public ChildMessage(NetworkParameters params, byte[] payload, int offset, @Nullable Message parent, MessageSerializer setSerializer, int length)
-            throws ProtocolException {
-        super(params, payload, offset, setSerializer, length);
-        this.parent = parent;
-    }
-
+ 
+  
     public final void setParent(@Nullable Message parent) {
         if (this.parent != null && this.parent != parent && parent != null) {
             // After old parent is unlinked it won't be able to receive notice if this ChildMessage

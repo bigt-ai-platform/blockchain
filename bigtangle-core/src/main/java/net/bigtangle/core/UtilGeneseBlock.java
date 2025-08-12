@@ -55,7 +55,7 @@ public class UtilGeneseBlock {
 	    }
 
 		public static Block createGenesis(NetworkParameters params) {
-		    Block genesisBlock = new Block(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
+		    Block genesisBlock =   Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
 		    		BlockType.BLOCKTYPE_INITIAL.ordinal(), 0, 0, Utils.encodeCompactBits(params.getMaxTarget()));
 		    genesisBlock.setTime(1532896109L); 
 		    genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 

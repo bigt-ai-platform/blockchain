@@ -59,9 +59,15 @@ public class AlertMessage extends Message {
 
     // Chosen arbitrarily to avoid memory blowups.
     private static final long MAX_SET_SIZE = 100;
-
-    public AlertMessage(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
-        super(params, payloadBytes, 0);
+    
+     public AlertMessage(NetworkParameters params) {
+    	   super(params);
+     }
+    public static   AlertMessage fromAlertMessage(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
+    	AlertMessage a = new AlertMessage(params);
+	 
+       a.setValues3(params, payloadBytes, 0);
+       return a;
     }
 
     @Override

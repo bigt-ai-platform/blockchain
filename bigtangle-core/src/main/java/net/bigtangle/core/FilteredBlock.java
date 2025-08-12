@@ -51,10 +51,17 @@ public class FilteredBlock extends Message {
     // These were relayed as a part of the filteredblock getdata, ie likely weren't previously received as loose transactions
     private Map<Sha256Hash, Transaction> associatedTransactions = new HashMap<Sha256Hash, Transaction>();
     
-    public FilteredBlock(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
-        super(params, payloadBytes, 0);
-    }
-
+ 
+    public FilteredBlock(NetworkParameters params) {
+  	   super(params);
+   }
+  public  void setFilteredBlock(NetworkParameters params, byte[] payloadBytes) throws ProtocolException {
+  	AlertMessage a = new AlertMessage(params);
+ 	 
+     a.setValues3(params, payloadBytes, 0);
+  }
+  
+  
     public FilteredBlock(NetworkParameters params, Block header, PartialMerkleTree pmt) {
         super(params);
         this.header = header;
@@ -75,8 +82,8 @@ public class FilteredBlock extends Message {
         byte[] headerBytes = new byte[NetworkParameters.HEADER_SIZE];
         System.arraycopy(payload, 0, headerBytes, 0, NetworkParameters.HEADER_SIZE);
         header = params.getDefaultSerializer().makeBlock(headerBytes);
-        
-        merkleTree = new PartialMerkleTree(params, payload, NetworkParameters.HEADER_SIZE);
+        PartialMerkleTree merkleTree = new PartialMerkleTree(params);
+        merkleTree  .setPartialMerkleTree(params, payload, NetworkParameters.HEADER_SIZE);
         
         length = NetworkParameters.HEADER_SIZE + merkleTree.getMessageSize();
     }

@@ -206,7 +206,7 @@ public class BitcoinSerializer extends MessageSerializer {
      */
     @Override
     public Message makeAlertMessage(byte[] payloadBytes) throws ProtocolException {
-        return new AlertMessage(params, payloadBytes);
+        return    AlertMessage.fromAlertMessage(params, payloadBytes);
     }
 
     /**
@@ -215,7 +215,7 @@ public class BitcoinSerializer extends MessageSerializer {
      */
     @Override
     public Block makeBlock(final byte[] payloadBytes, final int offset, final int length) throws ProtocolException {
-        return new Block(params, payloadBytes, offset, this, length);
+        return   Block.setBlock5(params, payloadBytes, offset, this, length);
     }
 
  
@@ -227,7 +227,7 @@ public class BitcoinSerializer extends MessageSerializer {
     @Override
     public Transaction makeTransaction(byte[] payloadBytes, int offset,
         int length, byte[] hash) throws ProtocolException {
-        Transaction tx = new Transaction(params, payloadBytes, offset, null, this, length);
+        Transaction tx =   Transaction.fromTransaction6(params, payloadBytes, offset, null, this, length);
         if (hash != null)
             tx.setHash(Sha256Hash.wrapReversed(hash));
         return tx;

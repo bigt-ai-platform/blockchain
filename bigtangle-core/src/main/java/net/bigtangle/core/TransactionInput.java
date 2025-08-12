@@ -90,43 +90,45 @@ public class TransactionInput extends ChildMessage {
 	 */
 	public static TransactionInput fromScriptBytes(NetworkParameters params, @Nullable Transaction parentTransaction,
 			byte[] scriptBytes) {
-		return fromOutpoint(params, parentTransaction, scriptBytes,
-				TransactionOutPoint.fromTx(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
+		return fromOutpoint4(params, parentTransaction, scriptBytes,
+				TransactionOutPoint.fromTx4(params, UNCONNECTED, (Sha256Hash) null, (Transaction) null));
 	}
-
-	public static TransactionInput fromOutpoint(NetworkParameters params, @Nullable Transaction parentTransaction,
+	
+	public static TransactionInput fromOutpoint4(NetworkParameters params, @Nullable Transaction parentTransaction,
 			byte[] scriptBytes, TransactionOutPoint outpoint) {
-		return new TransactionInput(params, parentTransaction, scriptBytes, outpoint, null);
+		return fromOutpoint5(params, parentTransaction, scriptBytes, outpoint, null);
 	}
 
-	public TransactionInput(NetworkParameters params, @Nullable Transaction parentTransaction, byte[] scriptBytes,
-			TransactionOutPoint outpoint, @Nullable Coin value) {
-		super(params);
-		this.scriptBytes = scriptBytes;
-		this.outpoint = outpoint;
-		this.sequence = NO_SEQUENCE;
-		this.value = value;
-		setParent(parentTransaction);
-		length = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
+	public static TransactionInput fromOutpoint5(NetworkParameters params, @Nullable Transaction parentTransaction,
+			byte[] scriptBytes, TransactionOutPoint outpoint, @Nullable Coin value) {
+		TransactionInput a = new TransactionInput(params);
+		a.scriptBytes = scriptBytes;
+		a.outpoint = outpoint;
+		a.sequence = NO_SEQUENCE;
+		a.value = value;
+		a.setParent(parentTransaction);
+		a.length = 40 + (scriptBytes == null ? 1 : VarInt.sizeOf(scriptBytes.length) + scriptBytes.length);
+		return a;
 	}
 
 	/**
 	 * Creates an UNSIGNED input that links to the given output
 	 */
-	TransactionInput(NetworkParameters params, Transaction parentTransaction, TransactionOutput output,
-			Sha256Hash blockHash) {
-		super(params);
+	public static TransactionInput fromTransactionInput4(NetworkParameters params, Transaction parentTransaction,
+			TransactionOutput output, Sha256Hash blockHash) {
+		TransactionInput a = new TransactionInput(params);
 		long outputIndex = output.getIndex();
 		if (output.getParentTransaction() != null) {
-			outpoint =   TransactionOutPoint.fromTx(params, outputIndex, blockHash, output.getParentTransaction());
+			a.outpoint = TransactionOutPoint.fromTx4(params, outputIndex, blockHash, output.getParentTransaction());
 		} else {
-			outpoint = TransactionOutPoint.fromOutput(params, blockHash, output);
+			a.outpoint = TransactionOutPoint.fromOutput3(params, blockHash, output);
 		}
-		scriptBytes = EMPTY_ARRAY;
-		sequence = NO_SEQUENCE;
-		setParent(parentTransaction);
-		this.value = output.getValue();
-		length = 41;
+		a.scriptBytes = EMPTY_ARRAY;
+		a.sequence = NO_SEQUENCE;
+		a.setParent(parentTransaction);
+		a.value = output.getValue();
+		a.length = 41;
+		return a;
 	}
 
 	/**
@@ -139,23 +141,30 @@ public class TransactionInput extends ChildMessage {
 	 * @param serializer the serializer to use for this message.
 	 * @throws ProtocolException
 	 */
-	public TransactionInput(NetworkParameters params, Transaction parentTransaction, byte[] payload, int offset,
-			MessageSerializer serializer) throws ProtocolException {
-		super(params, payload, offset, parentTransaction, serializer, UNKNOWN_LENGTH);
-		this.value = null;
+	public static TransactionInput fromTransactionInput5(NetworkParameters params, Transaction parentTransaction,
+			byte[] payload, int offset, MessageSerializer serializer) throws ProtocolException {
+		TransactionInput a = new TransactionInput(params);
+		a.setValues5(params, payload, offset, serializer, UNKNOWN_LENGTH);
+		a.setParent(parentTransaction);
+		a.value = null;
+		return a;
+	}
+
+	public TransactionInput(NetworkParameters params) throws ProtocolException {
+		super(params);
 	}
 
 	@Override
 	protected void parse() throws ProtocolException {
-		outpoint = new TransactionOutPoint(params, payload, cursor, this, serializer);
+		outpoint = TransactionOutPoint.fromTransactionOutPoint5(params, payload, cursor, this, serializer);
 		cursor += outpoint.getMessageSize();
 		int scriptLen = (int) readVarInt();
 		length = cursor - offset + scriptLen + 4;
 		scriptBytes = readBytes(scriptLen);
 		sequence = readUint32();
 		if (readUint32() == 1) {
-			outpoint.connectedOutput = new TransactionOutput(params, (Transaction) this.parent, payload, cursor,
-					serializer);
+			outpoint.connectedOutput = TransactionOutput.fromTransactionOutput(params, (Transaction) this.parent,
+					payload, cursor, serializer);
 			cursor += outpoint.connectedOutput.getMessageSize();
 		}
 	}

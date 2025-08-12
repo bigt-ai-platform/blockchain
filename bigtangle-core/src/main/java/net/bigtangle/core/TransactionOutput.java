@@ -87,6 +87,10 @@ public class TransactionOutput extends ChildMessage {
     private String description;
 
  
+    public TransactionOutput(NetworkParameters params) {
+        super(params);
+    }
+    		
     /**
      * Deserializes a transaction output message. This is usually part of a
      * transaction message.
@@ -102,10 +106,14 @@ public class TransactionOutput extends ChildMessage {
      *            the serializer to use for this message.
      * @throws ProtocolException
      */
-    public TransactionOutput(NetworkParameters params, @Nullable Transaction parent, byte[] payload, int offset,
+    public  static TransactionOutput fromTransactionOutput(NetworkParameters params, @Nullable Transaction parent, byte[] payload, int offset,
             MessageSerializer serializer) throws ProtocolException {
-        super(params, payload, offset, parent, serializer, UNKNOWN_LENGTH);
-        availableForSpending = true;
+    	TransactionOutput a = new TransactionOutput(params);
+        a.setValues5(params, payload, offset, serializer, UNKNOWN_LENGTH);
+    	 a.setParent(parent);
+        a.availableForSpending = true;
+        return a;
+        
     }
 
     /**
@@ -426,7 +434,7 @@ public class TransactionOutput extends ChildMessage {
      * detached.
      */
     public TransactionOutPoint getOutPointFor(Sha256Hash containingBlockHash) {
-        return   TransactionOutPoint.fromTx(params, getIndex(), containingBlockHash, getParentTransaction());
+        return   TransactionOutPoint.fromTx4(params, getIndex(), containingBlockHash, getParentTransaction());
     }
 
     /**

@@ -66,9 +66,13 @@ public class TransactionOutPoint extends ChildMessage {
 	// The connected output.
 	public TransactionOutput connectedOutput = null;
 
-	public static TransactionOutPoint fromTx(NetworkParameters params, long index, @Nullable Sha256Hash blockHash,
+	public TransactionOutPoint(NetworkParameters params) {
+		super(params);
+	}
+
+	public static TransactionOutPoint fromTx4(NetworkParameters params, long index, @Nullable Sha256Hash blockHash,
 			@Nullable Transaction fromTx) {
-		TransactionOutPoint a = new TransactionOutPoint(params, index, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH);
+		TransactionOutPoint a = fromTransactionOutPoint4(params, index, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH);
 
 		if (fromTx != null && blockHash != null) {
 			a.blockHash = blockHash;
@@ -79,27 +83,22 @@ public class TransactionOutPoint extends ChildMessage {
 		return a;
 	}
 
-	public TransactionOutPoint(NetworkParameters params, long index, Sha256Hash blockHash, Sha256Hash transactionHash) {
-		super(params);
-		this.index = index;
-		this.blockHash = blockHash;
-		this.txHash = transactionHash;
-		this.length = MESSAGE_LENGTH;
-	}
-
-	public static TransactionOutPoint fromOutput(NetworkParameters params, @Nullable Sha256Hash blockHash,
-			TransactionOutput connectedOutput) {
-		TransactionOutPoint a = new TransactionOutPoint(params, connectedOutput.getIndex(), blockHash,
-				connectedOutput.getParentTransactionHash());
-		a.connectedOutput = connectedOutput;
+	public static TransactionOutPoint fromTransactionOutPoint4(NetworkParameters params, long index,
+			Sha256Hash blockHash, Sha256Hash transactionHash) {
+		TransactionOutPoint a = new TransactionOutPoint(params);
+		a.index = index;
+		a.blockHash = blockHash;
+		a.txHash = transactionHash;
+		a.length = MESSAGE_LENGTH;
 		return a;
 	}
 
-	/**
-	 * /** Deserializes the message. This is usually part of a transaction message.
-	 */
-	public TransactionOutPoint(NetworkParameters params, byte[] payload, int offset) throws ProtocolException {
-		super(params, payload, offset);
+	public static TransactionOutPoint fromOutput3(NetworkParameters params, @Nullable Sha256Hash blockHash,
+			TransactionOutput connectedOutput) {
+		TransactionOutPoint a = fromTransactionOutPoint4(params, connectedOutput.getIndex(), blockHash,
+				connectedOutput.getParentTransactionHash());
+		a.connectedOutput = connectedOutput;
+		return a;
 	}
 
 	/**
@@ -110,9 +109,12 @@ public class TransactionOutPoint extends ChildMessage {
 	 * @param serializer the serializer to use for this message.
 	 * @throws ProtocolException
 	 */
-	public TransactionOutPoint(NetworkParameters params, byte[] payload, int offset, Message parent,
-			MessageSerializer serializer) throws ProtocolException {
-		super(params, payload, offset, parent, serializer, MESSAGE_LENGTH);
+	public static TransactionOutPoint fromTransactionOutPoint5(NetworkParameters params, byte[] payload, int offset,
+			Message parent, MessageSerializer serializer) throws ProtocolException {
+		TransactionOutPoint a = new TransactionOutPoint(params); 
+		a.setValues5(params, payload, offset, serializer, MESSAGE_LENGTH);
+		a.setParent(parent);
+		return a;
 	}
 
 	@Override

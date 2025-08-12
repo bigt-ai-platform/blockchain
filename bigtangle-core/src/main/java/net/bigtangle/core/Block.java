@@ -85,7 +85,7 @@ public class Block extends Message {
 	private long height;
 	// If NetworkParameters.USE_EQUIHASH, this field will contain the PoW
 	// solution
- 
+
 	/** If null, it means this object holds only the headers. */
 	@Nullable
 	List<Transaction> transactions;
@@ -104,15 +104,18 @@ public class Block extends Message {
 	// (which Message needs)
 	protected int optimalEncodingMessageSize;
 
- 
-	public Block(NetworkParameters params, long setVersion) {
-		this(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH, BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0,
-				Utils.encodeCompactBits(params.getMaxTarget()), 0);
+	public Block(NetworkParameters params) {
+		super(params);
+	}
+
+	public static Block setBlock2(NetworkParameters params, long setVersion) {
+		return Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
+				BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0, Utils.encodeCompactBits(params.getMaxTarget()), 0);
 	}
 
 	public static Block createBlock(NetworkParameters networkParameters, Block r1, Block r2) {
-		Block block = new Block(networkParameters, r1.getHash(), r2.getHash(), BlockType.BLOCKTYPE_TRANSFER.ordinal(),
-				Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
+		Block block = Block.setBlock7(networkParameters, r1.getHash(), r2.getHash(),
+				BlockType.BLOCKTYPE_TRANSFER.ordinal(), Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
 				Math.max(r1.getLastMiningRewardBlock(), r2.getLastMiningRewardBlock()),
 				r1.getLastMiningRewardBlock() > r2.getLastMiningRewardBlock() ? r1.getDifficultyTarget()
 						: r2.getDifficultyTarget());
@@ -121,23 +124,24 @@ public class Block extends Message {
 		return block;
 	}
 
-	public Block(NetworkParameters params, Sha256Hash prevBlockHash, Sha256Hash prevBranchBlockHash, int blocktype,
-			long minTime, long lastMiningRewardBlock, long difficultyTarget) {
-		super(params);
+	public static Block setBlock7(NetworkParameters params, Sha256Hash prevBlockHash, Sha256Hash prevBranchBlockHash,
+			int blocktype, long minTime, long lastMiningRewardBlock, long difficultyTarget) {
+		Block a = new Block(params);
 		// Set up a few basic things. We are not complete after this though.
-		this.version = NetworkParameters.BLOCK_VERSION_GENESIS;
-		this.difficultyTarget = difficultyTarget;
-		this.lastMiningRewardBlock = lastMiningRewardBlock;
-		this.time = System.currentTimeMillis() / 1000;
-		if (this.time < minTime)
-			this.time = minTime;
-		this.prevBlockHash = prevBlockHash;
-		this.prevBranchBlockHash = prevBranchBlockHash;
+		a.version = NetworkParameters.BLOCK_VERSION_GENESIS;
+		a.difficultyTarget = difficultyTarget;
+		a.lastMiningRewardBlock = lastMiningRewardBlock;
+		a.time = System.currentTimeMillis() / 1000;
+		if (a.time < minTime)
+			a.time = minTime;
+		a.prevBlockHash = prevBlockHash;
+		a.prevBranchBlockHash = prevBranchBlockHash;
 
-		this.blockType = BlockType.values()[blocktype];
-		this.minerAddress = new byte[20];
-		length = NetworkParameters.HEADER_SIZE;
-		this.transactions = new ArrayList<>();
+		a.blockType = BlockType.values()[blocktype];
+		a.minerAddress = new byte[20];
+		a.length = NetworkParameters.HEADER_SIZE;
+		a.transactions = new ArrayList<>();
+		return a;
 	}
 
 	/**
@@ -151,9 +155,9 @@ public class Block extends Message {
 	 *                     provided as part of the header. If unknown then set to
 	 *                     Message.UNKNOWN_LENGTH
 	 */
-	public Block(NetworkParameters params, byte[] payloadBytes, MessageSerializer serializer, int length)
-			throws ProtocolException {
-		super(params, payloadBytes, 0, serializer, length);
+	public static Block setBlock4(NetworkParameters params, byte[] payloadBytes, MessageSerializer serializer,
+			int length) throws ProtocolException {
+		return setBlock5(params, payloadBytes, 0, serializer, length);
 	}
 
 	/**
@@ -168,30 +172,11 @@ public class Block extends Message {
 	 *                     provided as part of the header. If unknown then set to
 	 *                     Message.UNKNOWN_LENGTH
 	 */
-	public Block(NetworkParameters params, byte[] payloadBytes, int offset, MessageSerializer serializer, int length)
-			throws ProtocolException {
-		super(params, payloadBytes, offset, serializer, length);
-	}
-
-	/**
-	 * Construct a block object from the Bitcoin wire format. Used in the case of a
-	 * block contained within another message (i.e. for AuxPoW header).
-	 *
-	 * @param params       NetworkParameters object.
-	 * @param payloadBytes Bitcoin protocol formatted byte array containing message
-	 *                     content.
-	 * @param offset       The location of the first payload byte within the array.
-	 * @param parent       The message element which contains this block, maybe null
-	 *                     for no parent.
-	 * @param serializer   the serializer to use for this block.
-	 * @param length       The length of message if known. Usually this is provided
-	 *                     when deserializing of the wire as the length will be
-	 *                     provided as part of the header. If unknown then set to
-	 *                     Message.UNKNOWN_LENGTH
-	 */
-	public Block(NetworkParameters params, byte[] payloadBytes, int offset, @Nullable Message parent,
+	public static Block setBlock5(NetworkParameters params, byte[] payloadBytes, int offset,
 			MessageSerializer serializer, int length) throws ProtocolException {
-		super(params, payloadBytes, offset, serializer, length);
+		Block a = new Block(params);
+		a.setValues5(params, payloadBytes, offset, serializer, length);
+		return a;
 	}
 
 	public boolean isBLOCKTYPE_INITIAL() {
@@ -220,7 +205,7 @@ public class Block extends Message {
 		optimalEncodingMessageSize += VarInt.sizeOf(numTransactions);
 		transactions = new ArrayList<>(numTransactions);
 		for (int i = 0; i < numTransactions; i++) {
-			Transaction tx = new Transaction(params, payload, cursor, this, serializer, UNKNOWN_LENGTH);
+			Transaction tx = Transaction.fromTransaction6(params, payload, cursor, this, serializer, UNKNOWN_LENGTH);
 			// Label the transaction as coming from the P2P network, so code
 			// that cares where we first saw it knows.
 			// tx.getConfidence().setSource(TransactionConfidence.Source.NETWORK);
@@ -247,7 +232,7 @@ public class Block extends Message {
 		blockType = BlockType.values()[(int) readUint32()];
 		height = readInt64();
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
-		headerBytesValid = serializer.isParseRetainMode(); 
+		headerBytesValid = serializer.isParseRetainMode();
 		// transactions
 		parseTransactions(cursor);
 		length = cursor - offset;
@@ -283,7 +268,7 @@ public class Block extends Message {
 	}
 
 	void writePoW(OutputStream stream) throws IOException {
-	 
+
 	}
 
 	private void writeTransactions(OutputStream stream) throws IOException {
@@ -467,7 +452,7 @@ public class Block extends Message {
 
 	/** Returns a copy of the block */
 	public Block cloneAsHeader() {
-		Block block = new Block(params, NetworkParameters.BLOCK_VERSION_GENESIS);
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		copyBitcoinHeaderTo(block);
 		return block;
 	}
@@ -483,7 +468,7 @@ public class Block extends Message {
 		block.difficultyTarget = difficultyTarget;
 		block.lastMiningRewardBlock = lastMiningRewardBlock;
 		block.minerAddress = minerAddress;
-	 
+
 		block.blockType = blockType;
 		block.transactions = null;
 		block.hash = getHash();
@@ -585,8 +570,8 @@ public class Block extends Message {
 					return;
 
 				// No, so increment the nonce and try again.
-				setNonce(getNonce() + 1); 
-		 
+				setNonce(getNonce() + 1);
+
 			} catch (VerificationException e) {
 				throw new RuntimeException(e); // Cannot happen.
 			}
@@ -645,17 +630,16 @@ public class Block extends Message {
 		// the difficultyTarget
 		// field is of the right value. This requires us to have the preceeding
 		// blocks.
- 
-			BigInteger h = calculatePoWHash().toBigInteger();
 
-			if (h.compareTo(target) > 0) {
-				// Proof of work check failed!
-				if (throwException)
-					throw new ProofOfWorkException();
-				else
-					return false;
-			}
-	 
+		BigInteger h = calculatePoWHash().toBigInteger();
+
+		if (h.compareTo(target) > 0) {
+			// Proof of work check failed!
+			if (throwException)
+				throw new ProofOfWorkException();
+			else
+				return false;
+		}
 
 		return true;
 	}
@@ -993,7 +977,7 @@ public class Block extends Message {
 		// Here we will do things a bit differently so a new address isn't
 		// needed every time. We'll put a simple
 		// counter in the scriptSig so every transaction has a different hash.
-		coinbase.addInput(  TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram()));
+		coinbase.addInput(TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram()));
 		if (tokenInfo == null) {
 			coinbase.addOutput(new TransactionOutput(params, coinbase, value,
 					ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
@@ -1060,7 +1044,7 @@ public class Block extends Message {
 	}
 
 	public void setBlockType(long blocktype) {
-		blockType=BlockType.values()[(int) blocktype];
+		blockType = BlockType.values()[(int) blocktype];
 		setBlockType(blockType);
 	}
 
@@ -1069,7 +1053,7 @@ public class Block extends Message {
 		this.blockType = blocktype;
 		this.hash = null;
 	}
- 
+
 	public long getDifficultyTarget() {
 		return difficultyTarget;
 	}
