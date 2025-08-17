@@ -23,16 +23,41 @@ mvn clean package -DskipTests=true
 ```
 
 This will compile and package the module into a JAR file in the `bigtangle-core/target/` directory.
+rm  Message.ts  ChildMessage.ts  Block.ts  TransactionOutPoint.ts  TransactionInput.ts  TransactionOutput.ts
  
 
-translate   parse and serialization from  /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Block.java to src/net/bigtangle/core/Block.ts
+translate  the test from java   /home/jcui/git/server/
+        bigtangle-core/src/test/java/net/bigtangle/core/CoinSerializationTest.java
+        bigtangle-core/src/test/java/net/bigtangle/core/TransactionInputSerializationTest.java
+        bigtangle-core/src/test/java/net/bigtangle/core/TransactionOutPointSerializationTest.java
+        bigtangle-core/src/test/java/net/bigtangle/core/TransactionOutputSerializationTest.java
+        bigtangle-core/src/test/java/net/bigtangle/script/ScriptSerializationTest.java
+to  test/core/
+
+
+translate   Transaction.java
+
+from  /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/  to src/net/bigtangle/core/
+
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
 bigtangle-typescript/src/net/bigtangle/utils
 bigtangle-typescript/src/net/bigtangle/exception
 bigtangle-typescript/src/net/bigtangle/params
 bigtangle-typescript/src/net/bigtangle/script
-use java compatible  parse and serialization and change the reference call 
+use java compatible parse and serialization
+
+
+
+and cahge the reference call 
+
+ - Message.ts
+- ChildMessage.ts
+- Block.ts
+- TransactionOutPoint.ts
+- TransactionInput.ts
+- TransactionOutput.ts
+- Transaction.ts
  
   npm test and fix,   parse and serialization must follow java code /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/  with same name and diretorcy in ts. 
     

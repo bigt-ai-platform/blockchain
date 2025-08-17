@@ -7,6 +7,7 @@ package net.bigtangle.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.Arrays;
@@ -107,6 +108,31 @@ public class BlockTest {
 		System.out.printf(tb.toString());
 
 		assertEquals(t, Utils.HEX.encode(tb.bitcoinSerialize()));
+		
+		// Assert transaction details
+		assertEquals(1, tb.getTransactions().size());
+		
+		Transaction tx = tb.getTransactions().get(0);
+		
+		// Assert transaction is not coinbase
+		assertFalse(tx.isCoinBase());
+		
+		// Assert input details
+		assertEquals(1, tx.getInputs().size());
+		TransactionInput input = tx.getInputs().get(0);
+		assertEquals("008cdb09efc7dd99014d74db1d0f2468cf52e6556fb869d08bb48850b67709bb", 
+		             Utils.HEX.encode(input.getOutpoint().getBlockHash().getBytes()));
+		assertEquals("ad1665697e83496891c8921bde5c60f88d9e16149e931336f26bf87df49e3035", 
+		             Utils.HEX.encode(input.getOutpoint().getTxHash().getBytes()));
+		assertEquals(1, input.getOutpoint().getIndex());
+		
+		// Assert output details
+		assertEquals(2, tx.getOutputs().size());
+		TransactionOutput output1 = tx.getOutputs().get(0);
+		TransactionOutput output2 = tx.getOutputs().get(1);
+		
+		assertEquals(Coin.valueOf(1000000L), output1.getValue());
+		assertEquals(Coin.valueOf(99999999996997000L), output2.getValue());
 	}
 
 	@Test
