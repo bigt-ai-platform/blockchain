@@ -165,7 +165,7 @@ public abstract class AbstractFullPrunedBlockChainTest {
         // Create bitcoin spend of 1 BTA.
         ECKey toKey = new ECKey();
         Coin amount = Coin.valueOf(10000, NetworkParameters.BIGTANGLE_TOKENID);
-        Address address = new Address(PARAMS, toKey.getPubKeyHash());
+        Address address =   Address.fromHash160(PARAMS, toKey.getPubKeyHash());
         Coin totalAmount = Coin.ZERO;
 
         Transaction t = new Transaction(PARAMS);

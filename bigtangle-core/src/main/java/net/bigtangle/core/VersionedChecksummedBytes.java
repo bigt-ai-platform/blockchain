@@ -47,18 +47,19 @@ public class VersionedChecksummedBytes implements Serializable, Cloneable, Compa
     protected final int version;
     protected byte[] bytes;
 
-    protected VersionedChecksummedBytes(String encoded) throws AddressFormatException {
-        byte[] versionAndDataBytes = Base58.decodeChecked(encoded);
-        byte versionByte = versionAndDataBytes[0];
-        version = versionByte & 0xFF;
-        bytes = new byte[versionAndDataBytes.length - 1];
-        System.arraycopy(versionAndDataBytes, 1, bytes, 0, versionAndDataBytes.length - 1);
-    }
-
     protected VersionedChecksummedBytes(int version, byte[] bytes) {
         checkArgument(version >= 0 && version < 256);
         this.version = version;
         this.bytes = bytes;
+    }
+
+    public static VersionedChecksummedBytes fromBase58(String encoded) throws AddressFormatException {
+        byte[] versionAndDataBytes = Base58.decodeChecked(encoded);
+        byte versionByte = versionAndDataBytes[0];
+        int version = versionByte & 0xFF;
+        byte[] bytes = new byte[versionAndDataBytes.length - 1];
+        System.arraycopy(versionAndDataBytes, 1, bytes, 0, versionAndDataBytes.length - 1);
+        return new VersionedChecksummedBytes(version, bytes);
     }
 
     /**
@@ -125,5 +126,14 @@ public class VersionedChecksummedBytes implements Serializable, Cloneable, Compa
      */
     public int getVersion() {
         return version;
+    }
+
+    /**
+     * Returns the bytes of the data.
+     *
+     * @return The bytes of the data.
+     */
+    public byte[] getBytes() {
+        return bytes;
     }
 }

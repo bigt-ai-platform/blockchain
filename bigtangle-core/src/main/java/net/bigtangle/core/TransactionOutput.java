@@ -233,6 +233,8 @@ public class TransactionOutput extends ChildMessage {
 
         checkNotNull(scriptBytes);
         byte[] valuebytes = value.getValue().toByteArray();
+   // System.out.println("Length: " + valuebytes.length);
+  //  System.out.println("Bytes: " + Arrays.toString(valuebytes));
          stream.write(new VarInt(valuebytes.length).encode()); 
          stream.write(valuebytes); 
 

@@ -24,7 +24,7 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.ScriptOpCodes;
-//TODO no binary blockBytes
+ 
 
 public class BlockTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();
@@ -36,15 +36,18 @@ public class BlockTest {
 		// 00000000a6e5eb79dcec11897af55e90cd571a4335383a3ccfbc12ec81085935
 		// One with lots of transactions in, so a good test of the merkle tree
 		// hashing.
-		blockBytes = UtilGeneseBlock.createGenesis(PARAMS).unsafeBitcoinSerialize();
+		Block gen= UtilGeneseBlock.createGenesis(PARAMS);
+		System.out.println("Genesis: " + gen. toString());
+		blockBytes =gen.unsafeBitcoinSerialize();
 
 	}
 
-	// TODO NO BINARY @Test
-	public void testBlockVerification() throws Exception {
+	 
+	  @Test
+	public void testSerial() throws Exception {
 		Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
-		block.verify();
-		assertEquals("00000000a6e5eb79dcec11897af55e90cd571a4335383a3ccfbc12ec81085935", block.getHashAsString());
+	 System.out.println("Genesis: " + block. toString());
+		assertEquals("e8b4ca6065a55a47447f754e2c0f9e2dfee90b9823702d50f0c77ad59cb7c28c", block.getHashAsString());
 	}
 
 	// TODO NO BINARY @Test

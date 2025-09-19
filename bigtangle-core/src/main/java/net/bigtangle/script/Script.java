@@ -348,7 +348,7 @@ public class Script {
      * transaction can actually receive coins on it. This method may be removed in future.
      */
     public Address getFromAddress(NetworkParameters params) throws ScriptException {
-        return new Address(params, Utils.sha256hash160(getPubKey()));
+        return   Address.fromHash160(params, Utils.sha256hash160(getPubKey()));
     }
 
     /**
@@ -367,7 +367,7 @@ public class Script {
      */
     public Address getToAddress(NetworkParameters params, boolean forcePayToPubKey) throws ScriptException {
         if (isSentToAddress())
-            return new Address(params, getPubKeyHash());
+            return   Address.fromHash160(params, getPubKeyHash());
         else if (isPayToScriptHash())
             return Address.fromP2SHScript(params, this);
         else if (forcePayToPubKey && isSentToRawPubKey())

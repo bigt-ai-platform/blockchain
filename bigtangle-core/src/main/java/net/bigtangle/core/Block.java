@@ -492,7 +492,7 @@ public class Block extends Message {
 		s.append("   difficulty target (nBits):    ").append(difficultyTarget).append("\n");
 		s.append("   nonce: ").append(nonce).append("\n");
 		if (minerAddress != null)
-			s.append("   mineraddress: ").append(new Address(params, minerAddress)).append("\n");
+			s.append("   mineraddress: ").append(new Address(params,params.getAddressHeader(),  minerAddress)).append("\n");
 
 		s.append("   blocktype: ").append(blockType).append("\n");
 		if (transactions != null && !transactions.isEmpty()) {

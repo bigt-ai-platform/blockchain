@@ -79,7 +79,7 @@ public class OutputService {
 		List<Coin> tokens = new ArrayList<>();
 
 		for (byte[] key : pubKeyHashs) {
-			Address address = new Address(networkParameters, key);
+			Address address =   Address.fromHash160(networkParameters, key);
 			List<Coin> accountBalance = cacheBlockService.getAccountBalance(address.toString(), store);
 			if (accountBalance != null)
 				tokens.addAll(accountBalance);
@@ -118,7 +118,7 @@ public class OutputService {
 			throws UTXOProviderException, IOException {
 		List<UTXO> list = new ArrayList<>();
 		for (byte[] key : pubKeyHashs) {
-			Address address = new Address(networkParameters, key);
+			Address address =   Address.fromHash160(networkParameters, key);
 			list.addAll(getOpenTransactionOutputs(address.toString(), store));
 		}
 

@@ -50,7 +50,7 @@ public class ScriptSerializationTest {
     public void testScriptSerializationWithPayToAddress() throws IOException {
         // Create a pay-to-address script
         byte[] pubkeyHash = Utils.sha256hash160(key1.getPubKey());
-        Script script = ScriptBuilder.createOutputScript(new Address(PARAMS, pubkeyHash));
+        Script script = ScriptBuilder.createOutputScript(  Address.fromHash160(PARAMS, pubkeyHash));
         
         // Serialize the script
         byte[] serialized = script.getProgram();
@@ -247,7 +247,7 @@ public class ScriptSerializationTest {
     public void testScriptSerializationRoundTrip() throws IOException {
         // Test round-trip serialization for various script types
         Script[] scripts = {
-                ScriptBuilder.createOutputScript(new Address(PARAMS, Utils.sha256hash160(key1.getPubKey()))),
+                ScriptBuilder.createOutputScript(  Address.fromHash160(PARAMS, Utils.sha256hash160(key1.getPubKey()))),
                 ScriptBuilder.createOutputScript(key1),
                 ScriptBuilder.createMultiSigOutputScript(2, Arrays.asList(key1, key2, key3)),
                 ScriptBuilder.createP2SHOutputScript(new byte[20]),

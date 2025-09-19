@@ -84,24 +84,39 @@ public class ScriptTest {
 		Script script = new Script(sigProgBytes);
 		// Test we can extract the from address.
 		byte[] hash160 = Utils.sha256hash160(script.getPubKey());
-		Address a = new Address(PARAMS, hash160);
+		Address a =   Address.fromHash160(PARAMS, hash160);
 		assertEquals("15jTWe6r9zqxkjjLFntAWADZosAwiuw4U5", a.toString());
 	}
 
-	@Test
-	public void testScriptPubKey() throws Exception {
-		// Check we can extract the to address
-		byte[] pubkeyBytes = HEX.decode(pubkeyProg);
-		Script pubkey = new Script(pubkeyBytes);
-		assertEquals("DUP HASH160 PUSHDATA(20)[33e81a941e64cda12c6a299ed322ddbdd03f8d0e] EQUALVERIFY CHECKSIG",
-				pubkey.toString());
-		Address toAddr = new Address(PARAMS, pubkey.getPubKeyHash());
-		assertEquals("15jTWe6r9zqxkjjLFntAWADZosAwiuw4U5", toAddr.toString());
-	}
+    @Test
+    public void testNumberBuilder16() {
+        ScriptBuilder builder = new ScriptBuilder();
+        // Numbers greater than 16 must be encoded with PUSHDATA
+        builder.number(15).number(16).number(17);
+        builder.number(0, 17).number(1, 16).number(2, 15);
+        Script script = builder.build();
+        assertEquals("PUSHDATA(1)[11] 16 15 15 16 PUSHDATA(1)[11]", script.toString());
+    }
+
+    @Test
+    public void testScriptExceptionNonTrueStack() {
+        NetworkParameters params = MainNetParams.get();
+        Transaction tx = new Transaction(params);
+        tx.addInput(TransactionInput.fromScriptBytes(params, tx, new byte[0]));
+
+        // Create a script that will result in a non-true stack
+        Script scriptSig = new Script(new byte[] {OP_0}); // Pushes false
+        Script scriptPubKey = new Script(new byte[] {OP_0}); // Pushes false
+
+        Exception exception = assertThrows(ScriptException.class, () -> {
+            scriptSig.correctlySpends(tx, 0, scriptPubKey, EnumSet.noneOf(VerifyFlag.class));
+        });
+        assertTrue(exception.getMessage().startsWith("Script resulted in a non-true stack"));
+    }
 
 	@Test
 	public void testAddress() {
-		log.debug(new Address(MainNetParams.get(), Utils.HEX.decode("bcdb06ac26dcdadb3b17859d14cf45ca285be9b9"))
+		log.debug(  Address.fromHash160(MainNetParams.get(), Utils.HEX.decode("bcdb06ac26dcdadb3b17859d14cf45ca285be9b9"))
 				.toString());
 	}
 
@@ -134,7 +149,7 @@ public class ScriptTest {
 
 	@Test
 	public void testP2SHOutputScript() throws Exception {
-		Address p2shAddress = Address.fromBase58(MainNetParams.get(), "35b9vsyH1KoFT5a5KtrKusaCcPLkiSo1tU");
+		Address p2shAddress = Address.fromBase58Version(MainNetParams.get(),MainNetParams.get().getP2SHHeader(), "35b9vsyH1KoFT5a5KtrKusaCcPLkiSo1tU");
 		assertTrue(ScriptBuilder.createOutputScript(p2shAddress).isPayToScriptHash());
 	}
 

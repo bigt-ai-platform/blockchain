@@ -325,7 +325,7 @@ public class BlockStoreService {
 			boolean allowMissingPredecessor) throws BlockStoreException {
 
 //		if( block.getHeight()==9) {
-//	 		log.debug(block.toString());
+ 	 		log.debug(block.toString());
 //		}
 		// Check the block is partially formally valid and fulfills PoW
 
@@ -350,7 +350,7 @@ public class BlockStoreService {
 			switch (solidityState.getState()) {
 			case MissingPredecessor:
 				if (!allowMissingPredecessor)
-					throw new UnsolidException();
+					throw new UnsolidException(solidityState.toString() + block.toString()	);
 			case MissingCalculation:
 			case Success:
 				break;

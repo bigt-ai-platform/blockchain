@@ -475,7 +475,7 @@ public class ECKey implements EncryptableItem {
      * the RIPEMD-160 hash of the public key and is not the public key itself (which is too large to be convenient).
      */
     public Address toAddress(NetworkParameters params) {
-        return new Address(params, getPubKeyHash());
+        return   Address.fromHash160(params, getPubKeyHash());
     }
 
     /**

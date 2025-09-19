@@ -24,11 +24,14 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * An unsynchronized implementation of ByteArrayOutputStream that will return the backing byte array if its length == size().
- * This avoids unneeded array copy where the BOS is simply being used to extract a byte array of known length from a
+ * An unsynchronized implementation of ByteArrayOutputStream that will return
+ * the backing byte array if its length == size().
+ * This avoids unneeded array copy where the BOS is simply being used to extract
+ * a byte array of known length from a
  * 'serialized to stream' method.
  * <p/>
- * Unless the final length can be accurately predicted the only performance this will yield is due to unsynchronized
+ * Unless the final length can be accurately predicted the only performance this
+ * will yield is due to unsynchronized
  * methods.
  *
  * @author git
@@ -79,9 +82,9 @@ public class UnsafeByteArrayOutputStream extends ByteArrayOutputStream {
             buf = Utils.copyOf(buf, Math.max(buf.length << 1, newcount));
         }
         System.arraycopy(b, off, buf, count, len);
-        count = newcount;
+        count = newcount; 
+     //   System.out.println("UnsafeByteArrayOutputStream.writeBytes: wrote ${" +len+"} bytes, new size= " +count);
     }
-
     /**
      * Writes the complete contents of this byte array output stream to
      * the specified output stream argument, as if by calling the output

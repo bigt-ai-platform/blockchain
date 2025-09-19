@@ -35,9 +35,9 @@ translate  the test from java   /home/jcui/git/server/
 to  test/core/
 
 
-translate   Transaction.java
+translate   
 
-from  /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/  to src/net/bigtangle/core/
+from  /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/script/bigtangle-core/src/main/java/net/bigtangle/script/ScriptBuilder.java  to src/net/bigtangle/core/script/ScriptBuilder.ts
 
 use imports 
 bigtangle-typescript/src/net/bigtangle/core
@@ -69,12 +69,12 @@ git config user.name "j0904"
 git config user.email "j0904@localhost.com"
 
 
-keep only Message(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Message.java 
-change other constructors to different instance methods in the form  setValues(...) 
+keep only VersionedChecksummedBytes(int version, byte[] bytes)    in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/VersionedChecksummedBytes.java 
+change other constructors to different factory methods in the form from...
 change the references call and remove those constructors
 
-keep only Block(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Block.java 
-change other constructors to different instance methods in the form  setValues(...) 
+keep only Address(NetworkParameters params, int version, byte[] hash160)    in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Address.java 
+change other constructors to different factory methods in the form from...
 change the references call and remove those constructors
 
 keep only TransactionOutPoint(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/TransactionOutPoint.java 

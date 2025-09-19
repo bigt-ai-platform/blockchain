@@ -141,6 +141,10 @@ public class VerificationException extends RuntimeException {
         public UnsolidException() {
             super("Not solid. Server disallows unsolid blocks.");
         }
+
+        public UnsolidException(String string) {
+            super(string);
+        }
     }
 
     public static class InvalidDependencyException extends VerificationException {

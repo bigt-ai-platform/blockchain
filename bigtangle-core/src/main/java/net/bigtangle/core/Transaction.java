@@ -705,7 +705,7 @@ public class Transaction extends ChildMessage {
 	 * 
 	 * @return the newly created input.
 	 */
-	public TransactionInput addInput(Sha256Hash blockHash, TransactionOutput from) {
+	public TransactionInput  addInput(Sha256Hash blockHash, TransactionOutput from) {
 		return addInput(  TransactionInput.fromTransactionInput4(params, this, from, blockHash));
 	}
 

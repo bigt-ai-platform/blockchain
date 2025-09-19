@@ -470,7 +470,7 @@ public abstract class ServiceBase {
 					if (connectedOutput.getScriptPubKey().isSentToAddress()) {
 						fromAddress = t.getFromAddress().toBase58();
 					} else {
-						fromAddress = new Address(networkParameters,
+						fromAddress =   Address.fromHash160(networkParameters,
 								Utils.sha256hash160(connectedOutput.getScriptPubKey().getPubKey())).toBase58();
 
 					}
@@ -506,7 +506,7 @@ public abstract class ServiceBase {
 
 		// Reward the consensus block with the static reward
 		tx.addOutput(Coin.FEE_DEFAULT.times(countRewardTXFeeBased(candidateBlocks, blockStore)),
-				new Address(networkParameters, block.getMinerAddress()));
+				  Address.fromHash160(networkParameters, block.getMinerAddress()));
 		tx.setMemo(new MemoInfo("Reward"));
 		// The input does not really need to be a valid signature, as long
 		// as it has the right general form and is slightly different for
@@ -564,7 +564,7 @@ public abstract class ServiceBase {
 		Map<BlockWrap, Set<Sha256Hash>> snapshotWeights = new HashMap<>();
 		Map<Address, Long> finalRewardCount = new HashMap<>();
 		BlockWrap currentBlock, approvedBlock;
-		Address consensusBlockMiner = new Address(networkParameters, block.getMinerAddress());
+		Address consensusBlockMiner =   Address.fromHash160(networkParameters, block.getMinerAddress());
 		long currentHeight = Long.MAX_VALUE;
 		long totalRewardCount = 0;
 
@@ -664,7 +664,7 @@ public abstract class ServiceBase {
 			if (rewarded >= heightRewardCount)
 				break;
 
-			Address miner = new Address(networkParameters, rewardedBlock.getBlock().getMinerAddress());
+			Address miner =   Address.fromHash160(networkParameters, rewardedBlock.getBlock().getMinerAddress());
 			if (!finalRewardCount.containsKey(miner))
 				finalRewardCount.put(miner, 1L);
 			else

@@ -75,7 +75,7 @@ public class SubtangleService {
 				b.addCoinbaseTransaction(signKey.getPubKey(), coinbase, null, new MemoInfo("SubtangleService"));
 				blockSaveService.saveBlock(b, store);
 
-				Address address = new Address(this.networkParameters, toAddressInSubtangle);
+				Address address =   Address.fromHash160(this.networkParameters, toAddressInSubtangle);
 				this.giveMoney(signKey, address, coinbase, store);
 
 				this.giveRemoteMoney(signKey, coinbase, output, store);

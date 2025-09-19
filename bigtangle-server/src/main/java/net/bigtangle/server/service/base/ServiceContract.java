@@ -273,7 +273,7 @@ public class ServiceContract extends ServiceBaseConnect {
 				BigInteger proceedsValue = tokenProceeds.getValue();
 
 				if (proceedsValue.signum() != 0)
-					tx.addOutput(new Coin(proceedsValue, tokenId), new Address(networkParameters, payout.getKey()));
+					tx.addOutput(new Coin(proceedsValue, tokenId),   Address.fromBase58(networkParameters, payout.getKey()));
 			}
 		}
 

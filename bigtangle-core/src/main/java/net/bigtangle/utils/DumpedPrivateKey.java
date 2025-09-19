@@ -55,7 +55,8 @@ public class DumpedPrivateKey extends VersionedChecksummedBytes {
      *             if the given private key is valid but for a different chain (eg testnet vs mainnet)
      */
     public static DumpedPrivateKey fromBase58(@Nullable NetworkParameters params,String base58) throws AddressFormatException {
-        return new DumpedPrivateKey(params, base58);
+        VersionedChecksummedBytes vcb = VersionedChecksummedBytes.fromBase58(base58);
+        return new DumpedPrivateKey(params, vcb);
     }
 
     // Used by ECKey.getPrivateKeyEncoded()
@@ -80,12 +81,17 @@ public class DumpedPrivateKey extends VersionedChecksummedBytes {
     /** @deprecated Use {@link #fromBase58(NetworkParameters, String)} */
     @Deprecated
     public DumpedPrivateKey(@Nullable NetworkParameters params, String encoded) throws AddressFormatException {
-        super(encoded);
+        this(params, VersionedChecksummedBytes.fromBase58(encoded));
+    }
+
+    private DumpedPrivateKey(@Nullable NetworkParameters params, VersionedChecksummedBytes vcb) throws AddressFormatException {
+        super(vcb.getVersion(), vcb.getBytes());
         if (params != null && version != params.getDumpedPrivateKeyHeader())
             throw new WrongNetworkException(version, new int[]{ params.getDumpedPrivateKeyHeader() });
+        byte[] bytes = vcb.getBytes();
         if (bytes.length == 33 && bytes[32] == 1) {
             compressed = true;
-            bytes = Arrays.copyOf(bytes, 32);  // Chop off the additional marker byte.
+            this.bytes = Arrays.copyOf(bytes, 32);  // Chop off the additional marker byte.
         } else if (bytes.length == 32) {
             compressed = false;
         } else {

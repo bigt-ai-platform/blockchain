@@ -289,7 +289,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				if (t.getConnectedOutput().getScriptPubKey().isSentToAddress()) {
 					fromAddress = t.getFromAddress().toBase58();
 				} else {
-					fromAddress = new Address(networkParameters,
+					fromAddress =   Address.fromHash160(networkParameters,
 							Utils.sha256hash160(t.getConnectedOutput().getScriptPubKey().getPubKey())).toBase58();
 
 				}
