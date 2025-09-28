@@ -25,42 +25,7 @@ services:
       timeout: 5s
       retries: 5
     restart: always
-
-  test-bigtangle:
-    image: ghcr.io/bigtangle/server:bigtangle-server-contract-latest
-    container_name: test-bigtangle
-    hostname: test-bigtangle
-    networks:
-      - bigtangle-bridged-network
-    links:
-      - test-bigtangle-postgres
-    ports:
-      - "18089:8088"
-    environment:
-      JAVA_OPTS: "-Ddebug -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
-      DB_PASSWORD: test1234
-      DB_USER: root
-      DB_PORT: 5432
-      SERVER_PORT: 18089
-      DB_NAME: info
-      DB_HOSTNAME: test-bigtangle-postgres
-      SERVICE_MCMC_RATE: 1000
-      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
-      SERVERMODE: ""
-      BOOT_STRAP_SERVERS: test.kafka.bigtangle.de:9092
-      TOPIC_OUT_NAME: bigtangle
-      CONSUMERIDSUFFIX: test-bigtangle.${HOSTNAME}
-      REQUESTER: https://test.bigtangle.org:8089
-      SERVICE_MINING_RATE: 36000
-      SERVICE_MINING: "true"
-      SERVICE_MCMC: "true"
-      SERVER_NET: Test
-      SSL: "true"
-      KEYSTORE: /app/bigtangle-server/ca.pkcs12
-    depends_on:
-      - test-bigtangle-postgres
-    restart: always
-
+ 
   minio:
     image: minio/minio
     container_name: minio

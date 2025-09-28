@@ -89,7 +89,7 @@ change the references call and remove those constructors
 change other constructors to different instance methods in the form  setValues(...) 
 change the references call and remove those constructors
  
- keep only Transaction(NetworkParameters params)  in   /home/jcui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/Transaction.java 
+ keep only Transaction(NetworkParameters params)  in  ./server/bigtangle-core/src/main/java/net/bigtangle/core/Transaction.java 
 change other constructors to different instance methods in the form  setValues(...) 
 change the references call and remove those constructors
    
@@ -116,4 +116,19 @@ Let me start by examining the first file mentioned - Message.java - to understan
 
 I'll help you modify these Java classes to keep only the NetworkParameters constructor and convert other constructors to setValues methods. Let me start by examining the Message.java file.
    
-   
+
+   java server and client code  /home/cui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/ 
+   ts client code  ./bigtangle-ts/
+
+   ts is translated from java client 
+   But the server does not accept the ts client crypto signature of transaction
+   Test of  server start:
+ cd /home/cui/git/server/bigtangle-server/ && \
+PID=$(lsof -ti :8088) && [ -n "$PID" ] && kill -9 $PID; \
+mvn clean install -DskipTests spring-boot:run
+
+
+   client test
+   npm test -- /home/cui/git/bigtangle-ts/test/testintegration/RemoteFromAddressTests.test.ts
+
+

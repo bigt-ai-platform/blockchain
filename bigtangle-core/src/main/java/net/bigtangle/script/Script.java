@@ -1587,16 +1587,51 @@ public class Script {
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
         
-        executeScript(txContainingThis, scriptSigIndex, this, stack, verifyFlags);
-        if (verifyFlags.contains(VerifyFlag.P2SH))
+        log.debug("Starting script validation for tx: {} input index: {}, verifyFlags: {}", 
+                 txContainingThis.getHash(), scriptSigIndex, verifyFlags);
+        log.debug("ScriptSig: {}", this);
+        log.debug("ScriptPubKey: {}", scriptPubKey);
+        
+        try {
+            executeScript(txContainingThis, scriptSigIndex, this, stack, verifyFlags);
+            log.debug("After ScriptSig execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
+        } catch (ScriptException e) {
+            log.error("ScriptSig execution failed for tx: {}, input index: {}, error: {}", 
+                     txContainingThis.getHash(), scriptSigIndex, e.getMessage());
+            throw e;
+        }
+        
+        if (verifyFlags.contains(VerifyFlag.P2SH)) {
             p2shStack = new LinkedList<byte[]>(stack);
-        executeScript(txContainingThis, scriptSigIndex, scriptPubKey, stack, verifyFlags);
+            log.debug("P2SH enabled, copied stack, p2shStack size: {}", p2shStack.size());
+        }
         
-        if (stack.size() == 0)
+        try {
+            executeScript(txContainingThis, scriptSigIndex, scriptPubKey, stack, verifyFlags);
+            log.debug("After ScriptPubKey execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
+        } catch (ScriptException e) {
+            log.error("ScriptPubKey execution failed for tx: {}, input index: {}, error: {}", 
+                     txContainingThis.getHash(), scriptSigIndex, e.getMessage());
+            throw e;
+        }
+        
+        if (stack.size() == 0) {
+            log.error("Stack empty at end of script execution for tx: {}, input index: {}", 
+                     txContainingThis.getHash(), scriptSigIndex);
             throw new ScriptException("Stack empty at end of script execution.");
+        }
         
-        if (!castToBool(stack.pollLast()))
+        byte[] result = stack.pollLast();
+        boolean isValid = castToBool(result);
+        log.debug("Script evaluation result: {}, value bytes: {}", isValid, result != null ? Utils.HEX.encode(result) : "null");
+        
+        if (!isValid) {
+            log.error("Script resulted in a non-true stack: {} for tx: {}, input index: {}, scriptSig: {}, scriptPubKey: {}", 
+                     stack, txContainingThis.getHash(), scriptSigIndex, this, scriptPubKey);
+            log.error("Failing scriptSig bytes: {}", Utils.HEX.encode(this.getProgram()));
+            log.error("Failing scriptPubKey bytes: {}", Utils.HEX.encode(scriptPubKey.getProgram()));
             throw new ScriptException("Script resulted in a non-true stack: " + stack);
+        }
 
         // P2SH is pay to script hash. It means that the scriptPubKey has a special form which is a valid
         // program but it has "useless" form that if evaluated as a normal program always returns true.
@@ -1634,6 +1669,31 @@ public class Script {
         if (program != null)
             return program;
         return getProgram();
+    }
+
+    /**
+     * Helper method to convert stack contents to string representation for logging
+     */
+    private String stackToString(LinkedList<byte[]> stack) {
+        if (stack == null) {
+            return "null";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        boolean first = true;
+        for (byte[] item : stack) {
+            if (!first) {
+                sb.append(", ");
+            }
+            if (item == null) {
+                sb.append("null");
+            } else {
+                sb.append(Utils.HEX.encode(item));
+            }
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
