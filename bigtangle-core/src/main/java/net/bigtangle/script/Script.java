@@ -1587,14 +1587,14 @@ public class Script {
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
         
-        log.debug("Starting script validation for tx: {} input index: {}, verifyFlags: {}", 
-                 txContainingThis.getHash(), scriptSigIndex, verifyFlags);
-        log.debug("ScriptSig: {}", this);
-        log.debug("ScriptPubKey: {}", scriptPubKey);
+   //     log.debug("Starting script validation for tx: {} input index: {}, verifyFlags: {}", 
+    //             txContainingThis.getHash(), scriptSigIndex, verifyFlags);
+    //    log.debug("ScriptSig: {}", this);
+    //    log.debug("ScriptPubKey: {}", scriptPubKey);
         
         try {
             executeScript(txContainingThis, scriptSigIndex, this, stack, verifyFlags);
-            log.debug("After ScriptSig execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
+         //   log.debug("After ScriptSig execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
         } catch (ScriptException e) {
             log.error("ScriptSig execution failed for tx: {}, input index: {}, error: {}", 
                      txContainingThis.getHash(), scriptSigIndex, e.getMessage());
@@ -1603,12 +1603,12 @@ public class Script {
         
         if (verifyFlags.contains(VerifyFlag.P2SH)) {
             p2shStack = new LinkedList<byte[]>(stack);
-            log.debug("P2SH enabled, copied stack, p2shStack size: {}", p2shStack.size());
+         //   log.debug("P2SH enabled, copied stack, p2shStack size: {}", p2shStack.size());
         }
         
         try {
             executeScript(txContainingThis, scriptSigIndex, scriptPubKey, stack, verifyFlags);
-            log.debug("After ScriptPubKey execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
+        //    log.debug("After ScriptPubKey execution, stack size: {}, stack contents: {}", stack.size(), stackToString(stack));
         } catch (ScriptException e) {
             log.error("ScriptPubKey execution failed for tx: {}, input index: {}, error: {}", 
                      txContainingThis.getHash(), scriptSigIndex, e.getMessage());
@@ -1623,13 +1623,13 @@ public class Script {
         
         byte[] result = stack.pollLast();
         boolean isValid = castToBool(result);
-        log.debug("Script evaluation result: {}, value bytes: {}", isValid, result != null ? Utils.HEX.encode(result) : "null");
+       // log.debug("Script evaluation result: {}, value bytes: {}", isValid, result != null ? Utils.HEX.encode(result) : "null");
         
         if (!isValid) {
-            log.error("Script resulted in a non-true stack: {} for tx: {}, input index: {}, scriptSig: {}, scriptPubKey: {}", 
-                     stack, txContainingThis.getHash(), scriptSigIndex, this, scriptPubKey);
-            log.error("Failing scriptSig bytes: {}", Utils.HEX.encode(this.getProgram()));
-            log.error("Failing scriptPubKey bytes: {}", Utils.HEX.encode(scriptPubKey.getProgram()));
+//            log.error("Script resulted in a non-true stack: {} for tx: {}, input index: {}, scriptSig: {}, scriptPubKey: {}", 
+//                     stack, txContainingThis.getHash(), scriptSigIndex, this, scriptPubKey);
+//            log.error("Failing scriptSig bytes: {}", Utils.HEX.encode(this.getProgram()));
+//            log.error("Failing scriptPubKey bytes: {}", Utils.HEX.encode(scriptPubKey.getProgram()));
             throw new ScriptException("Script resulted in a non-true stack: " + stack);
         }
 

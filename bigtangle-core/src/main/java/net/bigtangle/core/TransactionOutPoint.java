@@ -222,15 +222,7 @@ public class TransactionOutPoint extends ChildMessage {
 		checkNotNull(connectedOutput, "Input is not connected so cannot retrieve key");
 		Script connectedScript = connectedOutput.getScriptPubKey();
 
-		       System.out.println("connectedOutput  : " + connectedOutput);
-       System.out.println("Connected script: " + connectedScript);
-       System.out.println("Script program: " + Utils.HEX.encode(connectedScript.getProgram()));
-       System.out.println("Script type: " + connectedScript.getScriptType());
-       System.out.println("Is sent to address: " + connectedScript.isSentToAddress());
-       System.out.println("Is sent to raw pubkey: " + connectedScript.isSentToRawPubKey());
-       System.out.println("Is pay to script hash: " + connectedScript.isPayToScriptHash());
-       System.out.println("Is sent to multisig: " + connectedScript.isSentToMultiSig());
-
+	 
 		if (connectedScript.isSentToAddress()) {
 			byte[] addressBytes = connectedScript.getPubKeyHash();
 			return RedeemData.of(keyBag.findKeyFromPubHash(addressBytes), connectedScript);
