@@ -119,9 +119,13 @@ I'll help you modify these Java classes to keep only the NetworkParameters const
 
    java server and client code  /home/cui/git/server/bigtangle-core/src/main/java/net/bigtangle/core/ 
    ts client code  ./bigtangle-ts/
-
+   all ts code are translate from java and should follow the same code
    ts is translated from java client 
-   But the server does not accept the ts client crypto signature of transaction
+   But the server does not accept the ts client saveToken with create coinbase
+ 
+   client test cd   ./bigtangle-ts/
+   npm test -- /home/cui/git/bigtangle-ts/test/testintegration/RemoteFromAddressTests.test.ts
+   
    Test of  server start:
  cd /home/cui/git/server/bigtangle-server/ && \
 PID=$(lsof -ti :8088) && [ -n "$PID" ] && kill -9 $PID; \
