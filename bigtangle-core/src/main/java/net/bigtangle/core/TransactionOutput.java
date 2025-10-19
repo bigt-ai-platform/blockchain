@@ -220,7 +220,10 @@ public class TransactionOutput extends ChildMessage {
             int vlen = (int) readVarInt();
             byte[] v = readBytes(vlen);
         tokenLen = (int) readVarInt();
-        value = new Coin(new BigInteger(v), readBytes(tokenLen));
+        // For Bitcoin transaction values, treat as unsigned
+        // The MSB being set does not indicate a negative number in Bitcoin context
+        BigInteger unsignedValue = new BigInteger(1, v); // Signum=1 means positive, treats bytes as unsigned magnitude
+        value = new Coin(unsignedValue, readBytes(tokenLen));
         
         scriptLen = (int) readVarInt();
         scriptBytes = readBytes(scriptLen);

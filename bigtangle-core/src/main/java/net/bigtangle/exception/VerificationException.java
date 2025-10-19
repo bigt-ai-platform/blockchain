@@ -135,6 +135,10 @@ public class VerificationException extends RuntimeException {
         public MissingDependencyException() {
             super("No dependency defined");
         }
+
+        public MissingDependencyException(String string) {
+            super(string);
+        }
     }
 
     public static class UnsolidException extends VerificationException {

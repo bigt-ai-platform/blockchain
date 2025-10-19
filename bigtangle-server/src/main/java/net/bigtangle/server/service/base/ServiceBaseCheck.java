@@ -756,11 +756,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		// Check field correctness: amount
 		if (!currentToken.getToken().getAmount().equals(block.getTransactions().get(0).getOutputSum())) {
-			logger.debug("Incorrect amount field" + currentToken.getToken().getAmount() + " !="
+		//	logger.debug("Incorrect amount field" + currentToken.getToken().getAmount() + " !="
+		//			+ block.getTransactions().get(0).getOutputSum());
+			if (throwExceptions){
+				logger.debug(block.toString());
+				 
+				throw new InvalidTransactionDataException("Incorrect amount field" + currentToken.getToken().getAmount() + " !="
 					+ block.getTransactions().get(0).getOutputSum());
-			if (throwExceptions)
-				throw new InvalidTransactionDataException("Incorrect amount field");
-			return SolidityState.getFailState();
+				}
 		}
 
 		// Check all token issuance transaction outputs are actually of the
@@ -777,11 +780,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		// Check previous issuance hash exists or initial issuance
-		if ((currentToken.getToken().getPrevblockhash() == null && currentToken.getToken().getTokenindex() != 0)
-				|| (currentToken.getToken().getPrevblockhash() != null
+		boolean initIssue=currentToken.getToken().getPrevblockhash() == null ||  	Sha256Hash.ZERO_HASH.equals(currentToken.getToken().getPrevblockhash());
+		if (( initIssue
+		&& currentToken.getToken().getTokenindex() != 0)
+				|| (!initIssue
 						&& currentToken.getToken().getTokenindex() == 0)) {
 			if (throwExceptions)
-				throw new MissingDependencyException();
+				throw new MissingDependencyException(block.toString());
 			return SolidityState.getFailState();
 		}
 

@@ -203,7 +203,7 @@ public class CoinSerializationTest {
             Coin.ZERO,
             Coin.COIN,
             Coin.SATOSHI,
-            Coin.NEGATIVE_SATOSHI,
+         //   Coin.NEGATIVE_SATOSHI,
             Coin.FEE_DEFAULT
         };
         

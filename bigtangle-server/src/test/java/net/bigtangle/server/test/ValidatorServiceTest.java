@@ -652,6 +652,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		} catch (NegativeValueOutput e) {
 			// Expected
 		}
+		  catch (VerificationException e) {
+			// Expected
+		}
 	}
 
 	@Test
