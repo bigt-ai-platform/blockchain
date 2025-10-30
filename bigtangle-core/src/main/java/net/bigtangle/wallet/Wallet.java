@@ -233,9 +233,7 @@ public class Wallet extends WalletBase {
 	}
 
 
-	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
-		return saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
-	}
+	
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey, byte[] pubKeyTo,
 			MemoInfo memoInfo) throws Exception {
@@ -433,7 +431,7 @@ public class Wallet extends WalletBase {
 				// add big fee
 				block.addTransaction(feeTransaction(aesKey, coinList));
 			}
-			log.debug(" {}", block.toString());
+		 
 			solveAndPost(block);
 		}
 		return re;
@@ -532,7 +530,7 @@ public class Wallet extends WalletBase {
 			// add big fee
 			b.addTransaction(feeTransaction(aesKey, coinList));
 		}
-		log.debug(" {}", b);
+	 
 		solveAndPost(b);
 		return b;
 	}
@@ -1365,10 +1363,6 @@ public class Wallet extends WalletBase {
 		return BigInteger.valueOf(m).multiply(BigInteger.valueOf(factor)).divide(BigInteger.valueOf(d)).longValue();
 	}
 
-	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
-			List<MultiSignAddress> addresses) throws Exception {
-		return createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
-	}
 
 	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
 			List<MultiSignAddress> addresses, byte[] pubkeyTo, MemoInfo memoInfo) throws Exception {
@@ -1395,19 +1389,7 @@ public class Wallet extends WalletBase {
         return saveToken(tokenInfo, new Coin(token.getAmount(), tokenid), key, null, pubkeyTo, memoInfo);
 	}
 
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
-			BigInteger amount, boolean increment, KeyValue kv, int tokentype, List<MultiSignAddress> addresses,
-			String tokenid) throws Exception {
-
-		Token token = Token.buildSimpleTokenInfo(true, Sha256Hash.ZERO_HASH, tokenid, tokename, description, 1, 0,
-				amount, !increment, decimals, "");
-		token.addKeyvalue(kv);
-		token.setTokentype(tokentype);
-
-		return createToken(key, domainname, increment, token, addresses);
-
-	}
-
+ 
 	public Block getBlock(String hashHex) throws IOException {
 
 		Map<String, Object> requestParam = new HashMap<>();

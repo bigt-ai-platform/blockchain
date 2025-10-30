@@ -1,6 +1,7 @@
 package net.bigtangle.server.service.base;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -250,7 +251,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
 		// Disconnect each block in the previous best chain that is no
 		// longer in the new best chain from last to begin
-		oldBlocks.sort(new SortbyBlock());
+		oldBlocks.sort(Comparator.comparingLong((Block w) -> w.getHeight()));
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
 			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {

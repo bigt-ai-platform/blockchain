@@ -67,9 +67,8 @@ import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlock;
-import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrap;
-import net.bigtangle.server.service.base.ServiceBaseConnect.SortbyBlockWrapAsc;
+ 
+ 
 import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
@@ -1789,7 +1788,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		traversedConfirms = new HashSet<>();
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
-		arrayList.sort(new SortbyBlockWrap());
+		arrayList.sort(Comparator.comparingLong((BlockWrap w) -> w.getBlock().getHeight()) );
 		for (BlockWrap block : arrayList) {
 			unconfirm(block, traversedConfirms, -1, store);
 			// if (checksum)
@@ -1932,7 +1931,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public void confirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, boolean checksum,
 			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
-		arrayList.sort(new SortbyBlockWrapAsc());
+		arrayList.sort(Comparator.comparingLong((BlockWrap w) -> w.getBlock().getHeight()));
 		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
 //		 	if (checksum) 
@@ -2029,7 +2028,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
 		// Disconnect each block in the previous best chain that is no
 		// longer in the new best chain from last to begin
-		oldBlocks.sort(new SortbyBlock());
+		oldBlocks.sort(Comparator.comparingLong((Block w) -> w.getHeight()));
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
 			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters) .getHash())) {

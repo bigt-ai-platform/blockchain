@@ -330,26 +330,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		}
 	}
 
-	public static class SortbyBlock implements Comparator<Block> {
-
-		public int compare(Block a, Block b) {
-			return a.getHeight() <= b.getHeight() ? 1 : -1;
-		}
-	}
-
-	public static class SortbyBlockWrap implements Comparator<BlockWrap> {
-
-		public int compare(BlockWrap a, BlockWrap b) {
-			return a.getBlock().getHeight() <= b.getBlock().getHeight() ? 1 : -1;
-		}
-	}
-
-	public static class SortbyBlockWrapAsc implements Comparator<BlockWrap> {
-
-		public int compare(BlockWrap a, BlockWrap b) {
-			return a.getBlock().getHeight() >= b.getBlock().getHeight() ? 1 : -1;
-		}
-	}
-
+  
+ 
 
 }

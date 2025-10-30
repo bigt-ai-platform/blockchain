@@ -1081,7 +1081,7 @@ public abstract class AbstractIntegrationTest {
 			}
 		}
 
-		Block b = wallet.saveToken(tokenInfo, basecoin, outKey, null);
+		Block b = this.saveToken(tokenInfo, basecoin, outKey, null);
 		if (blocksAddedAll != null)
 			blocksAddedAll.add(b);
 
@@ -1090,7 +1090,9 @@ public abstract class AbstractIntegrationTest {
 			blocksAddedAll.add(re);
 		return re;
 	}
-
+	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
+		return  wallet.saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
+	}
 	protected void checkResponse(byte[] resp) throws JsonParseException, JsonMappingException, IOException {
 		checkResponse(resp, 0);
 	}
@@ -1299,7 +1301,7 @@ public abstract class AbstractIntegrationTest {
 			}
 		}
 
-		wallet.saveToken(tokenInfo, basecoin, keys.get(1), null);
+		this.saveToken(tokenInfo, basecoin, keys.get(1), null);
 		return tokenid;
 	}
 
@@ -1541,9 +1543,15 @@ public abstract class AbstractIntegrationTest {
 		token.setTokentype(tokentype);
 		List<MultiSignAddress> addresses = new ArrayList<MultiSignAddress>();
 		addresses.add(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
-		return w.createToken(key, domainname, increment, token, addresses);
+		return  createToken(key, domainname, increment, token, addresses,w);
 
 	}
+
+ 	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+			List<MultiSignAddress> addresses,Wallet w) throws Exception {
+		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
+	}
+
 
 	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,

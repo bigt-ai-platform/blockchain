@@ -41,7 +41,6 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.Wallet;
 
-
 public class ContractTest extends AbstractIntegrationTest {
 
 	protected static final Logger log = LoggerFactory.getLogger(ContractTest.class);
@@ -532,7 +531,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		}
 	}
 
-	//@Test
+	// @Test
 	public void testUnconfirmExecution() throws Exception {
 
 		List<Block> blocks = new ArrayList<>();
@@ -729,6 +728,11 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	public void payBigUserKeys(List<ECKey> userkeys, Long factor, List<Block> blocksAddedAll) throws Exception {
+		payBigUserKeys(userkeys, factor, true, blocksAddedAll);
+	}
+
+	public void payBigUserKeys(List<ECKey> userkeys, Long factor, boolean reward, List<Block> blocksAddedAll)
+			throws Exception {
 
 		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
 
@@ -739,7 +743,8 @@ public class ContractTest extends AbstractIntegrationTest {
 			}
 			Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay big to user");
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
-			rewardWithBlock(blocksAddedAll, b);
+			if (reward)
+				rewardWithBlock(blocksAddedAll, b);
 		}
 
 	}
@@ -763,6 +768,11 @@ public class ContractTest extends AbstractIntegrationTest {
 	}
 
 	public void payUserKeys(List<ECKey> userkeys, String factor, List<Block> blocksAddedAll) throws Exception {
+		payUserKeys(userkeys, factor, true, blocksAddedAll);
+	}
+
+	public void payUserKeys(List<ECKey> userkeys, String factor, boolean reward, List<Block> blocksAddedAll)
+			throws Exception {
 
 		Stopwatch watch = Stopwatch.createStarted();
 		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
@@ -775,7 +785,8 @@ public class ContractTest extends AbstractIntegrationTest {
 			}
 			Block b = wallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), "pay yuan to user");
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
-			rewardWithBlock(blocksAddedAll, b);
+			if (reward)
+				rewardWithBlock(blocksAddedAll, b);
 		}
 
 	}

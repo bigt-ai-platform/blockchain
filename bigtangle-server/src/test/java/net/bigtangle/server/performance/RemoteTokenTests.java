@@ -93,9 +93,15 @@ public class RemoteTokenTests    {
 		token.setTokentype(tokentype);
 		List<MultiSignAddress> addresses = new ArrayList<MultiSignAddress>();
 		addresses.add(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
-		return w.createToken(key, domainname, increment, token, addresses);
+		return createToken(key, domainname, increment, token, addresses,w);
 
 	}
+
+		public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+			List<MultiSignAddress> addresses,Wallet w) throws Exception {
+		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
+	}
+
 
 	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,

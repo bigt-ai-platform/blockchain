@@ -754,7 +754,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(1).getPublicKeyAsHex()));
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", keys.get(2).getPublicKeyAsHex()));
 
-		wallet.saveToken(tokenInfo, basecoin, keys.get(3), null);
+		saveToken(tokenInfo, basecoin, keys.get(3), null);
 
 		HashMap<String, Object> requestParam0 = new HashMap<String, Object>();
 		requestParam0.put("address", keys.get(0).toAddress(networkParameters).toBase58());
@@ -788,7 +788,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		multiSignBies.add(multiSignBy0);
 		MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
 		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
-		wallet.saveToken(tokenInfo, basecoin, keys.get(3), null);
+		 saveToken(tokenInfo, basecoin, keys.get(3), null);
 	}
 
 	@Test
@@ -1044,7 +1044,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		ECKey key3 = keys.get(2);
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key3.getPublicKeyAsHex()));
 
-		wallet.saveToken(tokenInfo, basecoin, keys.get(3), null);
+		 saveToken(tokenInfo, basecoin, keys.get(3), null);
 
 		HashMap<String, Object> requestParam0 = new HashMap<String, Object>();
 		requestParam0.put("address", key1.toAddress(networkParameters).toBase58());
@@ -1062,7 +1062,7 @@ public class TokenAndPayTests extends AbstractIntegrationTest {
 		updateTokenInfo.getToken().setTokenname("UPDATE_TOKEN");
 		ECKey key4 = keys.get(3);
 		updateTokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key4.getPublicKeyAsHex()));
-		wallet.saveToken(tokenInfo, basecoin, key4, null);
+		 saveToken(tokenInfo, basecoin, key4, null);
 
 		// save block
 		// OkHttp3Util.post(contextRoot + ReqCmd.updateTokenInfo.name(),
