@@ -256,30 +256,62 @@ public class Transaction extends ChildMessage {
 	 */
 	@Override
 	public Sha256Hash getHash() {
+		 
 		if (hash == null) {
-			byte[] buf = unsafeBitcoinSerialize();
-			hash = Sha256Hash.wrapReversed(
-					Sha256Hash.hashTwice(buf, 0, buf.length - calculateMemoLen() - calculateDataSignatureLen()));
+			// Serialize the transaction excluding memo and dataSignature fields using positive count
+			byte[] buf = bitcoinSerializeWithoutMemoAndDataSignature();
+		//	System.out.println(" bitcoinSerializeWithoutMemoAndDataSignature transaction=" + Utils.HEX.encode(buf));
+
+			hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(buf));
 		}
 		return hash;
 	}
 
-	private int calculateMemoLen() {
-		int len = 4;
-		if (this.memo != null) {
-			len += this.memo.getBytes(StandardCharsets.UTF_8).length;
+	/**
+	 * Serialize the transaction excluding memo and dataSignature fields
+	 * This is used for calculating the transaction hash.
+	 */
+	private byte[] bitcoinSerializeWithoutMemoAndDataSignature() {
+		ByteArrayOutputStream stream = new UnsafeByteArrayOutputStream(length < 32 ? 32 : length);
+		try {
+			// Serialize all fields except memo and dataSignature
+			uint32ToByteStreamLE(version, stream);
+			stream.write(new VarInt(inputs.size()).encode());
+			for (TransactionInput in : inputs)
+				in.bitcoinSerialize(stream);
+			stream.write(new VarInt(outputs.size()).encode());
+			for (TransactionOutput out : outputs)
+				out.bitcoinSerialize(stream);
+
+			uint32ToByteStreamLE(lockTime, stream);
+			if (this.dataClassName == null) {
+				uint32ToByteStreamLE(0L, stream);
+			} else {
+				uint32ToByteStreamLE(this.dataClassName.length(), stream);
+				stream.write(this.dataClassName.getBytes());
+			}
+
+			if (this.data == null) {
+				uint32ToByteStreamLE(0L, stream);
+			} else {
+				uint32ToByteStreamLE(this.data.length, stream);
+				stream.write(this.data);
+			}
+
+			if (this.toAddressInSubtangle == null) {
+				uint32ToByteStreamLE(0L, stream);
+			} else {
+				uint32ToByteStreamLE(this.toAddressInSubtangle.length, stream);
+				stream.write(this.toAddressInSubtangle);
+			}
+		} catch (IOException e) {
+			// Cannot happen, we are serializing to a memory stream.
+			throw new RuntimeException(e);
 		}
-		return len;
+		return stream.toByteArray();
 	}
 
-	private int calculateDataSignatureLen() {
-		int len = 4;
-		if (this.dataSignature != null) {
-			len += this.dataSignature.length;
-		}
-		return len;
-	}
-
+ 
 	/**
 	 * Used by BitcoinSerializer. The serializer has to calculate a hash for
 	 * checksumming so to avoid wasting the considerable effort a set method is
@@ -481,7 +513,7 @@ public class Transaction extends ChildMessage {
 		optimalEncodingMessageSize += VarInt.sizeOf(numInputs);
 		inputs = new ArrayList<TransactionInput>((int) numInputs);
 		for (long i = 0; i < numInputs; i++) {
-			TransactionInput input =   TransactionInput.fromTransactionInput5(params, this, payload, cursor, serializer);
+			TransactionInput input = TransactionInput.fromTransactionInput5(params, this, payload, cursor, serializer);
 			inputs.add(input);
 			long scriptLen = readVarInt(TransactionOutPoint.MESSAGE_LENGTH);
 			int addLen = 4 + (input.getOutpoint().connectedOutput == null ? 0
@@ -495,7 +527,8 @@ public class Transaction extends ChildMessage {
 		optimalEncodingMessageSize += VarInt.sizeOf(numOutputs);
 		outputs = new ArrayList<TransactionOutput>((int) numOutputs);
 		for (long i = 0; i < numOutputs; i++) {
-			TransactionOutput output =   TransactionOutput.fromTransactionOutput(params, this, payload, cursor, serializer);
+			TransactionOutput output = TransactionOutput.fromTransactionOutput(params, this, payload, cursor,
+					serializer);
 			outputs.add(output);
 			// long t = readVarInt(8);
 			// long scriptLen = readVarInt((int) t);
@@ -545,6 +578,7 @@ public class Transaction extends ChildMessage {
 		}
 
 		length = cursor - offset;
+		hash = null; // force recalculation of hash
 	}
 
 	public int getOptimalEncodingMessageSize() {
@@ -705,8 +739,8 @@ public class Transaction extends ChildMessage {
 	 * 
 	 * @return the newly created input.
 	 */
-	public TransactionInput  addInput(Sha256Hash blockHash, TransactionOutput from) {
-		return addInput(  TransactionInput.fromTransactionInput4(params, this, from, blockHash));
+	public TransactionInput addInput(Sha256Hash blockHash, TransactionOutput from) {
+		return addInput(TransactionInput.fromTransactionInput4(params, this, from, blockHash));
 	}
 
 	/**
@@ -731,7 +765,7 @@ public class Transaction extends ChildMessage {
 	public TransactionInput addInput(Sha256Hash spendBlockHash, Sha256Hash spendTxHash, long outputIndex,
 			Script script) {
 		return addInput(TransactionInput.fromOutpoint4(params, this, script.getProgram(),
-				  TransactionOutPoint.fromTransactionOutPoint4(params, outputIndex, spendBlockHash, spendTxHash)));
+				TransactionOutPoint.fromTransactionOutPoint4(params, outputIndex, spendBlockHash, spendTxHash)));
 	}
 
 	/**

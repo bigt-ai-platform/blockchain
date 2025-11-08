@@ -201,8 +201,13 @@ public class VerificationException extends RuntimeException {
 
     public static class InvalidSignatureException extends VerificationException {
         public InvalidSignatureException() {
-            super("Some signatures are not valid here");
+            super("Some signatures are not valid here"); 
+        
         }
+        public InvalidSignatureException(String string) {
+            super(string);
+        }
+        
     }
 
     public static class InsufficientSignaturesException extends VerificationException {
