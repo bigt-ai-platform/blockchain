@@ -284,10 +284,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
 				.anyMatch(c -> {
 					try {
-						boolean re = hasConflictDependency(c, checkMilestone, store);
-						if (re)
+						long m = hasConflictDependencyMilestone(c, checkMilestone, store);
+						boolean re = hasConflictDependency(m, checkMilestone );
+						if (re){
 							logger.debug("hasSpentInputs {}", c.getBlock().getBlock().toString());
-						return re;
+						store.updateBlockEvaluationMilestone(c.getBlock().getBlock().getHash(), -1*m);
+						}
+							return re;
 					} catch (BlockStoreException e) {
 						return true;
 					}
@@ -394,10 +397,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	public boolean hasConflictDependency(ConflictCandidate c, boolean checkMilestone, BlockStoreInterface store)
+	public boolean hasConflictDependency(long re, boolean checkMilestone )
 			throws BlockStoreException {
-		long re = hasConflictDependencyMilestone(c, checkMilestone, store);
-
+	 
 		if (re == NoConflict)
 			return false;
 		else {
@@ -432,10 +434,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (connectedToken.getTokenindex() == 0) {
 				if (checkMilestone)
 					return NoConflict;
-				else if (store.getTokenAnyConfirmed(connectedToken.getTokenid(), connectedToken.getTokenindex()))
+				else { if (store.getTokenAnyConfirmed(connectedToken.getTokenid(), connectedToken.getTokenindex()))
 					return ConflictWithConfirmed;
-				else
+				 else
 					return NoConflict;
+				}
 			}
 			s = store.getTokenSpent(connectedToken.getPrevblockhash());
 			if (s == null)
@@ -635,7 +638,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// Find conflict candidates whose used outputs are already spent and confirmed
 		return candidates.anyMatch((ConflictCandidate c) -> {
 			try {
-				return hasConflictDependency(c, false, store);
+				long m = hasConflictDependencyMilestone(c, false, store);  
+				return hasConflictDependency(m, false );
 			} catch (BlockStoreException e) {
 				// e.printStackTrace();
 			}
@@ -1016,7 +1020,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void filterSpent(Collection<ConflictCandidate> blockConflicts, BlockStoreInterface store) {
 		blockConflicts.removeIf(c -> {
 			try {
-				return !hasConflictDependency(c, true, store);
+				long m = hasConflictDependencyMilestone(c, true, store); 
+				return !hasConflictDependency(m, true );
 			} catch (BlockStoreException e) {
 				// e.printStackTrace();
 				return true;

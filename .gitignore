@@ -1,12 +1,10 @@
 /.project
 /build/
 /target/
-/bin/
-/.vscode/
+/bin/ 
 /.settings/
 bigtangle-docker/.settings/
-logs/
-/.vscode/
+logs/ 
 /.idea/
 
 
