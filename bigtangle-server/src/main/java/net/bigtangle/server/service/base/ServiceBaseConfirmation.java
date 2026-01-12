@@ -1424,8 +1424,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			for (Entry<String, Tokensums> a : r11.entrySet()) {
 
 				if (!a.getValue().check()) {
-					logger.debug(a.getValue().toString());
-					logger.debug("checkSum failed");
+				//	logger.debug(a.getValue().toString());
+				//	logger.debug("checkSum failed");
 				}
 
 			}

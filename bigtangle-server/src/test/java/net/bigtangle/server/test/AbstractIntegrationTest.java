@@ -239,7 +239,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll) throws Exception {
-// add more blocks follow this startBlock
+		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
 			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
@@ -309,35 +309,34 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void resetBucket() throws BlockStoreException {
-		String bucketName=minioConfig.getBucketName();
+		String bucketName = minioConfig.getBucketName();
 		MinioClient minioClient = MinioClient.builder().endpoint(
-				minioConfig.getMinioUrl()).credentials(minioConfig.getMinioAccessKey(),minioConfig.getMinioSecretKey())
-				.build(); 
+				minioConfig.getMinioUrl()).credentials(minioConfig.getMinioAccessKey(), minioConfig.getMinioSecretKey())
+				.build();
 		boolean found;
 		try {
-			found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(minioConfig.getBucketName()).build()); 
-	 
-		if (found) {
-	        Iterable<Result<Item>> results = minioClient.listObjects(
-	                ListObjectsArgs.builder().bucket(bucketName).recursive(true).build());
+			found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(minioConfig.getBucketName()).build());
 
-	            for (Result<Item> result : results) {
-	                Item item = result.get();
-	                minioClient.removeObject(
-	                    RemoveObjectArgs.builder()
-	                        .bucket(bucketName)
-	                        .object(item.objectName())
-	                        .build());
-	            }
-			
-		//	minioClient.removeBucket(RemoveBucketArgs.builder().bucket(minioConfig.getBucketName()).build());
-		}  
-		} catch ( Exception e) { 
-			 throw  new BlockStoreException(e);
-		}  
+			if (found) {
+				Iterable<Result<Item>> results = minioClient.listObjects(
+						ListObjectsArgs.builder().bucket(bucketName).recursive(true).build());
+
+				for (Result<Item> result : results) {
+					Item item = result.get();
+					minioClient.removeObject(
+							RemoveObjectArgs.builder()
+									.bucket(bucketName)
+									.object(item.objectName())
+									.build());
+				}
+
+				// minioClient.removeBucket(RemoveBucketArgs.builder().bucket(minioConfig.getBucketName()).build());
+			}
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
 	}
 
-	
 	protected void payTestTokenTo(ECKey beneficiary, ECKey testKey, BigInteger amount) throws Exception {
 		payTestTokenTo(beneficiary, testKey, amount, new ArrayList<>());
 	}
@@ -473,9 +472,10 @@ public abstract class AbstractIntegrationTest {
 				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid()).equals(tokenId))
 				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0).collect(Collectors.toList());
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
-		tx.addOutput(  TransactionOutput.fromCoinKey(networkParameters, tx, amount, beneficiary));
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, beneficiary));
 		tx.addOutput(
-				  TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount), fromKey));
+				TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount),
+						fromKey));
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 
 		// Sign
@@ -532,7 +532,7 @@ public abstract class AbstractIntegrationTest {
 
 		Block block = makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount,
 				NetworkParameters.BIGTANGLE_TOKENID_STRING, addedBlocks);
-		makeOrderExecutionAndReward(addedBlocks);
+		makeOrderExecutionAndReward(addedBlocks,block);
 		return block;
 	}
 
@@ -544,15 +544,26 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
+	private boolean enableOrderMatchExecutionChain() throws Exception, BlockStoreException {
+		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.enableOrderMatchExecutionChain(null);
+	}
+
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
-		Block b = orderExecutionService.createOrderExecution(store);
-		// no reward, this order will be not confirmed
-		// confirm the contract execution
-		if (b != null) {
-			confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
-			addedBlocks.add(b);
+
+		if (this.enableOrderMatchExecutionChain()) {
+
+			Block b = orderExecutionService.createOrderExecution(store);
+			// no reward, this order will be not confirmed
+			// confirm the contract execution
+			if (b != null) {
+				confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
+				addedBlocks.add(b);
+			} else {
+				log.debug("");
+			}
 		} else {
-			log.debug("");
+			makeRewardBlock(addedBlocks);
 		}
 	}
 
@@ -570,7 +581,7 @@ public abstract class AbstractIntegrationTest {
 			String basetoken, List<Block> addedBlocks) throws Exception {
 
 		Block block = makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount, basetoken, addedBlocks);
-		makeOrderExecutionAndReward(addedBlocks);
+		makeOrderExecutionAndReward(addedBlocks,block);
 		return block;
 	}
 
@@ -607,7 +618,8 @@ public abstract class AbstractIntegrationTest {
 
 		Block block = makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount,
 				NetworkParameters.BIGTANGLE_TOKENID_STRING, addedBlocks);
-		makeOrderExecutionAndReward(addedBlocks);
+		
+		makeOrderExecutionAndReward(addedBlocks,block);
 		return block;
 	}
 
@@ -626,7 +638,7 @@ public abstract class AbstractIntegrationTest {
 			String basetoken, List<Block> addedBlocks) throws Exception {
 
 		Block block = makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount, basetoken, addedBlocks);
-		makeOrderExecutionAndReward(addedBlocks);
+		makeOrderExecutionAndReward(addedBlocks,block);
 		return block;
 	}
 
@@ -659,7 +671,7 @@ public abstract class AbstractIntegrationTest {
 		this.blockGraph.addBlock(block, true, store);
 		addedBlocks.add(block);
 
-		makeOrderExecutionAndReward(addedBlocks);
+		makeOrderExecutionAndReward(addedBlocks,block);
 		return block;
 	}
 
@@ -710,10 +722,18 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks) throws Exception {
-		// mcmcServiceUpdate();
-		Block b = orderExecutionService.createOrderExecution(store);
-		return rewardWithBlock(addedBlocks, b);
+	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks,Block b ) throws Exception {
+	
+		 
+		if (this.enableOrderMatchExecutionChain()) {
+			
+			Block c = orderExecutionService.createOrderExecution(store);
+			return rewardWithBlock(addedBlocks, c);
+		} else {
+			// mcmcServiceUpdate();
+			return rewardWithBlock(addedBlocks,b);
+		}
+	
 
 	}
 
@@ -1038,12 +1058,14 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(),
+		return testCreateToken(outKey, tokennameName,
+				UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(),
 				blocksAddedAll);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName) throws JsonProcessingException, Exception {
-		return testCreateToken(outKey, tokennameName, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(), null);
+		return testCreateToken(outKey, tokennameName,
+				UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(), null);
 	}
 
 	protected Block testCreateToken(ECKey outKey, String tokennameName, String domainpre, List<Block> blocksAddedAll)
@@ -1090,9 +1112,11 @@ public abstract class AbstractIntegrationTest {
 			blocksAddedAll.add(re);
 		return re;
 	}
+
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
-		return  wallet.saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
+		return wallet.saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
 	}
+
 	protected void checkResponse(byte[] resp) throws JsonParseException, JsonMappingException, IOException {
 		checkResponse(resp, 0);
 	}
@@ -1543,15 +1567,14 @@ public abstract class AbstractIntegrationTest {
 		token.setTokentype(tokentype);
 		List<MultiSignAddress> addresses = new ArrayList<MultiSignAddress>();
 		addresses.add(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
-		return  createToken(key, domainname, increment, token, addresses,w);
+		return createToken(key, domainname, increment, token, addresses, w);
 
 	}
 
- 	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
-			List<MultiSignAddress> addresses,Wallet w) throws Exception {
+	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+			List<MultiSignAddress> addresses, Wallet w) throws Exception {
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
 	}
-
 
 	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
@@ -1871,7 +1894,7 @@ public abstract class AbstractIntegrationTest {
 
 				} catch (InsufficientMoneyException e) {
 					// ignore: handle exception
-				}catch (Exception e) {
+				} catch (Exception e) {
 					e.printStackTrace();
 				}
 				// break;
@@ -2057,7 +2080,7 @@ public abstract class AbstractIntegrationTest {
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
 		blockDAGPredecossors(from, to, dag);
 
-	//	drawDAG(filename, dag);
+		// drawDAG(filename, dag);
 	}
 
 	private void drawDAG(String filename, DefaultDirectedGraph<String, DefaultEdge> dag) throws IOException {
@@ -2120,7 +2143,7 @@ public abstract class AbstractIntegrationTest {
 		DefaultDirectedGraph<String, DefaultEdge> dag = new DefaultDirectedGraph<>(DefaultEdge.class);
 		blocksDAG(from, to, dag, withReferenced);
 
-	//	drawDAG(filename, dag);
+		// drawDAG(filename, dag);
 	}
 
 	public void createExecutionDAGRequired(String filename, long from, long to, boolean withReferenced)
@@ -2133,7 +2156,7 @@ public abstract class AbstractIntegrationTest {
 			blocks.add(getBlockWrap(c.getBlockHash()));
 		}
 		blocksDAG(dag, withReferenced, blocks);
-	//	drawDAG(filename, dag);
+		// drawDAG(filename, dag);
 	}
 
 	public List<Contractresult> getContractresults() throws BlockStoreException {

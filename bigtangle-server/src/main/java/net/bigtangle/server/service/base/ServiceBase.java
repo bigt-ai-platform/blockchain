@@ -101,7 +101,7 @@ public abstract class ServiceBase {
 	 * Enable each order execution in own chain and not part of reward chain
 	 */
 	public boolean enableOrderMatchExecutionChain(Block block) {
-		return enableFee(block);
+		return false;
 	}
 
 	/**

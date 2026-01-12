@@ -217,7 +217,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 							utxo.getValue().getValue().longValue(), null, null,
 							NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
 					blocksAddedAll.add(sellOrder);
-					makeOrderExecutionAndReward(blocksAddedAll);
+					makeOrderExecutionAndReward(blocksAddedAll,sellOrder);
 				} catch (InsufficientMoneyException e) {
 					// ignore: handle exception
 				}
@@ -267,7 +267,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			Block buyOrder = wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
 					null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false);
 			blocksAddedAll.add(buyOrder);
-			makeOrderExecutionAndReward(blocksAddedAll);
+			makeOrderExecutionAndReward(blocksAddedAll,buyOrder);
 
 		}
 

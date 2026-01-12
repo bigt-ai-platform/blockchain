@@ -381,6 +381,16 @@ public class Wallet extends WalletBase {
 			}
 		}
 
+		BigInteger requested = BigInteger.ZERO;
+		for (BigInteger value : giveMoneyResult.values()) {
+			requested = requested.add(value);
+		}
+		BigInteger available = sumOutputValues(coinList);
+		BigInteger deficit = requested.subtract(available);
+		String tokenHex = Utils.HEX.encode(tokenid);
+		String info = "token=" + tokenHex + " requested=" + requested + " available=" + available + " deficit="
+				+ deficit + " recipients=" + giveMoneyResult.size();
+		logInsufficientMoney("payMoneyToECKeyList", info, aesKey, coinList);
 		throw new InsufficientMoneyException("InsufficientMoneyException " + giveMoneyResult);
 
 	}
@@ -409,8 +419,13 @@ public class Wallet extends WalletBase {
 		List<FreeStandingTransactionOutput> coinTokenList = filterTokenid(amount.getTokenid(), coinList);
 
 		Coin sum = sum(coinTokenList);
-		if (sum.compareTo(amount) < 0)
+		if (sum.compareTo(amount) < 0) {
+			Coin deficit = amount.subtract(sum);
+			String info = "token=" + Utils.HEX.encode(amount.getTokenid()) + " required=" + amount + " available="
+					+ sum + " deficit=" + deficit + " destination=" + destination;
+			logInsufficientMoney("payFromList", info, aesKey, coinTokenList);
 			throw new InsufficientMoneyException("to pay " + amount + " account sum: " + sum);
+		}
 		// split the coinList into sub list, there is limit for transactions in a block
 		// NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 4);
 		List<List<FreeStandingTransactionOutput>> parts = chopped(coinTokenList, split);
@@ -483,6 +498,10 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || restAmount.isNegative()) {
+			Coin deficit = restAmount.isNegative() ? restAmount.negate() : restAmount;
+			String info = "destination=" + destination + " requested=" + amount + " remaining=" + restAmount
+					+ " deficit=" + deficit + " inputs=" + coinTokenList.size();
+			logInsufficientMoney("payFromListNoSplitTransaction", info, aesKey, coinTokenList);
 			throw new InsufficientMoneyException(amount + " outputs size= " + coinTokenList.size());
 		}
 
@@ -519,6 +538,10 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || restAmount.isNegative()) {
+			Coin deficit = restAmount.isNegative() ? restAmount.negate() : restAmount;
+			String info = "scriptPayment requested=" + amount + " remaining=" + restAmount + " deficit=" + deficit
+					+ " memo=" + memo;
+			logInsufficientMoney("payToScript", info, aesKey, coinTokenList);
 			throw new InsufficientMoneyException(amount + " outputs size= " + coinTokenList.size());
 		}
 
@@ -602,6 +625,10 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || amount.isNegative()) {
+			Coin deficit = amount.isNegative() ? amount.negate() : amount;
+			String info = "payToList total=" + summe + " remainder=" + amount + " deficit=" + deficit
+					+ " recipients=" + giveMoneyResult.size();
+			logInsufficientMoney("payToListTransaction", info, aesKey, coinListTokenid);
 			throw new InsufficientMoneyException(summe + " outputs size= " + coinListTokenid.size());
 		}
 
@@ -634,6 +661,9 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || amount.isNegative()) {
+			Coin deficit = amount.isNegative() ? amount.negate() : amount;
+			String info = "feePayment required=" + Coin.FEE_DEFAULT + " remainder=" + amount + " deficit=" + deficit;
+			logInsufficientMoney("feeTransaction", info, aesKey, coinListTokenid);
 			throw new InsufficientMoneyException(Coin.FEE_DEFAULT + " outputs size= " + coinListTokenid.size());
 		}
 
@@ -738,6 +768,18 @@ public class Wallet extends WalletBase {
 				throw e;
 			}
 		}
+		byte[] baseTokenId = Utils.HEX.decode(orderBaseToken);
+		List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
+				: candidates;
+		List<FreeStandingTransactionOutput> baseOutputs = filterTokenid(baseTokenId, spendableCandidates);
+		int priceShift = params.getOrderPriceShift(orderBaseToken);
+		BigInteger requestedValue = totalAmount(buyPrice, targetValue,
+				targetToken.getDecimals() + priceShift, allowRemainder);
+		BigInteger availableValue = sumOutputValues(baseOutputs);
+		BigInteger deficitValue = requestedValue.subtract(availableValue);
+		String info = "orderBaseToken=" + orderBaseToken + " requested=" + requestedValue + " available="
+				+ availableValue + " deficit=" + deficitValue + " repeatRemaining=" + repeat;
+		logInsufficientMoney("buyOrderDoRetry", info, aesKey, baseOutputs);
 		throw new InsufficientMoneyException("payTransaction ");
 	}
 
@@ -772,6 +814,17 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || toBePaid.isNegative()) {
+			byte[] baseTokenId = Utils.HEX.decode(orderBaseToken);
+			List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
+					: candidates;
+			List<FreeStandingTransactionOutput> baseOutputs = filterTokenid(baseTokenId, spendableCandidates);
+			Coin requiredAmount = toBePaid.negate();
+			Coin availableCoin = sumOutputs(baseTokenId, baseOutputs);
+			Coin deficitCoin = requiredAmount.subtract(availableCoin);
+			String info = "orderBaseToken=" + orderBaseToken + " required=" + requiredAmount + " available="
+					+ availableCoin + " deficit=" + deficitCoin + " price=" + buyPrice + " targetValue="
+					+ targetValue;
+			logInsufficientMoney("buyOrderDo", info, aesKey, baseOutputs);
 			throw new InsufficientMoneyException(orderBaseToken);
 		}
 
@@ -854,6 +907,19 @@ public class Wallet extends WalletBase {
 				throw e;
 			}
 		}
+		byte[] sellTokenBytes = Utils.HEX.decode(t.getTokenid());
+		List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
+				: candidates;
+		List<FreeStandingTransactionOutput> sellOutputs = filterTokenid(sellTokenBytes, spendableCandidates);
+		Coin requiredAmount = Coin.valueOf(offervalue, t.getTokenid());
+		if (getFee() && NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
+			requiredAmount = requiredAmount.add(Coin.FEE_DEFAULT);
+		}
+		Coin availableCoin = sumOutputs(sellTokenBytes, sellOutputs);
+		Coin deficitCoin = requiredAmount.subtract(availableCoin);
+		String info = "sellToken=" + t.getTokenid() + " required=" + requiredAmount + " available="
+				+ availableCoin + " deficit=" + deficitCoin + " repeatRemaining=" + repeat;
+		logInsufficientMoney("sellOrderDoRetry", info, aesKey, sellOutputs);
 		throw new InsufficientMoneyException("payTransaction ");
 	}
 
@@ -885,6 +951,20 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || myCoin.isNegative()) {
+			byte[] sellTokenBytes = Utils.HEX.decode(t.getTokenid());
+			List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
+					: candidates;
+			List<FreeStandingTransactionOutput> sellOutputs = filterTokenid(sellTokenBytes, spendableCandidates);
+			Coin requiredAmount = Coin.valueOf(offervalue, t.getTokenid());
+			if (getFee() && NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
+				requiredAmount = requiredAmount.add(Coin.FEE_DEFAULT);
+			}
+			Coin availableCoin = sumOutputs(sellTokenBytes, sellOutputs);
+			Coin deficitCoin = requiredAmount.subtract(availableCoin);
+			String info = "sellToken=" + t.getTokenid() + " required=" + requiredAmount + " available="
+					+ availableCoin + " deficit=" + deficitCoin + " price=" + sellPrice + " offervalue="
+					+ offervalue;
+			logInsufficientMoney("sellOrderDo", info, aesKey, sellOutputs);
 			throw new InsufficientMoneyException("");
 		}
 		// get the base token
@@ -1002,6 +1082,10 @@ public class Wallet extends WalletBase {
 			}
 		}
 		if (beneficiary == null || amount.isNegative()) {
+			Coin deficit = amount.isNegative() ? amount.negate() : amount;
+			String info = "payContract token=" + tokenId + " required=" + deficit + " remainder=" + amount
+					+ " outputs=" + coinList.size();
+			logInsufficientMoney("payContract", info, aesKey, coinList);
 			throw new InsufficientMoneyException(amount + " outputs size= " + coinList.size());
 
 		}
@@ -1043,6 +1127,63 @@ public class Wallet extends WalletBase {
 			}
 		}
 		return re;
+	}
+
+	private void logInsufficientMoney(String context, String deficitInfo, KeyParameter aesKey,
+			List<FreeStandingTransactionOutput> outputs) {
+		log.info("[{}] insufficient money -> {}", context, deficitInfo);
+		logOutputDetails(outputs);
+		logWalletKeys(aesKey);
+	}
+
+	private void logOutputDetails(List<FreeStandingTransactionOutput> outputs) {
+		if (outputs == null) {
+			log.info("Spendable outputs snapshot unavailable");
+			return;
+		}
+		log.info("Spendable outputs count: {}", outputs.size());
+		for (FreeStandingTransactionOutput output : outputs) {
+			log.info("Output summary -> blockHash:{} value:{} token:{} address:{}",
+					output.getUTXO().getBlockHash(), output.getValue(), output.getUTXO().getTokenId(),
+					output.getUTXO().getAddress());
+		}
+	}
+
+	private void logWalletKeys(KeyParameter aesKey) {
+		try {
+			List<ECKey> keys = walletKeys(aesKey);
+			if (keys == null || keys.isEmpty()) {
+				log.info("Wallet keys unavailable (no keys returned)");
+				return;
+			}
+			for (ECKey ecKey : keys) {
+				log.info("Wallet key: {}", ecKey.toAddress(params));
+			}
+		} catch (Exception e) {
+			log.info("Wallet keys unavailable ({})", e.getMessage());
+		}
+	}
+
+	private BigInteger sumOutputValues(List<FreeStandingTransactionOutput> outputs) {
+		BigInteger total = BigInteger.ZERO;
+		if (outputs == null) {
+			return total;
+		}
+		for (FreeStandingTransactionOutput output : outputs) {
+			total = total.add(output.getValue().getValue());
+		}
+		return total;
+	}
+
+	private Coin sumOutputs(byte[] tokenid, List<FreeStandingTransactionOutput> outputs) {
+		Coin total = Coin.valueOf(0, tokenid);
+		if (outputs == null) {
+			return total;
+		}
+		for (FreeStandingTransactionOutput output : outputs) {
+			total = output.getValue().add(total);
+		}
+		return total;
 	}
 
 	public Block paySubtangle(KeyParameter aesKey, String outputStr, ECKey connectKey, Address toAddressInSubtangle,

@@ -400,7 +400,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		buy(a1);
 		// a = checkSum(a);
 		// Generate mining reward block
-		makeOrderExecutionAndReward(a1);
+		makeOrderExecutionAndReward(a1,null);
 		// a = checkSum(a);
 	}
 
