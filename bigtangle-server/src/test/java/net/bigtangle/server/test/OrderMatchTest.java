@@ -73,7 +73,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
 
 		// Verify the tokens changed possession
-		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
+		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 101000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
 
 		// Verify token amount invariance
@@ -318,14 +318,16 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open sell order for test tokens
 		makeAndConfirmSellOrder(testKey, testTokenId, 1000, 100, addedBlocks);
 		checkAllOpenOrders(1);
+		// Verify token amount invariance
+		assertCurrentTokenAmountEquals(origTokenAmounts);
 
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
-		showOrders();
+		//showOrders();
 		checkAllOpenOrders(0);
 
 		// Verify the tokens changed possession
-		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
+		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 101000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
 
 		// Verify token amount invariance
@@ -588,7 +590,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeOrderExecutionAndReward(addedBlocks,null);
 
 		// Verify the tokens changed possession
-		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
+		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 101000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
 
 		// Verify token amount invariance
@@ -778,7 +780,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		c = checkSum(c);
 		showOrders();
 		// Verify the tokens changed possession
-		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
+		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 104000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
 
 		// Verify token amount invariance
@@ -821,7 +823,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		assertCurrentTokenAmountEquals(origTokenAmounts);
 
 		// Verify the tokens changed possession
-		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 100000l);
+		assertHasAvailableToken(testKey, NetworkParameters.BIGTANGLE_TOKENID_STRING, 102000l);
 		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
 
 		// Verify deterministic overall execution

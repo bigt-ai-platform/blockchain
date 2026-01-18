@@ -1109,7 +1109,7 @@ public class Wallet extends WalletBase {
 		try {
 			block.solve();
 			// check the valid to time must be at least the block creation time
-			System.out.println(Utils.HEX.encode( block.bitcoinSerialize()));
+			//System.out.println(Utils.HEX.encode( block.bitcoinSerialize()));
 			OkHttp3Util.post(getServerURL() + ReqCmd.saveBlock.name(), block.bitcoinSerialize());
 			return block;
 		} catch (ConnectException e) {

@@ -792,7 +792,13 @@ public abstract class AbstractIntegrationTest {
 				continue;
 
 			assertTrue(currTokenAmounts.containsKey(origTokenAmount.getKey()));
+			try {
 			assertEquals(origTokenAmount.getValue(), currTokenAmounts.get(origTokenAmount.getKey()));
+			}catch (AssertionError e) {
+				 log.debug("origTokenAmount" + origTokenAmount.toString());
+				 log.debug("currTokenAmounts" + currTokenAmounts.toString());
+				 throw e;
+			}
 		}
 		for (Entry<String, Long> currTokenAmount : currTokenAmounts.entrySet()) {
 			if (skipBig && currTokenAmount.getKey().equals(NetworkParameters.BIGTANGLE_TOKENID_STRING))
@@ -814,7 +820,14 @@ public abstract class AbstractIntegrationTest {
 			hashMap.put(tokenId, hashMap.get(tokenId) + o.getValue().getValue().longValue());
 		}
 
-		assertEquals(amount == 0 ? null : amount, hashMap.get(tokenId_));
+		try {
+			assertEquals(amount == 0 ? null : amount, hashMap.get(tokenId_));
+		} catch (AssertionError e) {
+			for (UTXO utxo : balance) {
+				log.info(utxo.toString());
+			}
+			throw e;
+		}
 	}
 
 	protected HashMap<String, Long> getCurrentTokenAmounts() throws BlockStoreException {
