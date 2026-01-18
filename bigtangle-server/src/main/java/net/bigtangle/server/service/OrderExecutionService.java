@@ -121,11 +121,14 @@ public class OrderExecutionService {
 	}
 
 	public Block createOrderExecution(BlockStoreInterface store) throws Exception {
-		Block contractExecution = createOrderExecutionDo(store);
-		if (contractExecution != null) {
-			// log.debug(" createOrder block is created: " + contractExecution);
-			blockSaveService.saveBlock(contractExecution, store);
-			return contractExecution;
+		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+				.enableOrderMatchExecutionChain(null)) {
+			Block contractExecution = createOrderExecutionDo(store);
+			if (contractExecution != null) {
+				// log.debug(" createOrder block is created: " + contractExecution);
+				blockSaveService.saveBlock(contractExecution, store);
+				return contractExecution;
+			}
 		}
 		return null;
 	}
@@ -170,9 +173,8 @@ public class OrderExecutionService {
 		ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
 		ordertypes.add(BlockType.BLOCKTYPE_ORDER_EXECUTE);
 		// add all blocks of dependencies
-		serviceBase.dagBlockHashesFrom(referencedblocks,
-				blockService.getBlockWrap(block.getPrevBlockHash(), store), cutoffheight, prevChainLength, ordertypes,
-				true, false, store);
+		serviceBase.dagBlockHashesFrom(referencedblocks, blockService.getBlockWrap(block.getPrevBlockHash(), store),
+				cutoffheight, prevChainLength, ordertypes, true, false, store);
 		serviceBase.dagBlockHashesFrom(referencedblocks,
 				blockService.getBlockWrap(block.getPrevBranchBlockHash(), store), cutoffheight, prevChainLength,
 				ordertypes, true, false, store);

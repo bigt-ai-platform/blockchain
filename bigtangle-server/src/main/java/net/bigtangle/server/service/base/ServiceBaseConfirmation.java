@@ -1748,11 +1748,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return;
 
 		// order and contract event are controlled by execution only.
+		if(enableOrderMatchExecutionChain(blockWrap.getBlock())) {
 		if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EVENT)
 				|| blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_OPEN)) {
 			return;
 		}
-
+		}
 		updateBlockConfirm(blockWrap, milestoneNumber, confirmation, store);
 
 		// Keep track of confirmed blocks
@@ -1939,7 +1940,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		arrayList.sort(Comparator.comparingLong((BlockWrap w) -> w.getBlock().getHeight()));
 		for (BlockWrap approvedBlock : arrayList) {
 			confirm(approvedBlock, traversedConfirms, milestoneNumber, true, store);
-//		 	if (checksum) 
+	 
 		}
 		checkSum(store);
 	}
