@@ -325,7 +325,7 @@ public class BlockStoreService {
 			boolean allowMissingPredecessor) throws BlockStoreException {
 
 //		if( block.getHeight()==9) {
- 	 	//	log.debug("addNonChain"+ block.toString());
+ 	 	 	log.debug("addNonChain"+ block.toString());
 		//	log.debug("addNonChain bin="+Utils.HEX.encode( block.unsafeBitcoinSerialize()) );
 //		}
 		// Check the block is partially formally valid and fulfills PoW

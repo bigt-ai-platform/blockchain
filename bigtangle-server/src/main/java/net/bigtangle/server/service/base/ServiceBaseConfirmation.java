@@ -1175,7 +1175,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// type-specific updates
 		switch (block.getBlock().getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
-				BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
+				BLOCKTYPE_CONTRACT_EVENT,  BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_REWARD:
@@ -1207,6 +1207,10 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			else {
 				confirmOrderExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
 			}
+			break;
+		case BLOCKTYPE_ORDER_OPEN:
+			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
+			blockStore.updateOrderBlockhash(block.getBlockHash(), Sha256Hash.ZERO_HASH, confirmation, false, null);
 			break;
 		default:
 			throw new RuntimeException("Not Implemented");

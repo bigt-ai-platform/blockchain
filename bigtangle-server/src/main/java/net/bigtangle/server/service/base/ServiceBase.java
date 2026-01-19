@@ -489,7 +489,7 @@ public abstract class ServiceBase {
 	//
 	public Transaction generateVirtualMiningRewardTX(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException {
-		if (enableOrderMatchExecutionChain(block)) {
+		if (enableFee(block)) {
 			return generateVirtualMiningRewardTXFeeBased(block, blockStore);
 		} else {
 			return generateVirtualMiningRewardTX1(block, blockStore);
