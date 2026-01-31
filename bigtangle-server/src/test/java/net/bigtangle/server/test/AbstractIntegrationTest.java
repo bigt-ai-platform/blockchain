@@ -2257,6 +2257,10 @@ public abstract class AbstractIntegrationTest {
 		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, store);
 		serviceBase.dagBlockHashesFrom(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, prevMilestoneNumber,
 				null, false, false, store);
+		// Check if the prototype block was filtered out due to conflicts
+		if (!currentApprovedNonMilestoneBlocks.contains(blockWrap)) {
+			throw new VerificationException("Prototype block conflicts with confirmed blocks");
+		}
 		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
 	}
 
