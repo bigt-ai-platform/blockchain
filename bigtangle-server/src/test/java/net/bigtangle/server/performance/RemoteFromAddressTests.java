@@ -22,6 +22,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
@@ -30,6 +31,7 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.response.GetBalancesResponse;
+import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.server.test.FromAddressTests;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
@@ -58,25 +60,21 @@ public class RemoteFromAddressTests extends RemoteTest {
 
 		testTokens();
 
-		accountKey = new ECKey();
+		// Verify token was created
+		verifyTokenCreated(yuanTokenPub);
+
+ 
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
 
-		createUserPay(accountKey);
+		createUserPay( );
 		list = getBalanceAccount(false, yuanWallet.walletKeys());
-
-		List<ECKey> userkeys = new ArrayList<ECKey>();
-		userkeys.add(accountKey);
-		list = getBalanceAccount(false, userkeys);
-		for (Coin coin : list) {
-			log.debug(coin.toString());
-
-		}
+ 
 	}
 
-	private void createUserPay(ECKey accountKey) throws Exception {
+	private void createUserPay( ) throws Exception {
 		List<ECKey> ulist = payKeys();
 		for (ECKey key : ulist) {
-	//		buyTicket(key, accountKey);
+	 		buyTicket(key );
 		}
 
 	}
@@ -84,12 +82,10 @@ public class RemoteFromAddressTests extends RemoteTest {
 	/*
 	 * pay money to the key and use the key to buy lottery
 	 */
-	public void buyTicket(ECKey key, ECKey accountKey) throws Exception {
+	public void buyTicket(ECKey key  ) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 		log.debug("====ready buyTicket====");
-		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
-				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
-
+		 
 		log.debug("====start buyTicket====");
 		List<ECKey> userkeys = new ArrayList<ECKey>();
 		userkeys.add(key);
@@ -98,12 +94,8 @@ public class RemoteFromAddressTests extends RemoteTest {
 		for (UTXO utxo : utxos) {
 			log.debug("user uxxo==" + utxo.toString());
 		}
-	 
-
-		userkeys = new ArrayList<ECKey>();
-		userkeys.add(accountKey);
-	 
  
+	  
 		getBalanceAccount(false, wallet.walletKeys());
 
 		// checkResult(accountKey, key.toAddress(networkParameters).toBase58());
@@ -113,10 +105,12 @@ public class RemoteFromAddressTests extends RemoteTest {
 		List<ECKey> userkeys = new ArrayList<ECKey>();
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
-		ECKey key = new ECKey();
+		ECKey key = ECKey.fromPrivateString( "9c845f50a809cf6bb3ff7a3679195141dc97bd62e237a2ced3d6373735a38891");
+		   
 		giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
 		userkeys.add(key);
-		ECKey key2 = new ECKey();
+		ECKey key2 =  ECKey.fromPrivateString(  "88c8383183d9db0a5fdbd8d862709f729e055d8981b8515044f28d4cf12d3f27");
+		  
 		giveMoneyResult.put(key2.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
 		userkeys.add(key2);
 
@@ -182,6 +176,28 @@ public class RemoteFromAddressTests extends RemoteTest {
 		}
 
 		return listUTXO;
+	}
+
+	// Verify that a token was created successfully
+	protected void verifyTokenCreated(String tokenid) throws Exception {
+		log.debug("=== Verifying token creation for tokenid: " + tokenid + " ===");
+
+		HashMap<String, Object> requestParam = new HashMap<>();
+		requestParam.put("tokenid", tokenid);
+		byte[] response = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
+				Json.jsonmapper().writeValueAsString(requestParam));
+
+		GetTokensResponse getTokensResponse =
+				Json.jsonmapper().readValue(response, GetTokensResponse.class);
+
+		assertTrue(getTokensResponse.getTokens() != null && getTokensResponse.getTokens().size() > 0,
+				"Token was not created: " + tokenid);
+
+		Token token = getTokensResponse.getTokens().get(0);
+		log.debug("Token found: " + token.getTokenname());
+		log.debug("Token confirmed: " + token.isConfirmed());
+		log.debug("Token amount: " + token.getAmount());
+		log.debug("Token id: " + token.getTokenid());
 	}
 
 }

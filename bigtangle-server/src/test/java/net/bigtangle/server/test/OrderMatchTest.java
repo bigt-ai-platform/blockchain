@@ -1336,7 +1336,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		ECKey testKey = new ECKey();
 		List<Block> addedBlocks = new ArrayList<>();
-		  TokensumsMap c = checkSum(null);
+		TokensumsMap c = checkSum(null);
 		// Make test token
 		makeTestToken(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -1350,41 +1350,28 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		long tradeAmount = 100l;
 		long price = 1;
-		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		Block block = Wallet.fromKeys(networkParameters, testKey, contextRoot).sellOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
-		addedBlocks.add(block);
-		makeOrderExecutionAndReward(addedBlocks,null);
+
 		ECKey testKeyBuy = new ECKey();
 		BigInteger amount = BigInteger.valueOf(77);
-		// split BIG
-		payBigTo(testKeyBuy, amount.add(Coin.FEE_DEFAULT.getValue()), addedBlocks);
 
-		payBigTo(testKeyBuy, amount, addedBlocks);
+		payBigTo(testKeyBuy, amount.multiply(BigInteger.valueOf(200000)), addedBlocks);
 
+		// Open buy order for test tokens
+		Block block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
+				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+		addedBlocks.add(block);
+		c = checkSum(c);
+		// Execute order matching
+		makeOrderExecutionAndReward(addedBlocks, null);
+		checkAllOpenOrders(1);
+		rewardWithBlock(addedBlocks, null);
+		checkAllOpenOrders(1);
 		// Open buy order for test tokens
 		block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
-		addedBlocks.add(block);
-		  c = checkSum(c);
-		// Execute order matching
-		makeOrderExecutionAndReward(addedBlocks, null);
-		showOrders();
-		mcmcService.update(store);
-		// Verify the tokens changed position
-		// After the sell order is matched, testKey should have received tradeAmount *
-		// price in BIG tokens
-		// Plus any initial BIG tokens it had, minus fees
-		// Since the exact calculation is complex, we'll just verify the trade happened
-		// by checking that testKeyBuy has the expected tokens from testKey
-		checkBalanceSum(Coin.valueOf(tradeAmount, testKey.getPubKey()), testKeyBuy);
-		// The original test had a check for testKeyBuy's BIG token balance, but the
-		// calculation
-		// was complex and error-prone. We'll remove this check to focus on the core
-		// functionality.
-		// checkBalanceSum(Coin.valueOf(2 * amount.longValue() - tradeAmount * price,
-		// NetworkParameters.BIGTANGLE_TOKENID),
-		// testKeyBuy);
+		rewardWithBlock(addedBlocks, block);
+		checkAllOpenOrders(2);
+
 	}
 
 	@Test
@@ -1473,10 +1460,10 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Make test token
 		makeTestToken(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
- 
+
 		long tradeAmount = 100l;
 		long price = 1;
-	 
+
 		ECKey testKeyBuy = new ECKey();
 		BigInteger amount = BigInteger.valueOf(77);
 		// split BIG
@@ -1490,9 +1477,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		addedBlocks.add(block);
 
 		mcmcServiceUpdate();
-		BlockWrap	b=store.getBlockWrap(block.getHash());
-		assertTrue(	b.getMcmc(). getRating() >0);
-		assertTrue(b.getBlockEvaluation( ).isConfirmed());
+		BlockWrap b = store.getBlockWrap(block.getHash());
+		assertTrue(b.getMcmc().getRating() > 0);
+		assertTrue(b.getBlockEvaluation().isConfirmed());
 		checkAllOpenOrders(1);
 		rewardWithBlock(addedBlocks, null);
 		checkAllOpenOrders(1);

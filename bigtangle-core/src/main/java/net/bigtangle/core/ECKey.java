@@ -227,6 +227,15 @@ public class ECKey implements EncryptableItem {
         this.priv = priv;
         this.pub = checkNotNull(pub);
     }
+    public static ECKey fromPrivateString(String privKey )   {
+    	  
+        return ECKey.fromPrivateByte(Utils.HEX.decode( privKey ));
+      }
+
+    public static ECKey  fromPrivateByte(byte[] privKeyBytes )  {
+    
+      return ECKey.fromPrivate(  privKeyBytes);
+    }
 
     /**
      * Utility for compressing an elliptic curve point. Returns the same point if it's already compressed.

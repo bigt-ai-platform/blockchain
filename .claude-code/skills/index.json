@@ -1,0 +1,19 @@
+{
+  "skills": [
+    {
+      "name": "bigtangle",
+      "file": "bigtangle.md",
+      "description": "BigTangle blockchain server development workflow",
+      "commands": [
+        "build",
+        "test",
+        "run",
+        "order-test",
+        "clean",
+        "docker",
+        "db",
+        "status"
+      ]
+    }
+  ]
+}

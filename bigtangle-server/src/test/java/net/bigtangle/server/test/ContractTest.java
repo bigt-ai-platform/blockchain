@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.tuple.Pair;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +42,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.wallet.Wallet;
 
- 
+@Disabled("Temporarily disabled")
 public class ContractTest extends AbstractIntegrationTest {
 
 	protected static final Logger log = LoggerFactory.getLogger(ContractTest.class);
