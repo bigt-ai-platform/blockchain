@@ -31,6 +31,8 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.GetBlockEvaluationsResponse;
 import net.bigtangle.response.GetBlockListResponse;
+import net.bigtangle.response.GetTXRewardListResponse;
+import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
@@ -253,5 +255,15 @@ public class BlockService {
 		new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.checkBlockBeforeSave(block, store);
 	}
+	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
+		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
+
+	}
+
+	public GetTXRewardListResponse getAllConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
+
+		return GetTXRewardListResponse.create(store.getAllConfirmedReward());
+
+	}
 }

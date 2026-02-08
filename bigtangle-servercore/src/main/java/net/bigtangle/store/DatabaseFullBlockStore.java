@@ -69,7 +69,7 @@ import net.bigtangle.utils.Gzip;
  * </p>
  * 
  */
-public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase implements BlockStoreInterface {
+public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase {
 
 	/**
 	 * <p>

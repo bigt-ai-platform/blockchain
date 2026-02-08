@@ -63,7 +63,7 @@ import net.bigtangle.server.service.OrderTickerService;
 import net.bigtangle.server.service.OrderdataService;
 import net.bigtangle.server.service.OutputService;
 import net.bigtangle.server.service.PayMultiSignService;
-import net.bigtangle.server.service.RewardService;
+ 
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.server.service.TokenDomainnameService;
@@ -108,8 +108,7 @@ public class DispatcherController {
 	@Autowired
 	private TokenDomainnameService tokenDomainnameService;
 
-	@Autowired
-	private RewardService rewardService;
+	 
 	@Autowired
 	private AccessPermissionedService accessPermissionedService;
 	@Autowired
@@ -549,9 +548,9 @@ public class DispatcherController {
 
 			case getChainNumber: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-                Json.jsonmapper().readValue(reqStr, Map.class);
-                AbstractResponse response = rewardService.getMaxConfirmedReward(store);
-
+					Json.jsonmapper().readValue(reqStr, Map.class);
+					AbstractResponse response = blockService.getMaxConfirmedReward(store);
+	
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -559,7 +558,7 @@ public class DispatcherController {
 			case getAllConfirmedReward: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
                 Json.jsonmapper().readValue(reqStr, Map.class);
-                AbstractResponse response = rewardService.getAllConfirmedReward(store);
+                AbstractResponse response = blockService.getAllConfirmedReward(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;

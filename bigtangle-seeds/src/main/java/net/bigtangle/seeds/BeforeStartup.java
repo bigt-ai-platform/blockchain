@@ -39,10 +39,10 @@ public class BeforeStartup {
 				for (int i = 0; i < jsonArray.length(); i++) {
 					JSONObject jsonObject = jsonArray.getJSONObject(i);
 					ServerInfo serverInfo = new ServerInfo();
-					serverInfo.setUrl(jsonObject.getString("url"));
-					serverInfo.setServertype(jsonObject.getString("servertype"));
-					serverInfo.setChain(jsonObject.getString("chain"));
-					serverInfo.setStatus(jsonObject.getString("status"));
+					serverInfo.setUrl(jsonObject.optString("url"));
+					serverInfo.setServertype(jsonObject.optString("servertype"));
+					serverInfo.setChain(jsonObject.optString("chain"));
+					serverInfo.setStatus(jsonObject.optString("status"));
 					if (DispatcherController.serverinfoList == null) {
 						DispatcherController.serverinfoList = new ArrayList<ServerInfo>();
 

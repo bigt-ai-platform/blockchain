@@ -10,10 +10,11 @@
             "name": "ServerStart",
             "request": "launch",
             "mainClass": "net.bigtangle.server.ServerStart",
-            "projectName": "bigtangle-server"      ,
+            "projectName": "bigtangle-server",
             "env": {
                 "SERVICE_MINING": "true",
                 "SERVICE_MCMC": "true"
             }
+        }
     ]
 }
