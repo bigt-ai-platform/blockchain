@@ -27,7 +27,7 @@ services:
     restart: always
 
   test-bigtangle:
-    image: ghcr.io/bigtangle/server:bigtangle-server-contract-latest
+    image: ghcr.io/bigtangle/server:latest
     container_name: test-bigtangle
     hostname: test-bigtangle
     networks:

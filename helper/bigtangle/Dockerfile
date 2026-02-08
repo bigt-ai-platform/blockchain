@@ -32,7 +32,7 @@ RUN  mvn  -DskipTests=true clean install
 
 
 ## runtime
-FROM   docker.io/openjdk:17-jdk-slim
+FROM   eclipse-temurin:17-jdk-jammy
  
 ARG BIGTANGLEVERSION
 RUN ulimit -n 65536
