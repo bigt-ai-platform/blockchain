@@ -1,0 +1,45 @@
+<!-- Copyright 2018 Inasset GmbH. -->
+<configuration>
+	<appender name="stdout1" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<Pattern>"%date{yyyy-MM-dd'T'HH:mm:ss.SSSZ, Europe/Berlin}" [%thread]
+				%-5level [%logger{42}:%line] - message: "%msg"%n</Pattern>
+		</encoder>
+	</appender>
+
+	<appender name="FILE"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>logs/server.log</file>
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- daily rollover -->
+			<fileNamePattern>logs/server.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+			<timeBasedFileNamingAndTriggeringPolicy
+				class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+				<!-- or whenever the file size reaches 50MB -->
+				<maxFileSize>50MB</maxFileSize>
+			</timeBasedFileNamingAndTriggeringPolicy>
+			<!-- keep 30 days' worth of history -->
+			<maxHistory>30</maxHistory>
+		</rollingPolicy>
+		<encoder>
+			<Pattern>"%date{yyyy-MM-dd'T'HH:mm:ss.SSSZ, Europe/Berlin}" [%thread]
+				%-5level [%logger{42}:%line] - message: "%msg"%n</Pattern>
+		</encoder>
+	</appender>
+
+	<root level="${LOGGING_LEVEL:-INFO}">
+		<appender-ref ref="stdout1" />
+		<appender-ref ref="FILE" />
+	</root>
+
+	<logger name="net.bigtangle" level="${LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
+
+	<logger name="org.apache.kafka" level="${LOGGING_LEVEL_KAFKA:-WARN}" />
+
+	<logger name="org.apache.kafka.streams.KafkaStreams" level="INFO" />
+	<logger name="org.apache.kafka.clients.consumer.ConsumerConfig"
+		level="ERROR" />
+	<logger name="org.apache.kafka.clients.producer.ProducerConfig"
+		level="ERROR" />
+
+</configuration>
