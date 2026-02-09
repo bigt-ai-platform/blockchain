@@ -61,6 +61,7 @@ import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.BlockStoreException;
+ 
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
@@ -79,7 +80,6 @@ import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.ContractExecutionService;
 import net.bigtangle.server.service.MCMCService;
-import net.bigtangle.server.service.RewardService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.TipsService;
@@ -119,8 +119,7 @@ public abstract class AbstractIntegrationTest {
 	protected BlockService blockService;
 	@Autowired
 	protected MCMCService mcmcService;
-	@Autowired
-	protected RewardService rewardService;
+	 
 
 	@Autowired
 	protected NetworkParameters networkParameters;
@@ -225,7 +224,7 @@ public abstract class AbstractIntegrationTest {
 	protected void payTestTokenTo(ECKey beneficiary, ECKey testKey, BigInteger amount, List<Block> addedBlocks)
 			throws Exception {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		makeRewardBlock(addedBlocks);
+	//	makeRewardBlock(addedBlocks);
 		HashMap<String, BigInteger> giveMoneyTestToken = new HashMap<String, BigInteger>();
 
 		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toString(), amount);
@@ -235,7 +234,7 @@ public abstract class AbstractIntegrationTest {
 		// log.debug("block " + (b == null ? "block is null" : b.toString()));
 
 		addedBlocks.add(b);
-		makeRewardBlock(addedBlocks);
+		//makeRewardBlock(addedBlocks);
 		// Open sell order for test tokens
 	}
 
@@ -321,7 +320,7 @@ public abstract class AbstractIntegrationTest {
 
 		Block block = w.payContract(null, tokenId, buyAmount, null, null, contractTokenid);
 		addedBlocks.add(block);
-		makeRewardBlock(addedBlocks);
+	//	makeRewardBlock(addedBlocks);
 		return block;
 
 	}
@@ -346,51 +345,11 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
+  
  
  
-
-	protected Block makeRewardBlock() throws Exception {
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		return makeRewardBlock(predecessor);
-	}
-
-	protected Block makeRewardBlock(List<Block> addedBlocks) throws Exception {
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block block = makeRewardBlock(predecessor);
-		if (addedBlocks != null)
-			addedBlocks.add(block);
-
-		return block;
-	}
-
  
-
-	protected Block makeRewardBlock(Block predecessor) throws Exception {
-		return makeRewardBlock(predecessor.getHash());
-	}
-
-	protected Block makeRewardBlock(Sha256Hash predecessor) throws Exception {
-
-		Block block = makeRewardBlock(cacheBlockService.getMaxConfirmedReward(store).getBlockHash(), predecessor, predecessor);
-
-		return block;
-	}
-
-	protected Block makeAndConfirmContractExecution(List<Block> addedBlocks) throws Exception {
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-
-		Block block = makeRewardBlock(cacheBlockService.getMaxConfirmedReward(store).getBlockHash(), predecessor.getHash(),
-				predecessor.getHash());
-		addedBlocks.add(block);
-
-		// Confirm
-		makeRewardBlock();
-
-		return block;
-	}
-
+	 
 	protected void assertCurrentTokenAmountEquals(HashMap<String, Long> origTokenAmounts) throws BlockStoreException {
 		assertCurrentTokenAmountEquals(origTokenAmounts, true);
 	}
@@ -847,17 +806,7 @@ public abstract class AbstractIntegrationTest {
 				PermissionedAddressesResponse.class);
 		return permissionedAddressesResponse;
 	}
-
-	public Block makeRewardBlock(Sha256Hash prevHash, Sha256Hash prevTrunk, Sha256Hash prevBranch) throws Exception {
-		Block block = rewardService.createMiningRewardBlock(prevHash, blockService.getBlockWrap(prevTrunk, store),
-				blockService.getBlockWrap(prevBranch, store),false, store);
-		if (block != null) {
-			blockSaveService.saveBlock(block, store);
-			blockGraph.updateChain();
-		}
-		return block;
-	}
-
+ 
  
 
 	public void send() throws JsonProcessingException, Exception {
