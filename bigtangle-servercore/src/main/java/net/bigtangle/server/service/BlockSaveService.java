@@ -44,9 +44,7 @@ public class BlockSaveService {
 		blockgraph.addBlock(block, false, store);
 		// no broadcastBlock, if there is error of blockgraph.add
 		broadcastBlock(block);
-		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
-			cacheBlockPrototypeService.evictBlockPrototypeByte();
-		}
+		 
 	}
 	public void broadcastBlock(Block block) {
 		try {

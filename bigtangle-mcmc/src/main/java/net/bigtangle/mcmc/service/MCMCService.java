@@ -1,8 +1,8 @@
 /*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
+ *  Copyright   2018  Inasset GmbH.
+ *
  *******************************************************************************/
-package net.bigtangle.server.service;
+package net.bigtangle.mcmc.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,6 +38,10 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Rating;
+import net.bigtangle.server.service.CacheBlockPrototypeService;
+import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.TipsService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
@@ -146,8 +150,7 @@ public class MCMCService {
 			updateWeightAndDepth(cutoffHeight, maxHeight, store);
 			updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
 			deleteMCMC(maxConfirmedReward, store);
-			cacheBlockService.evictBlockMCMC();
-			cacheBlockPrototypeService.evictBlockPrototypeByte();
+			cacheBlockService.evictBlockMCMC(); 
 			// generate new
 			cacheBlockPrototypeService.getBlockPrototype(store);
 		} catch (Exception e) {

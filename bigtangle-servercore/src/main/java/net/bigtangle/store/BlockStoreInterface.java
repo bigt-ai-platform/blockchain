@@ -53,6 +53,7 @@ import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.Rating;
+import net.bigtangle.server.data.TipsQueue;
 
 /**
  * <p>
@@ -358,6 +359,12 @@ public interface BlockStoreInterface {
 	void deleteBatchBlock(Sha256Hash hash) throws BlockStoreException;
 
 	List<BatchBlock> getBatchBlockList() throws BlockStoreException;
+
+	void insertTipsQueue(TipsQueue tipsQueue) throws BlockStoreException;
+
+	void deleteTipsQueue(Sha256Hash hash) throws BlockStoreException;
+
+	TipsQueue getTipsQueue() throws BlockStoreException;
 
 	List<UTXO> getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime)
 			throws BlockStoreException;

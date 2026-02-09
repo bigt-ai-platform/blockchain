@@ -125,9 +125,9 @@ import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
+import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.ContractExecutionService;
-import net.bigtangle.server.service.MCMCService;
 import net.bigtangle.server.service.OrderExecutionService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
@@ -305,7 +305,7 @@ public abstract class AbstractIntegrationTest {
 		cacheBlockService.evictMaxConfirmedReward();
 		cacheBlockService.evictBlockMCMC();
 		cacheBlockService.evictBlockEvaluation();
-		cacheBlockPrototypeService.evictBlockPrototypeByte();
+ 
 	}
 
 	public void resetBucket() throws BlockStoreException {

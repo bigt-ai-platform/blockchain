@@ -102,6 +102,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	private static final String DROP_MCMC_TABLE = "DROP TABLE  IF EXISTS mcmc";
 	private static final String DROP_LOCKOBJECT_TABLE = "DROP TABLE  IF EXISTS lockobject";
+	private static final String DROP_TIPSQUEUE_TABLE = "DROP TABLE  IF EXISTS tipsqueue";
 	private static final String DROP_MATCHING_LAST_TABLE = "DROP TABLE  IF EXISTS matchinglast";
 	private static final String DROP_MATCHINGDAILY_TABLE = "DROP TABLE  IF EXISTS matchingdaily";
 	private static final String DROP_MATCHINGLASTDAY_TABLE = "DROP TABLE  IF EXISTS matchinglastday";
@@ -417,6 +418,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ duplicateInsert();
 	protected final String DELETE_BATCHBLOCK_SQL = "DELETE FROM batchblock WHERE hash = ?";
 	protected final String SELECT_BATCHBLOCK_SQL = "SELECT hash, block, inserttime FROM batchblock order by inserttime ASC";
+
+	protected final String INSERT_TIPSQUEUE_SQL = "INSERT INTO tipsqueue (hash, block, height, inserttime) VALUES (?, ?, ?, ?)"
+			+ duplicateInsert();
+	protected final String DELETE_TIPSQUEUE_SQL = "DELETE FROM tipsqueue WHERE hash = ?";
+	protected final String SELECT_TIPSQUEUE_SQL = "SELECT hash, block, height, inserttime FROM tipsqueue ORDER BY height DESC, inserttime ASC LIMIT 1";
 	protected final String INSERT_SUBTANGLE_PERMISSION_SQL = "INSERT INTO  subtangle_permission (pubkey, userdataPubkey , status) VALUE (?, ?, ?)"
 			+ duplicateInsert();
 
@@ -566,6 +572,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_CHAINBLOCKQUEUE_TABLE);
 		sqlStatements.add(DROP_MCMC_TABLE);
 		sqlStatements.add(DROP_LOCKOBJECT_TABLE);
+		sqlStatements.add(DROP_TIPSQUEUE_TABLE);
 		sqlStatements.add(DROP_MATCHING_LAST_TABLE);
 		sqlStatements.add(DROP_MATCHINGDAILY_TABLE);
 		sqlStatements.add(DROP_MATCHINGLASTDAY_TABLE);

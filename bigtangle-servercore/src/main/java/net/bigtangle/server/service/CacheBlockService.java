@@ -232,29 +232,7 @@ public class CacheBlockService {
 		logger.debug("evictOutputs");
 	}
 
-	/**
-	 * Retrieves MCMC (Markov Chain Monte Carlo) data for a block from cache or database.
-	 * 
-	 * @param blockhash The hash of the block to retrieve MCMC data for
-	 * @param store The block store interface implementation
-	 * @return Serialized MCMC data as byte array
-	 * @throws BlockStoreException If there is an error accessing the block store
-	 * @throws JsonProcessingException If there is an error serializing the data
-	 */
-	@Cacheable(value = "BlockMCMC", key = "#blockhash")
-	public byte[] getBlockMCMC(Sha256Hash blockhash, BlockStoreInterface store)
-			throws BlockStoreException, JsonProcessingException {
-		// store.getParams().getId()
-		return jsonmapper.writeValueAsBytes(store.getMCMC(blockhash));
-	}
-
-	/**
-	 * Clears all entries from the MCMC cache.
-	 */
-	@CacheEvict(value = "BlockMCMC", allEntries = true)
-	public synchronized void evictBlockMCMC() {
-	}
-
+ 
 	/**
 	 * Retrieves block evaluation data from cache or database.
 	 * 
@@ -288,6 +266,27 @@ public class CacheBlockService {
 	 */
 	@CacheEvict(value = "BlockEvaluation", allEntries = true)
 	public synchronized void evictBlockEvaluation() {
+	}
+
+	/**
+	 * Retrieves block MCMC data from database.
+	 *
+	 * @param blockhash The hash of the block to retrieve MCMC data for
+	 * @param store The block store interface implementation
+	 * @return Serialized MCMC data as byte array
+	 * @throws BlockStoreException If there is an error accessing the block store
+	 * @throws JsonProcessingException If there is an error serializing the data
+	 */
+	public byte[] getBlockMCMC(Sha256Hash blockhash, BlockStoreInterface store)
+			throws BlockStoreException, JsonProcessingException {
+		return jsonmapper.writeValueAsBytes(store.getMCMC(blockhash));
+	}
+
+	/**
+	 * Clears all entries from the MCMC cache.
+	 */
+	@CacheEvict(value = "BlockMCMC", allEntries = true)
+	public synchronized void evictBlockMCMC() {
 	}
 
 	/**

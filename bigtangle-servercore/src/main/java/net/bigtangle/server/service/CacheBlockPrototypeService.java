@@ -27,40 +27,22 @@ public class CacheBlockPrototypeService {
 	  private static final Logger log  =
 	  LoggerFactory.getLogger(CacheBlockPrototypeService.class);
 
-	@Autowired
-	protected TipsService tipService;
+	 
 	@Autowired
 	protected NetworkParameters networkParameters;
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
-	@Cacheable(value = "BlockPrototype", key = "#store.getParams.getId", sync=true)
-	private byte[] getBlockPrototypeByte(BlockStoreInterface store) throws BlockStoreException, NoBlockException {
+	 
+	public Block getBlockPrototype(BlockStoreInterface store) throws BlockStoreException, NoBlockException {
 		// logger.debug("blockService.getNewBlockPrototype(store " ) ;
-		return calcNewBlockPrototype(store).unsafeBitcoinSerialize();
-
+		net.bigtangle.server.data.TipsQueue tipsQueue = store.getTipsQueue();
+		 if(tipsQueue == null) {
+			 throw new NoBlockException( );
+		 }	
+		return networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
+  
 	}
-
-	@CacheEvict(value = "BlockPrototype", allEntries = true)
-	public void evictBlockPrototypeByte() {
-		// logger.debug("evictBlockPrototypeByte" ) ;
-	}
-
-	public Block getBlockPrototype(BlockStoreInterface store)
-			throws ProtocolException, BlockStoreException, NoBlockException {
-		return networkParameters.getDefaultSerializer().makeBlock(getBlockPrototypeByte(store));
-	}
-
-	private synchronized  Block calcNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
-	 //	log.debug("calcNewBlockPrototype start" ) ;
-		   Stopwatch watch = Stopwatch.createStarted();
-		Pair<BlockWrap, BlockWrap> tipsToApprove = tipService.getValidatedBlockPair(store);
-		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
-				tipsToApprove.getRight().getBlock());
-		b.setMinerAddress(Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
-		if(watch.elapsed(TimeUnit.MILLISECONDS)>2000)
-		log.debug("calcNewBlockPrototype finish MILLISECONDS {} ", watch.elapsed(TimeUnit.MILLISECONDS) ) ;
-		return b;
-	}
+ 
 
 }
