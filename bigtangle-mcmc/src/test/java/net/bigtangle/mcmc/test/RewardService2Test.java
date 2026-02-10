@@ -233,7 +233,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			giveMoneyResult.put(new ECKey().toAddress(networkParameters).toString(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, j)));
 		}
-
+		mcmcService.calcNewBlockPrototype(store);	
 		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1");
 		blocksAddedAll.add(b);
 		makeRewardBlock(blocksAddedAll);

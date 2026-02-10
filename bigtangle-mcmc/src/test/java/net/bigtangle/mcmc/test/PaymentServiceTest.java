@@ -78,6 +78,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		Coin amount0 = Coin.valueOf(15, NetworkParameters.BIGTANGLE_TOKENID);
 
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		wallet.payToScript(null, amount0, new MemoInfo("multi signs"), scriptPubKey);
 
 		makeRewardBlock();
@@ -145,6 +147,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 		Address address = new ECKey().toAddress(networkParameters);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, address.toString(), amount,  "" );
 		// sendEmpty(5);
 		makeRewardBlock();
@@ -159,6 +163,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 		Address address = new ECKey().toAddress(networkParameters);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		List<Block> rollingBlock = wallet.pay(null, address.toString(), amount,   "" );
 		// sendEmpty(5);
 		makeRewardBlock();
@@ -211,6 +217,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		testPartsToOne(aCoin, to);
 		List<FreeStandingTransactionOutput> uspent = w.calculateAllSpendCandidates(null, false);
 		// assertTrue(uspent.size() == 4);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		w.payPartsToOne(null, to.toAddress(networkParameters).toString(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
 		makeRewardBlock();
 
@@ -223,6 +231,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 	public void testPartsToOne(Coin amount, ECKey to) throws Exception {
 
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, to.toAddress(networkParameters).toString(), amount, "");
 
 		makeRewardBlock();

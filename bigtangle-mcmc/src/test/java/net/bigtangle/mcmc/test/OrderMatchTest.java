@@ -1355,7 +1355,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		BigInteger amount = BigInteger.valueOf(77);
 
 		payBigTo(testKeyBuy, amount.multiply(BigInteger.valueOf(200000)), addedBlocks);
-
+		mcmcServiceUpdate();
 		// Open buy order for test tokens
 		Block block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
@@ -1427,6 +1427,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		payTestTokenTo(toKey, testKey, BigInteger.valueOf(tradeAmount * 2));
 		checkBalanceSum(Coin.valueOf(tradeAmount * 2, testKey.getPubKey()), toKey);
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block block = Wallet.fromKeys(networkParameters, testKey, contextRoot).sellOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
 
@@ -1439,6 +1441,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		payBigTo(testKeyBuy, amount, addedBlocks);
 		checkBalanceSum(new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID), testKeyBuy);
 		// Open buy order for test tokens
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
 		addedBlocks.add(block);
@@ -1472,6 +1476,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		payBigTo(testKeyBuy, amount, addedBlocks);
 
 		// Open buy order for test tokens
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
 		addedBlocks.add(block);

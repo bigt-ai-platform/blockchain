@@ -28,11 +28,7 @@ public class UserdataTest extends AbstractIntegrationTest {
     @Test
     public void testSaveUserData() throws Exception {
         // Ensure tips queue is populated before wallet operations
-        try {
-            mcmcService.update(store);
-        } catch (Exception e) {
-            // If update fails, continue anyway
-        }
+        mcmcService.calcNewBlockPrototype(store);
 
         ECKey outKey = new ECKey();
         Transaction transaction = new Transaction(networkParameters);
@@ -48,16 +44,16 @@ public class UserdataTest extends AbstractIntegrationTest {
 
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo0.toByteArray());
-       
-        
+
+
         // TODO encrypt and decrypt the  UserSettingData
-        
-        
+
+
        wallet.saveUserdata(outKey, transaction,true,null);
 
         makeRewardBlock();
 
-    
+
         UserSettingDataInfo contactInfo1 =wallet.getUserSettingDataInfo(outKey,true);
         assertTrue(contactInfo1.getUserSettingDatas().size() == 1);
 
@@ -69,6 +65,8 @@ public class UserdataTest extends AbstractIntegrationTest {
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo1.toByteArray());
 
+       // Ensure tips queue is updated before second wallet operation
+       mcmcService.calcNewBlockPrototype(store);
        wallet.saveUserdata(outKey, transaction,true,null);
         makeRewardBlock();
  
@@ -80,11 +78,7 @@ public class UserdataTest extends AbstractIntegrationTest {
     public void testSaveUserDataWithECKey() throws Exception {
 
         // Ensure tips queue is populated before wallet operations
-        try {
-            mcmcService.update(store);
-        } catch (Exception e) {
-            // If update fails, continue anyway
-        }
+        mcmcService.calcNewBlockPrototype(store);
 
         ECKey outKey = new ECKey();
         Transaction transaction = new Transaction(networkParameters);

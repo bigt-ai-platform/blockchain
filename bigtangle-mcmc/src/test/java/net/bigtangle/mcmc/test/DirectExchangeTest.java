@@ -52,7 +52,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	public void testBatchBlock() throws Exception {
 		// Ensure tips queue is populated
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -89,7 +89,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is populated
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -129,7 +129,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is populated
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -168,7 +168,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is populated before wallet operations
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -200,6 +200,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testRatingRead() throws Exception {
+
+		// Ensure tips queue is populated before wallet operations
+		try {
+			mcmcService.calcNewBlockPrototype(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
 
 		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
@@ -251,7 +258,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	public void exchangeTokenComplete(Transaction tx) throws Exception {
 		// Ensure tips queue is populated
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -276,7 +283,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	public void payToken(int amount, ECKey outKey, byte[] tokenbuf, Wallet wallet) throws Exception {
 		// Ensure tips queue is populated
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails, continue anyway
 		}
@@ -312,6 +319,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void createTransaction() throws Exception {
+
+		// Ensure tips queue is populated before wallet operations
+		try {
+			mcmcService.calcNewBlockPrototype(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
 
 		Address destination = Address.fromBase58(networkParameters, "1NWN57peHapmeNq1ndDeJnjwPmC56Z6x8j");
 

@@ -115,6 +115,8 @@ public class FromAddressTests extends AbstractIntegrationTest {
 	public void buyTicket(ECKey key, ECKey accountKey) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 		log.debug("====ready buyTicket====");
+		// Ensure tips queue is populated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
 		makeRewardBlock();
@@ -162,6 +164,8 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		userkeys.add(key2);
 
 		String memo = "pay to user";
+		// Ensure tips queue is populated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
 		makeRewardBlock();
@@ -233,11 +237,16 @@ public class FromAddressTests extends AbstractIntegrationTest {
 			String description, BigInteger amount) throws JsonProcessingException, Exception {
 		try {
 
+			// Ensure tips queue is populated before wallet operations
+			mcmcService.calcNewBlockPrototype(store);
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.currency.ordinal(), key.getPublicKeyAsHex(),
 					Wallet.fromKeys(networkParameters, key, contextRoot));
+			makeRewardBlock();
 			ECKey signkey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
 
+			// Ensure tips queue is updated before wallet operations
+			mcmcService.calcNewBlockPrototype(store);
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 
 		} catch (Exception e) {

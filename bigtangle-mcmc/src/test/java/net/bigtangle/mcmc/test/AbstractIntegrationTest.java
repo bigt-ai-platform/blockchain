@@ -353,7 +353,7 @@ public abstract class AbstractIntegrationTest {
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
 		// Ensure tips queue is populated before wallet operations that need getTip
 		try {
-			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails (e.g., not enough blocks), continue anyway
 		}
@@ -381,11 +381,13 @@ public abstract class AbstractIntegrationTest {
 		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toString(), amount);
 		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block b = w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
 		// log.debug("block " + (b == null ? "block is null" : b.toString()));
 
 		addedBlocks.add(b);
-		makeRewardBlock(addedBlocks);
+		rewardWithBlock(addedBlocks,b);
 		// Open sell order for test tokens
 	}
 
@@ -577,6 +579,8 @@ public abstract class AbstractIntegrationTest {
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
 			List<Block> addedBlocks) throws Exception {
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		Block block = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
 		addedBlocks.add(block);
@@ -596,6 +600,8 @@ public abstract class AbstractIntegrationTest {
 			String contractTokenid, List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block block = w.payContract(null, tokenId, buyAmount, null, null, contractTokenid);
 		addedBlocks.add(block);
 		makeRewardBlock(addedBlocks);
@@ -635,6 +641,8 @@ public abstract class AbstractIntegrationTest {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		Block block = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
 		addedBlocks.add(block);
 
@@ -1134,6 +1142,8 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
+		// Ensure tips queue is updated before wallet operations
+		mcmcService.calcNewBlockPrototype(store);
 		return wallet.saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
 	}
 
