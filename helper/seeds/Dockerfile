@@ -27,7 +27,7 @@ RUN  mvn  -DskipTests=true clean install
 
 
 ## runtime
-FROM   docker.io/openjdk:17-jdk-slim
+FROM   eclipse-temurin:17-jdk-jammy
  
 RUN ulimit -n 65536
 RUN mkdir -p /app/bigtangle-seeds/
