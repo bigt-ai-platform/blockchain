@@ -1,0 +1,130 @@
+version: '3.8'
+
+networks:
+  bigtangle-bridged-network:
+    driver: bridge
+
+services:
+  test-bigtangle-postgres:
+    image: postgres:16
+    container_name: test-bigtangle-postgres
+    hostname: test-bigtangle-postgres
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: test1234
+      POSTGRES_DB: info
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d info"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    hostname: minio
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+      MINIO_DEFAULT_BUCKETS: testbigtangle
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  test-bigtangle-server:
+    build:
+      context: ..
+      dockerfile: helper/bigtangle/Dockerfile
+    image: bigtangle-server:local
+    container_name: test-bigtangle-server
+    hostname: test-bigtangle-server
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "8089:8088"
+    environment:
+      JAVA_OPTS: "-Ddebug -Xmx4096m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
+      DB_PASSWORD: test1234
+      DB_USER: root
+      DB_PORT: 5432
+      SERVER_PORT: 8088
+      DB_NAME: info
+      DB_HOSTNAME: test-bigtangle-postgres
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESSKEY: minioadmin
+      MINIO_SECRETKEY: minioadminpassword
+      MINIO_BUCKETNAME: testbigtangle
+      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
+      SERVERMODE: ""
+      SERVER_NET: Test
+      SSL: "false"
+      # Disable MCMC in server since it runs separately
+      SERVICE_MCMC: "false"
+      SERVICE_MINING: "false"
+    depends_on:
+      test-bigtangle-postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: always
+
+  test-bigtangle-mcmc:
+    build:
+      context: ..
+      dockerfile: helper/bigtangle-mcmc/Dockerfile
+    image: bigtangle-mcmc:local
+    container_name: test-bigtangle-mcmc
+    hostname: test-bigtangle-mcmc
+    networks:
+      - bigtangle-bridged-network
+    ports:
+      - "8090:8088"
+    environment:
+      JAVA_OPTS: "-Ddebug -Xmx2048m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
+      DB_PASSWORD: test1234
+      DB_USER: root
+      DB_PORT: 5432
+      SERVER_PORT: 8088
+      DB_NAME: info
+      DB_HOSTNAME: test-bigtangle-postgres
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESSKEY: minioadmin
+      MINIO_SECRETKEY: minioadminpassword
+      MINIO_BUCKETNAME: testbigtangle
+      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
+      SERVER_NET: Test
+      SSL: "false"
+      # MCMC service configuration
+      SERVICE_MCMC: "true"
+      SERVICE_MCMC_RATE: 1000
+      # Schedule rate in milliseconds (how often to update MCMC and tips)
+    depends_on:
+      test-bigtangle-postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      test-bigtangle-server:
+        condition: service_started
+    restart: always
+
+volumes:
+  postgres-data:
+  minio-data:
