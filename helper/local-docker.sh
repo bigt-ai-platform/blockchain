@@ -80,7 +80,12 @@ case "$1" in
 
   tips)
     echo "Checking tips queue..."
-    docker exec -it test-bigtangle-postgres psql -U root -d info -c "SELECT encode(hash, 'hex') as hash, height, time FROM tips_queue ORDER BY time DESC LIMIT 10;"
+    docker exec -it test-bigtangle-postgres psql -U root -d info -c "SELECT encode(hash, 'hex') as hash, height, inserttime FROM tipsqueue ORDER BY inserttime DESC LIMIT 10;"
+    ;;
+
+  test)
+    echo "Running Docker local test..."
+    bash "$(dirname "$0")/test-tips-generation.sh"
     ;;
 
   *)
@@ -100,12 +105,14 @@ case "$1" in
     echo "  exec <service> <cmd> Execute command in container"
     echo "  db             Connect to PostgreSQL"
     echo "  tips           Show recent tips queue entries"
+    echo "  test           Run comprehensive system test"
     echo ""
     echo "Examples:"
     echo "  $0 start"
     echo "  $0 logs test-bigtangle-mcmc"
     echo "  $0 rebuild test-bigtangle-server"
     echo "  $0 tips"
+    echo "  $0 test"
     echo ""
     exit 1
     ;;
