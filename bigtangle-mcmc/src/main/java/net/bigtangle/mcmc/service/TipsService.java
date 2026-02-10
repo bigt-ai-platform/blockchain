@@ -1,8 +1,8 @@
 /*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
+ *  Copyright   2018  Inasset GmbH.
+ *
  *******************************************************************************/
-package net.bigtangle.server.service;
+package net.bigtangle.mcmc.service;
 
 /**
  * Provides tip selection functionality for the blockchain using Markov Chain Monte Carlo (MCMC) methods.
@@ -49,6 +49,7 @@ import net.bigtangle.exception.VerificationException.InfeasiblePrototypeExceptio
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 

@@ -119,6 +119,13 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		Script inputScript = ScriptBuilder.createMultiSigInputScript(ImmutableList.of(tsrecsig, tsintsig));
 		input2.setScriptSig(inputScript);
 
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));

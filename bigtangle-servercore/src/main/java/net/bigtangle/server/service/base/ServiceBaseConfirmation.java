@@ -882,9 +882,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	@NotNull
 	private Supplier<TreeSet<TreeSet<ConflictCandidate>>> getSetSupplier() {
 		Comparator<TreeSet<ConflictCandidate>> byDescendingSetRating = getConflictSetComparator()
-				.thenComparingLong((TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getRating())
-				.thenComparingLong(
-						(TreeSet<ConflictCandidate> s) -> s.first().getBlock().getMcmc().getCumulativeWeight())
+
 				.thenComparingLong(
 						(TreeSet<ConflictCandidate> s) -> -s.first().getBlock().getBlockEvaluation().getInsertTime())
 				.thenComparing(
@@ -897,8 +895,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	@NotNull
 	private Supplier<TreeSet<ConflictCandidate>> getTreeSetSupplier() {
 		Comparator<ConflictCandidate> byDescendingRating = getConflictComparator()
-				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getRating())
-				.thenComparingLong((ConflictCandidate e) -> e.getBlock().getMcmc().getCumulativeWeight())
 				.thenComparingLong((ConflictCandidate e) -> -e.getBlock().getBlockEvaluation().getInsertTime())
 				.thenComparing((ConflictCandidate e) -> e.getBlock().getBlockEvaluation().getBlockHash()).reversed();
 

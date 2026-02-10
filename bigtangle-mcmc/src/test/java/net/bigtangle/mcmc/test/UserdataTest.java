@@ -27,7 +27,13 @@ import net.bigtangle.utils.OkHttp3Util;
 public class UserdataTest extends AbstractIntegrationTest {
     @Test
     public void testSaveUserData() throws Exception {
-      
+        // Ensure tips queue is populated before wallet operations
+        try {
+            mcmcService.update(store);
+        } catch (Exception e) {
+            // If update fails, continue anyway
+        }
+
         ECKey outKey = new ECKey();
         Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
@@ -73,6 +79,13 @@ public class UserdataTest extends AbstractIntegrationTest {
     @Test
     public void testSaveUserDataWithECKey() throws Exception {
 
+        // Ensure tips queue is populated before wallet operations
+        try {
+            mcmcService.update(store);
+        } catch (Exception e) {
+            // If update fails, continue anyway
+        }
+
         ECKey outKey = new ECKey();
         Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
@@ -103,6 +116,13 @@ public class UserdataTest extends AbstractIntegrationTest {
     }
     @Test
     public void testServerURL() throws Exception {
+        // Ensure tips queue is populated
+        try {
+            mcmcService.update(store);
+        } catch (Exception e) {
+            // If update fails, continue anyway
+        }
+
         HashMap<String, String> requestParam = new HashMap<String, String>();
         byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));

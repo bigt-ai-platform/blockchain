@@ -50,6 +50,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testBatchBlock() throws Exception {
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
 		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
@@ -79,6 +86,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		new Random().nextBytes(subtangleID);
 
 		transaction.setToAddressInSubtangle(subtangleID);
+
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
 
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
@@ -113,6 +127,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		Coin basecoin = Coin.valueOf(0L, pubKey);
 
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -144,6 +165,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testGiveMoney() throws Exception {
+
+		// Ensure tips queue is populated before wallet operations
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
 
 		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
@@ -221,6 +249,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	}
 
 	public void exchangeTokenComplete(Transaction tx) throws Exception {
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		// get new Block to be used from server
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
@@ -239,6 +274,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	}
 
 	public void payToken(int amount, ECKey outKey, byte[] tokenbuf, Wallet wallet) throws Exception {
+		// Ensure tips queue is populated
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));

@@ -27,22 +27,21 @@ public class CacheBlockPrototypeService {
 	  private static final Logger log  =
 	  LoggerFactory.getLogger(CacheBlockPrototypeService.class);
 
-	 
 	@Autowired
 	protected NetworkParameters networkParameters;
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
-	 
+
 	public Block getBlockPrototype(BlockStoreInterface store) throws BlockStoreException, NoBlockException {
 		// logger.debug("blockService.getNewBlockPrototype(store " ) ;
 		net.bigtangle.server.data.TipsQueue tipsQueue = store.getTipsQueue();
 		 if(tipsQueue == null) {
-			 throw new NoBlockException( );
-		 }	
+			 throw new NoBlockException();
+		 }
 		return networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
-  
+
 	}
- 
+
 
 }

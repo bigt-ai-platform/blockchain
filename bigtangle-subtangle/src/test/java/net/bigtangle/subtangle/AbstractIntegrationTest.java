@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +42,6 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
@@ -54,14 +52,10 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionInput;
-import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.BlockStoreException;
- 
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
@@ -70,8 +64,6 @@ import net.bigtangle.response.MultiSignByRequest;
 import net.bigtangle.response.MultiSignResponse;
 import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.response.TokenIndexResponse;
-import net.bigtangle.script.Script;
-import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -79,17 +71,13 @@ import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.ContractExecutionService;
-import net.bigtangle.server.service.MCMCService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
-import net.bigtangle.server.service.TipsService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
-import net.bigtangle.utils.MonetaryFormat;
 import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.utils.UUIDUtil;
-import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
@@ -117,8 +105,7 @@ public abstract class AbstractIntegrationTest {
 	protected BlockStoreService blockGraph;
 	@Autowired
 	protected BlockService blockService;
-	@Autowired
-	protected MCMCService mcmcService;
+ 
 	 
 
 	@Autowired
@@ -127,8 +114,7 @@ public abstract class AbstractIntegrationTest {
 	@Autowired
 	protected StoreService storeService;
 
-	@Autowired
-	protected TipsService tipsService;
+ 
 	@Autowired
 	protected SyncBlockService syncBlockService;
 
@@ -216,7 +202,7 @@ public abstract class AbstractIntegrationTest {
 		// log.debug("block " + (b == null ? "block is null" : b.toString()));
 		if (addedBlocks != null)
 			addedBlocks.add(b);
-		mcmcServiceUpdate();
+	 
 		// makeRewardBlock(addedBlocks);
 		return b;
 	}
@@ -289,7 +275,7 @@ public abstract class AbstractIntegrationTest {
 		block = saveTokenUnitTest(tokenInfo, coinbase, testKey, null, addedBlocks);
 		addedBlocks.add(block);
 		// makeRewardBlock(addedBlocks);
-		mcmc();
+	 
 		return block;
 	}
 
@@ -837,15 +823,8 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	public void mcmcServiceUpdate() throws InterruptedException, ExecutionException, BlockStoreException {
-		mcmcService.update(store);
-		blockGraph.updateChain();
-	}
-
-	public void mcmc() throws JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
-		mcmcServiceUpdate();
-
-	}
+ 
+ 
 
 	public BlockWrap defaultBlockWrap(Block block) throws Exception {
 		return new BlockWrap(block, BlockEvaluation.buildInitial(block), null, networkParameters);

@@ -60,8 +60,7 @@ public class BlockService {
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
-	@Autowired
-	protected TipsService tipService;
+ 
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired

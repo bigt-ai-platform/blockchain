@@ -19,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,8 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
+import net.bigtangle.core.Address;
+import net.bigtangle.core.Block;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
@@ -38,10 +41,10 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Rating;
+import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
-import net.bigtangle.server.service.TipsService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
@@ -152,13 +155,27 @@ public class MCMCService {
 			deleteMCMC(maxConfirmedReward, store);
 			cacheBlockService.evictBlockMCMC(); 
 			// generate new
-			cacheBlockPrototypeService.getBlockPrototype(store);
+			calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			log.debug("update  ", e);
 		}
 
 	}
 
+	
+
+	 public synchronized   void calcNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
+	 //	log.debug("calcNewBlockPrototype start" ) ;
+		   Stopwatch watch = Stopwatch.createStarted();
+		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
+		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
+				tipsToApprove.getRight().getBlock());
+		b.setMinerAddress(Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
+		if(watch.elapsed(TimeUnit.MILLISECONDS)>2000)
+		log.debug("calcNewBlockPrototype finish MILLISECONDS {} ", watch.elapsed(TimeUnit.MILLISECONDS) ) ;
+		TipsQueue t= new TipsQueue(b.getHash().getBytes(), b.unsafeBitcoinSerialize(), b.getHeight(), b.getTimeSeconds() );
+		 store.insertTipsQueue(t);
+	}
 	private void deleteMCMC(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
 		store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
 	}

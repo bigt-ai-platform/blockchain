@@ -129,9 +129,9 @@ import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.ContractExecutionService;
 import net.bigtangle.server.service.OrderExecutionService;
+import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
-import net.bigtangle.server.service.TipsService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.store.BlockStoreInterface;
@@ -351,6 +351,13 @@ public abstract class AbstractIntegrationTest {
 
 	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
+		// Ensure tips queue is populated before wallet operations that need getTip
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails (e.g., not enough blocks), continue anyway
+		}
+
 		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
 		// log.debug("block " + (b == null ? "block is null" : b.toString()));
 		if (addedBlocks != null) {
@@ -1236,6 +1243,13 @@ public abstract class AbstractIntegrationTest {
 			}
 		}
 
+		// Ensure tips queue is populated before getting tip
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -1413,6 +1427,13 @@ public abstract class AbstractIntegrationTest {
 			}
 		}
 
+		// Ensure tips queue is populated before getting tip
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
+
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
@@ -1545,6 +1566,13 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void send() throws JsonProcessingException, Exception {
+
+		// Ensure tips queue is populated before getting tip
+		try {
+			mcmcService.update(store);
+		} catch (Exception e) {
+			// If update fails, continue anyway
+		}
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
