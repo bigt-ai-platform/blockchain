@@ -81,6 +81,17 @@
 			</plugin>
 
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<excludes>
+						<exclude>**/net/bigtangle/mcmc/remote/**</exclude>
+						<exclude>**/net/bigtangle/performance/**</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+
+			<plugin>
 				<groupId>pl.project13.maven</groupId>
 				<artifactId>git-commit-id-plugin</artifactId>
 				<version>4.9.10</version>

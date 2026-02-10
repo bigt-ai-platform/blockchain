@@ -2,7 +2,7 @@
  *  Copyright   2018  Inasset GmbH. 
  *  
  *******************************************************************************/
-package net.bigtangle.server.performance;
+package net.bigtangle.performance;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

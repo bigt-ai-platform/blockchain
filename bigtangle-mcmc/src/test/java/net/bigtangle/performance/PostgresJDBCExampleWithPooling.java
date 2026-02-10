@@ -1,4 +1,4 @@
-package net.bigtangle.server.performance;
+package net.bigtangle.performance;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;

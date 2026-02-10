@@ -1,4 +1,4 @@
-package net.bigtangle.server.performance;
+package net.bigtangle.performance;
 
 import org.jgrapht.graph.DefaultDirectedGraph;
 import org.jgrapht.graph.DefaultEdge;

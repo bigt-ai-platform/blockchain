@@ -1,4 +1,4 @@
-package net.bigtangle.server.performance;
+package net.bigtangle.performance;
 
 public class DeltalakeTest {
 
