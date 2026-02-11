@@ -61,9 +61,9 @@ import net.bigtangle.wallet.Wallet;
   
 public abstract class RemoteTest {
 
-	 
+
 	protected static final Logger log = LoggerFactory.getLogger(RemoteTest.class);
-	public String contextRoot="http://localhost:8088/";
+	public String contextRoot = System.getProperty("server.url", "http://localhost:8089/");
 
 	/*
 	 * default wallet which has key testpriv and yuanTokenPriv

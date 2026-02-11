@@ -116,6 +116,8 @@ services:
       SERVICE_MCMC: "true"
       SERVICE_MCMC_RATE: 1000
       # Schedule rate in milliseconds (how often to update MCMC and tips)
+      # Server URL for sending created blocks
+      SERVER_SERVERURL: "http://test-bigtangle-server:8088"
     depends_on:
       test-bigtangle-postgres:
         condition: service_healthy

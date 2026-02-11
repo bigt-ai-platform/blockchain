@@ -40,7 +40,7 @@ public class RemoteTokenTests    {
 	
 	@BeforeEach
 	public void setUp() throws Exception {
-		contextRoot = "http://localhost:8088/";
+		contextRoot = System.getProperty("server.url", "http://localhost:8089/");
 		wallet = Wallet.fromKeys(TestParams.get(), ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
 
 	}

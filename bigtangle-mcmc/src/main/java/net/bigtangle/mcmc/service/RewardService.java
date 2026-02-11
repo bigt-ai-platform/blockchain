@@ -30,6 +30,8 @@ import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.ReqCmd;
+import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.exception.VerificationException.CutoffException;
 import net.bigtangle.exception.VerificationException.InfeasiblePrototypeException;
@@ -179,7 +181,7 @@ public class RewardService {
 			if (latest.getChainLength() > block.getLastMiningRewardBlock()) {
 				log.debug("resolved Reward is out of date.");
 			} else {
-				blockSaveService.saveBlock(block, store);
+				sendBlockToServer(block);
 			}
 		}
 		return block;
@@ -298,6 +300,35 @@ public class RewardService {
 		}
 
 		return Utils.encodeCompactBits(difficultyChain);
+	}
+
+	/**
+	 * Sends the created reward block to the server via HTTP POST instead of saving directly.
+	 * This ensures proper separation between MCMC (block creation) and Server (block validation/persistence).
+	 *
+	 * @param block The reward block to send to the server
+	 * @throws Exception if the HTTP request fails or server rejects the block
+	 */
+	private void sendBlockToServer(Block block) throws Exception {
+		// Get the server URL from configuration (e.g., "http://test-bigtangle-server:8088")
+		String serverUrl = serverConfiguration.getServerurl();
+
+		if (serverUrl == null || serverUrl.isEmpty()) {
+			log.warn("SERVER_URL not configured, falling back to direct save");
+			blockSaveService.saveBlock(block, null);
+			return;
+		}
+
+		// Construct the saveBlock endpoint URL
+		String saveBlockEndpoint = serverUrl + "/" + ReqCmd.saveBlock.name();
+
+		try {
+			byte[] response = OkHttp3Util.post(saveBlockEndpoint, block.bitcoinSerialize());
+			log.debug("Reward block sent to server successfully: {}", block.getHashAsString());
+		} catch (Exception e) {
+			log.error("Failed to send reward block to server: {}, endpoint: {}", block.getHashAsString(), saveBlockEndpoint, e);
+			throw e;
+		}
 	}
 
 }
