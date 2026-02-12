@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
+import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MultiSignAddress;
@@ -48,7 +49,8 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// MCMC should not update this far out
 		makeRewardBlock();
 		assertFalse(getBlockEvaluation(rollingBlock1.getHash(), store).isConfirmed());
-		assertTrue(store.getBlockWrap(rollingBlock1.getHash()).getMcmc().getRating() == 0);
+		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(rollingBlock1.getHash(), store), BlockMCMC.class);
+		assertTrue(mcmc.getRating() == 0);
 
 		// Reward block should include it
 		Pair<BlockWrap, BlockWrap> validatedRewardBlockPair = tipsService

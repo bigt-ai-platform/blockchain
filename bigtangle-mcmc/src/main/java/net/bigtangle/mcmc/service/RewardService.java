@@ -181,7 +181,7 @@ public class RewardService {
 			if (latest.getChainLength() > block.getLastMiningRewardBlock()) {
 				log.debug("resolved Reward is out of date.");
 			} else {
-				sendBlockToServer(block);
+				sendBlockToServer(block,store);
 			}
 		}
 		return block;
@@ -309,13 +309,13 @@ public class RewardService {
 	 * @param block The reward block to send to the server
 	 * @throws Exception if the HTTP request fails or server rejects the block
 	 */
-	private void sendBlockToServer(Block block) throws Exception {
+	private void sendBlockToServer(Block block, BlockStoreInterface store) throws Exception {
 		// Get the server URL from configuration (e.g., "http://test-bigtangle-server:8088")
 		String serverUrl = serverConfiguration.getServerurl();
 
 		if (serverUrl == null || serverUrl.isEmpty()) {
 			log.warn("SERVER_URL not configured, falling back to direct save");
-			blockSaveService.saveBlock(block, null);
+			blockSaveService.saveBlock(block, store);
 			return;
 		}
 

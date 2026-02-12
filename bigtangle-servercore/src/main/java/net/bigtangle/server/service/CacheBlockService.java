@@ -40,6 +40,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
+import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -126,7 +127,11 @@ public class CacheBlockService {
 	@Cacheable(value = "reward", key = "#store.getParams.getId")
 	public byte[] getMaxConfirmedRewardByte(BlockStoreInterface store) throws BlockStoreException {
 		// store.getParams().getId()
-		return store.getMaxConfirmedReward().toByteArray();
+		TXReward reward = store.getMaxConfirmedReward();
+		if (reward == null) {
+			throw new BlockStoreException("MaxConfirmedReward is null");
+		}
+		return reward.toByteArray();
 	}
 
 	/**
@@ -269,7 +274,7 @@ public class CacheBlockService {
 	}
 
 	/**
-	 * Retrieves block MCMC data from database.
+	 * Retrieves block MCMC data from cache or database.
 	 *
 	 * @param blockhash The hash of the block to retrieve MCMC data for
 	 * @param store The block store interface implementation
@@ -277,9 +282,15 @@ public class CacheBlockService {
 	 * @throws BlockStoreException If there is an error accessing the block store
 	 * @throws JsonProcessingException If there is an error serializing the data
 	 */
+	@Cacheable(value = "BlockMCMC", key = "#blockhash")
 	public byte[] getBlockMCMC(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException, JsonProcessingException {
-		return jsonmapper.writeValueAsBytes(store.getMCMC(blockhash));
+		BlockMCMC mcmc = store.getMCMC(blockhash);
+		if (mcmc == null) {
+			// Return default MCMC if not found (block hasn't been rated yet)
+			mcmc = BlockMCMC.defaultBlockMCMC(blockhash);
+		}
+		return jsonmapper.writeValueAsBytes(mcmc);
 	}
 
 	/**

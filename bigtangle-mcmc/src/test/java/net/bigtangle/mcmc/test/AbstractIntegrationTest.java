@@ -69,6 +69,7 @@ import io.minio.Result;
 import io.minio.messages.Item;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
@@ -2183,7 +2184,8 @@ public abstract class AbstractIntegrationTest {
 
 			log.debug("");
 		}
-		return block.getBlock().getHeight() + "/D" + block.getMcmc().getDepth() + "/M"
+		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(block.getBlockHash(), store), BlockMCMC.class);
+		return block.getBlock().getHeight() + "/D" + mcmc.getDepth() + "/M"
 				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
 				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);
 	}

@@ -42,6 +42,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
+import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.exception.BlockStoreException;
@@ -203,26 +204,32 @@ public class TipsService {
 		// Repeat: Proceed on path to be included first (highest rating else
 		// random)
 		while (nextLeft != left && nextRight != right) {
-			if (nextLeft.getMcmc().getRating() > nextRight.getMcmc().getRating()) {
-				// Go left
-				left = nextLeft;
-				serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
+			try {
+				BlockMCMC nextLeftMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(nextLeft.getBlockHash(), store), BlockMCMC.class);
+				BlockMCMC nextRightMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(nextRight.getBlockHash(), store), BlockMCMC.class);
+				if (nextLeftMcmc.getRating() > nextRightMcmc.getRating()) {
+					// Go left
+					left = nextLeft;
+					serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
 
-				// Perform next steps
-				nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
-				nextRight = validateOrPerformValidatedStep(right, currentApprovedUnconfirmedBlocks, nextRight,
-						cutoffHeight, maxHeight, store);
-			} else {
-				// Go right
-				right = nextRight;
-				serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight,
-						store);
+					// Perform next steps
+					nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
+					nextRight = validateOrPerformValidatedStep(right, currentApprovedUnconfirmedBlocks, nextRight,
+							cutoffHeight, maxHeight, store);
+				} else {
+					// Go right
+					right = nextRight;
+					serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight,
+							store);
 
-				// Perform next steps
-				nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-						store);
-				nextLeft = validateOrPerformValidatedStep(left, currentApprovedUnconfirmedBlocks, nextLeft,
-						cutoffHeight, maxHeight, store);
+					// Perform next steps
+					nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
+							store);
+					nextLeft = validateOrPerformValidatedStep(left, currentApprovedUnconfirmedBlocks, nextLeft,
+							cutoffHeight, maxHeight, store);
+				}
+			} catch (Exception e) {
+				throw new BlockStoreException(e);
 			}
 		}
 
@@ -273,7 +280,7 @@ public class TipsService {
 		BlockWrap result;
 		do {
 			// Find results until one is valid/eligible
-			result = performTransition(fromBlock, candidates);
+			result = performTransition(fromBlock, candidates, store);
 			candidates.remove(result);
 		} while (!new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight,
@@ -286,54 +293,61 @@ public class TipsService {
 		// Repeatedly perform transitions until the final tip is found
 		List<BlockWrap> approvers = store.getNotInvalidApproverBlocks(currentBlock.getBlock().getHash());
 		approvers.removeIf(b -> b.getBlockEvaluation().getInsertTime() > maxTime);
-		BlockWrap nextBlock = performTransition(currentBlock, approvers);
+		BlockWrap nextBlock = performTransition(currentBlock, approvers, store);
 
 		while (currentBlock != nextBlock && nextBlock.getBlockEvaluation().getHeight() <= maxHeight) {
 			currentBlock = nextBlock;
 			approvers = store.getNotInvalidApproverBlocks(currentBlock.getBlock().getHash());
 			approvers.removeIf(b -> b.getBlockEvaluation().getInsertTime() > maxTime);
-			nextBlock = performTransition(currentBlock, approvers);
+			nextBlock = performTransition(currentBlock, approvers, store);
 		}
 		return currentBlock;
 	}
 
 	/**
 	 * Performs one step of MCMC random walk by cumulative weight.
-	 * 
+	 *
 	 * @param currentBlock the block to take a step from
 	 * @param candidates   all blocks approving the block that are allowed to go to
+	 * @param store        the block store interface
 	 * @return currentBlock if no further steps possible, else a new block from
 	 *         approvers
 	 */
-	public BlockWrap performTransition(BlockWrap currentBlock, List<BlockWrap> candidates) {
+	public BlockWrap performTransition(BlockWrap currentBlock, List<BlockWrap> candidates, BlockStoreInterface store) throws BlockStoreException {
 		if (candidates.isEmpty()) {
 			return currentBlock;
 		} else if (candidates.size() == 1) {
 			return candidates.get(0);
 		} else {
-			double[] transitionWeights = new double[candidates.size()];
-			double transitionWeightSum = 0;
-			long currentCumulativeWeight = currentBlock.getMcmc().getCumulativeWeight();
+			try {
+				double[] transitionWeights = new double[candidates.size()];
+				double transitionWeightSum = 0;
+				BlockMCMC currentMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(currentBlock.getBlockHash(), store), BlockMCMC.class);
+				long currentCumulativeWeight = currentMcmc.getCumulativeWeight();
 
-			// Calculate the unnormalized transition weights
-			for (int i = 0; i < candidates.size(); i++) {
-				// Calculate transition weights
-				transitionWeights[i] = Math.exp(serverConfiguration.getAlphaMCMC()
-						* (currentCumulativeWeight - candidates.get(i).getMcmc().getCumulativeWeight()));
-				transitionWeightSum += transitionWeights[i];
-			}
-
-			// Randomly select one of the approvers by transition probabilities
-			double transitionRealization = seed.nextDouble() * transitionWeightSum;
-			for (int i = 0; i < candidates.size(); i++) {
-				transitionRealization -= transitionWeights[i];
-				if (transitionRealization <= 0) {
-					return candidates.get(i);
+				// Calculate the unnormalized transition weights
+				for (int i = 0; i < candidates.size(); i++) {
+					// Calculate transition weights
+					BlockMCMC candidateMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(candidates.get(i).getBlockHash(), store), BlockMCMC.class);
+					transitionWeights[i] = Math.exp(serverConfiguration.getAlphaMCMC()
+							* (currentCumulativeWeight - candidateMcmc.getCumulativeWeight()));
+					transitionWeightSum += transitionWeights[i];
 				}
-			}
 
-			log.warn("MCMC step failed");
-			return currentBlock;
+				// Randomly select one of the approvers by transition probabilities
+				double transitionRealization = seed.nextDouble() * transitionWeightSum;
+				for (int i = 0; i < candidates.size(); i++) {
+					transitionRealization -= transitionWeights[i];
+					if (transitionRealization <= 0) {
+						return candidates.get(i);
+					}
+				}
+
+				log.warn("MCMC step failed");
+				return currentBlock;
+			} catch (Exception e) {
+				throw new BlockStoreException(e);
+			}
 		}
 	}
 
@@ -356,7 +370,7 @@ public class TipsService {
 				candidates.add(serviceBaseConnect.getBlockWrap(hash, store));
 			}
 		}
-		return pullRandomlyByCumulativeWeight(candidates, count);
+		return pullRandomlyByCumulativeWeight(candidates, count, store);
 	}
 
 	private List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
@@ -368,32 +382,52 @@ public class TipsService {
 
 	/**
 	 * Randomly pulls with replacement the specified amount from the specified list.
-	 * 
+	 *
 	 * @param candidates List to pull from
 	 * @param count      Amount to pull
+	 * @param store      the block store interface
 	 * @return Random pulls from collection
 	 */
-	private List<BlockWrap> pullRandomlyByCumulativeWeight(List<BlockWrap> candidates, int count) {
+	private List<BlockWrap> pullRandomlyByCumulativeWeight(List<BlockWrap> candidates, int count, BlockStoreInterface store) throws BlockStoreException {
 		if (candidates.isEmpty())
 			throw new IllegalArgumentException("Candidate list is empty.");
 
-		double maxBlockWeight = candidates.stream().mapToLong(e -> e.getMcmc().getCumulativeWeight()).max().orElse(1L);
-		double normalizedBlockWeightSum = candidates.stream()
-				.mapToDouble(e -> e.getMcmc().getCumulativeWeight() / maxBlockWeight).sum();
-		List<BlockWrap> results = new ArrayList<>();
+		try {
+			double maxBlockWeight = candidates.stream().mapToLong(e -> {
+				try {
+					BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(e.getBlockHash(), store), BlockMCMC.class);
+					return mcmc.getCumulativeWeight();
+				} catch (Exception ex) {
+					throw new RuntimeException(ex);
+				}
+			}).max().orElse(1L);
+			double normalizedBlockWeightSum = candidates.stream()
+					.mapToDouble(e -> {
+						try {
+							BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(e.getBlockHash(), store), BlockMCMC.class);
+							return mcmc.getCumulativeWeight() / maxBlockWeight;
+						} catch (Exception ex) {
+							throw new RuntimeException(ex);
+						}
+					}).sum();
+			List<BlockWrap> results = new ArrayList<>();
 
-		for (int i = 0; i < count; i++) {
-			// Randomly select weighted by cumulative weights
-			double selectionRealization = seed.nextDouble() * normalizedBlockWeightSum;
-			for (BlockWrap selectedBlock : candidates) {
-				selectionRealization -= selectedBlock.getMcmc().getCumulativeWeight() / maxBlockWeight;
-				if (selectionRealization <= 0) {
-					results.add(selectedBlock);
-					break;
+			for (int i = 0; i < count; i++) {
+				// Randomly select weighted by cumulative weights
+				double selectionRealization = seed.nextDouble() * normalizedBlockWeightSum;
+				for (BlockWrap selectedBlock : candidates) {
+					BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(selectedBlock.getBlockHash(), store), BlockMCMC.class);
+					selectionRealization -= mcmc.getCumulativeWeight() / maxBlockWeight;
+					if (selectionRealization <= 0) {
+						results.add(selectedBlock);
+						break;
+					}
 				}
 			}
-		}
 
-		return results;
+			return results;
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
 	}
 }

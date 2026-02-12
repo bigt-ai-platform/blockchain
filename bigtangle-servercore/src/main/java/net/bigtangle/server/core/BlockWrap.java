@@ -44,10 +44,6 @@ public class BlockWrap {
 		return blockEvaluation;
 	}
 
-	public BlockMCMC getMcmc() {
-		return mcmc;
-	}
-
 	public void setMcmc(BlockMCMC mcmc) {
 		this.mcmc = mcmc;
 	}

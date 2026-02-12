@@ -202,11 +202,14 @@ public class BlockStoreService {
 			store.insertChainBlockQueue(chainBlockQueue);
 			store.commitDatabaseBatchWrite();
 		} catch (Exception e) {
-			store.abortDatabaseBatchWrite();
+			if (store != null) {
+				store.abortDatabaseBatchWrite();
+			}
 			throw e;
 		} finally {
-			store.defaultDatabaseBatchWrite();
-
+			if (store != null) {
+				store.defaultDatabaseBatchWrite();
+			}
 		}
 	}
 

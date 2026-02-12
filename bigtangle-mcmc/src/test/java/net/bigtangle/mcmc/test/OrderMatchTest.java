@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
+import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
@@ -1484,7 +1485,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		mcmcServiceUpdate();
 		BlockWrap b = store.getBlockWrap(block.getHash());
-		assertTrue(b.getMcmc().getRating() > 0);
+		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(block.getHash(), store), BlockMCMC.class);
+		assertTrue(mcmc.getRating() > 0);
 		assertTrue(b.getBlockEvaluation().isConfirmed());
 		checkAllOpenOrders(1);
 		rewardWithBlock(addedBlocks, null);
