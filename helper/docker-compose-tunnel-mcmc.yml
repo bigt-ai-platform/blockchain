@@ -69,13 +69,13 @@ services:
       MINIO_ACCESSKEY: minioadmin
       MINIO_SECRETKEY: minioadminpassword
       MINIO_BUCKETNAME: testbigtangle
-      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
       SERVERMODE: ""
       SERVER_REQUESTER: http://test-bigtangle:18089
       REQUESTER: http://test-bigtangle:18089
 
       SERVICE_MCMC: "false"
-      SERVICE_SCHEDULE_MCMC: "true"
+      SERVICE_SCHEDULE_MCMC: "false"
       SERVER_RUN_KAFKA_STREAM: "false"
       SERVER_NET: Test
       SSL: "false"
@@ -108,7 +108,7 @@ services:
       MINIO_ACCESSKEY: minioadmin
       MINIO_SECRETKEY: minioadminpassword
       MINIO_BUCKETNAME: testbigtangle
-      SERVER_MINERADDRESS: 1LLtbSLJJn1D2churfWG55aDYqQQTu4eqH
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
       SERVER_NET: Test
       SSL: "false"
       SERVICE_MCMC: "true"

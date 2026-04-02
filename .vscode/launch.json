@@ -18,7 +18,7 @@
             "type": "java",
             "name": "MCMC ServerStart",
             "request": "launch",
-            "mainClass": "net.bigtangle.server.ServerStart",
+            "mainClass": "net.bigtangle.mcmc.MCMCStart",
             "projectName": "bigtangle-mcmc",
             "env": {
                 "SERVICE_MINING": "true",
