@@ -84,7 +84,7 @@
 		<dependency>
 			<groupId>io.minio</groupId>
 			<artifactId>minio</artifactId>
-			<version>8.5.9</version> <!-- Use a compatible version -->
+			<version>8.6.0</version> <!-- Use a compatible version -->
 		</dependency>
 	</dependencies>
 
