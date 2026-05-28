@@ -47,6 +47,7 @@ import net.bigtangle.server.service.base.ServiceBaseConnect.RewardBuilderResult;
 import net.bigtangle.server.service.base.ServiceBaseReward;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.CacheBlockService;
@@ -66,6 +67,8 @@ public class RewardService {
 	protected BlockStoreService blockGraph;
 	@Autowired
 	private BlockService blockService;
+	@Autowired
+	private BlockServiceCreate blockServiceCreate;
 	@Autowired
 	protected TipsService tipService;
 	@Autowired
@@ -246,7 +249,7 @@ public class RewardService {
 		currRewardInfo.setMiningResult(miningTx.getHash());
 		tx.setData(currRewardInfo.toByteArray());
 
-		blockService.adjustHeightRequiredBlocks(block, store);
+		blockServiceCreate.adjustHeightRequiredBlocks(block, store);
 		final BigInteger chainTargetFinal = chainTarget;
 		log.debug("prepare Reward time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		return rewardSolve(block, chainTargetFinal);

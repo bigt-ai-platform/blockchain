@@ -57,6 +57,7 @@ import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.MultiSignService;
 import net.bigtangle.server.service.OrderTickerService;
@@ -87,6 +88,8 @@ public class DispatcherController {
 	private OutputService walletService;
 	@Autowired
 	private BlockService blockService;
+	@Autowired
+	private BlockServiceCreate blockServiceCreate;
 	@Autowired
 	private BlockSaveService blockSaveService;
 	@Autowired
@@ -323,7 +326,7 @@ public class DispatcherController {
 				break;
 			case adjustHeight: {
 				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-				this.blockService.adjustHeightRequiredBlocks(block, store);
+				this.blockServiceCreate.adjustHeightRequiredBlocks(block, store);
 				this.outPointBinaryArray(httpServletResponse, block.bitcoinSerialize(), reqCmd);
 			}
 				break;

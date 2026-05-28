@@ -59,6 +59,8 @@ public class OrderExecutionService {
 	@Autowired
 	private BlockService blockService;
 	@Autowired
+	protected BlockServiceCreate blockServiceCreate;
+	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
 	@Autowired
@@ -207,7 +209,7 @@ public class OrderExecutionService {
 
 		tx.setData(result.toByteArray());
 
-		blockService.adjustHeightRequiredBlocks(block, store);
+		blockServiceCreate.adjustHeightRequiredBlocks(block, store);
 
 		return blockSolve(block, Utils.decodeCompactBits(block.getDifficultyTarget()));
 	}

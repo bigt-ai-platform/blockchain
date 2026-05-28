@@ -23,11 +23,14 @@ Split `bigtangle-servercore` so that:
 | `ScheduleContractService` | Schedules contract execution |
 | `ScheduleOrdermatchService` | Schedules order matching |
 
-### To move to bigtangle-order (CREATE only)
+### Moved to bigtangle-order (already done)
 | Class | Current Location | Reason |
 |-------|-----------------|--------|
-| `ServiceBaseReward` | `servercore/service/base/` | Creates reward blocks — only used by mcmc `RewardService` |
-| `CacheBlockPrototypeService` | `servercore/service/` | Provides block templates — only needed for block creation |
+| `ServiceBaseReward` | `order/service/base/` | Creates reward blocks — only used by mcmc `RewardService` |
+| `OrderExecutionService` | `order/service/` | Creates order-execution blocks |
+| `ContractExecutionService` | `order/service/` | Creates contract-execution blocks |
+| `ScheduleContractService` | `order/service/schedule/` | Schedules contract execution |
+| `ScheduleOrdermatchService` | `order/service/schedule/` | Schedules order matching |
 
 ### Keep in bigtangle-servercore (VERIFY / SHARED)
 | Class | Role |
@@ -76,24 +79,47 @@ ServiceBase (abstract, SHARED)
 - `bigtangle-order` depends on `bigtangle-servercore` (already the case)
 - `ServiceBaseReward` in `bigtangle-order` extends `ServiceVerifyReward` in `bigtangle-servercore` — this works because the dependency direction is correct
 
+## Method-level Extract: BlockServiceCreate ✓
+
+`BlockService` in servercore had 3 block-creation helper methods mixed with SHARED query methods:
+
+| Method | Classification | Action |
+|--------|--------------|--------|
+| `adjustHeightRequiredBlocks` | CREATE (adjust block height + prototype during creation) | Extracted to `BlockServiceCreate` in order |
+| `adjustPrototype` | CREATE (refresh block prototype if >2h old) | Extracted to `BlockServiceCreate` in order |
+| `calcHeightRequiredBlocks` | CREATE (compute height from prev blocks) | Extracted to `BlockServiceCreate` in order |
+| All other methods | SHARED/VERIFY | Stay in `BlockService` in servercore |
+
+`CacheBlockPrototypeService` stays in servercore (SHARED) — used by `BlockServiceCreate` (order → servercore) and `MultiSignService.checkBlockPrototype` (servercore internal).
+
+Updated callers:
+- `RewardService` (mcmc), `ContractExecutionService` (order), `OrderExecutionService` (order), `DispatcherController` (server) — now use `BlockServiceCreate`
+
 ## Execution Steps
 
-### Phase 1: Move ServiceBaseReward
+### Phase 1: Move ServiceBaseReward ✓
 1. Move `ServiceBaseReward.java` from `bigtangle-servercore/service/base/` to `bigtangle-order/service/base/`
-2. Verify `bigtangle-mcmc` still compiles (it depends on bigtangle-order → bigtangle-servercore)
-3. Verify `bigtangle-server` still compiles (it does NOT use ServiceBaseReward)
+2. Update `SyncBlockService`, `BlockStoreService` to use `ServiceVerifyReward` instead
+3. Remove `CacheBlockPrototypeService` autowiring from `BlockSaveService` (unused)
 
-### Phase 2: Move CacheBlockPrototypeService
-1. Move `CacheBlockPrototypeService.java` from `bigtangle-servercore/service/` to `bigtangle-order/service/`
-2. Verify `bigtangle-mcmc` compiles
-3. Verify `bigtangle-server` compiles (check no usage — it should not create blocks)
+### Phase 2: Move OrderExecutionService, ContractExecutionService ✓
+1. Move from `bigtangle-servercore/service/` to `bigtangle-order/service/`
 
-### Phase 3: Verify no circular dependencies
+### Phase 3: Move ScheduleContractService, ScheduleOrdermatchService ✓
+1. Move from `bigtangle-server/service/schedule/` to `bigtangle-order/service/schedule/`
+2. Add `bigtangle-order` dependency to `bigtangle-server/pom.xml`
+
+### Phase 4: Extract BlockServiceCreate methods ✓
+1. Create `BlockServiceCreate.java` in `bigtangle-order/service/` with `adjustHeightRequiredBlocks`, `adjustPrototype`, `calcHeightRequiredBlocks`
+2. Remove these methods from `BlockService.java` in servercore
+3. Update all callers to use `BlockServiceCreate`
+
+### Phase 5: Verify no circular dependencies
 - `bigtangle-core` ← `bigtangle-servercore` ← `bigtangle-order` ← `bigtangle-mcmc`
 - `bigtangle-server` depends on `bigtangle-order` (for scheduling) and `bigtangle-servercore`
 - No reverse dependency should exist
 
-### Phase 4: Run tests
+### Phase 6: Run tests
 1. `mvn compile` — all modules
 2. `mvn test -pl bigtangle-mcmc` — integration tests pass
 
@@ -105,7 +131,7 @@ bigtangle-core
 bigtangle-servercore   (verify + shared: ServiceBaseCheck, ServiceBaseConnect, 
      ↑                  ServiceVerifyReward, BlockService, SyncBlockService, etc.)
      |
-bigtangle-order        (create: ServiceBaseReward, CacheBlockPrototypeService,
+bigtangle-order        (create: ServiceBaseReward, BlockServiceCreate,
      ↑                  OrderExecutionService, ContractExecutionService)
      |
      ├── bigtangle-server  (verify node: only receives/validates/syncs blocks)
@@ -117,6 +143,6 @@ bigtangle-order        (create: ServiceBaseReward, CacheBlockPrototypeService,
 | Risk | Mitigation |
 |------|-----------|
 | `ServiceBaseReward` extends `ServiceVerifyReward` — tight coupling | Dependency direction is correct (order → servercore) |
-| `CacheBlockPrototypeService` might be used in verify path | Grep confirms only mcmc uses it for block creation |
+| `CacheBlockPrototypeService` is used by `BlockServiceCreate.adjustHeightRequiredBlocks` (order → servercore) and `MultiSignService.checkBlockPrototype` (servercore internal) | Keep in servercore as SHARED |
 | Spring component scanning must find classes in bigtangle-order | Package name is unchanged; Spring Boot apps already scan `net.bigtangle` |
 | `BlockSaveService` is used by both paths | Keep in servercore (shared) |
