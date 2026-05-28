@@ -60,6 +60,7 @@ import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.MultiSignService;
+import net.bigtangle.server.service.MultiSignServiceCreate;
 import net.bigtangle.server.service.OrderTickerService;
 import net.bigtangle.server.service.OrderdataService;
 import net.bigtangle.server.service.OutputService;
@@ -96,6 +97,8 @@ public class DispatcherController {
 	private TokensService tokensService;
 	@Autowired
 	private MultiSignService multiSignService;
+	@Autowired
+	private MultiSignServiceCreate multiSignServiceCreate;
 	@Autowired
 	private PayMultiSignService payMultiSignService;
 	@Autowired
@@ -385,7 +388,7 @@ public class DispatcherController {
 				break;
 			case signToken: {
 				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-				this.multiSignService.signTokenAndSaveBlock(block, store);
+				this.multiSignServiceCreate.signTokenAndSaveBlock(block, store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
