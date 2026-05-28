@@ -45,7 +45,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceBaseReward;
+import net.bigtangle.server.service.base.ServiceVerifyReward;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
@@ -522,7 +522,7 @@ public class SyncBlockService {
 		// Look up the blocks previous.
 		Block block = networkParameters.getDefaultSerializer().makeBlock(orphanBlock.getBlock());
 
-		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
+		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 
 		// remove too old OrphanBlock and cutoff chain length
@@ -535,14 +535,14 @@ public class SyncBlockService {
 			return;
 		}
 
-		Block prev = store.get(serviceBaseReward.getRewardInfo(block).getPrevRewardHash());
+		Block prev = store.get(serviceVerifyReward.getRewardInfo(block).getPrevRewardHash());
 		if (prev == null) {
 
 			// This is still an unconnected/orphan block.
 			// if (log.isDebugEnabled())
 			// log.debug("Orphan block {} is not connectable right now",
 			// orphanBlock.block.getHash());
-			requestBlock(serviceBaseReward.getRewardInfo(block).getPrevRewardHash(), store);
+			requestBlock(serviceVerifyReward.getRewardInfo(block).getPrevRewardHash(), store);
 			log.info("syncBlockService orphan {}", block.toString());
 
 		} else {

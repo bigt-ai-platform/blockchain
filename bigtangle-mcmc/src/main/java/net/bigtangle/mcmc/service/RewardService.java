@@ -44,13 +44,13 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect.RewardBuilderResult;
+import net.bigtangle.server.service.base.ServiceBaseReward;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
-import net.bigtangle.server.service.base.ServiceBaseReward;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 

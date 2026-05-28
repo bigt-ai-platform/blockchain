@@ -35,8 +35,6 @@ public class BlockSaveService {
 	@Autowired
 	protected KafkaConfiguration kafkaConfiguration;
 	@Autowired
-	protected CacheBlockPrototypeService cacheBlockPrototypeService;
-	@Autowired
 	protected ServerConfiguration serverConfiguration;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 

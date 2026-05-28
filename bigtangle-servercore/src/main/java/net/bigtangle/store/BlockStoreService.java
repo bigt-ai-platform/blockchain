@@ -53,7 +53,7 @@ import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceBaseReward;
+import net.bigtangle.server.service.base.ServiceVerifyReward;
 import net.bigtangle.utils.Gzip;
 
 /**
@@ -387,23 +387,23 @@ public class BlockStoreService {
 			return;
 		}
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
-		ServiceBaseReward serviceBaseReward = new ServiceBaseReward(serverConfiguration, networkParameters,
+		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
-		if (serviceBaseReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
+		if (serviceVerifyReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
-			serviceBaseReward.verifyRewardChainConfirmReferenced(block, store);
+			serviceVerifyReward.verifyRewardChainConfirmReferenced(block, store);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
 
-			boolean haveNewBestChain = serviceBaseReward.getRewardInfo(block).getChainlength() > serviceBaseReward
+			boolean haveNewBestChain = serviceVerifyReward.getRewardInfo(block).getChainlength() > serviceVerifyReward
 					.getRewardInfo(head).getChainlength();
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
 				connect(block, solidityState, store);
-				serviceBaseReward.handleNewBestChain(block, store);
+				serviceVerifyReward.handleNewBestChain(block, store);
 			} else {
 				// parallel chain, save as unconfirmed
 				connect(block, solidityState, store);

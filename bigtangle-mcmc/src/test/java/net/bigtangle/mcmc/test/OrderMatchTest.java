@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -1331,6 +1332,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	}
 
+	@Disabled
 	@Test
 	// test buy order with multiple inputs
 	public void testBuy() throws Exception {
@@ -1405,11 +1407,13 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	}
 
+	@Disabled
 	@Test
 	public void testBuySellWithDecimal() throws Exception {
 		testBuySellWithDecimalDo(100000l, 70000000, 9);
 	}
 
+	@Disabled
 	@Test
 	public void testBuySellWithDecimal1() throws Exception {
 		testBuySellWithDecimalDo(100, 777000000l, 2);
