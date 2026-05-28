@@ -125,6 +125,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
@@ -169,6 +170,8 @@ public abstract class AbstractIntegrationTest {
 	protected BlockStoreService blockGraph;
 	@Autowired
 	protected BlockService blockService;
+	@Autowired
+	protected BlockServiceCreate blockServiceCreate;
 	@Autowired
 	protected MCMCService mcmcService;
 	@Autowired

@@ -168,7 +168,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		mcmcService.calcNewBlockPrototype(store);
 		Block b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
-		makeRewardBlock();
+		makeRewardBlock(b);
 		blockGraph.updateTransactionOutputSpendPendingDo(b);
 		log.debug("====start check yuanWallet wallet====");
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
@@ -242,12 +242,12 @@ public class FromAddressTests extends AbstractIntegrationTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.currency.ordinal(), key.getPublicKeyAsHex(),
 					Wallet.fromKeys(networkParameters, key, contextRoot));
-			makeRewardBlock();
 			ECKey signkey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
 
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+			Block signedBlock = wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+			makeRewardBlock(signedBlock);
 
 		} catch (Exception e) {
 			// TODO: handle exception

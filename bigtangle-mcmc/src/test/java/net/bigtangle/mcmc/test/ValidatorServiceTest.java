@@ -106,7 +106,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		blockService.adjustPrototype(b, store);
+		blockServiceCreate.adjustPrototype(b, store);
 		blockSaveService.saveBlock(b, store);
 	}
 
