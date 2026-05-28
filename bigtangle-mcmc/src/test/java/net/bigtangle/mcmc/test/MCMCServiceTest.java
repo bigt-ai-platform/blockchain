@@ -89,6 +89,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		createAndAddNextBlock(b1, b2);
 
 		makeRewardBlock();
+		mcmcServiceUpdate();
 
 		assertFalse(getBlockEvaluation(b1.getHash(), store).isConfirmed()
 				&& getBlockEvaluation(b2.getHash(), store).isConfirmed());
@@ -96,6 +97,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				|| getBlockEvaluation(b2.getHash(), store).isConfirmed());
 
 		makeRewardBlock();
+		mcmcServiceUpdate();
 
 		assertFalse(getBlockEvaluation(b1.getHash(), store).isConfirmed()
 				&& getBlockEvaluation(b2.getHash(), store).isConfirmed());

@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
@@ -46,6 +47,8 @@ public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
+		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		payBigTo(genesisKey, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(10)), blocksAddedAll);
 
 		payMoneyToWallet1(1, blocksAddedAll);
 		sell(blocksAddedAll);
