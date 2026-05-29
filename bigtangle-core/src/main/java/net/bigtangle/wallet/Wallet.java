@@ -319,67 +319,34 @@ public class Wallet extends WalletBase {
 	// pay the BIGTANGLE_TOKENID from the list HashMap<String, Long>
 	// giveMoneyResult of
 	// address and amount and return the remainder back to fromkey.
-	// and repeat 3 times and wait as there may be a transaction pending for
-	// this key
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo,
-				calculateAllSpendCandidates(aesKey, false), 3, 60000);
+				calculateAllSpendCandidates(aesKey, false));
 	}
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo) throws IOException, InsufficientMoneyException {
 
-		return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false),
-				3, 60000);
+		return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo,
 			List<FreeStandingTransactionOutput> coinList) throws IOException, InsufficientMoneyException {
 
-		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo, coinList, 3,
-				60000);
+		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo, coinList);
 	}
 
 	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
-			String memo, List<FreeStandingTransactionOutput> coinList, int repeat, int sleep)
+			String memo, List<FreeStandingTransactionOutput> coinList)
 			throws IOException, InsufficientMoneyException {
-
 		try {
 			return payToList(aesKey, giveMoneyResult, tokenid, memo, filterTokenid(tokenid, coinList));
 		} catch (InsufficientMoneyException e) {
-			log.debug(" InsufficientMoneyException  {} repeat time ={} sleep={}", giveMoneyResult, repeat, sleep);
-			if (repeat > 0) {
-				repeat -= 1;
-				try {
-					Thread.sleep(sleep);
-				} catch (InterruptedException e1) {
-					log.debug(e1.getMessage());
-				}
-				return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo,
-						calculateAllSpendCandidates(aesKey, false), repeat, sleep);
-			}
-		} catch (RuntimeException e) {
-			if (e.getMessage() != null && e.getMessage()
-					.contains("net.bigtangle.core.exception.VerificationException$ConflictPossibleException")) {
-				log.debug("{}   {} repeat time ={} sleep={}", e.getMessage(), giveMoneyResult, repeat, sleep);
-				if (repeat > 0) {
-					repeat -= 1;
-					try {
-						Thread.sleep(sleep);
-					} catch (InterruptedException e1) {
-						log.debug(e1.getMessage());
-					}
-					return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo,
-							calculateAllSpendCandidates(aesKey, false), repeat, sleep);
-				}
-			} else {
-				throw e;
-			}
+			log.debug(" InsufficientMoneyException  {} ", giveMoneyResult);
 		}
-
 		BigInteger requested = BigInteger.ZERO;
 		for (BigInteger value : giveMoneyResult.values()) {
 			requested = requested.add(value);
@@ -391,7 +358,6 @@ public class Wallet extends WalletBase {
 				+ deficit + " recipients=" + giveMoneyResult.size();
 		logInsufficientMoney("payMoneyToECKeyList", info, aesKey, coinList);
 		throw new InsufficientMoneyException("InsufficientMoneyException " + giveMoneyResult);
-
 	}
 
 	// pay the tokenid from the list HashMap<String, Long> giveMoneyResult of
@@ -737,49 +703,7 @@ public class Wallet extends WalletBase {
 			throws IOException, InsufficientMoneyException, NoTokenException {
 
 		return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime, orderBaseToken,
-				allowRemainder, candidates, 3, 60000);
-	}
-
-	public Block buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
-			Long validFromTime, String orderBaseToken, boolean allowRemainder,
-			List<FreeStandingTransactionOutput> candidates, int repeat, int sleep)
-			throws IOException, InsufficientMoneyException, NoTokenException {
-		try {
-			return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime, orderBaseToken,
-					allowRemainder, candidates);
-		} catch (RuntimeException e) {
-			if (e.getMessage().contains("ConflictPossibleException:")) {
-				log.debug(" ConflictPossibleException   repeat time ={} sleep={}", repeat, sleep);
-
-				if (repeat > 0) {
-					repeat -= 1;
-					try {
-						Thread.sleep(sleep);
-					} catch (InterruptedException e1) {
-						log.debug(e1.toString());
-					}
-					candidates = calculateAllSpendCandidates(aesKey, false);
-					return buyOrderDo(aesKey, targetToken, buyPrice, targetValue, validToTime, validFromTime,
-							orderBaseToken, allowRemainder, candidates, repeat, sleep);
-
-				}
-			} else {
-				throw e;
-			}
-		}
-		byte[] baseTokenId = Utils.HEX.decode(orderBaseToken);
-		List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
-				: candidates;
-		List<FreeStandingTransactionOutput> baseOutputs = filterTokenid(baseTokenId, spendableCandidates);
-		int priceShift = params.getOrderPriceShift(orderBaseToken);
-		BigInteger requestedValue = totalAmount(buyPrice, targetValue,
-				targetToken.getDecimals() + priceShift, allowRemainder);
-		BigInteger availableValue = sumOutputValues(baseOutputs);
-		BigInteger deficitValue = requestedValue.subtract(availableValue);
-		String info = "orderBaseToken=" + orderBaseToken + " requested=" + requestedValue + " available="
-				+ availableValue + " deficit=" + deficitValue + " repeatRemaining=" + repeat;
-		logInsufficientMoney("buyOrderDoRetry", info, aesKey, baseOutputs);
-		throw new InsufficientMoneyException("payTransaction ");
+				allowRemainder, candidates);
 	}
 
 	public Block buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
@@ -875,51 +799,7 @@ public class Wallet extends WalletBase {
 			List<FreeStandingTransactionOutput> candidates)
 			throws IOException, InsufficientMoneyException {
 		return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken, allowRemainder,
-				candidates, 3, 60000);
-	}
-
-	public Block sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
-			Long validFromTime, String orderBaseToken, boolean allowRemainder,
-			List<FreeStandingTransactionOutput> candidates, int repeat, int sleep)
-			throws IOException, InsufficientMoneyException {
-		try {
-			return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken,
-					allowRemainder, candidates);
-		} catch (RuntimeException e) {
-			if (e.getMessage().contains("ConflictPossibleException:")) {
-				log.debug(" ConflictPossibleException   repeat time ={} sleep={}", repeat, sleep);
-
-				if (repeat > 0) {
-					repeat -= 1;
-					try {
-						Thread.sleep(sleep);
-					} catch (InterruptedException e1) {
-						log.debug(e1.toString());
-					}
-					candidates = calculateAllSpendCandidates(aesKey, false);
-					return sellOrderDo(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken,
-							allowRemainder, candidates, repeat, sleep);
-
-				}
-			} else {
-
-				throw e;
-			}
-		}
-		byte[] sellTokenBytes = Utils.HEX.decode(t.getTokenid());
-		List<FreeStandingTransactionOutput> spendableCandidates = candidates == null ? Collections.emptyList()
-				: candidates;
-		List<FreeStandingTransactionOutput> sellOutputs = filterTokenid(sellTokenBytes, spendableCandidates);
-		Coin requiredAmount = Coin.valueOf(offervalue, t.getTokenid());
-		if (getFee() && NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
-			requiredAmount = requiredAmount.add(Coin.FEE_DEFAULT);
-		}
-		Coin availableCoin = sumOutputs(sellTokenBytes, sellOutputs);
-		Coin deficitCoin = requiredAmount.subtract(availableCoin);
-		String info = "sellToken=" + t.getTokenid() + " required=" + requiredAmount + " available="
-				+ availableCoin + " deficit=" + deficitCoin + " repeatRemaining=" + repeat;
-		logInsufficientMoney("sellOrderDoRetry", info, aesKey, sellOutputs);
-		throw new InsufficientMoneyException("payTransaction ");
+				candidates);
 	}
 
 	public Block sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
