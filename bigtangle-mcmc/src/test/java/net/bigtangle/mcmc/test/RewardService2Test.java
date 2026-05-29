@@ -203,7 +203,6 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
 		List<UTXO> utxos = getBalancesResponse.getOutputs();
 		Collections.shuffle(utxos);
-		long q = 8;
 		for (UTXO utxo : utxos) {
 			if (!NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(utxo.getTokenId())) {
 				wallet.setServerURL(contextRoot);
@@ -214,7 +213,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 					blocksAddedAll.add(sellOrder);
 					makeOrderExecutionAndReward(blocksAddedAll,sellOrder);
 				} catch (InsufficientMoneyException e) {
-					// ignore: handle exception
+					log.debug("", e);
 				}
 			}
 		}
@@ -246,7 +245,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			try {
 				buy(orderRecord, blocksAddedAll);
 			} catch (InsufficientMoneyException e) {
-				Thread.sleep(4000);
+				log.debug("", e);
 			} catch (Exception e) {
 				log.debug("", e);
 			}
