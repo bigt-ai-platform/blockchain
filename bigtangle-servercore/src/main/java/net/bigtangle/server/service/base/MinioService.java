@@ -2,9 +2,6 @@ package net.bigtangle.server.service.base;
 
 import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -14,7 +11,6 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.utils.Gzip;
-import okhttp3.ConnectionPool;
 import okhttp3.OkHttpClient;
 
 /**

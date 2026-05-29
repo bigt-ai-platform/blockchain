@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.script.ScriptBuilder;
 
 public class TransactionOutputSerializationTest {
     private static final NetworkParameters PARAMS = MainNetParams.get();

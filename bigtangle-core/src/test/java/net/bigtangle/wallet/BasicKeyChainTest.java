@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.common.hash.BloomFilter;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;

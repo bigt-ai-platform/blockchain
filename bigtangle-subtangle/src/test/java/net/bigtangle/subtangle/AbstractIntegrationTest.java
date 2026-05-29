@@ -67,10 +67,8 @@ import net.bigtangle.response.TokenIndexResponse;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.service.ContractExecutionService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.store.BlockStoreInterface;
@@ -120,15 +118,10 @@ public abstract class AbstractIntegrationTest {
 
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
-
-	@Autowired
-	protected ContractExecutionService contractExecutionService;
-    @Autowired
+     @Autowired
     protected CacheBlockService cacheBlockService;
 	@Autowired
 	private ScheduleConfiguration scheduleConfiguration;
-	 @Autowired
-	    private BlockSaveService blockSaveService;
 	@Autowired
 	protected void prepareContextRoot(@Value("${local.server.port}") int port) {
 		contextRoot = String.format(CONTEXT_ROOT_TEMPLATE, port);

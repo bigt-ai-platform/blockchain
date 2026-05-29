@@ -50,7 +50,6 @@ import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;

@@ -4,29 +4,22 @@
  *******************************************************************************/
 package net.bigtangle.mcmc.test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.OrderRecord;
-import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
-import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
@@ -35,7 +28,6 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.OrderdataResponse;
-import net.bigtangle.server.checkpoint.CheckpointService;
 import net.bigtangle.server.service.MissingNumberCheckService;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
