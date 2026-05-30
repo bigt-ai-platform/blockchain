@@ -690,9 +690,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 		try (Statement s = getConnection().createStatement()) {
 			for (String sql : sqls) {
-				if (log.isDebugEnabled()) {
+			/*	if (log.isDebugEnabled()) {
 					log.debug("DatabaseFullBlockStore :     {}", sql);
 				}
+				*/
 				s.addBatch(sql);
 			}
 			s.executeBatch();

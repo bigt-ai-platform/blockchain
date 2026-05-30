@@ -1,0 +1,27 @@
+name: MCMC Single Docker Test
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  mcmc-single-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run single-container MCMC tests
+        run: ./helper/docker-test-mcmc/run-parallel-tests.sh --single
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcmc-test-reports
+          path: helper/docker-test-mcmc/test-reports-*/
+          retention-days: 14
