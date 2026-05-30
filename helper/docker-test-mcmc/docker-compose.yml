@@ -28,6 +28,7 @@ x-test-common: &test-common
   networks:
     - mcmc-test-net
   environment:
+    LANG: en_US.UTF-8
     DB_USERNAME: root
     DB_PASSWORD: test1234
     DB_PORT: 5432

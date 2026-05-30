@@ -35,6 +35,7 @@ ENTRYPOINT ["bash", "-c", \
   "mvn test -pl bigtangle-mcmc \
      -Dtest=${TEST_CLASSES} \
      -DSERVER_NET=Test \
+     -Dfile.encoding=UTF-8 \
      -DDB_HOSTNAME=${DB_HOSTNAME:-localhost} \
      -DDB_PORT=${DB_PORT:-5432} \
      -DDB_NAME=${DB_NAME:-info} \
