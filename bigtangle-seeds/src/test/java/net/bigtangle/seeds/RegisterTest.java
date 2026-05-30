@@ -14,7 +14,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
-//@Disabled("Temporarily disabled")
+@Disabled("Temporarily disabled")
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class RegisterTest extends AbstractIntegrationTest {

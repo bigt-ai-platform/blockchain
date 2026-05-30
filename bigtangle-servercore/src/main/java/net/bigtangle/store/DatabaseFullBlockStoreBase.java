@@ -1211,7 +1211,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		try {
 			s = getConnection().createStatement();
 			for (String sql : getDropTablesSQL()) {
-				log.info("drop table : {}", sql);
+			//	log.info("drop table : {}", sql);
 				s.addBatch(sql);
 			}
 			s.executeBatch();
