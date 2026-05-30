@@ -24,8 +24,10 @@ WORKDIR /build
 COPY . .
 
 # Build full project, skip tests, then pre-cache test-runtime Maven plugins
-RUN mvn -DskipTests=true clean install -q && \
-    mvn dependency:get -Dartifact=org.apache.maven.surefire:surefire-junit-platform:3.2.3 -q
+RUN mvn -DskipTests=true -Dfile.encoding=UTF-8 clean install -q && \
+    mvn -Dfile.encoding=UTF-8 dependency:get -Dartifact=org.apache.maven.surefire:surefire-junit-platform:3.2.3 -q
+
+ENV LANG=en_US.UTF-8 MAVEN_OPTS=-Dfile.encoding=UTF-8
 
 # TEST_CLASSES: comma-separated list of test class simple names to run,
 # e.g. "ContractTest,DirectExchangeTest"
