@@ -1,10 +1,9 @@
-name: build-and-push-seeds-ghcr
+name: build-and-push-mcmc-ghcr
 on:
   push:
     branches:
       - main
       - develop
-      - contract
   workflow_dispatch:
 env:
   REGISTRY: ghcr.io
@@ -13,7 +12,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  bigtangle-seeds-container-ghcr:
+  bigtangle-mcmc-container-ghcr:
     if: github.repository == 'bigtangle/server'
     runs-on: ubuntu-latest
     permissions:
@@ -61,9 +60,9 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=bigtangle-seeds-${{ steps.branch.outputs.branch_name }}-${{ steps.maven-version.outputs.version }}
-            type=raw,value=bigtangle-seeds-${{ steps.branch.outputs.branch_name }}-latest
-            type=sha,enable=true,priority=100,prefix=bigtangle-seeds:,suffix=,format=long
+            type=raw,value=bigtangle-mcmc-${{ steps.branch.outputs.branch_name }}-${{ steps.maven-version.outputs.version }}
+            type=raw,value=bigtangle-mcmc-${{ steps.branch.outputs.branch_name }}-latest
+            type=sha,enable=true,priority=100,prefix=bigtangle-mcmc:,suffix=,format=long
 
       - name: Build and push Docker image
         id: build-and-push
@@ -71,7 +70,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          file: ./helper/seeds/Dockerfile
+          file: ./helper/bigtangle-mcmc/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
