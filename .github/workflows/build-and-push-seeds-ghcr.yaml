@@ -14,7 +14,7 @@ env:
 
 jobs:
   bigtangle-seeds-container-ghcr:
-    if: github.repository == 'bigtangle/server'
+    if: github.repository == 'bigt-ai-platform/blockchain'
     runs-on: ubuntu-latest
     permissions:
       contents: read
