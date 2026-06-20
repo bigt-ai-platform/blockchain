@@ -1,12 +1,14 @@
 version: '3.8'
 
+# bigtangle-seeds is now a standalone repo: https://github.com/bigt-ai-platform/seeds
+# Build the image there first, then reference it by the tag below.
 networks:
   bigtangle-bridged-network:
     driver: bridge
 
 services:
   bigtangle-seeds:
-    image: ghcr.io/bigtangle/server:bigtangle-seeds-contract-latest
+    image: ghcr.io/bigt-ai-platform/seeds:latest
 
     container_name: bigtangle-seeds
     hostname: bigtangle-seeds
@@ -15,6 +17,5 @@ services:
     ports:
       - "8089:8089"
     environment:
-      SSL: "true"
-      KEYSTORE: /app/bigtangle-seeds/ca.pkcs12
-
+      KEY_PATH: /app/key.pem
+      CERT_PATH: /app/cert.pem

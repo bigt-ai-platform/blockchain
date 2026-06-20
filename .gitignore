@@ -11,11 +11,7 @@ logs/
 
 /node_modules/
 /bigtangle-typescript/dist/
-/bigtangle-seeds/.settings/org.eclipse.core.resources.prefs
 /bigtangle-subtangle/.settings/org.eclipse.core.resources.prefs
-/bigtangle-seeds/.settings/org.eclipse.jdt.core.prefs
 /bigtangle-subtangle/.settings/org.eclipse.jdt.core.prefs
-bigtangle-seeds/.settings/org.eclipse.jdt.apt.core.prefs
-bigtangle-seeds/.settings/org.eclipse.m2e.core.prefs
 bigtangle-subtangle/.settings/org.eclipse.jdt.apt.core.prefs
 bigtangle-subtangle/.settings/org.eclipse.m2e.core.prefs

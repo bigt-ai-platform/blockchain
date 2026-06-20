@@ -31,7 +31,6 @@
 		<module>bigtangle-server</module>
 		<module>bigtangle-mcmc</module>
 		<module>bigtangle-subtangle</module>
-		<module>bigtangle-seeds</module>
 
 	</modules>
 	<dependencies>

@@ -44,9 +44,11 @@ java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED net.bigtangle.serv
 ## Project Structure
 - **bigtangle-core**: Core blockchain implementation
 - **bigtangle-server**: Main server implementation
-- **bigtangle-seeds**: Seed node implementation
 - **bigtangle-subtangle**: Subtangle implementation
 - **helper**: Deployment and testing scripts
+
+> **Note**: The seed/discovery service (`bigtangle-seeds`) lives in its own
+> repo: [bigt-ai-platform/seeds](https://github.com/bigt-ai-platform/seeds).
 
 ## Testing
 The project includes extensive test resources including:
