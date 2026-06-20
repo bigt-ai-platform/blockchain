@@ -33,6 +33,7 @@
 		<module>bigtangle-subtangle</module>
 		<module>bigtangle-bridge</module>
 		<module>layer0-servercore</module>
+		<module>layer1-servercore</module>
 
 	</modules>
 	<dependencies>

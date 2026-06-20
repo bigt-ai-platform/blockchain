@@ -2,7 +2,7 @@
  *  Copyright   2018  Inasset GmbH. 
  *  
  *******************************************************************************/
-package net.bigtangle.server.service;
+package net.bigtangle.layer1.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +15,7 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.LockObject;
+import net.bigtangle.server.service.StoreService;
 import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.store.BlockStoreInterface;
 

@@ -3,7 +3,7 @@
  *  
  *******************************************************************************/
 
-package net.bigtangle.server.service;
+package net.bigtangle.layer0.service;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,6 +34,7 @@ import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.GetOutputsResponse;
 import net.bigtangle.response.OutputsDetailsResponse;
 import net.bigtangle.core.FilterToken;
+import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;

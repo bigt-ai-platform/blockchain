@@ -347,6 +347,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private SolidityState checkFullTypeSpecificSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
 			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
+		// Layer strategy: if a handler is registered for this block type,
+		// delegate the full solidity check to it. Otherwise fall through to the
+		// in-class switch below (existing behaviour). See LAYERING-PLAN.md.
+		if (handlerFor(block.getBlockType()).isPresent()) {
+			SolidityContext ctx = SolidityContext.builder().block(block).store(store).height(height)
+					.throwExceptions(throwExceptions).base(this).build();
+			return handlerFor(block.getBlockType()).get().checkFull(ctx);
+		}
 		switch (block.getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE:
 			break;
@@ -1294,6 +1302,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private SolidityState checkFormalTypeSpecificSolidity(Block block, boolean throwExceptions)
 			throws BlockStoreException {
+		// Layer strategy: delegate to a registered handler if present.
+		if (handlerFor(block.getBlockType()).isPresent()) {
+			SolidityContext ctx = SolidityContext.builder().block(block)
+					.throwExceptions(throwExceptions).base(this).build();
+			return handlerFor(block.getBlockType()).get().checkFormal(ctx);
+		}
 		switch (block.getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE:
 			break;

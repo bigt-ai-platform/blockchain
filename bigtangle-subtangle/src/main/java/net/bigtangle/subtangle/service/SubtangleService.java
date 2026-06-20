@@ -37,7 +37,7 @@ import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
-import net.bigtangle.server.service.OutputService;
+import net.bigtangle.layer0.service.OutputService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.subtangle.SubtangleConfiguration;
 import net.bigtangle.utils.Json;

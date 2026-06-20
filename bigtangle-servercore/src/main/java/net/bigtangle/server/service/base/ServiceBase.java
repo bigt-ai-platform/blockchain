@@ -63,6 +63,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.base.handler.BlockTypeHandlerRegistry;
 import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBase {
@@ -70,6 +71,13 @@ public abstract class ServiceBase {
 	protected NetworkParameters networkParameters;
 	protected CacheBlockService cacheBlockService;
 	protected ObjectMapper jsonmapper;
+	/**
+	 * Per-{@link net.bigtangle.core.BlockType} strategy handlers. Layer modules
+	 * register handlers here so the per-type validation/confirmation arms can be
+	 * extracted out of the base class. Null until a subclass calls
+	 * {@link #handlerRegistry()}. See LAYERING-PLAN.md.
+	 */
+	private BlockTypeHandlerRegistry blockTypeHandlerRegistry;
 
 	protected abstract void connectTypeSpecificUTXOs(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException, VerificationException;
@@ -89,6 +97,28 @@ public abstract class ServiceBase {
 		this.networkParameters = networkParameters;
 		this.cacheBlockService = cacheBlockService;
 		this.jsonmapper = jsonmapper;
+	}
+
+	/**
+	 * Lazily creates and returns the {@link BlockTypeHandlerRegistry} for this
+	 * service instance. Layer modules register their handlers here; the base
+	 * validation/confirmation switches consult it via
+	 * {@link #handlerFor(net.bigtangle.core.BlockType)} and delegate when a
+	 * handler is present.
+	 */
+	public BlockTypeHandlerRegistry handlerRegistry() {
+		if (blockTypeHandlerRegistry == null) {
+			blockTypeHandlerRegistry = new BlockTypeHandlerRegistry();
+		}
+		return blockTypeHandlerRegistry;
+	}
+
+	/** Convenience lookup used by the dispatch switches. */
+	public java.util.Optional<net.bigtangle.server.service.base.handler.BlockTypeHandler> handlerFor(
+			net.bigtangle.core.BlockType type) {
+		return blockTypeHandlerRegistry == null
+				? java.util.Optional.empty()
+				: blockTypeHandlerRegistry.get(type);
 	}
 
 	public boolean enableFee(Block block) {

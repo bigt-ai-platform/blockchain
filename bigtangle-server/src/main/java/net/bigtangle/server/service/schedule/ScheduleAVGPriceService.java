@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.server.service.AVGPriceService;
+import net.bigtangle.layer1.service.AVGPriceService;
 
 @Component
 @EnableAsync
