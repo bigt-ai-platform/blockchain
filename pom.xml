@@ -31,6 +31,8 @@
 		<module>bigtangle-server</module>
 		<module>bigtangle-mcmc</module>
 		<module>bigtangle-subtangle</module>
+		<module>bigtangle-bridge</module>
+		<module>layer0-servercore</module>
 
 	</modules>
 	<dependencies>

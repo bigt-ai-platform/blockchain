@@ -1,4 +1,4 @@
-package net.bigtangle.server.config;
+package net.bigtangle.core;
 
 import java.util.ArrayList;
 import java.util.List;

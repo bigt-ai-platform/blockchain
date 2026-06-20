@@ -33,6 +33,7 @@ import com.google.common.base.Objects;
 import com.google.common.math.LongMath;
 
 import net.bigtangle.core.BitcoinSerializer;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.MessageSerializer;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.script.Script;
@@ -92,6 +93,32 @@ public abstract class NetworkParameters {
 	public String genesisPub;
 	// List of root permissionDomainname
 	protected List<String> permissionDomainname;
+
+	/**
+	 * Identifier of the chain these parameters belong to. Layer 0 (the
+	 * settlement chain) is "L0"; each Layer 1 sub-chain (ordermatch, contract,
+	 * ...) gets its own id. Used to scope block storage, validation and
+	 * discovery to a single chain. See LAYERING-PLAN.md.
+	 */
+	protected String chainId = "L0";
+
+	/**
+	 * The set of {@link BlockType}s that a node running these parameters will
+	 * accept. Layer 0 accepts the full settlement set; a Layer 1 sub-chain
+	 * accepts only the types that belong to it. Enforced in
+	 * {@code ServiceBaseCheck.checkBlockBeforeSave} so a node never ingests a
+	 * block type from another layer.
+	 */
+	public EnumSet<BlockType> getAllowedBlockTypes() {
+		// L0 default: every type currently defined. Sub-classes representing a
+		// Layer 1 override this to a restricted set.
+		return EnumSet.allOf(BlockType.class);
+	}
+
+	/** The chain id (e.g. "L0", "ordermatch"). Never null. */
+	public String getChainId() {
+		return chainId;
+	}
 
 	// MCMC settings
 	public static final int CONFIRMATION_UPPER_THRESHOLD_PERCENT = 51;

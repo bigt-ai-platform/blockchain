@@ -33,7 +33,7 @@ import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.GetOutputsResponse;
 import net.bigtangle.response.OutputsDetailsResponse;
-import net.bigtangle.server.config.FilterToken;
+import net.bigtangle.core.FilterToken;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;

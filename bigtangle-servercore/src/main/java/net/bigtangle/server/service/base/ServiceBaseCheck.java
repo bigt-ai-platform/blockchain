@@ -1788,6 +1788,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public void checkBlockBeforeSave(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		block.verifyHeader();
+		// Layer scoping: a node only accepts block types allowed by its
+		// NetworkParameters. Layer 0 nodes accept the full settlement set; a
+		// Layer 1 sub-chain node rejects types that belong to another layer.
+		// See LAYERING-PLAN.md. (No-op for L0 today, which allows all types.)
+		if (!networkParameters.getAllowedBlockTypes().contains(block.getBlockType())) {
+			throw new VerificationException(
+					"Block type " + block.getBlockType() + " is not allowed on chain " + networkParameters.getChainId());
+		}
 		if (!checkSpentAndConflict(new HashSet<BlockWrap>(), initBlockWrap(block), false, store))
 			throw new ConflictPossibleException("Conflict Possible");
 		checkDomainname(block);

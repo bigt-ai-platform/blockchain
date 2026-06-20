@@ -1,11 +1,12 @@
 /.project
 /build/
-/target/
+**/target/
 /bin/ 
 /.settings/
 bigtangle-docker/.settings/
 logs/ 
 /.idea/
+*.class
 
 
 

@@ -16,6 +16,12 @@
  
 		<dependency>
 			<groupId>net.bigtangle</groupId>
+			<artifactId>layer0-servercore</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>net.bigtangle</groupId>
 			<artifactId>bigtangle-servercore</artifactId>
 			<version>${project.version}</version>
 		</dependency>
