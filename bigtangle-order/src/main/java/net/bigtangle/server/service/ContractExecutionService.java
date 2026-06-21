@@ -43,7 +43,6 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 
@@ -217,8 +216,14 @@ public class ContractExecutionService {
 		Set<BlockWrap> collectNotSpents = serviceBase.collectNotAreadyCollected(referencedblocks,
 				prevsNotMilestoneChainedBlocks);
 
-		ContractExecutionResult result = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper).executeContract(block, store, contract, lastConfirmedExecution,
+		// Invoke the Layer-1 contract engine via the SPI registry instead of
+		// `new ServiceContract(...)`, so bigtangle-order does not depend on the
+		// contract implementation module. serviceBase is a ServiceBaseConnect,
+		// hence a ContractConnectSupport. See ContractConnectSupport.
+		ContractExecutionResult result = net.bigtangle.server.service.base.handler.ContractExecutorRegistry.get()
+				.orElseThrow(() -> new IllegalStateException(
+						"No ContractExecutor registered; add layer1-servercore to the classpath"))
+				.executeContract(serviceBase, networkParameters, block, store, contract, lastConfirmedExecution,
 						serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks

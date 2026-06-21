@@ -44,11 +44,14 @@ import net.bigtangle.response.GetBlockEvaluationsResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.Contractresult;
+import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
+import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
 
-public class ServiceBaseConnect extends ServiceBaseConfirmation {
+public class ServiceBaseConnect extends ServiceBaseConfirmation
+		implements net.bigtangle.server.service.base.handler.OrderMatchingSupport {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseConnect.class);
 
@@ -91,7 +94,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 	}
 
 	@Override
-	protected void connectUTXOs(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectUTXOs(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 		connectUTXOs(block, transactions, blockStore);
 	}
@@ -239,9 +242,21 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
 			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
-					cacheBlockService, jsonmapper).executeContract(block, blockStore, result.getContracttokenid(),
-							prevblockhash, result.getReferencedBlocks());
+			// Invoke the contract engine via the Layer-1 SPI instead of
+			// `new ServiceContract(...)`, so bigtangle-servercore has no
+			// compile-time dependency on the contract implementation. If no
+			// executor is registered (Layer-0-only node), skip. See
+			// ContractConnectSupport / LAYERING-PLAN.md.
+			ContractExecutionResult check = ContractExecutorRegistry.get()
+					.map(exec -> {
+						try {
+							return exec.executeContract(this, networkParameters, block, blockStore,
+									result.getContracttokenid(), prevblockhash, result.getReferencedBlocks());
+						} catch (BlockStoreException e) {
+							throw new RuntimeException(e);
+						}
+					})
+					.orElse(null);
 			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
@@ -271,9 +286,15 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters,
-					cacheBlockService, jsonmapper)
-					.orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
+			OrderExecutionResult check = OrderExecutorRegistry.get().map(exec -> {
+						try {
+							return exec.executeOrderMatching(this, networkParameters,
+									block, prevblockhash, result.getReferencedBlocks(), blockStore);
+						} catch (BlockStoreException e) {
+							throw new RuntimeException(e);
+						}
+					})
+					.orElse(null);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())

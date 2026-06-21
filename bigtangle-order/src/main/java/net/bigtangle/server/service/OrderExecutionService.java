@@ -41,7 +41,7 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceOrderExecution;
+import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 
@@ -198,9 +198,15 @@ public class OrderExecutionService {
 				prevMilestoneExecution, store);
 		Set<BlockWrap> collectNotSpents = collectNotAreadyCollected(referencedblocks, prevsNotMilestoneChainedBlocks);
 
-		OrderExecutionResult result = new ServiceOrderExecution(serverConfiguration, networkParameters,
-				cacheBlockService, jsonmapper)
-				.orderMatching(block, lastConfirmedExecution, serviceBase.getHashSet(collectNotSpents), store);
+		OrderExecutionResult result = OrderExecutorRegistry.get().map(exec -> {
+					try {
+						return exec.executeOrderMatching(serviceBase, networkParameters,
+								block, lastConfirmedExecution, serviceBase.getHashSet(collectNotSpents), store);
+					} catch (BlockStoreException e) {
+						throw new RuntimeException(e);
+					}
+				})
+				.orElse(null);
 
 		// do not create the execution block, if there is no new referencedblocks and no
 		// match

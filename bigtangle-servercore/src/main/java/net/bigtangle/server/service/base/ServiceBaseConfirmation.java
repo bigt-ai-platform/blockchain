@@ -64,6 +64,8 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.data.Contractresult;
+import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
+import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
@@ -1326,9 +1328,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = new ServiceOrderExecution(serverConfiguration, networkParameters,
-					cacheBlockService, jsonmapper)
-					.orderMatching(block, prevblockhash, result.getReferencedBlocks(), blockStore);
+			OrderExecutionResult check = OrderExecutorRegistry.get().map(exec -> {
+						try {
+							return exec.executeOrderMatching((net.bigtangle.server.service.base.handler.OrderMatchingSupport) this,
+									networkParameters,
+									block, prevblockhash, result.getReferencedBlocks(), blockStore);
+						} catch (BlockStoreException e) {
+							throw new RuntimeException(e);
+						}
+					})
+					.orElse(null);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
 
@@ -1445,9 +1454,22 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
 			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
-					cacheBlockService, jsonmapper).executeContract(block, blockStore, result.getContracttokenid(),
-							prevblockhash, result.getReferencedBlocks());
+			// Invoke the contract engine via the Layer-1 SPI instead of
+			// `new ServiceContract(...)`. See ContractConnectSupport.
+			// At runtime `this` is always a ServiceBaseConnect subclass
+			// (ServiceBaseCheck / ServiceVerifyReward / ServiceBaseReward),
+			// hence a ContractConnectSupport.
+			ContractExecutionResult check = ContractExecutorRegistry.get()
+					.map(exec -> {
+						try {
+							return exec.executeContract((net.bigtangle.server.service.base.handler.ContractConnectSupport) this,
+									networkParameters, block, blockStore,
+									result.getContracttokenid(), prevblockhash, result.getReferencedBlocks());
+						} catch (BlockStoreException e) {
+							throw new RuntimeException(e);
+						}
+					})
+					.orElse(null);
 
 			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
 					&& result.getRemainderRecords().equals(check.getRemainderRecords())

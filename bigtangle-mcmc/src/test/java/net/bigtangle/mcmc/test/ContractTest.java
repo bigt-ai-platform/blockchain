@@ -39,7 +39,8 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException.InfeasiblePrototypeException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.service.base.ServiceContract;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
+
 import net.bigtangle.wallet.Wallet;
 
 @Disabled("Temporarily disabled")
@@ -88,9 +89,8 @@ public class ContractTest extends AbstractIntegrationTest {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(resultBlock.getTransactions().get(0).getData());
 
-			ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters,
-					cacheBlockService, jsonmapper).executeContract(resultBlock, store, result.getContracttokenid(),
-							store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
+			ContractExecutionResult check = executeContract(resultBlock, store, result.getContracttokenid(),
+					store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 			blockSaveService.saveBlock(resultBlock, store);
 			makeRewardBlock(resultBlock);
 			assertTrue(getBlockWrap(resultBlock.getHash()).getBlockEvaluation().getMilestone() > 0);
@@ -157,7 +157,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				makeRewardBlock(resultBlock);
 
 				blockSaveService.saveBlock(conflictBlock, store);
-				ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+				ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
 						jsonmapper);
 				Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 				s.getBlockWrap(resultBlock.getHash(), store);
@@ -181,7 +181,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		Block conflictBlock = null;
 		Block resultBlock = null;
 		int count = 0;
@@ -233,7 +233,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		Block conflictBlock = null;
 		Block resultBlock = null;
 		TokensumsMap c = checkSum(null);
@@ -277,7 +277,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		Block conflictBlock = null;
 		Block resultBlock = null;
 		int count = 0;
@@ -326,7 +326,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 		Block resultBlock = null;
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		int count = 0;
 		Block checkBlock = null;
 		for (ECKey key : ulist) {
@@ -341,7 +341,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				ContractExecutionResult result = new ContractExecutionResult()
 						.parse(resultBlock.getTransactions().get(0).getData());
 
-				ContractExecutionResult check = s.executeContract(resultBlock, store, result.getContracttokenid(),
+				ContractExecutionResult check = executeContract(resultBlock, store, result.getContracttokenid(),
 						store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 				blockSaveService.saveBlock(resultBlock, store);
 				mcmcServiceUpdate();
@@ -378,9 +378,8 @@ public class ContractTest extends AbstractIntegrationTest {
 		ContractExecutionResult result = new ContractExecutionResult()
 				.parse(checkBlock.getTransactions().get(0).getData());
 
-		ContractExecutionResult check = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper).executeContract(resultBlock, store, result.getContracttokenid(),
-						store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
+		ContractExecutionResult check = executeContract(resultBlock, store, result.getContracttokenid(),
+				store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 
 		if (!check.getOutputTx().getOutputs().isEmpty()) {
 			Address winnerAddress = check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
@@ -418,9 +417,9 @@ public class ContractTest extends AbstractIntegrationTest {
 				ContractExecutionResult result = new ContractExecutionResult()
 						.parse(resultBlock.getTransactions().get(0).getData());
 
-				ServiceContract serviceContract = new ServiceContract(serverConfiguration, networkParameters,
+				ServiceBaseConnect serviceContract = new ServiceBaseConnect(serverConfiguration, networkParameters,
 						cacheBlockService, jsonmapper);
-				ContractExecutionResult check = serviceContract.executeContract(resultBlock, store,
+				ContractExecutionResult check = executeContract(resultBlock, store,
 						result.getContracttokenid(), store.getContractresult(result.getPrevblockhash()),
 						result.getReferencedBlocks());
 				blockGraph.addBlock(resultBlock, false, store);
@@ -539,7 +538,7 @@ public class ContractTest extends AbstractIntegrationTest {
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
 		TokensumsMap c = checkSum(null);
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		for (ECKey key : ulist) {
 			Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 			w.payContract(null, yuanTokenPub, payContractAmount, null, null, contracttoken.getTokenid());
@@ -550,7 +549,7 @@ public class ContractTest extends AbstractIntegrationTest {
 				ContractExecutionResult result = new ContractExecutionResult()
 						.parse(resultBlock.getTransactions().get(0).getData());
 
-				ContractExecutionResult check = s.executeContract(resultBlock, store, result.getContracttokenid(),
+				ContractExecutionResult check = executeContract(resultBlock, store, result.getContracttokenid(),
 						store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 				blockSaveService.saveBlock(resultBlock, store);
 				confirmDo(s.getBlockWrap(resultBlock.getHash(), store), new HashSet<>(), store);
@@ -588,7 +587,7 @@ public class ContractTest extends AbstractIntegrationTest {
 
 		List<Block> blocks = new ArrayList<>();
 		prepare(blocks);
-		ServiceContract serviceBase = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper);
 
 		Block resultBlock = contractExecutionService.createContractExecution(contracttoken, store);
@@ -597,7 +596,7 @@ public class ContractTest extends AbstractIntegrationTest {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(resultBlock.getTransactions().get(0).getData());
 
-			ContractExecutionResult check = serviceBase.executeContract(resultBlock, store, result.getContracttokenid(),
+			ContractExecutionResult check = executeContract(resultBlock, store, result.getContracttokenid(),
 					store.getContractresult(result.getPrevblockhash()), result.getReferencedBlocks());
 			blockSaveService.saveBlock(resultBlock, store);
 			makeRewardBlock(resultBlock);

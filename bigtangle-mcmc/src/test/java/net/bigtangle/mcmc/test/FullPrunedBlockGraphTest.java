@@ -30,7 +30,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceContract;
+
 
 public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
@@ -254,7 +254,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				UtilGeneseBlock.createGenesis(networkParameters), tx11);
 
 		// Confirm
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		confirmDo(s.getBlockWrap(block.getHash(), store), new HashSet<>(), store);
 
 		// Should be confirmed now
@@ -327,7 +327,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	@Test
 	public void testUnconfirmTokenUTXOs() throws Exception {
 
-		ServiceContract s = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
 		ECKey outKey = new ECKey();
 		byte[] pubKey = outKey.getPubKey();

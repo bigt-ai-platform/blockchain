@@ -1,4 +1,4 @@
-package net.bigtangle.server.service.base;
+package net.bigtangle.layer1.contract;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -11,8 +11,6 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
@@ -32,47 +30,56 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
-import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.Contractresult;
-import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.base.handler.ContractConnectSupport;
+import net.bigtangle.server.service.base.handler.ContractExecutor;
 import net.bigtangle.store.BlockStoreInterface;
 
-public class ServiceContract extends ServiceBaseConnect {
+/**
+ * Layer-1 contract execution engine. This is the former
+ * {@code net.bigtangle.server.service.base.ServiceContract}, moved out of
+ * {@code bigtangle-servercore} so servercore no longer depends on the contract
+ * implementation (see {@code LAYERING-PLAN.md}, Approach A).
+ *
+ * <p>Two things changed vs. the original {@code ServiceContract}:
+ * <ul>
+ *   <li>It no longer {@code extends ServiceBaseConnect}. The three base methods
+ *       it needs ({@code getBlock}, {@code connectUTXOs},
+ *       {@code connectTypeSpecificUTXOs}) are reached through the
+ *       {@link ContractConnectSupport} argument, supplied by the caller (a
+ *       {@code ServiceBaseConnect} instance).</li>
+ *   <li>It implements {@link ContractExecutor} so {@code bigtangle-servercore}
+ *       can invoke it via {@code ContractExecutorRegistry} without importing
+ *       this class.</li>
+ * </ul>
+ * The contract logic itself (lottery matching, deterministic payouts, winner
+ * selection) is byte-for-byte the original.
+ */
+public class ContractEngine implements ContractExecutor {
 
-	public ServiceContract(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
-			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
-		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-
-	}
-
-	public ContractExecutionResult executeContract(Block block, BlockStoreInterface blockStore, String contractid,
-			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
+	@Override
+	public ContractExecutionResult executeContract(ContractConnectSupport support, NetworkParameters networkParameters,
+			Block block, BlockStoreInterface blockStore, String contractid, Contractresult prevHash,
+			Set<Sha256Hash> referencedblocks) throws BlockStoreException {
 		Token contract = blockStore.getTokenID(contractid).get(0);
-		return executeContract(block, blockStore, contract, prevHash, referencedblocks);
+		return executeContract(support, networkParameters, block, blockStore, contract, prevHash, referencedblocks);
 	}
-//	private static final Logger log = LoggerFactory.getLogger(ServiceContract.class);
 
-	/*
-	 * the ContractEvent received and do next action
-	 */
-	public ContractExecutionResult executeContract(Block block, BlockStoreInterface blockStore, Token contract,
-			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
+	public ContractExecutionResult executeContract(ContractConnectSupport support, NetworkParameters networkParameters,
+			Block block, BlockStoreInterface blockStore, Token contract, Contractresult prevHash,
+			Set<Sha256Hash> referencedblocks) throws BlockStoreException {
 
-		//
 		String classname = getValue("classname", contract.getTokenKeyValues());
 		if ("net.bigtangle.server.service.LotteryContract".equals(classname)) {
-			return lotteryContract(block, blockStore, contract, prevHash, referencedblocks);
+			return lotteryContract(support, networkParameters, block, blockStore, contract, prevHash, referencedblocks);
 		}
 		// TODO run others
 		return null;
-
 	}
 
-	/*
-	 * 
-	 */
-	public ContractExecutionResult lotteryContract(Block block, BlockStoreInterface store, Token contract,
-			Contractresult prevContractresult, Set<Sha256Hash> collectedBlocks) throws BlockStoreException {
+	public ContractExecutionResult lotteryContract(ContractConnectSupport support, NetworkParameters networkParameters,
+			Block block, BlockStoreInterface store, Token contract, Contractresult prevContractresult,
+			Set<Sha256Hash> collectedBlocks) throws BlockStoreException {
 
 		// Deterministic randomization
 		byte[] randomness = Utils.xor(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes());
@@ -89,18 +96,14 @@ public class ServiceContract extends ServiceBaseConnect {
 			toBeSpent.putAll(store.getContractEventPrev(contract.getTokenid(), prevContractresult.getBlockHash()));
 		}
 
-		// Set<ContractEventRecord> cancelled = new HashSet<>();
-
-		collectWithCancel(collectedBlocks, cancels, toBeSpent, store);
+		collectWithCancel(support, collectedBlocks, cancels, toBeSpent, store);
 		Set<ContractEventRecord> cancelledContractEventRecord = new HashSet<>();
 
-		// timeoutOrdersToCancelled(block, toBeSpent, cancelledContractEventRecord);
 		contractEventtoCancelled(cancels, toBeSpent, cancelledContractEventRecord);
 
 		// Remove the now cancelled orders from rest of orders
 		for (ContractEventRecord c : cancelledContractEventRecord) {
 			toBeSpent.remove(c.getBlockHash());
-
 		}
 
 		// Add to proceeds all cancelled orders going back to the beneficiary
@@ -109,31 +112,29 @@ public class ServiceContract extends ServiceBaseConnect {
 		String winnerAmount = getValue("winnerAmount", contract.getTokenKeyValues());
 		String amount = getValue("amount", contract.getTokenKeyValues());
 
-		TreeMap<Sha256Hash, ContractEventRecord> usedRecords = new TreeMap<>(
-				Comparator.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(blockHash.getBytes(), randomness))));
+		TreeMap<Sha256Hash, ContractEventRecord> usedRecords = new TreeMap<>(Comparator
+				.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(blockHash.getBytes(), randomness))));
 
 		if (winnerAmount != null && canTakeWinner(toBeSpent, usedRecords, new BigInteger(winnerAmount))) {
-			return doTakeWinner(block, usedRecords, new BigInteger(amount), prevContractresult, toBeSpent,
-					collectedBlocks, payouts, getContractEventRecordHash(cancelledContractEventRecord));
+			return doTakeWinner(networkParameters, block, usedRecords, new BigInteger(amount), prevContractresult,
+					toBeSpent, collectedBlocks, payouts, getContractEventRecordHash(cancelledContractEventRecord));
 		} else {
 			if (!collectedBlocks.isEmpty()) {
 				// no winner reset used
 				usedRecords = new TreeMap<>(Comparator
 						.comparing(blockHash -> Sha256Hash.wrap(Utils.xor(blockHash.getBytes(), randomness))));
-				Transaction tx = createPayoutTransaction(block, payouts);
+				Transaction tx = createPayoutTransaction(networkParameters, block, payouts);
 				Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(
 						toBeSpent.values(), usedRecords.values());
-				return new ContractExecutionResult(contract.getTokenid(),
-						  tx.getHash(), tx,
-						prevContractresult.getBlockHash(), getContractEventRecordHash(cancelledContractEventRecord),
+				return new ContractExecutionResult(contract.getTokenid(), tx.getHash(), tx,
+						prevContractresult.getBlockHash(),
+						getContractEventRecordHash(cancelledContractEventRecord),
 						getContractEventRecordHash(remainderContractEventRecord), block.getTimeSeconds(),
-						remainderContractEventRecord,   collectedBlocks,
-						prevContractresult.getChainlength() + 1);
+						remainderContractEventRecord, collectedBlocks, prevContractresult.getChainlength() + 1);
 
 			}
 		}
 		return null;
-
 	}
 
 	protected void payoutCancelled(TreeMap<String, TreeMap<String, BigInteger>> payouts,
@@ -159,17 +160,18 @@ public class ServiceContract extends ServiceBaseConnect {
 		}
 	}
 
-	private void collectWithCancel(Set<Sha256Hash> collectedBlocks, List<ContractEventCancelInfo> cancels,
-			TreeMap<Sha256Hash, ContractEventRecord> spents, BlockStoreInterface store) throws BlockStoreException {
+	private void collectWithCancel(ContractConnectSupport support, Set<Sha256Hash> collectedBlocks,
+			List<ContractEventCancelInfo> cancels, TreeMap<Sha256Hash, ContractEventRecord> spents,
+			BlockStoreInterface store) throws BlockStoreException {
 		for (Sha256Hash bHash : collectedBlocks) {
-			Block b = getBlock(bHash, store);
+			Block b = support.getBlock(bHash, store);
 			if (b.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EVENT) {
 
 				ContractEventRecord event = store.getContractEvent(b.getHash(), Sha256Hash.ZERO_HASH);
 				// order is null, write it to
 				if (event == null) {
-					connectUTXOs(b, store);
-					connectTypeSpecificUTXOs(b, store);
+					support.connectUTXOs(b, store);
+					support.connectTypeSpecificUTXOs(b, store);
 					event = store.getContractEvent(b.getHash(), Sha256Hash.ZERO_HASH);
 				}
 				if (event != null) {
@@ -188,7 +190,7 @@ public class ServiceContract extends ServiceBaseConnect {
 	 * can be check on each node, the winner, the winnerBlock hash calculate the
 	 * unique userAddress, userUtxos for check and generate the dynamic outputs
 	 */
-	private ContractExecutionResult doTakeWinner(Block winnerBlock,
+	private ContractExecutionResult doTakeWinner(NetworkParameters networkParameters, Block winnerBlock,
 			TreeMap<Sha256Hash, ContractEventRecord> usedRecords, BigInteger amount, Contractresult prevHash,
 			TreeMap<Sha256Hash, ContractEventRecord> allRecords, Set<Sha256Hash> collectedBlocks,
 			TreeMap<String, TreeMap<String, BigInteger>> payouts, Set<Sha256Hash> cancels) {
@@ -201,20 +203,15 @@ public class ServiceContract extends ServiceBaseConnect {
 		Random se = new Random(randomness);
 		List<String> userlist = baseList(usedRecords.values(), amount);
 		int randomWin = se.nextInt(userlist.size());
-		// log.debug("randomn win = " + randomWin + " userlist size =" +
-		// userlist.size());
 		ContractEventRecord winner = findList(usedRecords.values(), userlist.get(randomWin));
-		// log.debug("winner = " + winner.toString());
 		payout(payouts, winner.getBeneficiaryAddress(), winner.getTargetTokenid(), sum(usedRecords.values()));
-		Transaction tx = createPayoutTransaction(winnerBlock, payouts);
+		Transaction tx = createPayoutTransaction(networkParameters, winnerBlock, payouts);
 		Set<ContractEventRecord> remainderContractEventRecord = getRemainderContractEventRecord(allRecords.values(),
 				usedRecords.values());
 
-		return new ContractExecutionResult(winner.getContractTokenid(), 
-				tx.getHash(), tx, prevHash.getBlockHash(), cancels,
-				getContractEventRecordHash(remainderContractEventRecord), winnerBlock.getTimeSeconds(),
-				remainderContractEventRecord,  collectedBlocks,
-				prevHash.getChainlength() + 1);
+		return new ContractExecutionResult(winner.getContractTokenid(), tx.getHash(), tx, prevHash.getBlockHash(),
+				cancels, getContractEventRecordHash(remainderContractEventRecord), winnerBlock.getTimeSeconds(),
+				remainderContractEventRecord, collectedBlocks, prevHash.getChainlength() + 1);
 	}
 
 	public Set<Sha256Hash> getContractEventRecordHash(Collection<ContractEventRecord> orders) {
@@ -260,12 +257,11 @@ public class ServiceContract extends ServiceBaseConnect {
 				return true;
 			}
 		}
-		// log.debug(" sum= " + sum);
 		return false;
-
 	}
 
-	public Transaction createPayoutTransaction(Block block, TreeMap<String, TreeMap<String, BigInteger>> payouts) {
+	public Transaction createPayoutTransaction(NetworkParameters networkParameters, Block block,
+			TreeMap<String, TreeMap<String, BigInteger>> payouts) {
 		Transaction tx = new Transaction(networkParameters);
 		for (Entry<String, TreeMap<String, BigInteger>> payout : payouts.entrySet()) {
 			for (Entry<String, BigInteger> tokenProceeds : payout.getValue().entrySet()) {
@@ -273,12 +269,13 @@ public class ServiceContract extends ServiceBaseConnect {
 				BigInteger proceedsValue = tokenProceeds.getValue();
 
 				if (proceedsValue.signum() != 0)
-					tx.addOutput(new Coin(proceedsValue, tokenId),   Address.fromBase58(networkParameters, payout.getKey()));
+					tx.addOutput(new Coin(proceedsValue, tokenId),
+							Address.fromBase58(networkParameters, payout.getKey()));
 			}
 		}
 
 		// The coinbase input does not really need to be a valid signature
-		TransactionInput input =   TransactionInput.fromScriptBytes(networkParameters, tx, Script
+		TransactionInput input = TransactionInput.fromScriptBytes(networkParameters, tx, Script
 				.createInputScript(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes()));
 		tx.addInput(input);
 		tx.setMemo(new MemoInfo("contractExecution"));
@@ -323,7 +320,5 @@ public class ServiceContract extends ServiceBaseConnect {
 			}
 		}
 		return null;
-
 	}
-
 }

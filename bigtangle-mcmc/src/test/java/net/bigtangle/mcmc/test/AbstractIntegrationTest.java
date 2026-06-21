@@ -77,6 +77,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
+import net.bigtangle.layer1.contract.ContractEngine;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
@@ -135,7 +136,6 @@ import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
-import net.bigtangle.server.service.base.ServiceContract;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
@@ -560,6 +560,28 @@ public abstract class AbstractIntegrationTest {
 	private boolean enableOrderMatchExecutionChain() throws Exception, BlockStoreException {
 		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.enableOrderMatchExecutionChain(null);
+	}
+
+	/**
+	 * Test helper: run the Layer-1 contract engine (the former
+	 * {@code ServiceContract}, now {@code ContractEngine}) against a block, using
+	 * a fresh {@link ServiceBaseConnect} as the connect support. Replaces the old
+	 * inline {@code new ServiceContract(...).executeContract(...)} calls.
+	 */
+	protected ContractExecutionResult executeContract(Block block, BlockStoreInterface store, String contractid,
+			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
+		ServiceBaseConnect support = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper);
+		return new ContractEngine().executeContract(support, networkParameters, block, store, contractid, prevHash,
+				referencedblocks);
+	}
+
+	protected ContractExecutionResult executeContract(Block block, BlockStoreInterface store, Token contract,
+			Contractresult prevHash, Set<Sha256Hash> referencedblocks) throws BlockStoreException {
+		ServiceBaseConnect support = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper);
+		return new ContractEngine().executeContract(support, networkParameters, block, store, contract, prevHash,
+				referencedblocks);
 	}
 
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
@@ -2011,7 +2033,7 @@ public abstract class AbstractIntegrationTest {
 
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			ServiceContract serviceBase = new ServiceContract(serverConfiguration, networkParameters, cacheBlockService,
+			ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
 					jsonmapper);
 			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
 			// if (re.getBlockEvaluation().isConfirmed())
@@ -2315,7 +2337,7 @@ public abstract class AbstractIntegrationTest {
 		Set<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 		allApprovedNewBlocks.add(getBlockWrap(b1.getHash()));
 		allApprovedNewBlocks.add(getBlockWrap(b2.getHash()));
-		assertTrue(new ServiceContract(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
+		assertTrue(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.findBlockWithSpentOrUnconfirmedInputs(allApprovedNewBlocks, store));
 	}
 
