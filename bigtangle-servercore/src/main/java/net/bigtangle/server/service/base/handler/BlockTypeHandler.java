@@ -1,9 +1,9 @@
 package net.bigtangle.server.service.base.handler;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.store.BlockStoreException;
 
 /**
  * Strategy for the per-{@link net.bigtangle.core.BlockType} validation and

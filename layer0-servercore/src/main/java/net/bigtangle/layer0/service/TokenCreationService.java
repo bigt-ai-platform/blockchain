@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
@@ -17,12 +18,16 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
+import net.bigtangle.server.service.base.handler.SolidityContext;
+import net.bigtangle.server.layer0.handler.TokenCreationHandler;
 import net.bigtangle.store.BlockStoreInterface;
 
 /**
- * Layer-0 service for validating and creating new tokens. Delegates token
- * solidity checks to {@link ServiceBaseCheck} while keeping token-specific
- * workflows (domain checks, uniqueness, multisig sign-and-save) here.
+ * Layer-0 service for validating and creating new tokens. This is the
+ * workflow/API facade (Pattern A): it wires the {@link TokenCreationHandler}
+ * (Pattern B) into a {@link ServiceBaseCheck} instance so token validation
+ * flows through the single, strategy-dispatched path used by the consensus
+ * engine. See LAYERING-PLAN.md ("Keep both, unified").
  */
 @Service
 public class TokenCreationService {
@@ -44,27 +49,39 @@ public class TokenCreationService {
     @Autowired
     private ObjectMapper jsonmapper;
 
+    /**
+     * Build a {@link ServiceBaseCheck} with the Layer-0
+     * {@link TokenCreationHandler} registered, so token-type validation is
+     * routed through the strategy seam (the same path the consensus switches
+     * use) rather than calling the type-specific methods directly.
+     */
     private ServiceBaseCheck newServiceBaseCheck() {
-        return new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+        ServiceBaseCheck check = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
+                jsonmapper);
+        check.handlerRegistry().register(BlockType.BLOCKTYPE_TOKEN_CREATION, new TokenCreationHandler());
+        return check;
     }
 
     /**
-     * Full token creation solidity check: formal fields, amounts, previous
-     * issuance chain, multisig signatures, domain permission. Returns
-     * {@link SolidityState#getSuccessState()} on success.
+     * Full token creation solidity check via the registered handler: formal
+     * fields, amounts, previous issuance chain, multisig signatures, domain
+     * permission. Returns {@link SolidityState#getSuccessState()} on success.
      */
     public SolidityState validateToken(Block block, BlockStoreInterface store) throws BlockStoreException {
         ServiceBaseCheck check = newServiceBaseCheck();
-        return check.checkFullTokenSolidity(block, 0, true, store);
+        SolidityContext ctx = SolidityContext.builder().block(block).store(store).height(0).throwExceptions(true)
+                .base(check).build();
+        return check.handlerFor(BlockType.BLOCKTYPE_TOKEN_CREATION).get().checkFull(ctx);
     }
 
     /**
      * Formal token validation without dependency checks (coinbase, data
-     * fields, signatures).
+     * fields, signatures), via the registered handler.
      */
     public SolidityState validateTokenFormal(Block block) throws BlockStoreException {
         ServiceBaseCheck check = newServiceBaseCheck();
-        return check.checkFormalTokenSolidity(block, false);
+        SolidityContext ctx = SolidityContext.builder().block(block).throwExceptions(false).base(check).build();
+        return check.handlerFor(BlockType.BLOCKTYPE_TOKEN_CREATION).get().checkFormal(ctx);
     }
 
     /**

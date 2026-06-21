@@ -102,6 +102,43 @@ on `bigtangle-server` today.
 
 ---
 
+## 2.5 Two-pattern split (unified) — API layering vs consensus layering
+
+The repo uses **two complementary extraction patterns**, operating at different
+layers. They are kept and unified (decision: "keep both, unified"):
+
+- **Pattern A — `@Service` facades (API/workflow layering).** Token/payment/order
+  workflows extracted into `@Service` beans in `layer0-servercore`
+  (`TokenCreationService`, `PaymentTransactionService`, `MultiSignService`, ...)
+  and `layer1-servercore` (`OrderdataService`, `AVGPriceService`,
+  `OrderTickerService`). Wired via `ServerStart`'s
+  `@ComponentScan("net.bigtangle")` and `@Autowired` in `DispatcherController`.
+  These orchestrate *what an API command does*; they delegate to a
+  `ServiceBaseCheck` instance for validation.
+- **Pattern B — `BlockTypeHandler` strategy (consensus/validation layering).**
+  The per-`BlockType` validation/confirmation arms (the three `switch` statements
+  in `ServiceBaseCheck`/`ServiceBaseConfirmation`) extracted into pluggable
+  handlers registered in `ServiceBase.handlerRegistry()`. Plus a `chainId` +
+  `getAllowedBlockTypes()` gate in `checkBlockBeforeSave` that rejects foreign
+  block types at ingest. This is what makes a node *structurally* scoped to its
+  layer.
+
+**Unification:** Pattern A services register their Pattern B handler on the
+`ServiceBaseCheck` they construct, then validate through the handler — one
+validation path. Example: `TokenCreationService.newServiceBaseCheck()` registers
+a `TokenCreationHandler`, and `validateToken()`/`validateTokenFormal()` call
+through `check.handlerFor(...).checkFull(ctx)` rather than the type-specific
+method directly.
+
+| Concern | Pattern | Status |
+|---|---|---|
+| API command orchestration (saveToken, pay, getOrderdata...) | A — `@Service` | ✅ extracted (pre-existing) |
+| Per-BlockType validation switch dispatch | B — `BlockTypeHandler` | ✅ seam + 1 template handler (`TokenCreationHandler`) |
+| Per-layer block-type ingest gate | B — `chainId`/allow-set | ✅ wired (no-op for L0 today) |
+| Reward/Order/Contract handlers | B | ⬜ pending (template proven) |
+
+---
+
 ## 3. Key Design Mechanisms
 
 ### 3.1 `chainId` — the one new concept threaded everywhere

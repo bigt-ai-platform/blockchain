@@ -20,6 +20,8 @@ import java.util.concurrent.FutureTask;
 
 import javax.annotation.Nullable;
 
+import net.bigtangle.server.service.base.handler.SolidityContext;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
