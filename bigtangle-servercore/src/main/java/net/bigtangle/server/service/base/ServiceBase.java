@@ -7,6 +7,7 @@ package net.bigtangle.server.service.base;
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +18,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 import javax.annotation.Nullable;
 
@@ -79,6 +81,35 @@ public abstract class ServiceBase {
 	 */
 	private BlockTypeHandlerRegistry blockTypeHandlerRegistry;
 
+	/**
+	 * Global (static) handler registrations. Layer modules call
+	 * {@link #registerGlobalHandler(BlockType, Supplier)} at startup. Every new
+	 * {@code ServiceBase} instance copies these into its per-instance registry
+	 * during construction, so no instance is ever created without the handlers
+	 * its layer needs.
+	 */
+	private static final List<GlobalRegistration> globalRegistrations = Collections.synchronizedList(new ArrayList<>());
+
+	private static class GlobalRegistration {
+		final BlockType type;
+		final Supplier<net.bigtangle.server.service.base.handler.BlockTypeHandler> supplier;
+
+		GlobalRegistration(BlockType type, Supplier<net.bigtangle.server.service.base.handler.BlockTypeHandler> supplier) {
+			this.type = type;
+			this.supplier = supplier;
+		}
+	}
+
+	/**
+	 * Register a handler factory globally. Every {@code ServiceBase} (and its
+	 * subclasses) created after this call will include the handler.
+	 * Thread-safe; intended to be called from static initializers or
+	 * {@code @PostConstruct} methods.
+	 */
+	public static void registerGlobalHandler(BlockType type, Supplier<net.bigtangle.server.service.base.handler.BlockTypeHandler> supplier) {
+		globalRegistrations.add(new GlobalRegistration(type, supplier));
+	}
+
 	protected abstract void connectTypeSpecificUTXOs(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException, VerificationException;
 
@@ -97,6 +128,10 @@ public abstract class ServiceBase {
 		this.networkParameters = networkParameters;
 		this.cacheBlockService = cacheBlockService;
 		this.jsonmapper = jsonmapper;
+		// Copy global registrations into this instance's registry
+		for (GlobalRegistration reg : globalRegistrations) {
+			handlerRegistry().register(reg.type, reg.supplier.get());
+		}
 	}
 
 	/**

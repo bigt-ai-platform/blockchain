@@ -34,6 +34,10 @@
 		<module>bigtangle-bridge</module>
 		<module>layer0-servercore</module>
 		<module>layer1-servercore</module>
+		<module>layer0-server</module>
+		<module>layer1-server</module>
+		<module>layer0-mcmc</module>
+		<module>layer1-mcmc</module>
 
 	</modules>
 	<dependencies>

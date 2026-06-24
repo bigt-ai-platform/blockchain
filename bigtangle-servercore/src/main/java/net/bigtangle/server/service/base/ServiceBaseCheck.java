@@ -423,7 +423,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return checkFormalContractEventSolidity(block, throwExceptions, store);
 	}
 
-	private SolidityState checkFullOrderOpenSolidity(Block block, long height, boolean throwExceptions,
+	public SolidityState checkFullOrderOpenSolidity(Block block, long height, boolean throwExceptions,
 			BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
@@ -631,7 +631,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return burnedCoins;
 	}
 
-	private SolidityState checkFullOrderOpSolidity(Block block, long height, boolean throwExceptions,
+	public SolidityState checkFullOrderOpSolidity(Block block, long height, boolean throwExceptions,
 			BlockStoreInterface store) throws BlockStoreException {
 
 		// No output creation
@@ -684,7 +684,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFullRewardSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
+	public SolidityState checkFullRewardSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
 			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
@@ -1367,7 +1367,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalOrderOpenSolidity(Block block, boolean throwExceptions)
+	public SolidityState checkFormalOrderOpenSolidity(Block block, boolean throwExceptions)
 			throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
@@ -1424,7 +1424,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions,
+	public SolidityState checkFormalContractEventSolidity(Block block, boolean throwExceptions,
 			BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
@@ -1463,7 +1463,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalOrderOpSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
+	public SolidityState checkFormalOrderOpSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
 
 		// No output creation
 		if (!block.getTransactions().get(0).getOutputs().isEmpty()) {
@@ -1498,7 +1498,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private SolidityState checkFormalRewardSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
+	public SolidityState checkFormalRewardSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
 		if (transactions.size() != 1) {

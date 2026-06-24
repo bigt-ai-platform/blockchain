@@ -66,6 +66,7 @@ import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
 import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
+import net.bigtangle.server.service.base.handler.SolidityContext;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
@@ -1170,7 +1171,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		for (final Transaction tx : block.getBlock().getTransactions()) {
 			confirmTransaction(block.getBlock(), confirmation, tx, blockStore);
 		}
-		// type-specific updates
+		// Layer strategy: delegate to a registered handler if present.
+		if (handlerFor(block.getBlock().getBlockType()).isPresent()) {
+			SolidityContext ctx = SolidityContext.builder().block(block.getBlock()).store(blockStore)
+					.milestoneNumber(milestoneNumber).confirmation(confirmation)
+					.blockHash(block.getBlockHash()).base(this).build();
+			handlerFor(block.getBlock().getBlockType()).get().confirm(ctx);
+			return;
+		}
+		// type-specific updates (fallback when no handler registered)
 		switch (block.getBlock().getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
 				BLOCKTYPE_CONTRACT_EVENT,  BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
@@ -1178,7 +1187,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			break;
 		case BLOCKTYPE_REWARD:
 			confirmReward(block, confirmation, blockStore);
-			// For history, OrderMatching is part of rewards
 			if (!enableOrderMatchExecutionChain(block.getBlock())) {
 				confirmOrderMatching(block, confirmation, blockStore);
 			}
@@ -1234,7 +1242,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmVOSOrUserData(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
+	public void confirmVOSOrUserData(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		Transaction tx = block.getBlock().getTransactions().get(0);
 		if (tx.getData() != null && tx.getDataSignature() != null) {
@@ -1264,7 +1272,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	private void confirmOrderMatching(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
+	public void confirmOrderMatching(BlockWrap block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		// Get list of consumed orders, virtual order matching tx and newly
 		// generated remaining order book
@@ -1322,7 +1330,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		removeMatchingEvents(matchingResult.getOutputTx().getHash(), blockStore);
 	}
 
-	private void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)
+	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		updateBlockConfirmOnly(block.getHash(), milestoneNumber, confirm, blockStore);
 		try {
@@ -1447,7 +1455,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/*
 	 * confirmation of the contract Execution
 	 */
-	private void confirmContractExecute(Block block, long milestoneNumber, boolean confirm,
+	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm,
 			BlockStoreInterface blockStore) throws BlockStoreException {
 
 		try {
@@ -1611,7 +1619,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		return false;
 	}
 
-	private void confirmReward(BlockWrap block, boolean confirm, BlockStoreInterface blockStore)
+	public void confirmReward(BlockWrap block, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		// Set virtual reward tx outputs confirmed
 		confirmVirtualCoinbaseTransaction(block.getBlock(), confirm, blockStore);
@@ -1628,7 +1636,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		cacheBlockService.evictMaxConfirmedReward();
 	}
 
-	private void confirmToken(BlockWrap block, boolean confirm, BlockStoreInterface blockStore)
+	public void confirmToken(BlockWrap block, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		// Set used other output spent
 		if (confirm) {

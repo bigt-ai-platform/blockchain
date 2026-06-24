@@ -48,4 +48,14 @@ public interface BlockTypeHandler {
 	default void confirm(SolidityContext ctx) throws BlockStoreException {
 		// no-op by default
 	}
+
+	/**
+	 * Connect hook (mirrors
+	 * {@code ServiceBaseConnect.connectTypeSpecificUTXOs}). Called when a block
+	 * is connected to the store to insert type-specific state (tokens, orders,
+	 * contract events, etc.).
+	 */
+	default void connect(SolidityContext ctx) throws BlockStoreException {
+		// no-op by default
+	}
 }

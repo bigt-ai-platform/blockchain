@@ -46,6 +46,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
 import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
+import net.bigtangle.server.service.base.handler.SolidityContext;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
@@ -139,6 +140,13 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 	}
 
 	public void connectTypeSpecificUTXOs(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+		// Layer strategy: delegate to a registered handler if present.
+		if (handlerFor(block.getBlockType()).isPresent()) {
+			SolidityContext ctx = SolidityContext.builder().block(block).store(blockStore).base(this).build();
+			handlerFor(block.getBlockType()).get().connect(ctx);
+			return;
+		}
+		// fallback when no handler registered
 		switch (block.getBlockType()) {
 
 		case BLOCKTYPE_TOKEN_CREATION:
@@ -168,7 +176,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectCancelOrder(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectCancelOrder(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			OrderCancelInfo info = new OrderCancelInfo().parse(block.getTransactions().get(0).getData());
 			OrderCancel record = new OrderCancel(info.getBlockHash());
@@ -179,7 +187,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectContractEventCancel(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectContractEventCancel(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractEventCancelInfo info = new ContractEventCancelInfo()
 					.parse(block.getTransactions().get(0).getData());
@@ -222,7 +230,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectContractEvent(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectContractEvent(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractEventInfo reqInfo = new ContractEventInfo().parse(block.getTransactions().get(0).getData());
 
@@ -237,7 +245,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectContractExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectContractExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			ContractExecutionResult result = new ContractExecutionResult()
 					.parse(block.getTransactions().get(0).getData());
@@ -282,7 +290,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectOrderExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectOrderExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		try {
 			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
 			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
@@ -318,7 +326,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 	}
 
-	private void connectToken(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
+	public void connectToken(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 		Transaction tx = block.getTransactions().get(0);
 		if (tx.getData() != null) {
 			try {
