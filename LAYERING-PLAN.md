@@ -1,6 +1,6 @@
 # Bigtangle Layered Architecture — Plan
 
-> Status: Phase 0 ✅, Phase 1 ✅ (mostly), Phase 2 ✅, Phase 2.5 ✅, Phase 3 ✅, Phase 4+ ⬜ — see §5.5 for gaps
+> Status: Phase 0 ✅, Phase 1 ✅ (mostly), Phase 2 ✅, Phase 2.5 ✅, Phase 3 ✅, Phase 4 🟡 — see §5.5 for gaps
 > Decisions (confirmed): **(1)** same-repo, new-module split; **(2)** hybrid
 > consensus (each L1 runs its own MCMC/reward/rollback, but periodically
 > *anchors* a checkpoint into L0 so L0 finalizes L1 state); **(3)** subtangle
@@ -364,16 +364,18 @@ Goal: move BIG/tokens between layers safely. **Gated on Phase 2.5 completion.**
 **Exit criteria:** value can move L0→L1→L0 with no inflation/loss. ✅
 (single-key vault; M-of-N multisig deferred)
 
-### Phase 4 — Second L1 (contracts) + hardening
+### Phase 4 — Second L1 (contracts) + hardening — 🟡 IN PROGRESS
 Goal: prove the template generalizes; productionize.
 
-1. `bigtangle-l1-contract` runnable node, allow-set = `{CONTRACT_*}`.
-2. Generalize the existing hardcoded Lottery contract path; define the contract
-   L1's execution model.
-3. Observability: per-chain metrics, sync health, anchor latency.
-4. Documentation + the `bigtangle-seeds` discovery extended to register L1 nodes
-   by `chainId` (the seed already supports `{url, servertype}` — `servertype`
-   becomes the chainId).
+1. 🟡 `bigtangle-l1-contract` params and MCMC start created: `ContractL1Params`
+   restricts allow-set to contract types only (`BLOCKTYPE_CONTRACT_*` +
+   shared transfer/reward/crosstangle). `ContractL1MCMCStart` entry point
+   with explicit component-scan roots.
+2. ⬜ Generalize the existing hardcoded Lottery contract path; define the
+   contract L1's execution model.
+3. ⬜ Observability: per-chain metrics, sync health, anchor latency.
+4. ⬜ Documentation + the `bigtangle-seeds` discovery extended to register L1
+   nodes by `chainId`.
 
 **Exit criteria:** two distinct L1 chains running, each independently
 consensus-secured and L0-anchored.
