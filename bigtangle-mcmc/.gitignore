@@ -1,9 +1,0 @@
-/build/
-/target/
-/bin/
-/logs/
-/.settings/
-.classpath
-.project
-/.apt_generated/
-/.apt_generated_tests/

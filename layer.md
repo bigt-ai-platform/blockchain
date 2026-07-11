@@ -42,8 +42,6 @@ The Bigtangle blockchain is split into **Layer 0 (settlement)** and **Layer 1 (a
 | **`layer0-mcmc`** | L0 consensus node (MCMC tip-selection + reward) | **Yes** |
 | **`layer1-server`** | L1 full node (REST API + mining + order/contract engine) | **Yes** |
 | **`layer1-mcmc`** | L1 consensus node (MCMC tip-selection + reward) | **Yes** |
-| `bigtangle-server` | Legacy combined server (L0 + L1 in one process) | Yes |
-| `bigtangle-mcmc` | Legacy combined MCMC node | Yes |
 | `bigtangle-subtangle` | Subtangle/bridge instance (ported to L1 runtime template) | Yes |
 
 ## Key Design Mechanisms
@@ -104,7 +102,7 @@ This means no code in the consensus/validation stack needs to know about layers 
 
 ### 4. Consensus isolation — separate MCMC nodes
 
-Each layer has a dedicated MCMC node (`layer0-mcmc`, `layer1-mcmc`) that runs the full consensus loop (MCMC tip-selection + reward/rollback) against its own database. The MCMC `@ComponentScan` excludes the server's own schedules and MCMC services (same filter as `bigtangle-mcmc/MCMCStart`), so the mcmc module's versions are used.
+Each layer has a dedicated MCMC node (`layer0-mcmc`, `layer1-mcmc`) that runs the full consensus loop (MCMC tip-selection + reward/rollback) against its own database. Each layer module owns its MCMC service classes and its layer-specific integration tests.
 
 The `service.schedule.mcmc: true` flag in the mcmc node's `application.yml` enables the MCMC schedule; the server node sets it to `false` and runs mining instead.
 

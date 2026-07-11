@@ -14,7 +14,13 @@
 
 		<dependency>
 			<groupId>net.bigtangle</groupId>
-			<artifactId>bigtangle-server</artifactId>
+			<artifactId>bigtangle-servercore</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>net.bigtangle</groupId>
+			<artifactId>layer0-servercore</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 
@@ -42,7 +48,7 @@
 						<configuration>
 							<classifier>exec</classifier>
 
-							<mainClass>net.bigtangle.server.ServerStart</mainClass>
+							<mainClass>net.bigtangle.subtangle.ServerStart</mainClass>
 
 						</configuration>
 					</execution>

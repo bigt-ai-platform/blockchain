@@ -28,8 +28,6 @@
 		<module>bigtangle-core</module>
 		<module>bigtangle-servercore</module>
 		<module>bigtangle-order</module>
-		<module>bigtangle-server</module>
-		<module>bigtangle-mcmc</module>
 		<module>bigtangle-subtangle</module>
 		<module>bigtangle-bridge</module>
 		<module>layer0-servercore</module>

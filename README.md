@@ -38,12 +38,15 @@ sh bigtangle.sh
 git clone https://github.com/bigtangle/server.git
 cd server
 mvn -DskipTests=true clean install
-java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED net.bigtangle.server.ServerStart
+java -jar layer0-server/target/layer0-server-0.5.0-exec.jar
 ```
 
 ## Project Structure
 - **bigtangle-core**: Core blockchain implementation
-- **bigtangle-server**: Main server implementation
+- **layer0-server**: Layer 0 server runtime
+- **layer1-server**: Layer 1 server runtime
+- **layer0-mcmc**: Layer 0 MCMC runtime
+- **layer1-mcmc**: Layer 1 MCMC runtime
 - **bigtangle-subtangle**: Subtangle implementation
 - **helper**: Deployment and testing scripts
 

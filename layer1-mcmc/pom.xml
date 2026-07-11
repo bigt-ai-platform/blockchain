@@ -14,12 +14,6 @@
 
 		<dependency>
 			<groupId>net.bigtangle</groupId>
-			<artifactId>bigtangle-mcmc</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>net.bigtangle</groupId>
 			<artifactId>layer1-servercore</artifactId>
 			<version>${project.version}</version>
 		</dependency>

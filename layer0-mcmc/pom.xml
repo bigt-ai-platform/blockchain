@@ -14,12 +14,6 @@
 
 		<dependency>
 			<groupId>net.bigtangle</groupId>
-			<artifactId>bigtangle-mcmc</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>net.bigtangle</groupId>
 			<artifactId>layer0-servercore</artifactId>
 			<version>${project.version}</version>
 		</dependency>
@@ -28,6 +22,13 @@
 			<groupId>net.bigtangle</groupId>
 			<artifactId>bigtangle-order</artifactId>
 			<version>${project.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>net.bigtangle</groupId>
+			<artifactId>layer1-servercore</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
 		</dependency>
 
 		<dependency>

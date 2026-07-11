@@ -85,9 +85,11 @@ scoping, not by moving code between modules.
 blockchain/
   bigtangle-core            # UNCHANGED data model + BlockType (add 1 type)
   bigtangle-servercore      # consensus + validation, parameterized by chainId
-  bigtangle-mcmc            # MCMC engine (already per-call store)
   bigtangle-order           # L1 logic: ordermatch + contract engine
-  bigtangle-server          # L0 runnable node  (Layer 0 runtime)
+   layer0-server             # L0 runnable node  (Layer 0 runtime)
+   layer1-server             # L1 runnable node  (Layer 1 runtime)
+   layer0-mcmc               # L0 MCMC engine + reward/tip tests
+   layer1-mcmc               # L1 MCMC engine + order/contract consensus tests
   bigtangle-subtangle       # → renamed conceptually to the L1 runtime template
   bigtangle-l1-ordermatch   # NEW: runnable L1 ordermatch node
   bigtangle-l1-contract     # NEW: runnable L1 contract node
