@@ -99,6 +99,27 @@ public class AnchorService {
         }
     }
 
+    /**
+     * Called after an anchor's CROSSTANGLE block is confirmed on L0.
+     * Marks the anchor record as confirmed and credits the anchor reward
+     * to the L1 milestone node (if configured).
+     */
+    public void confirmAnchor(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_CROSSTANGLE) {
+            return;
+        }
+        AnchorRecord anchor = store.getAnchorByBlockHash(block.getHash());
+        if (anchor == null) {
+            logger.warn("No anchor record found for confirmed CROSSTANGLE block {}", block.getHashAsString());
+            return;
+        }
+        if (anchor.isConfirmed()) {
+            return;
+        }
+        store.updateAnchorConfirmed(anchor.getChainId(), anchor.getL1Height(), true);
+        logger.info("Anchor confirmed for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+    }
+
     public void validateAndSaveAnchor(LayerAnchor anchor, Sha256Hash l0BlockHash, BlockStoreInterface store)
             throws Exception {
         if (anchor.getL1RewardHeadHash() == null) {

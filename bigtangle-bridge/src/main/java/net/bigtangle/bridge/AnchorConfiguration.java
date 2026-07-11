@@ -12,6 +12,9 @@ public class AnchorConfiguration {
     private String l0Url;
     private String priKeyHex;
     private String pubKeyHex;
+    private long rewardAmount;
+    private String feePoolPriKeyHex;
+    private String feePoolPubKeyHex;
 
     public int getPostInterval() {
         return postInterval;
@@ -51,5 +54,29 @@ public class AnchorConfiguration {
 
     public void setPubKeyHex(String pubKeyHex) {
         this.pubKeyHex = pubKeyHex;
+    }
+
+    public long getRewardAmount() {
+        return rewardAmount;
+    }
+
+    public void setRewardAmount(long rewardAmount) {
+        this.rewardAmount = rewardAmount;
+    }
+
+    public String getFeePoolPriKeyHex() {
+        return feePoolPriKeyHex;
+    }
+
+    public void setFeePoolPriKeyHex(String feePoolPriKeyHex) {
+        this.feePoolPriKeyHex = feePoolPriKeyHex;
+    }
+
+    public String getFeePoolPubKeyHex() {
+        return feePoolPubKeyHex;
+    }
+
+    public void setFeePoolPubKeyHex(String feePoolPubKeyHex) {
+        this.feePoolPubKeyHex = feePoolPubKeyHex;
     }
 }

@@ -1,6 +1,8 @@
 package net.bigtangle.mcmc.test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.charset.StandardCharsets;
@@ -80,6 +82,97 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
 
         AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
         assertNotNull(saved, "Anchor should be saved after processing received CROSSTANGLE block");
+    }
+
+    @Test
+    public void testConfirmAnchor() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Sha256Hash l1Hash = genesis.getHash();
+        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+
+        Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
+        crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName("LayerAnchor");
+        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        crosstangleBlock.addTransaction(tx);
+        crosstangleBlock.solve();
+
+        store.saveAnchor(new AnchorRecord("L1", l1Hash, 1, null,
+                Utils.HEX.encode(sig.encodeToDER()), crosstangleBlock.getHash(), false));
+
+        AnchorRecord before = store.getAnchorByBlockHash(crosstangleBlock.getHash());
+        assertNotNull(before);
+        assertEquals(false, before.isConfirmed());
+
+        anchorService.confirmAnchor(crosstangleBlock, store);
+
+        AnchorRecord after = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(after);
+        assertEquals(true, after.isConfirmed(), "Anchor must be marked confirmed after confirmAnchor");
+    }
+
+    @Test
+    public void testConfirmAnchorViaHandler() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Sha256Hash l1Hash = genesis.getHash();
+        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+
+        Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
+        crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName("LayerAnchor");
+        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        crosstangleBlock.addTransaction(tx);
+        crosstangleBlock.solve();
+
+        anchorService.processReceivedAnchor(crosstangleBlock, store);
+        anchorService.confirmAnchor(crosstangleBlock, store);
+
+        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(saved);
+        assertEquals(true, saved.isConfirmed(),
+                "After processReceivedAnchor + confirmAnchor, anchor must be confirmed");
+    }
+
+    @Test
+    public void testGetAnchorByBlockHash() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Sha256Hash l1Hash = genesis.getHash();
+        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+
+        anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
+
+        AnchorRecord byHash = store.getAnchorByBlockHash(genesis.getHash());
+        assertNotNull(byHash, "getAnchorByBlockHash should find the anchor");
+        assertEquals("L1", byHash.getChainId());
+
+        AnchorRecord notFound = store.getAnchorByBlockHash(Sha256Hash.ZERO_HASH);
+        assertNull(notFound, "getAnchorByBlockHash should return null for non-existent block hash");
     }
 
     @Test

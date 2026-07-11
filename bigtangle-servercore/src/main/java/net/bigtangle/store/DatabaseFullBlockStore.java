@@ -3186,6 +3186,33 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
+	@Override
+	public AnchorRecord getAnchorByBlockHash(Sha256Hash blockHash) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_ANCHOR_BY_BLOCKHASH_SQL)) {
+			s.setString(1, blockHash.toString());
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) {
+					return setAnchorRecord(rs);
+				}
+			}
+			return null;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public void updateAnchorConfirmed(String chainId, long l1Height, boolean confirmed) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_ANCHOR_CONFIRMED_SQL)) {
+			s.setBoolean(1, confirmed);
+			s.setString(2, chainId);
+			s.setLong(3, l1Height);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
 	private AnchorRecord setAnchorRecord(ResultSet rs) throws SQLException {
 		AnchorRecord anchor = new AnchorRecord();
 		anchor.setChainId(rs.getString("chainId"));

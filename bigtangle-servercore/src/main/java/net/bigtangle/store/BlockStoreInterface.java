@@ -525,4 +525,8 @@ public interface BlockStoreInterface {
 
 	AnchorRecord getLatestAnchorByChainId(String chainId) throws BlockStoreException;
 
+	AnchorRecord getAnchorByBlockHash(Sha256Hash blockHash) throws BlockStoreException;
+
+	void updateAnchorConfirmed(String chainId, long l1Height, boolean confirmed) throws BlockStoreException;
+
 }
