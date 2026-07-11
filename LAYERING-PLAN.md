@@ -20,16 +20,26 @@
    │  bigtangle-core   bigtangle-servercore                       │
    │  anchors: BLOCKTYPE_CROSSTANGLE carries L1 checkpoint hashes │
    └──────────────────────────────────────────────────────────────┘
-            ▲ anchor post (L1→L0)        ▲ peg in/out (UTXO bridge)
-            │                            │
-   ┌────────┴───────────┐        ┌───────┴────────────────┐
-   │ Layer 1: ordermatch│        │ Layer 1: contracts      │  ... more L1 chains
-   │ own NetworkParams  │        │ own NetworkParams       │
-   │ own genesis/DB     │        │ own genesis/DB          │
-   │ own MCMC + reward  │        │ own MCMC + reward       │
-   │ + rollback         │        │ + rollback              │
-   │ BLOCKTYPE_ORDER_*  │        │ BLOCKTYPE_CONTRACT_*    │
-   └────────────────────┘        └─────────────────────────┘
+            ▲ anchor post                     ▲ anchor post
+            │ (L1-ordermatch→L0)              │ (L1-contract→L0)
+            │              ┌───────────────────┤
+   ┌────────┴─────────┐    │    ┌──────────────┴───────────┐
+   │ L1-ordermatch    │    │    │ L1-contract              │
+   │ chainId=ordermatch│    │    │ chainId=contract         │
+   │ own genesis/DB   │    │    │ own genesis/DB           │
+   │ own MCMC+reward  │    │    │ own MCMC+reward          │
+   │ + rollback       │    │    │ + rollback               │
+   │ ORDER_OPEN/CANCEL│    │    │ CONTRACT_EVENT/CANCEL    │
+   │ /EXECUTE         │    │    │ /EXECUTE                 │
+   └──────────────────┘    │    └─────────────────────────┘
+                           │
+                     ┌─────┴─────────────┐
+                     │ bigtangle-bridge  │
+                     │ anchors · SPV ·   │
+                     │ peg vault         │
+                     └───────────────────┘
+   Each L1 is a separate chain: own NetworkParameters, own genesis hash,
+   own DB, own MCMC + reward + rollback. The bridge module is shared.
 ```
 
 ### 1.1 Definitions
@@ -38,11 +48,16 @@
   `BLOCKTYPE_TRANSFER`, `BLOCKTYPE_TOKEN_CREATION`, `BLOCKTYPE_REWARD`, and the
   *anchor* use of `BLOCKTYPE_CROSSTANGLE`. It is the only chain that mints the
   system coin (`BIG`/`bc`) and runs the canonical reward/milestone consensus.
-- **Layer 1 (L1)** — a sub-blockchain. Each L1 is *analogous to L0*: its own
-  `NetworkParameters` (distinct genesis/id), its own DB/schema, its own reward
-  chain + MCMC + conflict resolution + rollback. An L1 is specialized: an
-  order-match chain accepts only `BLOCKTYPE_ORDER_*`; a contract chain only
-  `BLOCKTYPE_CONTRACT_*`.
+- **L1-ordermatch** — a sub-blockchain specialized for order matching. Accepts
+  only `BLOCKTYPE_ORDER_*` (plus shared `INITIAL`, `TRANSFER`, `REWARD`,
+  `CROSSTANGLE`). Each L1 has its own `NetworkParameters` (distinct genesis/id),
+  its own DB/schema, its own reward chain + MCMC + conflict resolution +
+  rollback. chainId = `"ordermatch"`.
+- **L1-contract** — a sub-blockchain specialized for contract execution. Accepts
+  only `BLOCKTYPE_CONTRACT_*` (plus shared `INITIAL`, `TRANSFER`, `REWARD`,
+  `CROSSTANGLE`). Each L1 has its own `NetworkParameters` (distinct genesis/id),
+  its own DB/schema, its own reward chain + MCMC + conflict resolution +
+  rollback. chainId = `"contract"`.
 - **Anchor** — an L1 milestone node posts a compact checkpoint (its current
   reward-head hash + height + a Merkle root of confirmed L1 blocks) into an L0
   `BLOCKTYPE_CROSSTANGLE` block. L0 confirmation of that block *finalizes* the
@@ -83,27 +98,37 @@ scoping, not by moving code between modules.
 
 ```
 blockchain/
-  bigtangle-core            # UNCHANGED data model + BlockType (add 1 type)
-  bigtangle-servercore      # consensus + validation, parameterized by chainId
-  bigtangle-order           # L1 logic: ordermatch + contract engine
-   layer0-server             # L0 runnable node  (Layer 0 runtime)
-   layer1-server             # L1 runnable node  (Layer 1 runtime)
-    layer0-mcmc               # L0 MCMC engine + reward/tip tests
-    layer1-mcmc               # L1 MCMC engine + order/contract consensus tests
-   bigtangle-subtangle       # → renamed conceptually to the L1 runtime template
-   layer1-server             # CURRENT: combined runnable L1 ordermatch + contract node
-   bigtangle-l1-ordermatch   # FUTURE: split runnable L1 ordermatch node
-   bigtangle-l1-contract     # FUTURE: split runnable L1 contract node
-   bigtangle-bridge          # shared anchor + peg logic (used by all L1s)
+  bigtangle-core              # data model + BlockType + MerkleProof
+  bigtangle-servercore        # consensus + validation, parameterized by chainId
+  bigtangle-order             # order matching + contract engine (shared by both L1s)
+  bigtangle-bridge            # anchors · SPV · peg vault (shared by both L1s)
+
+  # ─── Layer 0 ───
+  layer0-servercore           # L0-specific services
+  layer0-server               # L0 runnable node  (DispatcherController, etc.)
+  layer0-mcmc                 # L0 MCMC engine + reward/tip + tests
+
+  # ─── Layer 1: ordermatch ───
+  bigtangle-l1-ordermatch     # L1-ordermatch runnable node (own ServerStart, MCMCStart)
+                               # allow-set = {ORDER_*, TRANSFER, REWARD, CROSSTANGLE}
+                               # chainId = "ordermatch"
+
+  # ─── Layer 1: contract ───
+  bigtangle-l1-contract       # L1-contract runnable node (own ServerStart, MCMCStart)
+                               # allow-set = {CONTRACT_*, TRANSFER, REWARD, CROSSTANGLE}
+                               # chainId = "contract"
+
+  # ─── Legacy (combined runtime, being replaced) ───
+  layer1-servercore           # L1 services (shared across both L1s until split)
+  layer1-server               # combined ordermatch+contract L1 server (transitional)
+  layer1-mcmc                 # combined L1 MCMC engine + tests (transitional)
+  bigtangle-subtangle         # predecessor L1 template (superseded by bigtangle-bridge)
 ```
 
-The current L1 runtime is `layer1-server` / `layer1-mcmc`, a combined ordermatch
-+ contract chain with a restricted API surface and allow-set. Future
-`bigtangle-l1-*` runnable nodes should stay thin: a `ServerStart` + config that
-boots a *scoped* subset of beans (their block type only + the consensus loop +
-the bridge). They depend on `bigtangle-servercore` + `bigtangle-bridge` +
-`bigtangle-order` (for the engine), mirroring how `bigtangle-subtangle` depends
-on `bigtangle-server` today.
+Each L1 runnable node is thin: a `ServerStart` + config that boots a *scoped*
+subset of beans (its block type only + the consensus loop + the bridge).
+They depend on `bigtangle-servercore` + `bigtangle-bridge` + `bigtangle-order`
+(for the engine).
 
 ---
 
@@ -162,8 +187,8 @@ This dissolves the "there is one chain" assumption without rewriting the math.
 
 - `NetworkParameters.getAllowedBlockTypes()` → `Set<BlockType>`.
   - L0: `{INITIAL, TRANSFER, TOKEN_CREATION, REWARD, CROSSTANGLE(anchor)}`
-  - ordermatch L1: `{INITIAL, TRANSFER, REWARD, ORDER_OPEN, ORDER_CANCEL, ORDER_EXECUTE, CROSSTANGLE(peg)}`
-  - contract L1: `{INITIAL, TRANSFER, REWARD, CONTRACT_EVENT, CONTRACTEVENT_CANCEL, CONTRACT_EXECUTE, CROSSTANGLE(peg)}`
+  - L1-ordermatch (chainId `"ordermatch"`): `{INITIAL, TRANSFER, REWARD, ORDER_OPEN, ORDER_CANCEL, ORDER_EXECUTE, CROSSTANGLE(peg)}`
+  - L1-contract (chainId `"contract"`): `{INITIAL, TRANSFER, REWARD, CONTRACT_EVENT, CONTRACTEVENT_CANCEL, CONTRACT_EXECUTE, CROSSTANGLE(peg)}`
 - `ServiceBaseCheck.checkBlockBeforeSave` rejects blocks whose type isn't in the
   set. One gate, enforced at ingest.
 
@@ -364,21 +389,22 @@ Goal: move BIG/tokens between layers safely. **Gated on Phase 2.5 completion.**
 **Exit criteria:** value can move L0→L1→L0 with no inflation/loss. ✅
 (single-key vault; M-of-N multisig deferred)
 
-### Phase 4 — Second L1 (contracts) + hardening — 🟡 IN PROGRESS
-Goal: prove the template generalizes; productionize.
+### Phase 4 — L1 split completion + hardening — 🟡 IN PROGRESS
+Goal: complete the physical module split so each L1 is its own runnable node.
 
-1. 🟡 `bigtangle-l1-contract` params and MCMC start created: `ContractL1Params`
-   restricts allow-set to contract types only (`BLOCKTYPE_CONTRACT_*` +
-   shared transfer/reward/crosstangle). `ContractL1MCMCStart` entry point
-   with explicit component-scan roots.
-2. ⬜ Generalize the existing hardcoded Lottery contract path; define the
+1. 🟡 `ContractL1Params` / `ContractL1TestParams` restrict allow-set to
+   `{CONTRACT_*}` only. `OrderMatchL1Params` / `OrderMatchL1TestParams` do
+   the same for `{ORDER_*}`. Each has a distinct `chainId` (`"ordermatch"`,
+   `"contract"`).
+2. ⬜ `bigtangle-l1-ordermatch` and `bigtangle-l1-contract` Maven modules
+   with their own `ServerStart`, `MCMCStart`, `pom.xml`, and network config.
+3. ⬜ Generalize the existing hardcoded Lottery contract path; define the
    contract L1's execution model.
-3. ⬜ Observability: per-chain metrics, sync health, anchor latency.
-4. ⬜ Documentation + the `bigtangle-seeds` discovery extended to register L1
-   nodes by `chainId`.
+4. ⬜ Observability: per-chain metrics, sync health, anchor latency.
+5. ⬜ `bigtangle-seeds` discovery extended to register L1 nodes by `chainId`.
 
-**Exit criteria:** two distinct L1 chains running, each independently
-consensus-secured and L0-anchored.
+**Exit criteria:** two distinct L1 chains running as separate processes, each
+independently consensus-secured and L0-anchored.
 
 ---
 
@@ -442,15 +468,17 @@ MCMC + reward, then confirms a matching buy order executes and closes the
 order — covering the full reward/execution confirmation path that was
 previously missing.
 
-### P4 — Contract chain, vault multisig, anchor liveness
-Phases 0–3 (foundations, split, anchors, SPV, peg) are complete.
-**Remaining:**
+### P4 — L1 split modules, vault multisig, anchor liveness
+Phases 0–3 (foundations, split, anchors, SPV, peg) are complete. L1 is now
+conceptually split into two separate chains (L1-ordermatch, L1-contract) with
+distinct `chainId` values and allow-sets. **Remaining:**
+- `bigtangle-l1-ordermatch` and `bigtangle-l1-contract` Maven modules
+  (separate runnable nodes with own ServerStart/MCMCStart)
 - Vault key management (threshold M-of-N multisig enforcement in BridgeService)
+- Generalized contract execution model (beyond Lottery)
 - Anchor liveness fallback (degraded mode)
 - Anchor-assisted sync (light-client)
-- Phase 4: `bigtangle-l1-contract` runnable node
-- Phase 4: Generalized contract execution model (beyond Lottery)
-- Phase 4: Per-chain observability + seed discovery by chainId
+- Per-chain observability + seed discovery by chainId
 
 ---
 
