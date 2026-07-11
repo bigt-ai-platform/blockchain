@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +20,7 @@ import net.bigtangle.bridge.LayerAnchor;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
@@ -48,7 +53,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         long l1Height = 1;
 
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, l1Height, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, l1Height, null, sig.encodeToDER(), null);
 
         anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
 
@@ -68,7 +73,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -96,7 +101,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -132,7 +137,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -165,7 +170,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -196,7 +201,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         ECKey.ECDSASignature sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
 
@@ -217,9 +222,109 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         Sha256Hash hash = Sha256Hash.ZERO_HASH;
         ECKey.ECDSASignature sig = wrongKey.sign(hash);
 
-        LayerAnchor anchor = new LayerAnchor("L1", hash, 1, null, sig.encodeToDER());
+        LayerAnchor anchor = new LayerAnchor("L1", hash, 1, null, sig.encodeToDER(), null);
 
         assertThrows(BlockStoreException.class,
                 () -> anchorService.validateAndSaveAnchor(anchor, hash, store));
+    }
+
+    @Test
+    public void testMerkleProofValid() {
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000001"));
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000002"));
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000003"));
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000004"));
+        Collections.sort(leaves);
+
+        Sha256Hash targetLeaf = leaves.get(2);
+        MerkleProof.ProofResult result = MerkleProof.buildProof(leaves, 2);
+        boolean valid = result.proof.verify(targetLeaf, result.root);
+        assertTrue(valid, "Merkle proof must verify");
+    }
+
+    @Test
+    public void testMerkleProofTampered() {
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(Sha256Hash.wrap("000000000000000000000000000000000000000000000000000000000000000a"));
+        leaves.add(Sha256Hash.wrap("000000000000000000000000000000000000000000000000000000000000000b"));
+        leaves.add(Sha256Hash.wrap("000000000000000000000000000000000000000000000000000000000000000c"));
+        Collections.sort(leaves);
+
+        Sha256Hash tamperedLeaf = Sha256Hash.wrap("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        MerkleProof.ProofResult result = MerkleProof.buildProof(leaves, 1);
+        boolean valid = result.proof.verify(tamperedLeaf, result.root);
+        assertEquals(false, valid, "Tampered leaf must not verify");
+    }
+
+    @Test
+    public void testMerkleProofWrongRoot() {
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(Sha256Hash.wrap("00000000000000000000000000000000000000000000000000000000000000aa"));
+        leaves.add(Sha256Hash.wrap("00000000000000000000000000000000000000000000000000000000000000bb"));
+        Collections.sort(leaves);
+
+        Sha256Hash targetLeaf = leaves.get(0);
+        MerkleProof proof = MerkleProof.buildProof(leaves, 0).proof;
+        Sha256Hash wrongRoot = Sha256Hash.wrap("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+        boolean valid = proof.verify(targetLeaf, wrongRoot);
+        assertEquals(false, valid, "Wrong root must not verify");
+    }
+
+    @Test
+    public void testSpvProofInAnchorAccepted() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        List<Sha256Hash> leaves = new ArrayList<>();
+        Sha256Hash targetHash = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        leaves.add(targetHash);
+        Collections.sort(leaves);
+
+        Sha256Hash confirmedRoot = MerkleProof.computeRoot(leaves);
+        int leafIdx = leaves.indexOf(targetHash);
+        MerkleProof spvProof = MerkleProof.buildProof(leaves, leafIdx).proof;
+
+        ECKey.ECDSASignature sig = signKey.sign(targetHash);
+        LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1, confirmedRoot, sig.encodeToDER(), spvProof);
+
+        anchorService.validateAndSaveAnchor(anchor, Sha256Hash.wrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), store);
+
+        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(saved, "Anchor with valid SPV proof must be saved");
+        assertEquals(confirmedRoot, saved.getConfirmedRoot());
+    }
+
+    @Test
+    public void testSpvProofTamperedRejected() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        Sha256Hash targetHash = Sha256Hash.wrap("2222222222222222222222222222222222222222222222222222222222222222");
+        Sha256Hash otherHash = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
+
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        leaves.add(otherHash);
+        Collections.sort(leaves);
+
+        MerkleProof wrongProof = MerkleProof.buildProof(leaves, leaves.indexOf(otherHash)).proof;
+
+        ECKey.ECDSASignature sig = signKey.sign(targetHash);
+        LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1,
+                MerkleProof.computeRoot(leaves), sig.encodeToDER(), wrongProof);
+
+        assertThrows(BlockStoreException.class,
+                () -> anchorService.validateAndSaveAnchor(anchor,
+                        Sha256Hash.wrap("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), store));
     }
 }

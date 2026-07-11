@@ -6,8 +6,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
+import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.utils.Json;
 
@@ -20,17 +23,19 @@ public class LayerAnchor implements Serializable {
     private long l1Height;
     private Sha256Hash confirmedRoot;
     private byte[] signature;
+    private MerkleProof spvProof;
 
     public LayerAnchor() {
     }
 
     public LayerAnchor(String chainId, Sha256Hash l1RewardHeadHash, long l1Height, Sha256Hash confirmedRoot,
-            byte[] signature) {
+            byte[] signature, MerkleProof spvProof) {
         this.chainId = chainId;
         this.l1RewardHeadHash = l1RewardHeadHash;
         this.l1Height = l1Height;
         this.confirmedRoot = confirmedRoot;
         this.signature = signature;
+        this.spvProof = spvProof;
     }
 
     public String getChainId() {
@@ -71,6 +76,14 @@ public class LayerAnchor implements Serializable {
 
     public void setSignature(byte[] signature) {
         this.signature = signature;
+    }
+
+    public MerkleProof getSpvProof() {
+        return spvProof;
+    }
+
+    public void setSpvProof(MerkleProof spvProof) {
+        this.spvProof = spvProof;
     }
 
     @Override

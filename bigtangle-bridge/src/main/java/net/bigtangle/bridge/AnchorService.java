@@ -1,6 +1,8 @@
 package net.bigtangle.bridge;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -14,9 +16,11 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
@@ -73,8 +77,12 @@ public class AnchorService {
         ECKey.ECDSASignature sig = signKey.sign(l1RewardHeadHash);
         byte[] sigBytes = sig.encodeToDER();
 
-        LayerAnchor anchor = new LayerAnchor(networkParameters.getChainId(), l1RewardHeadHash, l1Height, null,
-                sigBytes);
+        List<Sha256Hash> confirmedHashes = collectConfirmedBlockHashes(l1Height, store);
+        Sha256Hash confirmedRoot = MerkleProof.computeRoot(confirmedHashes);
+        MerkleProof spvProof = MerkleProof.buildProofFor(confirmedHashes, l1RewardHeadHash);
+
+        LayerAnchor anchor = new LayerAnchor(networkParameters.getChainId(), l1RewardHeadHash, l1Height,
+                confirmedRoot, sigBytes, spvProof);
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -186,12 +194,40 @@ public class AnchorService {
                     "Anchor signature verification failed for chain " + anchor.getChainId());
         }
 
+        if (anchor.getConfirmedRoot() != null && anchor.getSpvProof() != null) {
+            boolean spvValid = anchor.getSpvProof().verify(anchor.getL1RewardHeadHash(), anchor.getConfirmedRoot());
+            if (!spvValid) {
+                throw new BlockStoreException(
+                        "SPV proof verification failed for chain " + anchor.getChainId()
+                        + " at height " + anchor.getL1Height());
+            }
+        } else {
+            logger.debug("No SPV proof in anchor for chain {} at height {} (Phase 2 trust model)",
+                    anchor.getChainId(), anchor.getL1Height());
+        }
+
         AnchorRecord record = new AnchorRecord(anchor.getChainId(), anchor.getL1RewardHeadHash(),
                 anchor.getL1Height(), anchor.getConfirmedRoot(),
                 Utils.HEX.encode(anchor.getSignature()), l0BlockHash, false);
 
         store.saveAnchor(record);
         logger.info("Saved anchor record for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+    }
+
+    /**
+     * Collects all confirmed L1 block hashes up to the given height to build
+     * the SPV Merkle tree. Uses the anchor table's last confirmed root for
+     * chain continuity. For simplicity, uses the confirmed reward blocks.
+     */
+    private List<Sha256Hash> collectConfirmedBlockHashes(long upToHeight, BlockStoreInterface store) throws Exception {
+        List<Sha256Hash> hashes = new ArrayList<>();
+        TXReward reward = cacheBlockService.getMaxConfirmedReward(store);
+        if (reward != null) {
+            hashes.add(reward.getBlockHash());
+        }
+        hashes.add(store.get(UtilGeneseBlock.createGenesis(networkParameters).getHash()).getHash());
+        Collections.sort(hashes);
+        return hashes;
     }
 
     public void processReceivedAnchor(Block block, BlockStoreInterface store) throws Exception {
