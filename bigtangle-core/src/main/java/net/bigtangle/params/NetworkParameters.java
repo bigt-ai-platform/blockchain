@@ -120,6 +120,10 @@ public abstract class NetworkParameters {
 		return chainId;
 	}
 
+	public boolean isOrderMatchExecutionChainEnabled() {
+		return false;
+	}
+
 	// MCMC settings
 	public static final int CONFIRMATION_UPPER_THRESHOLD_PERCENT = 51;
 	public static final int CONFIRMATION_LOWER_THRESHOLD_PERCENT = 45;

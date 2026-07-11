@@ -1,29 +1,88 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [ 
-    
+    "configurations": [
         {
             "type": "java",
-            "name": "ServerStart",
+            "name": "Layer0 ServerStart",
             "request": "launch",
-            "mainClass": "net.bigtangle.server.ServerStart",
-            "projectName": "bigtangle-server",
- 
-        },
-
-          {
-            "type": "java",
-            "name": "MCMC ServerStart",
-            "request": "launch",
-            "mainClass": "net.bigtangle.mcmc.MCMCStart",
-            "projectName": "bigtangle-mcmc",
+            "mainClass": "net.bigtangle.layer0.server.Layer0ServerStart",
+            "projectName": "layer0-server",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
             "env": {
+                "SERVER_PORT": "8081",
+                "DB_NAME": "layer0",
                 "SERVICE_MINING": "true",
+                "SERVICE_MCMC": "false"
+            }
+        },
+        {
+            "type": "java",
+            "name": "Layer0 MCMCStart",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer0.mcmc.Layer0MCMCStart",
+            "projectName": "layer0-mcmc",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
+            "env": {
+                "SERVER_PORT": "8082",
+                "DB_NAME": "layer0",
+                "SERVICE_MINING": "false",
                 "SERVICE_MCMC": "true"
             }
+        },
+        {
+            "type": "java",
+            "name": "Layer1 ServerStart",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer1.server.Layer1ServerStart",
+            "projectName": "layer1-server",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
+            "env": {
+                "SERVER_PORT": "8083",
+                "DB_NAME": "layer1",
+                "LAYER1_CHAINID": "L1",
+                "SERVICE_MINING": "true",
+                "SERVICE_MCMC": "false"
+            }
+        },
+        {
+            "type": "java",
+            "name": "Layer1 MCMCStart",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer1.mcmc.Layer1MCMCStart",
+            "projectName": "layer1-mcmc",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
+            "env": {
+                "SERVER_PORT": "8084",
+                "DB_NAME": "layer1",
+                "LAYER1_CHAINID": "L1",
+                "SERVICE_MINING": "false",
+                "SERVICE_MCMC": "true"
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Layer0 Node",
+            "configurations": [
+                "Layer0 ServerStart",
+                "Layer0 MCMCStart"
+            ]
+        },
+        {
+            "name": "Layer1 Node",
+            "configurations": [
+                "Layer1 ServerStart",
+                "Layer1 MCMCStart"
+            ]
+        },
+        {
+            "name": "All Layer Nodes",
+            "configurations": [
+                "Layer0 ServerStart",
+                "Layer0 MCMCStart",
+                "Layer1 ServerStart",
+                "Layer1 MCMCStart"
+            ]
         }
     ]
 }

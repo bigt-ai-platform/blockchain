@@ -20,6 +20,13 @@
 
 		<dependency>
 			<groupId>net.bigtangle</groupId>
+			<artifactId>layer1-server</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>net.bigtangle</groupId>
 			<artifactId>bigtangle-servercore</artifactId>
 			<version>${project.version}</version>
 		</dependency>
@@ -84,6 +91,8 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
+					<forkCount>0</forkCount>
+					<redirectTestOutputToFile>true</redirectTestOutputToFile>
 					<excludes>
 						<exclude>**/net/bigtangle/mcmc/remote/**</exclude>
 						<exclude>**/net/bigtangle/performance/**</exclude>

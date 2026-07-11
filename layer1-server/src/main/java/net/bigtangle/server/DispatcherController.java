@@ -49,9 +49,7 @@ import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.ErrorResponse;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.response.GetStringResponse;
-import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.response.OkResponse;
-import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
@@ -59,17 +57,16 @@ import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
-import net.bigtangle.layer0.service.MultiSignService;
-import net.bigtangle.layer0.service.MultiSignServiceCreate;
+import net.bigtangle.layer1.service.MultiSignService;
+import net.bigtangle.layer1.service.MultiSignServiceCreate;
+import net.bigtangle.layer1.service.OutputService;
 import net.bigtangle.layer1.service.OrderTickerService;
 import net.bigtangle.layer1.service.OrderdataService;
-import net.bigtangle.layer0.service.OutputService;
-import net.bigtangle.layer0.service.PayMultiSignService;
+import net.bigtangle.layer1.service.TokenDomainnameService;
+import net.bigtangle.layer1.service.TokensService;
  
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SubtanglePermissionService;
-import net.bigtangle.layer0.service.TokenDomainnameService;
-import net.bigtangle.layer0.service.TokensService;
 import net.bigtangle.server.service.UserDataService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Gzip;
@@ -94,14 +91,6 @@ public class DispatcherController {
 	@Autowired
 	private BlockSaveService blockSaveService;
 	@Autowired
-	private TokensService tokensService;
-	@Autowired
-	private MultiSignService multiSignService;
-	@Autowired
-	private MultiSignServiceCreate multiSignServiceCreate;
-	@Autowired
-	private PayMultiSignService payMultiSignService;
-	@Autowired
 	private SubtanglePermissionService subtanglePermissionService;
 	@Autowired
 	private OrderdataService orderdataService;
@@ -110,9 +99,15 @@ public class DispatcherController {
 	@Autowired
 	private OrderTickerService orderTickerService;
 	@Autowired
-	protected StoreService storeService;
-	@Autowired
 	private TokenDomainnameService tokenDomainnameService;
+	@Autowired
+	private MultiSignService multiSignService;
+	@Autowired
+	private MultiSignServiceCreate multiSignServiceCreate;
+	@Autowired
+	private TokensService tokensService;
+	@Autowired
+	protected StoreService storeService;
 
 	 
 	@Autowired
@@ -215,47 +210,11 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case getOutputsHistory: {
-				outputHistory(bodyByte, httpServletResponse, watch, store);
-			}
-				break;
 			case outputsOfTokenid: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				AbstractResponse response = walletService.getOpenAllOutputsResponse((String) request.get("tokenid"),
 						store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-
-			case searchTokens: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				GetTokensResponse response = tokensService.searchTokens((String) request.get("name"), store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case searchWebTokens: {
-                AbstractResponse response = tokensService.getWebTokensList(store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case searchContractTokens: {
-                AbstractResponse response = tokensService.getContractTokensList(store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case searchExchangeTokens: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				GetTokensResponse response = tokensService.searchExchangeTokens((String) request.get("name"), store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getTokenById: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = tokensService.getTokenById((String) request.get("tokenid"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -274,7 +233,6 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-
 			case getAccountBalances: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
                     logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
@@ -290,7 +248,6 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-
 			case findBlockEvaluation: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -352,6 +309,47 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case getUserData: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String dataclassname = (String) request.get("dataclassname");
+				String pubKey = (String) request.get("pubKey");
+				byte[] buf = this.userDataService.getUserData(dataclassname, pubKey, store);
+				this.outPointBinaryArray(httpServletResponse, buf, reqCmd);
+			}
+				break;
+			case userDataList: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				int blocktype = (int) request.get("blocktype");
+				List<String> pubKeyList = (List<String>) request.get("pubKeyList");
+				AbstractResponse response = this.userDataService.getUserDataList(blocktype, pubKeyList, store);
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
+			case regSubtangle: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkey = (String) request.get("pubkey");
+				String signHex = (String) request.get("signHex");
+				boolean flag = subtanglePermissionService.savePubkey(pubkey, signHex, store);
+				if (flag) {
+					this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+				} else {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
+				}
+			}
+				break;
+			case updateSubtangle: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkey = (String) request.get("pubkey");
+				String userdataPubkey = (String) request.get("userdataPubkey");
+				String status = (String) request.get("status");
+				subtanglePermissionService.updateSubtanglePermission(pubkey, "", userdataPubkey, status, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
 			case getTokenSignByAddress: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -381,8 +379,8 @@ public class DispatcherController {
 				}
 				Boolean isSign = (Boolean) request.get("isSign");
 				AbstractResponse response = this.multiSignService.getMultiSignListWithTokenid(tokenid,
-						 Integer.valueOf(tokenindex), (List<String>) request.get("addresses"),
-                        isSign != null && isSign, store);
+						Integer.valueOf(tokenindex), (List<String>) request.get("addresses"), isSign != null && isSign,
+						store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -401,89 +399,34 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case getUserData: {
+			case getTokenById: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String dataclassname = (String) request.get("dataclassname");
-				String pubKey = (String) request.get("pubKey");
-				byte[] buf = this.userDataService.getUserData(dataclassname, pubKey, store);
-				this.outPointBinaryArray(httpServletResponse, buf, reqCmd);
-			}
-				break;
-			case userDataList: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				int blocktype = (int) request.get("blocktype");
-				List<String> pubKeyList = (List<String>) request.get("pubKeyList");
-				AbstractResponse response = this.userDataService.getUserDataList(blocktype, pubKeyList, store);
+				AbstractResponse response = tokensService.getTokenById((String) request.get("tokenid"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case launchPayMultiSign: {
-				this.payMultiSignService.launchPayMultiSign(bodyByte, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case payMultiSign: {
+			case getTokenPermissionedAddresses: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = this.payMultiSignService.payMultiSign(request, store);
+				final String domainNameBlockHash = (String) request.get("domainNameBlockHash");
+				AbstractResponse response = this.tokenDomainnameService
+						.queryDomainnameTokenPermissionedAddresses(domainNameBlockHash, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case getPayMultiSignList: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignList(keyStrHex000, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getPayMultiSignAddressList: {
+			case getDomainNameBlockHash: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String orderid = (String) request.get("orderid");
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignAddressList(orderid, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case payMultiSignDetails: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String orderid = (String) request.get("orderid");
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignDetails(orderid, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getOutputByKey: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String hexStr = (String) request.get("hexStr");
-				AbstractResponse response = walletService.getOutputsWithHexStr(hexStr, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-
-			case regSubtangle: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkey = (String) request.get("pubkey");
-				String signHex = (String) request.get("signHex");
-				boolean flag = subtanglePermissionService.savePubkey(pubkey, signHex, store);
-				if (flag) {
-					this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+				final String domainname = (String) request.get("domainname");
+				final String token = (String) request.get("token");
+				if (token == null || token.isEmpty()) {
+					this.outPrintJSONString(httpServletResponse,
+							this.tokenDomainnameService.queryParentDomainnameBlockHash(domainname, store), watch, reqCmd);
 				} else {
-					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
+					this.outPrintJSONString(httpServletResponse,
+							this.tokenDomainnameService.queryDomainnameBlockHash(domainname, store), watch, reqCmd);
 				}
-			}
-				break;
-			case updateSubtangle: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkey = (String) request.get("pubkey");
-				String userdataPubkey = (String) request.get("userdataPubkey");
-				String status = (String) request.get("status");
-				subtanglePermissionService.updateSubtanglePermission(pubkey, "", userdataPubkey, status, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			case getOrders: {
@@ -526,32 +469,6 @@ public class DispatcherController {
 				}
 			}
 				break;
-			case getTokenPermissionedAddresses: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				final String domainNameBlockHash = (String) request.get("domainNameBlockHash");
-				PermissionedAddressesResponse response = this.tokenDomainnameService
-						.queryDomainnameTokenPermissionedAddresses(domainNameBlockHash, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getDomainNameBlockHash: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				final String domainname = (String) request.get("domainname");
-				final String token = (String) request.get("token");
-				if (token == null || token.isEmpty()) {
-					this.outPrintJSONString(httpServletResponse,
-							this.tokenDomainnameService.queryParentDomainnameBlockHash(domainname, store), watch,
-							reqCmd);
-				} else {
-					this.outPrintJSONString(httpServletResponse,
-							this.tokenDomainnameService.queryDomainnameBlockHash(domainname, store), watch, reqCmd);
-				}
-
-			}
-				break;
-
 			case getChainNumber: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 					Json.jsonmapper().readValue(reqStr, Map.class);
@@ -641,20 +558,6 @@ public class DispatcherController {
 	@RequestMapping("/")
 	public String index() {
 		return "Bigtangle";
-	}
-
-	private void outputHistory(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			BlockStoreInterface store)
-			throws Exception {
-		String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-		@SuppressWarnings("unchecked")
-		Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-		String fromaddress = request.get("fromaddress") == null ? "" : request.get("fromaddress").toString();
-		String toaddress = request.get("toaddress") == null ? "" : request.get("toaddress").toString();
-		Long starttime = request.get("starttime") == null ? null : Long.valueOf(request.get("starttime").toString());
-		Long endtime = request.get("endtime") == null ? null : Long.valueOf(request.get("endtime").toString());
-		AbstractResponse response = walletService.getOutputsHistory(fromaddress, toaddress, starttime, endtime, store);
-		this.outPrintJSONString(httpServletResponse, response, watch, "outputHistory");
 	}
 
 	private void batchBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,

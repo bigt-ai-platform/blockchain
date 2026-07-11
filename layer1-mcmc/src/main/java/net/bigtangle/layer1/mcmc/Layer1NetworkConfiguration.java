@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 
 import net.bigtangle.layer1.params.Layer1Params;
+import net.bigtangle.layer1.params.Layer1TestParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 
@@ -23,6 +24,9 @@ public class Layer1NetworkConfiguration {
     @Primary
     public NetworkParameters networkParameters() {
         String chainId = env.getProperty("layer1.chainId", "L1");
+        if ("Test".equals(serverConfiguration.getNet())) {
+            return new Layer1TestParams(chainId);
+        }
         return new Layer1Params(chainId);
     }
 }

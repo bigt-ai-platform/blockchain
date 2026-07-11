@@ -47,4 +47,9 @@ public class Layer1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
                 BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
     }
+
+    @Override
+    public boolean isOrderMatchExecutionChainEnabled() {
+        return true;
+    }
 }

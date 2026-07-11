@@ -1,24 +1,85 @@
 {
-    
     "version": "0.2.0",
-  
-        "configurations": [
-            
-
-            {
-                "type": "java",
-                "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED  -Xmx14g ",
-                "name": "bigtangle-server",
-                "request": "launch",
-                "mainClass": "net.bigtangle.server.ServerStart",
-                "projectName": "bigtangle-server",
-                "env": {
-                    "REQUESTER": "https://bigtangle.de:8088",
-                    "SERVER_NET": "Mainnet",
-                    "SERVICE_MINING": true, 
-                    "SERVICE_MCMC": true
-                }
+    "configurations": [
+        {
+            "type": "java",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
+            "name": "layer0-server",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer0.server.Layer0ServerStart",
+            "projectName": "layer0-server",
+            "env": {
+                "REQUESTER": "https://bigtangle.de:8088",
+                "SERVER_NET": "Mainnet",
+                "SERVER_PORT": "8081",
+                "DB_NAME": "layer0",
+                "SERVICE_MINING": "true",
+                "SERVICE_MCMC": "false"
             }
-        ]
-    }
- 
+        },
+        {
+            "type": "java",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
+            "name": "layer0-mcmc",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer0.mcmc.Layer0MCMCStart",
+            "projectName": "layer0-mcmc",
+            "env": {
+                "REQUESTER": "https://bigtangle.de:8088",
+                "SERVER_NET": "Mainnet",
+                "SERVER_PORT": "8082",
+                "DB_NAME": "layer0",
+                "SERVICE_MINING": "false",
+                "SERVICE_MCMC": "true"
+            }
+        },
+        {
+            "type": "java",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
+            "name": "layer1-server",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer1.server.Layer1ServerStart",
+            "projectName": "layer1-server",
+            "env": {
+                "REQUESTER": "https://bigtangle.de:8088",
+                "SERVER_NET": "Mainnet",
+                "SERVER_PORT": "8083",
+                "DB_NAME": "layer1",
+                "LAYER1_CHAINID": "L1",
+                "SERVICE_MINING": "true",
+                "SERVICE_MCMC": "false"
+            }
+        },
+        {
+            "type": "java",
+            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
+            "name": "layer1-mcmc",
+            "request": "launch",
+            "mainClass": "net.bigtangle.layer1.mcmc.Layer1MCMCStart",
+            "projectName": "layer1-mcmc",
+            "env": {
+                "REQUESTER": "https://bigtangle.de:8088",
+                "SERVER_NET": "Mainnet",
+                "SERVER_PORT": "8084",
+                "DB_NAME": "layer1",
+                "LAYER1_CHAINID": "L1",
+                "SERVICE_MINING": "false",
+                "SERVICE_MCMC": "true"
+            }
+        }
+    ],
+    "compounds": [
+        {
+            "name": "layer0-node",
+            "configurations": ["layer0-server", "layer0-mcmc"]
+        },
+        {
+            "name": "layer1-node",
+            "configurations": ["layer1-server", "layer1-mcmc"]
+        },
+        {
+            "name": "all-layer-nodes",
+            "configurations": ["layer0-server", "layer0-mcmc", "layer1-server", "layer1-mcmc"]
+        }
+    ]
+}

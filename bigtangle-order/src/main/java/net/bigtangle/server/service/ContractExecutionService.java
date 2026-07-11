@@ -223,7 +223,7 @@ public class ContractExecutionService {
 		ContractExecutionResult result = net.bigtangle.server.service.base.handler.ContractExecutorRegistry.get()
 				.orElseThrow(() -> new IllegalStateException(
 						"No ContractExecutor registered; add layer1-servercore to the classpath"))
-				.executeContract(serviceBase, networkParameters, block, store, contract, lastConfirmedExecution,
+				.executeContract(serviceBase, networkParameters, block, store, contract.getTokenid(), lastConfirmedExecution,
 						serviceBase.getHashSet(collectNotSpents));
 
 		// do not create the execution block, if there is no new referencedblocks

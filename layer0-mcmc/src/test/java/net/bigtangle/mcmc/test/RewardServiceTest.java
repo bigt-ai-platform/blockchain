@@ -32,6 +32,7 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
+import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;

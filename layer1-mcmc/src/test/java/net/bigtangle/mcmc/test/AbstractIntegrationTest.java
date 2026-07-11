@@ -147,7 +147,8 @@ import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = Layer1MCMCStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {})
+@SpringBootTest(classes = Layer1MCMCStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+	properties = { "server.net=Test", "service.schedule.initsync=false", "service.schedule.mcmc=false" })
 
 @TestExecutionListeners(value = { DependencyInjectionTestExecutionListener.class, MockitoTestExecutionListener.class,
 		DirtiesContextTestExecutionListener.class
@@ -588,6 +589,7 @@ public abstract class AbstractIntegrationTest {
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
 
 		if (this.enableOrderMatchExecutionChain()) {
+			mcmcService.calcNewBlockPrototype(store);
 
 			Block b = orderExecutionService.createOrderExecution(store);
 			// no reward, this order will be not confirmed
@@ -667,7 +669,10 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
-		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		if (!beneficiary.toAddress(networkParameters).toString().equals(genesisKey.toAddress(networkParameters).toString())) {
+			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
+		}
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
@@ -768,6 +773,7 @@ public abstract class AbstractIntegrationTest {
 	
 		 
 		if (this.enableOrderMatchExecutionChain()) {
+			mcmcService.calcNewBlockPrototype(store);
 			
 			Block c = orderExecutionService.createOrderExecution(store);
 			return rewardWithBlock(addedBlocks, c);
@@ -1669,6 +1675,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void mcmcServiceUpdate() throws InterruptedException, ExecutionException, BlockStoreException {
+		mcmcService.calcNewBlockPrototype(store);
 		mcmcService.update(store);
 		blockGraph.confirmDo(store);
 	}

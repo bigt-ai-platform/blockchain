@@ -14,7 +14,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * See {@code LAYERING-PLAN.md}.
  */
 @SpringBootApplication
-@ComponentScan(basePackages = { "net.bigtangle" })
+@ComponentScan(basePackages = { "net.bigtangle" },
+               excludeFilters = @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.REGEX,
+                                                       pattern = "net\\.bigtangle\\.server\\.config\\.NetConfiguration"))
 @EnableScheduling
 @EnableCaching
 public class Layer0ServerStart {

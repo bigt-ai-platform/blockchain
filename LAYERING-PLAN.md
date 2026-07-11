@@ -88,15 +88,18 @@ blockchain/
   bigtangle-order           # L1 logic: ordermatch + contract engine
    layer0-server             # L0 runnable node  (Layer 0 runtime)
    layer1-server             # L1 runnable node  (Layer 1 runtime)
-   layer0-mcmc               # L0 MCMC engine + reward/tip tests
-   layer1-mcmc               # L1 MCMC engine + order/contract consensus tests
-  bigtangle-subtangle       # → renamed conceptually to the L1 runtime template
-  bigtangle-l1-ordermatch   # NEW: runnable L1 ordermatch node
-  bigtangle-l1-contract     # NEW: runnable L1 contract node
-  bigtangle-bridge          # NEW: shared anchor + peg logic (used by all L1s)
+    layer0-mcmc               # L0 MCMC engine + reward/tip tests
+    layer1-mcmc               # L1 MCMC engine + order/contract consensus tests
+   bigtangle-subtangle       # → renamed conceptually to the L1 runtime template
+   layer1-server             # CURRENT: combined runnable L1 ordermatch + contract node
+   bigtangle-l1-ordermatch   # FUTURE: split runnable L1 ordermatch node
+   bigtangle-l1-contract     # FUTURE: split runnable L1 contract node
+   bigtangle-bridge          # shared anchor + peg logic (used by all L1s)
 ```
 
-New runnable nodes (`bigtangle-l1-*`) are thin: a `ServerStart` + config that
+The current L1 runtime is `layer1-server` / `layer1-mcmc`, a combined ordermatch
++ contract chain with a restricted API surface and allow-set. Future
+`bigtangle-l1-*` runnable nodes should stay thin: a `ServerStart` + config that
 boots a *scoped* subset of beans (their block type only + the consensus loop +
 the bridge). They depend on `bigtangle-servercore` + `bigtangle-bridge` +
 `bigtangle-order` (for the engine), mirroring how `bigtangle-subtangle` depends
@@ -270,9 +273,11 @@ Goal: boot a *second* bigtangle node that is a real independent chain.
 1. Generalize `bigtangle-subtangle`'s `ServerStart`/config into a reusable
    **L1 node bootstrapper**: own `NetworkParameters` subclass (distinct genesis
    via `UtilGeneseBlock.createGenesis` with new params), own DB, own port.
-2. Create `bigtangle-l1-ordermatch`: thin runnable node, allow-set =
-   `{ORDER_*}`. It runs the full consensus loop (its own `MCMCStart` +
-   `UpdateChainService` + `RewardService`) against its own DB.
+2. Create `layer1-server` / `layer1-mcmc`: thin runnable node, allow-set =
+   `{ORDER_*, CONTRACT_*}` plus shared transfer/reward/crosstangle types. It
+   runs the full consensus loop (its own `MCMCStart` + `UpdateChainService` +
+   `RewardService`) against its own DB. A later split can extract narrower
+   `bigtangle-l1-ordermatch` and `bigtangle-l1-contract` nodes.
 3. Validate block-type scoping end-to-end: an order block is accepted on the
    ordermatch L1, rejected on L0.
 4. Flip `ServiceBase.enableOrderMatchExecutionChain` to true *only* on the L1

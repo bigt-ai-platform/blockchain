@@ -144,7 +144,8 @@ import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 @ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = Layer0MCMCStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {})
+@SpringBootTest(classes = Layer0MCMCStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+		properties = { "server.net=Test" })
 
 @TestExecutionListeners(value = { DependencyInjectionTestExecutionListener.class, MockitoTestExecutionListener.class,
 

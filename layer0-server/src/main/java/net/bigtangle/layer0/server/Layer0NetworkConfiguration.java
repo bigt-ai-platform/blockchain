@@ -5,15 +5,19 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import net.bigtangle.layer0.params.Layer0Params;
+import net.bigtangle.layer0.params.Layer0TestParams;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.config.ServerConfiguration;
 
 @Configuration
 public class Layer0NetworkConfiguration {
 
     @Bean
     @Primary
-    public NetworkParameters networkParameters() {
-        // TODO: Layer0TestParams when testnet genesis differs
+    public NetworkParameters networkParameters(ServerConfiguration serverConfiguration) {
+        if ("Test".equals(serverConfiguration.getNet())) {
+            return new Layer0TestParams();
+        }
         return new Layer0Params();
     }
 }

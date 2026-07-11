@@ -59,8 +59,11 @@ public class BlockServiceCreate {
             result.add(store.get(pred));
         long height = 0;
         for (Block b : result) {
+            if (b == null) {
+                continue;
+            }
             height = Math.max(height, b.getHeight());
         }
-        return height + 1;
+        return height == 0 ? block.getHeight() : height + 1;
     }
 }

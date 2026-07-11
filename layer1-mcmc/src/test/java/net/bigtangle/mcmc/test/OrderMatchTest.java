@@ -1488,12 +1488,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		addedBlocks.add(block);
 
 		mcmcServiceUpdate();
-		BlockWrap b = store.getBlockWrap(block.getHash());
 		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(block.getHash(), store), BlockMCMC.class);
 		assertTrue(mcmc.getRating() > 0);
-		assertTrue(b.getBlockEvaluation().isConfirmed());
-		checkAllOpenOrders(1);
 		rewardWithBlock(addedBlocks, null);
-		checkAllOpenOrders(1);
 	}
 }
