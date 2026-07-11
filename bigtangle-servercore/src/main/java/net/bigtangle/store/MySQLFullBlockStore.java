@@ -394,6 +394,16 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    blockHash varchar(255) NOT NULL,\n"
             + "    confirmed tinyint(1) NOT NULL DEFAULT 0,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n) ENGINE=InnoDB";
+
+    private static final String CREATE_VAULT_TABLE = "CREATE TABLE vault (\n"
+            + "    chainId varchar(255) NOT NULL,\n"
+            + "    utxoBlockHash varchar(255) NOT NULL,\n"
+            + "    utxoIndex bigint NOT NULL,\n"
+            + "    amount bigint NOT NULL,\n"
+            + "    tokenIdHex varchar(255),\n"
+            + "    ownerAddress varchar(255),\n"
+            + "    spent boolean NOT NULL DEFAULT false,\n"
+            + "    PRIMARY KEY (chainId, utxoBlockHash, utxoIndex)\n) ENGINE=InnoDB";
     
     // Some indexes to speed up stuff
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) USING HASH";
@@ -459,6 +469,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MATCHING_LAST_TABLE);
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
         sqlStatements.add(CREATE_ANCHOR_TABLE);
+        sqlStatements.add(CREATE_VAULT_TABLE);
         return sqlStatements;
     }
 
@@ -495,8 +506,14 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
            updateTables(anchorTable);
            dbupdateversion("06");
        }
+       if("06".equals(ver)) {
+           List<String> vaultTable = new ArrayList<String>();
+           vaultTable.add(CREATE_VAULT_TABLE);
+           updateTables(vaultTable);
+           dbupdateversion("07");
+       }
       
-    }
+     }
     @Override
     protected List<String> getCreateIndexesSQL() {
         List<String> sqlStatements = new ArrayList<String>();

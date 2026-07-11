@@ -405,6 +405,16 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    confirmed boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n)";
 
+    private static final String CREATE_VAULT_TABLE = "CREATE TABLE vault (\n"
+            + "    chainId varchar(255) NOT NULL,\n"
+            + "    utxoBlockHash varchar(255) NOT NULL,\n"
+            + "    utxoIndex bigint NOT NULL,\n"
+            + "    amount bigint NOT NULL,\n"
+            + "    tokenIdHex varchar(255),\n"
+            + "    ownerAddress varchar(255),\n"
+            + "    spent boolean NOT NULL DEFAULT false,\n"
+            + "    PRIMARY KEY (chainId, utxoBlockHash, utxoIndex)\n)";
+
     // Some indexes to speed up stuff
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) ";
     private static final String CREATE_OUTPUTS_TOADDRESS_INDEX = "CREATE INDEX outputs_toaddress_idx ON outputs (toaddress) ";
@@ -473,6 +483,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MATCHING_LAST_TABLE);
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
         sqlStatements.add(CREATE_ANCHOR_TABLE);
+        sqlStatements.add(CREATE_VAULT_TABLE);
         return sqlStatements;
     }
 
@@ -510,8 +521,14 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
            updateTables(anchorTable);
            dbupdateversion("06");
        }
+       if("06".equals(ver)) {
+           List<String> vaultTable = new ArrayList<String>();
+           vaultTable.add(CREATE_VAULT_TABLE);
+           updateTables(vaultTable);
+           dbupdateversion("07");
+       }
       
-    }
+     }
     @Override
     protected List<String> getCreateIndexesSQL() {
         List<String> sqlStatements = new ArrayList<String>();

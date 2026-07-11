@@ -55,6 +55,7 @@ import net.bigtangle.ordermatch.MatchResult;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.data.AnchorRecord;
+import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
@@ -3211,6 +3212,65 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
+	}
+
+	@Override
+	public void saveVaultUTXO(VaultRecord vault) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(INSERT_VAULT_SQL)) {
+			s.setString(1, vault.getChainId());
+			s.setString(2, vault.getUtxoBlockHash().toString());
+			s.setLong(3, vault.getUtxoIndex());
+			s.setLong(4, vault.getAmount());
+			s.setString(5, vault.getTokenIdHex());
+			s.setString(6, vault.getOwnerAddress());
+			s.setBoolean(7, vault.isSpent());
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<VaultRecord> getVaultUTXOsByChainId(String chainId, boolean spent) throws BlockStoreException {
+		List<VaultRecord> result = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_VAULT_BY_CHAINID_SQL)) {
+			s.setString(1, chainId);
+			s.setBoolean(2, spent);
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.add(setVaultRecord(rs));
+				}
+			}
+			return result;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public void markVaultUTXOSpent(String chainId, Sha256Hash utxoBlockHash, long utxoIndex) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_VAULT_SPENT_SQL)) {
+			s.setBoolean(1, true);
+			s.setString(2, chainId);
+			s.setString(3, utxoBlockHash.toString());
+			s.setLong(4, utxoIndex);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	private VaultRecord setVaultRecord(ResultSet rs) throws SQLException {
+		VaultRecord v = new VaultRecord();
+		v.setChainId(rs.getString("chainId"));
+		String hash = rs.getString("utxoBlockHash");
+		if (hash != null) v.setUtxoBlockHash(Sha256Hash.wrap(hash));
+		v.setUtxoIndex(rs.getLong("utxoIndex"));
+		v.setAmount(rs.getLong("amount"));
+		v.setTokenIdHex(rs.getString("tokenIdHex"));
+		v.setOwnerAddress(rs.getString("ownerAddress"));
+		v.setSpent(rs.getBoolean("spent"));
+		return v;
 	}
 
 	private AnchorRecord setAnchorRecord(ResultSet rs) throws SQLException {

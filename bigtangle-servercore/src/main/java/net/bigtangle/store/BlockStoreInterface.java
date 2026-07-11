@@ -47,6 +47,7 @@ import net.bigtangle.ordermatch.MatchResult;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.AnchorRecord;
+import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
@@ -528,5 +529,11 @@ public interface BlockStoreInterface {
 	AnchorRecord getAnchorByBlockHash(Sha256Hash blockHash) throws BlockStoreException;
 
 	void updateAnchorConfirmed(String chainId, long l1Height, boolean confirmed) throws BlockStoreException;
+
+	void saveVaultUTXO(VaultRecord vault) throws BlockStoreException;
+
+	List<VaultRecord> getVaultUTXOsByChainId(String chainId, boolean spent) throws BlockStoreException;
+
+	void markVaultUTXOSpent(String chainId, Sha256Hash utxoBlockHash, long utxoIndex) throws BlockStoreException;
 
 }

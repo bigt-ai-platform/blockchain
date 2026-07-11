@@ -458,6 +458,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_LATEST_ANCHOR_BY_CHAINID_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? ORDER BY l1Height DESC LIMIT 1";
 	protected final String SELECT_ANCHOR_BY_BLOCKHASH_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE blockHash = ?";
 	protected final String UPDATE_ANCHOR_CONFIRMED_SQL = "UPDATE anchor SET confirmed = ? WHERE chainId = ? AND l1Height = ?";
+	protected final String INSERT_VAULT_SQL = "INSERT INTO vault (chainId, utxoBlockHash, utxoIndex, amount, tokenIdHex, ownerAddress, spent) VALUES (?, ?, ?, ?, ?, ?, ?)";
+	protected final String SELECT_VAULT_BY_CHAINID_SQL = "SELECT chainId, utxoBlockHash, utxoIndex, amount, tokenIdHex, ownerAddress, spent FROM vault WHERE chainId = ? AND spent = ?";
+	protected final String UPDATE_VAULT_SPENT_SQL = "UPDATE vault SET spent = ? WHERE chainId = ? AND utxoBlockHash = ? AND utxoIndex = ?";
 
 	protected NetworkParameters params;
 	protected Connection conn;
@@ -586,6 +589,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_MATCHINGLASTDAY_TABLE);
 		sqlStatements.add(DROP_ACCOUNT_TABLE);
 		sqlStatements.add("DROP TABLE IF EXISTS anchor");
+		sqlStatements.add("DROP TABLE IF EXISTS vault");
 		return sqlStatements;
 	}
 
