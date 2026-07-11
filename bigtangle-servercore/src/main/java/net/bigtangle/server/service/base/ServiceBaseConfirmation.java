@@ -50,6 +50,7 @@ import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlock;
 import net.bigtangle.core.SpentBlockData;
 import net.bigtangle.core.Token;
+import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.TokensumsMap;
 import net.bigtangle.core.Transaction;
@@ -64,6 +65,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.data.Contractresult;
+import net.bigtangle.server.service.base.handler.ContractConnectSupport;
 import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
 import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
 import net.bigtangle.server.service.base.handler.SolidityContext;
@@ -1189,6 +1191,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			confirmReward(block, confirmation, blockStore);
 			if (!enableOrderMatchExecutionChain(block.getBlock())) {
 				confirmOrderMatching(block, confirmation, blockStore);
+				confirmContractExecution(block, confirmation, blockStore);
 			}
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			break;
@@ -1328,6 +1331,82 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		blockStore.updateOrderConfirmed(matchingResult.getRemainingOrders(), false);
 		// Update the matching history in db
 		removeMatchingEvents(matchingResult.getOutputTx().getHash(), blockStore);
+	}
+
+	/**
+	 * Applies inline contract execution state changes during reward confirmation
+	 * when the execution chain is disabled. The contract results were already
+	 * computed during reward creation; this method applies the state transitions
+	 * (mark events spent, confirm outputs, update contract results).
+	 */
+	private void confirmContractExecution(BlockWrap blockWrap, boolean confirmation,
+			BlockStoreInterface blockStore) throws BlockStoreException {
+		try {
+			if (!confirmation) return;
+			RewardInfo rewardInfo = new RewardInfo()
+					.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
+			if (rewardInfo.getContractResult() == null
+					|| rewardInfo.getContractResult().equals(Sha256Hash.ZERO_HASH)) {
+				return;
+			}
+			ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+					cacheBlockService, jsonmapper);
+			long cutoff = serviceBase.getCurrentCutoffHeight(
+					cacheBlockService.getMaxConfirmedReward(blockStore), blockStore);
+			Set<BlockWrap> refs = new HashSet<>();
+			List<BlockType> types = List.of(BlockType.BLOCKTYPE_CONTRACT_EVENT,
+					BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+			serviceBase.dagBlockHashesFrom(refs,
+					serviceBase.getBlockWrap(blockWrap.getBlock().getPrevBlockHash(), blockStore),
+					cutoff, rewardInfo.getChainlength(), types, true, false, blockStore);
+			serviceBase.dagBlockHashesFrom(refs,
+					serviceBase.getBlockWrap(blockWrap.getBlock().getPrevBranchBlockHash(), blockStore),
+					cutoff, rewardInfo.getChainlength(), types, true, false, blockStore);
+
+			List<Token> openContracts = blockStore.getTokenTypeList(TokenType.contract.ordinal());
+			for (Token contract : openContracts) {
+				Contractresult lastConfirmed = blockStore.getMaxConfirmedContractresult(contract.getTokenid());
+				if (lastConfirmed == null) continue;
+
+				ContractExecutionResult result = ContractExecutorRegistry.get()
+						.map(exec -> {
+							try {
+								return exec.executeContract(
+										(ContractConnectSupport) serviceBase, networkParameters,
+										blockWrap.getBlock(), blockStore, contract.getTokenid(),
+										lastConfirmed, serviceBase.getHashSet(refs));
+							} catch (BlockStoreException e) {
+								throw new RuntimeException(e);
+							}
+						})
+						.orElse(null);
+				if (result == null || result.getOutputTx().getOutputs().isEmpty()) continue;
+
+				for (Sha256Hash ref : result.getReferencedBlocks()) {
+					blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, true, true,
+							blockWrap.getBlockHash());
+					confirmContractEventTransaction(getBlock(ref, blockStore), true,
+							blockWrap.getBlockEvaluation().getMilestone(), blockStore);
+				}
+				blockStore.updateContractEventPrevhash(result.getPrevblockhash(), true, true,
+						blockWrap.getBlockHash());
+				for (ContractEventRecord c : result.getRemainderContractEventRecord()) {
+					c.setConfirmed(true);
+					c.setSpent(false);
+					c.setSpenderBlockHash(null);
+					c.setCollectinghash(blockWrap.getBlockHash());
+				}
+				blockStore.updateContractEventSpent(result.getRemainderContractEventRecord());
+				blockStore.updateContractresultMilestone(blockWrap.getBlockHash(),
+						blockWrap.getBlockEvaluation().getMilestone());
+				blockStore.updateContractResultConfirmed(blockWrap.getBlockHash(), true);
+				confirmTransaction(blockWrap.getBlock(), true, result.getOutputTx(), blockStore);
+				blockStore.updateContractResultSpent(result.getPrevblockhash(), blockWrap.getBlockHash(), true);
+				blockStore.updateContractEventCancelSpent(result.getCancelRecords(), blockWrap.getBlockHash(), true);
+			}
+		} catch (Exception e) {
+			logger.error("Failed to verify inline contract execution", e);
+		}
 	}
 
 	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)

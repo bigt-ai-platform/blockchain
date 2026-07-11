@@ -12,6 +12,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +27,11 @@ import com.google.common.base.Stopwatch;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Token;
+import net.bigtangle.core.TokenType;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -41,7 +47,10 @@ import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.LockObject;
+import net.bigtangle.server.service.base.handler.ContractConnectSupport;
+import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect.RewardBuilderResult;
 import net.bigtangle.server.service.base.ServiceBaseReward;
@@ -238,6 +247,12 @@ public class RewardService {
 			OrderMatchingResult ordermatchresult = serviceBase.generateOrderMatching(block, currRewardInfo, store);
 			currRewardInfo.setOrdermatchingResult(ordermatchresult.getOrderMatchingResultHash());
 			tx.setData(currRewardInfo.toByteArray());
+
+			Sha256Hash contractResultHash = executeContractsInline(block, currRewardInfo, serviceBase, store);
+			if (contractResultHash != null) {
+				currRewardInfo.setContractResult(contractResultHash);
+				tx.setData(currRewardInfo.toByteArray());
+			}
 		} else {
 			if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
 				log.debug("   no referenced blocks skip createReward  time {} ms.",
@@ -312,6 +327,55 @@ public class RewardService {
 	 * @param block The reward block to send to the server
 	 * @throws Exception if the HTTP request fails or server rejects the block
 	 */
+	private Sha256Hash executeContractsInline(Block block, RewardInfo rewardInfo,
+			ServiceBaseReward serviceBase, BlockStoreInterface store) {
+		try {
+			long cutoff = serviceBase.getCurrentCutoffHeight(
+					cacheBlockService.getMaxConfirmedReward(store), store);
+			List<Token> openContracts = store.getTokenTypeList(TokenType.contract.ordinal());
+			Sha256Hash combinedHash = Sha256Hash.ZERO_HASH;
+
+			for (Token contract : openContracts) {
+				Contractresult lastConfirmed = store.getMaxConfirmedContractresult(contract.getTokenid());
+				if (lastConfirmed == null) continue;
+
+				Set<BlockWrap> refs = new HashSet<>();
+				List<BlockType> types = List.of(BlockType.BLOCKTYPE_CONTRACT_EVENT,
+						BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+				serviceBase.dagBlockHashesFrom(refs,
+						serviceBase.getBlockWrap(block.getPrevBlockHash(), store),
+						cutoff, rewardInfo.getChainlength(), types, true, false, store);
+				serviceBase.dagBlockHashesFrom(refs,
+						serviceBase.getBlockWrap(block.getPrevBranchBlockHash(), store),
+						cutoff, rewardInfo.getChainlength(), types, true, false, store);
+
+				ContractExecutionResult result = ContractExecutorRegistry.get()
+						.map(exec -> {
+							try {
+								return exec.executeContract(
+										(ContractConnectSupport) serviceBase, networkParameters,
+										block, store, contract.getTokenid(),
+										lastConfirmed, serviceBase.getHashSet(refs));
+							} catch (BlockStoreException e) {
+								throw new RuntimeException(e);
+							}
+						})
+						.orElse(null);
+
+				if (result != null && !result.getOutputTx().getOutputs().isEmpty()) {
+					byte[] combined = new byte[combinedHash.getBytes().length + result.getOutputTxHash().getBytes().length];
+					System.arraycopy(combinedHash.getBytes(), 0, combined, 0, combinedHash.getBytes().length);
+					System.arraycopy(result.getOutputTxHash().getBytes(), 0, combined, combinedHash.getBytes().length, result.getOutputTxHash().getBytes().length);
+					combinedHash = Sha256Hash.twiceOf(combined);
+				}
+			}
+			return combinedHash;
+		} catch (Exception e) {
+			log.warn("Inline contract execution failed", e);
+			return null;
+		}
+	}
+
 	private void sendBlockToServer(Block block, BlockStoreInterface store) throws Exception {
 		// Get the server URL from configuration (e.g., "http://test-bigtangle-server:8088")
 		String serverUrl = serverConfiguration.getServerurl();
