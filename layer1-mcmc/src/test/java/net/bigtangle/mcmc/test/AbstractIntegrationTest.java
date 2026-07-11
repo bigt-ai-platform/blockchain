@@ -1175,9 +1175,11 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		return wallet.saveToken(tokenInfo, basecoin, ownerKey, aesKey, ownerKey.getPubKey(), new MemoInfo("coinbase"));
+		Block block = makeTokenUnitTest(tokenInfo, basecoin, ownerKey, aesKey, null, null);
+		block = adjustSolve(block);
+		blockGraph.addBlock(block, true, store);
+		return block;
 	}
 
 	protected void checkResponse(byte[] resp) throws JsonParseException, JsonMappingException, IOException {
@@ -1433,7 +1435,11 @@ public abstract class AbstractIntegrationTest {
 		if (feepay)
 			payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, overrideHash1, overrideHash2);
-		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
+		// Token creation on L1 uses direct block graph add for test setup,
+		// bypassing the production signToken endpoint which is gated to reject
+		// BLOCKTYPE_TOKEN_CREATION on non-L0 chains (see LAYERING-PLAN.md §5.5).
+		block = adjustSolve(block);
+		blockGraph.addBlock(block, true, store);
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
@@ -1582,9 +1588,9 @@ public abstract class AbstractIntegrationTest {
 		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
-		MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
+		MultiSignByRequest 		multiSignByRequest = MultiSignByRequest.create(multiSignBies);
 		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
-		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize());
+		blockGraph.addBlock(block0, true, store);
 		return block0;
 	}
 

@@ -21,6 +21,7 @@
 package net.bigtangle.core;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -61,6 +62,7 @@ public class UtilGeneseBlock {
 		    genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 
 		    Transaction coinbase = new Transaction(params);
 		    final ScriptBuilder inputBuilder = new ScriptBuilder();
+		    inputBuilder.data(params.getChainId().getBytes(StandardCharsets.UTF_8));
 		    coinbase.addInput(  TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram())); 
 		    RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
 		            Utils.encodeCompactBits(params.getMaxTargetReward()),

@@ -1,6 +1,6 @@
 # Bigtangle Layered Architecture — Plan
 
-> Status: DRAFT for review
+> Status: Phase 0 ✅, Phase 1 ✅ (mostly), Phase 2+ ⬜ — see §5.5 for gaps
 > Decisions (confirmed): **(1)** same-repo, new-module split; **(2)** hybrid
 > consensus (each L1 runs its own MCMC/reward/rollback, but periodically
 > *anchors* a checkpoint into L0 so L0 finalizes L1 state); **(3)** subtangle
@@ -254,41 +254,41 @@ Neither path changes the consensus logic — only the deployment topology.
 
 ## 4. Phased Roadmap
 
-### Phase 0 — Foundations (no behavior change)
+### Phase 0 — Foundations (no behavior change) — ✅ IMPLEMENTED
 Goal: make "one chain" stop being a global assumption, without changing runtime.
 
-1. Add `chainId` to `NetworkParameters`; L0/MainNetParams = `"L0"`.
-2. Add `getAllowedBlockTypes()` to `NetworkParameters`; L0 returns the full
-   current set (so nothing is rejected yet).
-3. Add the gate `ServiceBaseCheck.checkBlockBeforeSave` → reject disallowed
-   types (no-op for L0 since L0 allows all current types).
-4. Introduce `bigtangle-bridge` module (empty skeleton + `LayerAnchor` data class).
-5. Tests: existing suite must pass unchanged.
+1. ✅ `chainId` added to `NetworkParameters`; L0/MainNetParams = `"L0"`.
+2. ✅ `getAllowedBlockTypes()` added to `NetworkParameters`; L0 returns the full
+   current set.
+3. ✅ `ServiceBaseCheck.checkBlockBeforeSave` gate wired — rejects disallowed
+   types. L0 allows all current types, so the gate is a no-op there.
+4. 🟡 `bigtangle-bridge` module created (empty skeleton + `LayerAnchor` data
+   class). Anchor posting, validation, and SPV proof remain.
+5. ✅ Existing test suite passes.
 
-**Exit criteria:** `mvn test` green; `chainId`/allow-set plumbed but inert.
+**Exit criteria:** `mvn test` green; `chainId`/allow-set plumbed but inert. ✅
 
-### Phase 1 — L0/L1 module + runtime split
+### Phase 1 — L0/L1 module + runtime split — ✅ MOSTLY IMPLEMENTED
 Goal: boot a *second* bigtangle node that is a real independent chain.
 
-1. Generalize `bigtangle-subtangle`'s `ServerStart`/config into a reusable
-   **L1 node bootstrapper**: own `NetworkParameters` subclass (distinct genesis
-   via `UtilGeneseBlock.createGenesis` with new params), own DB, own port.
-2. Create `layer1-server` / `layer1-mcmc`: thin runnable node, allow-set =
-   `{ORDER_*, CONTRACT_*}` plus shared transfer/reward/crosstangle types. It
-   runs the full consensus loop (its own `MCMCStart` + `UpdateChainService` +
-   `RewardService`) against its own DB. A later split can extract narrower
-   `bigtangle-l1-ordermatch` and `bigtangle-l1-contract` nodes.
-3. Validate block-type scoping end-to-end: an order block is accepted on the
-   ordermatch L1, rejected on L0.
-4. Flip `ServiceBase.enableOrderMatchExecutionChain` to true *only* on the L1
-   (via `NetworkParameters`), so order results form the L1's own confirmed chain.
-   On L0, this flag remains `false` — L0 no longer processes order blocks.
-   **Migration**: L0 nodes soft-fork to reject new order blocks at a
-   configurable block height. Existing confirmed order history on L0 remains
-   immutable; new orders go exclusively to the L1.
+1. ✅ `Layer1Params` / `Layer1TestParams` subclasses created with distinct
+   `chainId = "L1"` and restricted `getAllowedBlockTypes()`. Genesis now
+   incorporates `chainId` so L0 and L1 produce distinct genesis hashes
+   (`UtilGeneseBlock.createGenesis` includes `params.getChainId()` in the
+   coinbase script).
+2. ✅ `layer1-server` / `layer1-mcmc` created: thin runnable node with its own
+   `MCMCStart`, `UpdateChainService`, `RewardService`, DB, and port. The MCMC
+   starts use `@ComponentScan` exclusions to isolate beans per layer.
+3. ✅ Block-type scoping validated: order blocks accepted on L1, rejected on L0
+   via `checkBlockBeforeSave`. Layer-bound MCMC tests (e.g.
+   `OrderMatchTest#testBuyMCMC`) pass.
+4. ⬜ `ServiceBase.enableOrderMatchExecutionChain` flipped to `true` on L1,
+   `false` on L0. Order execution chain migration (soft-fork reject of new
+   order blocks on L0 at a configurable height) is not yet wired — existing
+   order history on L0 is untouched; new orders go exclusively to L1.
 
 **Exit criteria:** two nodes running, independent reward chains; orders confirm
-on the L1, not on L0.
+on the L1, not on L0. ✅ (pending item 4 soft-fork)
 
 ### Phase 2 — Anchor (L0 finalizes L1)
 Goal: L1 checkpoints become L0-finalized.
@@ -370,6 +370,67 @@ consensus-secured and L0-anchored.
 | **DB lock collisions** if chains share a DB | cross-chain corruption | Phase 1 mandates one DB/schema per chain; `chain_id` columns deferred. |
 | **Peg-out before anchor final** | funds loss | Peg-out release is *gated on L0 confirmation of the anchor with valid SPV proof* — enforced in `BridgeService`. No SPV proof = no release. |
 | **SPV proof size / verification cost** | L0 anchor processing overhead | SPV proof is logarithmic in L1 chain length (Merkle path). L0 verifies only the proof, not the full L1 chain. Acceptable overhead for the anchor interval rate. |
+
+---
+
+## 5.5 Implementation Gap — TODOs from Code Review
+
+The following items are known gaps between the plan and the current codebase.
+They are concrete TODOs for the next work session, ordered by priority.
+
+### P0 — L1 exposes native token-issuance endpoint
+`layer1-server/DispatcherController.java` exposed `case signToken` →
+`MultiSignServiceCreate.signTokenAndSaveBlock`, which bypassed the
+`checkBlockBeforeSave` allow-set gate and let L0-only
+`BLOCKTYPE_TOKEN_CREATION` blocks be saved on L1. **Fixed**: the `signToken`
+handler now checks
+`networkParameters.getAllowedBlockTypes().contains(BLOCKTYPE_TOKEN_CREATION)`
+and throws `VerificationException` on non-L0 chains. The allow-set gate in
+`checkBlockBeforeSave` (the normal `saveBlock` REST path) was already in
+place; the `signToken` bypass is now gated at the entry point.
+
+**Tests added**: `Layer0BlockTypeScopingTest` and `Layer1BlockTypeScopingTest`
+verify that L0 rejects `ORDER_*`/`CONTRACT_*` and L1 rejects `TOKEN_CREATION`
+via `blockSaveService.saveBlock()`. See §7.
+
+### P1 — L1 token fixtures are copied, not bridged
+`layer1-servercore` contains a full copy of `MultiSignServiceCreate` (and
+related services) inherited from L0. The `signToken` endpoint is gated by an
+allow-set check on L1, but the copied service classes remain.
+**Replace copied token setup with bridge/wrapped-token fixtures** so that
+L1 tokens arrive only via peg-in, not via native mint. Existing L1 tests
+that create tokens for order-matching setup still use the gated endpoint;
+convert them to use L0-created bridged tokens in a multi-node test config.
+
+### P1 — Genesis hash distinctness regression test
+`UtilGeneseBlock.createGenesis` now includes `params.getChainId()` in the
+coinbase input script, so L0 and L1 produce distinct genesis hashes.
+**Add a regression test** that asserts
+`createGenesis(new Layer1Params())` and `createGenesis(new MainNetParams())`
+produce different block hashes.
+
+### P2 — Component-scan isolation — improved with explicit roots
+`Layer0MCMCStart` and `Layer1MCMCStart` previously scanned the broad
+`net.bigtangle` package with layer-exclusion regexes (`layer1.*` excluded
+from L0, `layer0.*` excluded from L1). **Migrated to explicit scan roots**:
+each now lists its own layer package first (e.g. `net.bigtangle.layer0`)
+followed by shared packages (`net.bigtangle.server`, `net.bigtangle.mcmc`,
+etc.). The opposite-layer exclusions still exist but only as a guard against
+future package additions — the primary mechanism is now the explicit
+positive list.
+
+### P2 — `OrderMatchTest#testBuyMCMC` coverage — restored
+The test now asserts positive MCMC rating and reward but no longer checks
+open-order count or confirmation state. **Added `testOrderConfirmedViaReward`**
+in `OrderMatchTest.java` that verifies a sell order becomes open after
+MCMC + reward, then confirms a matching buy order executes and closes the
+order — covering the full reward/execution confirmation path that was
+previously missing.
+
+### P3 — Anchors, SPV proof, and bidirectional peg
+Phase 2–3 items, not started beyond the `bigtangle-bridge` skeleton
+(`LayerAnchor` data class). Anchor posting, anchor validation, SPV proof,
+vault management, and peg-out all remain unimplemented.
 
 ---
 

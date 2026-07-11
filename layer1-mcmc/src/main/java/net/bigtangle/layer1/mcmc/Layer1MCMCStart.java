@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @ComponentScan(basePackages = { "net.bigtangle" },
                excludeFilters = @ComponentScan.Filter(type = org.springframework.context.annotation.FilterType.REGEX,
-                                                       pattern = "net\\.bigtangle\\.layer0\\..*|net\\.bigtangle\\.layer1\\.server\\..*|net\\.bigtangle\\.server\\.config\\.NetConfiguration|net\\.bigtangle\\.server\\.service\\.schedule\\..*|net\\.bigtangle\\.server\\.ServerStart|net\\.bigtangle\\.server\\.service\\.RewardService|net\\.bigtangle\\.server\\.service\\.MCMCService|net\\.bigtangle\\.server\\.service\\.TipsService"))
+                                                        pattern = "net\\.bigtangle\\.layer0\\..*|net\\.bigtangle\\.layer1\\.server\\..*|net\\.bigtangle\\.server\\.config\\.NetConfiguration|net\\.bigtangle\\.server\\.service\\.schedule\\..*|net\\.bigtangle\\.server\\.ServerStart|net\\.bigtangle\\.server\\.service\\.RewardService|net\\.bigtangle\\.server\\.service\\.MCMCService|net\\.bigtangle\\.server\\.service\\.TipsService"))
 @EnableScheduling
 @EnableCaching
 public class Layer1MCMCStart {

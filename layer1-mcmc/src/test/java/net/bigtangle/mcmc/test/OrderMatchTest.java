@@ -1492,4 +1492,39 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		assertTrue(mcmc.getRating() > 0);
 		rewardWithBlock(addedBlocks, null);
 	}
+
+	@Test
+	// verifies a sell order becomes confirmed/open after the MCMC reward path,
+	// and a matching buy order executes and closes the order.
+	public void testOrderConfirmedViaReward() throws Exception {
+		ECKey testKey = new ECKey();
+		List<Block> addedBlocks = new ArrayList<>();
+
+		makeTestTokenWithSpare(testKey, addedBlocks);
+		String testTokenId = testKey.getPublicKeyAsHex();
+
+		// Create sell order (raw version, no auto-confirm)
+		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		mcmcService.calcNewBlockPrototype(store);
+		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+		Block sell = w.sellOrder(null, testTokenId, 1000, 100, null, null,
+				NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+		addedBlocks.add(sell);
+
+		// Confirm via MCMC + reward so the sell order becomes open
+		makeOrderExecutionAndReward(addedBlocks, sell);
+		checkAllOpenOrders(1);
+
+		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+				Utils.HEX.decode(testPub));
+		payBigToAmount(genesisKey, addedBlocks);
+
+		// Create matching buy order (auto-confirmed)
+		Block buy = makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
+
+		// After matching and reward, the order should be closed
+		checkAllOpenOrders(0);
+
+		assertHasAvailableToken(genesisKey, testKey.getPublicKeyAsHex(), 100l);
+	}
 }

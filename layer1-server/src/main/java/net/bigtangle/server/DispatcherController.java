@@ -37,11 +37,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.net.MyGZIPOutputStream;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
@@ -384,8 +386,13 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+
 			case signToken: {
 				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
+				if (!networkParameters.getAllowedBlockTypes().contains(BlockType.BLOCKTYPE_TOKEN_CREATION)) {
+					throw new VerificationException(
+							"Token creation is not allowed on chain " + networkParameters.getChainId());
+				}
 				this.multiSignServiceCreate.signTokenAndSaveBlock(block, store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
