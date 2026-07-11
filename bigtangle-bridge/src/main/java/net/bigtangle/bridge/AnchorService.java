@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -100,11 +101,13 @@ public class AnchorService {
     }
 
     /**
-     * Called after an anchor's CROSSTANGLE block is confirmed on L0.
-     * Marks the anchor record as confirmed and credits the anchor reward
-     * to the L1 milestone node (if configured).
+     * Called after an anchor's CROSSTANGLE block is confirmed or unconfirmed on L0.
+     * Marks the anchor record as confirmed (or unconfirmed on rollback) and
+     * credits the anchor reward to the L1 milestone node on initial confirmation.
+     *
+     * @param confirmed true if confirming, false if rolling back (reorg)
      */
-    public void confirmAnchor(Block block, BlockStoreInterface store) throws Exception {
+    public void confirmAnchor(Block block, boolean confirmed, BlockStoreInterface store) throws Exception {
         if (block.getBlockType() != BlockType.BLOCKTYPE_CROSSTANGLE) {
             return;
         }
@@ -113,11 +116,51 @@ public class AnchorService {
             logger.warn("No anchor record found for confirmed CROSSTANGLE block {}", block.getHashAsString());
             return;
         }
-        if (anchor.isConfirmed()) {
+        if (anchor.isConfirmed() == confirmed) {
             return;
         }
-        store.updateAnchorConfirmed(anchor.getChainId(), anchor.getL1Height(), true);
-        logger.info("Anchor confirmed for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+        store.updateAnchorConfirmed(anchor.getChainId(), anchor.getL1Height(), confirmed);
+        if (confirmed) {
+            logger.info("Anchor confirmed for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+            creditAnchorReward(anchor, store);
+        } else {
+            logger.info("Anchor unconfirmed (reorg) for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+        }
+    }
+
+    /**
+     * Credits the anchor reward from the L0 fee pool to the L1 milestone node.
+     * The milestone node's address is derived from the configured public key.
+     * Creates a simple BLOCKTYPE_TRANSFER and saves it locally on L0.
+     */
+    private void creditAnchorReward(AnchorRecord anchor, BlockStoreInterface store) throws Exception {
+        long rewardAmount = anchorConfiguration.getRewardAmount();
+        if (rewardAmount <= 0) {
+            return;
+        }
+        String feePoolPriKeyHex = anchorConfiguration.getFeePoolPriKeyHex();
+        String milestonePubKeyHex = anchorConfiguration.getPubKeyHex();
+        if (feePoolPriKeyHex == null || feePoolPriKeyHex.isEmpty()
+                || milestonePubKeyHex == null || milestonePubKeyHex.isEmpty()) {
+            logger.debug("Anchor reward not configured, skipping");
+            return;
+        }
+
+        ECKey feePoolKey = ECKey.fromPrivate(Utils.HEX.decode(feePoolPriKeyHex));
+        ECKey milestoneKey = ECKey.fromPublicOnly(Utils.HEX.decode(milestonePubKeyHex));
+
+        Block b = cacheBlockPrototypeService.getBlockPrototype(store);
+        b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+
+        Transaction tx = new Transaction(networkParameters);
+        Coin rewardCoin = Coin.valueOf(rewardAmount, NetworkParameters.BIGTANGLE_TOKENID);
+        tx.addOutput(rewardCoin, milestoneKey.toAddress(networkParameters));
+        b.addTransaction(tx);
+        b.solve();
+
+        blockSaveService.saveBlock(b, store);
+        logger.info("Anchor reward of {} credited to milestone node for chain {}",
+                rewardAmount, anchor.getChainId());
     }
 
     public void validateAndSaveAnchor(LayerAnchor anchor, Sha256Hash l0BlockHash, BlockStoreInterface store)

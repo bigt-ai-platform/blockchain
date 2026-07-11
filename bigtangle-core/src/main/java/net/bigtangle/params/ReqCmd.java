@@ -33,5 +33,6 @@ public enum ReqCmd {
 	addAccessGrant, deleteAccessGrant,
     // check point value
     getCheckPoint,
-    serverinfolist;
+    serverinfolist,
+    getAnchors;
 }

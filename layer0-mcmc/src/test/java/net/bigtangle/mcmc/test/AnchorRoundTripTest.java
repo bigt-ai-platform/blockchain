@@ -113,11 +113,44 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         assertNotNull(before);
         assertEquals(false, before.isConfirmed());
 
-        anchorService.confirmAnchor(crosstangleBlock, store);
+        anchorService.confirmAnchor(crosstangleBlock, true, store);
 
         AnchorRecord after = store.getAnchorByChainIdAndHeight("L1", 1);
         assertNotNull(after);
         assertEquals(true, after.isConfirmed(), "Anchor must be marked confirmed after confirmAnchor");
+    }
+
+    @Test
+    public void testUnconfirmAnchor() throws Exception {
+        anchorConfiguration.setActive(true);
+        anchorConfiguration.setPubKeyHex(TEST_PUB);
+        anchorConfiguration.setPriKeyHex(TEST_PRIV);
+
+        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
+                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Sha256Hash l1Hash = genesis.getHash();
+        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER());
+
+        Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
+        crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName("LayerAnchor");
+        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        crosstangleBlock.addTransaction(tx);
+        crosstangleBlock.solve();
+
+        store.saveAnchor(new AnchorRecord("L1", l1Hash, 1, null,
+                Utils.HEX.encode(sig.encodeToDER()), crosstangleBlock.getHash(), true));
+
+        anchorService.confirmAnchor(crosstangleBlock, false, store);
+
+        AnchorRecord after = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(after);
+        assertEquals(false, after.isConfirmed(),
+                "Anchor must be marked unconfirmed after confirmAnchor(false)");
     }
 
     @Test
@@ -143,7 +176,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         crosstangleBlock.solve();
 
         anchorService.processReceivedAnchor(crosstangleBlock, store);
-        anchorService.confirmAnchor(crosstangleBlock, store);
+        anchorService.confirmAnchor(crosstangleBlock, true, store);
 
         AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
         assertNotNull(saved);

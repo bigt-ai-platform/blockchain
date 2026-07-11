@@ -44,6 +44,7 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.net.MyGZIPOutputStream;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.ErrorResponse;
@@ -557,7 +558,20 @@ public class DispatcherController {
 			}
 				break;
 
- 
+			case getAnchors: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String chainId = (String) request.get("chainId");
+				long sinceHeight = Long.parseLong(request.get("sinceHeight") + "");
+				int limit = Integer.parseInt(request.get("limit") + "");
+				List<AnchorRecord> anchors = storeService.getStore().getAnchorsByChainId(
+						chainId, sinceHeight, limit);
+				String json = Json.jsonmapper().writeValueAsString(anchors);
+				httpServletResponse.setCharacterEncoding("UTF-8");
+				httpServletResponse.getOutputStream().write(json.getBytes(StandardCharsets.UTF_8));
+			}
+				break;
+
 			default:
 				break;
 			}

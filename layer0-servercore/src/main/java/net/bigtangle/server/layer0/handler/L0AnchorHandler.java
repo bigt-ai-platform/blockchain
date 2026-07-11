@@ -34,8 +34,10 @@ public class L0AnchorHandler implements BlockTypeHandler {
         ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
         ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
         try {
-            anchorService.processReceivedAnchor(ctx.block(), ctx.store());
-            anchorService.confirmAnchor(ctx.block(), ctx.store());
+            if (ctx.confirmation()) {
+                anchorService.processReceivedAnchor(ctx.block(), ctx.store());
+            }
+            anchorService.confirmAnchor(ctx.block(), ctx.confirmation(), ctx.store());
         } catch (BlockStoreException e) {
             throw e;
         } catch (Exception e) {
