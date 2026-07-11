@@ -30,6 +30,6 @@ public class OrderMatchL1TestParams extends TestParams {
 
     @Override
     public boolean isOrderMatchExecutionChainEnabled() {
-        return true;
+        return false;
     }
 }

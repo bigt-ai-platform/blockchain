@@ -37,6 +37,6 @@ public class OrderMatchL1Params extends MainNetParams {
 
     @Override
     public boolean isOrderMatchExecutionChainEnabled() {
-        return true;
+        return false;
     }
 }
