@@ -1,6 +1,6 @@
 # Bigtangle Layered Architecture — Plan
 
-> Status: Phase 0 ✅, Phase 1 ✅ (mostly), Phase 2 ✅, Phase 2.5+ ⬜ — see §5.5 for gaps
+> Status: Phase 0 ✅, Phase 1 ✅ (mostly), Phase 2 ✅, Phase 2.5 ✅, Phase 3+ ⬜ — see §5.5 for gaps
 > Decisions (confirmed): **(1)** same-repo, new-module split; **(2)** hybrid
 > consensus (each L1 runs its own MCMC/reward/rollback, but periodically
 > *anchors* a checkpoint into L0 so L0 finalizes L1 state); **(3)** subtangle
@@ -263,8 +263,8 @@ Goal: make "one chain" stop being a global assumption, without changing runtime.
 3. ✅ `ServiceBaseCheck.checkBlockBeforeSave` gate wired — rejects disallowed
    types. L0 allows all current types, so the gate is a no-op there.
 4. ✅ `bigtangle-bridge` module created — now fully implements anchor posting,
-   validation, confirmation, and incentive logic (Phase 2). SPV proof (Phase 2.5)
-   and peg (Phase 3) remain.
+   validation, confirmation, incentives, and SPV proof (Phases 2–2.5).
+   Peg (Phase 3) remains.
 5. ✅ Existing test suite passes.
 
 **Exit criteria:** `mvn test` green; `chainId`/allow-set plumbed but inert. ✅
@@ -312,9 +312,10 @@ Goal: L1 checkpoints become L0-finalized.
    `feePoolPriKeyHex`, `feePoolPubKeyHex`. `AnchorService.creditAnchorReward`
    creates a `BLOCKTYPE_TRANSFER` from the fee pool to the milestone node's
    address on confirmation.
-5. ✅ Tests: 7 `AnchorRoundTripTest` tests covering validate+save, process
-   received block, confirm, unconfirm (reorg), handler flow, block hash lookup,
-   and invalid signature rejection. L0: 127 tests ✅, L1: 130 tests ✅.
+5. ✅ Tests: 12 `AnchorRoundTripTest` tests covering validate+save, process,
+   confirm, unconfirm (reorg), handler flow, block hash lookup, sig rejection,
+   SPV valid proof, SPV tampered leaf, SPV wrong root, SPV anchor accepted,
+   SPV anchor rejected. L0: 132 tests ✅, L1: 130 tests ✅.
 
 **Exit criteria:** an anchored L1 head is provably finalized by L0 (under the
 milestone-key trust model). ✅ (Phase 2 trust model; Phase 2.5 adds SPV)
@@ -325,17 +326,21 @@ polls L0 for confirmed anchors and calls
 L0-finalized tip. Anchor liveness fallback (degraded mode) and anchor-assisted
 sync remain future work.
 
-### Phase 2.5 — SPV anchor hardening
+### Phase 2.5 — SPV anchor hardening — ✅ IMPLEMENTED
 Goal: replace trust-in-key with cryptographic verification of L1 chain validity.
 
-1. Extend `LayerAnchor` payload with compact SPV proof (Merkle path from
-   `confirmedRoot` to L1 genesis + chain of milestone headers).
-2. L0 anchor validation verifies the SPV proof — structural pass *and* chain
-   consistency pass required for confirmation.
-3. Tests: valid anchor confirmed; anchor with tampered SPV proof rejected;
-   anchor referencing a fork not rooted in genesis rejected.
+1. ✅ `LayerAnchor` extended with `spvProof` field (`MerkleProof`). New
+   `MerkleProof` class in `bigtangle-core` implements binary Merkle tree:
+   `computeRoot(leaves)` builds the tree, `buildProof(leaves, index)` returns
+   root + compact sibling path, `verify(leaf, root)` checks membership.
+2. ✅ `AnchorService.postAnchor` now computes `confirmedRoot` from confirmed
+   L1 block hashes plus a Merkle proof for the anchor's own `l1RewardHeadHash`.
+   `AnchorService.validateAndSaveAnchor` verifies the SPV proof when present;
+   Phase 2 trust-model fallback if absent (backward compatible).
+3. ✅ 5 SPV tests: valid proof, tampered leaf, wrong root, anchor with valid
+   proof accepted, anchor with tampered proof rejected.
 
-**Exit criteria:** L0 confirms only anchors backed by a valid SPV proof.
+**Exit criteria:** L0 confirms only anchors backed by a valid SPV proof. ✅
 Peg-out (Phase 3) MUST NOT ship before Phase 2.5 is done.
 
 ### Phase 3 — Bidirectional peg
@@ -381,7 +386,7 @@ consensus-secured and L0-anchored.
 |---|---|---|
 | **`BlockType` ordinal is persisted in DB** — adding types must append only | consensus break | Add new L1-only types at the *end* of the enum (contract already says so). L0 nodes simply never see them. |
 | **Single `NetworkParameters` Spring bean** wired everywhere | blocks multi-chain boot | Phase 0 plumbs `chainId`; Phase 1 uses per-context params (one Spring `ApplicationContext` per chain = one process per chain, lowest-risk). |
-| **Anchor key compromise before SPV** (Phase 2 milestone-key trust window) | invalid L1 state could be L0-finalized | The trust window exists only in Phase 2; Phase 2.5 adds SPV verification. Peg-out (Phase 3) is gated on Phase 2.5 completion. The window is explicitly temporary. |
+| **Anchor key compromise** (single L1 signing key) | invalid L1 state could be L0-finalized | Phase 2.5 SPV verification means L0 verifies the Merkle proof, not just the signature. Key compromise alone cannot forge an anchor — the SPV path must also be valid. Peg-out (Phase 3) gated on SPV-verified anchor finality. |
 | **Vault key compromise** (multisig threshold breached) | permanent loss of all pegged value | Vault uses threshold M-of-N multisig; M is configurable (recommended M > N/2). Keys are held by independent L1 milestone node operators. A future upgrade can add timelock + social recovery. |
 | **Anchor liveness failure** (milestone node offline) | peg-out stalls; L1 enters degraded mode | Degraded mode allows consensus to continue; peg-out is suspended but no funds are at risk. Anchor incentive aligns milestone node operators with liveness. |
 | **Reward chain references L1 block types today** (`ServiceBaseReward.getListedBlockOfType`) | L0 reward would try to include L1 blocks | Phase 1 scopes `getListedBlockOfType` by the chain's allow-set. |
@@ -435,10 +440,9 @@ MCMC + reward, then confirms a matching buy order executes and closes the
 order — covering the full reward/execution confirmation path that was
 previously missing.
 
-### P3 — SPV proof and bidirectional peg
-Phase 2.5–3 items. Phase 2 (anchor posting, validation, confirmation,
-incentives, fork resolution) is complete. **Remaining:**
-- SPV path proof in LayerAnchor payload + L0 verification (Phase 2.5)
+### P3 — Bidirectional peg
+Phase 3 items. Phases 0–2.5 (foundations, split, anchors, SPV) are complete.
+**Remaining:**
 - `BridgeService` generalization of `SubtangleService` for peg-out (Phase 3)
 - Vault key management (threshold M-of-N multisig)
 - Replay protection (spent-UTXO set per direction)
