@@ -451,6 +451,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String CONTRACTEVENTCANCEL_UPDATE_SPENT_SQL = "UPDATE contracteventcancel SET spent = ?, spenderblockhash=?  WHERE blockhash = ? ";
 
+	protected final String INSERT_ANCHOR_SQL = "INSERT INTO anchor (chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?)"
+			+ duplicateInsert();
+	protected final String SELECT_ANCHOR_BY_CHAINID_HEIGHT_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height = ?";
+	protected final String SELECT_ANCHORS_BY_CHAINID_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height >= ? ORDER BY l1Height ASC";
+	protected final String SELECT_LATEST_ANCHOR_BY_CHAINID_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? ORDER BY l1Height DESC LIMIT 1";
+
 	protected NetworkParameters params;
 	protected Connection conn;
 	protected MinioService minioService;
@@ -577,6 +583,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_MATCHINGDAILY_TABLE);
 		sqlStatements.add(DROP_MATCHINGLASTDAY_TABLE);
 		sqlStatements.add(DROP_ACCOUNT_TABLE);
+		sqlStatements.add("DROP TABLE IF EXISTS anchor");
 		return sqlStatements;
 	}
 

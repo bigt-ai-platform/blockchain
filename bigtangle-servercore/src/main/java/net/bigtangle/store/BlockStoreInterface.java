@@ -46,6 +46,7 @@ import net.bigtangle.ordermatch.MatchLastdayResult;
 import net.bigtangle.ordermatch.MatchResult;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
@@ -515,5 +516,13 @@ public interface BlockStoreInterface {
 
 	SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
 			throws BlockStoreException;
+
+	void saveAnchor(AnchorRecord anchor) throws BlockStoreException;
+
+	AnchorRecord getAnchorByChainIdAndHeight(String chainId, long l1Height) throws BlockStoreException;
+
+	List<AnchorRecord> getAnchorsByChainId(String chainId, long sinceHeight, int limit) throws BlockStoreException;
+
+	AnchorRecord getLatestAnchorByChainId(String chainId) throws BlockStoreException;
 
 }

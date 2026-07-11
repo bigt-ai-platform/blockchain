@@ -395,6 +395,16 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    inserttime bigint NOT NULL,\n"
             + "    CONSTRAINT tipsqueue_pk PRIMARY KEY (hash)  \n" + ") \n";
 
+    private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE anchor (\n"
+            + "    chainId varchar(255) NOT NULL,\n"
+            + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
+            + "    l1Height bigint NOT NULL,\n"
+            + "    confirmedRoot varchar(255),\n"
+            + "    signatureHex varchar(1024),\n"
+            + "    blockHash varchar(255) NOT NULL,\n"
+            + "    confirmed boolean NOT NULL DEFAULT false,\n"
+            + "    PRIMARY KEY (chainId, l1Height)\n)";
+
     // Some indexes to speed up stuff
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) ";
     private static final String CREATE_OUTPUTS_TOADDRESS_INDEX = "CREATE INDEX outputs_toaddress_idx ON outputs (toaddress) ";
@@ -462,6 +472,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MCMC_TABLE); 
         sqlStatements.add(CREATE_MATCHING_LAST_TABLE);
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
+        sqlStatements.add(CREATE_ANCHOR_TABLE);
         return sqlStatements;
     }
 
@@ -492,6 +503,12 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
            updateTables(getCreateTablesSQL2());
            updateTables(getCreateIndexesSQL2());
            dbupdateversion("05");
+       }
+       if("05".equals(ver)) {
+           List<String> anchorTable = new ArrayList<String>();
+           anchorTable.add(CREATE_ANCHOR_TABLE);
+           updateTables(anchorTable);
+           dbupdateversion("06");
        }
       
     }

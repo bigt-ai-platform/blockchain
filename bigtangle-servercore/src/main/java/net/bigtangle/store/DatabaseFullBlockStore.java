@@ -54,6 +54,7 @@ import net.bigtangle.ordermatch.MatchLastdayResult;
 import net.bigtangle.ordermatch.MatchResult;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
+import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
@@ -3116,6 +3117,94 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			throw new BlockStoreException(e);
 		}
 
+	}
+
+	@Override
+	public void saveAnchor(AnchorRecord anchor) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(INSERT_ANCHOR_SQL)) {
+			s.setString(1, anchor.getChainId());
+			s.setString(2, anchor.getL1RewardHeadHash().toString());
+			s.setLong(3, anchor.getL1Height());
+			s.setString(4, anchor.getConfirmedRoot() != null ? anchor.getConfirmedRoot().toString() : null);
+			s.setString(5, anchor.getSignatureHex());
+			s.setString(6, anchor.getBlockHash().toString());
+			s.setBoolean(7, anchor.isConfirmed());
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public AnchorRecord getAnchorByChainIdAndHeight(String chainId, long l1Height) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_ANCHOR_BY_CHAINID_HEIGHT_SQL)) {
+			s.setString(1, chainId);
+			s.setLong(2, l1Height);
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) {
+					return setAnchorRecord(rs);
+				}
+			}
+			return null;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<AnchorRecord> getAnchorsByChainId(String chainId, long sinceHeight, int limit)
+			throws BlockStoreException {
+		List<AnchorRecord> result = new ArrayList<>();
+		String sql = SELECT_ANCHORS_BY_CHAINID_SQL + " LIMIT ?";
+		try (PreparedStatement s = getConnection().prepareStatement(sql)) {
+			s.setString(1, chainId);
+			s.setLong(2, sinceHeight);
+			s.setInt(3, limit);
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.add(setAnchorRecord(rs));
+				}
+			}
+			return result;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public AnchorRecord getLatestAnchorByChainId(String chainId) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_LATEST_ANCHOR_BY_CHAINID_SQL)) {
+			s.setString(1, chainId);
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) {
+					return setAnchorRecord(rs);
+				}
+			}
+			return null;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	private AnchorRecord setAnchorRecord(ResultSet rs) throws SQLException {
+		AnchorRecord anchor = new AnchorRecord();
+		anchor.setChainId(rs.getString("chainId"));
+		String l1RewardHeadHash = rs.getString("l1RewardHeadHash");
+		if (l1RewardHeadHash != null) {
+			anchor.setL1RewardHeadHash(Sha256Hash.wrap(l1RewardHeadHash));
+		}
+		anchor.setL1Height(rs.getLong("l1Height"));
+		String confirmedRoot = rs.getString("confirmedRoot");
+		if (confirmedRoot != null) {
+			anchor.setConfirmedRoot(Sha256Hash.wrap(confirmedRoot));
+		}
+		anchor.setSignatureHex(rs.getString("signatureHex"));
+		String blockHash = rs.getString("blockHash");
+		if (blockHash != null) {
+			anchor.setBlockHash(Sha256Hash.wrap(blockHash));
+		}
+		anchor.setConfirmed(rs.getBoolean("confirmed"));
+		return anchor;
 	}
 
 }
