@@ -47,11 +47,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockitoTestExecutionListener;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestExecutionListeners;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.support.DependencyInjectionTestExecutionListener;
-import org.springframework.test.context.support.DirtiesContextTestExecutionListener;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -63,7 +61,6 @@ import com.google.common.math.LongMath;
 import io.minio.BucketExistsArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
-import io.minio.RemoveBucketArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.Result;
 import io.minio.messages.Item;
@@ -150,10 +147,8 @@ import net.bigtangle.wallet.Wallet;
 @SpringBootTest(classes = Layer0MCMCStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {})
 
 @TestExecutionListeners(value = { DependencyInjectionTestExecutionListener.class, MockitoTestExecutionListener.class,
-		DirtiesContextTestExecutionListener.class
 
 })
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class AbstractIntegrationTest {
 
 	private static final String CONTEXT_ROOT_TEMPLATE = "http://localhost:%s/";
@@ -211,6 +206,10 @@ public abstract class AbstractIntegrationTest {
 
 	@Autowired
 	protected MinioConfig minioConfig;
+	@Autowired
+	protected MinioClient minioClient;
+	@Value("${test.minio.reset:false}")
+	private boolean resetMinioBucket;
 
 	@Autowired
 	protected transient javax.sql.DataSource dataSource;
@@ -302,7 +301,9 @@ public abstract class AbstractIntegrationTest {
 	 *                             initialised.
 	 */
 	public void resetStore() throws BlockStoreException {
-		resetBucket();
+		if (resetMinioBucket) {
+			resetBucket();
+		}
 		store.resetStore();
 		cacheBlockService.evictOutputs();
 		cacheBlockService.evictBlock();
@@ -315,12 +316,9 @@ public abstract class AbstractIntegrationTest {
 
 	public void resetBucket() throws BlockStoreException {
 		String bucketName = minioConfig.getBucketName();
-		MinioClient minioClient = MinioClient.builder().endpoint(
-				minioConfig.getMinioUrl()).credentials(minioConfig.getMinioAccessKey(), minioConfig.getMinioSecretKey())
-				.build();
 		boolean found;
 		try {
-			found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(minioConfig.getBucketName()).build());
+			found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
 
 			if (found) {
 				Iterable<Result<Item>> results = minioClient.listObjects(
