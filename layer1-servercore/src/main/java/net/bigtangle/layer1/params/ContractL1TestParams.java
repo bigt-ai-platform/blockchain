@@ -30,6 +30,6 @@ public class ContractL1TestParams extends TestParams {
 
     @Override
     public boolean isOrderMatchExecutionChainEnabled() {
-        return false;
+        return true;
     }
 }
