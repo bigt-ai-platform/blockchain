@@ -62,8 +62,6 @@ import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.layer1.service.MultiSignService;
 import net.bigtangle.layer1.service.MultiSignServiceCreate;
 import net.bigtangle.layer1.service.OutputService;
-import net.bigtangle.layer1.service.OrderTickerService;
-import net.bigtangle.layer1.service.OrderdataService;
 import net.bigtangle.layer1.service.TokenDomainnameService;
 import net.bigtangle.layer1.service.TokensService;
  
@@ -95,11 +93,7 @@ public class DispatcherController {
 	@Autowired
 	private SubtanglePermissionService subtanglePermissionService;
 	@Autowired
-	private OrderdataService orderdataService;
-	@Autowired
 	ServerConfiguration serverConfiguration;
-	@Autowired
-	private OrderTickerService orderTickerService;
 	@Autowired
 	private TokenDomainnameService tokenDomainnameService;
 	@Autowired
@@ -433,46 +427,6 @@ public class DispatcherController {
 				} else {
 					this.outPrintJSONString(httpServletResponse,
 							this.tokenDomainnameService.queryDomainnameBlockHash(domainname, store), watch, reqCmd);
-				}
-			}
-				break;
-			case getOrders: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-                String address = (String) request.get("address");
-				String tokenid = (String) request.get("tokenid");
-                List<String> addresses = (List<String>) request.get("addresses");
-				AbstractResponse response = orderdataService.getOrderdataList(address, addresses, tokenid,
-						store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getOrdersTicker: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				Long startDate = (Long) request.get("startDate");
-				Long endDate = (Long) request.get("endDate");
-				Integer count = (Integer) request.get("count");
-				String basetoken = (String) request.get("basetoken");
-				String interval = (String) request.get("interval");
-				Set<String> tokenids = new HashSet<>((List<String>) request.get("tokenids"));
-				// logger.debug(request.toString() );
-
-				if (count != null) {
-					// logger.debug("count"+count);
-					AbstractResponse response = orderTickerService.getLastMatchingEvents(tokenids, basetoken, store);
-					this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-				} else {
-					AbstractResponse response;
-					if ("43200".equals(interval)) {
-						response = orderTickerService.getTimeAVBGBetweenMatchingEvents(tokenids, basetoken, null, null,
-								store);
-					} else {
-						response = orderTickerService.getTimeBetweenMatchingEvents(tokenids, basetoken,
-								startDate / 1000, endDate / 1000, store);
-					}
-
-					this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 				}
 			}
 				break;

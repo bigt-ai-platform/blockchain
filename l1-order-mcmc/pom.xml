@@ -39,6 +39,12 @@
 		</dependency>
 
 		<dependency>
+			<groupId>net.bigtangle</groupId>
+			<artifactId>l1-order-server</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.jgrapht</groupId>
 			<artifactId>jgrapht-core</artifactId>
 			<version>1.5.1</version>
