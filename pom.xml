@@ -29,7 +29,6 @@
 		<module>bigtangle-servercore</module>
 		<module>bigtangle-subtangle</module>
 		<module>bigtangle-bridge</module>
-		<module>layer0-servercore</module>
 		<module>layer0-server</module>
 		<module>layer0-mcmc</module>
 		<module>l1-contract-server</module>
