@@ -33,11 +33,11 @@
 		<module>layer0-servercore</module>
 		<module>layer1-servercore</module>
 		<module>layer0-server</module>
-		<module>layer1-server</module>
 		<module>layer0-mcmc</module>
-		<module>layer1-mcmc</module>
-		<module>bigtangle-l1-ordermatch</module>
-		<module>bigtangle-l1-contract</module>
+		<module>l1-contract-server</module>
+		<module>l1-order-server</module>
+		<module>l1-contract-mcmc</module>
+		<module>l1-order-mcmc</module>
 
 	</modules>
 	<dependencies>

@@ -1,0 +1,68 @@
+server:
+  port: ${SERVER_PORT:8086}
+  net: ${SERVER_NET:Test}
+  requester: ${REQUESTER:}
+  mineraddress: ${SERVER_MINERADDRESS:mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG}
+  serverversion: ${SERVERVERSION:0.5.0}
+  clientversion: ${CLIENTVERSION:0.5.0}
+  ssl:
+    enabled: ${SSL:false}
+    key-store: ${KEYSTORE:src/main/resources/ca.pkcs12}
+    key-store-password: ${KEYSTOREPW:changeit}
+    keyStoreType: ${KEYSTORETYPE:PKCS12}
+  permissioned: ${PERMISSIONED:false}
+  permissionadmin: ${PERMISSIONADMIN:mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG}
+  myserverblockOnly: ${MYSERVERBLOCKONLY:false}
+  runKafkaStream: ${RUNKAFKASTREAM:true}
+  createtable: ${CREATETABLE:true}
+  checkpoint: ${CHECKPOINT:-1}
+  servermode: ${SERVERMODE:Fullnode}
+  deniedIPlist: ${DENIEDIPLIST:}
+  ipcheck: ${IPCHECK:false}
+  allowIPlist: ${ALLOWIPLIST:}
+  syncblocks: ${SYNCBLOCKS:1000}
+  dockerCreateDBHost: ${DOCKERCREATEDBHOST:false}
+  dockerDBHost: ${DOCKERDBHOST:bigtangle-mysql}
+
+db:
+  dbtype: ${DBTYPE:postgresql}
+  hostname: ${DB_HOSTNAME:localhost}
+  port: ${DB_PORT:5432}
+  dbName: ${DB_NAME:ordermatch}
+  username: ${DB_USERNAME:root}
+  password: ${DB_PASSWORD:test1234}
+
+service:
+  schedule:
+    mcmc: ${SERVICE_MCMC:false}
+    mcmcrate: ${SERVICE_MCMC_RATE:1000}
+    mining: ${SERVICE_MINING:true}
+    miningrate: ${SERVICE_MINING_RATE:50000}
+    sync: ${SERVICE_SYNC:true}
+    syncrate: ${SERVICE_SYNC_RATE:50000}
+    blockbatch: ${SERVICE_BLOCKBATCH:false}
+    blockbatchrate: ${SERVICE_BLOCKBATCH_RATE:50000}
+    initsync: ${SERVICE_INITSYNC:true}
+
+kafka:
+  bootstrapServers: ${BOOT_STRAP_SERVERS:}
+  topicOutName: ${TOPIC_OUT_NAME:bigtangle}
+  consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
+
+management:
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  endpoints:
+    web:
+      accessibility:
+        include: '*'
+  endpoint:
+    prometheus:
+      enabled: true
+
+minio:
+  url: ${MINIO_URL:http://localhost:9000}
+  accessKey: ${MINIO_ACCESS_KEY:minioadmin}
+  secretKey: ${MINIO_SECRET_KEY:minioadminpassword}
