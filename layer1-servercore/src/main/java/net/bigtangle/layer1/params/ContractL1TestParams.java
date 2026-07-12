@@ -24,8 +24,7 @@ public class ContractL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_REWARD,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
-                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
-                BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
+                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
     }
 
     @Override

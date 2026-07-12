@@ -44,8 +44,7 @@ public class Layer1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_ORDER_EXECUTE,
                 // contracts
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
-                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
-                BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
+                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
     }
 
     @Override

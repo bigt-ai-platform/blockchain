@@ -128,7 +128,6 @@ import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.service.ContractExecutionService;
 import net.bigtangle.server.service.OrderExecutionService;
 import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.StoreService;
@@ -188,8 +187,6 @@ public abstract class AbstractIntegrationTest {
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
-	@Autowired
-	protected ContractExecutionService contractExecutionService;
 	@Autowired
 	protected OrderExecutionService orderExecutionService;
 	@Autowired

@@ -27,8 +27,7 @@ public class Layer1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_ORDER_CANCEL,
                 BlockType.BLOCKTYPE_ORDER_EXECUTE,
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
-                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
-                BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
+                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
     }
 
     @Override
