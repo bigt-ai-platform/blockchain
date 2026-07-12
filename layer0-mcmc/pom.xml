@@ -34,7 +34,7 @@
 
 		<dependency>
 			<groupId>net.bigtangle</groupId>
-			<artifactId>layer1-servercore</artifactId>
+			<artifactId>l1-contract-server</artifactId>
 			<version>${project.version}</version>
 			<scope>test</scope>
 		</dependency>
