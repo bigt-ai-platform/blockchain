@@ -22,11 +22,5 @@
 			<artifactId>bigtangle-bridge</artifactId>
 			<version>${project.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>net.bigtangle</groupId>
-			<artifactId>bigtangle-order</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-
 	</dependencies>
 </project>
