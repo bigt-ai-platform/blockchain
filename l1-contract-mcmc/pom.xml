@@ -26,7 +26,6 @@
 			<version>${project.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>net.bigtangle</groupId>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<version>${org.springframework.boot.version}</version>
