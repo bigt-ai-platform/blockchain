@@ -9,7 +9,7 @@ import net.bigtangle.layer0.params.Layer0TestParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 
-@Configuration
+@Configuration("layer0ServerNetworkConfiguration")
 public class Layer0NetworkConfiguration {
 
     @Bean
