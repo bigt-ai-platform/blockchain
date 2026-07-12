@@ -41,7 +41,6 @@ public class Layer1Params extends MainNetParams {
                 // order-match
                 BlockType.BLOCKTYPE_ORDER_OPEN,
                 BlockType.BLOCKTYPE_ORDER_CANCEL,
-                BlockType.BLOCKTYPE_ORDER_EXECUTE,
                 // contracts
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
                 BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);

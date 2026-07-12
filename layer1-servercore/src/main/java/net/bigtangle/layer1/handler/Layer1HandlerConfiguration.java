@@ -19,7 +19,6 @@ public class Layer1HandlerConfiguration {
 	public void registerHandlers() {
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_ORDER_OPEN, OrderOpenHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_ORDER_CANCEL, OrderCancelHandler::new);
-		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_ORDER_EXECUTE, OrderExecuteHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACT_EVENT, ContractEventHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL, ContractEventCancelHandler::new);
 	}

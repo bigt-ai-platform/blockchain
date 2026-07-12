@@ -131,7 +131,6 @@ import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
-import net.bigtangle.server.service.OrderExecutionService;
 import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
@@ -192,8 +191,6 @@ public abstract class AbstractIntegrationTest {
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 
-	@Autowired
-	protected OrderExecutionService orderExecutionService;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired
@@ -588,7 +585,7 @@ public abstract class AbstractIntegrationTest {
 		if (this.enableOrderMatchExecutionChain()) {
 			mcmcService.calcNewBlockPrototype(store);
 
-			Block b = orderExecutionService.createOrderExecution(store);
+			Block b = null;
 			// no reward, this order will be not confirmed
 			// confirm the contract execution
 			if (b != null) {
@@ -762,7 +759,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeOrdermatch() throws Exception {
-		return orderExecutionService.createOrderExecution(store);
+		return null;
 
 	}
 
@@ -772,7 +769,7 @@ public abstract class AbstractIntegrationTest {
 		if (this.enableOrderMatchExecutionChain()) {
 			mcmcService.calcNewBlockPrototype(store);
 			
-			Block c = orderExecutionService.createOrderExecution(store);
+			Block c = null;
 			return rewardWithBlock(addedBlocks, c);
 		} else {
 			// mcmcServiceUpdate();

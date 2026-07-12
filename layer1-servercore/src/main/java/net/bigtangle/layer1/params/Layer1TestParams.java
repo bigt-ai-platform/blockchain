@@ -25,7 +25,6 @@ public class Layer1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_ORDER_OPEN,
                 BlockType.BLOCKTYPE_ORDER_CANCEL,
-                BlockType.BLOCKTYPE_ORDER_EXECUTE,
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
                 BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
     }

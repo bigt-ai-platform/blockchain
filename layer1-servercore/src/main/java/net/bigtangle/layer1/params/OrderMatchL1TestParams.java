@@ -24,8 +24,7 @@ public class OrderMatchL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_REWARD,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_ORDER_OPEN,
-                BlockType.BLOCKTYPE_ORDER_CANCEL,
-                BlockType.BLOCKTYPE_ORDER_EXECUTE);
+                BlockType.BLOCKTYPE_ORDER_CANCEL);
     }
 
     @Override
