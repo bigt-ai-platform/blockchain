@@ -29,9 +29,6 @@ public class RewardHandler implements BlockTypeHandler {
 		BlockWrap w = ctx.base().getBlockWrap(ctx.blockHash(), ctx.store());
 		if (w != null) {
 			base.confirmReward(w, ctx.confirmation(), ctx.store());
-			if (!ctx.base().enableOrderMatchExecutionChain(ctx.block())) {
-				base.confirmOrderMatching(w, ctx.confirmation(), ctx.store());
-			}
 		}
 		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
 		ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());

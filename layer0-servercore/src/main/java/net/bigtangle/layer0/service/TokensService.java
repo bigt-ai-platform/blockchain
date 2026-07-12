@@ -37,11 +37,6 @@ public class TokensService {
         List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.web.ordinal()));
         return GetTokensResponse.create(list);
     }
-    public AbstractResponse getContractTokensList(BlockStoreInterface store) throws BlockStoreException {
-        List<Token> list = new ArrayList<>(store.getTokenTypeList(TokenType.contract.ordinal()));
-        return GetTokensResponse.create(list);
-    }
-
     public GetTokensResponse searchTokens(String name, BlockStoreInterface store) throws BlockStoreException {
         List<Token> list = new ArrayList<>(store.getTokensList(name));
         Map<String, BigInteger> map = store.getTokenAmountMap();

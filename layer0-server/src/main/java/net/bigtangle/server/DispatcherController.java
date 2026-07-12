@@ -235,11 +235,6 @@ public class DispatcherController {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case searchContractTokens: {
-                AbstractResponse response = tokensService.getContractTokensList(store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
 			case searchExchangeTokens: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);

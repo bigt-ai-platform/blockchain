@@ -129,16 +129,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
 			throw new VerificationException("Incorrect difficulty target");
 		}
-		if (!enableOrderMatchExecutionChain(newMilestoneBlock)) {
-			OrderMatchingResult ordermatchresult = generateOrderMatching(newMilestoneBlock, store);
 
-			// Only check the Hash of OrderMatchingResult
-			if (currRewardInfo.getOrdermatchingResult() == null
-					|| !currRewardInfo.getOrdermatchingResult().equals(ordermatchresult.getOrderMatchingResultHash())) {
-				// if(currRewardInfo.getChainlength()!=197096)
-				throw new VerificationException("OrderMatchingResult transactions output is   wrong.");
-			}
-		}
 		Transaction miningTx = generateVirtualMiningRewardTX(newMilestoneBlock, store);
 
 		// Only check the Hash of OrderMatchingResult

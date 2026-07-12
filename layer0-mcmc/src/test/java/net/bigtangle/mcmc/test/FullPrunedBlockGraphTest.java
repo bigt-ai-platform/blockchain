@@ -7,7 +7,6 @@ package net.bigtangle.mcmc.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import org.junit.jupiter.api.Disabled;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,7 +21,6 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.MultiSignAddress;
-import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
@@ -214,37 +212,6 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		// Should be confirmed now
 		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
 		assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
-	}
-
-	@Test
-	@Disabled("Layer 0 rejects BLOCKTYPE_ORDER_OPEN; order matching is covered by Layer 1 MCMC tests.")
-	public void testConfirmOrderMatchUTXOs2() throws Exception {
-
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
-		// Make the "test" token
-		List<Block> addedBlocks = new ArrayList<>();
-		makeTestToken(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-		// Make a buy order for testKey.getPubKey()s
-		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		Block block1 = makeAndConfirmBuyOrder(testKey, Utils.HEX.encode(testKey.getPubKey()), 2, 2, addedBlocks);
-
-		// Make a sell order for testKey.getPubKey()s
-		// Open sell order for test tokens
-		Block block3 = makeAndConfirmSellOrder(testKey, testTokenId, 2, 2, addedBlocks);
-
-		// Ensure all consumed order records are now spent
-		OrderRecord order = store.getOrder(block1.getHash(), Sha256Hash.ZERO_HASH);
-		assertNotNull(order);
-		assertTrue(order.isConfirmed());
-		assertTrue(order.isSpent());
-
-		OrderRecord order2 = store.getOrder(block3.getHash(), Sha256Hash.ZERO_HASH);
-		assertNotNull(order2);
-		assertTrue(order2.isConfirmed());
-		assertTrue(order2.isSpent());
-
 	}
 
 	@Test

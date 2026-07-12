@@ -1856,7 +1856,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
 			return;
 
-		// order and contract event are controlled by execution only.
 		if(enableOrderMatchExecutionChain(blockWrap.getBlock())) {
 		if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EVENT)
 				|| blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_OPEN)) {
