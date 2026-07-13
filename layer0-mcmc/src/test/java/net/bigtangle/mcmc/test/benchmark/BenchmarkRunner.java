@@ -15,8 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.ECKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.wallet.Wallet;
 
 /**
