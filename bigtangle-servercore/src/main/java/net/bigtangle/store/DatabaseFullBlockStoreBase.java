@@ -187,6 +187,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 ";
 
+	protected final String SELECT_SOLID_BLOCK_TOPOLOGY_INTERVAL_SQL = "SELECT hash, prevblockhash, prevbranchblockhash, "
+			+ " height, milestone, milestonelastupdate, inserttime, solid, confirmed "
+			+ " FROM blocks WHERE height > ? AND height <= ? AND solid = 2 ";
+
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
 			+ "FROM blocks WHERE milestone = -1 AND height >= ? AND solid > -1 order by height desc ";
 
@@ -1348,6 +1352,37 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
+	public List<BlockWrap> getBlockWraps(Collection<Sha256Hash> hashes) throws BlockStoreException {
+		if (hashes == null || hashes.isEmpty()) {
+			return new ArrayList<>();
+		}
+		try {
+			StringBuilder sql = new StringBuilder("SELECT " + SELECT_BLOCKS_TEMPLATE + " FROM blocks WHERE hash IN (");
+			for (int i = 0; i < hashes.size(); i++) {
+				if (i > 0) sql.append(",");
+				sql.append("?");
+			}
+			sql.append(")");
+			try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql.toString())) {
+				int idx = 1;
+				for (Sha256Hash hash : hashes) {
+					preparedStatement.setBytes(idx++, hash.getBytes());
+				}
+				ResultSet resultSet = preparedStatement.executeQuery();
+				List<BlockWrap> result = new ArrayList<>(hashes.size());
+				while (resultSet.next()) {
+					BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
+					Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
+					result.add(new BlockWrap(block, blockEvaluation, getMCMC(block.getHash()), params));
+				}
+				return result;
+			}
+		} catch (Exception ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	@Override
 	public List<UTXO> getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime)
 			throws BlockStoreException {
 		List<UTXO> outputs = new ArrayList<>();
@@ -1469,6 +1504,47 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			throw new BlockStoreException(ex);
 		}
 
+	}
+
+	@Override
+	public PriorityQueue<BlockWrap> getSolidBlockTopologyInInterval(long cutoffHeight, long maxHeight)
+			throws BlockStoreException {
+		// Lightweight version: no block bytes deserialization, only topology fields
+		PriorityQueue<BlockWrap> blocksByDescendingHeight = new PriorityQueue<>(
+				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
+
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_SOLID_BLOCK_TOPOLOGY_INTERVAL_SQL)) {
+			preparedStatement.setLong(1, cutoffHeight);
+			preparedStatement.setLong(2, maxHeight);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				BlockEvaluation blockEvaluation = BlockEvaluation.build(
+						Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
+						resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+						resultSet.getLong("inserttime"), resultSet.getLong("solid"),
+						resultSet.getBoolean("confirmed"));
+
+				// Create a minimal Block with only topology fields — no block bytes loaded
+				long blockHeight = resultSet.getLong("height");
+				Block block = new Block(params);
+				block.setHeight(blockHeight);
+				block.setPrevBlockHash(Sha256Hash.wrap(resultSet.getBytes("prevblockhash")));
+				byte[] prevBranchBytes = resultSet.getBytes("prevbranchblockhash");
+				if (prevBranchBytes != null) {
+					block.setPrevBranchBlockHash(Sha256Hash.wrap(prevBranchBytes));
+				}
+				// Set minimal time to avoid time-reversion validation errors
+				long insertTime = resultSet.getLong("inserttime");
+				block.setTime(Math.max(insertTime / 1000, 1));
+
+				blocksByDescendingHeight.add(
+						new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
+			}
+			return blocksByDescendingHeight;
+		} catch (Exception ex) {
+			throw new BlockStoreException(ex);
+		}
 	}
 
 	@Override

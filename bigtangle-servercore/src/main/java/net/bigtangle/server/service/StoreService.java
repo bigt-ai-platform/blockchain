@@ -19,6 +19,10 @@ import net.bigtangle.store.PostgreSQLFullBlockStore;
  * Service class responsible for managing database store implementations.
  * Provides abstraction for different database types (MySQL, PostgreSQL) and
  * creates appropriate store implementations based on configuration.
+ * <p>
+ * MinioService is cached because its constructor creates a heavyweight
+ * OkHttpClient (connection pool, thread pool). Recreating it per request
+ * causes unnecessary GC pressure and connection churn.
  */
 @Service
 public class StoreService {
@@ -36,8 +40,29 @@ public class StoreService {
     protected transient DBStoreConfiguration dbStoreConfiguration;
 
     @Autowired
-    protected  MinioConfig minioConfig;
-    
+    protected MinioConfig minioConfig;
+
+    private volatile MinioService cachedMinioService;
+
+    /**
+     * Returns a cached singleton MinioService. The MinioClient internally
+     * manages an OkHttpClient with connection pooling — recreating it per
+     * request is expensive and unnecessary.
+     */
+    private MinioService getMinioService() {
+        MinioService service = cachedMinioService;
+        if (service == null) {
+            synchronized (this) {
+                service = cachedMinioService;
+                if (service == null) {
+                    service = new MinioService(minioConfig, networkParameters);
+                    cachedMinioService = service;
+                }
+            }
+        }
+        return service;
+    }
+
     /**
      * Creates and returns the appropriate BlockStoreInterface implementation
      * based on configured database type.
@@ -47,10 +72,11 @@ public class StoreService {
      */
     public BlockStoreInterface getStore() throws BlockStoreException {
         try {
+            MinioService minioService = getMinioService();
             if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-                return new MySQLFullBlockStore(networkParameters, dataSource.getConnection(),new MinioService(minioConfig, networkParameters));
+                return new MySQLFullBlockStore(networkParameters, dataSource.getConnection(), minioService);
             } else {
-                return new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection(), new MinioService(minioConfig, networkParameters));
+                return new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection(), minioService);
             }
         } catch (SQLException e) {
             throw new BlockStoreException(e);

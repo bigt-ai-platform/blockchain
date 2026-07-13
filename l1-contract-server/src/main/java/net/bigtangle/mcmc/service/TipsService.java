@@ -21,6 +21,7 @@ package net.bigtangle.mcmc.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -71,6 +72,29 @@ public class TipsService {
 
 	private static final Random seed = new Random();
 
+	// Precomputed exp(alpha * diff) lookup table for common weight differences.
+	private static final int EXP_TABLE_MIN = -200;
+	private static final int EXP_TABLE_MAX = 200;
+	private static final int EXP_TABLE_SIZE = EXP_TABLE_MAX - EXP_TABLE_MIN + 1;
+	private static volatile double[] expTable;
+	private static volatile double expTableAlpha;
+
+	private static double fastExp(double alpha, long diff) {
+		if (diff >= EXP_TABLE_MIN && diff <= EXP_TABLE_MAX) {
+			double[] table = expTable;
+			if (table == null || expTableAlpha != alpha) {
+				table = new double[EXP_TABLE_SIZE];
+				for (int i = EXP_TABLE_MIN; i <= EXP_TABLE_MAX; i++) {
+					table[i - EXP_TABLE_MIN] = Math.exp(alpha * i);
+				}
+				expTable = table;
+				expTableAlpha = alpha;
+			}
+			return table[(int) diff - EXP_TABLE_MIN];
+		}
+		return Math.exp(alpha * diff);
+	}
+
 	private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
 	/**
@@ -80,16 +104,19 @@ public class TipsService {
 		final BlockWrap entryPoint;
 		long maxHeight;
 		final BlockStoreInterface store;
+		final HashMap<Sha256Hash, List<BlockWrap>> approverCache;
 
-		public RatingTipWalker(final BlockWrap entryPoint, long maxHeight, BlockStoreInterface store) {
+		public RatingTipWalker(final BlockWrap entryPoint, long maxHeight, BlockStoreInterface store,
+				HashMap<Sha256Hash, List<BlockWrap>> approverCache) {
 			this.entryPoint = entryPoint;
 			this.maxHeight = maxHeight;
 			this.store = store;
+			this.approverCache = approverCache;
 		}
 
 		@Override
 		public BlockWrap call() throws Exception {
-			return getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store);
+			return getRatingTip(entryPoint, Long.MAX_VALUE, maxHeight, store, approverCache);
 		}
 	}
 
@@ -111,7 +138,9 @@ public class TipsService {
 		List<BlockWrap> ratingTips = new ArrayList<>(count);
 
 		for (BlockWrap entryPoint : entryPoints) {
-			FutureTask<BlockWrap> future = new FutureTask<>(new RatingTipWalker(entryPoint, maxHeight, store));
+			HashMap<Sha256Hash, List<BlockWrap>> approverCache = new HashMap<>();
+			FutureTask<BlockWrap> future = new FutureTask<>(
+					new RatingTipWalker(entryPoint, maxHeight, store, approverCache));
 			executor.execute(future);
 			ratingTipFutures.add(future);
 		}
@@ -195,18 +224,29 @@ public class TipsService {
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
 			BlockWrap left, BlockWrap right, BlockStoreInterface store, Stopwatch watch, ServiceBaseConnect serviceBase,
 			long cutoffHeight, long maxHeight) throws BlockStoreException {
-		// Perform next steps
-		BlockWrap nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-				store);
-		BlockWrap nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-				store);
+		BlockWrap leftCapture = left;
+		BlockWrap rightCapture = right;
+		HashSet<BlockWrap> rightCopy = new HashSet<>(currentApprovedUnconfirmedBlocks);
+		BlockWrap nextLeft;
+		BlockWrap nextRight;
+		try {
+			java.util.concurrent.Future<BlockWrap> leftFuture = executor.submit(() ->
+				performValidatedStep(leftCapture, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store));
+			java.util.concurrent.Future<BlockWrap> rightFuture = executor.submit(() ->
+				performValidatedStep(rightCapture, rightCopy, cutoffHeight, maxHeight, store));
+			nextLeft = leftFuture.get(30, java.util.concurrent.TimeUnit.SECONDS);
+			nextRight = rightFuture.get(30, java.util.concurrent.TimeUnit.SECONDS);
+			currentApprovedUnconfirmedBlocks.addAll(rightCopy);
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
 
 		// Repeat: Proceed on path to be included first (highest rating else
 		// random)
 		while (nextLeft != left && nextRight != right) {
 			try {
-				BlockMCMC nextLeftMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(nextLeft.getBlockHash(), store), BlockMCMC.class);
-				BlockMCMC nextRightMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(nextRight.getBlockHash(), store), BlockMCMC.class);
+				BlockMCMC nextLeftMcmc = cacheBlockService.getBlockMCMCAsObject(nextLeft.getBlockHash(), store);
+				BlockMCMC nextRightMcmc = cacheBlockService.getBlockMCMCAsObject(nextRight.getBlockHash(), store);
 				if (nextLeftMcmc.getRating() > nextRightMcmc.getRating()) {
 					// Go left
 					left = nextLeft;
@@ -288,20 +328,30 @@ public class TipsService {
 		return result;
 	}
 
-	private BlockWrap getRatingTip(BlockWrap currentBlock, long maxTime, long maxHeight, BlockStoreInterface store)
-			throws BlockStoreException {
-		// Repeatedly perform transitions until the final tip is found
-		List<BlockWrap> approvers = store.getNotInvalidApproverBlocks(currentBlock.getBlock().getHash());
+	private BlockWrap getRatingTip(BlockWrap currentBlock, long maxTime, long maxHeight, BlockStoreInterface store,
+			HashMap<Sha256Hash, List<BlockWrap>> approverCache) throws BlockStoreException {
+		List<BlockWrap> approvers = getCachedApprovers(currentBlock.getBlock().getHash(), store, approverCache);
 		approvers.removeIf(b -> b.getBlockEvaluation().getInsertTime() > maxTime);
 		BlockWrap nextBlock = performTransition(currentBlock, approvers, store);
 
 		while (currentBlock != nextBlock && nextBlock.getBlockEvaluation().getHeight() <= maxHeight) {
 			currentBlock = nextBlock;
-			approvers = store.getNotInvalidApproverBlocks(currentBlock.getBlock().getHash());
+			approvers = getCachedApprovers(currentBlock.getBlock().getHash(), store, approverCache);
 			approvers.removeIf(b -> b.getBlockEvaluation().getInsertTime() > maxTime);
 			nextBlock = performTransition(currentBlock, approvers, store);
 		}
 		return currentBlock;
+	}
+
+	private List<BlockWrap> getCachedApprovers(Sha256Hash hash, BlockStoreInterface store,
+			HashMap<Sha256Hash, List<BlockWrap>> cache) throws BlockStoreException {
+		return cache.computeIfAbsent(hash, h -> {
+			try {
+				return store.getNotInvalidApproverBlocks(h);
+			} catch (BlockStoreException e) {
+				throw new RuntimeException(e);
+			}
+		});
 	}
 
 	/**
@@ -322,15 +372,17 @@ public class TipsService {
 			try {
 				double[] transitionWeights = new double[candidates.size()];
 				double transitionWeightSum = 0;
-				BlockMCMC currentMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(currentBlock.getBlockHash(), store), BlockMCMC.class);
+				BlockMCMC currentMcmc = cacheBlockService.getBlockMCMCAsObject(currentBlock.getBlockHash(), store);
 				long currentCumulativeWeight = currentMcmc.getCumulativeWeight();
+
+				double alpha = serverConfiguration.getAlphaMCMC();
 
 				// Calculate the unnormalized transition weights
 				for (int i = 0; i < candidates.size(); i++) {
 					// Calculate transition weights
-					BlockMCMC candidateMcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(candidates.get(i).getBlockHash(), store), BlockMCMC.class);
-					transitionWeights[i] = Math.exp(serverConfiguration.getAlphaMCMC()
-							* (currentCumulativeWeight - candidateMcmc.getCumulativeWeight()));
+					BlockMCMC candidateMcmc = cacheBlockService.getBlockMCMCAsObject(candidates.get(i).getBlockHash(), store);
+					transitionWeights[i] = fastExp(alpha,
+							currentCumulativeWeight - candidateMcmc.getCumulativeWeight());
 					transitionWeightSum += transitionWeights[i];
 				}
 
@@ -395,7 +447,7 @@ public class TipsService {
 		try {
 			double maxBlockWeight = candidates.stream().mapToLong(e -> {
 				try {
-					BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(e.getBlockHash(), store), BlockMCMC.class);
+					BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(e.getBlockHash(), store);
 					return mcmc.getCumulativeWeight();
 				} catch (Exception ex) {
 					throw new RuntimeException(ex);
@@ -404,7 +456,7 @@ public class TipsService {
 			double normalizedBlockWeightSum = candidates.stream()
 					.mapToDouble(e -> {
 						try {
-							BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(e.getBlockHash(), store), BlockMCMC.class);
+							BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(e.getBlockHash(), store);
 							return mcmc.getCumulativeWeight() / maxBlockWeight;
 						} catch (Exception ex) {
 							throw new RuntimeException(ex);
@@ -416,7 +468,7 @@ public class TipsService {
 				// Randomly select weighted by cumulative weights
 				double selectionRealization = seed.nextDouble() * normalizedBlockWeightSum;
 				for (BlockWrap selectedBlock : candidates) {
-					BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(selectedBlock.getBlockHash(), store), BlockMCMC.class);
+					BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(selectedBlock.getBlockHash(), store);
 					selectionRealization -= mcmc.getCumulativeWeight() / maxBlockWeight;
 					if (selectionRealization <= 0) {
 						results.add(selectedBlock);

@@ -157,10 +157,16 @@ public interface BlockStoreInterface {
 
 	BlockWrap getBlockWrap(Sha256Hash hash) throws BlockStoreException;
 
+	List<BlockWrap> getBlockWraps(java.util.Collection<Sha256Hash> hashes) throws BlockStoreException;
+
 	BlockEvaluation getTransactionOutputSpender(Sha256Hash blockHash, Sha256Hash txHash, long index)
 			throws BlockStoreException;
 
 	PriorityQueue<BlockWrap> getSolidBlocksInIntervalDescending(long cutoffHeight, long maxHeight)
+			throws BlockStoreException;
+
+	/** Lightweight topology query — returns only hash+prev hashes+height, no block bytes. */
+	PriorityQueue<BlockWrap> getSolidBlockTopologyInInterval(long cutoffHeight, long maxHeight)
 			throws BlockStoreException;
 
 	HashSet<BlockEvaluation> getBlocksToUnconfirm() throws BlockStoreException;

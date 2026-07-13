@@ -26,6 +26,7 @@ package net.bigtangle.server.service;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -252,7 +253,7 @@ public class CacheBlockService {
 			throws BlockStoreException, JsonProcessingException {
 		BlockEvaluation value = store.getBlockEvaluationsByhashs(blockhash);
 
-		return Json.jsonmapper().writeValueAsBytes(value);
+		return jsonmapper.writeValueAsBytes(value);
 	}
 
 	/**
@@ -294,10 +295,51 @@ public class CacheBlockService {
 	}
 
 	/**
+	 * Retrieves block MCMC data as a deserialized BlockMCMC object from cache or database.
+	 * Avoids JSON round-trip overhead compared to getBlockMCMC().
+	 * Uses a separate cache name to avoid ClassCastException with the byte[] cache.
+	 */
+	@Cacheable(value = "BlockMCMCObject", key = "#blockhash")
+	public BlockMCMC getBlockMCMCAsObject(Sha256Hash blockhash, BlockStoreInterface store)
+			throws BlockStoreException {
+		BlockMCMC mcmc = store.getMCMC(blockhash);
+		if (mcmc == null) {
+			mcmc = BlockMCMC.defaultBlockMCMC(blockhash);
+		}
+		return mcmc;
+	}
+
+	/**
 	 * Clears all entries from the MCMC cache.
 	 */
 	@CacheEvict(value = "BlockMCMC", allEntries = true)
 	public synchronized void evictBlockMCMC() {
+	}
+
+	/**
+	 * Evicts a single BlockMCMC entry from the cache.
+	 */
+	@CacheEvict(value = "BlockMCMC", key = "#blockhash")
+	public void evictBlockMCMC(Sha256Hash blockhash) {
+	}
+
+	@CacheEvict(value = "BlockMCMCObject", key = "#blockhash")
+	public void evictBlockMCMCObject(Sha256Hash blockhash) {
+	}
+
+	@CacheEvict(value = "BlockMCMCObject", allEntries = true)
+	public synchronized void evictBlockMCMCObject() {
+	}
+
+	/**
+	 * Evicts a batch of specific block hashes from both MCMC caches.
+	 * More efficient than full eviction when only a subset of blocks changed.
+	 */
+	public void evictBlockMCMCBatch(Set<Sha256Hash> hashes) {
+		for (Sha256Hash hash : hashes) {
+			evictBlockMCMC(hash);
+			evictBlockMCMCObject(hash);
+		}
 	}
 
 	/**

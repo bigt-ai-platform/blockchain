@@ -2203,7 +2203,7 @@ public abstract class AbstractIntegrationTest {
 
 			log.debug("");
 		}
-		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(block.getBlockHash(), store), BlockMCMC.class);
+		BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(block.getBlockHash(), store);
 		return block.getBlock().getHeight() + "/D" + mcmc.getDepth() + "/M"
 				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
 				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);

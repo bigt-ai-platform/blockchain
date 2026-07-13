@@ -1488,7 +1488,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		addedBlocks.add(block);
 
 		mcmcServiceUpdate();
-		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(block.getHash(), store), BlockMCMC.class);
+		BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(block.getHash(), store);
 		assertTrue(mcmc.getRating() > 0);
 		rewardWithBlock(addedBlocks, null);
 	}

@@ -49,7 +49,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		// MCMC should not update this far out
 		makeRewardBlock();
 		assertFalse(getBlockEvaluation(rollingBlock1.getHash(), store).isConfirmed());
-		BlockMCMC mcmc = jsonmapper.readValue(cacheBlockService.getBlockMCMC(rollingBlock1.getHash(), store), BlockMCMC.class);
+		BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(rollingBlock1.getHash(), store);
 		assertTrue(mcmc.getRating() == 0);
 
 		// Reward block should include it

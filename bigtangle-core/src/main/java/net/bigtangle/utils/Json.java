@@ -11,20 +11,19 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class Json {
 
-	public static ObjectMapper jsonmapper() {
+	private static final ObjectMapper MAPPER;
 
-		// getJsonName(response);
+	static {
 		ObjectMapper mapper = new ObjectMapper();
-
 		mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
 		mapper.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
-		// SimpleDateFormat outputFormat = new SimpleDateFormat("dd MMM yyyy");
-		// mapper.setDateFormat(outputFormat);
-
 		mapper.setSerializationInclusion(Include.NON_EMPTY);
 		mapper.setSerializationInclusion(Include.NON_NULL);
-		mapper.configure( DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-		return mapper;
-		// mapper.writeValue(System.out, response);
+		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+		MAPPER = mapper;
+	}
+
+	public static ObjectMapper jsonmapper() {
+		return MAPPER;
 	}
 }

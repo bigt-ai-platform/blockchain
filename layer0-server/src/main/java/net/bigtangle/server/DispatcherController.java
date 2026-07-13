@@ -21,6 +21,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.springframework.beans.factory.DisposableBean;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,9 +78,12 @@ import net.bigtangle.utils.Json;
 
 @RestController
 @RequestMapping("/")
-public class DispatcherController {
+public class DispatcherController implements DisposableBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
+
+	private static final ExecutorService requestExecutor = Executors.newFixedThreadPool(
+			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
 
 	@Autowired
 	private NetworkParameters networkParameters;
@@ -117,6 +122,11 @@ public class DispatcherController {
 	@Autowired
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 
+	@Override
+	public void destroy() {
+		requestExecutor.shutdownNow();
+	}
+
 	@SuppressWarnings("unchecked")
 	@RequestMapping(value = "{reqCmd}", method = { RequestMethod.POST, RequestMethod.GET })
 	public void process(@PathVariable("reqCmd") String reqCmd, @RequestBody byte[] contentBytes,
@@ -127,9 +137,8 @@ public class DispatcherController {
             errorLimit(httpServletResponse, watch);
 			return;
         }
-		ExecutorService executor = Executors.newSingleThreadExecutor();
 		@SuppressWarnings("rawtypes")
-		final Future<String> handler = executor.submit((Callable) () -> {
+		final Future<String> handler = requestExecutor.submit((Callable) () -> {
             processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
             return "";
         });
@@ -142,8 +151,6 @@ public class DispatcherController {
 			StringWriter sw = new StringWriter();
 			resp.setMessage(sw.toString());
 			gzipBinary(httpServletResponse, resp, reqCmd);
-		} finally {
-			executor.shutdownNow();
 		}
 
 	}
