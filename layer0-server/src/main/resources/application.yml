@@ -32,6 +32,15 @@ db:
   username: ${DB_USERNAME:root}
   password: ${DB_PASSWORD:test1234}
 
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${HIKARI_MAX_POOL:50}
+      minimum-idle: ${HIKARI_MIN_IDLE:10}
+      connection-timeout: ${HIKARI_CONN_TIMEOUT:30000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT:600000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1800000}
+
 service:
   schedule:
     mcmc: ${SERVICE_MCMC:false}

@@ -719,11 +719,20 @@ public class DispatcherController implements DisposableBean {
 		return flag;
 	}
 
+	private static final int GZIP_MIN_SIZE = 256;
+
 	public void gzipBinary(HttpServletResponse httpServletResponse, AbstractResponse response, String reqCmd)
 			throws Exception {
+		byte[] data = Json.jsonmapper().writeValueAsBytes(response);
+		if (data.length < GZIP_MIN_SIZE) {
+			httpServletResponse.setContentLength(data.length);
+			httpServletResponse.getOutputStream().write(data);
+			httpServletResponse.getOutputStream().flush();
+			return;
+		}
 		MyGZIPOutputStream servletOutputStream = new MyGZIPOutputStream(httpServletResponse.getOutputStream());
 
-		servletOutputStream.write(Json.jsonmapper().writeValueAsBytes(response));
+		servletOutputStream.write(data);
 		if (servletOutputStream.getBytesWritten() > 1000000) {
 			logger.info(" reqCmd {}  output size {} ", reqCmd, servletOutputStream.getBytesWritten());
 		}
