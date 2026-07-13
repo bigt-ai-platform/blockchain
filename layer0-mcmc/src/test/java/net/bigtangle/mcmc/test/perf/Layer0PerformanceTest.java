@@ -102,7 +102,7 @@ public class Layer0PerformanceTest {
 		pool.shutdownNow();
 
 		double speedup = (double) oldTime.get() / Math.max(newTime.get(), 1);
-		log.info("ObjectMapper: {} threads x {} ops — old={}ms new={}ms speedup={:.1f}x",
+		log.info("ObjectMapper: {} threads x {} ops — old={}ms new={}ms speedup={}",
 				threads, ops, oldTime.get() / 1_000_000, newTime.get() / 1_000_000, speedup);
 		assertTrue(speedup > 2, "ObjectMapper singleton should be >2x faster, got " + speedup + "x");
 	}
@@ -143,7 +143,7 @@ public class Layer0PerformanceTest {
 		long fastExpNs = measureNanos(() -> { for (int i = 0; i < iterations; i++) fastExp(alpha, diffs[i]); });
 
 		double speedup = (double) mathExpNs / Math.max(fastExpNs, 1);
-		log.info("fastExp {} iterations: Math.exp={}ms fastExp={}ms speedup={:.1f}x",
+		log.info("fastExp {} iterations: Math.exp={}ms fastExp={}ms speedup={}",
 				iterations, mathExpNs / 1_000_000, fastExpNs / 1_000_000, speedup);
 	}
 
@@ -173,7 +173,7 @@ public class Layer0PerformanceTest {
 		});
 
 		double speedup = (double) jsonNs / Math.max(directNs, 1);
-		log.info("BlockMCMC access {} iterations: JSON={}ms Direct={}ms speedup={:.1f}x",
+		log.info("BlockMCMC access {} iterations: JSON={}ms Direct={}ms speedup={}",
 				iterations, jsonNs / 1_000_000, directNs / 1_000_000, speedup);
 		assertTrue(speedup > 2, "Direct object access should be >2x faster, got " + speedup + "x");
 	}
@@ -200,7 +200,7 @@ public class Layer0PerformanceTest {
 		long newNs = measureNanos(() -> mcmcWalkNew(iterations, weights, rnd));
 
 		double speedup = (double) oldNs / Math.max(newNs, 1);
-		log.info("MCMC walk {} iterations: old={}ms new={}ms speedup={:.1f}x",
+		log.info("MCMC walk {} iterations: old={}ms new={}ms speedup={}",
 				iterations, oldNs / 1_000_000, newNs / 1_000_000, speedup);
 	}
 
@@ -253,7 +253,7 @@ public class Layer0PerformanceTest {
 		});
 
 		double speedup = (double) sequentialNs / Math.max(batchNs, 1);
-		log.info("Batch ops 10000 hashes: sequential={}ms batch={}ms speedup={:.1f}x",
+		log.info("Batch ops 10000 hashes: sequential={}ms batch={}ms speedup={}",
 				sequentialNs / 1_000_000, batchNs / 1_000_000, speedup);
 	}
 
@@ -297,7 +297,7 @@ public class Layer0PerformanceTest {
 		pool.shutdownNow();
 
 		double speedup = (double) perRequestNs.get() / Math.max(sharedNs.get(), 1);
-		log.info("Executor overhead: per-request={}ms shared={}ms speedup={:.1f}x",
+		log.info("Executor overhead: per-request={}ms shared={}ms speedup={}",
 				perRequestNs.get() / 1_000_000, sharedNs.get() / 1_000_000, speedup);
 	}
 
