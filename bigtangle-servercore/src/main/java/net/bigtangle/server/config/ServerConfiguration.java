@@ -38,6 +38,7 @@ import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+import net.bigtangle.core.Block;
 import net.bigtangle.utils.OkHttp3Util;
  
 @Component
@@ -120,6 +121,12 @@ public class ServerConfiguration {
      * Required for real-time analytics and monitoring.
      */
     private Boolean runKafkaStream = false;
+
+    /**
+     * Whether proof-of-work is required for new blocks.
+     * Disable on test networks for higher throughput.
+     */
+    private Boolean powEnabled = true;
     
     /** 
      * Block interval for creating checkpoints.
@@ -586,4 +593,12 @@ public class ServerConfiguration {
         this.dockerDBHostData = dockerDBHostData;
     }
 
+    public Boolean getPowEnabled() {
+        return powEnabled;
+    }
+
+    public void setPowEnabled(Boolean powEnabled) {
+        this.powEnabled = powEnabled;
+        Block.powEnabled = powEnabled;
+    }
 }

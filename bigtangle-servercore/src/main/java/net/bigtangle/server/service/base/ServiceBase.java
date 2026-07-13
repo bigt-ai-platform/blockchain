@@ -157,6 +157,8 @@ public abstract class ServiceBase {
 	}
 
 	public boolean enableFee(Block block) {
+		if (!Block.powEnabled) return false;
+		if (block.getBlockType() == BlockType.BLOCKTYPE_CROSSTANGLE) return false;
 		return (block.getLastMiningRewardBlock() > 1424626
 				&& networkParameters.getId().equals(NetworkParameters.ID_MAINNET))
 				|| networkParameters.getId().equals(NetworkParameters.ID_UNITTESTNET);
@@ -829,10 +831,12 @@ public abstract class ServiceBase {
 	}
 
 	public void solidifyWaiting(Block block, BlockStoreInterface store) throws BlockStoreException {
-
+		BlockEvaluation eval = store.getBlockEvaluationsByhashs(block.getHash());
+		if (eval != null && eval.getSolid() == 2) {
+			return;
+		}
 		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper).checkSolidity(block, false, store, false);
-		// allow here unsolid block, as sync may do only the referenced blocks
 		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
 			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
 		} else {

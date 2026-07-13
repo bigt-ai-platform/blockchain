@@ -1,15 +1,21 @@
 package net.bigtangle.server.service;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.KafkaConfiguration;
@@ -17,6 +23,7 @@ import net.bigtangle.kafka.KafkaMessageProducer;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.BatchBlock;
+import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 
@@ -41,11 +48,16 @@ public class BlockSaveService {
 	protected ServerConfiguration serverConfiguration;
 	@Autowired
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
+	@Autowired
+	protected MempoolService mempoolService;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
+
+	public static int BATCH_TX_PER_BLOCK = 5000; // adjustable for testing
+	private static final ExecutorService parallelBatchPool = Executors.newFixedThreadPool(
+			Math.max(8, Runtime.getRuntime().availableProcessors() * 2));
 
 	public void saveBlock(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.addBlock(block, false, store);
-		// no broadcastBlock, if there is error of blockgraph.add
 		broadcastBlock(block);
 	}
 
@@ -86,5 +98,74 @@ public class BlockSaveService {
 		} finally {
 			store.close();
 		}
+	}
+
+	public int batchBlocksFromMempool() throws Exception {
+		List<Transaction> txns = mempoolService.drainAll();
+		if (txns.isEmpty()) {
+			return 0;
+		}
+		if (txns.size() <= BATCH_TX_PER_BLOCK) {
+			BlockStoreInterface store = storeService.getStore();
+			try {
+				Block block = cacheBlockPrototypeService.getBlockPrototype(store);
+				for (Transaction tx : txns) {
+					block.addTransaction(tx);
+				}
+				block.solve();
+				saveBlock(block, store);
+			} finally {
+				store.close();
+			}
+			return txns.size();
+		}
+		List<List<Transaction>> groups = new ArrayList<>();
+		for (int i = 0; i < txns.size(); i += BATCH_TX_PER_BLOCK) {
+			groups.add(txns.subList(i, Math.min(i + BATCH_TX_PER_BLOCK, txns.size())));
+		}
+		BlockStoreInterface store = storeService.getStore();
+		try {
+			TipsQueue tipsQueue = store.getTipsQueue();
+			if (tipsQueue == null) {
+				return 0;
+			}
+			Block proto = networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
+			@SuppressWarnings("unchecked")
+			CompletableFuture<Void>[] futures = new CompletableFuture[groups.size()];
+			for (int g = 0; g < groups.size(); g++) {
+				final List<Transaction> group = groups.get(g);
+				final Sha256Hash prevHash = proto.getPrevBlockHash();
+				final Sha256Hash prevBranchHash = proto.getPrevBranchBlockHash();
+				final byte[] minerAddr = proto.getMinerAddress();
+				if (g > 0) {
+					store.insertTipsQueue(new TipsQueue(java.util.Arrays.copyOf(
+							proto.getHash().getBytes(), 32),
+							proto.unsafeBitcoinSerialize(), proto.getHeight(), proto.getTimeSeconds()));
+				}
+				futures[g] = CompletableFuture.runAsync(() -> {
+					try {
+						BlockStoreInterface s = storeService.getStore();
+						try {
+							Block b = Block.createBlock(networkParameters,
+									s.get(prevHash), s.get(prevBranchHash));
+							b.setMinerAddress(minerAddr);
+							for (Transaction tx : group) {
+								b.addTransaction(tx);
+							}
+							b.solve();
+							saveBlock(b, s);
+						} finally {
+							s.close();
+						}
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				}, parallelBatchPool);
+			}
+			CompletableFuture.allOf(futures).get();
+		} finally {
+			store.close();
+		}
+		return txns.size();
 	}
 }

@@ -558,7 +558,14 @@ public class Block extends Message {
 	 * Finds a value of nonce and equihashProof if using Equihash that validates
 	 * correctly.
 	 */
+	/** Disables proof-of-work when false. Set via --server.powEnabled=false. */
+	public static volatile boolean powEnabled = true;
+
 	public void solve(BigInteger target) {
+		if (!powEnabled) {
+			setNonce(0);
+			return;
+		}
 		// Add randomness to prevent new empty blocks from same miner with same
 		// approved blocks to be the same
 		setNonce(gen.nextLong());
@@ -615,26 +622,13 @@ public class Block extends Message {
 		if (getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 			return true;
 		}
-
-		// This part is key - it is what proves the block was as difficult to
-		// make as it claims
-		// to be. Note however that in the context of this function, the block
-		// can claim to be
-		// as difficult as it wants to be .... if somebody was able to take
-		// control of our network
-		// connection and fork us onto a different chain, they could send us
-		// valid blocks with
-		// ridiculously easy difficulty and this function would accept them.
-		//
-		// To prevent this attack from being possible, elsewhere we check that
-		// the difficultyTarget
-		// field is of the right value. This requires us to have the preceeding
-		// blocks.
+		if (!powEnabled) {
+			return true;
+		}
 
 		BigInteger h = calculatePoWHash().toBigInteger();
 
 		if (h.compareTo(target) > 0) {
-			// Proof of work check failed!
 			if (throwException)
 				throw new ProofOfWorkException();
 			else

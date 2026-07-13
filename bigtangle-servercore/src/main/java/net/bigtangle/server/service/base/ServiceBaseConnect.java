@@ -103,9 +103,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 	@Override
 	protected void connectUTXOs(Block block, List<Transaction> transactions, BlockStoreInterface blockStore)
 			throws BlockStoreException {
+		List<UTXO> allUtxos = new ArrayList<>();
 		for (final Transaction tx : transactions) {
 			boolean isCoinBase = tx.isCoinBase();
-			List<UTXO> utxos = new ArrayList<>();
 			for (TransactionOutput out : tx.getOutputs()) {
 				Script script = getScript(out.getScriptBytes());
 				String fromAddress = fromAddress(tx, isCoinBase);
@@ -119,10 +119,8 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 						block.getTimeSeconds(), null);
 
 				if (!newOut.isZero()) {
-					// logger.debug(newOut.toString());
-					utxos.add(newOut);
+					allUtxos.add(newOut);
 					if (script.isSentToMultiSig()) {
-
 						for (ECKey ecKey : script.getPubKeys()) {
 							String toaddress = ecKey.toAddress(networkParameters).toBase58();
 							OutputsMulti outputsMulti = new OutputsMulti(newOut.getTxHash(), toaddress,
@@ -131,10 +129,11 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 						}
 					}
 				}
-
 			}
-			blockStore.addUnspentTransactionOutput(utxos);
-			for (UTXO u : utxos)
+		}
+		if (!allUtxos.isEmpty()) {
+			blockStore.addUnspentTransactionOutput(allUtxos);
+			for (UTXO u : allUtxos)
 				cacheBlockService.evictTransactionOutput(u, blockStore);
 		}
 	}

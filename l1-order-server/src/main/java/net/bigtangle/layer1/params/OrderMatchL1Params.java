@@ -5,13 +5,6 @@ import java.util.EnumSet;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.params.MainNetParams;
 
-/**
- * L1-ordermatch {@link net.bigtangle.params.NetworkParameters}: accepts only
- * order-match block types plus the shared transfer/reward/cross-tangle types.
- * chainId = {@code "ordermatch"}.
- *
- * @see ContractL1Params (the L1-contract counterpart)
- */
 public class OrderMatchL1Params extends MainNetParams {
 
     public OrderMatchL1Params() {
@@ -22,6 +15,9 @@ public class OrderMatchL1Params extends MainNetParams {
         super();
         this.chainId = chainId;
     }
+
+    @Override
+    public boolean genesisMintsBIG() { return false; }
 
     @Override
     public EnumSet<BlockType> getAllowedBlockTypes() {

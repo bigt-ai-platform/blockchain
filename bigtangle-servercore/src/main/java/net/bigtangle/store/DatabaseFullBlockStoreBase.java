@@ -733,7 +733,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			Block genesisBlock = UtilGeneseBlock.createGenesis( params );
 			saveNewStore(genesisBlock);
-			saveGenesisTransactionOutput(genesisBlock);
+			if (params.genesisMintsBIG()) {
+			    saveGenesisTransactionOutput(genesisBlock);
+			}
 
 			// Just fill the tables with some valid data
 			// Reward output table
@@ -1753,6 +1755,24 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
+	public void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
+			List<Long> indexes, Sha256Hash spenderBlockHash) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_OUTPUTS_SPENT_SQL)) {
+			for (int i = 0; i < prevBlockHashes.size(); i++) {
+				s.setBoolean(1, true);
+				s.setBytes(2, spenderBlockHash.getBytes());
+				s.setBytes(3, prevTxHashes.get(i).getBytes());
+				s.setLong(4, indexes.get(i));
+				s.setBytes(5, prevBlockHashes.get(i).getBytes());
+				s.addBatch();
+			}
+			s.executeBatch();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public void updateTransactionOutputConfirmed(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b)
 			throws BlockStoreException {
 
@@ -1779,6 +1799,21 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			throw new BlockStoreException(e);
 		}
 
+	}
+
+	@Override
+	public void updateAllTransactionOutputsConfirmedBatch(List<Sha256Hash> blockHashes, boolean b)
+			throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_ALL_OUTPUTS_CONFIRMED_SQL)) {
+			for (Sha256Hash h : blockHashes) {
+				s.setBoolean(1, b);
+				s.setBytes(2, h.getBytes());
+				s.addBatch();
+			}
+			s.executeBatch();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
 	}
 
 	@Override

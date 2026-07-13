@@ -85,28 +85,22 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		allApprovedNewBlocks.add(getBlockWrap(newMilestoneBlock.getHash(), store));
 
-		// If anything is already spent, no-go
-		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, true, store);
-		// Optional<ConflictCandidate> spentInput =
-		// findFirstSpentInput(allApprovedNewBlocks);
-
-		if (anySpentInputs) {
-		 	solidityState = SolidityState.getFailState();
-			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
-		}
-		// If any conflicts exist between the current set of
-		// blocks, no-go
-		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
-				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
-				.values().stream().anyMatch(l -> l.size() > 1);
-		// if (anyCandidateConflicts)
-		// showConflict(allApprovedNewBlocks);
-
-		// Did we fail? Then we stop now and rerun consensus
-		// logic on the new longest chain.
-		if (anyCandidateConflicts) {
-			solidityState = SolidityState.getFailState();
-			throw new VerificationException("conflicts exist between the current set of ");
+		if (Block.powEnabled) {
+			// If anything is already spent, no-go
+			boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, true, store);
+			if (anySpentInputs) {
+				solidityState = SolidityState.getFailState();
+				throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
+			}
+			// If any conflicts exist between the current set of
+			// blocks, no-go
+			boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
+					.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
+					.values().stream().anyMatch(l -> l.size() > 1);
+			if (anyCandidateConflicts) {
+				solidityState = SolidityState.getFailState();
+				throw new VerificationException("conflicts exist between the current set of ");
+			}
 		}
 
 		// Otherwise, all predecessors exist and were at least

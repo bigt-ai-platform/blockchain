@@ -125,7 +125,7 @@ public class BridgeService {
             }
 
             Block releaseBlock = cacheBlockPrototypeService.getBlockPrototype(store);
-            releaseBlock.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+            releaseBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 
             Transaction tx = new Transaction(networkParameters);
             Coin amount = Coin.valueOf(vault.getAmount(), Utils.HEX.decode(vault.getTokenIdHex()));

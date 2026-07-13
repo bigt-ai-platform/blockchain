@@ -69,8 +69,10 @@ public class UtilGeneseBlock {
 		            new HashSet<>(), 0L);
 		
 		    coinbase.setData(rewardInfo.toByteArray());
-		    add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
-		    genesisBlock.addTransaction(coinbase);
+	    if (params.genesisMintsBIG()) {
+	        add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
+	    }
+	    genesisBlock.addTransaction(coinbase);
 		    genesisBlock.setNonce(0);
 		    genesisBlock.setHeight(0);
 		    return genesisBlock;

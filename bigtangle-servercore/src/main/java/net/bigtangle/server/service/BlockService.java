@@ -60,6 +60,8 @@ public class BlockService {
 	protected CacheBlockService cacheBlockService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
+	@Autowired
+	protected MempoolService mempoolService;
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -94,8 +96,12 @@ public class BlockService {
 	}
 
 	public void batchBlock(Block block, BlockStoreInterface store) throws BlockStoreException {
-
 		store.insertBatchBlock(block);
+		mempoolService.submit(block);
+	}
+
+	public void batchBlockToMempool(Block block) {
+		mempoolService.submit(block);
 	}
 
 	public void insertMyserverblocks(Sha256Hash prevhash, Sha256Hash hash, Long inserttime, BlockStoreInterface store)

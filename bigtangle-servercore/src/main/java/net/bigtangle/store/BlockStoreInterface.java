@@ -16,6 +16,8 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
 
+import javax.annotation.Nullable;
+
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
@@ -193,12 +195,14 @@ public interface BlockStoreInterface {
 
 	/* TXOs */
 	void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
-			Sha256Hash spenderBlock) throws BlockStoreException;
-
+			@Nullable Sha256Hash spenderBlockHash) throws BlockStoreException;
+	void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
+			List<Long> indexes, Sha256Hash spenderBlockHash) throws BlockStoreException;
 	void updateTransactionOutputConfirmed(Sha256Hash blockHash, Sha256Hash txHash, long index, boolean b)
 			throws BlockStoreException;
 
 	void updateAllTransactionOutputsConfirmed(Sha256Hash blockHash, boolean b) throws BlockStoreException;
+	void updateAllTransactionOutputsConfirmedBatch(List<Sha256Hash> blockHashes, boolean b) throws BlockStoreException;
 
 	void updateTransactionOutputSpendPending(List<UTXO> utxos) throws BlockStoreException;
 

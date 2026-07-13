@@ -224,9 +224,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					}
 				}
 
-				if (!isCoinBase) {
-					// Because correctlySpends modifies transactions, this must
-					// come after we are done with tx
+				if (!isCoinBase && Block.powEnabled) {
 					FutureTask<VerificationException> future = new FutureTask<VerificationException>(
 							new Verifier(tx, prevOutScripts, verifyFlags));
 					scriptVerificationExecutor.execute(future);
@@ -236,21 +234,21 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!checkFee && enableFee(block))
 				throw new VerificationException.NoFeeException(Coin.FEE_DEFAULT.toString());
 
-			for (Future<VerificationException> future : listScriptVerificationResults) {
-				VerificationException e;
-				try {
-					e = future.get();
-				} catch (InterruptedException thrownE) {
-					throw new RuntimeException(thrownE); // Shouldn't happen
-				} catch (ExecutionException thrownE) {
-					// logger.error("Script.correctlySpends threw a non-normal
-					// exception: " ,thrownE );
-					throw new VerificationException(
-							"Bug in Script.correctlySpends, likely script malformed in some new and interesting way.",
-							thrownE);
+			if (Block.powEnabled) {
+				for (Future<VerificationException> future : listScriptVerificationResults) {
+					VerificationException e;
+					try {
+						e = future.get();
+					} catch (InterruptedException thrownE) {
+						throw new RuntimeException(thrownE);
+					} catch (ExecutionException thrownE) {
+						throw new VerificationException(
+								"Bug in Script.correctlySpends, likely script malformed in some new and interesting way.",
+								thrownE);
+					}
+					if (e != null)
+						throw e;
 				}
-				if (e != null)
-					throw e;
 			}
 		} catch (VerificationException e) {
 			logger.info("", e);
@@ -1678,7 +1676,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 				// Check difficulty and latest consensus block is passed through
 				// correctly
-				if (block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
+				if (Block.powEnabled && block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
 					if (storedPrev.getBlock().getLastMiningRewardBlock() >= storedPrevBranch.getBlock()
 							.getLastMiningRewardBlock()) {
 						if (block.getLastMiningRewardBlock() != storedPrev.getBlock().getLastMiningRewardBlock()

@@ -110,14 +110,18 @@ public abstract class NetworkParameters {
 	 * block type from another layer.
 	 */
 	public EnumSet<BlockType> getAllowedBlockTypes() {
-		// L0 default: every type currently defined. Sub-classes representing a
-		// Layer 1 override this to a restricted set.
 		return EnumSet.allOf(BlockType.class);
 	}
 
 	/** The chain id (e.g. "L0", "ordermatch"). Never null. */
 	public String getChainId() {
 		return chainId;
+	}
+
+	/** Whether this chain's genesis block should mint the native BIG token.
+	 *  Only Layer 0 should mint BIG. L1 chains get BIG via bridge peg only. */
+	public boolean genesisMintsBIG() {
+		return true;
 	}
 
 	public boolean isOrderMatchExecutionChainEnabled() {
@@ -151,7 +155,7 @@ public abstract class NetworkParameters {
 	 * <p>
 	 * Start at: 262144
 	 */
-	public static final int MAX_DEFAULT_BLOCK_SIZE = 1024 * 1024; // 1MB
+	public static int MAX_DEFAULT_BLOCK_SIZE = 20 * 1024 * 1024; // 5MB, adjustable for testing
 
 	/**
 	 * A "sigop" is a signature verification operation. Because they're expensive we
@@ -188,7 +192,7 @@ public abstract class NetworkParameters {
 	public static final int TARGET_TIMESPAN = 3 * 60 * 60;
 
 	// cycle
-	public static final int TARGET_SPACING = 30; // seconds per chain block.
+	public static int TARGET_SPACING = 30; // seconds per chain block, adjustable for testing
 	public static final int INTERVAL = TARGET_TIMESPAN / TARGET_SPACING;
 
 	public static final int TARGET_MAX_TPS = 100;

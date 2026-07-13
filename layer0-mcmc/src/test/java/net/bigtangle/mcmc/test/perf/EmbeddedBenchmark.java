@@ -40,7 +40,8 @@ import net.bigtangle.wallet.Wallet;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = { "server.net=Test",
                        "spring.main.allow-bean-definition-overriding=true",
-                       "spring.datasource.hikari.maximum-pool-size=100" })
+                       "spring.datasource.hikari.maximum-pool-size=100",
+                       "server.powEnabled=false" })
 public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedBenchmark.class);

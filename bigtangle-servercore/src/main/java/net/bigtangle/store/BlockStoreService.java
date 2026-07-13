@@ -98,7 +98,7 @@ public class BlockStoreService {
 		}
 		// update spend of origin UTXO to avoid create of double spent and account
 		// balance
-		if (added) {
+		if (added && Block.powEnabled) {
 			updateTransactionOutputSpendPending(block);
 		}
 
@@ -137,8 +137,8 @@ public class BlockStoreService {
 	 * updateChainConnected and updateConfirmed can not run in parallel
 	 */
 	public void updateChain(boolean confirmTimebox) throws BlockStoreException {
-		// first undo the mc confirm for calculation chain confirm
 		updateChainConnected();
+		if (!Block.powEnabled) return;
 		if (confirmTimebox)
 			updateConfirmedTimeBoxed();
 		else
@@ -173,7 +173,7 @@ public class BlockStoreService {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				updateUnConfirmedDo(store);
+				if (Block.powEnabled) updateUnConfirmedDo(store);
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {

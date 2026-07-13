@@ -1169,9 +1169,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void confirmBlockTransactionWithType(BlockWrap block, long milestoneNumber, boolean confirmation,
 			BlockStoreInterface blockStore) throws BlockStoreException {
 
-		// confirm transactions
-		for (final Transaction tx : block.getBlock().getTransactions()) {
-			confirmTransaction(block.getBlock(), confirmation, tx, blockStore);
+		if (Block.powEnabled) {
+			blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
+		}
+		if (confirmation && Block.powEnabled) {
+			confirmBlockTransactionSpentBatch(block.getBlock(), blockStore);
+		} else {
+			for (final Transaction tx : block.getBlock().getTransactions()) {
+				confirmTransactionSpent(block.getBlock(), false, tx, blockStore);
+			}
 		}
 		// Layer strategy: delegate to a registered handler if present.
 		if (handlerFor(block.getBlock().getBlockType()).isPresent()) {
@@ -1773,6 +1779,33 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 		// Set previous outputs as spent
 		for (TransactionInput in : tx.getInputs()) {
+			if (!tx.isCoinBase()) {
+				UTXO prevOut = blockStore.getTransactionOutput(in.getOutpoint().getBlockHash(),
+						in.getOutpoint().getTxHash(), in.getOutpoint().getIndex());
+				if (prevOut == null && confirm) {
+					BlockWrap b = getBlockWrap(in.getOutpoint().getBlockHash(), blockStore);
+					throw new RuntimeException("Attempted to spend a non-existent output from block" + b.toString());
+				}
+				if (confirm) {
+					if (prevOut != null)
+						blockStore.updateTransactionOutputSpent(prevOut.getBlockHash(), prevOut.getTxHash(),
+								prevOut.getIndex(), true, block.getHash());
+				} else {
+					if (prevOut != null && !checkSpentMilestone(prevOut, block, blockStore)) {
+						blockStore.updateTransactionOutputSpent(prevOut.getBlockHash(), prevOut.getTxHash(),
+								prevOut.getIndex(), false, null);
+					}
+				}
+				if (prevOut != null)
+					cacheBlockService.evictTransactionOutput(prevOut, blockStore);
+			}
+		}
+	}
+
+	private void confirmTransactionSpent(Block block, boolean confirm, Transaction tx, BlockStoreInterface blockStore)
+			throws BlockStoreException {
+
+		for (TransactionInput in : tx.getInputs()) {
 
 			if (!tx.isCoinBase()) {
 				UTXO prevOut = blockStore.getTransactionOutput(in.getOutpoint().getBlockHash(),
@@ -1798,6 +1831,35 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			}
 		}
 
+	}
+
+	private void confirmBlockTransactionSpentBatch(Block block, BlockStoreInterface blockStore)
+			throws BlockStoreException {
+		List<Sha256Hash> prevBlockHashes = new ArrayList<>();
+		List<Sha256Hash> prevTxHashes = new ArrayList<>();
+		List<Long> indexes = new ArrayList<>();
+		for (Transaction tx : block.getTransactions()) {
+			if (tx.isCoinBase()) continue;
+			for (TransactionInput in : tx.getInputs()) {
+				Sha256Hash b = in.getOutpoint().getBlockHash();
+				Sha256Hash h = in.getOutpoint().getTxHash();
+				long idx = in.getOutpoint().getIndex();
+				prevBlockHashes.add(b);
+				prevTxHashes.add(h);
+				indexes.add(idx);
+			}
+		}
+		if (!prevBlockHashes.isEmpty()) {
+			blockStore.updateTransactionOutputSpentBatch(prevBlockHashes, prevTxHashes, indexes, block.getHash());
+			if (Block.powEnabled) {
+				for (int i = 0; i < prevBlockHashes.size(); i++) {
+					UTXO prevOut = blockStore.getTransactionOutput(prevBlockHashes.get(i),
+							prevTxHashes.get(i), indexes.get(i));
+					if (prevOut != null)
+						cacheBlockService.evictTransactionOutput(prevOut, blockStore);
+				}
+			}
+		}
 	}
 
 	private boolean checkSpentMilestone(UTXO prevOut, Block block, BlockStoreInterface store)
@@ -1879,6 +1941,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	private void updateBlockConfirmOnly(Sha256Hash blockhash, long milestoneNumber, boolean confirmation,
 			BlockStoreInterface store) throws BlockStoreException {
+		if (!Block.powEnabled) return;
 		store.updateBlockEvaluationConfirmed(blockhash, confirmation);
 		store.updateBlockEvaluationMilestone(blockhash, milestoneNumber);
 	}

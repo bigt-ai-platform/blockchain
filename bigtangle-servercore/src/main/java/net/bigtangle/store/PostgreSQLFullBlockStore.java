@@ -88,8 +88,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    confirmed boolean NOT NULL,\n"
             //this is indicator for wallet to minimize conflict, is set for create at spender block
             + "    spendpending boolean NOT NULL,\n" 
-            + "    spendpendingtime bigint,\n" 
-            + "    CONSTRAINT outputs_pk PRIMARY KEY (blockhash, hash, outputindex) \n" 
+            + "    spendpendingtime bigint\n" 
             + "   ) \n";
 
 
@@ -416,6 +415,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    PRIMARY KEY (chainId, utxoBlockHash, utxoIndex)\n)";
 
     // Some indexes to speed up stuff
+    private static final String CREATE_OUTPUTS_BRIN_INDEX = "CREATE INDEX outputs_blockhash_brin_idx ON outputs USING brin(blockhash) WITH (pages_per_range=32) ";
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) ";
     private static final String CREATE_OUTPUTS_TOADDRESS_INDEX = "CREATE INDEX outputs_toaddress_idx ON outputs (toaddress) ";
     private static final String CREATE_OUTPUTS_FROMADDRESS_INDEX = "CREATE INDEX outputs_fromaddress_idx ON outputs (fromaddress) ";
@@ -539,6 +539,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     
     protected List<String> getCreateIndexesSQL1() {
         List<String> sqlStatements = new ArrayList<String>();
+        sqlStatements.add(CREATE_OUTPUTS_BRIN_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_ADDRESS_MULTI_INDEX); 
         sqlStatements.add(CREATE_BLOCKS_HEIGHT_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_TOADDRESS_INDEX);

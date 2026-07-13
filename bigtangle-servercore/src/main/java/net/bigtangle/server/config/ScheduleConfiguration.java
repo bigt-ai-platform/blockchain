@@ -30,7 +30,10 @@ public class ScheduleConfiguration {
 
     @Value("${service.schedule.initsync:false}")
     boolean initSync;
-    
+
+    @Value("${service.schedule.microbatch:false}")
+    boolean microBatch_active;
+
     public boolean isMilestone_active() {
         return milestone_active;
     }
@@ -95,11 +98,20 @@ public class ScheduleConfiguration {
 		this.initSync = initSync;
 	}
 
+    public boolean isMicroBatch_active() {
+        return microBatch_active;
+    }
+
+    public void setMicroBatch_active(boolean microBatch_active) {
+        this.microBatch_active = microBatch_active;
+    }
+
 	@Override
 	public String toString() {
 		return "ScheduleConfiguration [milestone_active=" + milestone_active + ", mcmcrate=" + mcmcrate + ", mining="
 				+ mining + ", blockBatchService_active=" + blockBatchService_active + ", miningrate=" + miningrate
-				+ ", blockbatchrate=" + blockbatchrate + ", syncrate=" + syncrate + ", initSync=" + initSync + "]";
+				+ ", blockbatchrate=" + blockbatchrate + ", syncrate=" + syncrate + ", initSync=" + initSync
+				+ ", microBatch_active=" + microBatch_active + "]";
 	}
 
  
