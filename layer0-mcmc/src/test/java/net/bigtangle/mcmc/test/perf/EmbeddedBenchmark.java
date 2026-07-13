@@ -25,15 +25,14 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.server.config.ScheduleConfiguration;
 
 /**
- * 10-client payment benchmark using embedded Spring Boot server with MCMC.
- * 
- * Each client sends ONE transaction with MANY outputs (like the existing
- * PerformanceRemote pattern). Avoids spendpending lock by using single
- * large transactions per client.
+ * Real 10-client payment benchmark. 500 independent wallets, each with 1 UTXO.
+ * Each wallet sends 2000 to a recipient (1 + 1999 change — no spendpending
+ * lock because wallet is used once).
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
@@ -44,8 +43,8 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedBenchmark.class);
     private static final int CLIENTS = 10;
-    private static final int PAYMENTS_PER_CLIENT = 500;
-    private static final int OUTPUTS_PER_TX = 100;
+    private static final int PAYMENTS_PER_CLIENT = 50;
+    private static final int TOTAL_PAYMENTS = CLIENTS * PAYMENTS_PER_CLIENT;
 
     @Autowired
     protected ScheduleConfiguration scheduleConfiguration;
@@ -63,60 +62,63 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        // Create recipient keys
-        List<List<ECKey>> recipientGroups = new ArrayList<>();
-        for (int c = 0; c < CLIENTS; c++) {
-            List<ECKey> group = new ArrayList<>();
-            for (int p = 0; p < Math.min(OUTPUTS_PER_TX, PAYMENTS_PER_CLIENT); p++) {
-                group.add(new ECKey());
-            }
-            recipientGroups.add(group);
+        // Create 500 independent wallets, each will get 2000 coins
+        List<ECKey> walletKeys = new ArrayList<>();
+        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(new ECKey());
+
+        // Fund all in ONE tx (500 outputs x 12000) — 12000 covers payment + fee
+        // Each wallet sends 10000 to recipient. 12000 - 10000 - 1000 fee = 1000 change
+        HashMap<String, BigInteger> funding = new HashMap<>();
+        for (ECKey k : walletKeys) {
+            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(12000));
+        }
+        Block fb = wallet.payMoneyToECKeyList(null, funding,
+                NetworkParameters.BIGTANGLE_TOKENID, "fund");
+        if (fb != null) {
+            Block rb = makeRewardBlock(fb);
+            blockGraph.updateChain(false);
+            log.info("Funding block {} confirmed by reward {}", fb.getHash(), rb.getHash());
         }
 
-        int txCount = (PAYMENTS_PER_CLIENT + OUTPUTS_PER_TX - 1) / OUTPUTS_PER_TX;
-
-        // Fund genesis wallet with small UTXOs by splitting the genesis coin
-        long totalNeeded = (long) CLIENTS * PAYMENTS_PER_CLIENT + CLIENTS;
-        log.info("Splitting genesis coin into {} UTXOs...", totalNeeded);
-        HashMap<String, BigInteger> splitTx = new HashMap<>();
-        for (int i = 0; i < Math.min(1000, totalNeeded); i++) {
-            ECKey dummy = new ECKey();
-            splitTx.put(dummy.toAddress(networkParameters).toString(), BigInteger.valueOf(1));
-        }
-        wallet.payToList(null, splitTx, NetworkParameters.BIGTANGLE_TOKENID, "split");
-        log.info("Split done");
-
-        // Wait for MCMC to refresh tip after split
+        // Re-init MCMC after funding
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
+
+        ECKey finalRecipient = new ECKey();
+        String finalAddr = finalRecipient.toAddress(networkParameters).toString();
 
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
-
         ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
         @SuppressWarnings("unchecked")
         CompletableFuture<Void>[] futures = new CompletableFuture[CLIENTS];
         long wallStart = System.nanoTime();
 
         for (int c = 0; c < CLIENTS; c++) {
-            int clientId = c;
-            List<ECKey> recipients = recipientGroups.get(c);
+            int startIdx = c * PAYMENTS_PER_CLIENT;
             futures[c] = CompletableFuture.runAsync(() -> {
-                try {
-                    long start = System.nanoTime();
-                    HashMap<String, BigInteger> batchTx = new HashMap<>();
-                    for (ECKey r : recipients) {
-                        batchTx.put(r.toAddress(networkParameters).toString(), BigInteger.valueOf(1));
+                for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
+                    ECKey walletKey = walletKeys.get(startIdx + i);
+                    try {
+                        // Each wallet sends 10000 to final recipient
+                        long start = System.nanoTime();
+                        HashMap<String, BigInteger> pmt = new HashMap<>();
+                        pmt.put(finalAddr, BigInteger.valueOf(10000));
+                        net.bigtangle.wallet.Wallet w = net.bigtangle.wallet.Wallet.fromKeys(
+                                networkParameters, walletKey, contextRoot);
+                        Block b = w.payMoneyToECKeyList(null, pmt,
+                                NetworkParameters.BIGTANGLE_TOKENID, "pay");
+                        if (b != null) {
+                            // Confirm the payment
+                            makeRewardBlock(b);
+                            blockGraph.updateChain(false);
+                            totalNs.addAndGet(System.nanoTime() - start);
+                            ok.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        fail.incrementAndGet();
                     }
-                    Block b = wallet.payToList(null, batchTx, NetworkParameters.BIGTANGLE_TOKENID,
-                            "batch-" + clientId);
-                    if (b != null) {
-                        totalNs.addAndGet(System.nanoTime() - start);
-                        ok.addAndGet(recipients.size());
-                    }
-                } catch (Exception e) {
-                    fail.addAndGet(recipients.size());
                 }
             }, pool);
         }
@@ -130,16 +132,14 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
         log.info("");
         log.info("==============================================");
-        log.info("  Embedded 10-Client Payment Benchmark");
+        log.info("  Real 10-Client Payment Benchmark");
         log.info("==============================================");
-        log.info("Clients:        {}", CLIENTS);
-        log.info("Outputs/client: {}", OUTPUTS_PER_TX);
-        log.info("Total outputs:  {}", ok.get() + fail.get());
-        log.info("OK:             {}", ok.get());
-        log.info("Fail:           {}", fail.get());
-        log.info("Wall time:      {} ms", wallMs);
-        log.info("Avg latency:    {} ms", (long) avg);
-        log.info("Throughput:     {} tx/s", (long) tps);
+        log.info("Clients:         {}", CLIENTS);
+        log.info("Payments/client: {}", PAYMENTS_PER_CLIENT);
+        log.info("Total:           {} (OK {}, fail {})", ok.get() + fail.get(), ok.get(), fail.get());
+        log.info("Wall time:       {} ms", wallMs);
+        log.info("Avg latency:     {} ms", (long) avg);
+        log.info("Throughput:      {} tx/s", (long) tps);
         log.info("==============================================");
         assertTrue(ok.get() > 0, "Must have successful payments");
     }
