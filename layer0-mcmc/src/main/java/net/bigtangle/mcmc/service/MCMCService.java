@@ -130,8 +130,11 @@ public class MCMCService {
 			} catch (Exception e) {
 				log.error("mcmcService", e);
 				if (!e.getLocalizedMessage().contains("java.sql.SQLIntegrityConstraintViolationException")) {
-					try (BlockStoreInterface cleanup = storeService.getStore()) {
+					BlockStoreInterface cleanup = storeService.getStore();
+					try {
 						cleanup.deleteLockobject(LOCKID);
+					} finally {
+						cleanup.close();
 					}
 				}
 			} finally {
