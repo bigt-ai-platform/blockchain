@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.service.schedule.AbstractScheduleInitService;
 
-@Component
+@Component("mcmcScheduleInitService")
 @EnableAsync
 public class ScheduleInitService extends AbstractScheduleInitService {
 

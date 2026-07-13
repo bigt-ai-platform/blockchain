@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import net.bigtangle.server.service.schedule.AbstractScheduleInitService;
 import net.bigtangle.kafka.BlockStreamHandler;
 
-@Component
+@Component("mcmcScheduleInitService")
 @EnableAsync
 public class ScheduleInitService extends AbstractScheduleInitService {
 

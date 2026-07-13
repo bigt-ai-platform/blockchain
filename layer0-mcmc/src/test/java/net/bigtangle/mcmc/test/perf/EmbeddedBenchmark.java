@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
@@ -29,6 +30,10 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 
 /**
  * 10-client payment benchmark using embedded Spring Boot server with MCMC.
+ * 
+ * Each client sends ONE transaction with MANY outputs (like the existing
+ * PerformanceRemote pattern). Avoids spendpending lock by using single
+ * large transactions per client.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
@@ -39,29 +44,51 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedBenchmark.class);
     private static final int CLIENTS = 10;
-    private static final int PAYMENTS_PER_CLIENT = 100;
+    private static final int PAYMENTS_PER_CLIENT = 500;
+    private static final int OUTPUTS_PER_TX = 100;
 
     @Autowired
     protected ScheduleConfiguration scheduleConfiguration;
-
-    private List<ECKey> userKeys;
 
     @Override
     @BeforeEach
     public void setUp() throws Exception {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
-        userKeys = createUserkey();
-        for (ECKey key : userKeys) {
-            payBigTo(key, BigInteger.valueOf(1000000), null);
-        }
-        log.info("Funded {} wallets", userKeys.size());
     }
 
     @Test
     public void testPaymentThroughput() throws Exception {
-        List<ECKey> recipients = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) recipients.add(new ECKey());
+        // Initialize MCMC
+        mcmcService.update(store);
+        mcmcService.calcNewBlockPrototype(store);
+
+        // Create recipient keys
+        List<List<ECKey>> recipientGroups = new ArrayList<>();
+        for (int c = 0; c < CLIENTS; c++) {
+            List<ECKey> group = new ArrayList<>();
+            for (int p = 0; p < Math.min(OUTPUTS_PER_TX, PAYMENTS_PER_CLIENT); p++) {
+                group.add(new ECKey());
+            }
+            recipientGroups.add(group);
+        }
+
+        int txCount = (PAYMENTS_PER_CLIENT + OUTPUTS_PER_TX - 1) / OUTPUTS_PER_TX;
+
+        // Fund genesis wallet with small UTXOs by splitting the genesis coin
+        long totalNeeded = (long) CLIENTS * PAYMENTS_PER_CLIENT + CLIENTS;
+        log.info("Splitting genesis coin into {} UTXOs...", totalNeeded);
+        HashMap<String, BigInteger> splitTx = new HashMap<>();
+        for (int i = 0; i < Math.min(1000, totalNeeded); i++) {
+            ECKey dummy = new ECKey();
+            splitTx.put(dummy.toAddress(networkParameters).toString(), BigInteger.valueOf(1));
+        }
+        wallet.payToList(null, splitTx, NetworkParameters.BIGTANGLE_TOKENID, "split");
+        log.info("Split done");
+
+        // Wait for MCMC to refresh tip after split
+        mcmcService.update(store);
+        mcmcService.calcNewBlockPrototype(store);
 
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
@@ -73,18 +100,23 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         long wallStart = System.nanoTime();
 
         for (int c = 0; c < CLIENTS; c++) {
-            ECKey fromKey = userKeys.get(c % userKeys.size());
-            ECKey toKey = recipients.get(c);
+            int clientId = c;
+            List<ECKey> recipients = recipientGroups.get(c);
             futures[c] = CompletableFuture.runAsync(() -> {
-                for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
-                    try {
-                        long start = System.nanoTime();
-                        payBigTo(fromKey, BigInteger.valueOf(1), null);
-                        totalNs.addAndGet(System.nanoTime() - start);
-                        ok.incrementAndGet();
-                    } catch (Exception e) {
-                        fail.incrementAndGet();
+                try {
+                    long start = System.nanoTime();
+                    HashMap<String, BigInteger> batchTx = new HashMap<>();
+                    for (ECKey r : recipients) {
+                        batchTx.put(r.toAddress(networkParameters).toString(), BigInteger.valueOf(1));
                     }
+                    Block b = wallet.payToList(null, batchTx, NetworkParameters.BIGTANGLE_TOKENID,
+                            "batch-" + clientId);
+                    if (b != null) {
+                        totalNs.addAndGet(System.nanoTime() - start);
+                        ok.addAndGet(recipients.size());
+                    }
+                } catch (Exception e) {
+                    fail.addAndGet(recipients.size());
                 }
             }, pool);
         }
@@ -100,11 +132,14 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         log.info("==============================================");
         log.info("  Embedded 10-Client Payment Benchmark");
         log.info("==============================================");
-        log.info("OK:      {}", ok.get());
-        log.info("Fail:    {}", fail.get());
-        log.info("Wall:    {} ms", wallMs);
-        log.info("Avg lat: {} ms", (long) avg);
-        log.info("TPS:     {} tx/s", (long) tps);
+        log.info("Clients:        {}", CLIENTS);
+        log.info("Outputs/client: {}", OUTPUTS_PER_TX);
+        log.info("Total outputs:  {}", ok.get() + fail.get());
+        log.info("OK:             {}", ok.get());
+        log.info("Fail:           {}", fail.get());
+        log.info("Wall time:      {} ms", wallMs);
+        log.info("Avg latency:    {} ms", (long) avg);
+        log.info("Throughput:     {} tx/s", (long) tps);
         log.info("==============================================");
         assertTrue(ok.get() > 0, "Must have successful payments");
     }
