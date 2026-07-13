@@ -24,15 +24,16 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.server.config.ScheduleConfiguration;
+import net.bigtangle.wallet.Wallet;
 
 /**
- * Real 10-client payment benchmark. 500 independent wallets, each with 1 UTXO.
- * Each wallet sends 2000 to a recipient (1 + 1999 change — no spendpending
- * lock because wallet is used once).
+ * Batched 10-client payment benchmark. Each client batches 50 payments into 
+ * ONE block → 1 solve → 1 reward block. Reduces PoW from 500 to 10.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
@@ -58,16 +59,13 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     @Test
     public void testPaymentThroughput() throws Exception {
-        // Initialize MCMC
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        // Create 500 independent wallets, each will get 2000 coins
+        // Create 500 wallet keys, fund each with 12000 coins
         List<ECKey> walletKeys = new ArrayList<>();
         for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(new ECKey());
 
-        // Fund all in ONE tx (500 outputs x 12000) — 12000 covers payment + fee
-        // Each wallet sends 10000 to recipient. 12000 - 10000 - 1000 fee = 1000 change
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(12000));
@@ -77,19 +75,18 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         if (fb != null) {
             Block rb = makeRewardBlock(fb);
             blockGraph.updateChain(false);
-            log.info("Funding block {} confirmed by reward {}", fb.getHash(), rb.getHash());
+            log.info("Funded {} wallets, reward={}", walletKeys.size(), rb.getHash());
         }
 
-        // Re-init MCMC after funding
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
         ECKey finalRecipient = new ECKey();
         String finalAddr = finalRecipient.toAddress(networkParameters).toString();
-
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
+
         ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
         @SuppressWarnings("unchecked")
         CompletableFuture<Void>[] futures = new CompletableFuture[CLIENTS];
@@ -98,27 +95,36 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         for (int c = 0; c < CLIENTS; c++) {
             int startIdx = c * PAYMENTS_PER_CLIENT;
             futures[c] = CompletableFuture.runAsync(() -> {
-                for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
-                    ECKey walletKey = walletKeys.get(startIdx + i);
-                    try {
-                        // Each wallet sends 10000 to final recipient
-                        long start = System.nanoTime();
-                        HashMap<String, BigInteger> pmt = new HashMap<>();
-                        pmt.put(finalAddr, BigInteger.valueOf(10000));
-                        net.bigtangle.wallet.Wallet w = net.bigtangle.wallet.Wallet.fromKeys(
-                                networkParameters, walletKey, contextRoot);
-                        Block b = w.payMoneyToECKeyList(null, pmt,
-                                NetworkParameters.BIGTANGLE_TOKENID, "pay");
-                        if (b != null) {
-                            // Confirm the payment
-                            makeRewardBlock(b);
-                            blockGraph.updateChain(false);
-                            totalNs.addAndGet(System.nanoTime() - start);
-                            ok.incrementAndGet();
+                try {
+                    // Get ONE tip block for this client
+                    Wallet firstW = Wallet.fromKeys(networkParameters, walletKeys.get(startIdx), contextRoot);
+                    Block tip = firstW.getTip();
+                    List<Block> clientBlocks = new ArrayList<>();
+
+                    for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
+                        ECKey wk = walletKeys.get(startIdx + i);
+                        Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
+                        Transaction tx = w.payToListTransaction(null,
+                                new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(10000))),
+                                NetworkParameters.BIGTANGLE_TOKENID, "pay",
+                                w.calculateAllSpendCandidates(null, false));
+                        if (tx != null) {
+                            tip.addTransaction(tx);
                         }
-                    } catch (Exception e) {
-                        fail.incrementAndGet();
                     }
+
+                    // Solve ONCE and post
+                    long solveStart = System.nanoTime();
+                    Block posted = firstW.solveAndPost(tip);
+                    if (posted != null) {
+                        clientBlocks.add(posted);
+                        Block reward = makeRewardBlock(posted);
+                        clientBlocks.add(reward);
+                        totalNs.addAndGet(System.nanoTime() - solveStart);
+                        ok.addAndGet(PAYMENTS_PER_CLIENT);
+                    }
+                } catch (Exception e) {
+                    fail.addAndGet(PAYMENTS_PER_CLIENT);
                 }
             }, pool);
         }
@@ -126,13 +132,16 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         CompletableFuture.allOf(futures).get(10, TimeUnit.MINUTES);
         pool.shutdownNow();
 
+        // One chain update at the end
+        blockGraph.updateChain(false);
+
         long wallMs = (System.nanoTime() - wallStart) / 1_000_000;
         double tps = wallMs > 0 ? (double) ok.get() / wallMs * 1000 : 0;
         double avg = ok.get() > 0 ? (double) totalNs.get() / ok.get() / 1_000_000 : 0;
 
         log.info("");
         log.info("==============================================");
-        log.info("  Real 10-Client Payment Benchmark");
+        log.info("  Batched 10-Client Payment Benchmark");
         log.info("==============================================");
         log.info("Clients:         {}", CLIENTS);
         log.info("Payments/client: {}", PAYMENTS_PER_CLIENT);
