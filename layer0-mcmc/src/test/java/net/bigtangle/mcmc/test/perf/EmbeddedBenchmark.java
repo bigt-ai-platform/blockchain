@@ -43,8 +43,8 @@ import net.bigtangle.wallet.Wallet;
 public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedBenchmark.class);
-    private static final int CLIENTS = 10;
-    private static final int PAYMENTS_PER_CLIENT = 50;
+    private static final int CLIENTS = 50;
+    private static final int PAYMENTS_PER_CLIENT = 40;
     private static final int TOTAL_PAYMENTS = CLIENTS * PAYMENTS_PER_CLIENT;
 
     @Autowired
