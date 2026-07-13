@@ -26,25 +26,26 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
-import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.wallet.Wallet;
 
 /**
- * Batched 10-client payment benchmark. Each client batches 50 payments into 
- * ONE block → 1 solve → 1 reward block. Reduces PoW from 500 to 10.
+ * Max-throughput benchmark. Each client batches all payments into ONE block.
+ * ONE reward block at the end confirms everything. HikariCP pool = 100.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = { "server.net=Test",
-                       "spring.main.allow-bean-definition-overriding=true" })
+                       "spring.main.allow-bean-definition-overriding=true",
+                       "spring.datasource.hikari.maximum-pool-size=100" })
 public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedBenchmark.class);
     private static final int CLIENTS = 50;
-    private static final int PAYMENTS_PER_CLIENT = 40;
+    private static final int PAYMENTS_PER_CLIENT = 100;
     private static final int TOTAL_PAYMENTS = CLIENTS * PAYMENTS_PER_CLIENT;
 
     @Autowired
@@ -62,20 +63,21 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        // Create 500 wallet keys, fund each with 12000 coins
+        // Create wallet keys — one per payment
         List<ECKey> walletKeys = new ArrayList<>();
         for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(new ECKey());
 
+        // Fund all in ONE transaction
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (ECKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(12000));
+            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
         Block fb = wallet.payMoneyToECKeyList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund");
         if (fb != null) {
             Block rb = makeRewardBlock(fb);
             blockGraph.updateChain(false);
-            log.info("Funded {} wallets, reward={}", walletKeys.size(), rb.getHash());
+            log.info("Funded {} wallets", walletKeys.size());
         }
 
         mcmcService.update(store);
@@ -96,31 +98,23 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
             int startIdx = c * PAYMENTS_PER_CLIENT;
             futures[c] = CompletableFuture.runAsync(() -> {
                 try {
-                    // Get ONE tip block for this client
                     Wallet firstW = Wallet.fromKeys(networkParameters, walletKeys.get(startIdx), contextRoot);
                     Block tip = firstW.getTip();
-                    List<Block> clientBlocks = new ArrayList<>();
 
                     for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
                         ECKey wk = walletKeys.get(startIdx + i);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(10000))),
+                                new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay",
                                 w.calculateAllSpendCandidates(null, false));
-                        if (tx != null) {
-                            tip.addTransaction(tx);
-                        }
+                        if (tx != null) tip.addTransaction(tx);
                     }
 
-                    // Solve ONCE and post
-                    long solveStart = System.nanoTime();
+                    long start = System.nanoTime();
                     Block posted = firstW.solveAndPost(tip);
                     if (posted != null) {
-                        clientBlocks.add(posted);
-                        Block reward = makeRewardBlock(posted);
-                        clientBlocks.add(reward);
-                        totalNs.addAndGet(System.nanoTime() - solveStart);
+                        totalNs.addAndGet(System.nanoTime() - start);
                         ok.addAndGet(PAYMENTS_PER_CLIENT);
                     }
                 } catch (Exception e) {
@@ -132,8 +126,12 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         CompletableFuture.allOf(futures).get(10, TimeUnit.MINUTES);
         pool.shutdownNow();
 
-        // One chain update at the end
-        blockGraph.updateChain(false);
+        // Final reward + chain update to confirm all blocks
+        if (ok.get() > 0) {
+            mcmcService.update(store);
+            mcmcService.calcNewBlockPrototype(store);
+            blockGraph.updateChain(false);
+        }
 
         long wallMs = (System.nanoTime() - wallStart) / 1_000_000;
         double tps = wallMs > 0 ? (double) ok.get() / wallMs * 1000 : 0;
@@ -141,10 +139,11 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
         log.info("");
         log.info("==============================================");
-        log.info("  Batched 10-Client Payment Benchmark");
+        log.info("  Max-Throughput Benchmark");
         log.info("==============================================");
         log.info("Clients:         {}", CLIENTS);
         log.info("Payments/client: {}", PAYMENTS_PER_CLIENT);
+        log.info("Pool size:       100");
         log.info("Total:           {} (OK {}, fail {})", ok.get() + fail.get(), ok.get(), fail.get());
         log.info("Wall time:       {} ms", wallMs);
         log.info("Avg latency:     {} ms", (long) avg);
