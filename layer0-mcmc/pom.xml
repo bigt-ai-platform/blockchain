@@ -49,6 +49,12 @@
 			<version>1.5.2</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>net.bigtangle</groupId>
+			<artifactId>l1-contract-server</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
 
 	</dependencies>
 
@@ -98,8 +104,8 @@
 					<redirectTestOutputToFile>true</redirectTestOutputToFile>
 					<excludes>
 						<exclude>**/net/bigtangle/mcmc/remote/**</exclude>
-						<exclude>**/net/bigtangle/performance/**</exclude>
 					</excludes>
+					<argLine>-Dspring.main.allow-bean-definition-overriding=true</argLine>
 				</configuration>
 			</plugin>
 
