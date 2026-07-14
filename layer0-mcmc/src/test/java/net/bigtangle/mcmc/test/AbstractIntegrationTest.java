@@ -280,6 +280,8 @@ public abstract class AbstractIntegrationTest {
 		resetStore();
 		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
 		serverConfiguration.setServiceReady(true);
+		mcmcService.update(store);
+		mcmcService.calcNewBlockPrototype(store);
 
 	}
 

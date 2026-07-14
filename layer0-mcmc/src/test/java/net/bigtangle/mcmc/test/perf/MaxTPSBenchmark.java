@@ -43,8 +43,7 @@ import net.bigtangle.wallet.Wallet;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = { "server.net=Test",
                        "spring.main.allow-bean-definition-overriding=true",
-                       "spring.datasource.hikari.maximum-pool-size=100",
-                       "server.powEnabled=false" })
+                       "spring.datasource.hikari.maximum-pool-size=100" })
 public class MaxTPSBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(MaxTPSBenchmark.class);
@@ -71,7 +70,6 @@ public class MaxTPSBenchmark extends AbstractIntegrationTest {
 
     @Test
     public void testMaxTPS() throws Exception {
-        Block.powEnabled = false;
 
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);

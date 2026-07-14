@@ -49,7 +49,6 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
     @Override
     @BeforeEach
     public void setUp() throws Exception {
-        Block.powEnabled = false;
         super.setUp();
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
