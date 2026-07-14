@@ -31,7 +31,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 
 
-@org.junit.jupiter.api.Disabled("MCMC assertions need PoS conversion")
 public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 	@Test
@@ -70,7 +69,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testConnectTokenUTXOs() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testConnectTokenUTXOs() throws Exception {
 
 		ECKey ecKey1 = new ECKey();
 		byte[] pubKey = ecKey1.getPubKey();
@@ -192,7 +192,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testConfirmTokenUTXOs() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testConfirmTokenUTXOs() throws Exception {
 
 		// Generate an eligible issuance
 		ECKey outKey = new ECKey();
@@ -295,7 +296,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testUnconfirmTokenUTXOs() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testUnconfirmTokenUTXOs() throws Exception {
 
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance

@@ -35,7 +35,7 @@ import net.bigtangle.utils.OkHttp3Util;
 /*
  * test payment, buy and sell and create the roll back of reward  by switch to longest chain
  */
-@org.junit.jupiter.api.Disabled("MCMC assertions need PoS conversion")
+@org.junit.jupiter.api.Disabled("PoS conversion")
 public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell

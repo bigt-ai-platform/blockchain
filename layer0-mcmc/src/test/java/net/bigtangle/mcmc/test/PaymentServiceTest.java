@@ -42,7 +42,6 @@ import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
-@org.junit.jupiter.api.Disabled("1 assertion needs PoS conversion")
 public class PaymentServiceTest extends AbstractIntegrationTest {
 	private static final Logger log = LoggerFactory.getLogger(PaymentServiceTest.class);
 
@@ -160,7 +159,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 	@Test
 	// transfer the coin to address
-	public void testPossibleConflict() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 		Address address = new ECKey().toAddress(networkParameters);

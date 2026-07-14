@@ -70,7 +70,6 @@ import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
-@org.junit.jupiter.api.Disabled("MCMC assertions need PoS conversion")
 public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 	@Test
@@ -111,7 +110,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testVerificationIncorrectPoW() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testVerificationIncorrectPoW() throws Exception {
 
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block r1 = tipsToApprove.getLeft().getBlock();
@@ -351,7 +351,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testUnsolidMissingToken() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testUnsolidMissingToken() throws Exception {
 
 		// Generate an eligible issuance
 		ECKey outKey = wallet.walletKeys().get(0);
@@ -502,7 +503,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTXDoubleSpend() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTXDoubleSpend() throws Exception {
 
 		// Create block with UTXOs
 		Transaction tx1 = createTestTransaction();
@@ -711,7 +713,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityRewardTxWrongDifficulty() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityRewardTxWrongDifficulty() throws Exception {
 
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 
@@ -852,7 +855,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityRewardTxMalformedData2() throws Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityRewardTxMalformedData2() throws Exception {
 
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 
@@ -2012,7 +2016,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTokenPredecessorWrongTokenid() throws JsonProcessingException, Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTokenPredecessorWrongTokenid() throws JsonProcessingException, Exception {
 
 		// Generate an eligible issuance
 		ECKey outKey = wallet.walletKeys().get(0);
@@ -2047,7 +2052,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTokenWrongTokenindex() throws JsonProcessingException, Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTokenWrongTokenindex() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
@@ -2082,7 +2088,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTokenPredecessorStopped() throws JsonProcessingException, Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTokenPredecessorStopped() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
@@ -2117,7 +2124,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTokenPredecessorConflictingType() throws JsonProcessingException, Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTokenPredecessorConflictingType() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
@@ -2153,7 +2161,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testSolidityTokenPredecessorConflictingName() throws JsonProcessingException, Exception {
+	@org.junit.jupiter.api.Disabled("PoS conversion")
+    public void testSolidityTokenPredecessorConflictingName() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
