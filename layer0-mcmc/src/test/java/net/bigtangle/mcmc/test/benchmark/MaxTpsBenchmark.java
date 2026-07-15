@@ -44,14 +44,14 @@ import net.bigtangle.wallet.Wallet;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = { "server.net=Test",
                        "spring.main.allow-bean-definition-overriding=true",
-                       "spring.datasource.hikari.maximum-pool-size=100" })
+                       "spring.datasource.hikari.maximum-pool-size=200" })
 public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(MaxTpsBenchmark.class);
 
-    private static final int CLIENTS = 50;
-    private static final int TX_PER_CLIENT = 1000;
-    private static final int BATCH_SIZE = 100;
+    private static final int CLIENTS = 200;
+    private static final int TX_PER_CLIENT = 250;
+    private static final int BATCH_SIZE = 250;
     private static final int TOTAL_TX = CLIENTS * TX_PER_CLIENT;
 
     @Autowired

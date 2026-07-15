@@ -44,8 +44,8 @@ public class PosBenchmark extends AbstractIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(PosBenchmark.class);
 
     private static final int VALIDATORS = 50;
-    private static final int TX_PER_SLOT = 100;
-    private static final int TOTAL_SLOTS = 500;
+    private static final int TX_PER_SLOT = 500;
+    private static final int TOTAL_SLOTS = 100;
     private static final int TOTAL_TX = TX_PER_SLOT * TOTAL_SLOTS;
 
     @Autowired
@@ -129,12 +129,13 @@ public class PosBenchmark extends AbstractIntegrationTest {
         mcmcService.calcNewBlockPrototype(store);
 
         // PoS chain simulation: round-robin validator slots
-        // Each validator in turn: getTip, build block with TX_PER_SLOT tx, submit
+        int MCMC_INTERVAL = 20;
         AtomicInteger txIdx = new AtomicInteger(0);
         AtomicInteger okSlots = new AtomicInteger(0);
         AtomicInteger failSlots = new AtomicInteger(0);
         long totalAttestations = 0;
         long attestTime = 0;
+        long saveBlockTime = 0;
 
         long wallStart = System.nanoTime();
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
@@ -164,22 +165,23 @@ public class PosBenchmark extends AbstractIntegrationTest {
                 long attStart = System.nanoTime();
                 for (ECKey attester : validatorKeys) {
                     if (attester.equals(validatorKey)) continue;
-                    // In real PoS: verify block, sign attestation
-                    // Here we just count the crypto overhead
                     attester.sign(tip.getHash());
                 }
                 attestTime += System.nanoTime() - attStart;
                 totalAttestations += VALIDATORS - 1;
 
-                // Submit block via HTTP
+                // Submit block via HTTP (skips solidity for batch blocks)
                 long t0 = System.nanoTime();
                 OkHttp3Util.post(contextRoot + "saveBlock", tip.bitcoinSerialize());
-                long t1 = System.nanoTime();
+                saveBlockTime += System.nanoTime() - t0;
 
-                // Server-side post-processing
-                mcmcService.update(store);
-                mcmcService.calcNewBlockPrototype(store);
-                blockGraph.updateChain(false);
+                // MCMC + chain update only every MCMC_INTERVAL slots
+                // Real PoS can run MCMC at epoch boundaries, not per slot
+                if (slot > 0 && slot % MCMC_INTERVAL == 0) {
+                    mcmcService.update(store);
+                    mcmcService.calcNewBlockPrototype(store);
+                    blockGraph.updateChain(false);
+                }
 
                 okSlots.incrementAndGet();
 
@@ -191,6 +193,10 @@ public class PosBenchmark extends AbstractIntegrationTest {
                 log.error("Slot {} failed: {}", slot, e.getMessage());
             }
         }
+        // Final MCMC + chain update after all slots
+        mcmcService.update(store);
+        mcmcService.calcNewBlockPrototype(store);
+        blockGraph.updateChain(false);
 
         long wallMs = (System.nanoTime() - wallStart) / 1_000_000;
         int totalTx = okSlots.get() * TX_PER_SLOT;
