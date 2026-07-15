@@ -805,7 +805,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected void putUpdateStoredBlock(Block block, BlockEvaluation blockEvaluation) throws SQLException {
 		try {
-
 			PreparedStatement s = getConnection().prepareStatement(INSERT_BLOCKS_SQL);
 			s.setBytes(1, block.getHash().getBytes());
 			s.setLong(2, block.getHeight());
@@ -819,18 +818,13 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			int j = 1;
 			s.setLong(j + 7, blockEvaluation.getMilestone());
 			s.setLong(j + 8, blockEvaluation.getMilestoneLastUpdateTime());
-
 			s.setLong(j + 9, blockEvaluation.getInsertTime());
-
 			s.setLong(j + 10, blockEvaluation.getSolid());
 			s.setBoolean(j + 11, blockEvaluation.isConfirmed());
 
 			s.executeUpdate();
 			s.close();
-			// log.info("add block hexStr : " + block.getHash().toString());
 		} catch (SQLException e) {
-			// It is possible we try to add a duplicate Block if we
-			// upgraded
 			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
 				throw e;
 		}

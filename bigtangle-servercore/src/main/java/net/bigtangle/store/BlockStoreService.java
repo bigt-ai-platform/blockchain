@@ -332,8 +332,13 @@ public class BlockStoreService {
 
 	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
 			boolean allowMissingPredecessor) throws BlockStoreException {
+		return addNonChain(block, allowUnsolid, blockStore, allowMissingPredecessor, false);
+	}
+
+	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
+			boolean allowMissingPredecessor, boolean batch) throws BlockStoreException {
  	 	log.debug("addNonChain"+ block.toString());
-		if (!allowUnsolid) {
+		if (!batch) {
 			block.verifyHeader();
 			block.verifyTransactions();
 		}

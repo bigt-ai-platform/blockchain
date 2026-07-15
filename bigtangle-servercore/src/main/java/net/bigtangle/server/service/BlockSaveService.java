@@ -67,7 +67,7 @@ public class BlockSaveService {
 	 *  the MCMC bridge. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
 		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch()) {
-			blockgraph.addNonChain(block, true, store, true);
+			blockgraph.addNonChain(block, true, store, true, true);
 		}
 		broadcastBlock(block);
 	}
