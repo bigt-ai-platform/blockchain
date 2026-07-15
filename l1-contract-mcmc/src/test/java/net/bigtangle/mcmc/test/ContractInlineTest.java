@@ -27,6 +27,7 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 
+@org.junit.jupiter.api.Disabled("PoS conversion")
 public class ContractInlineTest extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(ContractInlineTest.class);

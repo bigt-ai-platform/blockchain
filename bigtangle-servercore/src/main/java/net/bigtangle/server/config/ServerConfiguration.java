@@ -126,7 +126,7 @@ public class ServerConfiguration {
      * Whether proof-of-work is required for new blocks.
      * Disable on test networks for higher throughput.
      */
-    private Boolean powEnabled = true;
+
     
     /** 
      * Block interval for creating checkpoints.
@@ -593,12 +593,4 @@ public class ServerConfiguration {
         this.dockerDBHostData = dockerDBHostData;
     }
 
-    public Boolean getPowEnabled() {
-        return powEnabled;
-    }
-
-    public void setPowEnabled(Boolean powEnabled) {
-        this.powEnabled = powEnabled;
-        Block.powEnabled = powEnabled;
-    }
 }

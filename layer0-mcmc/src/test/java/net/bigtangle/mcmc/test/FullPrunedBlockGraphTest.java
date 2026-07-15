@@ -69,8 +69,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion - signToken height check")
-    public void testConnectTokenUTXOs() throws Exception {
+	public void testConnectTokenUTXOs() throws Exception {
 
 		ECKey ecKey1 = new ECKey();
 		byte[] pubKey = ecKey1.getPubKey();
@@ -191,9 +190,9 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertFalse(utxo1.isSpent());
 	}
 
-	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion - signToken height check")
-    public void testConfirmTokenUTXOs() throws Exception {
+	// PoS conversion: reward path confirmation needs PoS upgrade
+	// @Test
+	public void disabled_testConfirmTokenUTXOs() throws Exception {
 
 		// Generate an eligible issuance
 		ECKey outKey = new ECKey();
@@ -296,8 +295,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion - signToken height check")
-    public void testUnconfirmTokenUTXOs() throws Exception {
+	public void testUnconfirmTokenUTXOs() throws Exception {
 
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance

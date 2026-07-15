@@ -1169,10 +1169,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void confirmBlockTransactionWithType(BlockWrap block, long milestoneNumber, boolean confirmation,
 			BlockStoreInterface blockStore) throws BlockStoreException {
 
-		if (Block.powEnabled) {
-			blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
-		}
-		if (confirmation && Block.powEnabled) {
+		blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
+		if (confirmation) {
 			confirmBlockTransactionSpentBatch(block.getBlock(), blockStore);
 		} else {
 			for (final Transaction tx : block.getBlock().getTransactions()) {
@@ -1190,7 +1188,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// type-specific updates (fallback when no handler registered)
 		switch (block.getBlock().getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
-				BLOCKTYPE_CONTRACT_EVENT,  BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL:
+				BLOCKTYPE_CONTRACT_EVENT,  BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL, BLOCKTYPE_STAKE,
+				BLOCKTYPE_SLASHING:
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_REWARD:
@@ -1851,13 +1850,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 		if (!prevBlockHashes.isEmpty()) {
 			blockStore.updateTransactionOutputSpentBatch(prevBlockHashes, prevTxHashes, indexes, block.getHash());
-			if (Block.powEnabled) {
-				for (int i = 0; i < prevBlockHashes.size(); i++) {
+			for (int i = 0; i < prevBlockHashes.size(); i++) {
 					UTXO prevOut = blockStore.getTransactionOutput(prevBlockHashes.get(i),
 							prevTxHashes.get(i), indexes.get(i));
 					if (prevOut != null)
 						cacheBlockService.evictTransactionOutput(prevOut, blockStore);
-				}
 			}
 		}
 	}
@@ -1941,7 +1938,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	private void updateBlockConfirmOnly(Sha256Hash blockhash, long milestoneNumber, boolean confirmation,
 			BlockStoreInterface store) throws BlockStoreException {
-		if (!Block.powEnabled) return;
 		store.updateBlockEvaluationConfirmed(blockhash, confirmation);
 		store.updateBlockEvaluationMilestone(blockhash, milestoneNumber);
 	}

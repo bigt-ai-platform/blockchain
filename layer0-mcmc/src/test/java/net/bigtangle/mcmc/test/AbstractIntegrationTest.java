@@ -1282,11 +1282,12 @@ public abstract class AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		mcmcService.update(store);
+		Block tipP = cacheBlockPrototypeService.getBlockPrototype(store);
+		Block block = Block.createBlock(networkParameters,
+				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
+		block.setMinerAddress(tipP.getMinerAddress());
 		block.addCoinbaseTransaction(keys.get(2).getPubKey(), basecoin, tokenInfo, new MemoInfo("coinbase"));
 		block = adjustSolve(block);
 
@@ -1466,17 +1467,16 @@ public abstract class AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		mcmcService.update(store);
+		Block tipP = cacheBlockPrototypeService.getBlockPrototype(store);
+		Block block = Block.createBlock(networkParameters,
+				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
+		block.setMinerAddress(tipP.getMinerAddress());
 
 		if (overrideHash1 != null && overrideHash2 != null) {
 			block.setPrevBlockHash(overrideHash1.getHash());
-
 			block.setPrevBranchBlockHash(overrideHash2.getHash());
-
 			block.setHeight(Math.max(overrideHash2.getHeight(), overrideHash1.getHeight()) + 1);
 		}
 

@@ -141,7 +141,13 @@ public class DispatcherController implements DisposableBean {
         }
 		@SuppressWarnings("rawtypes")
 		final Future<String> handler = requestExecutor.submit((Callable) () -> {
-            processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
+			try {
+				processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
+			} catch (Throwable t) {
+				System.err.println("ERROR in processDo reqCmd=" + reqCmd + ": " + t.getClass().getName() + ": " + t.getMessage());
+				t.printStackTrace();
+				throw t;
+			}
             return "";
         });
 		try {
@@ -153,6 +159,13 @@ public class DispatcherController implements DisposableBean {
 			StringWriter sw = new StringWriter();
 			resp.setMessage(sw.toString());
 			gzipBinary(httpServletResponse, resp, reqCmd);
+		} catch (java.util.concurrent.ExecutionException e) {
+			System.err.println("ERROR ExecutionException reqCmd=" + reqCmd + " cause=" + (e.getCause() != null ? e.getCause().getClass().getName() + ": " + e.getCause().getMessage() : "null"));
+			logger.error("process ExecutionException for reqCmd={}", reqCmd, e.getCause());
+			Stopwatch watch = Stopwatch.createStarted();
+			AbstractResponse resp = ErrorResponse.create(101);
+			resp.setMessage(e.getCause() != null ? e.getCause().getLocalizedMessage() : e.getLocalizedMessage());
+			this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
 		}
 
 	}

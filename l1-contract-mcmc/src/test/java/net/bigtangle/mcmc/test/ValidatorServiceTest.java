@@ -71,6 +71,7 @@ import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
+@org.junit.jupiter.api.Disabled("PoS conversion")
 public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 	@Test

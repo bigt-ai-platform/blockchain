@@ -42,10 +42,8 @@ import com.google.common.collect.ImmutableList;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.CoinbaseDisallowedException;
-import net.bigtangle.exception.VerificationException.DifficultyTargetException;
 import net.bigtangle.exception.VerificationException.LargerThanMaxBlockSize;
 import net.bigtangle.exception.VerificationException.MerkleRootMismatchException;
-import net.bigtangle.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.exception.VerificationException.SigOpsException;
 import net.bigtangle.exception.VerificationException.TimeTravelerException;
 import net.bigtangle.params.NetworkParameters;
@@ -397,25 +395,7 @@ public class Block extends Message {
 		}
 	}
 
-	/**
-	 * Calculates the hash relevant for PoW difficulty checks.
-	 */
-	private Sha256Hash calculatePoWHash() {
-		try {
-			ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(NetworkParameters.HEADER_SIZE);
-			writeHeader(bos);
-			return Sha256Hash.wrapReversed(Sha256Hash.hashTwice(bos.toByteArray()));
-		} catch (IOException e) {
-			throw new RuntimeException(e); // Cannot happen.
-		}
-	}
-
-	/**
-	 * Returns the hash of the block (which for a valid, solved block should be
-	 * below the target) in the form seen on the block explorer. If you call this on
-	 * block 1 in the mainnet chain you will get
-	 * "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048".
-	 */
+	/** Returns the hash as hex string. */
 	public String getHashAsString() {
 		return getHash().toString();
 	}
@@ -429,25 +409,6 @@ public class Block extends Message {
 		if (hash == null)
 			hash = calculateHash();
 		return hash;
-	}
-
-	/**
-	 * The number that is one greater than the largest representable SHA-256 hash.
-	 */
-	private static final BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
-
-	/**
-	 * Returns the work represented by this block.
-	 * <p>
-	 *
-	 * Work is defined as the number of tries needed to solve a block in the average
-	 * case. Consider a difficulty target that covers 5% of all possible hash
-	 * values. Then the work of the block will be 20. As the target gets lower, the
-	 * amount of work goes up.
-	 */
-	public BigInteger getWork() throws VerificationException {
-		BigInteger target = getDifficultyTargetAsInteger();
-		return LARGEST_HASH.divide(target.add(BigInteger.ONE));
 	}
 
 	/** Returns a copy of the block */
@@ -558,83 +519,16 @@ public class Block extends Message {
 	 * Finds a value of nonce and equihashProof if using Equihash that validates
 	 * correctly.
 	 */
-	/** Disables proof-of-work when false. Set via --server.powEnabled=false. */
-	public static volatile boolean powEnabled = true;
-
-	public void solve(BigInteger target) {
-		if (!powEnabled) {
-			setNonce(0);
-			return;
-		}
-		// Add randomness to prevent new empty blocks from same miner with same
-		// approved blocks to be the same
-		setNonce(gen.nextLong());
-
-		while (true) {
-			try {
-				// Is our proof of work valid yet?
-				if (checkProofOfWork(false, target))
-					return;
-
-				// No, so increment the nonce and try again.
-				setNonce(getNonce() + 1);
-
-			} catch (VerificationException e) {
-				throw new RuntimeException(e); // Cannot happen.
-			}
-		}
-	}
-
-	/**
-	 * <p>
-	 * Finds a value of nonce and equihashProof if using Equihash that validates
-	 * correctly.
-	 */
 	public void solve() {
-		solve(getDifficultyTargetAsInteger());
+		setNonce(0);
 	}
 
-	/**
-	 * Returns the difficulty target as a 256 bit value that can be compared to a
-	 * SHA-256 hash. Inside a block the target is represented using a compact form.
-	 * If this form decodes to a value that is out of bounds, an exception is
-	 * thrown.
-	 */
-	public BigInteger getDifficultyTargetAsInteger() throws VerificationException {
-		BigInteger target = Utils.decodeCompactBits(difficultyTarget);
-		if (target.signum() < 0 || target.compareTo(params.getMaxTarget()) > 0)
-			throw new DifficultyTargetException();
-		return target;
+	@Deprecated
+	public void solve(java.math.BigInteger target) {
+		setNonce(0);
 	}
 
-	/**
-	 * Returns true if the PoW of the block is OK
-	 */
-	public void checkProofOfWork(boolean throwException) throws VerificationException {
-		checkProofOfWork(throwException, getDifficultyTargetAsInteger());
-	}
-
-	/**
-	 * Returns true if the PoW of the block is OK
-	 */
-	public boolean checkProofOfWork(boolean throwException, BigInteger target) throws VerificationException {
-		// No PoW for genesis block
-		if (getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
-			return true;
-		}
-		if (!powEnabled) {
-			return true;
-		}
-
-		BigInteger h = calculatePoWHash().toBigInteger();
-
-		if (h.compareTo(target) > 0) {
-			if (throwException)
-				throw new ProofOfWorkException();
-			else
-				return false;
-		}
-
+	public boolean checkProofOfWork(boolean throwException, java.math.BigInteger target) {
 		return true;
 	}
 
@@ -752,15 +646,6 @@ public class Block extends Message {
 	 *
 	 */
 	public void verifyHeader() throws VerificationException {
-		// Prove that this block is OK. It might seem that we can just ignore
-		// most of these checks given that the
-		// network is also verifying the blocks, but we cannot as it'd open us
-		// to a variety of obscure attacks.
-		//
-		// Firstly we need to ensure this block does in fact represent real work
-		// done. If the difficulty is high
-		// enough, it's probably been done by the network.
-		checkProofOfWork(true);
 		checkTimestamp();
 	}
 

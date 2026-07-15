@@ -22,7 +22,9 @@ public enum BlockType {
 	BLOCKTYPE_ORDER_OPEN(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // new-order
 	BLOCKTYPE_ORDER_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // cancel-order
 	BLOCKTYPE_ORDER_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
-	BLOCKTYPE_CONTRACTEVENT_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false); // Order execution
+	BLOCKTYPE_CONTRACTEVENT_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
+	BLOCKTYPE_STAKE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // PoS staking deposit
+	BLOCKTYPE_SLASHING(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false); // PoS slashing proof
 
 	private final boolean allowCoinbaseTransaction;
 	private final int maxSize;

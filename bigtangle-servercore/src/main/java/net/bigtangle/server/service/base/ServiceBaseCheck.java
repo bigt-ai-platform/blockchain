@@ -224,7 +224,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					}
 				}
 
-				if (!isCoinBase && Block.powEnabled) {
+				if (!isCoinBase) {
 					FutureTask<VerificationException> future = new FutureTask<VerificationException>(
 							new Verifier(tx, prevOutScripts, verifyFlags));
 					scriptVerificationExecutor.execute(future);
@@ -234,8 +234,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!checkFee && enableFee(block))
 				throw new VerificationException.NoFeeException(Coin.FEE_DEFAULT.toString());
 
-			if (Block.powEnabled) {
-				for (Future<VerificationException> future : listScriptVerificationResults) {
+			for (Future<VerificationException> future : listScriptVerificationResults) {
 					VerificationException e;
 					try {
 						e = future.get();
@@ -249,7 +248,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					if (e != null)
 						throw e;
 				}
-			}
 		} catch (VerificationException e) {
 			logger.info("", e);
 			if (throwExceptions)
@@ -1216,6 +1214,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				return formalSolidityResult;
 			final Set<Sha256Hash> allReuiredBlockHashes = getAllRequiredBlockHashes(block);
 			List<BlockWrap> allRequirements = getAllBlocksFromHash(allReuiredBlockHashes, store);
+
 			// Required must exist and be ok
 			SolidityState check = checkRequiredAndOk(block, throwExceptions, allRequirements, store);
 			if (check.notSuccessState()) {
@@ -1676,7 +1675,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 				// Check difficulty and latest consensus block is passed through
 				// correctly
-				if (Block.powEnabled && block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
+				if (block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
 					if (storedPrev.getBlock().getLastMiningRewardBlock() >= storedPrevBranch.getBlock()
 							.getLastMiningRewardBlock()) {
 						if (block.getLastMiningRewardBlock() != storedPrev.getBlock().getLastMiningRewardBlock()
@@ -1790,11 +1789,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				return SolidityState.from(Sha256Hash.ZERO_HASH, true);
 			if (pred.getBlock().getBlockType().requiresCalculation() && pred.getBlockEvaluation().getSolid() != 2)
 				return SolidityState.fromMissingCalculation(pred.getBlockHash());
-			if (pred.getBlock().getHeight() >= block.getHeight()) {
-				if (throwExceptions)
-					throw new VerificationException("Height of used blocks must be lower than height of this block.");
-				return SolidityState.getFailState();
-			}
 		}
 		return SolidityState.getSuccessState();
 	}

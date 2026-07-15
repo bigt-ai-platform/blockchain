@@ -73,9 +73,9 @@ public class DBStoreConfiguration {
 		config.setUsername(username);
 		config.setPassword(password);
 		config.setDriverClassName("org.postgresql.Driver"); // explicitly set driver
-		config.setMaximumPoolSize(10); // Limit number of connections
+		config.setMaximumPoolSize(200); // Limit number of connections
 		config.setMinimumIdle(5);
-		config.setConnectionTimeout(3000);
+		config.setConnectionTimeout(30000);
 		config.setIdleTimeout(60000);
 		config.setMaxLifetime(1800000);
 		config.addDataSourceProperty("cachePrepStmts", "true");

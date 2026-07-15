@@ -157,7 +157,6 @@ public abstract class ServiceBase {
 	}
 
 	public boolean enableFee(Block block) {
-		if (!Block.powEnabled) return false;
 		if (block.getBlockType() == BlockType.BLOCKTYPE_CROSSTANGLE) return false;
 		return (block.getLastMiningRewardBlock() > 1424626
 				&& networkParameters.getId().equals(NetworkParameters.ID_MAINNET))
