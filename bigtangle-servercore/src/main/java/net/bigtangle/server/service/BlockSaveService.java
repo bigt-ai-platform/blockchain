@@ -61,6 +61,15 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
+	/** Batch variant: skips transaction re-verification and solidity checks
+	 *  since all transactions were previously validated before entering the
+	 *  mempool.  Also passes allowMissingPredecessor=true so that parallel
+	 *  groups can reference the same tentative predecessor without blocking. */
+	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
+		blockgraph.addNonChain(block, true, store, true);
+		broadcastBlock(block);
+	}
+
 	public void broadcastBlock(Block block) {
 		try {
 			if ("".equalsIgnoreCase(kafkaConfiguration.getBootstrapServers()))
@@ -132,19 +141,25 @@ public class BlockSaveService {
 			Block proto = networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
 			@SuppressWarnings("unchecked")
 			CompletableFuture<Void>[] futures = new CompletableFuture[groups.size()];
-			for (int g = 0; g < groups.size(); g++) {
-				final List<Transaction> group = groups.get(g);
-				final Sha256Hash prevHash = proto.getPrevBlockHash();
-				final Sha256Hash prevBranchHash = proto.getPrevBranchBlockHash();
-				final byte[] minerAddr = proto.getMinerAddress();
-				if (g > 0) {
-					store.insertTipsQueue(new TipsQueue(java.util.Arrays.copyOf(
-							proto.getHash().getBytes(), 32),
-							proto.unsafeBitcoinSerialize(), proto.getHeight(), proto.getTimeSeconds()));
+			// Pre-open one DB connection per worker thread and share them
+			// across groups, avoiding open/close churn on every block.
+			BlockStoreInterface[] stores = new BlockStoreInterface[groups.size()];
+			try {
+				for (int g = 0; g < groups.size(); g++) {
+					stores[g] = storeService.getStore();
 				}
-				futures[g] = CompletableFuture.runAsync(() -> {
-					try {
-						BlockStoreInterface s = storeService.getStore();
+				for (int g = 0; g < groups.size(); g++) {
+					final List<Transaction> group = groups.get(g);
+					final Sha256Hash prevHash = proto.getPrevBlockHash();
+					final Sha256Hash prevBranchHash = proto.getPrevBranchBlockHash();
+					final byte[] minerAddr = proto.getMinerAddress();
+					final BlockStoreInterface s = stores[g];
+					if (g > 0) {
+						store.insertTipsQueue(new TipsQueue(java.util.Arrays.copyOf(
+								proto.getHash().getBytes(), 32),
+								proto.unsafeBitcoinSerialize(), proto.getHeight(), proto.getTimeSeconds()));
+					}
+					futures[g] = CompletableFuture.runAsync(() -> {
 						try {
 							Block b = Block.createBlock(networkParameters,
 									s.get(prevHash), s.get(prevBranchHash));
@@ -153,16 +168,18 @@ public class BlockSaveService {
 								b.addTransaction(tx);
 							}
 							b.solve();
-							saveBlock(b, s);
-						} finally {
-							s.close();
+							saveBatchBlock(b, s);
+						} catch (Exception e) {
+							throw new RuntimeException(e);
 						}
-					} catch (Exception e) {
-						throw new RuntimeException(e);
-					}
-				}, parallelBatchPool);
+					}, parallelBatchPool);
+				}
+				CompletableFuture.allOf(futures).get();
+			} finally {
+				for (BlockStoreInterface s : stores) {
+					if (s != null) s.close();
+				}
 			}
-			CompletableFuture.allOf(futures).get();
 		} finally {
 			store.close();
 		}

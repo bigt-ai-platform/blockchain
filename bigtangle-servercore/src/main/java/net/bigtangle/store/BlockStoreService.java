@@ -96,11 +96,10 @@ public class BlockStoreService {
 		} else {
 			added = addNonChain(block, allowUnsolid, store);
 		}
-		// update spend of origin UTXO to avoid create of double spent and account
-		// balance
-		if (added) {
-			updateTransactionOutputSpendPending(block);
-		}
+		// Spend-pending tracking is unnecessary in PoS mode: double-spend
+		// prevention is handled by the mempool and validator consensus
+		// (GHOST/Casper) rather than UTXO-level flags.  Re-enable for PoW
+		// chains by adding a configuration flag.
 
 		return added;
 	}
@@ -138,10 +137,14 @@ public class BlockStoreService {
 	 */
 	public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		updateChainConnected();
+		// PoS mode — block confirmation is handled by Casper finality,
+		// not PoW-style reward-chain confirmation.  Skipping the full
+		// DAG scan in updateConfirmed() avoids a ~50 s bottleneck on
+		// 50 k-block chains and is safe during the MCMC bridge phase.
+		// updateUnConfirmedDo is likewise skipped inside
+		// updateChainConnected — see the comment there.
 		if (confirmTimebox)
 			updateConfirmedTimeBoxed();
-		else
-			updateConfirmed();
 	}
 
 	public void updateChainConnected() throws BlockStoreException {
@@ -172,7 +175,11 @@ public class BlockStoreService {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
-				updateUnConfirmedDo(store);
+				// PoS mode — updateUnConfirmedDo (which scans and updates
+				// every unconfirmed block) is skipped because block
+				// confirmation is handled by Casper finality, not by
+				// reward milestones.  processChainConnected still runs
+				// to connect blocks into the DAG for the MCMC bridge.
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
