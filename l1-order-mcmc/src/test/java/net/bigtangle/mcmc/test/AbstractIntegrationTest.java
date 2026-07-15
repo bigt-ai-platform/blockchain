@@ -151,7 +151,7 @@ import net.bigtangle.wallet.Wallet;
 		DirtiesContextTestExecutionListener.class
 
 })
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class AbstractIntegrationTest {
 
 	private static final String CONTEXT_ROOT_TEMPLATE = "http://localhost:%s/";

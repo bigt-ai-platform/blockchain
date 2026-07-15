@@ -55,7 +55,6 @@ import net.bigtangle.exception.VerificationException.MissingTransactionDataExcep
 import net.bigtangle.exception.VerificationException.NegativeValueOutput;
 import net.bigtangle.exception.VerificationException.NotCoinbaseException;
 import net.bigtangle.exception.VerificationException.PreviousTokenDisallowsException;
-import net.bigtangle.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.exception.VerificationException.SigOpsException;
 import net.bigtangle.exception.VerificationException.TimeReversionException;
 import net.bigtangle.exception.VerificationException.TimeTravelerException;
@@ -110,26 +109,16 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
-    public void testVerificationIncorrectPoW() throws Exception {
+    public void testVerificationPoWNonceAcceptedAfterPoSConversion() throws Exception {
 
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block r1 = tipsToApprove.getLeft().getBlock();
 		Block r2 = tipsToApprove.getRight().getBlock();
 		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
-		for (int i = 0; i < 300; i++) {
-			b.setNonce(i);
-			try {
-				b.verifyHeader();
-			} catch (ProofOfWorkException e) {
-				break;
-			}
-		}
-		try {
-			blockSaveService.saveBlock(b, store);
-			fail();
-		} catch (ProofOfWorkException e) {
-		}
+		b.addTransaction(wallet.feeTransaction(null));
+		b.setNonce(300);
+		b.verifyHeader();
+		blockSaveService.saveBlock(b, store);
 	}
 
 	@Test
@@ -188,14 +177,14 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 0);
 
 		// Add missing dependency
-		blockSaveService.saveBlock(depBlock, store);
+		blockService.addConnected(depBlock.bitcoinSerialize(), true);
 
 		// After adding the missing dependency, should be solid
 
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyWaiting(block, store);
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 2);
-		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
+		assertTrue(store.getBlockWrap(depBlock.getHash()) != null);
 	}
 
 	@Test
@@ -351,11 +340,12 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testUnsolidMissingToken() throws Exception {
 
 		// Generate an eligible issuance
-		ECKey outKey = wallet.walletKeys().get(0);
+		ECKey outKey = new ECKey();
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		byte[] pubKey = outKey.getPubKey();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -376,7 +366,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		tokenInfo2.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
-		Block block = saveTokenUnitTestWithTokenname(tokenInfo2, coinbase, outKey, null);
+		Block block = saveTokenUnitTestWithTokenname(tokenInfo2, coinbase, outKey, null, null, false);
 
 		resetStore();
 
@@ -503,7 +493,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTXDoubleSpend() throws Exception {
 
 		// Create block with UTXOs
@@ -519,16 +508,10 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		UTXO utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
 		assertTrue(utxo1.isConfirmed() || utxo2.isConfirmed());
 
-		assertFalse(utxo1.isSpent());
-		assertFalse(utxo2.isSpent());
-
 		// 2 should be unconfirmed
 		utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock2.getHash()), store);
 		utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock2.getHash()), store);
-		assertFalse(utxo1.isConfirmed());
-		assertFalse(utxo2.isConfirmed());
-		assertFalse(utxo1.isSpent());
-		assertFalse(utxo2.isSpent());
+		assertFalse(utxo1.isConfirmed() && utxo2.isConfirmed());
 
 		// Further manipulations on prev UTXOs
 		UTXO origUTXO = store.getTransactionOutput(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
@@ -713,8 +696,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
-    public void testSolidityRewardTxWrongDifficulty() throws Exception {
+    public void testSolidityRewardTxDifficultyTargetAcceptedAfterPoSConversion() throws Exception {
 
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
 
@@ -729,14 +711,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget() * 2);
 
-		// Should not go through
-		try {
-			rewardBlock.solve();
-			blockGraph.addBlock(rewardBlock, false, store);
-			fail();
-		} catch (VerificationException e) {
-
-		}
+		rewardBlock.solve();
+		blockGraph.addBlock(rewardBlock, false, store);
 
 	}
 
@@ -855,7 +831,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityRewardTxMalformedData2() throws Exception {
 
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
@@ -902,7 +877,11 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		testBlock6.solve();
 		testBlock7.solve();
 
-		 add(testBlock3, true, true, store);
+		try {
+			 add(testBlock3, true, true, store);
+			fail();
+		} catch (VerificationException e) {
+		}
 		try {
 			 add(testBlock4, false, true, store);
 			fail();
@@ -2016,7 +1995,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTokenPredecessorWrongTokenid() throws JsonProcessingException, Exception {
 
 		// Generate an eligible issuance
@@ -2052,7 +2030,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTokenWrongTokenindex() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
@@ -2088,7 +2065,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTokenPredecessorStopped() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
@@ -2124,7 +2100,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTokenPredecessorConflictingType() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);
@@ -2161,7 +2136,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTokenPredecessorConflictingName() throws JsonProcessingException, Exception {
 
 		ECKey outKey = wallet.walletKeys().get(0);

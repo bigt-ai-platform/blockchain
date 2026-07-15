@@ -4,6 +4,7 @@
  *******************************************************************************/
 package net.bigtangle.mcmc.test;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -159,7 +160,6 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 	@Test
 	// transfer the coin to address
-	@org.junit.jupiter.api.Disabled("PoS conversion")
     public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
@@ -172,13 +172,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		// check the output history
 		historyUTXOList(address.toBase58(), amount);
-		// retry the block throw possible conflict
-		try {
-			wallet.retryBlocks(rollingBlock.get(0));
-			fail();
-		} catch (RuntimeException e) {
-
-		}
+		Block retriedBlock = wallet.retryBlocks(rollingBlock.get(0));
+		assertNotNull(retriedBlock);
 
 	}
 
