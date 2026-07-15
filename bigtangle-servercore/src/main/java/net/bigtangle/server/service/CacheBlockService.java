@@ -370,4 +370,14 @@ public class CacheBlockService {
 
 	}
 
+	@Cacheable(value = "approverHashes", key = "#blockhash")
+	public List<Sha256Hash> getApproverBlockHashes(Sha256Hash blockhash, BlockStoreInterface store)
+			throws BlockStoreException {
+		return store.getApproverBlockHashes(blockhash);
+	}
+
+	@CacheEvict(value = "approverHashes", allEntries = true)
+	public void evictApproverHashes() {
+	}
+
 }

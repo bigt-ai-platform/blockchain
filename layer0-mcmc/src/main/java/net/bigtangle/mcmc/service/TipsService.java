@@ -292,7 +292,7 @@ public class TipsService {
 //		{
 //		 log.debug(fromBlock.toString());
 //		}
-		for (Sha256Hash req : store.getApproverBlockHashes(fromBlock.getBlockHash())) {
+		for (Sha256Hash req : cacheBlockService.getApproverBlockHashes(fromBlock.getBlockHash(), store)) {
 			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 					.getBlockWrap(req, store));
 		}

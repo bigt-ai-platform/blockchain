@@ -207,6 +207,23 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}
 				break;
+			case submitTransactions: {
+				java.io.DataInputStream dis = new java.io.DataInputStream(
+						new java.io.ByteArrayInputStream(bodyByte));
+				int count = 0;
+				while (dis.available() > 0) {
+					int len = dis.readInt();
+					byte[] txBytes = new byte[len];
+					dis.readFully(txBytes);
+					Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(txBytes);
+					mempoolService.submitTransaction(tx);
+					count++;
+				}
+				net.bigtangle.response.GetStringResponse resp = new net.bigtangle.response.GetStringResponse();
+				resp.setMessage(String.valueOf(count));
+				this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
+			}
+				break;
 			case batchBlock: {
 				batchBlock(bodyByte, httpServletResponse, watch, store);
 			}

@@ -2,6 +2,8 @@ package net.bigtangle.mcmc.test.benchmark;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,6 +51,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
     private static final int CLIENTS = 50;
     private static final int TX_PER_CLIENT = 1000;
+    private static final int BATCH_SIZE = 100;
     private static final int TOTAL_TX = CLIENTS * TX_PER_CLIENT;
 
     @Autowired
@@ -122,6 +125,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
             int startIdx = c * TX_PER_CLIENT;
             futures[c] = CompletableFuture.runAsync(() -> {
                 try {
+                    List<Transaction> txs = new ArrayList<>();
                     for (int i = 0; i < TX_PER_CLIENT; i++) {
                         int idx = startIdx + i;
                         ECKey wk = walletKeys.get(idx);
@@ -130,10 +134,21 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
                         Transaction tx = w.payToListTransaction(null,
                                 new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
-                        if (tx != null) {
-                            // Submit raw transaction to mempool via HTTP
-                            OkHttp3Util.post(contextRoot + "submitTransaction",
-                                    tx.bitcoinSerialize());
+                        if (tx != null) txs.add(tx);
+
+                        // Send batch when full or at the end
+                        if (txs.size() == BATCH_SIZE || i == TX_PER_CLIENT - 1) {
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            DataOutputStream dos = new DataOutputStream(baos);
+                            for (Transaction bt : txs) {
+                                byte[] btBytes = bt.bitcoinSerialize();
+                                dos.writeInt(btBytes.length);
+                                dos.write(btBytes);
+                            }
+                            dos.close();
+                            OkHttp3Util.post(contextRoot + "submitTransactions",
+                                    baos.toByteArray());
+                            txs.clear();
                         }
                     }
                     ok.addAndGet(TX_PER_CLIENT);
