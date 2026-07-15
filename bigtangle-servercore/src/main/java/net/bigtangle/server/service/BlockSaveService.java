@@ -124,7 +124,7 @@ public class BlockSaveService {
 					block.addTransaction(tx);
 				}
 				block.solve();
-				saveBlock(block, store);
+				saveBatchBlock(block, store);
 			} finally {
 				store.close();
 			}

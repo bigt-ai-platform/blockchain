@@ -41,6 +41,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
@@ -60,6 +61,7 @@ import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.layer0.service.MultiSignService;
@@ -121,6 +123,8 @@ public class DispatcherController implements DisposableBean {
 	private AccessGrantService accessGrantService;
 	@Autowired
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
+	@Autowired
+	private MempoolService mempoolService;
 
 	@Override
 	public void destroy() {
@@ -195,6 +199,12 @@ public class DispatcherController implements DisposableBean {
 					return;
 				}
 				saveBlock(bodyByte, httpServletResponse, watch, store);
+			}
+				break;
+			case submitTransaction: {
+				Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
+				mempoolService.submitTransaction(tx);
+				this.outPrintJSONString(httpServletResponse, new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}
 				break;
 			case batchBlock: {
