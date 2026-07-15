@@ -26,6 +26,8 @@ public class Layer0TestParams extends TestParams {
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_USERDATA,
                 BlockType.BLOCKTYPE_FILE,
-                BlockType.BLOCKTYPE_GOVERNANCE);
+                BlockType.BLOCKTYPE_GOVERNANCE,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING);
     }
 }

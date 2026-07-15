@@ -41,6 +41,7 @@ import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.UTXO;
@@ -3271,6 +3272,91 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		v.setOwnerAddress(rs.getString("ownerAddress"));
 		v.setSpent(rs.getBoolean("spent"));
 		return v;
+	}
+
+	@Override
+	public void saveStakeDeposit(StakeRecord stake) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("INSERT INTO stake_deposits "
+					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash) "
+					+ "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")) {
+			s.setBytes(1, stake.getPubkey());
+			s.setLong(2, stake.getAmount().longValue());
+			s.setBytes(3, stake.getWithdrawalCredentials());
+			s.setLong(4, stake.getActivatedEpoch());
+			s.setBoolean(5, stake.isSlashed());
+			s.setLong(6, stake.getWithdrawableEpoch());
+			s.setBytes(7, stake.getBlockHash() != null ? stake.getBlockHash().getBytes() : null);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public StakeRecord getStakeDeposit(byte[] pubkey) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT * FROM stake_deposits WHERE pubkey = ?")) {
+			s.setBytes(1, pubkey);
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) return setStakeRecord(rs);
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return null;
+	}
+
+	@Override
+	public List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException {
+		List<StakeRecord> list = new ArrayList<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT * FROM stake_deposits WHERE activated_epoch >= 0 "
+					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0)")) {
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) list.add(setStakeRecord(rs));
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return list;
+	}
+
+	@Override
+	public void updateStakeActivation(byte[] pubkey, long epoch) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("UPDATE stake_deposits SET activated_epoch = ? WHERE pubkey = ?")) {
+			s.setLong(1, epoch);
+			s.setBytes(2, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public void updateStakeSlashing(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("UPDATE stake_deposits SET slashed = TRUE, withdrawable_epoch = ? WHERE pubkey = ?")) {
+			s.setLong(1, withdrawableEpoch);
+			s.setBytes(2, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	private StakeRecord setStakeRecord(ResultSet rs) throws SQLException {
+		StakeRecord r = new StakeRecord();
+		r.setPubkey(rs.getBytes("pubkey"));
+		r.setAmount(BigInteger.valueOf(rs.getLong("amount")));
+		r.setWithdrawalCredentials(rs.getBytes("withdrawal_credentials"));
+		r.setActivatedEpoch(rs.getLong("activated_epoch"));
+		r.setSlashed(rs.getBoolean("slashed"));
+		r.setWithdrawableEpoch(rs.getLong("withdrawable_epoch"));
+		String hash = rs.getString("blockhash");
+		if (hash != null) r.setBlockHash(Sha256Hash.wrap(hash));
+		return r;
 	}
 
 	private AnchorRecord setAnchorRecord(ResultSet rs) throws SQLException {

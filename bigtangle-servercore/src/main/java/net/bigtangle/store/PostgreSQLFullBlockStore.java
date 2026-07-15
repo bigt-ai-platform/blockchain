@@ -282,12 +282,23 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ")";
 
  
+    private static final String CREATE_STAKE_DEPOSITS_TABLE = "CREATE TABLE stake_deposits (\n"
+    		+ "    pubkey BYTEA NOT NULL,\n"
+    		+ "    amount BIGINT NOT NULL,\n"
+    		+ "    withdrawal_credentials BYTEA,\n"
+    		+ "    activated_epoch BIGINT DEFAULT -1,\n"
+    		+ "    slashed BOOLEAN DEFAULT FALSE,\n"
+    		+ "    withdrawable_epoch BIGINT DEFAULT -1,\n"
+    		+ "    blockhash BYTEA,\n"
+    		+ "    CONSTRAINT stake_deposits_pk PRIMARY KEY (pubkey)\n"
+    		+ ")";
+
     private static final String CREATE_BATCHBLOCK_TABLE = "CREATE TABLE batchblock (\n"
-    	    + "    hash BYTEA NOT NULL,\n"
-    	    + "    block BYTEA NOT NULL,\n"
-    	    + "    inserttime TIMESTAMP NOT NULL,\n"  //Replaced datetime with timestamp
-    	    + "   CONSTRAINT batchblock_pk PRIMARY KEY (hash)  \n"
-    	    + ")";
+    		+ "    hash BYTEA NOT NULL,\n"
+    		+ "    block BYTEA NOT NULL,\n"
+    		+ "    inserttime TIMESTAMP NOT NULL,\n"
+    		+ "   CONSTRAINT batchblock_pk PRIMARY KEY (hash)  \n"
+    		+ ")";
     private static final String CREATE_SUBTANGLE_PERMISSION_TABLE = "CREATE TABLE subtangle_permission (\n"
             + "    pubkey varchar(255) NOT NULL,\n" 
             + "    userdataPubkey varchar(255) NOT NULL,\n"
@@ -473,6 +484,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PAYMULTISIGN_TABLE);
         sqlStatements.add(CREATE_PAYMULTISIGNADDRESS_TABLE);
         sqlStatements.add(CREATE_ORDER_CANCEL_TABLE);
+        sqlStatements.add(CREATE_STAKE_DEPOSITS_TABLE);
         sqlStatements.add(CREATE_BATCHBLOCK_TABLE);
         sqlStatements.add(CREATE_SUBTANGLE_PERMISSION_TABLE);
         sqlStatements.add(CREATE_ORDERS_TABLE);

@@ -60,6 +60,7 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		// Reward can not be as Referenced ordertypes.add(BlockType.BLOCKTYPE_REWARD);
 		ordertypes.add(BlockType.BLOCKTYPE_GOVERNANCE);
 		ordertypes.add(BlockType.BLOCKTYPE_CROSSTANGLE);
+		ordertypes.add(BlockType.BLOCKTYPE_STAKE);
 
 		if (contractExecute) {
 			// exclude order open , cancel

@@ -37,6 +37,7 @@ import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
+import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.UTXO;
@@ -545,5 +546,15 @@ public interface BlockStoreInterface {
 	List<VaultRecord> getVaultUTXOsByChainId(String chainId, boolean spent) throws BlockStoreException;
 
 	void markVaultUTXOSpent(String chainId, Sha256Hash utxoBlockHash, long utxoIndex) throws BlockStoreException;
+
+	void saveStakeDeposit(StakeRecord stake) throws BlockStoreException;
+
+	StakeRecord getStakeDeposit(byte[] pubkey) throws BlockStoreException;
+
+	List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException;
+
+	void updateStakeActivation(byte[] pubkey, long epoch) throws BlockStoreException;
+
+	void updateStakeSlashing(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException;
 
 }
