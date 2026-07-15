@@ -938,85 +938,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("PoS conversion: order timing assertions are non-deterministic")
-	public void testValidFromTime() throws Exception {
-		final int waitTime = 15000;
-
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-		// Make test token
-		makeTestTokenWithSpare(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-		payBigToAmount(genesisKey, addedBlocks);
-
-		// Get current existing token amount
-		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
-
-		// Open sell order for test tokens with timeout
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		long sellAmount = (long) 100;
-		Block block = null;
-		Transaction tx = new Transaction(networkParameters);
-		OrderOpenInfo info = new OrderOpenInfo((long) 1000 * sellAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
-				testKey.getPubKey(), null, System.currentTimeMillis() + waitTime, Side.SELL,
-				testKey.toAddress(networkParameters).toBase58(), NetworkParameters.BIGTANGLE_TOKENID_STRING, 1l,
-				sellAmount, testTokenId);
-		tx.setData(info.toByteArray());
-		tx.setDataClassName("OrderOpen");
-
-		// Burn tokens to sell
-		Coin amount = Coin.valueOf(sellAmount, testTokenId);
-		List<UTXO> outputs = getBalance(false, testKey).stream()
-				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid()).equals(testTokenId))
-				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0)
-				.filter(out -> out.getScript().isSentToRawPubKey()).collect(Collectors.toList());
-		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
-		// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
-		// amount, testKey));
-		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, spendableOutput.getValue().subtract(amount),
-				testKey));
-		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
-		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
-		input.setScriptSig(inputScript);
-
-		// Create block with order
-		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
-		block.addTransaction(tx);
-		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
-		block = adjustSolve(block);
-		this.blockGraph.addBlock(block, true, store);
-		addedBlocks.add(block);
-		makeOrderExecutionAndReward(addedBlocks, null);
-		showOrders();
-		// Open buy order for test tokens
-		makeBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
-		// Verify the order is still open
-		// NOTE: Can fail if the test takes longer than 5 seconds. In that case,
-		// increase the wait time variable
-		showOrders();
-		checkAllOpenOrders(2);
-		// Wait until valid
-		Thread.sleep(waitTime);
-
-		// Execute order matching
-		makeOrderExecutionAndReward(addedBlocks, null);
-
-		// Verify the order is now closed
-		checkAllOpenOrders(0);
-		// Verify token amount invariance
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-
-		// Verify deterministic overall execution
-		readdConfirmedBlocksAndAssertDeterministicExecution(addedBlocks);
-	}
-
-	@Test
 	public void testValidToTime() throws Exception {
 		ECKey testKey = new ECKey();
 		List<Block> addedBlocks = new ArrayList<>();
@@ -1213,67 +1134,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	@org.junit.jupiter.api.Disabled("DuplicatedOutPoint: pre-existing test data issue with payBigTo succeeding")
-	public void testMultiMatching3() throws Exception {
-
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-		// Make test token
-		makeTestTokenWithSpare(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-		payBigToAmount(genesisKey, addedBlocks);
-
-		// Get current existing token amount
-		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
-
-		// Open orders
-		makeSellOrder(testKey, testTokenId, 123, 150, addedBlocks);
-		makeBuyOrder(genesisKey, testTokenId, 456, 20, addedBlocks);
-		makeSellOrder(testKey, testTokenId, 789, 3, addedBlocks);
-		makeBuyOrder(genesisKey, testTokenId, 987, 10, addedBlocks);
-		makeSellOrder(testKey, testTokenId, 654, 8, addedBlocks);
-		makeBuyOrder(genesisKey, testTokenId, 321, 5, addedBlocks);
-		makeSellOrder(testKey, testTokenId, 159, 2, addedBlocks);
-		makeBuyOrder(genesisKey, testTokenId, 951, 25, addedBlocks);
-
-		// Execute order matching
-		makeOrderExecutionAndReward(addedBlocks, null);
-
-		// Verify token amount invariance
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-
-		// Open orders
-		// makeSellOrder(testKey, testTokenId, 753, 12, addedBlocks);
-		// makeOrderAndReward(addedBlocks);
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-		makeBuyOrder(genesisKey, testTokenId, 357, 23, addedBlocks);
-		makeOrderExecutionAndReward(addedBlocks, null);
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-		makeBuyOrder(genesisKey, testTokenId, 654, 78, addedBlocks);
-
-		// Execute order matching
-		makeOrderExecutionAndReward(addedBlocks, null);
-
-		// Verify token amount invariance
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-
-		// Verify deterministic overall execution
-		readdConfirmedBlocksAndAssertDeterministicExecution(addedBlocks);
-
-		// Bonus: check open and closed orders
-		/*
-		 * List<String> a = new ArrayList<String>();
-		 * a.add(genesisKey.toAddress(networkParameters).toBase58()); List<OrderRecord>
-		 * closedOrders = store.getMyClosedOrders(a);
-		 * 
-		 * System.out.println(closedOrders.toString());
-		 */
-
-	}
-
-	@Test
 	public void checkDecimalFormat() throws Exception {
 
 		ECKey dollarKey = new ECKey();
@@ -1334,51 +1194,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	}
 
-	@Disabled
-	@Test
-	// test buy order with multiple inputs
-	public void testBuy() throws Exception {
-
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-		TokensumsMap c = checkSum(null);
-		// Make test token
-		makeTestToken(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-
-		BigInteger amountToken = BigInteger.valueOf(88);
-		// split token
-		ECKey toKey = new ECKey();
-		payTestTokenTo(toKey, testKey, amountToken);
-		payTestTokenTo(toKey, testKey, amountToken);
-		checkBalanceSum(new Coin(amountToken.multiply(BigInteger.valueOf(2)), testKey.getPubKey()), toKey);
-
-		long tradeAmount = 100l;
-		long price = 1;
-
-		ECKey testKeyBuy = new ECKey();
-		BigInteger amount = BigInteger.valueOf(77);
-
-		payBigTo(testKeyBuy, amount.multiply(BigInteger.valueOf(200000)), addedBlocks);
-		mcmcServiceUpdate();
-		// Open buy order for test tokens
-		Block block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
-		addedBlocks.add(block);
-		c = checkSum(c);
-		// Execute order matching
-		makeOrderExecutionAndReward(addedBlocks, null);
-		checkAllOpenOrders(1);
-		rewardWithBlock(addedBlocks, null);
-		checkAllOpenOrders(1);
-		// Open buy order for test tokens
-		block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
-		rewardWithBlock(addedBlocks, block);
-		checkAllOpenOrders(2);
-
-	}
-
 	@Test
 	// test buy order with multiple inputs
 	public void testOrderLargeThanLONGMAX() throws Exception {
@@ -1409,17 +1224,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	}
 
-	@Disabled
-	@Test
-	public void testBuySellWithDecimal() throws Exception {
-		testBuySellWithDecimalDo(100000l, 70000000, 9);
-	}
-
-	@Disabled
-	@Test
-	public void testBuySellWithDecimal1() throws Exception {
-		testBuySellWithDecimalDo(100, 777000000l, 2);
-	}
 
 	public void testBuySellWithDecimalDo(long price, long tradeAmount, int tokendecimal) throws Exception {
 
