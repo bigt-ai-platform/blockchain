@@ -61,12 +61,14 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
-	/** Batch variant: skips transaction re-verification and solidity checks
-	 *  since all transactions were previously validated before entering the
-	 *  mempool.  Also passes allowMissingPredecessor=true so that parallel
-	 *  groups can reference the same tentative predecessor without blocking. */
+	/** Batch variant: skips transaction re-verification, solidity checks,
+	 *  AND Minio object storage.  Batch blocks are transient mempool dumps
+	 *  that don't need archival — the PostgreSQL row alone suffices for
+	 *  the MCMC bridge. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
-		blockgraph.addNonChain(block, true, store, true);
+		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch()) {
+			blockgraph.addNonChain(block, true, store, true);
+		}
 		broadcastBlock(block);
 	}
 

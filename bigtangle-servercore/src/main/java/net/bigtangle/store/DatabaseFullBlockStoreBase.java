@@ -836,17 +836,25 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 	}
 
-	@Override
-	public void put(Block block) throws BlockStoreException {
+	/** Thread-local flag to skip Minio object storage during batch.
+	 *  Set before calling put() and the flag is consumed automatically. */
+	private static final ThreadLocal<Boolean> SKIP_MINIO = ThreadLocal.withInitial(() -> false);
 
+	public static AutoCloseable skipMinioForBatch() {
+		SKIP_MINIO.set(true);
+		return () -> SKIP_MINIO.remove();
+	}
+
+	public void put(Block block) throws BlockStoreException {
 		try {
 			BlockEvaluation blockEval = BlockEvaluation.buildInitial(block);
-			minioService.put(block);
+			if (!SKIP_MINIO.get()) {
+				minioService.put(block);
+			}
 			putUpdateStoredBlock(block, blockEval);
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
-
 	}
 
 	@Override
