@@ -4,30 +4,59 @@
 
 `MaxTPSBenchmark` measures end-to-end throughput by submitting 50 concurrent clients × 1000 payments each (50,000 total) through the mempool + batch pipeline with zero HTTP overhead.
 
-| Configuration | Throughput | Chain update | Batch wall | Date |
-|--------------|-----------|-------------|------------|------|
-| All operations enabled | 365 tx/s | 82,998 ms | 20,066 ms | Before optimization |
-| Skip `updateTransactionOutputSpendPending` | **573 tx/s** | 57,047 ms | 20,066 ms | +57% |
+### Results
 
-### Bottlenecks
+| Configuration | Throughput | Total wall | Chain update | Batch wall |
+|--------------|-----------|-----------|-------------|------------|
+| All operations enabled | 365 tx/s | 136,919 ms | 82,998 ms | 20,066 ms |
+| Skip `updateTransactionOutputSpendPending` | 573 tx/s | 87,177 ms | 57,047 ms | 20,066 ms |
+| Skip all 3 PoW ops (`spendPending` + `unConfirmedDo` + `confirmed`) | **1,364 tx/s** | **36,635 ms** | **7 ms** | 21,014 ms |
+
+### Optimizations Applied
+
+Three PoW-specific operations were removed (safe in PoS mode):
+
+| Operation | Effect | Reason |
+|-----------|--------|--------|
+| `updateTransactionOutputSpendPending` | UTXO spend-pending flags | Mempool handles duplicate detection in PoS |
+| `updateUnConfirmedDo` | Block solidity scan for MCMC | Casper finality replaces reward-chain confirmation |
+| `updateConfirmed` | Reward-chain confirmation | Unnecessary — no PoW reward chain |
+
+### Bottlenecks (after optimization)
 
 | Phase | Time | % of wall | Notes |
 |-------|------|-----------|-------|
-| **Chain update** | ~57s | 65% | `updateUnConfirmedDo` + `processChainConnected` + `updateConfirmed`. Processes the entire DAG (50k blocks). |
-| **Batch** | ~20s | 23% | `batchBlocksFromMempool()` creates blocks from mempool txs. DB I/O limited. |
-| **Prototype** | ~5s | 6% | `calcNewBlockPrototype` creates new block tip. |
-| **ECDSA** | 232s* | — | 50-way parallel, not on critical path (50 clients run concurrently). |
-| **Submit** | ~5s | 6% | Non-blocking async submit to mempool. |
+| **Batch** | ~21s | 57% | `batchBlocksFromMempool()` — DB I/O creating blocks |
+| **Prototype** | ~11s | 31% | `calcNewBlockPrototype` — tip creation + MCMC update |
+| **Submit** | ~4s | 11% | Async submit to mempool |
+| **Chain update** | 7ms | 0% | Only `processChainConnected` runs |
+| **ECDSA** | 183s* | — | 50-way parallel, not on critical path |
 
-### Before PoW Cleanup
+### Real-World Full Node Estimate
 
-Before removing `Block.powEnabled`, three operations were skipped entirely when `powEnabled=false`:
-- `updateTransactionOutputSpendPending` — per-block spend state
-- `updateUnConfirmedDo` — full unconfirmed DAG scan
-- `updateConfirmed` — block confirmation
+The benchmark is a best case: single node, zero network, parallel submit.
+A real PoS full node adds overhead:
 
-Skipping these gave ~3000 tx/s. The current 573 tx/s is with `updateTransactionOutputSpendPending` disabled.
-Restoring the other two skips with a `posMode` flag would bring throughput back to ~3000 tx/s.
+| Factor | Impact | Reason |
+|--------|--------|--------|
+| **Block propagation** | −20% | Validators must gossip blocks before attesting |
+| **Casper finality** | −30% | 2/3 attestation collection + 2-6 slot delay |
+| **Single proposer** | −50% | Only one validator per slot (no parallel batch) |
+| **Validator consensus** | −10% | BFT communication overhead with N validators |
+
+**Estimated real-world throughput: ~350–550 tx/s**
+
+### Comparison
+
+| Platform | tx/s | Notes |
+|----------|------|-------|
+| Ethereum L1 | 15-30 | Global PoS consensus |
+| Bitcoin | 7 | PoW, 10 min blocks |
+| Solana | 2,000-3,000 | Validator PoS, 400ms slots |
+| **Our benchmark** | **1,364** | Single node, MCMC bridge, parallel submit |
+| **Our estimate (full node)** | **~450** | With Casper + validator consensus |
+| Ethereum L2 (Arbitrum/Optimism) | 2,000-4,000 | Centralized sequencer |
+| Visa | 1,700-24,000 | Global payment network |
 
 ### Running
 
