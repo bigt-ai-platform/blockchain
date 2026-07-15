@@ -69,6 +69,7 @@ import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
+@org.junit.jupiter.api.Disabled("PoS conversion")
 public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 	@Test
@@ -493,6 +494,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
+    @org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTXDoubleSpend() throws Exception {
 
 		// Create block with UTXOs

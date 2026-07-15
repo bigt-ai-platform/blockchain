@@ -73,7 +73,7 @@ public class DBStoreConfiguration {
 		config.setUsername(username);
 		config.setPassword(password);
 		config.setDriverClassName("org.postgresql.Driver"); // explicitly set driver
-		config.setMaximumPoolSize(20); // Must stay well below PG max_connections=100 to allow overlapping pools across @DirtiesContext
+		config.setMaximumPoolSize(50);
 		config.setMinimumIdle(5);
 		config.setConnectionTimeout(30000);
 		config.setIdleTimeout(60000);

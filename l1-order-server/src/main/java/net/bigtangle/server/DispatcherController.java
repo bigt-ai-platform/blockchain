@@ -82,7 +82,7 @@ public class DispatcherController implements DisposableBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
 
-	private static final ExecutorService requestExecutor = Executors.newFixedThreadPool(
+	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
 			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
 
 	@Autowired

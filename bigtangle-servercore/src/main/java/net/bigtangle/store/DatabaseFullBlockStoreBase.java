@@ -617,18 +617,20 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	@Override
 	public void close() {
+		if (conn == null) return;
 		try {
 			if (!conn.getAutoCommit()) {
 				conn.rollback();
 			}
-
+		} catch (Exception e) {
+			// Ignore rollback failures but still close
+		}
+		try {
 			conn.close();
-			conn = null;
 		} catch (Exception e) {
 			// Ignore
-
 		}
-
+		conn = null;
 	}
 
 	/**
