@@ -1573,6 +1573,21 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	}
 
+	public List<Sha256Hash> getBlocksByPrevHash(Sha256Hash prev) throws BlockStoreException {
+		List<Sha256Hash> result = new ArrayList<>();
+		String sql = "SELECT hash FROM blocks WHERE prevblockhash = ? OR prevbranchblockhash = ?";
+		try (PreparedStatement s = getConnection().prepareStatement(sql)) {
+			s.setBytes(1, prev.getBytes());
+			s.setBytes(2, prev.getBytes());
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) result.add(Sha256Hash.wrap(rs.getBytes(1)));
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return result;
+	}
+
 	private BlockEvaluation setBlockEvaluationNumber(ResultSet resultSet) throws SQLException {
 
 		return BlockEvaluation.build(Sha256Hash.wrap(resultSet.getBytes(1)), resultSet.getLong(3), resultSet.getLong(4),

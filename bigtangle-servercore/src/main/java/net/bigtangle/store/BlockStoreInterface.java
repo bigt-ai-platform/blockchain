@@ -416,6 +416,8 @@ public interface BlockStoreInterface {
 
 	List<Sha256Hash> getBlocksInMilestoneInterval(long minMilestone, long maxMilestone) throws BlockStoreException;
 
+	List<Sha256Hash> getBlocksByPrevHash(Sha256Hash prev) throws BlockStoreException;
+
 	List<OrderCancel> getOrderCancelByOrderBlockHash(HashSet<String> orderBlockHashs) throws BlockStoreException;
 
 	boolean getTokennameAndDomain(String tokenname, String domainpre) throws BlockStoreException;
