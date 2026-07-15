@@ -42,12 +42,14 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.net.MyGZIPOutputStream;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.data.AnchorRecord;
+import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.AbstractResponse;
 import net.bigtangle.response.ErrorResponse;
@@ -59,6 +61,7 @@ import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
+import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.MempoolService;
@@ -125,6 +128,8 @@ public class DispatcherController implements DisposableBean {
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
 	private MempoolService mempoolService;
+	@Autowired(required = false)
+	private BridgeService bridgeService;
 
 	@Override
 	public void destroy() {
@@ -222,6 +227,47 @@ public class DispatcherController implements DisposableBean {
 				net.bigtangle.response.GetStringResponse resp = new net.bigtangle.response.GetStringResponse();
 				resp.setMessage(String.valueOf(count));
 				this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
+			}
+				break;
+			case processPegIn: {
+				if (bridgeService == null) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
+					break;
+				}
+				String reqStr = new String(bodyByte, java.nio.charset.StandardCharsets.UTF_8);
+				Map<String, String> params = Json.jsonmapper().readValue(reqStr, Map.class);
+				String utxoKey = params.get("utxo");
+				String[] parts = utxoKey.split(":");
+				UTXO utxo = store.getOutputsWithHexStr(
+						net.bigtangle.core.Utils.HEX.decode(parts[0]), Long.parseLong(parts[1]));
+				if (utxo == null) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(404), watch, reqCmd);
+					break;
+				}
+				bridgeService.processPegIn(utxo, params.get("beneficiary"), store);
+				this.outPrintJSONString(httpServletResponse,
+						new net.bigtangle.response.OkResponse(), watch, reqCmd);
+			}
+				break;
+			case processPegOut: {
+				if (bridgeService == null) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
+					break;
+				}
+				// Process peg-out for all unspent vault records on given chain
+				List<VaultRecord> vaults = store.getVaultUTXOsByChainId(
+						networkParameters.getChainId(), false);
+				for (VaultRecord v : vaults) {
+					AnchorRecord anchor = store.getAnchorByBlockHash(v.getUtxoBlockHash());
+					if (anchor != null) {
+						bridgeService.processPegOut(anchor, store);
+					}
+				}
+				this.outPrintJSONString(httpServletResponse,
+						new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}
 				break;
 			case batchBlock: {
