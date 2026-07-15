@@ -13,8 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import net.bigtangle.bridge.AnchorConfiguration;
-import net.bigtangle.bridge.BridgeConfiguration;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.ECKey;
@@ -58,28 +56,14 @@ public class PoSTest extends AbstractIntegrationTest {
     @Autowired
     private StoreService storeService;
 
-    @Autowired
-    private AnchorConfiguration anchorConfiguration;
-
-    @Autowired
-    private BridgeConfiguration bridgeConfiguration;
-
     private ECKey validatorKey;
 
     @Override
     @BeforeEach
     public void setUp() throws Exception {
-        Block.powEnabled = false;
         super.setUp();
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
-
-        anchorConfiguration.setActive(true);
-        anchorConfiguration.setPubKeyHex(testPub);
-        anchorConfiguration.setPriKeyHex(testPriv);
-        bridgeConfiguration.setActive(true);
-        bridgeConfiguration.setVaultPubKeyHex(testPub);
-        bridgeConfiguration.setVaultPriKeyHex(testPriv);
 
         validatorKey = new ECKey();
     }

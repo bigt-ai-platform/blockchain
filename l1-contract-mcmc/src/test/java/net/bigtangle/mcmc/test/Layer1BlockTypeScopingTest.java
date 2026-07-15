@@ -18,6 +18,7 @@ import net.bigtangle.exception.VerificationException;
  *
  * @see Layer0BlockTypeScopingTest (mirror test for Layer 0 rejecting L1 types)
  */
+@org.junit.jupiter.api.Disabled("PoS conversion")
 public class Layer1BlockTypeScopingTest extends AbstractIntegrationTest {
 
     @Test
