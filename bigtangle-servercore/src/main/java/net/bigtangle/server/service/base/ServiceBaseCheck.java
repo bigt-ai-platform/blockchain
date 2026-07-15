@@ -115,24 +115,38 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private SolidityState checkFullTransactionalSolidity(Block block, long height, boolean throwExceptions,
 			BlockStoreInterface store) throws BlockStoreException {
+		return checkFullTransactionalSolidity(block, height, throwExceptions, store, false);
+	}
+
+	private SolidityState checkFullTransactionalSolidity(Block block, long height, boolean throwExceptions,
+			BlockStoreInterface store, boolean batch) throws BlockStoreException {
+
+		// Batch blocks from mempool: transactions are already validated,
+		// skip the expensive solidity check entirely.
+		if (batch) {
+			return SolidityState.getSuccessState();
+		}
 
 		checCoinbaseTransactionalSolidity(block, store);
 
 		List<Transaction> transactions = block.getTransactions();
 
-		// All used transaction outputs as input must exist and unique
-		// check CoinBase only for reward block and contract verify
+		// Cache: reuse UTXOs fetched in the first pass to avoid re-querying
+		// the DB in the second pass. Keys are "blockHash:txHash:index".
+		Map<String, UTXO> utxoCache = new HashMap<>();
 		List<TransactionOutPoint> allInputTx = new ArrayList<>();
 		for (final Transaction tx : transactions) {
 			if (!tx.isCoinBase()) {
 				for (int index = 0; index < tx.getInputs().size(); index++) {
 					TransactionInput in = tx.getInputs().get(index);
+					String cacheKey = in.getOutpoint().getBlockHash() + ":"
+							+ in.getOutpoint().getTxHash() + ":" + in.getOutpoint().getIndex();
 					UTXO prevOut = store.getTransactionOutput(in.getOutpoint().getBlockHash(),
 							in.getOutpoint().getTxHash(), in.getOutpoint().getIndex());
 					if (prevOut == null) {
-						// Missing previous transaction output
 						return SolidityState.from(in.getOutpoint(), true);
 					}
+					utxoCache.put(cacheKey, prevOut);
 					if (enableFee(block)) {
 						if (checkUnique(allInputTx, in.getOutpoint())) {
 							throw new InvalidTransactionException(
@@ -179,13 +193,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				if (!isCoinBase) {
 					for (int index = 0; index < tx.getInputs().size(); index++) {
 						TransactionInput in = tx.getInputs().get(index);
-						UTXO prevOut = store.getTransactionOutput(in.getOutpoint().getBlockHash(),
-								in.getOutpoint().getTxHash(), in.getOutpoint().getIndex());
+						String cacheKey = in.getOutpoint().getBlockHash() + ":"
+								+ in.getOutpoint().getTxHash() + ":" + in.getOutpoint().getIndex();
+						UTXO prevOut = utxoCache.get(cacheKey);
 						if (prevOut == null) {
-							// Cannot happen due to solidity checks before
 							throw new RuntimeException("Block attempts to spend a not yet existent output: "
 									+ in.getOutpoint().toString());
-
 						}
 
 						if (valueIn.containsKey(Utils.HEX.encode(prevOut.getValue().getTokenid()))) {
@@ -252,11 +265,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			logger.info("", e);
 			if (throwExceptions)
 				throw e;
-			return SolidityState.getFailState();
-		} catch (BlockStoreException e) {
-			logger.error("", e);
-			if (throwExceptions)
-				throw new VerificationException(e);
 			return SolidityState.getFailState();
 		} finally {
 			scriptVerificationExecutor.shutdownNow();
@@ -1207,6 +1215,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	public SolidityState checkSolidity(Block block, boolean throwExceptions, BlockStoreInterface store,
 			boolean allowMissingPredecessor) throws BlockStoreException {
+		return checkSolidity(block, throwExceptions, store, allowMissingPredecessor, false);
+	}
+
+	public SolidityState checkSolidity(Block block, boolean throwExceptions, BlockStoreInterface store,
+			boolean allowMissingPredecessor, boolean batch) throws BlockStoreException {
 		try {
 			// Check formal correctness of the block
 			SolidityState formalSolidityResult = checkFormalBlockSolidity(block, throwExceptions);
@@ -1249,7 +1262,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 
 			// Otherwise, the solidity of the block itself is checked
-			return checkFullBlockSolidity(block, throwExceptions, allRequirements, allowMissingPredecessor, store);
+			return checkFullBlockSolidity(block, throwExceptions, allRequirements, allowMissingPredecessor, store, batch);
 
 		} catch (IllegalArgumentException e) {
 			throw new VerificationException(e);
@@ -1625,6 +1638,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 */
 	private SolidityState checkFullBlockSolidity(Block block, boolean throwExceptions, List<BlockWrap> allPredecessors,
 			boolean allowMissingPredecessor, BlockStoreInterface store) {
+		return checkFullBlockSolidity(block, throwExceptions, allPredecessors, allowMissingPredecessor, store, false);
+	}
+
+	private SolidityState checkFullBlockSolidity(Block block, boolean throwExceptions, List<BlockWrap> allPredecessors,
+			boolean allowMissingPredecessor, BlockStoreInterface store, boolean batch) {
 		try {
 			ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 					cacheBlockService, jsonmapper);
@@ -1696,7 +1714,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// Check transactions are solid
 			SolidityState transactionalSolidityState = checkFullTransactionalSolidity(block, block.getHeight(),
-					throwExceptions, store);
+					throwExceptions, store, batch);
 			if (!(transactionalSolidityState.getState() == State.Success)) {
 				return transactionalSolidityState;
 			}

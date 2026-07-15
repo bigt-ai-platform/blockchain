@@ -160,8 +160,6 @@ public class MCMCService {
 			updateWeightAndDepth(cutoffHeight, maxHeight, store);
 			updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
 			deleteMCMC(maxConfirmedReward, store);
-			cacheBlockService.evictBlockMCMC();
-			cacheBlockService.evictBlockMCMCObject(); 
 			// Track for next incremental cycle
 			lastProcessedMaxHeight = maxHeight;
 			// generate new

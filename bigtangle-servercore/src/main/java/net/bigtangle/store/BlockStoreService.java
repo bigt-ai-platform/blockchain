@@ -347,7 +347,7 @@ public class BlockStoreService {
 		SolidityState solidityState = new SolidityState(State.Success, null, false);
 		try {
 			solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-					.checkSolidity(block, !allowUnsolid, blockStore, allowMissingPredecessor);
+					.checkSolidity(block, !allowUnsolid, blockStore, allowMissingPredecessor, batch);
 		} catch (Exception e) {
 			if (!allowUnsolid)
 				throw e;
