@@ -17,6 +17,7 @@ import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SlotData;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.service.EpochRewardService;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
 
@@ -34,6 +35,9 @@ public class SlotService {
 
     @Autowired
     private CacheBlockPrototypeService cacheBlockPrototypeService;
+
+    @Autowired
+    private EpochRewardService epochRewardService;
 
     @Autowired
     private BlockSaveService blockSaveService;
@@ -110,6 +114,19 @@ public class SlotService {
 
     public void processEpoch(long epoch, BlockStoreInterface store) throws Exception {
         casperService.finalizeCheckpoint(epoch, store);
-        log.info("Epoch {} processed: finality updated", epoch);
+
+        // Distribute epoch rewards to validators
+        // Uses the per-block reward amount accumulated over the epoch.
+        // This repurposes the existing block reward pool (no new inflation).
+        // Each slot contributes one REWARD_AMOUNT_BLOCK_REWARD worth of fees.
+        long epochSlots = NetworkParameters.SLOTS_PER_EPOCH;
+        long epochRewardPool = epochSlots * NetworkParameters.REWARD_AMOUNT_BLOCK_REWARD;
+        if (epochRewardPool > 0) {
+            epochRewardService.distributeEpochRewards(epoch,
+                    java.math.BigInteger.valueOf(epochRewardPool), store);
+        }
+
+        log.info("Epoch {} processed: finality updated, {} pool distributed",
+                epoch, epochRewardPool);
     }
 }

@@ -205,6 +205,9 @@ public abstract class NetworkParameters {
 	// itself:
 	public static final long PER_BLOCK_REWARD = TARGET_INTERVAL_REWARD / 3 / TARGET_MAX_TPS / TARGET_SPACING;
 
+	// PoS epoch: fee-only rewards (no inflation, no new token minting)
+	public static final long SLOTS_PER_EPOCH = 32L;
+
 	// block number can be taken in a reward block, it can not be too large for
 	// build reward.
 	// about TARGET_MAX_TPS * TARGET_SPACING
