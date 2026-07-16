@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.NetworkParameters;
+import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -50,11 +51,11 @@ public class EpochRewardService {
      * @param totalFees collected during the epoch
      * @param store block store
      */
-    public void distributeEpochRewards(long epoch, BigInteger totalFees,
+    public Sha256Hash distributeEpochRewards(long epoch, BigInteger totalFees,
             BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
         if (validators.isEmpty() || totalFees.compareTo(BigInteger.ZERO) <= 0) {
-            return;
+            return null;
         }
 
         BigInteger totalStake = validators.stream()
@@ -92,6 +93,8 @@ public class EpochRewardService {
             store.put(rewardBlock);
             log.info("Epoch {}: distributed {} to {} validators",
                     epoch, distributed, validators.size());
+            return rewardBlock.getHash();
         }
+        return null;
     }
 }
