@@ -30,8 +30,4 @@ public class ContractL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
     }
 
-    @Override
-    public boolean isOrderMatchExecutionChainEnabled() {
-        return false;
-    }
 }

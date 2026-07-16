@@ -30,8 +30,4 @@ public class OrderMatchL1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_ORDER_CANCEL);
     }
 
-    @Override
-    public boolean isOrderMatchExecutionChainEnabled() {
-        return false;
-    }
 }

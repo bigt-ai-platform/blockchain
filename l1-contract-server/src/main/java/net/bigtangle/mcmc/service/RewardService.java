@@ -5,6 +5,7 @@
 package net.bigtangle.mcmc.service;
 
 import java.math.BigInteger;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -27,6 +28,8 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
+import net.bigtangle.core.Token;
+import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
@@ -42,7 +45,6 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.LockObject;
-import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.service.base.ServiceBaseConnect.RewardBuilderResult;
 import net.bigtangle.server.service.base.ServiceBaseReward;
 import net.bigtangle.server.service.BlockSaveService;
@@ -235,9 +237,14 @@ public class RewardService {
 
 		block.addTransaction(tx);
 		if (!serviceBase.enableOrderMatchExecutionChain(block)) {
-			OrderMatchingResult ordermatchresult = serviceBase.generateOrderMatching(block, currRewardInfo, store);
-			currRewardInfo.setOrdermatchingResult(ordermatchresult.getOrderMatchingResultHash());
-			tx.setData(currRewardInfo.toByteArray());
+			// Execute contracts inline in the beacon chain (Flow A).
+			// Signal to confirmContractExecution that contract work is needed
+			// by setting contractResult to a non-null, non-ZERO_HASH value.
+			List<Token> openContracts = store.getTokenTypeList(TokenType.contract.ordinal());
+			if (!openContracts.isEmpty()) {
+				currRewardInfo.setContractResult(currRewardInfo.getPrevRewardHash());
+				tx.setData(currRewardInfo.toByteArray());
+			}
 		} else {
 			if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
 				log.debug("   no referenced blocks skip createReward  time {} ms.",
