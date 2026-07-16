@@ -1119,7 +1119,7 @@ public abstract class AbstractIntegrationTest {
 		Block re = this.pullBlockDoMultiSign(tokenid, outKey, aesKey);
 		if (blocksAddedAll != null)
 			blocksAddedAll.add(re);
-		return re;
+		return re != null ? re : b;
 	}
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {

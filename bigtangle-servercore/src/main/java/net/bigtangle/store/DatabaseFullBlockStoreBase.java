@@ -668,7 +668,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	 * 
 	 * @throws java.sql.SQLException If there is a database error.
 	 */
-	private synchronized void createTables() throws SQLException {
+	private synchronized void createTables() throws SQLException, BlockStoreException {
 		// beginDatabaseBatchWrite();
 		// create all the database tables
 		updateTables(getCreateTablesSQL());
@@ -1208,7 +1208,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		try {
 			deleteStore();
 			createTables();
-		} catch (SQLException ex) {
+		} catch (SQLException | BlockStoreException ex) {
 			log.warn("Warning: deleteStore", ex);
 			throw new RuntimeException(ex);
 		}
