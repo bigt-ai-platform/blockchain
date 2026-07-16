@@ -60,13 +60,13 @@ CREATE TABLE validator_set (
 );
 ```
 
-### Phase 2: Slot/Epoch Timing Replace MCMC Schedule
+### Phase 2: Slot/Epoch Timing Alongside MCMC Schedule
 
-Replace the MCMC scheduled services with slot-driven scheduling.
+Add slot-driven scheduling alongside MCMC. Both run concurrently — MCMC handles DAG tip selection, slot schedule drives beacon block production.
 
 **Changes:**
 ```
-layer0-mcmc/.../ScheduleMCMCService.java   — REMOVE (or disable)
+layer0-mcmc/.../ScheduleMCMCService.java   — KEEP (DAG consensus)
 layer0-mcmc/.../SlotTickService.java        — NEW: ticks every 12s
 layer0-mcmc/.../SlotService.java            — NEW: slot/epoch state machine
 ```
@@ -230,35 +230,7 @@ Transaction now includes:
 - `maxPriorityFeePerGas` (tip to proposer)
 - Gas used (proportional to tx size/sigops)
 
-### Phase 9: Migration Path
 
-The transition is done via a **hard fork** at a specific epoch number.
-
-**Steps:**
-1. Deploy staking contract (Phase 1) — runs alongside MCMC
-2. Stakers deposit BIG (minimum 6 months before fork)
-3. At fork epoch: MCMC disabled, beacon chain activated
-4. All existing DAG blocks are considered pre-fork and finalized
-5. Validator set from stake deposits becomes the first active set
-6. MCMC code paths are removed in the next release
-
-**Backward compatibility:**
-- Existing wallets work unchanged (address format, key types are the same)
-- Transaction format unchanged (Block, Transaction, UTXO)
-- DAG structure preserved for data availability
-- Only consensus changes (how the canonical tip is selected and finalized)
-
-### Phase 10: Remove MCMC Code
-
-After the fork, remove:
-
-```
-layer0-mcmc/   → delete module
-l1-order-mcmc/ → delete module  
-l1-contract-mcmc/ → delete module
-```
-
-Replace with a unified `beacon-chain` module.
 
 ## Summary: Key Differences From Current
 
