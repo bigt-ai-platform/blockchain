@@ -17,7 +17,7 @@ public class ContractL1TestParams extends TestParams {
     }
 
     @Override
-    public boolean genesisMintsBIG() { return true; }
+    public boolean genesisMintsBIG() { return false; }
 
     @Override
     public EnumSet<BlockType> getAllowedBlockTypes() {

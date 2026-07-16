@@ -763,20 +763,14 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks,Block b ) throws Exception {
-	
-		 
+	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks, Block b) throws Exception {
 		if (this.enableOrderMatchExecutionChain()) {
 			mcmcService.calcNewBlockPrototype(store);
-			
 			Block c = null;
 			return rewardWithBlock(addedBlocks, c);
 		} else {
-			// mcmcServiceUpdate();
-			return rewardWithBlock(addedBlocks,b);
+			return rewardWithBlock(addedBlocks, b);
 		}
-	
-
 	}
 
 	public Block rewardWithBlock(List<Block> addedBlocks, Block b) throws Exception {
