@@ -183,8 +183,8 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			ECKey outKey = new ECKey();
 			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
-		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
-		makeRewardBlock();
+		Block payblock = wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		makeRewardBlock(payblock);
 
 		List<UTXO> balance = getBalance(false, genesiskey);
 		log.info("balance : " + balance);
