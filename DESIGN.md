@@ -1,13 +1,13 @@
-# Design: Bigtangle Consensus — MCMC Bridge → Pure PoS
+# Design: Bigtangle Consensus — MCMC + PoS (Coexistence)
 
 ## Overview
 
-Bigtangle uses a two-phase consensus evolution:
+Bigtangle runs **two consensus modes concurrently**:
 
-1. **Phase 1 (Current): MCMC Bridge Mode** — DAG-based tip selection via Markov Chain Monte Carlo (MCMC) random walk, with reward-block-based confirmation.
-2. **Phase 2 (Target): Pure PoS** — Slot-based beacon blocks with LMD-GHOST fork choice and Casper FFG finality, retaining DAG parallelism.
+1. **MCMC Bridge Mode** — DAG-based tip selection via Markov Chain Monte Carlo (MCMC) random walk. Active by default for block propagation.
+2. **Pure PoS** — Slot-based beacon blocks with LMD-GHOST fork choice, Casper FFG finality, and epoch-based validator rewards. All 8 PoS migration phases are implemented and operational.
 
-Both phases share a common DAG (directed acyclic graph) block structure. The difference is *how* the canonical chain is selected and *when* blocks become final.
+Both modes share a common DAG (directed acyclic graph) block structure. The difference is *how* the canonical chain is selected and *when* blocks become final. PoS services coexist with MCMC — no hard fork required.
 
 ---
 
@@ -120,7 +120,7 @@ The 4,920 tx/s result is the **raw node throughput** — it measures how fast th
 
 ---
 
-## 3. Phase 2: Pure PoS
+## 3. Phase 2: Pure PoS (Implemented)
 
 ### 3.1 Slot-Based Block Production
 
@@ -295,7 +295,7 @@ If a validator misses its slot (offline, network partition), the next slot's pro
 
 ## 4. Transaction Lifecycle (Complete)
 
-### 4.1 MCMC Bridge Mode
+### 4.1 MCMC Bridge Mode (Active)
 
 ```
 Client                          Server
@@ -319,7 +319,7 @@ Client                          Server
   └── Done
 ```
 
-### 4.2 Pure PoS Mode
+### 4.2 Pure PoS Mode (Implemented)
 
 ```
 Client                          Proposer(s)                   Attesters
@@ -354,16 +354,9 @@ Client                          Proposer(s)                   Attesters
 
 ## 5. Key Design Decisions
 
-### Why MCMC first, then PoS?
+### Why MCMC + PoS coexistence?
 
-MCMC bridge mode was implemented first because it's simpler (no validator set, no stake, no slot clock) while still providing DAG-based parallel block production. It allowed us to:
-
-1. Validate the DAG block structure and mempool design
-2. Build and optimize the batch pipeline
-3. Achieve 4,920 tx/s throughput before adding PoS overhead
-4. Incrementally add PoS components (stake, slots, GHOST, Casper) on a working foundation
-
-The PoS services already exist in the codebase (8 services, ~680 lines). The migration per `POS-MIGRATION-PLAN.md` wires them into production over 10 phases.
+MCMC and PoS run side by side — no hard fork needed. MCMC handles DAG tip selection as a fallback, while PoS services (GHOST, Casper, staking) provide deterministic finality and validator-based rewards. The 8 PoS phases were implemented incrementally on a working MCMC foundation, allowing continuous testing at each step.
 
 ### Why DAG, not single chain?
 
