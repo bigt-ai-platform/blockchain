@@ -1760,7 +1760,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 							+ "  and blocks.milestone < ? and blocks.milestone > 0  " + " and ( blocks.blocktype = "
 							+ BlockType.BLOCKTYPE_TRANSFER.ordinal() + " or blocks.blocktype = "
 							+ BlockType.BLOCKTYPE_ORDER_OPEN.ordinal() + " or blocks.blocktype = "
-							+ BlockType.BLOCKTYPE_REWARD.ordinal() + "  ) limit 1000 ");
+							+ BlockType.BLOCKTYPE_BEACON.ordinal() + "  ) limit 1000 ");
 			// preparedStatement.setLong(1, height);
 			preparedStatement.setLong(1, chain);
 

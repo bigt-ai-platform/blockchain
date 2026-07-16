@@ -462,7 +462,7 @@ public class Block extends Message {
 				s.append(tx);
 			}
 		}
-		if (blockType == BlockType.BLOCKTYPE_REWARD) {
+		if (blockType == BlockType.BLOCKTYPE_BEACON) {
 			try {
 				if (transactions != null && !transactions.isEmpty()) {
 					RewardInfo rewardInfo = new RewardInfo().parse(getTransactions().get(0).getData());

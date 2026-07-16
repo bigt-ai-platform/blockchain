@@ -11,7 +11,7 @@ public enum BlockType {
 
 	BLOCKTYPE_INITIAL(false, Integer.MAX_VALUE, false), // Genesis block
 	BLOCKTYPE_TRANSFER(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Default
-	BLOCKTYPE_REWARD(false, NetworkParameters.MAX_REWARD_BLOCK_SIZE, false), // Rewards
+	BLOCKTYPE_BEACON(false, NetworkParameters.MAX_REWARD_BLOCK_SIZE, false), // Rewards
 	BLOCKTYPE_TOKEN_CREATION(true, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // tokenissuance
 	BLOCKTYPE_USERDATA(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // User-defined-data
 	BLOCKTYPE_CONTRACT_EVENT(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Smart-contracts

@@ -244,7 +244,7 @@ public abstract class ServiceBase {
 				BLOCKTYPE_USERDATA, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL,
 				BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(rewardInfo.getPrevRewardHash());
 			if (withReferenced)
@@ -296,7 +296,7 @@ public abstract class ServiceBase {
 		Set<Sha256Hash> allRefs = new HashSet<>();
 		final List<Transaction> transactions = block.getTransactions();
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 			allRefs.addAll(rewardInfo.getBlocks());
 			break;
@@ -394,7 +394,7 @@ public abstract class ServiceBase {
 			new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
 		case BLOCKTYPE_ORDER_EXECUTE ->
 			new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getPrevblockhash();
-		case BLOCKTYPE_REWARD ->
+		case BLOCKTYPE_BEACON ->
 			new RewardInfo().parseChecked(block.getTransactions().get(0).getData()).getPrevRewardHash();
 		default -> throw new RuntimeException("Wrong block.getBlockType()");
 		};
@@ -773,7 +773,7 @@ public abstract class ServiceBase {
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
 			// Reward blocks follow different logic: If this is new, run
 			// consensus logic
-			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 				solidifyReward(block, blockStore);
 				return;
 			}
@@ -793,7 +793,7 @@ public abstract class ServiceBase {
 			connectTypeSpecificUTXOs(block, blockStore);
 			calculateBlockOrderMatchingResult(block, blockStore);
 
-			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD && !setMilestoneSuccess) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON && !setMilestoneSuccess) {
 				// If we don't want to set the milestone success, initialize as
 				// missing calc
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
@@ -801,7 +801,7 @@ public abstract class ServiceBase {
 				// normal update
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 2);
 			}
-			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 				solidifyReward(block, blockStore);
 				return;
 			}

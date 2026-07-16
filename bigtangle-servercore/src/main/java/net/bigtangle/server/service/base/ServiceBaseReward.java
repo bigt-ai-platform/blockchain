@@ -57,7 +57,7 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		ordertypes.add(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		ordertypes.add(BlockType.BLOCKTYPE_FILE);
 		ordertypes.add(BlockType.BLOCKTYPE_USERDATA);
-		// Reward can not be as Referenced ordertypes.add(BlockType.BLOCKTYPE_REWARD);
+		// Reward can not be as Referenced ordertypes.add(BlockType.BLOCKTYPE_BEACON);
 		ordertypes.add(BlockType.BLOCKTYPE_GOVERNANCE);
 		ordertypes.add(BlockType.BLOCKTYPE_CROSSTANGLE);
 		ordertypes.add(BlockType.BLOCKTYPE_STAKE);

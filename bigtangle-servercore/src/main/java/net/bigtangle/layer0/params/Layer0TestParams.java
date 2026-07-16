@@ -22,7 +22,7 @@ public class Layer0TestParams extends TestParams {
                 BlockType.BLOCKTYPE_INITIAL,
                 BlockType.BLOCKTYPE_TRANSFER,
                 BlockType.BLOCKTYPE_TOKEN_CREATION,
-                BlockType.BLOCKTYPE_REWARD,
+                BlockType.BLOCKTYPE_BEACON,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_USERDATA,
                 BlockType.BLOCKTYPE_FILE,

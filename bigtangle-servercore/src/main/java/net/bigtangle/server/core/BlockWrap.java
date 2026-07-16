@@ -97,7 +97,7 @@ public class BlockWrap {
 				 BLOCKTYPE_TRANSFER, BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL,
 				 BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
-			case BLOCKTYPE_REWARD:
+			case BLOCKTYPE_BEACON:
 			// Dynamic conflicts: mining rewards spend the previous reward
 			RewardInfo rewardInfo = new RewardInfo().parseChecked(this.getBlock().getTransactions().get(0).getData());
 			blockConflicts.add(ConflictCandidate.fromReward(this, rewardInfo));

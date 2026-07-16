@@ -245,7 +245,7 @@ public class SyncBlockService {
 	}
 
 	public boolean anyMatchConfirmedReward(Block block, List<TXReward> remotes) {
-		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 			return remotes.stream().anyMatch(s -> s.getBlockHash().equals(block.getHash()));
 		} else {
 			return true;

@@ -36,7 +36,7 @@ public class UtilsTest {
         b.setPrevBranchBlockHash(branchBlock.getHash());
 
         // Set difficulty according to previous consensus
-        // only BLOCKTYPE_REWARD and BLOCKTYPE_INITIAL should overwrite this
+        // only BLOCKTYPE_BEACON and BLOCKTYPE_INITIAL should overwrite this
         b.setLastMiningRewardBlock(Math.max(prevBlock.getLastMiningRewardBlock(), branchBlock.getLastMiningRewardBlock()));
         b.setDifficultyTarget(prevBlock.getLastMiningRewardBlock() >= branchBlock.getLastMiningRewardBlock() ? prevBlock.getDifficultyTarget()
                 : branchBlock.getDifficultyTarget());

@@ -23,7 +23,7 @@ public class Layer0HandlerConfiguration {
 	@PostConstruct
 	public void registerHandlers() {
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_TOKEN_CREATION, TokenCreationHandler::new);
-		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_REWARD, RewardHandler::new);
+		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_BEACON, RewardHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_USERDATA, UserDataHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_TRANSFER, NoOpConfirmHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CROSSTANGLE, () -> new L0AnchorHandler(anchorService));

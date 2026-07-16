@@ -104,7 +104,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// only reward block and contract can be set coinbase and check by caculation
 		for (final Transaction tx : block.getTransactions()) {
-			if (tx.isCoinBase() && (block.getBlockType() == BlockType.BLOCKTYPE_REWARD
+			if (tx.isCoinBase() && (block.getBlockType() == BlockType.BLOCKTYPE_BEACON
 					|| block.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EXECUTE
 					|| block.getBlockType() == BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				throw new InvalidTransactionException("coinbase is not allowed ");
@@ -178,7 +178,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// pro block check fee
 			boolean checkFee = false;
-			if (block.getBlockType().equals(BlockType.BLOCKTYPE_REWARD)
+			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)
 					|| block.getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)
 					|| block.getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
 				checkFee = true;
@@ -370,7 +370,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		case BLOCKTYPE_INITIAL:
 			break;
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			// Check rewards are solid
 			SolidityState rewardSolidityState = checkFullRewardSolidity(block, storedPrev, storedPrevBranch, height,
 					throwExceptions, store);
@@ -730,7 +730,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		// Ensure dependency (prev reward hash) is valid predecessor
 		if (dependency.getBlock().getBlockType() != BlockType.BLOCKTYPE_INITIAL
-				&& dependency.getBlock().getBlockType() != BlockType.BLOCKTYPE_REWARD) {
+				&& dependency.getBlock().getBlockType() != BlockType.BLOCKTYPE_BEACON) {
 			if (throwExceptions)
 				throw new InvalidDependencyException("Predecessor is not reward or genesis");
 			return SolidityState.getFailState();
@@ -1234,7 +1234,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// For consensus blocks, it works as follows:
 			// If solid == 1 or solid == 2, we also check for PoW now
 			// since it is possible to do so
-			if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 				if (minPredecessorSolidity.getState() == State.MissingCalculation
 						|| minPredecessorSolidity.getState() == State.Success) {
 					SolidityState state = checkRewardBlockPow(block, throwExceptions);
@@ -1322,7 +1322,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		case BLOCKTYPE_INITIAL:
 			break;
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			// Check rewards are solid
 			SolidityState rewardSolidityState = checkFormalRewardSolidity(block, throwExceptions);
 			if (!(rewardSolidityState.getState() == State.Success)) {
@@ -1686,7 +1686,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 				// Check difficulty and latest consensus block is passed through
 				// correctly
-				if (block.getBlockType() != BlockType.BLOCKTYPE_REWARD) {
+				if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
 					if (storedPrev.getBlock().getLastMiningRewardBlock() >= storedPrevBranch.getBlock()
 							.getLastMiningRewardBlock()) {
 						if (block.getLastMiningRewardBlock() != storedPrev.getBlock().getLastMiningRewardBlock()
@@ -1891,7 +1891,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		Block prevRewardBlock = store.get(prevRewardHash);
 		if (prevRewardBlock == null)
 			return SolidityState.fromPrevReward(prevRewardHash, true);
-		if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_REWARD
+		if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_BEACON
 				&& prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_INITIAL)
 			throw new VerificationException("Previous reward block is not reward block.");
 
@@ -1969,7 +1969,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			Block prevRewardBlock = store.get(prevRewardHash);
 			if (prevRewardBlock == null)
 				return SolidityState.fromPrevReward(prevRewardHash, true);
-			if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_REWARD
+			if (prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_BEACON
 					&& prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_INITIAL)
 				throw new VerificationException("Previous reward block is not reward block.");
 

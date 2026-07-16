@@ -91,7 +91,7 @@ public class BlockStoreService {
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
-		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 			added = addChain(block, store);
 		} else {
 			added = addNonChain(block, allowUnsolid, store);
@@ -109,7 +109,7 @@ public class BlockStoreService {
 	 */
 	public void addFromSync(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 
-		if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 			addChain(block, store);
 		} else {
 			addNonChain(block, allowUnsolid, store, true);

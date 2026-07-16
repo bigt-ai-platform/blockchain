@@ -141,7 +141,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
             Block block = Block.createBlock(networkParameters,
                     prevBlock, prevBlock);
             block.setMinerAddress(proposer.getPubKey());
-            block.setBlockType(BlockType.BLOCKTYPE_REWARD);
+            block.setBlockType(BlockType.BLOCKTYPE_BEACON);
             block.solve();
             store.put(block);
             blockHashes.add(block.getHash());

@@ -162,7 +162,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			BlockWrap block = getBlockWrap(hash, store);
-			if (block.getBlock().getBlockType() == BlockType.BLOCKTYPE_REWARD)
+			if (block.getBlock().getBlockType() == BlockType.BLOCKTYPE_BEACON)
 				throw new VerificationException("Reward block referenced block has other reward blocks" + block);
 		}
 	}

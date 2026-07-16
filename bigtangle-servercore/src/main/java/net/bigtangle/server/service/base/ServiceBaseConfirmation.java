@@ -722,7 +722,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 *
 	 */
 	private Set<BlockWrap> findWhereCurrentlyIneligible(Set<BlockWrap> blocksToAdd) {
-		return blocksToAdd.stream().filter(b -> b.getBlock().getBlockType() == BlockType.BLOCKTYPE_REWARD)
+		return blocksToAdd.stream().filter(b -> b.getBlock().getBlockType() == BlockType.BLOCKTYPE_BEACON)
 				.collect(Collectors.toSet());
 	}
 
@@ -1192,7 +1192,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				BLOCKTYPE_SLASHING:
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			break;
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			confirmReward(block, confirmation, blockStore);
 			if (!enableOrderMatchExecutionChain(block.getBlock())) {
 				confirmOrderMatching(block, confirmation, blockStore);
@@ -2263,7 +2263,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			return getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
 		case BLOCKTYPE_ORDER_EXECUTE:
 			return getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			return getBlock(store.getMaxConfirmedReward().getBlockHash(), store);
 		default:
 			throw new RuntimeException("block.getBlockType() is wrong " + block.getBlockType());
@@ -2317,7 +2317,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					.getChainlength();
 		case BLOCKTYPE_ORDER_EXECUTE:
 			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			return new RewardInfo().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
 		case BLOCKTYPE_INITIAL:
 			return 0;

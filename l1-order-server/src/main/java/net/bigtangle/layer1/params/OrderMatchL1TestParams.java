@@ -24,7 +24,7 @@ public class OrderMatchL1TestParams extends TestParams {
         return EnumSet.of(
                 BlockType.BLOCKTYPE_INITIAL,
                 BlockType.BLOCKTYPE_TRANSFER,
-                BlockType.BLOCKTYPE_REWARD,
+                BlockType.BLOCKTYPE_BEACON,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_ORDER_OPEN,
                 BlockType.BLOCKTYPE_ORDER_CANCEL);

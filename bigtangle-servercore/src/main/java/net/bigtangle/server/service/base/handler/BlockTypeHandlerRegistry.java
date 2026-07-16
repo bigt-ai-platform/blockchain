@@ -10,7 +10,7 @@ import net.bigtangle.core.BlockType;
  * Holds the {@link BlockTypeHandler} registered per {@link BlockType}.
  *
  * <p>Layer modules register their handlers here (e.g. layer0 registers a
- * {@code RewardHandler} for {@code BLOCKTYPE_REWARD}); the base
+ * {@code RewardHandler} for {@code BLOCKTYPE_BEACON}); the base
  * {@code ServiceBaseCheck}/{@code ServiceBaseConfirmation} switches consult it
  * and delegate when a handler is present, otherwise fall back to the existing
  * in-class behaviour. This keeps the extraction incremental: a handler can be

@@ -169,7 +169,7 @@ public class BlockService {
 		try {
 			if (!store.existBlock(block.getHash())) {
 				try {
-					if (block.getBlockType() == BlockType.BLOCKTYPE_REWARD) {
+					if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
 					}
 					blockgraph.addBlock(block, allowUnsolid, store);

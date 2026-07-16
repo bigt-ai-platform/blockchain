@@ -92,7 +92,7 @@ public class SlotService {
         Sha256Hash dagRoot = ghostService.getDagRoot(store);
 
         Block beaconBlock = cacheBlockPrototypeService.getBlockPrototype(store);
-        beaconBlock.setBlockType(BlockType.BLOCKTYPE_REWARD);
+        beaconBlock.setBlockType(BlockType.BLOCKTYPE_BEACON);
 
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, beaconBlock.getPrevBlockHash());
         slotData.setRandaoReveal(reveal);

@@ -14,7 +14,7 @@ public class ConstantTest {
         // Only new add
         assertTrue(BlockType.BLOCKTYPE_INITIAL.ordinal() == 0);
         assertTrue(BlockType.BLOCKTYPE_TRANSFER.ordinal() == 1);
-        assertTrue(BlockType.BLOCKTYPE_REWARD.ordinal() == 2);
+        assertTrue(BlockType.BLOCKTYPE_BEACON.ordinal() == 2);
         assertTrue(BlockType.BLOCKTYPE_TOKEN_CREATION.ordinal() == 3);
         assertTrue(BlockType.BLOCKTYPE_USERDATA.ordinal() == 4);
         assertTrue(BlockType.BLOCKTYPE_CONTRACT_EVENT.ordinal() == 5);

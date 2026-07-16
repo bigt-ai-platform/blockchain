@@ -580,7 +580,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			break;
 		case BLOCKTYPE_INITIAL:
 			break;
-		case BLOCKTYPE_REWARD:
+		case BLOCKTYPE_BEACON:
 			tx = generateVirtualMiningRewardTX(block, blockStore);
 			insertVirtualUTXOs(block, tx, blockStore);
 
