@@ -491,26 +491,6 @@ public class Block extends Message {
 			}
 
 		}
-		if (blockType == BlockType.BLOCKTYPE_CONTRACT_EXECUTE) {
-
-			try {
-				ContractExecutionResult info = new ContractExecutionResult().parse(transactions.get(0).getData());
-				s.append(info.toString());
-			} catch (Exception e) {
-				// ignore throw new RuntimeException(e);
-			}
-
-		}
-		if (blockType == BlockType.BLOCKTYPE_ORDER_EXECUTE) {
-
-			try {
-				OrderExecutionResult info = new OrderExecutionResult().parse(transactions.get(0).getData());
-				s.append(info.toString());
-			} catch (Exception e) {
-				// ignore throw new RuntimeException(e);
-			}
-
-		}
 		return s.toString();
 	}
 

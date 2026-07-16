@@ -217,8 +217,7 @@ public class RewardService {
 		block.setMinerAddress(
 				Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
 
-		RewardBuilderResult result = serviceBase.calcRewardInfo(serviceBase.enableOrderMatchExecutionChain(block),
-				prevTrunk, prevBranch, prevRewardHash, currentTime, store);
+		RewardBuilderResult result = serviceBase.calcRewardInfo(prevTrunk, prevBranch, prevRewardHash, currentTime, store);
 
 		Transaction tx = result.getTx();
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(tx.getData());

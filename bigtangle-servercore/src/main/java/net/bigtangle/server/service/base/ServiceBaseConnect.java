@@ -152,12 +152,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 			connectToken(block, blockStore);
 			break;
 
-		case BLOCKTYPE_CONTRACT_EXECUTE: 
-			connectContractExecute(block, blockStore);
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE: 
-			connectOrderExecute(block, blockStore);
-			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			connectOrder(block, blockStore);
 			break;
@@ -239,87 +233,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 			List<ContractEventRecord> events = new ArrayList<>();
 			events.add(record);
 			blockStore.insertContractEvent(events);
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	public void connectContractExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
-		try {
-			ContractExecutionResult result = new ContractExecutionResult()
-					.parse(block.getTransactions().get(0).getData());
-			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			// Invoke the contract engine via the Layer-1 SPI instead of
-			// `new ServiceContract(...)`, so bigtangle-servercore has no
-			// compile-time dependency on the contract implementation. If no
-			// executor is registered (Layer-0-only node), skip. See
-			// ContractConnectSupport / LAYERING-PLAN.md.
-			ContractExecutionResult check = ContractExecutorRegistry.get()
-					.map(exec -> {
-						try {
-							return exec.executeContract(this, networkParameters, block, blockStore,
-									result.getContracttokenid(), prevblockhash, result.getReferencedBlocks());
-						} catch (BlockStoreException e) {
-							throw new RuntimeException(e);
-						}
-					})
-					.orElse(null);
-			// check.getOutputTx().getOutput(0).getScriptPubKey().getToAddress(networkParameters);
-
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
-					&& result.getRemainderRecords().equals(check.getRemainderRecords())
-					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-
-				blockStore.insertContractResult(result, block.getHash());
-				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
-				for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-					// connected not confirmed
-					c.setConfirmed(false);
-					c.setCollectinghash(block.getHash());
-				}
-				blockStore.insertContractEvent(check.getRemainderContractEventRecord());
-
-			} else {
-				// the ContractExecute can not be reproduced here
-				logger.debug("ContractResult check failed  from result {} compare to check {}", result,
-						check == null ? "" : check.toString());
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	public void connectOrderExecute(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
-		try {
-			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
-			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = OrderExecutorRegistry.get().map(exec -> {
-						try {
-							return exec.executeOrderMatching(this, networkParameters,
-									block, prevblockhash, result.getReferencedBlocks(), blockStore);
-						} catch (BlockStoreException e) {
-							throw new RuntimeException(e);
-						}
-					})
-					.orElse(null);
-
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash()) 
-					&& result.getRemainderRecords().equals(check.getRemainderRecords())
-					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-				blockStore.insertOrderResult(result, block.getHash());
-				insertVirtualUTXOs(block, check.getOutputTx(), blockStore);
-
-				for (OrderRecord c : check.getRemainderOrderRecord()) {
-					c.setIssuingMatcherBlockHash(block.getHash());
-					c.setConfirmed(false);
-				}
-				blockStore.insertOrder(check.getRemainderOrderRecord());
-
-			} else {
-				// the ContractExecute can not be reproduced here
-				logger.warn("OrderExecutionResult check failed  from result {} compare to check {}", result,
-						check == null ? "" : check.toString());
-			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

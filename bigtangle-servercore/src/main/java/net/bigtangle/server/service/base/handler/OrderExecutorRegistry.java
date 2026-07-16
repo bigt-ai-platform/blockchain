@@ -5,8 +5,7 @@ import java.util.Optional;
 /**
  * Static holder for the {@link OrderExecutor} registered by the Layer-1
  * module. {@code bigtangle-servercore} looks the executor up here
- * (in {@code ServiceBaseConnect.connectOrderExecute} and
- * {@code ServiceBaseConfirmation.confirmOrderExecute}) instead of calling
+ * (execution chain removed) instead of calling
  * {@code new ServiceOrderExecution(...)} directly.
  */
 public final class OrderExecutorRegistry {

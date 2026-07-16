@@ -7,8 +7,6 @@ package net.bigtangle.server.core;
 
 import com.google.common.base.Objects;
 
-import net.bigtangle.core.ContractExecutionResult;
-import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TransactionOutPoint;
@@ -43,15 +41,7 @@ public class ConflictCandidate {
     public static ConflictCandidate fromDomainToken(BlockWrap block, Token token) {
         return new ConflictCandidate(block, ConflictPoint.fromDomainToken(token));
     }
-    public static ConflictCandidate fromContractExecute(BlockWrap block, ContractExecutionResult token) {
-        return new ConflictCandidate(block, ConflictPoint.fromContractExecute(token));
-    }
 
-    public static ConflictCandidate fromOrderExecute(BlockWrap block, OrderExecutionResult token) {
-        return new ConflictCandidate(block, ConflictPoint.fromOrderExecute(token));
-    }
-
-    
 	public BlockWrap getBlock() {
         return block;
     }

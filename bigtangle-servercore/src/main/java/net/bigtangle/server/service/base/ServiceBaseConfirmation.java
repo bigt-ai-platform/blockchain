@@ -302,48 +302,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				});
 	}
 
-	public Set<BlockWrap> collectPrevsChain(Contractresult prevNotMilestone, Contractresult lastMilestone,
-			BlockStoreInterface store) throws BlockStoreException {
-		Set<BlockWrap> re = new HashSet<>();
-		Contractresult startingBlock = prevNotMilestone;
-		// prevNotMilestone = lastMilestone
-		if (startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
-			return re;
-		}
-		while (startingBlock != null
-				&& !Contractresult.firstContractresult().getBlockHash().equals(startingBlock.getBlockHash())) {
-			re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
-				return re;
-			} else {
-				startingBlock = store.getContractresult(startingBlock.getPrevblockhash());
-			}
-		}
-		// not chained to lastMilestone
-		return new HashSet<>();
-	}
-
-	public Set<BlockWrap> collectPrevsOrderChain(Orderresult prevNotMilestone, Orderresult lastMilestone,
-			BlockStoreInterface store) throws BlockStoreException {
-
-		Set<BlockWrap> re = new HashSet<>();
-		Orderresult startingBlock = prevNotMilestone;
-		if (startingBlock.getBlockHash().equals(lastMilestone.getBlockHash())) {
-			return re;
-		}
-		while (startingBlock != null
-				&& !Orderresult.zeroOrderresult().getBlockHash().equals(startingBlock.getBlockHash())) {
-			re.add(getBlockWrap(startingBlock.getBlockHash(), store));
-			if (startingBlock.getPrevblockhash().equals(lastMilestone.getBlockHash())) {
-				return re;
-			} else {
-				startingBlock = store.getOrderResult(startingBlock.getPrevblockhash());
-			}
-		}
-
-		return re;
-	}
-
 	/**
 	 * Recursively adds the specified block and its approved blocks to the
 	 * collection. startingBlock is an approval of a block from blocks, it will add
@@ -1195,9 +1153,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		case BLOCKTYPE_BEACON:
 			confirmReward(block, confirmation, blockStore);
 			// Order matching confirmation always runs here (matching uses
-			// BEACON block data). The enableOrderMatchExecutionChain flag
-			// controls only whether ORDER_OPEN blocks are individually
-			// confirmed (line 1918).
+			// BEACON block data).
 			confirmOrderMatching(block, confirmation, blockStore);
 			confirmContractExecution(block, confirmation, blockStore);
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
@@ -1210,44 +1166,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			confirmVOSOrUserData(block, confirmation, blockStore);
 			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			if (confirmation)
-				handleNewBestExecutionChain(block.getBlock(), milestoneNumber, blockStore);
-			else {
-				confirmContractExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
-			}
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			if (confirmation)
-				handleNewBestExecutionChain(block.getBlock(), milestoneNumber, blockStore);
-			else {
-				confirmOrderExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
-			}
-			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			blockStore.updateOrderBlockhash(block.getBlockHash(), Sha256Hash.ZERO_HASH, confirmation, false, null);
 			break;
 		default:
 			throw new RuntimeException("Not Implemented");
-
-		}
-	}
-
-	private void confirmExecution(BlockWrap block, long milestoneNumber, boolean confirmation,
-			BlockStoreInterface blockStore) throws BlockStoreException {
-
-		// type-specific updates
-		switch (block.getBlock().getBlockType()) {
-
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			confirmContractExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			confirmOrderExecute(block.getBlock(), milestoneNumber, confirmation, blockStore);
-			break;
-		default:
-			break;
 
 		}
 	}
@@ -1416,108 +1340,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	public void confirmOrderExecute(Block block, long milestoneNumber, boolean confirm, BlockStoreInterface blockStore)
-			throws BlockStoreException {
-		updateBlockConfirmOnly(block.getHash(), milestoneNumber, confirm, blockStore);
-		try {
-			OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
-			Orderresult prevblockhash = blockStore.getOrderResult(result.getPrevblockhash());
-			OrderExecutionResult check = OrderExecutorRegistry.get().map(exec -> {
-						try {
-							return exec.executeOrderMatching((net.bigtangle.server.service.base.handler.OrderMatchingSupport) this,
-									networkParameters,
-									block, prevblockhash, result.getReferencedBlocks(), blockStore);
-						} catch (BlockStoreException e) {
-							throw new RuntimeException(e);
-						}
-					})
-					.orElse(null);
-
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-
-					&& result.getRemainderRecords().equals(check.getRemainderRecords())
-					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-				// debugOrderExecutionResult(block, check, confirm, blockStore);
-
-				if (confirm) {
-
-					for (Sha256Hash ref : check.getReferencedBlocks()) {
-						blockStore.updateOrderBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
-						confirmOrderAndTransaction(getBlock(ref, blockStore), true, milestoneNumber, blockStore);
-					}
-					blockStore.updateOrderPrevhash(check.getPrevblockhash(), true, true, block.getHash());
-
-					blockStore.updateOrderConfirmed(check.getRemainderOrderRecord(), true);
-
-					// update cancel
-					blockStore.updateOrderCancelSpent(check.getCancelRecords(), block.getHash(), true);
-
-					// update order result
-					confirmTransaction(block, true, check.getOutputTx(), blockStore);
-					blockStore.updateOrderresultMilestone(block.getHash(), milestoneNumber);
-					blockStore.updateOrderResultConfirmed(block.getHash(), true);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), block.getHash(), true);
-
-					// Update the matching
-					addMatchingEventsOrderExecution(check, check.getOutputTx().getHashAsString(),
-							block.getTimeSeconds(), blockStore);
-				} else {
-
-					// referenced block can be referenced by conflict block
-					for (Sha256Hash ref : check.getReferencedBlocks()) {
-						OrderRecord event = blockStore.getOrder(ref, Sha256Hash.ZERO_HASH);
-						BlockWrap refBlock = getBlockWrap(ref, blockStore);
-						if (event != null && block.getHash().equals(event.getSpenderBlockHash())) {
-							blockStore.updateOrderBlockhash(ref, Sha256Hash.ZERO_HASH, false, false, null);
-							confirmOrderAndTransaction(refBlock.getBlock(), false, -1, blockStore);
-						} else {
-							if (event != null && event.getSpenderBlockHash() != null)
-								logger.debug("referenced block can be referenced by other block:" + refBlock.toString()
-										+ "\n spenderBlockHash: " + event.getSpenderBlockHash());
-						}
-					}
-
-					blockStore.updateOrderPrevhash(check.getPrevblockhash(), false, false, null);
-					mayRestoreprevOrderExecution(blockStore, result, prevblockhash, block);
-
-					blockStore.updateOrderConfirmed(check.getRemainderOrderRecord(), false);
-					// update cancel
-					blockStore.updateOrderCancelSpent(check.getCancelRecords(), null, false);
-
-					// update order result
-					confirmTransaction(block, false, check.getOutputTx(), blockStore);
-					blockStore.updateOrderResultConfirmed(block.getHash(), false);
-					blockStore.updateOrderresultMilestone(block.getHash(), -1);
-					blockStore.updateOrderResultSpent(check.getPrevblockhash(), null, false);
-				}
-
-				evictTransactionsAndBlockEva(block, blockStore);
-
-			} else {
-				logger.debug("check failed result={} check ={}", result, check != null ? check.toString() : null);
-			}
-
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private void mayRestoreprevOrderExecution(BlockStoreInterface blockStore, OrderExecutionResult result,
-			Orderresult prevblockhash, Block block) throws BlockStoreException {
-		if (prevblockhash.getOrderExecutionResult() != null) {
-			if (!checkOrderresultOtherSpent(prevblockhash, block, blockStore)) {
-				BlockWrap prevBlock = getBlockWrap(result.getPrevblockhash(), blockStore);
-				if (prevBlock.getBlockEvaluation().isConfirmed()
-						|| prevBlock.getBlockEvaluation().getMilestone() > -1) {
-					// recalculate the prev confirmed
-					confirmOrderExecute(prevBlock.getBlock(), prevBlock.getBlockEvaluation().getMilestone(), true,
-							blockStore);
-					evictTransactionsAndBlockEva(prevBlock.getBlock(), blockStore);
-				}
-			}
-		}
-	}
-
 	public void checkSum(BlockStoreInterface blockStore) {
 
 		try {
@@ -1536,173 +1358,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// ignore as check only
 		}
 
-	}
-
-	/*
-	 * confirmation of the contract Execution
-	 */
-	public void confirmContractExecute(Block block, long milestoneNumber, boolean confirm,
-			BlockStoreInterface blockStore) throws BlockStoreException {
-
-		try {
-			ContractExecutionResult result = new ContractExecutionResult()
-					.parse(block.getTransactions().get(0).getData());
-			Contractresult prevblockhash = blockStore.getContractresult(result.getPrevblockhash());
-			// Invoke the contract engine via the Layer-1 SPI instead of
-			// `new ServiceContract(...)`. See ContractConnectSupport.
-			// At runtime `this` is always a ServiceBaseConnect subclass
-			// (ServiceBaseCheck / ServiceVerifyReward / ServiceBaseReward),
-			// hence a ContractConnectSupport.
-			ContractExecutionResult check = ContractExecutorRegistry.get()
-					.map(exec -> {
-						try {
-							return exec.executeContract((net.bigtangle.server.service.base.handler.ContractConnectSupport) this,
-									networkParameters, block, blockStore,
-									result.getContracttokenid(), prevblockhash, result.getReferencedBlocks());
-						} catch (BlockStoreException e) {
-							throw new RuntimeException(e);
-						}
-					})
-					.orElse(null);
-
-			if (check != null && result.getOutputTxHash().equals(check.getOutputTxHash())
-					&& result.getRemainderRecords().equals(check.getRemainderRecords())
-					&& result.getCancelRecords().equals(check.getCancelRecords())) {
-
-				confirmContractExecuteDo(block, milestoneNumber, confirm, blockStore, prevblockhash, check);
-			}
-
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	private void confirmContractExecuteDo(Block block, long milestoneNumber, boolean confirm,
-			BlockStoreInterface blockStore, Contractresult prevblockhash, ContractExecutionResult check)
-			throws BlockStoreException {
-		if (confirm) {
-			for (Sha256Hash ref : check.getReferencedBlocks()) {
-				blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, true, true, block.getHash());
-				confirmContractEventTransaction(getBlock(ref, blockStore), true, milestoneNumber, blockStore);
-			}
-			blockStore.updateContractEventPrevhash(prevblockhash.getBlockHash(), true, true, block.getHash());
-
-			for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-				c.setConfirmed(true);
-				c.setSpent(false);
-				c.setSpenderBlockHash(null);
-				// remainder set the collection hash using block hash, as the calculation of
-				// execution the block hash is done only at solve block.
-				c.setCollectinghash(block.getHash());
-			}
-			blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
-
-			// update ContractResult
-			blockStore.updateContractresultMilestone(block.getHash(), milestoneNumber);
-			blockStore.updateContractResultConfirmed(block.getHash(), true);
-			confirmTransaction(block, true, check.getOutputTx(), blockStore);
-			blockStore.updateContractResultSpent(check.getPrevblockhash(), block.getHash(), true);
-
-			// update cancel
-			blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), true);
-
-		} else {
-			Sha256Hash spenderBlockHash = prevblockhash.getSpenderBlockHash();
-			// referenced block can be referenced by other conflict block, set to
-			// unconfirmed only the block is the spender
-			for (Sha256Hash ref : check.getReferencedBlocks()) {
-				ContractEventRecord event = blockStore.getContractEvent(ref, Sha256Hash.ZERO_HASH);
-				BlockWrap refBlock = getBlockWrap(ref, blockStore);
-				if (block.getHash().equals(event.getSpenderBlockHash())) {
-					blockStore.updateContractEventBlockhash(ref, Sha256Hash.ZERO_HASH, false, false, null);
-					confirmContractEventTransaction(refBlock.getBlock(), false, -1, blockStore);
-				} else {
-					if (event.getSpenderBlockHash() != null)
-						logger.debug("referenced block can be referenced by other block:" + refBlock.toString()
-								+ "\n spenderBlockHash: " + event.getSpenderBlockHash());
-				}
-			}
-
-			blockStore.updateContractEventPrevhash(prevblockhash.getBlockHash(), false, false, null);
-			// may restore the prev state,
-			mayRestorePrevContractExecution(block, blockStore, prevblockhash);
-
-			for (ContractEventRecord c : check.getRemainderContractEventRecord()) {
-				c.setConfirmed(false);
-				c.setSpent(false);
-				c.setSpenderBlockHash(null);
-				// remainder set the collection hash using block hash, as the calculation of
-				// execution the block hash is not fixed.
-				c.setCollectinghash(block.getHash());
-			}
-			blockStore.updateContractEventSpent(check.getRemainderContractEventRecord());
-
-			// update ContractResult
-			blockStore.updateContractresultMilestone(block.getHash(), -1);
-			blockStore.updateContractResultConfirmed(block.getHash(), false);
-			confirmTransaction(block, false, check.getOutputTx(), blockStore);
-
-			if (block.getHash().equals(spenderBlockHash)) {
-				blockStore.updateContractResultSpent(check.getPrevblockhash(), null, false);
-			}
-			// update cancel
-			blockStore.updateContractEventCancelSpent(check.getCancelRecords(), block.getHash(), false);
-
-		}
-
-		updateBlockConfirmOnly(block.getHash(), milestoneNumber, confirm, blockStore);
-	}
-
-	private void mayRestorePrevContractExecution(Block block, BlockStoreInterface blockStore,
-			Contractresult prevblockhash) throws BlockStoreException {
-		if (prevblockhash.getContractExecutionResult() != null) {
-			if (!checkContractresultOtherSpent(prevblockhash, block, blockStore)) {
-				BlockWrap prevBlock = getBlockWrap(prevblockhash.getBlockHash(), blockStore);
-				if (prevBlock.getBlockEvaluation().isConfirmed() || prevBlock.getBlockEvaluation().getMilestone() > 0) {
-					confirmContractExecute(prevBlock.getBlock(), prevBlock.getBlockEvaluation().getMilestone(), true,
-							blockStore);
-					evictTransactionsAndBlockEva(prevBlock.getBlock(), blockStore);
-				}
-			}
-		}
-	}
-
-	private boolean checkContractresultOtherSpent(Contractresult prev, Block c, BlockStoreInterface store)
-			throws BlockStoreException {
-		List<Contractresult> allWithPrev = store.getContractresultWithPrev(prev.getBlockHash());
-		for (Contractresult s : allWithPrev) {
-			if (c.getHash().equals(s.getBlockHash()))
-				continue;
-
-			if (!c.getHash().equals(s.getSpenderBlockHash())) {
-				if (s.getMilestone() > 0) {
-					return true;
-				}
-			} else {
-				if (s.isConfirmed())
-					return true;
-			}
-		}
-		return false;
-	}
-
-	private boolean checkOrderresultOtherSpent(Orderresult prev, Block c, BlockStoreInterface store)
-			throws BlockStoreException {
-		List<Orderresult> allWithPrev = store.getOrderresultWithPrev(prev.getBlockHash());
-		for (Orderresult s : allWithPrev) {
-			if (c.getHash().equals(s.getBlockHash()))
-				continue;
-
-			if (!c.getHash().equals(s.getSpenderBlockHash())) {
-				if (s.getMilestone() > 0) {
-					return true;
-				}
-			} else {
-				if (s.isConfirmed())
-					return true;
-			}
-		}
-		return false;
 	}
 
 	public void confirmReward(BlockWrap block, boolean confirm, BlockStoreInterface blockStore)
@@ -1917,13 +1572,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
 			return;
 
-		// When order execution chain is enabled, ORDER_OPEN blocks are
-		// still confirmed (marked solid/spendable) but are skipped from
-		// the reward-chain-specific handler in confirmReward (switch case
-		// BLOCKTYPE_ORDER_OPEN at line 1225 handles ORDER_OPEN normally).
-		// The flag only prevents ORDER_OPEN from being processed through
-		// the reward block's order-matching confirmation — matching is
-		// handled separately via ORDER_EXECUTE blocks.
+		// ORDER_OPEN blocks confirmed inline via the reward chain handler.
 		updateBlockConfirm(blockWrap, milestoneNumber, confirmation, store);
 
 		// Keep track of confirmed blocks
@@ -1973,132 +1622,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		checkSum(store);
 	}
 
-	/*
-	 * unconfirm chained execution for contract and order, it will add all follow of
-	 * the unconfirmed blocks. Execution will be added, only if it is longest than
-	 * the last confirmed execution
-	 */
-	public Set<BlockWrap> addUnconfirmBlocksChainedFollow(BlockStoreInterface store, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-		Set<BlockWrap> re = new HashSet<>();
-		for (BlockWrap blockWrap : blocks) {
-			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				ContractExecutionResult c = new ContractExecutionResult()
-						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
-				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
-				if (last.getChainlength() < c.getChainlength()) {
-					addFollowerContract(store, blockWrap, re);
-				} else {
-					// skip this block
-					continue;
-				}
-			}
-			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
-				addFollowerOrderexecution(store, blockWrap, re);
-			}
-			re.add(blockWrap);
-		}
-		return re;
-	}
-
-	/*
-	 * confirm chained execution for contract and order, it will add all previous
-	 * unconfirmed blocks until confirmed
-	 */
-	public Set<BlockWrap> addUnconfirmBlocksChainedPrev(BlockStoreInterface store, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-		Set<BlockWrap> re = new HashSet<>();
-		for (BlockWrap blockWrap : blocks) {
-
-			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				ContractExecutionResult c = new ContractExecutionResult()
-						.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
-				Contractresult last = store.getMaxConfirmedContractresult(c.getContracttokenid());
-				if (last.getChainlength() < c.getChainlength()) {
-					addExecutionPrev(store, blockWrap, re);
-				} else {
-					// skip this block
-					continue;
-				}
-			}
-			if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
-				addExecutionPrev(store, blockWrap, re);
-			}
-			// at the end may skip
-			re.add(blockWrap);
-		}
-		return re;
-	}
-
-	private void addExecutionPrev(BlockStoreInterface store, BlockWrap startingBlock, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-
-		while (startingBlock != null) {
-			BlockWrap b = getBlockWrap(getExecutionPrev(startingBlock.getBlock()), store);
-			startingBlock = b;
-			if (b != null && !b.getBlockEvaluation().isConfirmed()) {
-				blocks.add(b);
-			} else {
-				startingBlock = null;
-			}
-		}
-
-	}
-
-	private void addFollowerContract(BlockStoreInterface store, BlockWrap startingBlock, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
-		Set<Sha256Hash> blockQueueSet = new HashSet<>();
-		blockQueue.add(startingBlock);
-		blockQueueSet.add(startingBlock.getBlockHash());
-
-		while (!blockQueue.isEmpty()) {
-			BlockWrap block = blockQueue.poll();
-			blockQueueSet.remove(block.getBlockHash());
-			// Add this block.
-			blocks.add(block);
-
-			// Queue all of its confirmed approver blocks if not already queued.
-			for (Contractresult req : store.getContractresultWithPrev(block.getBlockHash())) {
-				if (!blockQueueSet.contains(req.getBlockHash())) {
-					BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
-					blockQueueSet.add(req.getBlockHash());
-					blockQueue.add(pred);
-				}
-			}
-		}
-
-	}
-
-	private void addFollowerOrderexecution(BlockStoreInterface store, BlockWrap startingBlock, Set<BlockWrap> blocks)
-			throws BlockStoreException {
-
-		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
-				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()));
-		Set<Sha256Hash> blockQueueSet = new HashSet<>();
-		blockQueue.add(startingBlock);
-		blockQueueSet.add(startingBlock.getBlockHash());
-
-		while (!blockQueue.isEmpty()) {
-			BlockWrap block = blockQueue.poll();
-			blockQueueSet.remove(block.getBlockHash());
-			// Add this block.
-			blocks.add(block);
-
-			// Queue all of its confirmed approver blocks if not already queued.
-			for (Orderresult req : store.getOrderresultWithPrev(block.getBlockHash())) {
-				if (!blockQueueSet.contains(req.getBlockHash())) {
-					BlockWrap pred = getBlockWrap(req.getBlockHash(), store);
-					blockQueueSet.add(req.getBlockHash());
-					blockQueue.add(pred);
-				}
-			}
-		}
-
-	}
-
 	public void confirmBlocksSorted(BlockStoreInterface store, long milestoneNumber, Collection<BlockWrap> blocks,
 			HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 		confirmBlocksSorted(store, milestoneNumber, false, blocks, traversedConfirms);
@@ -2115,157 +1638,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		checkSum(store);
 	}
 
-	public Set<BlockWrap> collectNotAreadyCollected(Set<BlockWrap> collectedBlocks, Set<BlockWrap> prevs)
-			throws IOException {
-		Set<BlockWrap> collectNews = new HashSet<>();
-		Set<Sha256Hash> alreadyCollected = collectNotSpentFrom(prevs);
-		for (BlockWrap b : collectedBlocks) {
-			if (!b.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)) {
-				if (!alreadyCollected.contains(b.getBlockHash())) {
-					collectNews.add(b);
-				}
-			}
-		}
-		return collectNews;
-	}
-
-	protected Set<Sha256Hash> collectNotSpentFrom(Set<BlockWrap> prevs) throws IOException {
-		Set<Sha256Hash> collectOrdersNoSpents = new HashSet<>();
-		for (BlockWrap b : prevs) {
-			ContractExecutionResult result = new ContractExecutionResult()
-					.parse(b.getBlock().getTransactions().get(0).getData());
-
-			collectOrdersNoSpents.addAll(result.getReferencedBlocks());
-		}
-		return collectOrdersNoSpents;
-	}
-
-	/**
-	 * Called as part of connecting a block when the new block results in a
-	 * different chain having higher total work as longest reward chain.
-	 * 
-	 */
-	public void handleNewBestExecutionChain(Block newChainHead, long milestoneNumber, BlockStoreInterface store)
-			throws BlockStoreException, VerificationException {
-		// checkState(lock.isHeldByCurrentThread());
-		// This chain has overtaken the one we currently believe is best.
-		// Reorganize is required.
-		//
-		// Firstly, calculate the block at which the chain diverged. We only
-		// need to examine the
-		// chain from beyond this block to find differences.
-		Block head = getChainHeadExecution(newChainHead, store);
-
-		if (head == null) {
-			confirmExecution(getBlockWrap(newChainHead.getHash(), store), milestoneNumber, true, store);
-			return;
-		}
-
-		if (head != null && getExecuteChainlength(newChainHead) <= getExecuteChainlength(head)) {
-			// best execution chain nothing to dod
-			return;
-		}
-
-		if (head != null && getExecutionPrev(newChainHead).equals(head.getHash())) {
-			// ok follow the head
-			confirmExecution(getBlockWrap(newChainHead.getHash(), store), milestoneNumber, true, store);
-			return;
-		}
-		// there is new best execution chain
-		executionBestChained(newChainHead, milestoneNumber, store, head);
-
-	}
-
-	private void executionBestChained(Block newChainHead, long milestoneNumber, BlockStoreInterface store, Block head)
-			throws BlockStoreException {
-		final Block splitPoint = findSplit(newChainHead, head, store);
-		if (splitPoint == null) {
-			logger.info(" splitPoint is null, the chain ist not complete: {} ", newChainHead);
-			return;
-		}
-
-		logger.info("Re-organize after split at height {}", splitPoint.getHeight());
-		logger.info("Old Execution chain head: \n {}", head);
-		logger.info("New Execution chain head: \n {}", newChainHead);
-		logger.info("Split at Execution block: \n {}", splitPoint);
-		// Then build a list of all blocks in the old part of the chain and the
-		// new part.
-		LinkedList<Block> oldBlocks = new LinkedList<>();
-		if (!head.getHash().equals(splitPoint.getHash())) {
-			oldBlocks = getPartialChain(head, splitPoint, store);
-		}
-		// add other confirmed and not milestone execution block lower than the
-		// newChainHead
-		for (Sha256Hash h : getLowerExecuteChainlength(newChainHead, store)) {
-			if (findBlockFromHash(oldBlocks, h) == null) {
-				oldBlocks.add(getBlock(h, store));
-			}
-		}
-		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
-		// Disconnect each block in the previous best chain that is no
-		// longer in the new best chain from last to begin
-		oldBlocks.sort(Comparator.comparingLong((Block w) -> w.getHeight()));
-		for (Block oldBlock : oldBlocks) {
-			// Sanity check:
-			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters) .getHash())) {
-				// Unconfirm
-				confirmExecution(getBlockWrap(oldBlock.getHash(), store), -1, false, store);
-			}
-		}
-		Block cursor;
-		// Walk in ascending chronological order.
-		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
-			cursor = it.next();
-			confirmExecution(getBlockWrap(cursor.getHash(), store), milestoneNumber, true, store);
-			// if we build a chain longer than head, do a commit, even it may be
-			// failed after this.
-			if (getExecuteChainlength(cursor) > getExecuteChainlength(head)) {
-				store.commitDatabaseBatchWrite();
-				store.beginDatabaseBatchWrite();
-			}
-		}
-	}
-
-	private Block findBlockFromHash(List<Block> collectList, Sha256Hash blockhash) throws BlockStoreException {
-		for (Block b : collectList) {
-			if (b.getHash().equals(blockhash))
-				return b;
-		}
-		return null;
-	}
-
 	public boolean checkBestExecutionChain(Block newChainHead, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
-		Block head = null;
-		switch (newChainHead.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			ContractExecutionResult c = new ContractExecutionResult()
-					.parseChecked(newChainHead.getTransactions().get(0).getData());
-			head = getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
-		case BLOCKTYPE_ORDER_EXECUTE:
-			// head = getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
-		default:
-		}
-		if (head == null) {
-			return true;
-		} else {
-			boolean re = getExecuteChainlength(newChainHead) > getExecuteChainlength(head);
-			if (re) {
-				logger.debug(newChainHead.toString());
-			}
-			return re;
-		}
+		return true;
 	}
 
 	public Block getChainHeadExecution(Block block, BlockStoreInterface store) throws BlockStoreException {
 
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			ContractExecutionResult c = new ContractExecutionResult()
-					.parseChecked(block.getTransactions().get(0).getData());
-			return getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
-		case BLOCKTYPE_ORDER_EXECUTE:
-			return getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
 		case BLOCKTYPE_BEACON:
 			return getBlock(store.getMaxConfirmedReward().getBlockHash(), store);
 		default:
@@ -2315,11 +1695,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (block == null)
 			return 0;
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			return new ContractExecutionResult().parseChecked(block.getTransactions().get(0).getData())
-					.getChainlength();
-		case BLOCKTYPE_ORDER_EXECUTE:
-			return new OrderExecutionResult().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
 		case BLOCKTYPE_BEACON:
 			return new RewardInfo().parseChecked(block.getTransactions().get(0).getData()).getChainlength();
 		case BLOCKTYPE_INITIAL:
@@ -2335,17 +1710,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			throws BlockStoreException {
 		List<Sha256Hash> re = new ArrayList<>();
 		switch (newChainHead.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			ContractExecutionResult c = new ContractExecutionResult()
-					.parseChecked(newChainHead.getTransactions().get(0).getData());
-			for (Contractresult s : store.getLowerConfirmedContractresult(c.getContracttokenid(),
-					getExecuteChainlength(newChainHead))) {
-				re.add(s.getBlockHash());
-			}
-		case BLOCKTYPE_ORDER_EXECUTE:
-			for (Orderresult s : store.getLowerConfirmedOrderresult(getExecuteChainlength(newChainHead))) {
-				re.add(s.getBlockHash());
-			}
 		default:
 		}
 		return re;

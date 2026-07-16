@@ -5,8 +5,7 @@ import java.util.Optional;
 /**
  * Static holder for the {@link ContractExecutor} registered by the Layer-1
  * module. {@code bigtangle-servercore} looks the executor up here (in
- * {@code ServiceBaseConnect.connectContractExecute} and
- * {@code ServiceBaseConfirmation.confirmContractExecute}) instead of calling
+ * (now only used by the inline BEACON path) instead of calling
  * {@code new ServiceContract(...)} directly, which is what removes the compile-
  * time dependency on the contract implementation.
  *

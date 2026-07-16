@@ -579,28 +579,8 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	private boolean enableOrderMatchExecutionChain() throws Exception, BlockStoreException {
-		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.enableOrderMatchExecutionChain(null);
-	}
-
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
-
-		if (this.enableOrderMatchExecutionChain()) {
-			mcmcService.calcNewBlockPrototype(store);
-
-			Block b = null;
-			// no reward, this order will be not confirmed
-			// confirm the contract execution
-			if (b != null) {
-				confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
-				addedBlocks.add(b);
-			} else {
-				log.debug("");
-			}
-		} else {
-			makeRewardBlock(addedBlocks);
-		}
+		makeRewardBlock(addedBlocks);
 	}
 
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
@@ -769,10 +749,7 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks, Block b) throws Exception {
 		// ORDER_OPEN block is always included in the reward chain (matching
-		// uses BEACON block data via generateOrderMatching regardless of flag).
-		// The enableOrderMatchExecutionChain flag only controls whether
-		// ORDER_OPEN confirmation happens through reward chain traversal
-		// or via ORDER_EXECUTE blocks.
+		// uses BEACON block data via generateOrderMatching).
 		return rewardWithBlock(addedBlocks, b);
 	}
 

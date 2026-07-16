@@ -27,14 +27,14 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 
 	}
 
-	public RewardBuilderResult calcRewardInfo(boolean contractExecute, BlockWrap prevTrunk, BlockWrap prevBranch,
+	public RewardBuilderResult calcRewardInfo(BlockWrap prevTrunk, BlockWrap prevBranch,
 			Sha256Hash prevRewardHash, long currentTime, BlockStoreInterface store) throws BlockStoreException {
 
 		// Read previous reward block's data
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 
 		long cutoffheight = getRewardCutoffHeight(prevRewardHash, store);
-		List<BlockType> ordertypes = getListedBlockOfType(contractExecute);
+		List<BlockType> ordertypes = getListedBlockOfType();
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
@@ -44,12 +44,11 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 				true, store);
 		serviceBase.dagBlockHashesFrom(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
 				store);
-		serviceBase.checkExecutionChained(store, blocks );
-		return calcRewardInfo(contractExecute, prevTrunk, prevBranch, prevRewardHash, currentTime,
+		return calcRewardInfo(false, prevTrunk, prevBranch, prevRewardHash, currentTime,
 				serviceBase.getHashSet(blocks), store);
 	}
 
-	private List<BlockType> getListedBlockOfType(boolean contractExecute) {
+	private List<BlockType> getListedBlockOfType() {
 		List<BlockType> ordertypes = new ArrayList<>();
 
 		ordertypes.add(BlockType.BLOCKTYPE_INITIAL);
@@ -61,18 +60,11 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		ordertypes.add(BlockType.BLOCKTYPE_GOVERNANCE);
 		ordertypes.add(BlockType.BLOCKTYPE_CROSSTANGLE);
 		ordertypes.add(BlockType.BLOCKTYPE_STAKE);
+		ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
+		ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
+		ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);
+		ordertypes.add(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 
-		if (contractExecute) {
-			// exclude order open , cancel
-			ordertypes.add(BlockType.BLOCKTYPE_ORDER_EXECUTE);
-			ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
-		} else {
-			ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
-			ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
-			ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);
-			ordertypes.add(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
-
-		}
 		return ordertypes;
 	}
 

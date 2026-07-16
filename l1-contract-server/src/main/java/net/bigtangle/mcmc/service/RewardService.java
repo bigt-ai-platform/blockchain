@@ -220,8 +220,7 @@ public class RewardService {
 		block.setMinerAddress(
 				Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
 
-		RewardBuilderResult result = serviceBase.calcRewardInfo(serviceBase.enableOrderMatchExecutionChain(block),
-				prevTrunk, prevBranch, prevRewardHash, currentTime, store);
+		RewardBuilderResult result = serviceBase.calcRewardInfo(prevTrunk, prevBranch, prevRewardHash, currentTime, store);
 
 		Transaction tx = result.getTx();
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(tx.getData());
@@ -236,21 +235,18 @@ public class RewardService {
 		}
 
 		block.addTransaction(tx);
-		if (!serviceBase.enableOrderMatchExecutionChain(block)) {
-			// Execute contracts inline in the beacon chain (Flow A).
-			// Signal to confirmContractExecution that contract work is needed
-			// by setting contractResult to a non-null, non-ZERO_HASH value.
-			List<Token> openContracts = store.getTokenTypeList(TokenType.contract.ordinal());
-			if (!openContracts.isEmpty()) {
-				currRewardInfo.setContractResult(currRewardInfo.getPrevRewardHash());
-				tx.setData(currRewardInfo.toByteArray());
-			}
-		} else {
-			if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
-				log.debug("   no referenced blocks skip createReward  time {} ms.",
-						watch.elapsed(TimeUnit.MILLISECONDS));
-				return null;
-			}
+		// Execute contracts inline in the beacon chain (Flow A).
+		// Signal to confirmContractExecution that contract work is needed
+		// by setting contractResult to a non-null, non-ZERO_HASH value.
+		List<Token> openContracts = store.getTokenTypeList(TokenType.contract.ordinal());
+		if (!openContracts.isEmpty()) {
+			currRewardInfo.setContractResult(currRewardInfo.getPrevRewardHash());
+			tx.setData(currRewardInfo.toByteArray());
+		}
+		if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
+			log.debug("   no referenced blocks skip createReward  time {} ms.",
+					watch.elapsed(TimeUnit.MILLISECONDS));
+			return null;
 		}
 		// Mining reward removed — epoch-based via EpochRewardService
 		// miningTx removed; epoch-based rewards

@@ -63,14 +63,6 @@ public class ConflictPoint {
 		return new ConflictPoint(ConflictType.DOMAINISSUANCE, null, null, null, token, null, null);
 	}
 
-	public static ConflictPoint fromContractExecute(ContractExecutionResult contractResult) {
-		return new ConflictPoint(ConflictType.CONTRACTEXECUTE, null, null, null, null, contractResult, null);
-	}
-
-	public static ConflictPoint fromOrderExecute(OrderExecutionResult orderExecutionResult) {
-		return new ConflictPoint(ConflictType.ORDEREXECUTE, null, null, null, null, null, orderExecutionResult);
-	}
-
 	@Override
 	public boolean equals(Object o) {
 		if (this == o)

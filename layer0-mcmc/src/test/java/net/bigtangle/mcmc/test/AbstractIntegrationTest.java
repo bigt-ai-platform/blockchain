@@ -553,11 +553,6 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	private boolean enableOrderMatchExecutionChain() throws Exception, BlockStoreException {
-		return new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.enableOrderMatchExecutionChain(null);
-	}
-
 	/**
 	 * Test helper: run the Layer-1 contract engine (the former
 	 * {@code ServiceContract}, now {@code ContractEngine}) against a block, using
@@ -581,21 +576,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
-
-		// ORDER_OPEN always included in reward chain (flag not needed here)
-
-			Block b = null;
-			// no reward, this order will be not confirmed
-			// confirm the contract execution
-			if (b != null) {
-				confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
-				addedBlocks.add(b);
-			// } else {
-				log.debug("");
-			}
-		// } else {
-			makeRewardBlock(addedBlocks);
-		}
+		makeRewardBlock(addedBlocks);
 	}
 
 	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
@@ -764,18 +745,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block rewardWithBlock(List<Block> addedBlocks, Block b) throws Exception {
-		if (b != null) {
-			if (addedBlocks != null) {
-				addedBlocks.add(b);
-			}
-			Block block = makeRewardBlock(b);
-			if (addedBlocks != null && block != null) {
-				addedBlocks.add(block);
-			}
-			return block;
-		// } else {
-			return makeRewardBlock(addedBlocks);
-		}
+		return makeRewardBlock(addedBlocks);
 	}
 
 	protected Block makeRewardBlock(Block predecessor) throws Exception {

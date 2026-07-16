@@ -115,27 +115,6 @@ public class BlockWrap {
 				throw new RuntimeException(e);
 			}
 			break;
-			case BLOCKTYPE_CONTRACT_EXECUTE:
-			try {
-				ContractExecutionResult result = new ContractExecutionResult().parse(block.getTransactions().get(0).getData());
-				blockConflicts.add(ConflictCandidate.fromContractExecute(this, result));
-
-			} catch (IOException e) {
-				// Cannot happen since any blocks added already were checked.
-				throw new RuntimeException(e);
-			}
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			try {
-				OrderExecutionResult result = new OrderExecutionResult().parse(block.getTransactions().get(0).getData());
-				blockConflicts.add(ConflictCandidate.fromOrderExecute(this, result));
-
-			} catch (IOException e) {
-				// Cannot happen since any blocks added already were checked.
-				throw new RuntimeException(e);
-			}
-			break;
-
 			default:
 			throw new RuntimeException("Blocktype not implemented!");
 

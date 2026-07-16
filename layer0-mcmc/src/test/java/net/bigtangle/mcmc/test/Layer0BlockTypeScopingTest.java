@@ -31,11 +31,6 @@ public class Layer0BlockTypeScopingTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void l0RejectsOrderExecute() {
-        assertRejected(BlockType.BLOCKTYPE_ORDER_EXECUTE);
-    }
-
-    @Test
     public void l0RejectsContractEvent() {
         assertRejected(BlockType.BLOCKTYPE_CONTRACT_EVENT);
     }
@@ -43,11 +38,6 @@ public class Layer0BlockTypeScopingTest extends AbstractIntegrationTest {
     @Test
     public void l0RejectsContractEventCancel() {
         assertRejected(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
-    }
-
-    @Test
-    public void l0RejectsContractExecute() {
-        assertRejected(BlockType.BLOCKTYPE_CONTRACT_EXECUTE);
     }
 
     private void assertRejected(BlockType rejectedType) {

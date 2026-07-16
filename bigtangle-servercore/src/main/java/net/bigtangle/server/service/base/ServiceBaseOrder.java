@@ -585,7 +585,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			tx = new Transaction(networkParameters);
 
 			// Order matching always uses BEACON block data (RewardInfo).
-			// The enableOrderMatchExecutionChain flag only controls whether
+			// The (removed) execution-chain flag only controlled whether
 			// ORDER_OPEN confirmation happens here or via ORDER_EXECUTE blocks.
 			matchingResult = generateOrderMatching(block, blockStore);
 			tx = matchingResult.getOutputTx();
@@ -599,10 +599,6 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 		case BLOCKTYPE_USERDATA:
 			break;
 		case BLOCKTYPE_CONTRACT_EVENT:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
 			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			break;

@@ -104,9 +104,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// only reward block and contract can be set coinbase and check by caculation
 		for (final Transaction tx : block.getTransactions()) {
-			if (tx.isCoinBase() && (block.getBlockType() == BlockType.BLOCKTYPE_BEACON
-					|| block.getBlockType() == BlockType.BLOCKTYPE_CONTRACT_EXECUTE
-					|| block.getBlockType() == BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (tx.isCoinBase() && (block.getBlockType() == BlockType.BLOCKTYPE_BEACON)) {
 				throw new InvalidTransactionException("coinbase is not allowed ");
 			}
 		}
@@ -178,9 +176,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// pro block check fee
 			boolean checkFee = false;
-			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)
-					|| block.getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EXECUTE)
-					|| block.getBlockType().equals(BlockType.BLOCKTYPE_ORDER_EXECUTE)) {
+			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)) {
 				checkFee = true;
 			}
 			for (final Transaction tx : block.getTransactions()) {
@@ -390,10 +386,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		case BLOCKTYPE_TRANSFER:
 			break;
 		case BLOCKTYPE_USERDATA:
-			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
 			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			SolidityState openSolidityState = checkFullOrderOpenSolidity(block, height, throwExceptions, store);
@@ -1342,11 +1334,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		case BLOCKTYPE_USERDATA:
 			break;
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			break;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			break;
-
 		case BLOCKTYPE_ORDER_OPEN:
 			SolidityState openSolidityState = checkFormalOrderOpenSolidity(block, throwExceptions);
 			if (!(openSolidityState.getState() == State.Success)) {

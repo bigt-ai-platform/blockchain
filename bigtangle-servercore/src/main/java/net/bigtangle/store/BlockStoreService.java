@@ -32,7 +32,6 @@ import net.bigtangle.exception.VerificationException.GenericInvalidityException;
 import net.bigtangle.exception.VerificationException.MissingDependencyException;
 import net.bigtangle.exception.VerificationException.UnsolidException;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -531,8 +530,6 @@ public class BlockStoreService {
 				serviceBase.dagBlockHashesFrom(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
 						blockStore);
 			}
-			// Set<BlockWrap> toAdd = serviceBase.addUnconfirmBlocksChainedPrev(blockStore,
-			// blocks);
 			// if (resolveConflict) {
 			// VALIDITY CHECKS, remove the conflicts
 			// serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
@@ -571,9 +568,7 @@ public class BlockStoreService {
 					blocksToUnconfirm.add(block);
 				}
 			}
-			// Set<BlockWrap> unconfirmBlocksChainedFollow =
-			// serviceBase.addUnconfirmBlocksChainedFollow(blockStore, blocksToUnconfirm);
-			// log.debug("unconfirmDo size= " + unconfirmBlocksChainedFollow.size());
+
 			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
 
 			blockStore.commitDatabaseBatchWrite();
@@ -589,16 +584,6 @@ public class BlockStoreService {
 			throws BlockStoreException {
 
 		switch (block.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			ContractExecutionResult c = new ContractExecutionResult()
-					.parseChecked(block.getTransactions().get(0).getData());
-			Block head = serviceBase
-					.getBlock(store.getMaxConfirmedContractresult(c.getContracttokenid()).getBlockHash(), store);
-			return head == null || serviceBase.getExecuteChainlength(block) >= serviceBase.getExecuteChainlength(head);
-		case BLOCKTYPE_ORDER_EXECUTE:
-			Block headorder = serviceBase.getBlock(store.getMaxConfirmedOrderresult().getBlockHash(), store);
-			return headorder == null
-					|| serviceBase.getExecuteChainlength(block) >= serviceBase.getExecuteChainlength(headorder);
 		default:
 			return true;
 		}
@@ -610,30 +595,6 @@ public class BlockStoreService {
 	 */
 	public void updateChainHeadExecutionObsolete(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)
 			throws BlockStoreException {
-
-		int backsteps = 5;
-		switch (block.getBlockType()) {
-		case BLOCKTYPE_CONTRACT_EXECUTE:
-			ContractExecutionResult c = new ContractExecutionResult()
-					.parseChecked(block.getTransactions().get(0).getData());
-			Block head = serviceBase
-					.getBlock(store.getMaxMilestoneContractresult(c.getContracttokenid()).getBlockHash(), store);
-
-			if (head != null
-					&& serviceBase.getExecuteChainlength(block) < serviceBase.getExecuteChainlength(head) + backsteps) {
-				store.updateBlockEvaluationSolid(block.getHash(), -1 * serviceBase.getExecuteChainlength(head));
-			}
-			;
-		case BLOCKTYPE_ORDER_EXECUTE:
-			Block headorder = serviceBase.getBlock(store.getMaxMilestoneOrderresult().getBlockHash(), store);
-			if (headorder != null
-					&& serviceBase.getExecuteChainlength(block) < serviceBase.getExecuteChainlength(headorder)
-							+ backsteps) {
-				store.updateBlockEvaluationSolid(block.getHash(), -1 * serviceBase.getExecuteChainlength(headorder));
-			}
-		default:
-		}
-
 	}
 
 	public void updateMilestoneConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)

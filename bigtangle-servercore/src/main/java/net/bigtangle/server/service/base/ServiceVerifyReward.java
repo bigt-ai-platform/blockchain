@@ -116,7 +116,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		RewardBuilderResult result = getRewardBuilderResult(newMilestoneBlock.getPrevBlockHash(),
 				newMilestoneBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
-				newMilestoneBlock.getTimeSeconds(), enableOrderMatchExecutionChain(newMilestoneBlock),
+				newMilestoneBlock.getTimeSeconds(), false,
 				referrencedBlocks, store);
 		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
 			throw new VerificationException("Incorrect difficulty target");

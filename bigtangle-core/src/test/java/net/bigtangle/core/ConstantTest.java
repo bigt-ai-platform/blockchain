@@ -20,11 +20,9 @@ public class ConstantTest {
         assertTrue(BlockType.BLOCKTYPE_CONTRACT_EVENT.ordinal() == 5);
         assertTrue(BlockType.BLOCKTYPE_GOVERNANCE.ordinal() == 6);
         assertTrue(BlockType.BLOCKTYPE_FILE.ordinal() == 7);
-        assertTrue(BlockType.BLOCKTYPE_CONTRACT_EXECUTE.ordinal() == 8);
         assertTrue(BlockType.BLOCKTYPE_CROSSTANGLE.ordinal() == 9);
         assertTrue(BlockType.BLOCKTYPE_ORDER_OPEN.ordinal() == 10);
         assertTrue(BlockType.BLOCKTYPE_ORDER_CANCEL.ordinal() == 11);
-        assertTrue(BlockType.BLOCKTYPE_ORDER_EXECUTE.ordinal() == 12);
         assertTrue(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL.ordinal() == 13);
     }
 

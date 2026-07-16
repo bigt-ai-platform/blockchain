@@ -17,10 +17,14 @@ public enum BlockType {
 	BLOCKTYPE_CONTRACT_EVENT(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Smart-contracts
 	BLOCKTYPE_GOVERNANCE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Governance
 	BLOCKTYPE_FILE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // User-defined-file
+	/** @deprecated Kept for DB ordinal compatibility; execution chain was removed. */
+	@Deprecated
 	BLOCKTYPE_CONTRACT_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Smart-contracts execution
 	BLOCKTYPE_CROSSTANGLE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // mainnet to permissioned
 	BLOCKTYPE_ORDER_OPEN(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // new-order
 	BLOCKTYPE_ORDER_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // cancel-order
+	/** @deprecated Kept for DB ordinal compatibility; execution chain was removed. */
+	@Deprecated
 	BLOCKTYPE_ORDER_EXECUTE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
 	BLOCKTYPE_CONTRACTEVENT_CANCEL(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // Order execution
 	BLOCKTYPE_STAKE(false, NetworkParameters.MAX_DEFAULT_BLOCK_SIZE, false), // PoS staking deposit
