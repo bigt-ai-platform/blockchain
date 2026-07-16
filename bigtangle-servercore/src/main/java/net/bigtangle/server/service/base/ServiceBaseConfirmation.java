@@ -1194,10 +1194,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			break;
 		case BLOCKTYPE_BEACON:
 			confirmReward(block, confirmation, blockStore);
-			if (!enableOrderMatchExecutionChain(block.getBlock())) {
-				confirmOrderMatching(block, confirmation, blockStore);
-				confirmContractExecution(block, confirmation, blockStore);
-			}
+			// Order matching confirmation always runs here (matching uses
+			// BEACON block data). The enableOrderMatchExecutionChain flag
+			// controls only whether ORDER_OPEN blocks are individually
+			// confirmed (line 1918).
+			confirmOrderMatching(block, confirmation, blockStore);
+			confirmContractExecution(block, confirmation, blockStore);
 			updateBlockConfirmOnly(block.getBlockHash(), milestoneNumber, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_TOKEN_CREATION:
@@ -1915,12 +1917,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		if (traversedBlockHashes.contains(blockWrap.getBlockHash()))
 			return;
 
-		if(enableOrderMatchExecutionChain(blockWrap.getBlock())) {
-		if (blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_CONTRACT_EVENT)
-				|| blockWrap.getBlock().getBlockType().equals(BlockType.BLOCKTYPE_ORDER_OPEN)) {
-			return;
-		}
-		}
+		// When order execution chain is enabled, ORDER_OPEN blocks are
+		// still confirmed (marked solid/spendable) but are skipped from
+		// the reward-chain-specific handler in confirmReward (switch case
+		// BLOCKTYPE_ORDER_OPEN at line 1225 handles ORDER_OPEN normally).
+		// The flag only prevents ORDER_OPEN from being processed through
+		// the reward block's order-matching confirmation — matching is
+		// handled separately via ORDER_EXECUTE blocks.
 		updateBlockConfirm(blockWrap, milestoneNumber, confirmation, store);
 
 		// Keep track of confirmed blocks

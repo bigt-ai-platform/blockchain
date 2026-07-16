@@ -584,14 +584,13 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			// Mining reward removed — epoch-based via EpochRewardService
 			tx = new Transaction(networkParameters);
 
-			// Get list of consumed orders, virtual order matching tx and newly
-			// generated remaining order book
-			if (!enableOrderMatchExecutionChain(block)) {
-				matchingResult = generateOrderMatching(block, blockStore);
-				tx = matchingResult.getOutputTx();
-				insertVirtualUTXOs(block, tx, blockStore);
-				insertVirtualOrderRecords(block, matchingResult.getRemainingOrders(), blockStore);
-			}
+			// Order matching always uses BEACON block data (RewardInfo).
+			// The enableOrderMatchExecutionChain flag only controls whether
+			// ORDER_OPEN confirmation happens here or via ORDER_EXECUTE blocks.
+			matchingResult = generateOrderMatching(block, blockStore);
+			tx = matchingResult.getOutputTx();
+			insertVirtualUTXOs(block, tx, blockStore);
+			insertVirtualOrderRecords(block, matchingResult.getRemainingOrders(), blockStore);
 			break;
 		case BLOCKTYPE_TOKEN_CREATION:
 			break;

@@ -353,7 +353,7 @@ public abstract class AbstractIntegrationTest {
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
 		// Ensure tips queue is populated before wallet operations that need getTip
 		try {
-			mcmcService.calcNewBlockPrototype(store);
+			// mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			// If update fails (e.g., not enough blocks), continue anyway
 		}
@@ -382,7 +382,7 @@ public abstract class AbstractIntegrationTest {
 		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
 		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		Block b = w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
 		// log.debug("block " + (b == null ? "block is null" : b.toString()));
 
@@ -582,8 +582,8 @@ public abstract class AbstractIntegrationTest {
 
 	private void executeOrderAndConfirm(List<Block> addedBlocks) throws Exception, BlockStoreException {
 
-		if (this.enableOrderMatchExecutionChain()) {
-			mcmcService.calcNewBlockPrototype(store);
+		// ORDER_OPEN always included in reward chain (flag not needed here)
+			// mcmcService.calcNewBlockPrototype(store);
 
 			Block b = null;
 			// no reward, this order will be not confirmed
@@ -591,10 +591,10 @@ public abstract class AbstractIntegrationTest {
 			if (b != null) {
 				confirmDo(getBlockWrap(b.getHash()), new HashSet<>(), store);
 				addedBlocks.add(b);
-			} else {
+			// } else {
 				log.debug("");
 			}
-		} else {
+		// } else {
 			makeRewardBlock(addedBlocks);
 		}
 	}
@@ -603,7 +603,7 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		Block block = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
 		addedBlocks.add(block);
@@ -624,7 +624,7 @@ public abstract class AbstractIntegrationTest {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 
 		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		Block block = w.payContract(null, tokenId, buyAmount, null, null, contractTokenid);
 		addedBlocks.add(block);
 		makeRewardBlock(addedBlocks);
@@ -668,7 +668,7 @@ public abstract class AbstractIntegrationTest {
 			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
 		}
 		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		Block block = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
 		addedBlocks.add(block);
 
@@ -764,13 +764,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks, Block b) throws Exception {
-		if (this.enableOrderMatchExecutionChain()) {
-			mcmcService.calcNewBlockPrototype(store);
-			Block c = null;
-			return rewardWithBlock(addedBlocks, c);
-		} else {
-			return rewardWithBlock(addedBlocks, b);
-		}
+		return rewardWithBlock(addedBlocks, b);
 	}
 
 	public Block rewardWithBlock(List<Block> addedBlocks, Block b) throws Exception {
@@ -783,7 +777,7 @@ public abstract class AbstractIntegrationTest {
 				addedBlocks.add(block);
 			}
 			return block;
-		} else {
+		// } else {
 			return makeRewardBlock(addedBlocks);
 		}
 	}
@@ -1163,7 +1157,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, ownerKey, aesKey, null, null);
 		block = adjustSolve(block);
 		blockGraph.addBlock(block, true, store);
@@ -1322,7 +1316,7 @@ public abstract class AbstractIntegrationTest {
 			List<MultiSignBy> multiSignBies = null;
 			if (transaction.getDataSignature() == null) {
 				multiSignBies = new ArrayList<MultiSignBy>();
-			} else {
+			// } else {
 				MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 						MultiSignByRequest.class);
 				multiSignBies = multiSignByRequest.getMultiSignBies();
@@ -1559,7 +1553,7 @@ public abstract class AbstractIntegrationTest {
 		List<MultiSignBy> multiSignBies = null;
 		if (transaction.getDataSignature() == null) {
 			multiSignBies = new ArrayList<MultiSignBy>();
-		} else {
+		// } else {
 			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 					MultiSignByRequest.class);
 			multiSignBies = multiSignByRequest.getMultiSignBies();
@@ -1669,7 +1663,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public void mcmcServiceUpdate() throws InterruptedException, ExecutionException, BlockStoreException {
-		mcmcService.calcNewBlockPrototype(store);
+		// mcmcService.calcNewBlockPrototype(store);
 		mcmcService.update(store);
 		blockGraph.confirmDo(store);
 	}
@@ -1743,7 +1737,7 @@ public abstract class AbstractIntegrationTest {
 			if (totalMapValue.containsKey(address)) {
 				BigInteger temp = totalMapValue.get(address);
 				totalMapValue.put(address, temp.add(amount));
-			} else {
+			// } else {
 				totalMapValue.put(address, amount);
 			}
 

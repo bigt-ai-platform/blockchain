@@ -768,13 +768,12 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeOrderExecutionAndReward(List<Block> addedBlocks, Block b) throws Exception {
-		if (this.enableOrderMatchExecutionChain()) {
-			mcmcService.calcNewBlockPrototype(store);
-			Block c = null;
-			return rewardWithBlock(addedBlocks, c);
-		} else {
-			return rewardWithBlock(addedBlocks, b);
-		}
+		// ORDER_OPEN block is always included in the reward chain (matching
+		// uses BEACON block data via generateOrderMatching regardless of flag).
+		// The enableOrderMatchExecutionChain flag only controls whether
+		// ORDER_OPEN confirmation happens through reward chain traversal
+		// or via ORDER_EXECUTE blocks.
+		return rewardWithBlock(addedBlocks, b);
 	}
 
 	public Block rewardWithBlock(List<Block> addedBlocks, Block b) throws Exception {
