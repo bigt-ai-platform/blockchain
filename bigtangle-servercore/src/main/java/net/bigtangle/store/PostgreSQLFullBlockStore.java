@@ -405,7 +405,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    inserttime bigint NOT NULL,\n"
             + "    CONSTRAINT tipsqueue_pk PRIMARY KEY (hash)  \n" + ") \n";
 
-    private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE anchor (\n"
+    private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE IF NOT EXISTS anchor (\n"
             + "    chainId varchar(255) NOT NULL,\n"
             + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
             + "    l1Height bigint NOT NULL,\n"
@@ -415,7 +415,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    confirmed boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n)";
 
-    private static final String CREATE_VAULT_TABLE = "CREATE TABLE vault (\n"
+    private static final String CREATE_VAULT_TABLE = "CREATE TABLE IF NOT EXISTS vault (\n"
             + "    chainId varchar(255) NOT NULL,\n"
             + "    utxoBlockHash varchar(255) NOT NULL,\n"
             + "    utxoIndex bigint NOT NULL,\n"

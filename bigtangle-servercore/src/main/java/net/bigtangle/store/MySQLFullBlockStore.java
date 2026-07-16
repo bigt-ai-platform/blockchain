@@ -385,7 +385,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    locktime bigint NOT NULL,\n"
             + "    CONSTRAINT lockobject_pk PRIMARY KEY (lockobjectid)  \n" + ") ENGINE=InnoDB \n";
     
-    private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE anchor (\n"
+    private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE IF NOT EXISTS anchor (\n"
             + "    chainId varchar(255) NOT NULL,\n"
             + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
             + "    l1Height bigint NOT NULL,\n"
@@ -395,7 +395,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    confirmed tinyint(1) NOT NULL DEFAULT 0,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n) ENGINE=InnoDB";
 
-    private static final String CREATE_VAULT_TABLE = "CREATE TABLE vault (\n"
+    private static final String CREATE_VAULT_TABLE = "CREATE TABLE IF NOT EXISTS vault (\n"
             + "    chainId varchar(255) NOT NULL,\n"
             + "    utxoBlockHash varchar(255) NOT NULL,\n"
             + "    utxoIndex bigint NOT NULL,\n"
