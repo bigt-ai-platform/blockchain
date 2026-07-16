@@ -669,20 +669,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	 * @throws java.sql.SQLException If there is a database error.
 	 */
 	private synchronized void createTables() throws SQLException {
-		try {
-			// beginDatabaseBatchWrite();
-			// create all the database tables
-			updateTables(getCreateTablesSQL());
-			// create all the database indexes
-			updateTables(getCreateIndexesSQL());
-			// insert the initial settings for this store
-			dbversion();
-			createNewStore(params);
-
-		} catch (Exception e) {
-			log.error("", e);
-			// this.abortDatabaseBatchWrite();
-		}
+		// beginDatabaseBatchWrite();
+		// create all the database tables
+		updateTables(getCreateTablesSQL());
+		// create all the database indexes
+		updateTables(getCreateIndexesSQL());
+		// insert the initial settings for this store
+		dbversion();
+		createNewStore(params);
 	}
 
 	/*
@@ -707,20 +701,13 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	/*
 	 * check version and update the tables
 	 */
-	protected synchronized void updateTables(List<String> sqls) {
+	protected synchronized void updateTables(List<String> sqls) throws SQLException {
 
 		try (Statement s = getConnection().createStatement()) {
 			for (String sql : sqls) {
-			/*	if (log.isDebugEnabled()) {
-					log.debug("DatabaseFullBlockStore :     {}", sql);
-				}
-				*/
 				s.addBatch(sql);
 			}
 			s.executeBatch();
-		} catch (Exception e) {
-			log.debug("DatabaseFullBlockStore :     ", e);
-
 		}
 
 	}
