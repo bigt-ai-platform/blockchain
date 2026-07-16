@@ -49,9 +49,8 @@ public class UserdataTest extends AbstractIntegrationTest {
         // TODO encrypt and decrypt the  UserSettingData
 
 
-       wallet.saveUserdata(outKey, transaction,true,null);
-
-        makeRewardBlock();
+       Block dataBlock = wallet.saveUserdata(outKey, transaction,true,null);
+        makeRewardBlock(dataBlock);
 
 
         UserSettingDataInfo contactInfo1 =wallet.getUserSettingDataInfo(outKey,true);
@@ -67,8 +66,8 @@ public class UserdataTest extends AbstractIntegrationTest {
 
        // Ensure tips queue is updated before second wallet operation
        mcmcService.calcNewBlockPrototype(store);
-       wallet.saveUserdata(outKey, transaction,true,null);
-        makeRewardBlock();
+       Block clearBlock = wallet.saveUserdata(outKey, transaction,true,null);
+        makeRewardBlock(clearBlock);
  
 
         contactInfo1 =wallet.getUserSettingDataInfo(outKey,true);
@@ -95,9 +94,8 @@ public class UserdataTest extends AbstractIntegrationTest {
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo0.toByteArray());      
         
-       wallet.saveUserdata(outKey, transaction,true,null);
-
-        makeRewardBlock();
+       Block dataBlock = wallet.saveUserdata(outKey, transaction,true,null);
+        makeRewardBlock(dataBlock);
 
 
         UserSettingDataInfo contactInfo1 = wallet.getUserSettingDataInfo(outKey,true);
