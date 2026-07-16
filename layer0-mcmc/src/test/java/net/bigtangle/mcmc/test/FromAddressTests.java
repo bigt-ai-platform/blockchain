@@ -119,11 +119,11 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		mcmcService.calcNewBlockPrototype(store);
 		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
-		makeRewardBlock();
+		makeRewardBlock(bs.get(0));
 		for (Block b : bs) {
 			blockGraph.updateTransactionOutputSpendPendingDo(b);
 		}
-		makeRewardBlock();
+		makeRewardBlock(bs.get(0));
 		log.debug("====start buyTicket====");
 		List<ECKey> userkeys = new ArrayList<ECKey>();
 		userkeys.add(key);

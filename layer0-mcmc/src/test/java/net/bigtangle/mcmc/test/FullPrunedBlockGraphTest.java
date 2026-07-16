@@ -141,7 +141,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 				UtilGeneseBlock.createGenesis(networkParameters), tx1);
 
 		// Confirm
-		makeRewardBlock();
+		makeRewardBlock(spenderBlock);
 
 		// Should be confirmed now
 		final UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock.getHash()), store);
