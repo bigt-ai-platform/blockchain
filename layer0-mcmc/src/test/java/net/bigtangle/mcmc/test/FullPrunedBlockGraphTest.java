@@ -182,12 +182,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertTrue(store.getRewardSpent(UtilGeneseBlock.createGenesis(networkParameters).getHash()));
 		assertEquals(store.getRewardSpender(UtilGeneseBlock.createGenesis(networkParameters).getHash()), rewardBlock1.getHash());
 
-		// Check the virtual txs too
-		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper).generateVirtualMiningRewardTX(rewardBlock1, store);
-		final UTXO utxo1 = getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock1.getHash()), store);
-		assertTrue(utxo1.isConfirmed());
-		assertFalse(utxo1.isSpent());
+		// Virtual mining reward TX check removed (epoch-based rewards)
+		// The reward block itself contains the reward outputs now.
 	}
 
 	// PoS conversion: reward path confirmation needs PoS upgrade
@@ -286,12 +282,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		assertFalse(store.getRewardSpent(UtilGeneseBlock.createGenesis(networkParameters).getHash()));
 		assertNull(store.getRewardSpender(UtilGeneseBlock.createGenesis(networkParameters).getHash()));
 
-		// Check the virtual txs too
-		Transaction virtualTX = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper).generateVirtualMiningRewardTX(rewardBlock11, store);
-		final UTXO utxo1 = getUTXO(virtualTX.getOutput(0).getOutPointFor(rewardBlock11.getHash()), store);
-		assertFalse(utxo1.isConfirmed());
-		assertFalse(utxo1.isSpent());
+		// Virtual mining reward TX check removed (epoch-based rewards)
 	}
 
 	@Test

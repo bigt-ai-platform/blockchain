@@ -201,9 +201,7 @@ public abstract class NetworkParameters {
 	public static final long TARGET_INTERVAL_REWARD = TARGET_YEARLY_MINING_PAYOUT * TARGET_SPACING / 31536000;
 	// a third always comes directly from the consensus blocks:
 	public static final long REWARD_AMOUNT_BLOCK_REWARD = TARGET_INTERVAL_REWARD / 3;
-	// the other two thirds are for each inclusion into consensus and each block
-	// itself:
-	public static final long PER_BLOCK_REWARD = TARGET_INTERVAL_REWARD / 3 / TARGET_MAX_TPS / TARGET_SPACING;
+	// PER_BLOCK_REWARD removed — epoch-based rewards via EpochRewardService
 
 	// PoS epoch: fee-only rewards (no inflation, no new token minting)
 	public static final long SLOTS_PER_EPOCH = 32L;

@@ -581,8 +581,8 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 		case BLOCKTYPE_INITIAL:
 			break;
 		case BLOCKTYPE_BEACON:
-			tx = generateVirtualMiningRewardTX(block, blockStore);
-			insertVirtualUTXOs(block, tx, blockStore);
+			// Mining reward removed — epoch-based via EpochRewardService
+			tx = new Transaction(networkParameters);
 
 			// Get list of consumed orders, virtual order matching tx and newly
 			// generated remaining order book

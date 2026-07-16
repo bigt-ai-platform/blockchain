@@ -122,12 +122,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			throw new VerificationException("Incorrect difficulty target");
 		}
 
-		Transaction miningTx = generateVirtualMiningRewardTX(newMilestoneBlock, store);
-
-		// Only check the Hash of OrderMatchingResult
-		if (!currRewardInfo.getMiningResult().equals(miningTx.getHash())) {
-			throw new VerificationException("generateVirtualMiningRewardTX transactions output is wrong.");
-		}
+		// Mining reward verification removed — epoch-based via EpochRewardService
 	}
 
 	/*

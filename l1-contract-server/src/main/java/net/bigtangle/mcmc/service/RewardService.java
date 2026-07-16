@@ -245,8 +245,8 @@ public class RewardService {
 				return null;
 			}
 		}
-		Transaction miningTx = serviceBase.generateVirtualMiningRewardTX(block, store);
-		currRewardInfo.setMiningResult(miningTx.getHash());
+		// Mining reward removed — epoch-based via EpochRewardService
+		// miningTx removed; epoch-based rewards
 		tx.setData(currRewardInfo.toByteArray());
 
 		blockServiceCreate.adjustHeightRequiredBlocks(block, store);
