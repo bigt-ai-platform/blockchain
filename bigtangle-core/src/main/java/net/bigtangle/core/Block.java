@@ -528,10 +528,6 @@ public class Block extends Message {
 		setNonce(0);
 	}
 
-	public boolean checkProofOfWork(boolean throwException, java.math.BigInteger target) {
-		return true;
-	}
-
 	private void checkTimestamp() throws VerificationException {
 		// Allow injection of a fake clock to allow unit testing.
 		long currentTime = Utils.currentTimeSeconds();

@@ -228,12 +228,6 @@ public class VerificationException extends RuntimeException {
         }
     }
 
-    public static class ProofOfWorkException extends VerificationException {
-        public ProofOfWorkException() {
-            super("Hash is higher than target");
-        }
-    }
-
     public static class TimeTravelerException extends VerificationException {
         public TimeTravelerException() {
             super("Block too far in future");

@@ -20,7 +20,6 @@ import net.bigtangle.core.TXReward;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
-import net.bigtangle.exception.VerificationException.ProofOfWorkException;
 import net.bigtangle.exception.VerificationException.UnsolidException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.response.AbstractResponse;
@@ -176,7 +175,7 @@ public class BlockService {
 					blockgraph.addBlock(block, allowUnsolid, store);
 					// removeBlockPrototype(block,store);
 					return Optional.of(block);
-				} catch (ProofOfWorkException | UnsolidException e) {
+				} catch (UnsolidException e) {
 					return Optional.empty();
 				} catch (Exception e) {
 					logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(),

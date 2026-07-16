@@ -1134,15 +1134,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			RewardInfo rewardInfo = new RewardInfo().parse(block.getTransactions().get(0).getData());
 			// Get difficulty from predecessors
 			BigInteger target = Utils.decodeCompactBits(rewardInfo.getDifficultyTargetReward());
-			// Check PoW
-			boolean allOk = false;
-			try {
-				allOk = block.checkProofOfWork(throwExceptions, target);
-			} catch (VerificationException e) {
-				logger.warn("Failed to verify block: ", e);
-				logger.warn(block.getHashAsString());
-				throw e;
-			}
+			// PoW check removed — always passes in PoS mode
+			boolean allOk = true;
 
 			if (!allOk)
 				return SolidityState.getFailState();
