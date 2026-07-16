@@ -514,11 +514,7 @@ public class Block extends Message {
 		return s.toString();
 	}
 
-	/**
-	 * <p>
-	 * Finds a value of nonce and equihashProof if using Equihash that validates
-	 * correctly.
-	 */
+	/** No-op in PoS mode — block hash is not constrained by difficulty. */
 	public void solve() {
 		setNonce(0);
 	}
