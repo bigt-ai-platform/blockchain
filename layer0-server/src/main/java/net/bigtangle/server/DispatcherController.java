@@ -77,6 +77,7 @@ import net.bigtangle.server.service.FeeService;
 import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.server.service.SlashingService;
 import net.bigtangle.server.service.StakeService;
+import net.bigtangle.server.service.ValidatorDutyService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.layer0.service.MultiSignService;

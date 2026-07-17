@@ -18,7 +18,7 @@ RUN  \
   locale-gen en_US.UTF-8 && \
   /usr/sbin/update-locale LANG=en_US.UTF-8
 
-RUN apt-get update && apt-get -y install git  openjdk-17-jdk maven
+RUN apt-get update && apt-get -y install git  openjdk-25-jdk maven
 RUN apt-get install -y autoconf libtool make
 RUN  git clone https://github.com/bigtangle/secp256k1.git
 RUN cd secp256k1/ && git checkout jni && ./autogen.sh \
@@ -32,7 +32,7 @@ RUN  mvn  -DskipTests=true clean install
 
 
 ## runtime
-FROM   eclipse-temurin:17-jdk-jammy
+FROM   eclipse-temurin:25-jdk-jammy
 
 ARG BIGTANGLEVERSION
 RUN ulimit -n 65536

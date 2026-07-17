@@ -34,7 +34,7 @@ import net.bigtangle.utils.OkHttp3Util;
 /*
  * test payment, buy and sell and create the roll back of reward  by switch to longest chain
  */
-@org.junit.jupiter.api.Disabled("needs MCMC mode with valid reward/difficulty state — test infrastructure must create compatible blocks")
+@org.junit.jupiter.api.Disabled("needs HTTP server tip queue and reward infrastructure — depends on wallet HTTP flow and makeRewardBlock")
 public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell

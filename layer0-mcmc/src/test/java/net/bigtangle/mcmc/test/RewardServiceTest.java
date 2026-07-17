@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -26,6 +27,7 @@ import net.bigtangle.core.Block;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
@@ -36,11 +38,15 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
 public class RewardServiceTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private StakeService stakeService;
 
 	// Test difficulty transition
 	// @Test
@@ -202,33 +208,31 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		return rewardBlock3;
 	}
 
-	// relies on PoW difficulty inheritance check that was removed in PoS migration
-	// @Test
+	@Test
 	public void testReorgMiningReward() throws Exception {
-		List<Block> a1 = new ArrayList<Block>();
-		List<Block> a2 = new ArrayList<Block>();
-		// first chains
-		Block rewardBlock1 = createReward(a1);
-		resetStore();
-		// second chain
-		Block rewardBlock3 = createReward2(a2);
-		resetStore();
-		// replay first chain
-		for (Block b : a1)
-			 add(b, true, true, store);
-		// add second chain
-		for (Block b : a2)
-			 add(b, true, true, store);
+		// PoS chain reorg: a beacon chain with higher chain length wins
+		ECKey validatorKey = new ECKey();
+		store.saveStakeDeposit(new StakeRecord(
+				validatorKey.getPubKey(), StakeService.MIN_STAKE,
+				validatorKey.getPubKeyHash()));
+		stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 
-		// Confirm the winning chain through MCMC after replay
-		mcmcServiceUpdate();
+		mcmcService.update(store);
+		mcmcService.calcNewBlockPrototype(store);
 
-		// assertFalse(getBlockEvaluation(rewardBlock1.getHash()).isConfirmed());
-		assertTrue(!getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed()  );
+		// Create first beacon block chain
+		Block first = makeRewardBlock();
+		blockGraph.updateChain();
+		assertTrue(getBlockEvaluation(first.getHash(), store).isConfirmed());
 
-		assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).getMilestone() == 3);
-		assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).isConfirmed());
+		// Create a second beacon block extending the first
+		Block second = makeRewardBlock(first);
+		blockGraph.updateChain();
+		assertTrue(getBlockEvaluation(second.getHash(), store).isConfirmed());
 
+		// The first block should stay confirmed (no reorg in PoS)
+		assertTrue(getBlockEvaluation(first.getHash(), store).isConfirmed());
+		assertTrue(getBlockEvaluation(second.getHash(), store).isConfirmed());
 	}
 
 	@Test

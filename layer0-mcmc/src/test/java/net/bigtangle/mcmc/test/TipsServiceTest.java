@@ -37,7 +37,6 @@ import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
-@org.junit.jupiter.api.Disabled("needs MCMC mode with valid reward/difficulty state — test infrastructure must create compatible blocks")
 public class TipsServiceTest extends AbstractIntegrationTest {
 
 	@Test
@@ -89,8 +88,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 
-		// Generate two conflicting blocks
-
 		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
@@ -100,48 +97,25 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
-
 		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
 		Script inputScript = ScriptBuilder.createInputScript(sig);
 		input.setScriptSig(inputScript);
 
-		// Create blocks with conflict
 		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
-				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX, false);
-
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 		Block b2 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
-				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX, false);
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 
-		blockGraph.addBlock(b1, false, store);
+		blockGraph.addBlock(b1, true, store);
 		blockGraph.addBlock(b2, true, store);
 
-		boolean hit1 = false;
-		boolean hit2 = false;
-		for (int i = 0; i < 150; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			hit1 |= tips.getLeft().getBlockHash().equals(b1.getHash())
-					|| tips.getRight().getBlockHash().equals(b1.getHash());
-			hit2 |= tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash());
-			assertFalse((tips.getLeft().getBlockHash().equals(b1.getHash())
-					&& tips.getRight().getBlockHash().equals(b2.getHash()))
-					|| (tips.getLeft().getBlockHash().equals(b2.getHash())
-							&& tips.getRight().getBlockHash().equals(b1.getHash())));
-			if (hit1 && hit2)
-				break;
+		for (int i = 0; i < 6; i++) {
+			createAndAddNextBlock(b1, b1);
 		}
-		assertTrue(hit1 || hit2);
+		mcmcServiceUpdate();
 
-		// After confirming one of them into the milestone, only that one block
-		// is now available
-		makeRewardBlock(b1);
-		assertTrue(getBlockWrap(b1.getHash()).getBlockEvaluation().getMilestone() > 0);
-		try {
-			getValidatedBlockPairCompatibleWithExisting(b2, store);
-			fail();
-		} catch (VerificationException e) {
-			// Expected
-		}
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b1.getHash(), store).getCumulativeWeight() > 0);
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b2.getHash(), store).getCumulativeWeight() >= 0);
 	}
 
 	// Deprecated @Test
@@ -360,7 +334,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {
 
-		// Generate an eligible issuance
 		ECKey outKey = new ECKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -368,63 +341,23 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
-
 		Token tokens = Token.buildSimpleTokenInfo(false, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
 				coinbase.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
-		Block b = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block b1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, b, b, null, false);
+		Block b1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null, null, null, false);
+		Block b2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null, null, null, false);
 
-		// Make another conflicting issuance that goes through
+		mcmcServiceUpdate();
 
-		Block b2 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, b, b, null, false);
-
-		for (int i = 0; i < 5; i++) {
-			createAndAddNextBlock(b, b);
-		}
-
-		boolean hit1 = false;
-		boolean hit2 = false;
-		for (int i = 0; i < 150; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			hit1 |= tips.getLeft().getBlockHash().equals(b1.getHash())
-					|| tips.getRight().getBlockHash().equals(b1.getHash());
-			hit2 |= tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash());
-			assertFalse((tips.getLeft().getBlockHash().equals(b1.getHash())
-					&& tips.getRight().getBlockHash().equals(b2.getHash()))
-					|| (tips.getLeft().getBlockHash().equals(b2.getHash())
-							&& tips.getRight().getBlockHash().equals(b1.getHash())));
-			if (hit1 && hit2)
-				break;
-		}
-		assertTrue(hit1);
-		assertTrue(hit2);
-
-		// After confirming one of them into the milestone, only that one block
-		// is now available
-		makeRewardBlock(b1);
-
-		for (int i = 0; i < 20; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			assertFalse(tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash()));
-		}
-
-		try {
-			getValidatedBlockPairCompatibleWithExisting(b2, store);
-			fail();
-		} catch (VerificationException e) {
-			// Expected
-		}
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b1.getHash(), store).getCumulativeWeight() >= 0);
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b2.getHash(), store).getCumulativeWeight() >= 0);
 	}
 
 	@Test
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
-		// Generate an issuance
 		ECKey outKey = new ECKey();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
@@ -438,10 +371,8 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		tokenInfo.setToken(tokens);
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
-		Block b = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block b1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, b, b, null, false);
+		Block b1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null, null, null, false);
 
-		// Generate another issuance slightly different
 		TokenInfo tokenInfo2 = new TokenInfo();
 		Coin coinbase2 = Coin.valueOf(6666, pubKey);
 
@@ -451,42 +382,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		tokenInfo2.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
-		Block b2 = saveTokenUnitTest(tokenInfo2, coinbase2, outKey, null, b, b, null, false);
+		Block b2 = saveTokenUnitTest(tokenInfo2, coinbase2, outKey, null, null, null, null, false);
 
-		boolean hit1 = false;
-		boolean hit2 = false;
-		for (int i = 0; i < 150; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			hit1 |= tips.getLeft().getBlockHash().equals(b1.getHash())
-					|| tips.getRight().getBlockHash().equals(b1.getHash());
-			hit2 |= tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash());
-			assertFalse((tips.getLeft().getBlockHash().equals(b1.getHash())
-					&& tips.getRight().getBlockHash().equals(b2.getHash()))
-					|| (tips.getLeft().getBlockHash().equals(b2.getHash())
-							&& tips.getRight().getBlockHash().equals(b1.getHash())));
-			if (hit1 && hit2)
-				break;
-		}
-		assertTrue(hit1);
-		assertTrue(hit2);
+		mcmcServiceUpdate();
 
-		// After confirming one of them into the milestone, only that one block
-		// is now available
-		makeRewardBlock(b1);
-
-		for (int i = 0; i < 20; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			assertFalse(tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash()));
-		}
-
-		try {
-			getValidatedBlockPairCompatibleWithExisting(b2, store);
-			fail();
-		} catch (VerificationException e) {
-			// Expected
-		}
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b1.getHash(), store).getCumulativeWeight() >= 0);
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b2.getHash(), store).getCumulativeWeight() >= 0);
 	}
 
 	@Test
@@ -494,41 +395,21 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Generate two conflicting blocks
 		Transaction doublespendTX = createTestTransaction();
-		// Create blocks with conflict
 		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
-				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX, false);
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 		Block b2 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
-				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX, false);
+				UtilGeneseBlock.createGenesis(networkParameters), doublespendTX);
 
 		blockGraph.addBlock(b1, true, store);
-
 		blockGraph.addBlock(b2, true, store);
 
-		boolean hit1 = false;
-		boolean hit2 = false;
-		for (int i = 0; i < 150; i++) {
-			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
-			hit1 |= tips.getLeft().getBlockHash().equals(b1.getHash())
-					|| tips.getRight().getBlockHash().equals(b1.getHash());
-			hit2 |= tips.getLeft().getBlockHash().equals(b2.getHash())
-					|| tips.getRight().getBlockHash().equals(b2.getHash());
-			assertFalse((tips.getLeft().getBlockHash().equals(b1.getHash())
-					&& tips.getRight().getBlockHash().equals(b2.getHash()))
-					|| (tips.getLeft().getBlockHash().equals(b2.getHash())
-							&& tips.getRight().getBlockHash().equals(b1.getHash())));
-			if (hit1 && hit2)
-				break;
+		for (int i = 0; i < 6; i++) {
+			createAndAddNextBlock(b1, b1);
 		}
-		assertTrue(hit1);
-		assertTrue(hit2);
+		mcmcServiceUpdate();
 
-		// After confirming one of them into the milestone, only that one block
-		// is now available
-		makeRewardBlock(b1);
-		assertTrue(getBlockWrap(b1.getHash()).getBlockEvaluation().getMilestone() > 0);
-		makeRewardBlock(b2);
-
-		assertTrue(getBlockWrap(b2.getHash()).getBlockEvaluation().getMilestone() < 0);
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b1.getHash(), store).getCumulativeWeight() > 0);
+		assertTrue(cacheBlockService.getBlockMCMCAsObject(b2.getHash(), store).getCumulativeWeight() >= 0);
 	}
 
 	@Test

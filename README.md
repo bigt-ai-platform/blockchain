@@ -11,7 +11,7 @@ BigTangle is a distributed blockchain platform implementation featuring:
 ## Technical Stack
 - **Languages**: Java (main), C++ (proof-of-work),
 - **Build System**: Maven
-- **Runtime**: Java 17
+- **Runtime**: Java 25
 - **Database**: PostgreSQL
 - **Messaging**: Kafka integration
 
@@ -61,7 +61,7 @@ The project includes extensive test resources including:
 - Integration tests
 
 ## Requirements
-- Java 17
+- Java 25
 - Maven 3.6+
 - Docker (for containerized deployment)
 - PostgreSQL (for production deployment)

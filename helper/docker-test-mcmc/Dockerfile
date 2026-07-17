@@ -12,7 +12,7 @@ RUN apt-get install -y locales ntp ntpdate && \
     locale-gen en_US.UTF-8 && \
     /usr/sbin/update-locale LANG=en_US.UTF-8
 
-RUN apt-get update && apt-get -y install git openjdk-17-jdk maven
+RUN apt-get update && apt-get -y install git openjdk-25-jdk maven
 RUN apt-get install -y autoconf libtool make
 
 RUN git clone https://github.com/bigtangle/secp256k1.git && \
