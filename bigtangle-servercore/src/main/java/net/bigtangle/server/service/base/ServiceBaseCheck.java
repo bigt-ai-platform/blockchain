@@ -1671,26 +1671,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					return SolidityState.getFailState();
 				}
 
-				// Check difficulty and latest consensus block is passed through
-				// correctly
-				if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
-					if (storedPrev.getBlock().getLastMiningRewardBlock() >= storedPrevBranch.getBlock()
-							.getLastMiningRewardBlock()) {
-						if (block.getLastMiningRewardBlock() != storedPrev.getBlock().getLastMiningRewardBlock()
-								|| block.getDifficultyTarget() != storedPrev.getBlock().getDifficultyTarget()) {
-							if (throwExceptions)
-								throw new DifficultyConsensusInheritanceException();
-							return SolidityState.getFailState();
-						}
-					} else {
-						if (block.getLastMiningRewardBlock() != storedPrevBranch.getBlock().getLastMiningRewardBlock()
-								|| block.getDifficultyTarget() != storedPrevBranch.getBlock().getDifficultyTarget()) {
-							if (throwExceptions)
-								throw new DifficultyConsensusInheritanceException();
-							return SolidityState.getFailState();
-						}
-					}
-				}
+				// PoW difficulty/consensus inheritance is not enforced for
+			// non-beacon blocks in PoS mode — Casper/GHOST handle fork
+			// choice and finality independently of lastMiningRewardBlock
+			// and difficultyTarget, which are vestigial PoW fields.
 			}
 			// Check transactions are solid
 			SolidityState transactionalSolidityState = checkFullTransactionalSolidity(block, block.getHeight(),

@@ -37,7 +37,7 @@ import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
-@org.junit.jupiter.api.Disabled("PoS conversion")
+@org.junit.jupiter.api.Disabled("needs MCMC mode with valid reward/difficulty state — test infrastructure must create compatible blocks")
 public class TipsServiceTest extends AbstractIntegrationTest {
 
 	@Test
@@ -356,7 +356,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 			}
 		}
 	}
-
 
 	@Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {

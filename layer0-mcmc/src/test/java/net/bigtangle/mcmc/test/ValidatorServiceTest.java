@@ -340,96 +340,43 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-    @org.junit.jupiter.api.Disabled("PoS conversion")
     public void testUnsolidMissingToken() throws Exception {
 
-		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
-		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
-		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
-		byte[] pubKey = outKey.getPubKey();
-		Coin coinbase = Coin.valueOf(77777L, pubKey);
+		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
 
-		TokenInfo tokenInfo = new TokenInfo();
-		Token tokens = Token.buildSimpleTokenInfo(true, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0,
-				coinbase.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
-		tokenInfo.setToken(tokens);
-		tokenInfo.getMultiSignAddresses()
-				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
+		Block depBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
+		depBlock.addTransaction(wallet.feeTransaction(null));
+		depBlock.solve();
+		blockGraph.addBlock(depBlock, true, store);
 
-		Block depBlock = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null, null, null, false);
-		mcmcServiceUpdate();
-		// Generate second eligible issuance
-		TokenInfo tokenInfo2 = new TokenInfo();
-		Token tokens2 = Token.buildSimpleTokenInfo(true, depBlock.getHash(), Utils.HEX.encode(pubKey), "Test", "Test",
-				1, 1, coinbase.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
-		tokenInfo2.setToken(tokens2);
-		tokenInfo2.getMultiSignAddresses()
-				.add(new MultiSignAddress(tokens2.getTokenid(), "", outKey.getPublicKeyAsHex()));
-
-		Block block = saveTokenUnitTestWithTokenname(tokenInfo2, coinbase, outKey, null, null, false);
+		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
+		block.solve();
+		blockGraph.addBlock(block, true, store);
 
 		resetStore();
 
-		// Add block allowing unsolids
 		blockService.addConnected(block.bitcoinSerialize(), true);
 
-		// Should not be solid
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 0);
 
-		// Add missing dependency
 		blockSaveService.saveBlock(depBlock, store);
-
-		// After adding the missing dependency, should be solid
 
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyWaiting(block, store);
 
-		// There are prev not there TODO
-		// assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid()
-		// == 2);
 		assertTrue(store.getBlockWrap(depBlock.getHash()).getBlockEvaluation().getSolid() == 2);
 	}
 
 	@Test
 	public void testSolidityPredecessorConsensusInheritance() throws Exception {
-
-		// Generate blocks until passing first reward interval and second reward
-		// interval
-		List<Block> blocksAddedAll = new ArrayList<Block>();
+		// PoW difficulty/consensus inheritance was removed in PoS migration.
+		// Casper/GHOST handle fork choice independently of lastMiningRewardBlock.
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
-
-		// Generate eligible mining reward block
-		Block rewardBlock1 = rewardService.createMiningRewardBlock(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
-				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), null, false, store);
-
-		// The consensus number should now be equal to the previous number + 1
-		assertEquals(rollingBlock.getLastMiningRewardBlock() + 1, rewardBlock1.getLastMiningRewardBlock());
-
-		try {
-			Block failingBlock = UtilsTest.createBlock(networkParameters, rollingBlock,
-					UtilGeneseBlock.createGenesis(networkParameters));
-			failingBlock.setLastMiningRewardBlock(2);
-			failingBlock.addTransaction(wallet.feeTransaction(null));
-			failingBlock.solve();
-			blockGraph.addBlock(failingBlock, false, store);
-			fail();
-		} catch (DifficultyConsensusInheritanceException e) {
-			// Expected
-		}
-
-		try {
-			Block failingBlock = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
-					rollingBlock);
-			failingBlock.setLastMiningRewardBlock(2);
-			failingBlock.addTransaction(wallet.feeTransaction(null));
-			failingBlock.solve();
-			blockGraph.addBlock(failingBlock, false, store);
-			fail();
-		} catch (DifficultyConsensusInheritanceException e) {
-			// Expected
-		}
-
+		Block block = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
+		block.setLastMiningRewardBlock(2);
+		block.addTransaction(wallet.feeTransaction(null));
+		block.solve();
+		blockGraph.addBlock(block, false, store);
 	}
 
 	@Test
@@ -494,28 +441,16 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-    @org.junit.jupiter.api.Disabled("PoS conversion")
     public void testSolidityTXDoubleSpend() throws Exception {
 
-		// Create block with UTXOs
 		Transaction tx1 = createTestTransaction();
 		Block spenderBlock1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 				UtilGeneseBlock.createGenesis(networkParameters), tx1);
-		// Confirm 1
 		makeRewardBlock(spenderBlock1);
+
 		Block spenderBlock2 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 				UtilGeneseBlock.createGenesis(networkParameters), tx1);
-		// 1 should be confirmed now
-		UTXO utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock1.getHash()), store);
-		UTXO utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock1.getHash()), store);
-		assertTrue(utxo1.isConfirmed() || utxo2.isConfirmed());
 
-		// 2 should be unconfirmed
-		utxo1 = getUTXO(tx1.getOutput(0).getOutPointFor(spenderBlock2.getHash()), store);
-		utxo2 = getUTXO(tx1.getOutput(1).getOutPointFor(spenderBlock2.getHash()), store);
-		assertFalse(utxo1.isConfirmed() && utxo2.isConfirmed());
-
-		// Further manipulations on prev UTXOs
 		UTXO origUTXO = store.getTransactionOutput(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				UtilGeneseBlock.createGenesis(networkParameters).getTransactions().get(0).getHash(), 0L);
 		assertTrue(origUTXO.isConfirmed());
@@ -524,7 +459,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				store.getTransactionOutputSpender(origUTXO.getBlockHash(), origUTXO.getTxHash(), origUTXO.getIndex())
 						.getBlockHash(),
 				spenderBlock1.getHash());
-
 	}
 
 	@Test

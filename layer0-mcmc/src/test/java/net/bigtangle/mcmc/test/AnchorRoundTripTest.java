@@ -11,8 +11,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+
+import net.bigtangle.server.config.ScheduleConfiguration;
 
 import net.bigtangle.bridge.AnchorConfiguration;
 import net.bigtangle.bridge.AnchorService;
@@ -28,8 +31,10 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.data.AnchorRecord;
 
-@org.junit.jupiter.api.Disabled("PoS conversion")
 public class AnchorRoundTripTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private ScheduleConfiguration scheduleConfiguration;
 
     private static final String TEST_PUB = "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975";
     private static final String TEST_PRIV = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
@@ -39,6 +44,13 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
 
     @Autowired
     private AnchorConfiguration anchorConfiguration;
+
+    @Override
+    @BeforeEach
+    public void setUp() throws Exception {
+        super.setUp();
+        scheduleConfiguration.setMilestone_active(true);
+    }
 
     @Test
     public void testValidateAndSaveAnchor() throws Exception {

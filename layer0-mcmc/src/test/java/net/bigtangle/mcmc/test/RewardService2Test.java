@@ -4,7 +4,6 @@
  *******************************************************************************/
 package net.bigtangle.mcmc.test;
 
-
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +34,7 @@ import net.bigtangle.utils.OkHttp3Util;
 /*
  * test payment, buy and sell and create the roll back of reward  by switch to longest chain
  */
-@org.junit.jupiter.api.Disabled("PoS conversion")
+@org.junit.jupiter.api.Disabled("needs MCMC mode with valid reward/difficulty state — test infrastructure must create compatible blocks")
 public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell
