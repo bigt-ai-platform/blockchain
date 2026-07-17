@@ -7,6 +7,7 @@ package net.bigtangle.server;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,12 +60,23 @@ import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.response.OkResponse;
 import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.server.config.ServerConfiguration;
+import net.bigtangle.core.Address;
+import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.Coin;
+import net.bigtangle.core.ECKey;
+import net.bigtangle.core.StakeRecord;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
 import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.CasperService;
+import net.bigtangle.server.service.FeeService;
 import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.server.service.SlashingService;
+import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.layer0.service.MultiSignService;
@@ -130,6 +142,16 @@ public class DispatcherController implements DisposableBean {
 	private MempoolService mempoolService;
 	@Autowired(required = false)
 	private BridgeService bridgeService;
+	@Autowired
+	private CasperService casperService;
+	@Autowired
+	private SlashingService slashingService;
+	@Autowired
+	private StakeService stakeService;
+	@Autowired
+	private FeeService feeService;
+	@Autowired
+	private ValidatorDutyService validatorDutyService;
 
 	@Override
 	public void destroy() {
@@ -647,6 +669,135 @@ public class DispatcherController implements DisposableBean {
 			}
 				break;
 
+			case submitAttestation: {
+				AttestationData att = Json.jsonmapper().readValue(bodyByte, AttestationData.class);
+				casperService.processVote(att, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case getAttestations: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				long slot = Long.parseLong(request.getOrDefault("slot", "0").toString());
+				List<AttestationData> attestations = store.getAttestationsForSlot(slot);
+				Map<String, Object> result = new HashMap<>();
+				result.put("attestations", attestations);
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.GetStringResponse.create(
+								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
+			}
+				break;
+			case processWithdrawal: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
+				stakeService.processWithdrawals(epoch, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case submitSlashingProof: {
+				AttestationData att1 = null, att2 = null;
+				try {
+					Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
+					if (req.containsKey("attestation1")) {
+						att1 = Json.jsonmapper().convertValue(req.get("attestation1"), AttestationData.class);
+					}
+					if (req.containsKey("attestation2")) {
+						att2 = Json.jsonmapper().convertValue(req.get("attestation2"), AttestationData.class);
+					}
+				} catch (Exception e) {
+					// single attestation mode
+				}
+				if (att1 != null) {
+					slashingService.checkDoubleVote(att1);
+					if (att2 != null) {
+						slashingService.checkSurroundVote(att1);
+					}
+					slashingService.processSlashing(att1.getValidatorPubkey(), store);
+				}
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case stakeDeposit: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkeyHex = (String) request.get("pubkey");
+				String amountStr = (String) request.get("amount");
+				ECKey depositKey = ECKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				BigInteger amount = new BigInteger(amountStr);
+				Address addr = depositKey.toAddress(networkParameters);
+				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());
+				UTXO selected = null;
+				for (UTXO u : utxos) {
+					if (u.getValue().getValue().compareTo(amount) >= 0
+							&& java.util.Arrays.equals(u.getValue().getTokenid(), NetworkParameters.BIGTANGLE_TOKENID)) {
+						selected = u;
+						break;
+					}
+				}
+				if (selected == null) {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(404), watch, reqCmd);
+					break;
+				}
+				if (request.containsKey("withdrawalCredentials")) {
+					stakeService.processDeposit(selected,
+							Utils.HEX.decode((String) request.get("withdrawalCredentials")), depositKey, store);
+				} else {
+					stakeService.processDeposit(selected, depositKey.getPubKey(), depositKey, store);
+				}
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case activateValidator: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkeyHex = (String) request.get("pubkey");
+				long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
+				stakeService.activateValidator(Utils.HEX.decode(pubkeyHex), epoch, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case getValidators: {
+				List<StakeRecord> validators = store.getActiveStakeDeposits();
+				Map<String, Object> result = new HashMap<>();
+				result.put("validators", validators);
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.GetStringResponse.create(
+								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
+			}
+				break;
+			case getBaseFee: {
+				Map<String, Object> result = new HashMap<>();
+				result.put("baseFee", feeService.getBaseFee());
+				result.put("feeDefault", Coin.FEE_DEFAULT.getValue().longValue());
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.GetStringResponse.create(
+								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
+			}
+				break;
+			case setValidatorKey: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String keyHex = (String) request.get("privateKey");
+				if (keyHex != null && !keyHex.isEmpty()) {
+					ECKey key = ECKey.fromPrivate(Utils.HEX.decode(keyHex));
+					validatorDutyService.setValidatorKey(key);
+				}
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case getValidatorKey: {
+				Map<String, Object> result = new HashMap<>();
+				result.put("configured", validatorDutyService.getValidatorKey() != null);
+				ECKey key = validatorDutyService.getValidatorKey();
+				if (key != null) {
+					result.put("pubkey", Utils.HEX.encode(key.getPubKey()));
+				}
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.GetStringResponse.create(
+								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
+			}
+				break;
 			default:
 				break;
 			}

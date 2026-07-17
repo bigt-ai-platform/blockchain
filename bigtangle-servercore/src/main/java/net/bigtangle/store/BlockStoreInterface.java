@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
@@ -37,7 +38,10 @@ import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
+import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.StakeRecord;
+
+
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.UTXO;
@@ -555,8 +559,26 @@ public interface BlockStoreInterface {
 
 	List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException;
 
+	List<StakeRecord> getAllStakeDeposits() throws BlockStoreException;
+
 	void updateStakeActivation(byte[] pubkey, long epoch) throws BlockStoreException;
 
 	void updateStakeSlashing(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException;
+
+	void releaseStakeDeposit(byte[] pubkey) throws BlockStoreException;
+
+	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException;
+
+	List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException;
+
+	Map<Sha256Hash, Long> getSummedAttestationVotes() throws BlockStoreException;
+
+	void savePosState(String service, String key, byte[] value) throws BlockStoreException;
+
+	byte[] getPosState(String service, String key) throws BlockStoreException;
+
+	Map<String, byte[]> getPosStateByService(String service) throws BlockStoreException;
+
+	void deletePosState(String service, String key) throws BlockStoreException;
 
 }

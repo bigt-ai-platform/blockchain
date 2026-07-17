@@ -36,5 +36,8 @@ public enum ReqCmd {
     // check point value
     getCheckPoint,
     serverinfolist,
-    getAnchors;
+    getAnchors,
+    // PoS
+    submitAttestation, getAttestations, processWithdrawal, submitSlashingProof,
+    stakeDeposit, activateValidator, getValidators, getBaseFee, setValidatorKey, getValidatorKey;
 }

@@ -21,6 +21,7 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.kafka.KafkaMessageProducer;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.TipsQueue;
@@ -50,6 +51,10 @@ public class BlockSaveService {
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
 	protected MempoolService mempoolService;
+	@Autowired
+	protected FeeService feeService;
+	@Autowired
+	protected ScheduleConfiguration scheduleConfiguration;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 5000; // adjustable for testing
@@ -128,6 +133,9 @@ public class BlockSaveService {
 			} finally {
 				store.close();
 			}
+			if (scheduleConfiguration.isPosEnabled()) {
+				feeService.updateBaseFee(txns.size());
+			}
 			return txns.size();
 		}
 		List<List<Transaction>> groups = new ArrayList<>();
@@ -184,6 +192,9 @@ public class BlockSaveService {
 			}
 		} finally {
 			store.close();
+		}
+		if (scheduleConfiguration.isPosEnabled()) {
+			feeService.updateBaseFee(txns.size());
 		}
 		return txns.size();
 	}

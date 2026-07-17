@@ -54,6 +54,13 @@ kafka:
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
   
        
+pos:
+  enabled: ${POS_ENABLED:false}
+  slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}
+  slotsPerEpoch: ${POS_SLOTS_PER_EPOCH:32}
+  validatorKey: ${POS_VALIDATOR_KEY:}
+  gossipPeers: ${POS_GOSSIP_PEERS:}
+
 management:
   metrics:
     export:

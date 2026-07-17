@@ -12,6 +12,7 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.SlotService;
 import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.ValidatorDutyService;
 
 @Component
 @EnableAsync
@@ -31,12 +32,15 @@ public class SlotTickService {
     @Autowired
     private ServerConfiguration serverConfiguration;
 
+    @Autowired
+    private ValidatorDutyService validatorDutyService;
+
     private long lastProcessedEpoch = -1;
 
     @Async
     @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
     public void tick() {
-        if (!scheduleConfiguration.isMilestone_active() || !serverConfiguration.checkService()) {
+        if (!scheduleConfiguration.isPosEnabled() || !serverConfiguration.checkService()) {
             return;
         }
 
@@ -55,6 +59,8 @@ public class SlotTickService {
             } finally {
                 store.close();
             }
+
+            validatorDutyService.performDuty();
         } catch (Exception e) {
             log.debug("Slot tick error", e);
         }

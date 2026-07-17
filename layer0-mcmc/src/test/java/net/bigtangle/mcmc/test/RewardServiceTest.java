@@ -220,6 +220,9 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		for (Block b : a2)
 			 add(b, true, true, store);
 
+		// Confirm the winning chain through MCMC after replay
+		mcmcServiceUpdate();
+
 		// assertFalse(getBlockEvaluation(rewardBlock1.getHash()).isConfirmed());
 		assertTrue(!getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed()  );
 

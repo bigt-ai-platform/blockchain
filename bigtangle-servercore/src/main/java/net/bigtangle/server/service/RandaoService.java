@@ -2,13 +2,17 @@ package net.bigtangle.server.service;
 
 import java.security.MessageDigest;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Utils;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class RandaoService {
@@ -18,12 +22,36 @@ public class RandaoService {
     private final ConcurrentHashMap<Long, byte[]> randaoMixes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, byte[]> commitments = new ConcurrentHashMap<>();
 
+    @Autowired
+    private StoreService storeService;
+
+    @PostConstruct
+    public void restoreState() {
+        try {
+            BlockStoreInterface store = storeService.getStore();
+            try {
+                Map<String, byte[]> saved = store.getPosStateByService("randao");
+                for (Map.Entry<String, byte[]> e : saved.entrySet()) {
+                    if (e.getKey().startsWith("mix_")) {
+                        long epoch = Long.parseLong(e.getKey().substring(4));
+                        randaoMixes.put(epoch, e.getValue());
+                    }
+                }
+            } finally {
+                store.close();
+            }
+        } catch (Exception ex) {
+            log.debug("No prior RANDAO state to restore", ex);
+        }
+    }
+
     public byte[] commit(byte[] pubkey, long slot) {
         byte[] secret = new byte[32];
         new java.security.SecureRandom().nextBytes(secret);
         byte[] hash = sha256(secret);
         String key = Utils.HEX.encode(pubkey) + ":" + slot;
         commitments.put(key, hash);
+        persistCommitment(key, hash);
         return hash;
     }
 
@@ -49,11 +77,33 @@ public class RandaoService {
             currentMix[i] ^= reveal[i];
         }
         randaoMixes.put(epoch, currentMix);
+
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            store.savePosState("randao", "mix_" + epoch, currentMix);
+        } catch (Exception e) {
+            log.debug("Failed to persist RANDAO mix", e);
+        } finally {
+            try { if (store != null) store.close(); } catch (Exception e) {}
+        }
     }
 
     public byte[] getRandaoMix(long slot) {
         long epoch = slot / 32;
         return randaoMixes.getOrDefault(epoch, sha256(String.valueOf(epoch).getBytes()));
+    }
+
+    private void persistCommitment(String key, byte[] hash) {
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            store.savePosState("randao", "cmt_" + key, hash);
+        } catch (Exception e) {
+            log.debug("Failed to persist commitment", e);
+        } finally {
+            try { if (store != null) store.close(); } catch (Exception e) {}
+        }
     }
 
     private byte[] sha256(byte[] input) {

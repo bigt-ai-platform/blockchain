@@ -34,6 +34,13 @@ public class ScheduleConfiguration {
     @Value("${service.schedule.microbatch:false}")
     boolean microBatch_active;
 
+    @Value("${pos.enabled:false}")
+    boolean posEnabled;
+    @Value("${pos.slotIntervalMs:12000}")
+    long posSlotIntervalMs;
+    @Value("${pos.slotsPerEpoch:32}")
+    long posSlotsPerEpoch;
+
     public boolean isMilestone_active() {
         return milestone_active;
     }
@@ -105,6 +112,13 @@ public class ScheduleConfiguration {
     public void setMicroBatch_active(boolean microBatch_active) {
         this.microBatch_active = microBatch_active;
     }
+
+    public boolean isPosEnabled() { return posEnabled; }
+    public void setPosEnabled(boolean v) { this.posEnabled = v; }
+    public long getPosSlotIntervalMs() { return posSlotIntervalMs; }
+    public void setPosSlotIntervalMs(long v) { this.posSlotIntervalMs = v; }
+    public long getPosSlotsPerEpoch() { return posSlotsPerEpoch; }
+    public void setPosSlotsPerEpoch(long v) { this.posSlotsPerEpoch = v; }
 
 	@Override
 	public String toString() {

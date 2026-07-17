@@ -577,6 +577,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_CONTRACT_RESULT_TABLE);
 		sqlStatements.add(DROP_ORDER_RESULT_TABLE);
 		sqlStatements.add(DROP_ORDERCANCEL_TABLE);
+		sqlStatements.add("DROP TABLE IF EXISTS pos_state");
+		sqlStatements.add("DROP TABLE IF EXISTS attestation_votes");
 		sqlStatements.add(DROP_STAKE_DEPOSITS_TABLE);
 		sqlStatements.add(DROP_BATCHBLOCK_TABLE);
 		sqlStatements.add(DROP_SUBTANGLE_PERMISSION_TABLE);

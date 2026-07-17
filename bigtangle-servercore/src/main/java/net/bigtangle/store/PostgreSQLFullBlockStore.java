@@ -282,6 +282,22 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ")";
 
  
+    private static final String CREATE_POS_STATE_TABLE = "CREATE TABLE pos_state (\n"
+            + "    service VARCHAR(64) NOT NULL,\n"
+            + "    key VARCHAR(255) NOT NULL,\n"
+            + "    value BYTEA,\n"
+            + "    CONSTRAINT pos_state_pk PRIMARY KEY (service, key)\n"
+            + ")";
+
+    private static final String CREATE_ATTESTATION_VOTES_TABLE = "CREATE TABLE attestation_votes (\n"
+            + "    blockhash BYTEA NOT NULL,\n"
+            + "    pubkey BYTEA NOT NULL,\n"
+            + "    weight BIGINT NOT NULL,\n"
+            + "    slot BIGINT NOT NULL,\n"
+            + "    inserted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
+            + "    CONSTRAINT attestation_votes_pk PRIMARY KEY (pubkey, blockhash)\n"
+            + ")";
+
     private static final String CREATE_STAKE_DEPOSITS_TABLE = "CREATE TABLE stake_deposits (\n"
     		+ "    pubkey BYTEA NOT NULL,\n"
     		+ "    amount BIGINT NOT NULL,\n"
@@ -485,6 +501,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PAYMULTISIGNADDRESS_TABLE);
         sqlStatements.add(CREATE_ORDER_CANCEL_TABLE);
         sqlStatements.add(CREATE_STAKE_DEPOSITS_TABLE);
+        sqlStatements.add(CREATE_ATTESTATION_VOTES_TABLE);
+        sqlStatements.add(CREATE_POS_STATE_TABLE);
         sqlStatements.add(CREATE_BATCHBLOCK_TABLE);
         sqlStatements.add(CREATE_SUBTANGLE_PERMISSION_TABLE);
         sqlStatements.add(CREATE_ORDERS_TABLE);

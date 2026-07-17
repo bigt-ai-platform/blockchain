@@ -27,7 +27,15 @@ service:
   milestoneschedule:
     rate: ${SERVICE_MILESTONE_RATE:15000}
     active: ${SERVICE_MILESTONE_ACTIVE:false}
-    initsync: ${SERVICE_INITSYNC:true}    
+    initsync: ${SERVICE_INITSYNC:true}
+  schedule:
+    mcmc: ${SERVICE_MCMC:false}
+    mcmcrate: ${SERVICE_MCMC_RATE:1000}
+
+pos:
+  enabled: ${POS_ENABLED:false}
+  slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}
+  slotsPerEpoch: ${POS_SLOTS_PER_EPOCH:32}
 kafka:
   bootstrapServers: ${BOOT_STRAP_SERVERS:}
   topicOutName: ${TOPIC_OUT_NAME:bigtangle}

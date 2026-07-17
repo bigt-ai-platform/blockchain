@@ -59,7 +59,9 @@ public final class Coin implements Monetary, Comparable<Coin> {
 	 */
 	public static final Coin NEGATIVE_SATOSHI = Coin.valueOf(-1, NetworkParameters.BIGTANGLE_TOKENID);
 
-	public static final Coin FEE_DEFAULT = Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID);
+	public static final Coin FEE_DEFAULT = Coin.valueOf(
+			Long.parseLong(System.getProperty("bigtangle.fee.default", "1000")),
+			NetworkParameters.BIGTANGLE_TOKENID);
 
 	/**
 	 * The number of satoshis of this monetary value.

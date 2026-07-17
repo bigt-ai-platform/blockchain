@@ -41,6 +41,11 @@ import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
+import java.util.HashMap;
+import java.util.Map;
+
+import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
@@ -3346,6 +3351,86 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
+	@Override
+	public List<StakeRecord> getAllStakeDeposits() throws BlockStoreException {
+		List<StakeRecord> list = new ArrayList<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT * FROM stake_deposits")) {
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) list.add(setStakeRecord(rs));
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return list;
+	}
+
+	@Override
+	public void releaseStakeDeposit(byte[] pubkey) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("UPDATE stake_deposits SET slashed = FALSE, "
+					+ "withdrawable_epoch = -1, activated_epoch = -1 WHERE pubkey = ?")) {
+			s.setBytes(1, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("INSERT INTO attestation_votes (blockhash, pubkey, weight, slot) "
+					+ "VALUES (?, ?, ?, ?) ON CONFLICT (pubkey, blockhash) DO UPDATE SET weight = ?")) {
+			s.setBytes(1, blockHash.getBytes());
+			s.setBytes(2, pubkey);
+			s.setLong(3, weight);
+			long slot = System.currentTimeMillis() / 12_000L;
+			s.setLong(4, slot);
+			s.setLong(5, weight);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public Map<Sha256Hash, Long> getSummedAttestationVotes() throws BlockStoreException {
+		Map<Sha256Hash, Long> result = new HashMap<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT blockhash, SUM(weight) as total FROM attestation_votes GROUP BY blockhash")) {
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.put(Sha256Hash.wrap(rs.getBytes("blockhash")), rs.getLong("total"));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
+	public List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException {
+		List<AttestationData> list = new ArrayList<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT * FROM attestation_votes WHERE slot = ?")) {
+			s.setLong(1, slot);
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					AttestationData att = new AttestationData();
+					att.setBeaconBlockHash(Sha256Hash.wrap(rs.getBytes("blockhash")));
+					att.setValidatorPubkey(rs.getBytes("pubkey"));
+					att.setSlot(slot);
+					list.add(att);
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return list;
+	}
+
 	private StakeRecord setStakeRecord(ResultSet rs) throws SQLException {
 		StakeRecord r = new StakeRecord();
 		r.setPubkey(rs.getBytes("pubkey"));
@@ -3378,6 +3463,64 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 		anchor.setConfirmed(rs.getBoolean("confirmed"));
 		return anchor;
+	}
+
+	@Override
+	public void savePosState(String service, String key, byte[] value) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("INSERT INTO pos_state (service, key, value) VALUES (?, ?, ?) "
+					+ "ON CONFLICT (service, key) DO UPDATE SET value = EXCLUDED.value")) {
+			s.setString(1, service);
+			s.setString(2, key);
+			s.setBytes(3, value);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public byte[] getPosState(String service, String key) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT value FROM pos_state WHERE service = ? AND key = ?")) {
+			s.setString(1, service);
+			s.setString(2, key);
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) return rs.getBytes("value");
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return null;
+	}
+
+	@Override
+	public Map<String, byte[]> getPosStateByService(String service) throws BlockStoreException {
+		Map<String, byte[]> result = new HashMap<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT key, value FROM pos_state WHERE service = ?")) {
+			s.setString(1, service);
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.put(rs.getString("key"), rs.getBytes("value"));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
+	public void deletePosState(String service, String key) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("DELETE FROM pos_state WHERE service = ? AND key = ?")) {
+			s.setString(1, service);
+			s.setString(2, key);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
 	}
 
 }

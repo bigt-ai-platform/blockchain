@@ -1,6 +1,7 @@
 package net.bigtangle.server.service;
 
 import java.math.BigInteger;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,7 @@ public class StakeService {
 
     private static final Logger log = LoggerFactory.getLogger(StakeService.class);
 
-    public static final BigInteger MIN_STAKE = BigInteger.valueOf(32_000_000L); // 32 BIG (6 decimals)
+    public static final BigInteger MIN_STAKE = BigInteger.valueOf(32_000_000L);
     public static final long WITHDRAWAL_DELAY_EPOCHS = 256;
 
     @Autowired
@@ -36,6 +37,12 @@ public class StakeService {
 
     @Autowired
     private BlockSaveService blockSaveService;
+
+    public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
+        return stake.getAmount().longValue();
+    }
 
     public void processDeposit(UTXO utxo, byte[] withdrawalCredentials,
             ECKey depositKey, BlockStoreInterface store) throws Exception {
@@ -80,7 +87,7 @@ public class StakeService {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed()) return;
 
-        long currentEpoch = System.currentTimeMillis() / 384_000; // approximate: 32 slots * 12s
+        long currentEpoch = System.currentTimeMillis() / 384_000;
         long withdrawableEpoch = currentEpoch + WITHDRAWAL_DELAY_EPOCHS;
         store.updateStakeSlashing(pubkey, withdrawableEpoch);
 
@@ -92,5 +99,17 @@ public class StakeService {
         return store.getActiveStakeDeposits().stream()
                 .map(StakeRecord::getAmount)
                 .reduce(BigInteger.ZERO, BigInteger::add);
+    }
+
+    public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {
+        List<StakeRecord> allDeposits = store.getAllStakeDeposits();
+        for (StakeRecord stake : allDeposits) {
+            if (stake.getWithdrawableEpoch() >= 0 && stake.getWithdrawableEpoch() <= currentEpoch
+                    && (stake.isSlashed() || stake.getActivatedEpoch() >= 0)) {
+                store.releaseStakeDeposit(stake.getPubkey());
+                log.info("Stake withdrawal processed: pubkey={}, amount={}",
+                        Utils.HEX.encode(stake.getPubkey()), stake.getAmount());
+            }
+        }
     }
 }
