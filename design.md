@@ -23,7 +23,7 @@ BigTangle is split into **Layer 0 (settlement)** and **Layer 1 (application)** c
    │ BIG + tokens via peg only │   │ BIG + tokens via peg only    │
    │ l1-order-server (8083)    │   │ l1-contract-server (8085)    │
    │ l1-order-mcmc (8084)      │   │ l1-contract-mcmc (8086)      │
-   │ chainId: "ordermatch"     │   │ chainId: "contract"          │
+   │ chainId: "ordermatch"     │   │ chainId: "L1-contract"       │
    │ OrderMatchL1Params        │   │ ContractL1Params             │
    │ NO BLOCKTYPE_TOKEN_CREATION  │  NO BLOCKTYPE_TOKEN_CREATION  │
    └───────────────────────────┘   └─────────────────────────────┘
@@ -53,7 +53,7 @@ BigTangle is split into **Layer 0 (settlement)** and **Layer 1 (application)** c
 ## Token Supply Model
 
 - **Layer 0 genesis** mints the entire BIG supply (`NetworkParameters.BigtangleCoinTotal`). All `BLOCKTYPE_TOKEN_CREATION` (custom tokens) happens on L0 only.
-- **L1 chains have no native BIG.** Their genesis blocks create only the DAG root block — no token outputs. L1's getBIG from L0 must flow through the bridge peg-in: L0 locks BIG to the vault address with `toAddressInSubtangle` set to the L1 beneficiary, and L1's `BridgeService.processPegInFromL0()` polls L0 and issues wrapped BIG.
+- **L1 chains have no native BIG.** Their genesis blocks create only the DAG root block — no token outputs. L1's BIG from L0 must flow through the bridge peg-in: L0 locks BIG to the vault address with `toAddressInSubtangle` set to the L1 beneficiary, and L1's `BridgeService.processPegInFromL0()` polls L0 and issues wrapped BIG.
 - **L1 `BLOCKTYPE_TRANSFER`** moves BIG that came via peg — it cannot originate BIG.
 
 ## Key Design Mechanisms
@@ -63,7 +63,7 @@ BigTangle is split into **Layer 0 (settlement)** and **Layer 1 (application)** c
 `NetworkParameters.chainId` identifies the chain:
 - L0: `"L0"`
 - L1-ordermatch: `"ordermatch"`
-- L1-contract: `"contract"`
+- L1-contract: `"L1-contract"`
 
 Each chain has its own database (configured via `db.dbName`), providing full isolation.
 
@@ -87,14 +87,14 @@ BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE
 
 **L1-order-match allows** (`OrderMatchL1Params`):
 ```
-BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER, BLOCKTYPE_REWARD,
+BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER, BLOCKTYPE_BEACON,
 BLOCKTYPE_CROSSTANGLE,
 BLOCKTYPE_ORDER_OPEN, BLOCKTYPE_ORDER_CANCEL
 ```
 
 **L1-contract allows** (`ContractL1Params`):
 ```
-BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER, BLOCKTYPE_REWARD,
+BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER, BLOCKTYPE_BEACON,
 BLOCKTYPE_CROSSTANGLE,
 BLOCKTYPE_CONTRACT_EVENT, BLOCKTYPE_CONTRACTEVENT_CANCEL,
 BLOCKTYPE_CONTRACT_EXECUTE
@@ -152,7 +152,7 @@ No BIG or custom token exists on L1 without going through this peg.
 | Setting | layer0-server | layer0-mcmc | l1-order-server | l1-order-mcmc | l1-contract-server | l1-contract-mcmc |
 |---------|:---:|:---:|:---:|:---:|:---:|:---:|
 | Port | 8081 | 8082 | 8083 | 8084 | 8085 | 8086 |
-| `chainId` | L0 | L0 | ordermatch | ordermatch | contract | contract |
+| `chainId` | L0 | L0 | ordermatch | ordermatch | L1-contract | L1-contract |
 | `service.schedule.mcmc` | false | true | false | true | false | true |
 | `service.schedule.mining` | true | false | true | false | true | false |
 
@@ -185,3 +185,7 @@ All six nodes can run simultaneously on different ports, each against its own da
 | `AnchorWatcherService` L1 reorg | Done |
 | L1 no native BIG (token creation L0-only) | Done |
 | Bridge-only token transfer path | Done (peg v1) |
+
+## Remaining Work
+
+See [TODO.md](TODO.md) for remaining gaps: M-of-N vault multisig, general contract model, anchor liveness fallback, light-client sync, observability, and bridged token fixtures for L1 tests.
