@@ -38,7 +38,7 @@ for i in $(seq 1 30); do
 done
 
 echo "=== Creating databases ==="
-for db in info_l0 info_order info_contract; do
+for db in info_l0 info_order info_contract info_pai; do
     docker exec test-bigtangle-postgres psql -U root -d info -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
@@ -55,11 +55,14 @@ mvn test -pl l1-order-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifie
 ORDER_PID=$!
 mvn test -pl l1-contract-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
 CONTRACT_PID=$!
+mvn test -pl l1-pai-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai &
+PAI_PID=$!
 
 EXIT_CODE=0
 wait $L0_PID      || { echo "Layer 0 tests FAILED";      EXIT_CODE=1; }
 wait $ORDER_PID   || { echo "Order match tests FAILED";  EXIT_CODE=1; }
 wait $CONTRACT_PID || { echo "Contract tests FAILED";     EXIT_CODE=1; }
+wait $PAI_PID     || { echo "PAI tests FAILED";          EXIT_CODE=1; }
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== All tests passed ==="
