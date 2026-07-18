@@ -12,7 +12,7 @@ server:
   permissioned: ${PERMISSIONED:false}
   permissionadmin: ${PERMISSIONADMIN:mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG}
   myserverblockOnly: ${MYSERVERBLOCKONLY:false}
-  createtable: false
+  createtable: true
 db:
   dbtype: ${DBTYPE:postgresql}
   hostname: ${DB_HOSTNAME:localhost}
