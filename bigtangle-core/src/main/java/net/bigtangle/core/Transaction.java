@@ -1396,14 +1396,10 @@ public class Transaction extends ChildMessage {
 	 * 
 	 */
 	public void setMemo(MemoInfo memoInfo) {
-		try {
-			if (memoInfo == null)
-				this.memo = null;
-			else
-				this.memo = memoInfo.toJson();
-		} catch (JsonProcessingException e) {
-			this.memo = "";
-		}
+		if (memoInfo == null)
+			this.memo = null;
+		else
+			this.memo = Utils.HEX.encode(memoInfo.toByteArray());
 		unCache();
 	}
 

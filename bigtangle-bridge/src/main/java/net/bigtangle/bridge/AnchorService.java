@@ -89,7 +89,7 @@ public class AnchorService {
 
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName("LayerAnchor");
-        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        tx.setData(anchor.toByteArray());
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
@@ -251,7 +251,13 @@ public class AnchorService {
             return;
         }
 
-        LayerAnchor anchor = LayerAnchor.fromJson(new String(data, StandardCharsets.UTF_8));
+        LayerAnchor anchor;
+        try {
+            anchor = LayerAnchor.parse(data);
+        } catch (Exception e) {
+            // Fallback to legacy JSON format
+            anchor = LayerAnchor.fromJson(new String(data, StandardCharsets.UTF_8));
+        }
         validateAndSaveAnchor(anchor, block.getHash(), store);
     }
 }
