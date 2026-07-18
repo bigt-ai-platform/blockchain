@@ -40,8 +40,8 @@
 |----------|-----------|-----------|-----|-------|
 | **4C i5 + SATA PG (current)** | 6.0s | 10.3s | **4,873** | CPU + PG I/O |
 | **128C EPYC + NVMe PG** | ~1.0s | ~1.6s | **~31,000** | Single-thread block creation |
-| **+ pipeline (overlap stages)** | ~0.9s | **~40,000** | MCMC finality |
-| **Architectural ceiling** | ≥0.6s | **~80,000** | Single-pipeline MCMC limit |
+| **+ pipeline (overlap stages)** | ~0.9s | **~40,000** | Single-thread block creation |
+| **Architectural ceiling** | ≥0.6s | **~80,000** | Block creation + MCMC consensus (serial pipeline) |
 
 ### Cumulative Optimizations (from 3,018 → 4,873 tx/s)
 
@@ -95,9 +95,9 @@
 
 **Strengths:**
 - **DAG + Beacon chain**: MCMC selects DAG tips for fast probabilistic confirmation; PoS beacon chain provides deterministic Casper finality. Best of both — fast confirms for low-value tx, 2/3 finality for settlements.
-- **Batch blocks**: Mempool drained every 100ms into 50k-tx blocks → high throughput with low per-tx overhead. 
+- **Batch blocks**: Server-side `microBatch()` drains the mempool into 50k-tx blocks every 100ms, independent of validator slots → high throughput regardless of consensus schedule.
 - **UTXO model**: Inherently parallel — each tx touches distinct UTXOs, enabling concurrent validation.
-- **No single-leader bottleneck**: Any validator can propose a DAG block within their slot; parallel branches converge via GHOST fork choice.
+- **No single-leader bottleneck**: DAG blocks are produced by every node's local batch service, not by a designated leader. Beacon blocks use a single proposer per slot, but the 100ms micro-batch ensures transaction throughput is decoupled from the 12s slot clock.
 - **RANDAO proposer selection**: Unpredictable leader schedule prevents targeted DoS on upcoming proposers.
 
 **Weaknesses:**
