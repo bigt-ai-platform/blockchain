@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%style{%d{ISO8601}}{black} %highlight{%-5level }[%style{%t}{bright,blue}] %style{%C{1.}}{bright,yellow}: %msg%n%throwable" />
+        </Console>
+        <RollingFile name="RollingFile"
+            fileName="./logs/l1-pai-mcmc.log"
+            filePattern="./logs/l1-pai-mcmc-%d{-dd-MMMM-yyyy}-%i.log">
+            <PatternLayout>
+                <pattern>%d %p %C{1.} [%t] %m%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <OnStartupTriggeringPolicy />
+                <SizeBasedTriggeringPolicy size="30 MB" />
+                <TimeBasedTriggeringPolicy />
+            </Policies>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Root level="warn">
+            <AppenderRef ref="Console" />
+            <AppenderRef ref="RollingFile" />
+        </Root>
+        <logger name="net.bigtangle" level="${LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
+        <logger name="org.apache.kafka" level="${LOGGING_LEVEL_KAFKA:-WARN}" />
+        <logger name="org.apache.kafka.streams.KafkaStreams" level="INFO" />
+        <logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="ERROR" />
+        <logger name="org.apache.kafka.clients.producer.ProducerConfig" level="ERROR" />
+    </Loggers>
+</Configuration>

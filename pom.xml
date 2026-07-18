@@ -35,6 +35,8 @@
 		<module>l1-order-server</module>
 		<module>l1-contract-mcmc</module>
 		<module>l1-order-mcmc</module>
+		<module>l1-pai-server</module>
+		<module>l1-pai-mcmc</module>
 
 	</modules>
 	<dependencies>
