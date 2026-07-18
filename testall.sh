@@ -49,11 +49,11 @@ mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml"
 echo "=== Core tests passed ==="
 
 echo "=== Running L0 and L1 tests in parallel ==="
-mvn test -pl layer0-mcmc      -q -f "$ROOT/pom.xml" $DB_ARGS -DDB_NAME=info_l0 &
+mvn test -pl layer0-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
-mvn test -pl l1-order-mcmc    -q -f "$ROOT/pom.xml" $DB_ARGS -DDB_NAME=info_order &
+mvn test -pl l1-order-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
 ORDER_PID=$!
-mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" $DB_ARGS -DDB_NAME=info_contract &
+mvn test -pl l1-contract-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
 CONTRACT_PID=$!
 
 EXIT_CODE=0
