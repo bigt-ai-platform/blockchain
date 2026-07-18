@@ -62,9 +62,6 @@ public class ServerConfiguration {
      */
     private String net;
 
-    /** Mining reward address where block rewards are sent */
-    private String mineraddress;
-    
     /** Base URL for this server's API endpoints */
     private String serverurl;
     
@@ -279,15 +276,12 @@ public class ServerConfiguration {
      * @return The miner's reward address
      */
     public String getMineraddress() {
-        return mineraddress;
+        return "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG";
     }
 
-    /**
-     * Sets the mining reward address.
-     * @param mineraddress The new reward address to use
-     */
+    /** @deprecated PoW-era setter — address is fixed */
+    @Deprecated
     public void setMineraddress(String mineraddress) {
-        this.mineraddress = mineraddress;
     }
 
     /**
@@ -511,8 +505,7 @@ public class ServerConfiguration {
      */
     @Override
     public String toString() {
-        return "ServerConfiguration [requester=" + requester + ", port=" + port + ", net=" + net + ", mineraddress="
-                + mineraddress + ", serverurl=" + serverurl + ", serverversion=" + serverversion + ", clientversion="
+        return "ServerConfiguration [requester=" + requester + ", port=" + port + ", net=" + net + ", serverurl=" + serverurl + ", serverversion=" + serverversion + ", clientversion="
                 + clientversion + ", permissioned=" + permissioned + ", permissionadmin=" + permissionadmin
                 + ", myserverblockOnly=" + myserverblockOnly
                 + ", maxsearchblocks=" + maxsearchblocks  
