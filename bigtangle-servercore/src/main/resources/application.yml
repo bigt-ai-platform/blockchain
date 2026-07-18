@@ -35,7 +35,6 @@ db:
 
  
 
-
 service:
   schedule:
     mcmc: ${SERVICE_MCMC:false}
@@ -74,7 +73,3 @@ management:
     prometheus:
       enabled: true
 
-minio:
-  url: ${MINIO_URL:http://localhost:9000}
-  accessKey: ${MINIO_ACCESS_KEY:minioadmin}
-  secretKey: ${MINIO_SECRET_KEY:minioadminpassword}

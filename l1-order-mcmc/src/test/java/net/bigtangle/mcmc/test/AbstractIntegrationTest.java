@@ -1,6 +1,6 @@
 /*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
+ *  Copyright   2018  Inasset GmbH.
+ *
  *******************************************************************************/
 package net.bigtangle.mcmc.test;
 
@@ -60,13 +60,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 import com.google.common.math.LongMath;
 
-import io.minio.BucketExistsArgs;
-import io.minio.ListObjectsArgs;
-import io.minio.MinioClient;
-import io.minio.RemoveBucketArgs;
-import io.minio.RemoveObjectArgs;
-import io.minio.Result;
-import io.minio.messages.Item;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockMCMC;
@@ -119,7 +112,6 @@ import net.bigtangle.response.TokenIndexResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.checkpoint.CheckpointService;
-import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -202,10 +194,6 @@ public abstract class AbstractIntegrationTest {
 	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
-
-	@Autowired
-	protected MinioConfig minioConfig;
-
 	@Autowired
 	protected transient javax.sql.DataSource dataSource;
 
@@ -318,12 +306,11 @@ public abstract class AbstractIntegrationTest {
 	/**
 	 * Resets the store by deleting the contents of the tables and reinitialising
 	 * them.
-	 * 
+	 *
 	 * @throws BlockStoreException If the tables couldn't be cleared and
 	 *                             initialised.
 	 */
 	public void resetStore() throws BlockStoreException {
-		resetBucket();
 		store.resetStore();
 		cacheBlockService.evictOutputs();
 		cacheBlockService.evictBlock();
@@ -331,36 +318,10 @@ public abstract class AbstractIntegrationTest {
 		cacheBlockService.evictMaxConfirmedReward();
 		cacheBlockService.evictBlockMCMC();
 		cacheBlockService.evictBlockEvaluation();
- 
+
 	}
 
 	public void resetBucket() throws BlockStoreException {
-		String bucketName = minioConfig.getBucketName();
-		MinioClient minioClient = MinioClient.builder().endpoint(
-				minioConfig.getMinioUrl()).credentials(minioConfig.getMinioAccessKey(), minioConfig.getMinioSecretKey())
-				.build();
-		boolean found;
-		try {
-			found = minioClient.bucketExists(BucketExistsArgs.builder().bucket(minioConfig.getBucketName()).build());
-
-			if (found) {
-				Iterable<Result<Item>> results = minioClient.listObjects(
-						ListObjectsArgs.builder().bucket(bucketName).recursive(true).build());
-
-				for (Result<Item> result : results) {
-					Item item = result.get();
-					minioClient.removeObject(
-							RemoveObjectArgs.builder()
-									.bucket(bucketName)
-									.object(item.objectName())
-									.build());
-				}
-
-				// minioClient.removeBucket(RemoveBucketArgs.builder().bucket(minioConfig.getBucketName()).build());
-			}
-		} catch (Exception e) {
-			throw new BlockStoreException(e);
-		}
 	}
 
 	protected void payTestTokenTo(ECKey beneficiary, ECKey testKey, BigInteger amount) throws Exception {
@@ -430,7 +391,7 @@ public abstract class AbstractIntegrationTest {
 		/*
 		 * HashMap<String, BigInteger> giveMoneyResult = new HashMap<String,
 		 * BigInteger>();
-		 * 
+		 *
 		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
 		 * BigInteger.valueOf(500000));
 		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),

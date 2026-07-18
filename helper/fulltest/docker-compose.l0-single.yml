@@ -1,0 +1,77 @@
+networks:
+  l0-test-net:
+    driver: bridge
+
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: l0-pg
+    networks: [l0-test-net]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: test1234
+      POSTGRES_DB: layer0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d layer0"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  l0-server:
+    image: bigtangle:test
+    container_name: l0-svr
+    networks: [l0-test-net]
+    ports:
+      - "8081:8081"
+    environment:
+      SERVER_PORT: 8081
+      SERVER_NET: Test
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres
+      DB_PORT: 5432
+      DB_NAME: layer0
+      DB_USERNAME: root
+      DB_PASSWORD: test1234
+      DBTYPE: postgresql
+      SERVICE_MINING: "false"
+      SERVICE_MCMC: "true"
+      SERVICE_MCMC_RATE: 1000
+      SERVICE_SYNC: "true"
+      SERVICE_INITSYNC: "true"
+      SYNCBLOCKS: 1000
+      CREATETABLE: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  l0-mcmc:
+    image: bigtangle:test
+    container_name: l0-mcmc
+    networks: [l0-test-net]
+    ports:
+      - "8084:8084"
+    environment:
+      APP_MODULE: layer0-mcmc
+      SERVER_PORT: 8084
+      SERVER_NET: Test
+      REQUESTER: http://l0-svr:8081
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres
+      DB_PORT: 5432
+      DB_NAME: layer0
+      DB_USERNAME: root
+      DB_PASSWORD: test1234
+      DBTYPE: postgresql
+      SERVICE_MINING: "true"
+      SERVICE_MINING_RATE: 50000
+      SERVICE_MCMC: "true"
+      SERVICE_MCMC_RATE: 1000
+      SERVICE_INITSYNC: "true"
+      SERVICE_SYNC: "true"
+      SYNCBLOCKS: 1000
+      CREATETABLE: "false"
+    depends_on:
+      l0-server: { condition: service_started }
+      postgres: { condition: service_healthy }

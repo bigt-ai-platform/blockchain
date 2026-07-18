@@ -39,7 +39,6 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ChainBlockQueue;
@@ -49,7 +48,6 @@ import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
-import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceVerifyReward;
@@ -85,8 +83,6 @@ public class BlockStoreService {
 	@Autowired
 	protected ObjectMapper jsonmapper;
 
-	@Autowired
-	protected MinioConfig minioConfig;
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;

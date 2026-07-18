@@ -54,7 +54,6 @@ import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
-import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -101,7 +100,6 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected ScheduleConfiguration scheduleConfiguration;
     @Autowired protected CacheBlockPrototypeService cacheBlockPrototypeService;
     @Autowired protected BlockSaveService blockSaveService;
-    @Autowired protected MinioConfig minioConfig;
     @Autowired protected transient javax.sql.DataSource dataSource;
 
     protected static ObjectMapper objectMapper = new ObjectMapper();

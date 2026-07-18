@@ -14,10 +14,10 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.DBStoreConfiguration;
-import net.bigtangle.server.config.MinioConfig;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.store.BlockStoreInterface;
+
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
 
@@ -34,12 +34,13 @@ public class BeforeStartup {
 		// set false in test
 		if (serverConfiguration.getCreatetable()) {
 			BlockStoreInterface store;
+			MinioService minioService = new MinioService();
 			if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
 				store = new MySQLFullBlockStore(networkParameters, dataSource.getConnection(),
-						new MinioService(minioConfig, networkParameters));
+						minioService);
 			} else {
 				store = new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection(),
-						new MinioService(minioConfig, networkParameters));
+						minioService);
 
 			}
 			try {
@@ -61,7 +62,4 @@ public class BeforeStartup {
 	protected transient DataSource dataSource;
 	@Autowired
 	protected transient DBStoreConfiguration dbStoreConfiguration;
-
-	@Autowired
-	protected MinioConfig minioConfig;
 }

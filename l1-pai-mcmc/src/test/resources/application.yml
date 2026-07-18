@@ -40,11 +40,6 @@ kafka:
   topicOutName: ${TOPIC_OUT_NAME:bigtangle}
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
 
-minio:
-    url: ${MINIO_URL:http://localhost:9000}
-    accessKey: ${MINIO_ACCESS_KEY:minioadmin}
-    secretKey: ${MINIO_SECRET_KEY:minioadminpassword}
-
 management:
   metrics:
     export:
