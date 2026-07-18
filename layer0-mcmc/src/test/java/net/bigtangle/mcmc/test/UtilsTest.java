@@ -50,7 +50,6 @@ public class UtilsTest {
             b.setTime(currTime + 1);
         else
             b.setTime(minTime);
-        b.solve();
         try {
             b.verifyHeader();
         } catch (VerificationException e) {

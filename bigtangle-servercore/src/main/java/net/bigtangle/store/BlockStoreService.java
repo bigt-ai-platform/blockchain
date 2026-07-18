@@ -114,7 +114,7 @@ public class BlockStoreService {
 
 	public boolean addChain(Block block, BlockStoreInterface store) throws BlockStoreException {
 
-		// Check the block is partially formally valid and fulfills PoW
+		// Check the block is formally valid
 		block.verifyHeader();
 		block.verifyTransactions();
 		// no more check add data
@@ -263,7 +263,7 @@ public class BlockStoreService {
 		try {
 			store.beginDatabaseBatchWrite();
 
-			// Check the block is partially formally valid and fulfills PoW
+			// Check the block is formally valid
 			block.verifyHeader();
 			block.verifyTransactions();
 

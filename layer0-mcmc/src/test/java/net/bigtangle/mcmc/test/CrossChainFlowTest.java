@@ -89,7 +89,6 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
                         "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975"))
                         .toAddress(networkParameters));
         pegBlock.addTransaction(pegTx);
-        pegBlock.solve();
         store.put(pegBlock);
         blockGraph.updateChain(false);
         mcmcService.update(store);
@@ -116,7 +115,6 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         Transaction tx = new Transaction(networkParameters);
         tx.addOutput(new Coin(BigInteger.valueOf(bridged), NetworkParameters.BIGTANGLE_TOKENID), bobKey);
         l1Block.addTransaction(tx);
-        l1Block.solve();
         store.put(l1Block);
         blockGraph.updateChain(false);
         mcmcService.update(store);

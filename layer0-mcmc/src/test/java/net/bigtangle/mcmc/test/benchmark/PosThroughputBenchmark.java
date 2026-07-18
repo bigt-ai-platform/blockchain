@@ -122,7 +122,6 @@ public class PosThroughputBenchmark extends AbstractIntegrationTest {
                     NetworkParameters.BIGTANGLE_TOKENID),
                     vk.toAddress(networkParameters));
             depositBlock.addTransaction(tx);
-            depositBlock.solve();
             store.put(depositBlock);
             store.saveStakeDeposit(new StakeRecord(
                     vk.getPubKey(), StakeService.MIN_STAKE, null));

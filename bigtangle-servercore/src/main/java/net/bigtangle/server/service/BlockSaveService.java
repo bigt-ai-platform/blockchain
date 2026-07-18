@@ -109,7 +109,6 @@ public class BlockSaveService {
 			if (block.getTransactions().size() == 0) {
 				return;
 			}
-			block.solve();
 			saveBlock(block, store);
 			for (BatchBlock batchBlock : batchBlocks) {
 				store.deleteBatchBlock(batchBlock.getHash());
@@ -131,7 +130,6 @@ public class BlockSaveService {
 				for (Transaction tx : txns) {
 					block.addTransaction(tx);
 				}
-				block.solve();
 				saveBatchBlock(block, store);
 			} finally {
 				store.close();
@@ -181,7 +179,6 @@ public class BlockSaveService {
 							for (Transaction tx : group) {
 								b.addTransaction(tx);
 							}
-							b.solve();
 							saveBatchBlock(b, s);
 						} catch (Exception e) {
 							throw new RuntimeException(e);

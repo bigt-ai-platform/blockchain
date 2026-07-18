@@ -149,7 +149,6 @@ public class MultiSignServiceCreate {
             for (Transaction transaction : oldBlock.getTransactions()) {
                 block.addTransaction(transaction);
             }
-            block.solve();
             return block;
         } else {
             return oldBlock;

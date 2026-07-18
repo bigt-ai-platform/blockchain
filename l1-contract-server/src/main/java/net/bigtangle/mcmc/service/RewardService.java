@@ -115,7 +115,7 @@ public class RewardService {
 				store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 				canrun = true;
 			} else {
-				long timeout = 15 * scheduleConfiguration.getMiningrate();
+				long timeout = 15 * 50000L;
 				if (lock.getLocktime() < System.currentTimeMillis() - timeout) {
 					log.info(" reward locked is fored delete   {} < {}", lock.getLocktime(),
 							System.currentTimeMillis() - timeout);
@@ -264,12 +264,11 @@ public class RewardService {
 		@SuppressWarnings({ "unchecked", "rawtypes" })
 		final Future<String> handler = executor.submit((Callable) () -> {
 			log.debug(" reward block solve started  : {} \n for block{}", chainTargetFinal, block);
-			block.solve(chainTargetFinal);
 			return "";
 		});
 		Stopwatch watch = Stopwatch.createStarted();
 		try {
-			handler.get(scheduleConfiguration.getMiningrate(), TimeUnit.MILLISECONDS);
+			handler.get(50000L, TimeUnit.MILLISECONDS);
 		} catch (TimeoutException e) {
 			log.debug(" reward solve Timeout  {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 			handler.cancel(true);

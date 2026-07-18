@@ -81,8 +81,6 @@ public class Block extends Message {
 	private byte[] minerAddress; // Utils.sha256hash160
 	private BlockType blockType;
 	private long height;
-	// If NetworkParameters.USE_EQUIHASH, this field will contain the PoW
-	// solution
 
 	/** If null, it means this object holds only the headers. */
 	@Nullable
@@ -494,16 +492,6 @@ public class Block extends Message {
 		return s.toString();
 	}
 
-	/** No-op in PoS mode — block hash is not constrained by difficulty. */
-	public void solve() {
-		setNonce(0);
-	}
-
-	@Deprecated
-	public void solve(java.math.BigInteger target) {
-		setNonce(0);
-	}
-
 	private void checkTimestamp() throws VerificationException {
 		// Allow injection of a fake clock to allow unit testing.
 		long currentTime = Utils.currentTimeSeconds();
@@ -611,10 +599,10 @@ public class Block extends Message {
 
 	/**
 	 * Checks the block data to ensure it follows the rules laid out in the network
-	 * parameters. Specifically, throws an exception if the proof of work is
-	 * invalid, or if the timestamp is too far from what it should be. This is
-	 * <b>not</b> everything that is required for a block to be valid, only what is
-	 * checkable independent of the chain and without a transaction index.
+	 * parameters. Specifically throws an exception if the timestamp is too far
+	 * from what it should be. This is <b>not</b> everything that is required for
+	 * a block to be valid, only what is checkable independent of the chain and
+	 * without a transaction index.
 	 *
 	 */
 	public void verifyHeader() throws VerificationException {

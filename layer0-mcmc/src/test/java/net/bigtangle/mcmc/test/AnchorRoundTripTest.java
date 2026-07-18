@@ -94,7 +94,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         tx.setDataClassName("LayerAnchor");
         tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
         crosstangleBlock.addTransaction(tx);
-        crosstangleBlock.solve();
 
         anchorService.processReceivedAnchor(crosstangleBlock, store);
 
@@ -122,7 +121,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         tx.setDataClassName("LayerAnchor");
         tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
         crosstangleBlock.addTransaction(tx);
-        crosstangleBlock.solve();
 
         store.saveAnchor(new AnchorRecord("L1", l1Hash, 1, null,
                 Utils.HEX.encode(sig.encodeToDER()), crosstangleBlock.getHash(), false));
@@ -158,7 +156,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         tx.setDataClassName("LayerAnchor");
         tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
         crosstangleBlock.addTransaction(tx);
-        crosstangleBlock.solve();
 
         store.saveAnchor(new AnchorRecord("L1", l1Hash, 1, null,
                 Utils.HEX.encode(sig.encodeToDER()), crosstangleBlock.getHash(), true));
@@ -191,7 +188,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         tx.setDataClassName("LayerAnchor");
         tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
         crosstangleBlock.addTransaction(tx);
-        crosstangleBlock.solve();
 
         anchorService.processReceivedAnchor(crosstangleBlock, store);
         anchorService.confirmAnchor(crosstangleBlock, true, store);

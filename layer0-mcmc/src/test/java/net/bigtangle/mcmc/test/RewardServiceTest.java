@@ -365,7 +365,6 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			} catch (Exception e) {
 				// wallet may have no UTXOs; PoW-disabled tests skip fees
 			}
-			rollingBlock1.solve();
 			blockGraph.addBlock(rollingBlock1, true, store);
 			blocksAddedAll.add(rollingBlock1);
 		}

@@ -89,7 +89,6 @@ public class EpochRewardService {
         }
 
         if (distributed > 0) {
-            rewardBlock.solve();
             store.put(rewardBlock);
             log.info("Epoch {}: distributed {} to {} validators",
                     epoch, distributed, validators.size());

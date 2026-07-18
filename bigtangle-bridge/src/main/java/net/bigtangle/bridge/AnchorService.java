@@ -91,7 +91,6 @@ public class AnchorService {
         tx.setDataClassName("LayerAnchor");
         tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
         b.addTransaction(tx);
-        b.solve();
 
         blockSaveService.saveBlock(b, store);
         logger.info("Anchor block saved locally: {} for chain {} at height {}", b.getHashAsString(),
@@ -164,7 +163,6 @@ public class AnchorService {
         Coin rewardCoin = Coin.valueOf(rewardAmount, NetworkParameters.BIGTANGLE_TOKENID);
         tx.addOutput(rewardCoin, milestoneKey.toAddress(networkParameters));
         b.addTransaction(tx);
-        b.solve();
 
         blockSaveService.saveBlock(b, store);
         logger.info("Anchor reward of {} credited to milestone node for chain {}",

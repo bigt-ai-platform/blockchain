@@ -135,7 +135,6 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
 		rollingBlock.addTransaction(transaction0);
 
-		rollingBlock.solve();
 
 		checkResponse(OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize()));
 

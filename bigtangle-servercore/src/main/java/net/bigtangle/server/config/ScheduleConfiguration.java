@@ -14,14 +14,10 @@ public class ScheduleConfiguration {
     boolean milestone_active;
     @Value("${service.schedule.mcmcrate:500}")
     Long mcmcrate;
-    @Value("${service.schedule.mining:false}")
-    boolean mining;
 
     @Value("${service.schedule.blockbatch:false}")
     boolean blockBatchService_active;
 
-    @Value("${service.schedule.miningrate:50000}")
-    Long miningrate;
     @Value("${service.schedule.blockbatchrate:50000}")
     Long blockbatchrate;
 
@@ -55,22 +51,6 @@ public class ScheduleConfiguration {
 
     public void setBlockBatchService_active(boolean blockBatchService_active) {
         this.blockBatchService_active = blockBatchService_active;
-    }
-
-    public boolean isMining() {
-        return mining;
-    }
-
-    public void setMining(boolean mining) {
-        this.mining = mining;
-    }
-
-    public Long getMiningrate() {
-        return miningrate;
-    }
-
-    public void setMiningrate(Long miningrate) {
-        this.miningrate = miningrate;
     }
 
     public Long getBlockbatchrate() {
@@ -122,9 +102,9 @@ public class ScheduleConfiguration {
 
 	@Override
 	public String toString() {
-		return "ScheduleConfiguration [milestone_active=" + milestone_active + ", mcmcrate=" + mcmcrate + ", mining="
-				+ mining + ", blockBatchService_active=" + blockBatchService_active + ", miningrate=" + miningrate
-				+ ", blockbatchrate=" + blockbatchrate + ", syncrate=" + syncrate + ", initSync=" + initSync
+		return "ScheduleConfiguration [milestone_active=" + milestone_active + ", mcmcrate=" + mcmcrate
+				+ ", blockBatchService_active=" + blockBatchService_active + ", blockbatchrate=" + blockbatchrate
+				+ ", syncrate=" + syncrate + ", initSync=" + initSync
 				+ ", microBatch_active=" + microBatch_active + "]";
 	}
 

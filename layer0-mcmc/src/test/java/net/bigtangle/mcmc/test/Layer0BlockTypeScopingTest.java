@@ -44,7 +44,6 @@ public class Layer0BlockTypeScopingTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Block badBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         badBlock.setBlockType(rejectedType);
-        badBlock.solve();
         // checkBlockBeforeSave is the allow-set gate; saveBlock expects it has
         // already been called, so we test the gate directly.
         VerificationException ex = assertThrows(VerificationException.class,

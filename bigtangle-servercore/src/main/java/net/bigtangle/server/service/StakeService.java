@@ -56,7 +56,6 @@ public class StakeService {
         Transaction tx = new Transaction(networkParameters);
         tx.addOutput(utxo.getValue(), depositKey.toAddress(networkParameters));
         b.addTransaction(tx);
-        b.solve();
 
         blockSaveService.saveBlock(b, store);
 

@@ -468,7 +468,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// log.debug( (Utils.encodeCompactBits( networkParameters. getMaxTargetReward())
 		// - b1.getDifficultyTarget() )+ "" );
-		b1.solve();
 		this.blockGraph.addBlock(b1, true, store);
 		return b1;
 	}

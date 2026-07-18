@@ -109,7 +109,6 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
                     NetworkParameters.BIGTANGLE_TOKENID),
                     vk.toAddress(networkParameters));
             depositBlock.addTransaction(tx);
-            depositBlock.solve();
             store.put(depositBlock);
             // Register stake directly (simplified for benchmark)
             store.saveStakeDeposit(new net.bigtangle.core.StakeRecord(
@@ -142,7 +141,6 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
                     prevBlock, prevBlock);
             block.setMinerAddress(proposer.getPubKey());
             block.setBlockType(BlockType.BLOCKTYPE_BEACON);
-            block.solve();
             store.put(block);
             blockHashes.add(block.getHash());
             prevBlock = block;

@@ -43,7 +43,6 @@ import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.CoinbaseDisallowedException;
-import net.bigtangle.exception.VerificationException.DifficultyConsensusInheritanceException;
 import net.bigtangle.exception.VerificationException.GenesisBlockDisallowedException;
 import net.bigtangle.exception.VerificationException.IncorrectTransactionCountException;
 import net.bigtangle.exception.VerificationException.InvalidDependencyException;
@@ -79,7 +78,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block r2 = tipsToApprove.getRight().getBlock();
 		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		b.setTime(1887836800); //
-		b.solve();
 		try {
 			blockSaveService.saveBlock(b, store);
 			fail();
@@ -95,7 +93,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		b.setTime(1567836800); //
 		b.addTransaction(wallet.feeTransaction(null));
-		b.solve();
 
 		// Populate tips queue for adjustPrototype
 		try {
@@ -130,7 +127,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				UtilGeneseBlock.createGenesis(networkParameters));
 		block.setPrevBlockHash(sha256Hash1);
 		block.setPrevBranchBlockHash(sha256Hash2);
-		block.solve();
 		System.out.println(block.getHashAsString());
 
 		// Send over kafka method to allow unsolids
@@ -146,7 +142,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				UtilGeneseBlock.createGenesis(networkParameters));
 		block.setPrevBlockHash(sha256Hash1);
 		block.setPrevBranchBlockHash(sha256Hash2);
-		block.solve();
 		System.out.println(block.getHashAsString());
 
 		// Send over API method to disallow unsolids
@@ -167,10 +162,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block depBlock = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
 				UtilGeneseBlock.createGenesis(networkParameters));
 		depBlock.addTransaction(wallet.feeTransaction(null));
-		depBlock.solve();
 		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
 
 		// Should not be solid
@@ -193,10 +186,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block depBlock = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
 				UtilGeneseBlock.createGenesis(networkParameters));
 		depBlock.addTransaction(wallet.feeTransaction(null));
-		depBlock.solve();
 		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
 		// Should not be solid
 		assertTrue(store.getBlockWrap(block.getHash()).getBlockEvaluation().getSolid() == 0);
@@ -217,10 +208,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block depBlock = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
 				UtilGeneseBlock.createGenesis(networkParameters));
 		depBlock.addTransaction(wallet.feeTransaction(null));
-		depBlock.solve();
 		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.solve();
 		blockService.addConnected(block.bitcoinSerialize(), true);
 
 		// Should not be solid
@@ -346,11 +335,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		Block depBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
 		depBlock.addTransaction(wallet.feeTransaction(null));
-		depBlock.solve();
 		blockGraph.addBlock(depBlock, true, store);
 
 		Block block = UtilsTest.createBlock(networkParameters, depBlock, depBlock);
-		block.solve();
 		blockGraph.addBlock(block, true, store);
 
 		resetStore();
@@ -375,7 +362,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block block = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 		block.setLastMiningRewardBlock(2);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.solve();
 		blockGraph.addBlock(block, false, store);
 	}
 
@@ -390,7 +376,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 		rollingBlock.setTime(rollingBlock.getTimeSeconds()); // 01/01/2000 @
 		rollingBlock.addTransaction(wallet.feeTransaction(null)); // 12:00am (UTC)
-		rollingBlock.solve();
 		blockGraph.addBlock(rollingBlock, false, store);
 		makeRewardBlock(rollingBlock);
 		// The time is not allowed to move backwards
@@ -398,7 +383,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			rollingBlock = UtilsTest.createBlock(networkParameters, rollingBlock, rollingBlock);
 			rollingBlock.setTime(946684800); // 01/01/2000 @ 12:00am (UTC)
 			rollingBlock.addTransaction(wallet.feeTransaction(null));
-			rollingBlock.solve();
 			blockGraph.addBlock(rollingBlock, false, store);
 			fail();
 		} catch (TimeReversionException e) {
@@ -431,7 +415,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					Block rollingBlock = UtilsTest.createBlock(networkParameters, genesisBlock, genesisBlock);
 					rollingBlock.setBlockType(type);
 					rollingBlock.addTransaction(tx);
-					rollingBlock.solve();
 					blockGraph.addBlock(rollingBlock, false, store);
 
 					fail();
@@ -593,7 +576,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			Block b = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
 					UtilGeneseBlock.createGenesis(networkParameters));
 			b.setBlockType(BlockType.BLOCKTYPE_INITIAL);
-			b.solve();
 			blockGraph.addBlock(b, false, store);
 			fail();
 		} catch (GenesisBlockDisallowedException e) {
@@ -647,7 +629,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget() * 2);
 
-		rewardBlock.solve();
 		blockGraph.addBlock(rewardBlock, false, store);
 
 	}
@@ -681,7 +662,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
 		Script inputScript = ScriptBuilder.createInputScript(sig);
 		input.setScriptSig(inputScript);
-		rewardBlock.solve();
 
 		// Should not go through
 		try {
@@ -708,7 +688,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = createTestTransaction();
 		rewardBlock.addTransaction(tx);
-		rewardBlock.solve();
 
 		// Should not go through
 		try {
@@ -734,7 +713,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block rewardBlock = rewardService.createMiningRewardBlock(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.getTransactions().get(0).setData(null);
-		rewardBlock.solve();
 
 		// Should not go through
 		try {
@@ -756,7 +734,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		rewardBlock.getTransactions().get(0).setData(new byte[] { 2, 3, 4 });
 
-		rewardBlock.solve();
 
 		// Should not go through
 		try {
@@ -805,13 +782,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		testBlock5.getTransactions().get(0).setData(rewardInfo5.toByteArray());
 		testBlock6.getTransactions().get(0).setData(rewardInfo6.toByteArray());
 		testBlock7.getTransactions().get(0).setData(rewardInfo7.toByteArray());
-		testBlock1.solve();
-		testBlock2.solve();
-		testBlock3.solve();
-		testBlock4.solve();
-		testBlock5.solve();
-		testBlock6.solve();
-		testBlock7.solve();
 
 		try {
 			 add(testBlock3, true, true, store);
@@ -861,7 +831,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.getTransactions().get(0).setData(null);
 
 		// solve block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -896,7 +865,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.getTransactions().get(0).setData(new byte[] { 1, 2 });
 
 		// solve block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -933,7 +901,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.getTransactions().get(0).setDataSignature(null);
 
 		// solve block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -970,7 +937,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.getTransactions().get(0).setDataSignature(new byte[] { 1, 2 });
 
 		// solve block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -1602,7 +1568,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			}
 
 			// solve block
-			block.solve();
 
 			// Should not go through
 			if (executors[i].expectsException()) {
@@ -1770,24 +1735,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block17.getTransactions().get(0).setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest17));
 		block18.getTransactions().get(0).setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest18));
 
-		block1.solve();
-		block2.solve();
-		block3.solve();
-		block4.solve();
-		block5.solve();
-		block6.solve();
-		block7.solve();
-		block8.solve();
-		block9.solve();
-		block10.solve();
-		block11.solve();
-		block12.solve();
-		block13.solve();
-		block14.solve();
-		block15.solve();
-		block16.solve();
-		block17.solve();
-		block18.solve();
 
 		// Test
 		try {
@@ -1896,7 +1843,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 
 		// save block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -1919,7 +1865,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.addTransaction(tx);
 
 		// save block
-		block.solve();
 
 		// Should not go through
 		try {
@@ -2149,7 +2094,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
 
 		// save block
-		block.solve();
 
 		// Should not go through
 		try {

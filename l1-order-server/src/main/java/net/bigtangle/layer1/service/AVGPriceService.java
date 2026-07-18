@@ -60,7 +60,7 @@ public class AVGPriceService {
             if (lock == null) {
                 store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
                 canrun = true;
-            } else if (lock.getLocktime() < System.currentTimeMillis() - scheduleConfiguration.getMiningrate()) {
+            } else if (lock.getLocktime() < System.currentTimeMillis() - 50000L) {
                 store.deleteLockobject(LOCKID);
                 store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
                 canrun = true;

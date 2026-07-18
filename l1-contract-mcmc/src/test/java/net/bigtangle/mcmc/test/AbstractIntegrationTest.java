@@ -219,7 +219,6 @@ public abstract class AbstractIntegrationTest {
 		for (int i = 0; i < num; i++) {
 			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(feeTransaction);
-			rollingBlock1.solve();
 			blockGraph.addBlock(rollingBlock1, true, store);
 			blocksAddedAll.add(rollingBlock1);
 		}
@@ -232,7 +231,6 @@ public abstract class AbstractIntegrationTest {
 		for (int i = 0; i < num; i++) {
 			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 			rollingBlock1.addTransaction(wallet.feeTransaction(null));
-			rollingBlock1.solve();
 			blockGraph.addBlock(rollingBlock1, true, store);
 			rewardWithBlock(blocksAddedAll, rollingBlock1);
 		}
@@ -245,7 +243,6 @@ public abstract class AbstractIntegrationTest {
 
 		rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
 		rollingBlock1.addTransaction(wallet.feeTransaction(null));
-		rollingBlock1.solve();
 		blockGraph.addBlock(rollingBlock1, true, store);
 		return rollingBlock1;
 	}
@@ -912,7 +909,6 @@ public abstract class AbstractIntegrationTest {
 		String dataHex = (String) result.get("dataHex");
 
 		Block adjust = networkParameters.getDefaultSerializer().makeBlock(Utils.HEX.decode(dataHex));
-		adjust.solve();
 		return adjust;
 	}
 
@@ -1551,7 +1547,6 @@ public abstract class AbstractIntegrationTest {
 				Json.jsonmapper().writeValueAsString(requestParam));
 
 		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
-		rollingBlock.solve();
 
 		OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize());
 

@@ -101,12 +101,6 @@ public class VerificationException extends RuntimeException {
         }
     }
 
-    public static class DifficultyConsensusInheritanceException extends VerificationException {
-        public DifficultyConsensusInheritanceException() {
-            super("Difficulty and consensus not inherited correctly");
-        }
-    }
-
     public static class IncorrectTransactionCountException extends VerificationException {
         public IncorrectTransactionCountException() {
             super("Incorrect tx count");

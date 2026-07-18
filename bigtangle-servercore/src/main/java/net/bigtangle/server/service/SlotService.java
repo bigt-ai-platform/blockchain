@@ -122,7 +122,6 @@ public class SlotService {
         slotData.setRandaoReveal(reveal);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
 
-        beaconBlock.solve();
         blockSaveService.saveBlock(beaconBlock, store);
 
         casperService.processSlot(slot, beaconBlock.getHash(), attestations, store);

@@ -55,7 +55,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.ConflictPossibleException;
-import net.bigtangle.exception.VerificationException.DifficultyConsensusInheritanceException;
 import net.bigtangle.exception.VerificationException.GenesisBlockDisallowedException;
 import net.bigtangle.exception.VerificationException.IncorrectTransactionCountException;
 import net.bigtangle.exception.VerificationException.InsufficientSignaturesException;
@@ -1121,28 +1120,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	public SolidityState checkRewardBlockPow(Block block, boolean throwExceptions) throws BlockStoreException {
-		try {
-			RewardInfo rewardInfo = new RewardInfo().parse(block.getTransactions().get(0).getData());
-			// Get difficulty from predecessors
-			BigInteger target = Utils.decodeCompactBits(rewardInfo.getDifficultyTargetReward());
-			// PoW check removed — always passes in PoS mode
-			boolean allOk = true;
-
-			if (!allOk)
-				return SolidityState.getFailState();
-			else
-				return SolidityState.getSuccessState();
-		} catch (Exception e) {
-			throw new UnsolidException();
-		}
-	}
-
 	public SolidityState checkChainSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
 			throws BlockStoreException {
-
-		// Check the block fulfills PoW as chain
-		checkRewardBlockPow(block, true);
 
 		// Check the chain block formally valid
 		checkFormalBlockSolidity(block, true);
@@ -1162,7 +1141,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		if (block.getLastMiningRewardBlock() != getRewardInfo(block).getChainlength()) {
 			if (throwExceptions)
-				throw new DifficultyConsensusInheritanceException();
+				throw new VerificationException("Reward chain length mismatch");
 			return SolidityState.getFailState();
 		}
 

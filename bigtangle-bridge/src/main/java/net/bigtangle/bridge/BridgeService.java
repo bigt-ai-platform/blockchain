@@ -86,7 +86,6 @@ public class BridgeService {
         tx.setToAddressInSubtangle(Address.fromBase58(networkParameters, l1BeneficiaryAddress).getHash160());
         tx.addOutput(utxo.getValue(), vaultAddress);
         b.addTransaction(tx);
-        b.solve();
 
         blockSaveService.saveBlock(b, store);
 
@@ -132,7 +131,6 @@ public class BridgeService {
             Address ownerAddress = Address.fromBase58(networkParameters, vault.getOwnerAddress());
             tx.addOutput(amount, ownerAddress);
             releaseBlock.addTransaction(tx);
-            releaseBlock.solve();
             blockSaveService.saveBlock(releaseBlock, store);
 
             store.markVaultUTXOSpent(vault.getChainId(), vault.getUtxoBlockHash(), vault.getUtxoIndex());
@@ -193,7 +191,6 @@ public class BridgeService {
         Transaction tx = new Transaction(networkParameters);
         tx.addOutput(amount, address);
         b.addTransaction(tx);
-        b.solve();
         blockSaveService.saveBlock(b, store);
     }
 

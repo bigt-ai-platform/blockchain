@@ -100,7 +100,6 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		block.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 		block.addTransaction(transaction);
 		block.addTransaction(wallet.feeTransaction(null));
-		block.solve();
 		OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), block.bitcoinSerialize());
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
@@ -269,7 +268,6 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 				Json.jsonmapper().writeValueAsString(requestParam));
 		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
 		rollingBlock.addTransaction(tx);
-		rollingBlock.solve();
 
 		byte[] res = OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize());
 		log.debug(res.toString());

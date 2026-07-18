@@ -302,7 +302,6 @@ public class Wallet extends WalletBase {
 	private Block adjustSolveAndSign(Block block) throws IOException {
 		// save block
 		try {
-			block.solve();
 			OkHttp3Util.post(getServerURL() + ReqCmd.signToken.name(), block.bitcoinSerialize());
 			return block;
 		} catch (ConnectException e) {
@@ -986,7 +985,6 @@ public class Wallet extends WalletBase {
 
 	public Block solveAndPost(Block block) throws IOException {
 		try {
-			block.solve();
 			// check the valid to time must be at least the block creation time
 			//System.out.println(Utils.HEX.encode( block.bitcoinSerialize()));
 			OkHttp3Util.post(getServerURL() + ReqCmd.saveBlock.name(), block.bitcoinSerialize());
@@ -1372,7 +1370,6 @@ public class Wallet extends WalletBase {
 			for (Transaction transaction : oldBlock.getTransactions()) {
 				block.addTransaction(transaction);
 			}
-			block.solve();
 			return block;
 		} else {
 			return oldBlock;

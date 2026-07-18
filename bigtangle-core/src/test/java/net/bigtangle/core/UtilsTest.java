@@ -40,7 +40,6 @@ public class UtilsTest {
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
-			block.solve();
 			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
 	}
@@ -54,7 +53,6 @@ public class UtilsTest {
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
-			block.solve();
 			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
 	}
@@ -69,7 +67,6 @@ public class UtilsTest {
 
 			// save block
 			Stopwatch watch = Stopwatch.createStarted();
-			block.solve(MainNetParams.get().getMaxTargetReward());
 			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
 	}
@@ -149,7 +146,6 @@ public class UtilsTest {
             b.setTime(currTime + 1);
         else
             b.setTime(minTime);
-        b.solve();
         try {
             b.verifyHeader();
         } catch (VerificationException e) {

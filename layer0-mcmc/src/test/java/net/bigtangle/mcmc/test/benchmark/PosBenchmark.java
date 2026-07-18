@@ -159,7 +159,6 @@ public class PosBenchmark extends AbstractIntegrationTest {
                 if (added == 0) break;
 
                 // Block is "solved" (nonce for MCMC)
-                tip.solve();
 
                 // Simulate attestations from other validators
                 long attStart = System.nanoTime();
