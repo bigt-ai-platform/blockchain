@@ -423,7 +423,9 @@ public class BlockStoreService {
 			throws BlockStoreException, VerificationException {
 	 
 		store.put(block);
-		cacheBlockService.cachePutBlock(block, store);
+		if (!net.bigtangle.store.DatabaseFullBlockStoreBase.isCacheSkipped()) {
+			cacheBlockService.cachePutBlock(block, store);
+		}
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyBlock(block, solidityState, false, store);
 	}

@@ -57,7 +57,7 @@ public class BlockSaveService {
 	protected ScheduleConfiguration scheduleConfiguration;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
-	public static int BATCH_TX_PER_BLOCK = 5000; // adjustable for testing
+	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
 	private static final ExecutorService parallelBatchPool = Executors.newFixedThreadPool(
 			Math.max(8, Runtime.getRuntime().availableProcessors() * 2));
 
@@ -67,11 +67,14 @@ public class BlockSaveService {
 	}
 
 	/** Batch variant: skips transaction re-verification, solidity checks,
-	 *  AND Minio object storage.  Batch blocks are transient mempool dumps
-	 *  that don't need archival — the PostgreSQL row alone suffices for
-	 *  the MCMC bridge. */
+	 *  Minio object storage, AND cache operations.  Batch blocks are
+	 *  transient mempool dumps that don't need archival — the PostgreSQL
+	 *  row alone suffices for the MCMC bridge. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
-		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch()) {
+		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch();
+		     AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
+		     AutoCloseable gzipFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipGzipForBatch();
+		     AutoCloseable copyFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.usePgCopyForBatch()) {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
 		broadcastBlock(block);
@@ -149,6 +152,9 @@ public class BlockSaveService {
 				return 0;
 			}
 			Block proto = networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
+			// Pre-fetch predecessor blocks once — avoids N redundant DB reads
+			Block predBlock = store.get(proto.getPrevBlockHash());
+			Block predBranchBlock = store.get(proto.getPrevBranchBlockHash());
 			@SuppressWarnings("unchecked")
 			CompletableFuture<Void>[] futures = new CompletableFuture[groups.size()];
 			// Pre-open one DB connection per worker thread and share them
@@ -160,8 +166,6 @@ public class BlockSaveService {
 				}
 				for (int g = 0; g < groups.size(); g++) {
 					final List<Transaction> group = groups.get(g);
-					final Sha256Hash prevHash = proto.getPrevBlockHash();
-					final Sha256Hash prevBranchHash = proto.getPrevBranchBlockHash();
 					final byte[] minerAddr = proto.getMinerAddress();
 					final BlockStoreInterface s = stores[g];
 					if (g > 0) {
@@ -172,7 +176,7 @@ public class BlockSaveService {
 					futures[g] = CompletableFuture.runAsync(() -> {
 						try {
 							Block b = Block.createBlock(networkParameters,
-									s.get(prevHash), s.get(prevBranchHash));
+									predBlock, predBranchBlock);
 							b.setMinerAddress(minerAddr);
 							for (Transaction tx : group) {
 								b.addTransaction(tx);

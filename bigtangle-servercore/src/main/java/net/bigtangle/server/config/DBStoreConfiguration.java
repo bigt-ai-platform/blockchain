@@ -81,6 +81,7 @@ public class DBStoreConfiguration {
 		config.addDataSourceProperty("cachePrepStmts", "true");
 		config.addDataSourceProperty("prepStmtCacheSize", "250");
 		config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+		config.addDataSourceProperty("reWriteBatchedInserts", "true");
 
 		config.setLeakDetectionThreshold(300000);
 		logger.debug(config.getJdbcUrl());

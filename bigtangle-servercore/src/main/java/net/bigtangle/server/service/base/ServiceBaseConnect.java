@@ -133,8 +133,10 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		}
 		if (!allUtxos.isEmpty()) {
 			blockStore.addUnspentTransactionOutput(allUtxos);
-			for (UTXO u : allUtxos)
-				cacheBlockService.evictTransactionOutput(u, blockStore);
+			if (!net.bigtangle.store.DatabaseFullBlockStoreBase.isCacheSkipped()) {
+				for (UTXO u : allUtxos)
+					cacheBlockService.evictTransactionOutput(u, blockStore);
+			}
 		}
 	}
 

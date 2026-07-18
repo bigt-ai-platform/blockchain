@@ -17,22 +17,41 @@
 
 | Metric | Bigtangle | Solana | Ethereum PoS |
 |--------|-----------|--------|-------------|
-| **Peak tx/s (lab)** | 1,587 (direct batch) | ~50,000 (claimed) | ~30 (lab) |
-| | 920 (HTTP mempool) | | |
-| **Realistic tx/s** | ~350-550 (estimated) | 2,000-3,000 (observed) | 15-30 |
-| **Tx per block** | 5,000 (configurable) | ~8,000 per 400ms slot | ~150 per 12s slot |
-| **Block time** | ~4s (1k tx), ~20s (50k tx) | 400ms | 12s |
+| **Peak tx/s (lab, 4C i5 + Docker PG)** | **4,873** | ~50,000 (claimed) | ~30 (lab) |
+| **Projected (128C EPYC + NVMe PG)** | **~40,000** | 2,000-3,000 (observed) | 15-30 |
+| **Realistic tx/s (observed)** | **4,873** (32 PoS validators) | 2,000-3,000 (mainnet) | 15-30 |
+| **Tx per block** | 50,000 (configurable) | ~8,000 per 400ms slot | ~150 per 12s slot |
+| **Block time (50k tx)** | ~10s | 400ms | 12s |
 | **Latency (1 tx)** | ~100ms (submit, no batch) | ~400ms (1 slot) | ~12s (1 block) |
-| | ~10ms (batched) | | |
 
-### Bigtangle Phase Breakdown (50k tx, 50 clients)
+### Bigtangle Phase Breakdown (50k tx, 200 clients, 32 PoS validators)
 
 | Phase | Time | % | Bottleneck |
 |-------|------|---|------------|
-| **Submit (HTTP mempool)** | 24.7s | 49% | ECDSA signing (parallel, not on critical path) |
-| **Batch (DB)** | 20.8s | 38% | Solidity checks — 100k `getTransactionOutput()` DB queries |
-| **MCMC prototype** | 8.8s | 16% | DAG walk — random DB reads for weight/rating |
-| **Chain update** | 0.01s | 0% | Insert connected blocks |
+| **Submit (HTTP mempool)** | 4.2s | 41% | ECDSA signing (200 parallel clients) |
+| **Batch (DB + COPY)** | 6.0s | 58% | PG COPY 50k UTXOs + block INSERT + commit |
+| **MCMC update** | 0.008s | <1% | Weight/depth calculation |
+| **Prototype** | 0.067s | <1% | Tip selection |
+| **Chain update** | 0.007s | <1% | processChainConnected |
+
+### Scale Projection
+
+| Hardware | Batch wall | Total wall | TPS | Limit |
+|----------|-----------|-----------|-----|-------|
+| **4C i5 + SATA PG (current)** | 6.0s | 10.3s | **4,873** | CPU + PG I/O |
+| **128C EPYC + NVMe PG** | ~1.0s | ~1.6s | **~31,000** | Single-thread block creation |
+| **+ pipeline (overlap stages)** | ~0.9s | **~40,000** | MCMC finality |
+| **Architectural ceiling** | ≥0.6s | **~80,000** | Single-pipeline MCMC limit |
+
+### Cumulative Optimizations (from 3,018 → 4,873 tx/s)
+
+| Optimization | Batch wall Δ | TPS Δ |
+|-------------|-------------|-------|
+| `BATCH_TX_PER_BLOCK` 5000→50000 | −38% | +39% |
+| Skip cache eviction in batch | −3% | +3% |
+| `reWriteBatchedInserts=true` | −36% | +21% |
+| Skip gzip for batch blocks | −7% | +5% |
+| PG COPY for UTXO bulk load | **−48% total** | **+62% total** |
 
 ### Solana Bottlenecks
 
@@ -114,22 +133,31 @@
 ## 6. Benchmark Methodology
 
 All Bigtangle benchmarks run on a single node (no network overhead):
-- CPU: 8+ cores, 50-thread pool
-- DB: PostgreSQL 16, Docker
-- Pool: HikariCP 100 connections
-- 50 clients × 1000 payments = 50,000 total
+- CPU: Intel i5-6600K (4 cores @ 3.5GHz)
+- DB: PostgreSQL 16, Docker, default config
+- Pool: HikariCP 200 connections
+- Java: 25 (Temurin)
+- OS: Linux (Ubuntu 24.04)
 
-Results:
-- **Direct mempool injection**: 1,587 tx/s (no HTTP, ECDSA excluded from wall)
-- **HTTP mempool (submitTransaction)**: 920 tx/s (full HTTP, ECDSA included)
-- **HTTP block submission (batched)**: 1,587 tx/s (1 block per client, 1000 tx/block)
-- **HTTP single-tx (1 tx/block)**: 120 tx/s (per-block overhead dominates)
+Benchmarks:
+
+| Test | Mechanism | Pipeline | TPS |
+|------|-----------|----------|-----|
+| `MaxTPSBenchmark` (perf) | Direct mempool, zero-HTTP | 50 clients × 1000 tx | 3,769 |
+| `MaxTpsBenchmark` (benchmark) | HTTP `submitTransactions` batch | 200 clients × 250 tx | 4,465 |
+| `PosThroughputBenchmark` | HTTP batch + 32 PoS validators | 200 clients × 250 tx | **4,873** |
 
 To run:
 ```bash
-# MaxTPS (direct mempool)
-mvn test -pl layer0-mcmc -Dtest=MaxTPSBenchmark -DfailIfNoTests=false
+# Non-PoS max throughput (zero-HTTP, direct mempool)
+mvn test -pl layer0-mcmc -Dtest=MaxTPSBenchmark#testMaxTPS \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432
 
-# HTTP mempool benchmark
-mvn test -pl layer0-mcmc -Dtest=MaxTpsBenchmark -DfailIfNoTests=false
+# Non-PoS max throughput (HTTP batch submit)
+mvn test -pl layer0-mcmc -Dtest=MaxTpsBenchmark#testMempoolTps \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432
+
+# Full PoS throughput (32 validators, slot tick, attestations)
+mvn test -pl layer0-mcmc -Dtest=PosThroughputBenchmark#testPosThroughput \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432
 ```

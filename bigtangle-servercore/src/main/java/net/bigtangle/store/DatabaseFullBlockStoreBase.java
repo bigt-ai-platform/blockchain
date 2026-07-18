@@ -7,6 +7,7 @@ package net.bigtangle.store;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,6 +26,9 @@ import java.util.TreeSet;
 
 import javax.annotation.Nullable;
 
+import org.postgresql.copy.CopyIn;
+import org.postgresql.copy.CopyManager;
+import org.postgresql.PGConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -797,7 +801,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			PreparedStatement s = getConnection().prepareStatement(INSERT_BLOCKS_SQL);
 			s.setBytes(1, block.getHash().getBytes());
 			s.setLong(2, block.getHeight());
-			s.setBytes(3, Gzip.compress(block.unsafeBitcoinSerialize()));
+			byte[] rawBlock = block.unsafeBitcoinSerialize();
+			s.setBytes(3, SKIP_GZIP.get() ? rawBlock : Gzip.compress(rawBlock));
 
 			s.setBytes(4, block.getPrevBlockHash().getBytes());
 			s.setBytes(5, block.getPrevBranchBlockHash().getBytes());
@@ -826,6 +831,40 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public static AutoCloseable skipMinioForBatch() {
 		SKIP_MINIO.set(true);
 		return () -> SKIP_MINIO.remove();
+	}
+
+	/** Thread-local flag to skip cache operations (put/evict) during batch.
+	 *  Batch blocks are transient mempool dumps — caching is unnecessary. */
+	private static final ThreadLocal<Boolean> SKIP_CACHE = ThreadLocal.withInitial(() -> false);
+
+	public static AutoCloseable skipCacheForBatch() {
+		SKIP_CACHE.set(true);
+		return () -> SKIP_CACHE.remove();
+	}
+
+	public static boolean isCacheSkipped() {
+		return SKIP_CACHE.get();
+	}
+
+	/** Thread-local flag to skip gzip compression during batch.
+	 *  Batch blocks are transient mempool dumps — gzip adds CPU cost
+	 *  with no benefit since the blocks are never transmitted over the
+	 *  network or archived to MinIO. */
+	private static final ThreadLocal<Boolean> SKIP_GZIP = ThreadLocal.withInitial(() -> false);
+
+	public static AutoCloseable skipGzipForBatch() {
+		SKIP_GZIP.set(true);
+		return () -> SKIP_GZIP.remove();
+	}
+
+	/** Thread-local flag to use PostgreSQL COPY instead of batch INSERT
+	 *  for UTXO bulk loading.  COPY streams raw data directly to PG
+	 *  without SQL parsing, 2-5x faster for large batches. */
+	private static final ThreadLocal<Boolean> USE_PG_COPY = ThreadLocal.withInitial(() -> false);
+
+	public static AutoCloseable usePgCopyForBatch() {
+		USE_PG_COPY.set(true);
+		return () -> USE_PG_COPY.remove();
 	}
 
 	public void put(Block block) throws BlockStoreException {
@@ -1099,14 +1138,20 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	@Override
 	public void addUnspentTransactionOutput(List<UTXO> utxos) throws BlockStoreException {
+		if (USE_PG_COPY.get() && conn instanceof PGConnection) {
+			addUnspentTransactionOutputCopy(utxos);
+			return;
+		}
+		addUnspentTransactionOutputBatch(utxos);
+	}
 
+	private void addUnspentTransactionOutputBatch(List<UTXO> utxos) throws BlockStoreException {
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(INSERT_OUTPUTS_SQL);
 			for (UTXO out : utxos) {
 				if (out.getValue().isPositive()) {
 					s.setBytes(1, out.getTxHash().getBytes());
-					// index is actually an unsigned int
 					s.setLong(2, out.getIndex());
 					s.setBytes(3, out.getValue().getValue().toByteArray());
 					s.setBytes(4, out.getScript().getProgram());
@@ -1137,8 +1182,74 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 					if (s.getConnection() != null)
 						s.close();
 				} catch (SQLException e) {
-					// throw new BlockStoreException(e);
 				}
+			}
+		}
+	}
+
+	/** COPY-based bulk load — streams UTXO rows directly to PostgreSQL
+	 *  without SQL parsing overhead (~3-5x faster than batch INSERT). */
+	private void addUnspentTransactionOutputCopy(List<UTXO> utxos) throws BlockStoreException {
+		StringBuilder sb = new StringBuilder(65536);
+		try {
+			CopyManager cm = ((PGConnection) conn).getCopyAPI();
+			CopyIn copyIn = cm.copyIn(
+					"COPY outputs (hash, outputindex, coinvalue, scriptbytes, toaddress, addresstargetable,"
+					+ " coinbase, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,"
+					+ " time, spendpendingtime, minimumsign) FROM STDIN");
+			for (UTXO out : utxos) {
+				if (!out.getValue().isPositive()) continue;
+				sb.setLength(0);
+				copyHexBytes(sb, out.getTxHash().getBytes()); sb.append('\t');
+				sb.append(out.getIndex()); sb.append('\t');
+				copyHexBytes(sb, out.getValue().getValue().toByteArray()); sb.append('\t');
+				copyHexBytes(sb, out.getScript().getProgram()); sb.append('\t');
+				copyTextString(sb, out.getAddress()); sb.append('\t');
+				sb.append(out.getScript().getScriptType().ordinal()); sb.append('\t');
+				sb.append(out.isCoinbase() ? 't' : 'f'); sb.append('\t');
+				if (out.getBlockHash() != null) {
+					copyHexBytes(sb, out.getBlockHash().getBytes());
+				}
+				sb.append('\t');
+				sb.append(Utils.HEX.encode(out.getValue().getTokenid())); sb.append('\t');
+				copyTextString(sb, out.getFromaddress()); sb.append('\t');
+				copyTextString(sb, out.getMemo()); sb.append('\t');
+				sb.append(out.isSpent() ? 't' : 'f'); sb.append('\t');
+				sb.append(out.isConfirmed() ? 't' : 'f'); sb.append('\t');
+				sb.append(out.isSpendPending() ? 't' : 'f'); sb.append('\t');
+				sb.append(out.getTime()); sb.append('\t');
+				sb.append(out.getSpendPendingTime()); sb.append('\t');
+				sb.append(out.getMinimumsign());
+				sb.append('\n');
+				copyIn.writeToCopy(sb.toString().getBytes(StandardCharsets.UTF_8),
+						0, sb.length());
+			}
+			copyIn.endCopy();
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	/** Append a bytea value in PostgreSQL hex format (\x...) for COPY. */
+	private static void copyHexBytes(StringBuilder sb, byte[] data) {
+		sb.append("\\x");
+		sb.append(Utils.HEX.encode(data));
+	}
+
+	/** Append a text value for COPY, escaping special characters and handling null. */
+	private static void copyTextString(StringBuilder sb, String s) {
+		if (s == null) {
+			sb.append("\\N");
+			return;
+		}
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			switch (c) {
+			case '\\': sb.append("\\\\"); break;
+			case '\t': sb.append("\\t"); break;
+			case '\n': sb.append("\\n"); break;
+			case '\r': sb.append("\\r"); break;
+			default:   sb.append(c);
 			}
 		}
 	}
