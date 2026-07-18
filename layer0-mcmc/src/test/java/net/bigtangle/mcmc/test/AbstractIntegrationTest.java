@@ -122,6 +122,7 @@ import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.mcmc.service.TipsService;
+import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
@@ -283,6 +284,13 @@ public abstract class AbstractIntegrationTest {
 	public void resetStore() throws BlockStoreException {
 
 		store.resetStore();
+		// Genesis block must exist for MCMC + HTTP endpoints
+		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+		genesis.setLastMiningRewardBlock(0);
+		genesis.setBlockType(BlockType.BLOCKTYPE_INITIAL);
+		store.put(genesis);
+		store.insertTipsQueue(new TipsQueue(genesis.getHash().getBytes(),
+				genesis.unsafeBitcoinSerialize(), genesis.getHeight(), genesis.getTimeSeconds()));
 		cacheBlockService.evictOutputs();
 		cacheBlockService.evictBlock();
 		cacheBlockService.evictAccountBalance();
