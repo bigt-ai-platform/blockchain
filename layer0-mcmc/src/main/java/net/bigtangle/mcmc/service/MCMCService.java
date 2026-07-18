@@ -181,7 +181,7 @@ public class MCMCService {
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
 				tipsToApprove.getRight().getBlock());
-		b.setMinerAddress(Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
+		b.setMinerAddress(Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG").getHash160());
 		if(watch.elapsed(TimeUnit.MILLISECONDS)>2000)
 		log.debug("calcNewBlockPrototype finish MILLISECONDS {} ", watch.elapsed(TimeUnit.MILLISECONDS) ) ;
 		TipsQueue t= new TipsQueue(b.getHash().getBytes(), b.unsafeBitcoinSerialize(), b.getHeight(), b.getTimeSeconds() );

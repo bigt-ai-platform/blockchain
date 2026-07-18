@@ -80,7 +80,7 @@ public abstract class AbstractStreamHandler {
     private String getApplicationId() {
         String consumerIdSuffix=kafkaConfiguration.getConsumerIdSuffix();
         if(consumerIdSuffix==null || "".equals(consumerIdSuffix )) {
-            consumerIdSuffix= serverConfiguration.getMineraddress(); 
+            consumerIdSuffix= "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG"; 
         }
         return BlockStreamHandler.class.getCanonicalName() + "_" + this.getClass().getSimpleName() + "_"
                 + consumerIdSuffix;

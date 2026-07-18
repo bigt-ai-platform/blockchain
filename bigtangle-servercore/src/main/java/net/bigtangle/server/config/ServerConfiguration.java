@@ -275,15 +275,6 @@ public class ServerConfiguration {
      * Gets the mining reward address where block rewards are sent.
      * @return The miner's reward address
      */
-    public String getMineraddress() {
-        return "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG";
-    }
-
-    /** @deprecated PoW-era setter — address is fixed */
-    @Deprecated
-    public void setMineraddress(String mineraddress) {
-    }
-
     /**
      * Gets the current server software version.
      * @return The version string in semver format

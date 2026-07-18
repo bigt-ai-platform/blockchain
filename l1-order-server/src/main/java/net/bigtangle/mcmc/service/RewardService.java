@@ -216,7 +216,7 @@ public class RewardService {
 		block.setBlockType(BlockType.BLOCKTYPE_BEACON);
 		block.setHeight(Math.max(prevRewardBlock.getHeight(), Math.max(r1.getHeight(), r2.getHeight())) + 1);
 		block.setMinerAddress(
-				Address.fromBase58(networkParameters, serverConfiguration.getMineraddress()).getHash160());
+				Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG").getHash160());
 
 		RewardBuilderResult result = serviceBase.calcRewardInfo(prevTrunk, prevBranch, prevRewardHash, currentTime, store);
 

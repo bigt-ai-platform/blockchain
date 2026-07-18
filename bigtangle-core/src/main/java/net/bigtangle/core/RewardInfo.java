@@ -23,9 +23,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
     private long difficultyTargetReward;
     private Sha256Hash ordermatchingResult;
     private Sha256Hash contractResult;
-    /** @deprecated PoW-era field, kept for serialization compatibility. Always null in PoS mode. */
-    @Deprecated
-    private Sha256Hash miningResult;
     
     public RewardInfo() {
     }
@@ -137,9 +134,7 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             dos.writeBoolean(contractResult != null);
             if (contractResult != null)
                 dos.write(contractResult.getBytes());
-            dos.writeBoolean(miningResult != null);
-            if (miningResult != null)
-                dos.write(miningResult.getBytes());
+
             
             dos.close();
         } catch (IOException e) {
@@ -188,14 +183,7 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             dis.readFully(hbuf);
             r.contractResult = Sha256Hash.wrap(hbuf);
         }
-        
-        boolean hasMiningReward = dis.readBoolean();
-        if (hasMiningReward) {
-            hbuf = new byte[32];
-            dis.readFully(hbuf);
-            r.miningResult = Sha256Hash.wrap(hbuf);
-        } 
-        
+
         dis.close();
         bain.close();
         return r;

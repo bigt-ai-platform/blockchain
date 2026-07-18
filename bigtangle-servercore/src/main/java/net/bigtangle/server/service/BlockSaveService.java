@@ -85,7 +85,7 @@ public class BlockSaveService {
 			if ("".equalsIgnoreCase(kafkaConfiguration.getBootstrapServers()))
 				return;
 			KafkaMessageProducer kafkaMessageProducer = new KafkaMessageProducer(kafkaConfiguration);
-			kafkaMessageProducer.sendMessage(block.bitcoinSerialize(), serverConfiguration.getMineraddress());
+			kafkaMessageProducer.sendMessage(block.bitcoinSerialize(), "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG");
 		} catch (InterruptedException | ExecutionException | IOException e) {
 			logger.warn(block.toString(), e);
 		}
