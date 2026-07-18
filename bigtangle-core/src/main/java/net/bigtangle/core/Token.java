@@ -4,6 +4,11 @@
  *******************************************************************************/
 package net.bigtangle.core;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 
 import net.bigtangle.params.NetworkParameters;
@@ -234,6 +239,82 @@ public class Token extends SpentBlock implements java.io.Serializable {
     public Boolean isTokenDomainname() {
         return tokentype == TokenType.domainname.ordinal();  
     }
+
+    @Override
+    public byte[] toByteArray() {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try {
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.write(super.toByteArray());
+            Utils.writeNBytesString(dos, tokenid);
+            dos.writeLong(tokenindex);
+            Utils.writeNBytesString(dos, tokenname);
+            Utils.writeNBytesString(dos, description);
+            Utils.writeNBytesString(dos, domainName);
+            Utils.writeNBytesString(dos, domainNameBlockHash);
+            dos.writeInt(signnumber);
+            dos.writeInt(tokentype);
+            dos.writeBoolean(tokenstop);
+            dos.writeBoolean(prevblockhash != null);
+            if (prevblockhash != null) dos.write(prevblockhash.getBytes());
+            Utils.writeNBytes(dos, amount.toByteArray());
+            dos.writeInt(decimals);
+            Utils.writeNBytesString(dos, classification);
+            Utils.writeNBytesString(dos, language);
+            dos.writeBoolean(revoked != null && revoked);
+            if (tokenKeyValues != null) {
+                byte[] kvBytes = tokenKeyValues.toByteArray();
+                dos.writeInt(kvBytes.length);
+                dos.write(kvBytes);
+            } else {
+                dos.writeInt(0);
+            }
+            dos.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return baos.toByteArray();
+    }
+
+    @Override
+    public Token parse(byte[] buf) throws IOException {
+        ByteArrayInputStream bain = new ByteArrayInputStream(buf);
+        DataInputStream dis = new DataInputStream(bain);
+        parseDIS(dis);
+        dis.close();
+        bain.close();
+        return this;
+    }
+
+    @Override
+    public Token parseDIS(DataInputStream dis) throws IOException {
+        super.parseDIS(dis);
+        tokenid = Utils.readNBytesString(dis);
+        tokenindex = dis.readLong();
+        tokenname = Utils.readNBytesString(dis);
+        description = Utils.readNBytesString(dis);
+        domainName = Utils.readNBytesString(dis);
+        domainNameBlockHash = Utils.readNBytesString(dis);
+        signnumber = dis.readInt();
+        tokentype = dis.readInt();
+        tokenstop = dis.readBoolean();
+        if (dis.readBoolean()) {
+            prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
+        }
+        amount = new BigInteger(Utils.readNBytes(dis));
+        decimals = dis.readInt();
+        classification = Utils.readNBytesString(dis);
+        language = Utils.readNBytesString(dis);
+        revoked = dis.readBoolean();
+        int kvLen = dis.readInt();
+        if (kvLen > 0) {
+            byte[] kvBytes = new byte[kvLen];
+            dis.readFully(kvBytes);
+            tokenKeyValues = TokenKeyValues.parse(kvBytes);
+        }
+        return this;
+    }
+
     public static Token buildSimpleTokenInfo(boolean confirmed, Sha256Hash prevblockhash, String tokenid,
             String tokenname, String description, int signnumber, long tokenindex, BigInteger amount, boolean tokenstop,
             TokenKeyValues tokenKeyValues, Boolean revoked, String language, String classification, int tokentype,

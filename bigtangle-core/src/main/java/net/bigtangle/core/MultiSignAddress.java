@@ -5,6 +5,12 @@
 
 package net.bigtangle.core;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 public class MultiSignAddress implements java.io.Serializable {
 
     private static final long serialVersionUID = -2956933642847534834L;
@@ -76,6 +82,43 @@ public class MultiSignAddress implements java.io.Serializable {
     }
 
     public MultiSignAddress() {
+    }
+
+    public byte[] toByteArray() {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            Utils.writeNBytesString(dos, tokenid);
+            Utils.writeNBytesString(dos, address);
+            Utils.writeNBytesString(dos, pubKeyHex);
+            dos.writeInt(posIndex);
+            dos.writeInt(tokenHolder);
+            dos.writeBoolean(blockhash != null);
+            if (blockhash != null) dos.write(blockhash.getBytes());
+            dos.close();
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static MultiSignAddress parse(byte[] buf) throws IOException {
+        return parseDIS(new DataInputStream(new ByteArrayInputStream(buf)));
+    }
+
+    public static MultiSignAddress parseDIS(DataInputStream dis) throws IOException {
+        MultiSignAddress m = new MultiSignAddress();
+        m.tokenid = Utils.readNBytesString(dis);
+        m.address = Utils.readNBytesString(dis);
+        m.pubKeyHex = Utils.readNBytesString(dis);
+        m.posIndex = dis.readInt();
+        m.tokenHolder = dis.readInt();
+        if (dis.readBoolean()) {
+            byte[] hbuf = new byte[32];
+            dis.readFully(hbuf);
+            m.blockhash = Sha256Hash.wrap(hbuf);
+        }
+        return m;
     }
 
     @Override

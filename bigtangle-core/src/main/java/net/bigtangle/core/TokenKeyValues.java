@@ -4,12 +4,13 @@
  *******************************************************************************/
 package net.bigtangle.core;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-
-import net.bigtangle.utils.Json;
 
 public class TokenKeyValues implements java.io.Serializable {
 	/**
@@ -29,17 +30,39 @@ public class TokenKeyValues implements java.io.Serializable {
 
 	public byte[] toByteArray() {
 		try {
-			String jsonStr = Json.jsonmapper().writeValueAsString(this);
-			return jsonStr.getBytes(StandardCharsets.UTF_8);
-		} catch (Exception e) {
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			DataOutputStream dos = new DataOutputStream(baos);
+			List<KeyValue> list = keyvalues;
+			if (list == null) {
+				dos.writeInt(0);
+			} else {
+				dos.writeInt(list.size());
+				for (KeyValue kv : list) {
+					byte[] bytes = kv.toByteArray();
+					dos.writeInt(bytes.length);
+					dos.write(bytes);
+				}
+			}
+			dos.close();
+			return baos.toByteArray();
+		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
- 
 	}
 
 	public static TokenKeyValues parse(byte[] buf) throws IOException {
-		String jsonStr = new String(buf);
-		return Json.jsonmapper().readValue(jsonStr, TokenKeyValues.class);
+		TokenKeyValues tkv = new TokenKeyValues();
+		if (buf == null || buf.length == 0) return tkv;
+		DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buf));
+		int size = dis.readInt();
+		for (int i = 0; i < size; i++) {
+			int len = dis.readInt();
+			byte[] bytes = new byte[len];
+			dis.readFully(bytes);
+			tkv.addKeyvalue(new KeyValue().parse(bytes));
+		}
+		dis.close();
+		return tkv;
 	}
 
 	public List<KeyValue> getKeyvalues() {

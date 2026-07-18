@@ -5,17 +5,15 @@
 
 package net.bigtangle.core;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-import net.bigtangle.utils.Json;
-
 public class TokenInfo extends DataClass implements java.io.Serializable {
-
-    // TODO drop string from everywhere, stop using Sha256Hash.wrap, instead use
-    // Sha256Hash, stop using jsonserialization!
 
     private static final long serialVersionUID = 1554582498768357964L;
 
@@ -24,23 +22,55 @@ public class TokenInfo extends DataClass implements java.io.Serializable {
 
     public byte[] toByteArray() {
         try {
-            String jsonStr = Json.jsonmapper().writeValueAsString(this);
-            return jsonStr.getBytes(StandardCharsets.UTF_8);
-        } catch (Exception e) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            if (token != null) {
+                byte[] tBytes = token.toByteArray();
+                dos.writeInt(tBytes.length);
+                dos.write(tBytes);
+            } else {
+                dos.writeInt(0);
+            }
+            if (multiSignAddresses != null) {
+                dos.writeInt(multiSignAddresses.size());
+                for (MultiSignAddress msa : multiSignAddresses) {
+                    byte[] mBytes = msa.toByteArray();
+                    dos.writeInt(mBytes.length);
+                    dos.write(mBytes);
+                }
+            } else {
+                dos.writeInt(0);
+            }
+            dos.close();
+            return baos.toByteArray();
+        } catch (IOException e) {
             throw new RuntimeException(e);
-        } 
+        }
     }
 
     public TokenInfo parse(byte[] buf) throws IOException {
-        String jsonStr = new String(buf);
-        return Json.jsonmapper().readValue(jsonStr, TokenInfo.class);
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(buf));
+        int tLen = dis.readInt();
+        if (tLen > 0) {
+            byte[] tBytes = new byte[tLen];
+            dis.readFully(tBytes);
+            this.token = new Token().parse(tBytes);
+        }
+        int mSize = dis.readInt();
+        this.multiSignAddresses = new ArrayList<>();
+        for (int i = 0; i < mSize; i++) {
+            int mLen = dis.readInt();
+            byte[] mBytes = new byte[mLen];
+            dis.readFully(mBytes);
+            this.multiSignAddresses.add(MultiSignAddress.parse(mBytes));
+        }
+        dis.close();
+        return this;
     }
 
-    //already check and is not allowed to have IOException
     public TokenInfo parseChecked(byte[] buf) {
-        String jsonStr = new String(buf);
         try {
-            return Json.jsonmapper().readValue(jsonStr, TokenInfo.class);
+            return parse(buf);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
