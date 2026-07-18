@@ -48,14 +48,21 @@ echo "=== Running core tests (no DB needed) ==="
 mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml"
 echo "=== Core tests passed ==="
 
+echo "=== Building all modules (serial) ==="
+# Build all server modules + core dependencies first (without tests)
+# This ensures L1 test modules get fresh JARs for MinioService etc.
+mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
+  -pl layer0-server,layer0-mcmc,l1-order-server,l1-contract-server,l1-pai-server 2>&1 | tail -1
+echo "=== All modules built ==="
+
 echo "=== Running L0 and L1 tests in parallel ==="
-mvn test -pl layer0-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
+mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
-mvn test -pl l1-order-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
+mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
 ORDER_PID=$!
-mvn test -pl l1-contract-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
+mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
 CONTRACT_PID=$!
-mvn test -pl l1-pai-mcmc -am -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai &
+mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai &
 PAI_PID=$!
 
 EXIT_CODE=0
