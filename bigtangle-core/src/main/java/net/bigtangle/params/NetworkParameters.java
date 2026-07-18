@@ -170,13 +170,14 @@ public abstract class NetworkParameters {
 	 * How many bytes are required to represent a block header WITHOUT the trailing
 	 * 00 length byte.
 	 */
-	public static final int HEADER_SIZE = 88 // bitcoin
+	public static final int HEADER_SIZE = 72 // bitcoin (excluding nonce + difficultyTarget)
 			+ 32 // additional branch prev block
 			+ 4 // time from int to long
 			+ 8 // sequence (lastMiningReward) long
 			+ 4 // blockType
 			+ 8 // height
-	;
+			+ 0 // (nonce, difficultyTarget, minerAddress removed — PoS mode)
+			;
 	// max time of an order in seconds
 	public static final long ORDER_TIMEOUT_MAX = 8 * 60 * 60;
 

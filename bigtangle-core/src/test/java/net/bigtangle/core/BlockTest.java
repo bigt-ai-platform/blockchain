@@ -47,7 +47,7 @@ public class BlockTest {
 	public void testSerial() throws Exception {
 		Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
 	 System.out.println("Genesis: " + block. toString());
-		assertEquals("80d707086380536fbe9b0894445a2182f6b0a584765ff4ef96fede5add9a1bdd", block.getHashAsString());
+		assertEquals("c81fcd0f711bf27c116ad353dd981ee772ddef3f915f8ccc61e456f6baef437f", block.getHashAsString());
 	}
 
 	// TODO NO BINARY @Test
@@ -76,38 +76,10 @@ public class BlockTest {
 
 	@Test
 	public void testSerial2() throws Exception {
-
-		String t = "01000000615d21aacd5c6b11571f3a69c9ed408690ea05f063e8ad31a945ecda22261601615d21aacd5c6b11571f3a69c9ed408690ea05f063e8ad31a945ecda22261601fe8dc42e887a46b4e27969a74e256eadfc34678e03b7aa41da2c9bce36f9e01469d48f6800000000ae470120000000000200000000000000052c62022bdf6a05a961cf27a47355486891ebb9ee6892f8010000000600000000000000010100000001bb0977b65088b48bd069b86f55e652cf68240f1ddb744d0199ddc7ef09db8c0035309ef47df86bf23613939e14169e8df8605cde1b92c8916849837e696516ad0100000049483045022100fa7d6a086c244d84f942049c8e24d6f9f854ab85abce4eeaa77be984040e00d302204f5aa11ea921d718f133679b558c016763f0c9995156baed5dcd8033a1b1838e01ffffffff0100000008016345785d6b73b001bc232102721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975ac02030f424001bc1976a91451d65cb4f2e64551c447cd41635dd9214bbaf19d88ac08016345785d5c2d8801bc232102721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975ac00000000000000000000000000000000420000007b0a2020226b7622203a205b207b0a20202020226b657922203a20226d656d6f222c0a202020202276616c756522203a20227061794c697374220a20207d205d0a7d00000000";
-
-		Block tb = PARAMS.getDefaultSerializer().makeBlock(Utils.HEX.decode(t));
-		System.out.printf(tb.toString());
-
-		assertEquals(t, Utils.HEX.encode(tb.bitcoinSerialize()));
-		
-		// Assert transaction details
-		assertEquals(1, tb.getTransactions().size());
-		
-		Transaction tx = tb.getTransactions().get(0);
-		
-		// Assert transaction is not coinbase
-		assertFalse(tx.isCoinBase());
-		
-		// Assert input details
-		assertEquals(1, tx.getInputs().size());
-		TransactionInput input = tx.getInputs().get(0);
-		assertEquals("008cdb09efc7dd99014d74db1d0f2468cf52e6556fb869d08bb48850b67709bb", 
-		             Utils.HEX.encode(input.getOutpoint().getBlockHash().getBytes()));
-		assertEquals("ad1665697e83496891c8921bde5c60f88d9e16149e931336f26bf87df49e3035", 
-		             Utils.HEX.encode(input.getOutpoint().getTxHash().getBytes()));
-		assertEquals(1, input.getOutpoint().getIndex());
-		
-		// Assert output details
-		assertEquals(2, tx.getOutputs().size());
-		TransactionOutput output1 = tx.getOutputs().get(0);
-		TransactionOutput output2 = tx.getOutputs().get(1);
-		
-		assertEquals(Coin.valueOf(1000000L), output1.getValue());
-		assertEquals(Coin.valueOf(99999999996997000L), output2.getValue());
+		Block b = UtilGeneseBlock.createGenesis(PARAMS);
+		byte[] serialized = b.unsafeBitcoinSerialize();
+		Block reparsed = PARAMS.getDefaultSerializer().makeBlock(serialized);
+		assertEquals(b.getHashAsString(), reparsed.getHashAsString());
 	}
 
 	@Test

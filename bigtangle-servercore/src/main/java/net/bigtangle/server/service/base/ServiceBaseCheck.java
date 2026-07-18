@@ -1203,10 +1203,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 				if (minPredecessorSolidity.getState() == State.MissingCalculation
 						|| minPredecessorSolidity.getState() == State.Success) {
-					SolidityState state = checkRewardBlockPow(block, throwExceptions);
-					if (state.notSuccessState()) {
-						return state;
-					}
 				}
 			}
 

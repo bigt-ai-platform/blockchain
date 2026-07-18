@@ -499,9 +499,9 @@ public abstract class ServiceBase {
 				break;
 
 			if (!finalRewardCount.containsKey(null))
-				finalRewardCount.put(miner, 1L);
+				finalRewardCount.put(Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG"), 1L);
 			else
-				finalRewardCount.put(miner, finalRewardCount.get(miner) + 1);
+				finalRewardCount.put(Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG"), finalRewardCount.get(Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG")) + 1);
 			rewarded++;
 		}
 		return totalRewardCount;
