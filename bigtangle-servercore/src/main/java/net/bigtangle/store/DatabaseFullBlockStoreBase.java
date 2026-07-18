@@ -806,7 +806,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			s.setBytes(4, block.getPrevBlockHash().getBytes());
 			s.setBytes(5, block.getPrevBranchBlockHash().getBytes());
-			s.setLong(6, block.getBlockType().ordinal());
+			s.setString(6, block.getBlockType().name());
 
 			int j = 1;
 			s.setLong(j + 6, blockEvaluation.getMilestone());
@@ -830,6 +830,17 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public static AutoCloseable skipMinioForBatch() {
 		SKIP_MINIO.set(true);
 		return () -> SKIP_MINIO.remove();
+	}
+
+	/** Convert a blocktype DB value (String name or legacy int ordinal) to int ordinal. */
+	protected static int blockTypeFromDB(ResultSet rs) throws SQLException {
+		String bt = rs.getString("blocktype");
+		if (bt == null) return 0;
+		try {
+			return net.bigtangle.core.BlockType.valueOf(bt).ordinal();
+		} catch (IllegalArgumentException e) {
+			return Integer.parseInt(bt);
+		}
 	}
 
 	/** Thread-local flag to skip cache operations (put/evict) during batch.
@@ -2400,7 +2411,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 					BlockEvaluationDisplay blockEvaluation = BlockEvaluationDisplay.build(
 							Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
 							resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
-							resultSet.getLong("inserttime"), resultSet.getInt("blocktype"), resultSet.getLong("solid"),
+						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 							resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
 					blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
 					result.add(blockEvaluation);
