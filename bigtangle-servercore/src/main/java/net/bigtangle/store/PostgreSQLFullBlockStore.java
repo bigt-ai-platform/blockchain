@@ -41,13 +41,12 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    block BYTEA NOT NULL,\n"
             + "    prevblockhash  BYTEA NOT NULL,\n"
             + "    prevbranchblockhash  BYTEA NOT NULL,\n" 
-            + "    mineraddress BYTEA NOT NULL,\n"
             + "    blocktype bigint NOT NULL,\n" 
             //reward block chain length is here milestone
             + "    milestone bigint NOT NULL,\n"
             + "    milestonelastupdate bigint NOT NULL,\n"  
             + "    confirmed boolean NOT NULL,\n"
-     
+      
             //solid is result of validation of the block, 
             + "    solid bigint NOT NULL,\n"
             + "    inserttime bigint NOT NULL,\n"

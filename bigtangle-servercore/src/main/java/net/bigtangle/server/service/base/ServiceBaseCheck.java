@@ -1134,11 +1134,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		if (prevBranchBlock == null)
 			SolidityState.from(block.getPrevBranchBlockHash(), true);
 
-		long difficulty = calculateNextBlockDifficulty(getRewardInfo(block));
-		if (difficulty != block.getDifficultyTarget()) {
-			throw new VerificationException("calculateNextBlockDifficulty does not match.");
-		}
-
 		if (block.getLastMiningRewardBlock() != getRewardInfo(block).getChainlength()) {
 			if (throwExceptions)
 				throw new VerificationException("Reward chain length mismatch");

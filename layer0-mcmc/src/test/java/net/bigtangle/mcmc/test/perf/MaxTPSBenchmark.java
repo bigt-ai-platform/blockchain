@@ -120,8 +120,6 @@ public class MaxTPSBenchmark extends AbstractIntegrationTest {
         Block tipProto = cacheBlockPrototypeService.getBlockPrototype(store);
         Block tipParent = store.get(tipProto.getPrevBlockHash());
         Block tipBranchParent = store.get(tipProto.getPrevBranchBlockHash());
-        byte[] tipMinerAddr = tipProto.getMinerAddress();
-
         AtomicLong totalEcdsaNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
@@ -153,7 +151,6 @@ public class MaxTPSBenchmark extends AbstractIntegrationTest {
                     totalEcdsaNs.addAndGet(System.nanoTime() - t0);
 
                     Block tip = Block.createBlock(networkParameters, tipParent, tipBranchParent);
-                    tip.setMinerAddress(tipMinerAddr);
                     for (Transaction tx : txs) {
                         tip.addTransaction(tx);
                     }

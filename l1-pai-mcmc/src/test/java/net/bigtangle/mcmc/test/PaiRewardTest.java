@@ -23,7 +23,6 @@ public class PaiRewardTest extends AbstractIntegrationTest {
             Block b = Block.createBlock(networkParameters,
                     tipsService.getValidatedBlockPair(store).getLeft().getBlock(),
                     tipsService.getValidatedBlockPair(store).getRight().getBlock());
-            b.solve();
             blockGraph.addBlock(b, true, store);
             addedBlocks.add(b);
         }
@@ -50,7 +49,6 @@ public class PaiRewardTest extends AbstractIntegrationTest {
                 Block b = Block.createBlock(networkParameters,
                         tipsService.getValidatedBlockPair(store).getLeft().getBlock(),
                         tipsService.getValidatedBlockPair(store).getRight().getBlock());
-                b.solve();
                 blockGraph.addBlock(b, true, store);
                 addedBlocks.add(b);
             }

@@ -172,9 +172,8 @@ public abstract class NetworkParameters {
 	 */
 	public static final int HEADER_SIZE = 88 // bitcoin
 			+ 32 // additional branch prev block
-			+ 2 * 4 // time and difftarget from int to long
+			+ 4 // time from int to long
 			+ 8 // sequence (lastMiningReward) long
-			+ 20 // miner address
 			+ 4 // blockType
 			+ 8 // height
 	;

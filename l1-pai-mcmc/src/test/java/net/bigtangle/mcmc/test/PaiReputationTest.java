@@ -22,7 +22,6 @@ public class PaiReputationTest extends AbstractIntegrationTest {
             Block b = Block.createBlock(networkParameters,
                     tipsService.getValidatedBlockPair(store).getLeft().getBlock(),
                     tipsService.getValidatedBlockPair(store).getRight().getBlock());
-            b.solve();
             blockGraph.addBlock(b, true, store);
             addedBlocks.add(b);
         }
@@ -47,18 +46,15 @@ public class PaiReputationTest extends AbstractIntegrationTest {
 
         // Create two parallel branches
         Block branchA = Block.createBlock(networkParameters, genesisTip, genesisTip);
-        branchA.solve();
         blockGraph.addBlock(branchA, true, store);
         addedBlocks.add(branchA);
 
         Block branchB = Block.createBlock(networkParameters, genesisTip, genesisTip);
-        branchB.solve();
         blockGraph.addBlock(branchB, true, store);
         addedBlocks.add(branchB);
 
         // Merge branches
         Block merged = Block.createBlock(networkParameters, branchA, branchB);
-        merged.solve();
         blockGraph.addBlock(merged, true, store);
         addedBlocks.add(merged);
 

@@ -529,13 +529,6 @@ public class DispatcherController implements DisposableBean {
     private void saveBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
             BlockStoreInterface store) throws Exception {
         Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-        if (!Arrays.equals(block.getMinerAddress(),
-                Address.fromBase58(networkParameters, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG").getHash160())) {
-            AbstractResponse resp = ErrorResponse.create(101);
-            resp.setErrorcode(403);
-            resp.setMessage("server Mineraddress " + "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG");
-            this.outPrintJSONString(httpServletResponse, resp, watch, "saveBlock");
-        }
         if (serverConfiguration.getMyserverblockOnly()) {
             if (!blockService.existMyserverblocks(block.getPrevBlockHash(), store)) {
                 AbstractResponse resp = ErrorResponse.create(101);

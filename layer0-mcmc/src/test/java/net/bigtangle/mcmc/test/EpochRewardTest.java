@@ -134,7 +134,6 @@ public class EpochRewardTest extends AbstractIntegrationTest {
                 store.get(proto.getPrevBlockHash()),
                 store.get(proto.getPrevBranchBlockHash()));
         depositBlock.setBlockType(BlockType.BLOCKTYPE_BEACON);
-        depositBlock.setMinerAddress(key.getPubKey());
         store.put(depositBlock);
         store.saveStakeDeposit(new StakeRecord(key.getPubKey(), amount, null));
     }

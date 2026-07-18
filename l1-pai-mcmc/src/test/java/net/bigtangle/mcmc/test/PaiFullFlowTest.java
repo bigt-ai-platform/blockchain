@@ -20,7 +20,6 @@ public class PaiFullFlowTest extends AbstractIntegrationTest {
             Block b = Block.createBlock(networkParameters,
                     tipsService.getValidatedBlockPair(store).getLeft().getBlock(),
                     tipsService.getValidatedBlockPair(store).getRight().getBlock());
-            b.solve();
             blockGraph.addBlock(b, true, store);
             addedBlocks.add(b);
         }
@@ -45,7 +44,6 @@ public class PaiFullFlowTest extends AbstractIntegrationTest {
         for (int i = 0; i < 20; i++) {
             Block b = Block.createBlock(networkParameters, prev, prev);
             b.setTime(prev.getTimeSeconds() + 1);
-            b.solve();
             blockGraph.addBlock(b, true, store);
             addedBlocks.add(b);
             prev = b;

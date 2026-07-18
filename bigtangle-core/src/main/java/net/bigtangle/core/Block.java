@@ -25,11 +25,9 @@ import static net.bigtangle.core.Sha256Hash.hashTwice;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Random;
 
 import javax.annotation.Nullable;
 
@@ -75,10 +73,7 @@ public class Block extends Message {
 	private Sha256Hash prevBranchBlockHash; // second predecessor
 	private Sha256Hash merkleRoot;
 	private long time;
-	private long difficultyTarget; // "nBits"
 	private long lastMiningRewardBlock; // last approved reward blocks max
-	private long nonce;
-	private byte[] minerAddress; // Utils.sha256hash160
 	private BlockType blockType;
 	private long height;
 
@@ -106,26 +101,23 @@ public class Block extends Message {
 
 	public static Block setBlock2(NetworkParameters params, long setVersion) {
 		return Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-				BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0, Utils.encodeCompactBits(params.getMaxTarget()), 0);
+				BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0, Utils.encodeCompactBits(params.getMaxTarget()));
 	}
 
 	public static Block createBlock(NetworkParameters networkParameters, Block r1, Block r2) {
 		Block block = Block.setBlock7(networkParameters, r1.getHash(), r2.getHash(),
 				BlockType.BLOCKTYPE_TRANSFER.ordinal(), Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
-				Math.max(r1.getLastMiningRewardBlock(), r2.getLastMiningRewardBlock()),
-				r1.getLastMiningRewardBlock() > r2.getLastMiningRewardBlock() ? r1.getDifficultyTarget()
-						: r2.getDifficultyTarget());
+				Math.max(r1.getLastMiningRewardBlock(), r2.getLastMiningRewardBlock()));
 		block.setHeight(Math.max(r1.getHeight(), r2.getHeight()) + 1);
 
 		return block;
 	}
 
 	public static Block setBlock7(NetworkParameters params, Sha256Hash prevBlockHash, Sha256Hash prevBranchBlockHash,
-			int blocktype, long minTime, long lastMiningRewardBlock, long difficultyTarget) {
+			int blocktype, long minTime, long lastMiningRewardBlock) {
 		Block a = new Block(params);
 		// Set up a few basic things. We are not complete after this though.
 		a.version = NetworkParameters.BLOCK_VERSION_GENESIS;
-		a.difficultyTarget = difficultyTarget;
 		a.lastMiningRewardBlock = lastMiningRewardBlock;
 		a.time = System.currentTimeMillis() / 1000;
 		if (a.time < minTime)
@@ -134,7 +126,6 @@ public class Block extends Message {
 		a.prevBranchBlockHash = prevBranchBlockHash;
 
 		a.blockType = BlockType.values()[blocktype];
-		a.minerAddress = new byte[20];
 		a.length = NetworkParameters.HEADER_SIZE;
 		a.transactions = new ArrayList<>();
 		return a;
@@ -221,10 +212,7 @@ public class Block extends Message {
 		prevBranchBlockHash = readHash();
 		merkleRoot = readHash();
 		time = readInt64();
-		difficultyTarget = readInt64();
 		lastMiningRewardBlock = readInt64();
-		nonce = readUint32();
-		minerAddress = readBytes(20);
 		blockType = BlockType.values()[(int) readUint32()];
 		height = readInt64();
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
@@ -255,10 +243,7 @@ public class Block extends Message {
 		stream.write(prevBranchBlockHash.getReversedBytes());
 		stream.write(getMerkleRoot().getReversedBytes());
 		Utils.int64ToByteStreamLE(time, stream);
-		Utils.int64ToByteStreamLE(difficultyTarget, stream);
 		Utils.int64ToByteStreamLE(lastMiningRewardBlock, stream);
-		Utils.uint32ToByteStreamLE(nonce, stream);
-		stream.write(minerAddress);
 		Utils.uint32ToByteStreamLE(blockType.ordinal(), stream);
 		Utils.int64ToByteStreamLE(height, stream);
 	}
@@ -418,15 +403,12 @@ public class Block extends Message {
 
 	/** Copy the block into the provided block. */
 	protected final void copyBitcoinHeaderTo(final Block block) {
-		block.nonce = nonce;
 		block.prevBlockHash = prevBlockHash;
 		block.prevBranchBlockHash = prevBranchBlockHash;
 		block.merkleRoot = getMerkleRoot();
 		block.version = version;
 		block.time = time;
-		block.difficultyTarget = difficultyTarget;
 		block.lastMiningRewardBlock = lastMiningRewardBlock;
-		block.minerAddress = minerAddress;
 
 		block.blockType = blockType;
 		block.transactions = null;
@@ -448,11 +430,6 @@ public class Block extends Message {
 		s.append("   previous: ").append(getPrevBlockHash()).append("\n");
 		s.append("   branch: ").append(getPrevBranchBlockHash()).append("\n");
 		s.append("   merkle: ").append(getMerkleRoot()).append("\n");
-		s.append("   difficulty target (nBits):    ").append(difficultyTarget).append("\n");
-		s.append("   nonce: ").append(nonce).append("\n");
-		if (minerAddress != null)
-			s.append("   mineraddress: ").append(new Address(params,params.getAddressHeader(),  minerAddress)).append("\n");
-
 		s.append("   blocktype: ").append(blockType).append("\n");
 		if (transactions != null && !transactions.isEmpty()) {
 			s.append("   ").append(transactions.size()).append(" transaction(s):\n");
@@ -763,21 +740,6 @@ public class Block extends Message {
 	}
 
 	/**
-	 * Returns the nonce, an arbitrary value that exists only to make the hash of
-	 * the block header fall below the difficulty target.
-	 */
-	public long getNonce() {
-		return nonce;
-	}
-
-	/** Sets the nonce and clears any cached data. */
-	public void setNonce(long nonce) {
-		unCacheHeader();
-		this.nonce = nonce;
-		this.hash = null;
-	}
-
-	/**
 	 * Returns an immutable list of transactions held in this block, or null if this
 	 * object represents just a header.
 	 */
@@ -856,8 +818,6 @@ public class Block extends Message {
 		return blockType.allowCoinbaseTransaction();
 	}
 
-	private static Random gen = new Random();
-
 	/**
 	 * Return whether this block contains any transactions.
 	 * 
@@ -866,16 +826,6 @@ public class Block extends Message {
 	 */
 	public boolean hasTransactions() {
 		return this.transactions != null && !this.transactions.isEmpty();
-	}
-
-	public byte[] getMinerAddress() {
-		return minerAddress;
-	}
-
-	public void setMinerAddress(byte[] mineraddress) {
-		unCacheHeader();
-		this.minerAddress = mineraddress;
-		this.hash = null;
 	}
 
 	public BlockType getBlockType() {
@@ -891,14 +841,6 @@ public class Block extends Message {
 		unCacheHeader();
 		this.blockType = blocktype;
 		this.hash = null;
-	}
-
-	public long getDifficultyTarget() {
-		return difficultyTarget;
-	}
-
-	public void setDifficultyTarget(long difficultyTarget) {
-		this.difficultyTarget = difficultyTarget;
 	}
 
 	public long getLastMiningRewardBlock() {

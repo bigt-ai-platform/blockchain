@@ -458,16 +458,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
 		makeRewardBlock(new ArrayList<Block>());
 		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
-		assertEquals(b1.getDifficultyTarget(), Utils.encodeCompactBits(networkParameters.getMaxTarget()));
 
 	}
 
 	private Block difficultychange(Block b1) throws BlockStoreException {
 		b1 = UtilsTest.createBlock(networkParameters, b1, b1);
-		b1.setDifficultyTarget(Utils.encodeCompactBits(networkParameters.getMaxTargetReward()));
 
-		// log.debug( (Utils.encodeCompactBits( networkParameters. getMaxTargetReward())
-		// - b1.getDifficultyTarget() )+ "" );
 		this.blockGraph.addBlock(b1, true, store);
 		return b1;
 	}

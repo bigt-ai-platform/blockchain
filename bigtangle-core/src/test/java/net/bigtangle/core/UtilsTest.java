@@ -116,26 +116,22 @@ public class UtilsTest {
 	}
 
     public static Block createBlock(NetworkParameters params, Block prevBlock, Block branchBlock) {
-        return createNextBlock(prevBlock,branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS,
-                Address.fromBase58(params, "1Kbm8rqjcX6j5oLbq9J8FapksdvrfGUA88").getHash160());
+        return createNextBlock(prevBlock,branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS);
     }
 
     /**
      * Returns a solved, valid empty block that builds on top of this one and
      * the specified other Block.
      */
-    public static Block createNextBlock(Block prevBlock, Block branchBlock, final long version, byte[] mineraddress) {
+    public static Block createNextBlock(Block prevBlock, Block branchBlock, final long version) {
         Block b =   Block.setBlock2(prevBlock.getParams(), version);
 
-        b.setMinerAddress(mineraddress);
         b.setPrevBlockHash(prevBlock.getHash());
         b.setPrevBranchBlockHash(branchBlock.getHash());
 
         // Set difficulty according to previous consensus
         // only BLOCKTYPE_BEACON and BLOCKTYPE_INITIAL should overwrite this
         b.setLastMiningRewardBlock(Math.max(prevBlock.getLastMiningRewardBlock(), branchBlock.getLastMiningRewardBlock()));
-        b.setDifficultyTarget(prevBlock.getLastMiningRewardBlock() >= branchBlock.getLastMiningRewardBlock() ? prevBlock.getDifficultyTarget()
-                : branchBlock.getDifficultyTarget());
 
         b.setHeight(Math.max(prevBlock.getHeight(), branchBlock.getHeight()) + 1);
 

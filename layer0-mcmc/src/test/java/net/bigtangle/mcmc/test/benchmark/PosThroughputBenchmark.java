@@ -116,7 +116,6 @@ public class PosThroughputBenchmark extends AbstractIntegrationTest {
                     store.get(proto.getPrevBlockHash()),
                     store.get(proto.getPrevBranchBlockHash()));
             depositBlock.setBlockType(BlockType.BLOCKTYPE_STAKE);
-            depositBlock.setMinerAddress(vk.getPubKey());
             Transaction tx = new Transaction(networkParameters);
             tx.addOutput(new Coin(StakeService.MIN_STAKE.longValue(),
                     NetworkParameters.BIGTANGLE_TOKENID),

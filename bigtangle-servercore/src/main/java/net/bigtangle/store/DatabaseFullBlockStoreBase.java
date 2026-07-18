@@ -137,9 +137,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "WHERE blocks.prevblockhash = ? or blocks.prevbranchblockhash = ?";
 
 	protected final String INSERT_BLOCKS_SQL = getInsert() + "  INTO blocks(hash,  height, block,  prevblockhash,"
-			+ "prevbranchblockhash,mineraddress,blocktype,  "
+			+ "prevbranchblockhash,blocktype,  "
 			+ "milestone, milestonelastupdate,  inserttime,  solid, confirmed  )"
-			+ " VALUES(?, ?, ?, ?, ?,?, ?, ?, ?, ? ,  ?, ? )" + duplicateInsert();
+			+ " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ? ,  ?, ? )" + duplicateInsert();
 
 	protected final String INSERT_OUTPUTS_SQL = getInsert()
 			+ " INTO outputs (hash, outputindex, coinvalue, scriptbytes, toaddress, addresstargetable,"
@@ -806,15 +806,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			s.setBytes(4, block.getPrevBlockHash().getBytes());
 			s.setBytes(5, block.getPrevBranchBlockHash().getBytes());
-			s.setBytes(6, block.getMinerAddress());
-			s.setLong(7, block.getBlockType().ordinal());
+			s.setLong(6, block.getBlockType().ordinal());
 
 			int j = 1;
-			s.setLong(j + 7, blockEvaluation.getMilestone());
-			s.setLong(j + 8, blockEvaluation.getMilestoneLastUpdateTime());
-			s.setLong(j + 9, blockEvaluation.getInsertTime());
-			s.setLong(j + 10, blockEvaluation.getSolid());
-			s.setBoolean(j + 11, blockEvaluation.isConfirmed());
+			s.setLong(j + 6, blockEvaluation.getMilestone());
+			s.setLong(j + 7, blockEvaluation.getMilestoneLastUpdateTime());
+			s.setLong(j + 8, blockEvaluation.getInsertTime());
+			s.setLong(j + 9, blockEvaluation.getSolid());
+			s.setBoolean(j + 10, blockEvaluation.isConfirmed());
 
 			s.executeUpdate();
 			s.close();

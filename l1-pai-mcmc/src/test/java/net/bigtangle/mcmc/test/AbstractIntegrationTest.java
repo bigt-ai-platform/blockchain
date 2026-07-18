@@ -169,14 +169,12 @@ public abstract class AbstractIntegrationTest {
 
     protected Block makeAndAddBlock(Block predecessor) throws Exception {
         Block block = Block.createBlock(networkParameters, predecessor, predecessor);
-        block.solve();
         this.blockGraph.addBlock(block, true, store);
         return block;
     }
 
     protected Block makeAndConfirmBlock(List<Block> addedBlocks, Block predecessor) throws Exception {
         Block block = Block.createBlock(networkParameters, predecessor, predecessor);
-        block.solve();
         this.blockGraph.addBlock(block, true, store);
         addedBlocks.add(block);
         makeRewardBlock(addedBlocks);

@@ -25,7 +25,6 @@ public class Layer1BlockTypeScopingTest extends AbstractIntegrationTest {
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Block badBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         badBlock.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
-        badBlock.solve();
         VerificationException ex = assertThrows(VerificationException.class,
                 () -> blockService.checkBlockBeforeSave(badBlock, store));
         assertTrue(ex.getMessage().contains("not allowed"),

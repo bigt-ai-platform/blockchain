@@ -164,7 +164,6 @@ public class BlockSaveService {
 				}
 				for (int g = 0; g < groups.size(); g++) {
 					final List<Transaction> group = groups.get(g);
-					final byte[] minerAddr = proto.getMinerAddress();
 					final BlockStoreInterface s = stores[g];
 					if (g > 0) {
 						store.insertTipsQueue(new TipsQueue(java.util.Arrays.copyOf(
@@ -175,7 +174,6 @@ public class BlockSaveService {
 						try {
 							Block b = Block.createBlock(networkParameters,
 									predBlock, predBranchBlock);
-							b.setMinerAddress(minerAddr);
 							for (Transaction tx : group) {
 								b.addTransaction(tx);
 							}

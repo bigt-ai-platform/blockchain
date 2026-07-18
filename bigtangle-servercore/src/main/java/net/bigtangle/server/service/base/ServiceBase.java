@@ -498,8 +498,7 @@ public abstract class ServiceBase {
 			if (rewarded >= heightRewardCount)
 				break;
 
-			Address miner =   Address.fromHash160(networkParameters, rewardedBlock.getBlock().getMinerAddress());
-			if (!finalRewardCount.containsKey(miner))
+			if (!finalRewardCount.containsKey(null))
 				finalRewardCount.put(miner, 1L);
 			else
 				finalRewardCount.put(miner, finalRewardCount.get(miner) + 1);

@@ -113,7 +113,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block r2 = tipsToApprove.getRight().getBlock();
 		Block b = UtilsTest.createBlock(networkParameters, r2, r1);
 		b.addTransaction(wallet.feeTransaction(null));
-		b.setNonce(300);
 		b.verifyHeader();
 		blockSaveService.saveBlock(b, store);
 	}
@@ -627,8 +626,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate mining reward block with spending inputs
 		Block rewardBlock = rewardService.createMiningRewardBlock(UtilGeneseBlock.createGenesis(networkParameters).getHash(),
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
-		rewardBlock.setDifficultyTarget(rollingBlock.getDifficultyTarget() * 2);
-
 		blockGraph.addBlock(rewardBlock, false, store);
 
 	}

@@ -51,34 +51,6 @@ public class BlockTest {
 	}
 
 	// TODO NO BINARY @Test
-	public void testProofOfWork() throws Exception {
-		// This params accepts any difficulty target.
-		NetworkParameters params = MainNetParams.get();
-		Block block = params.getDefaultSerializer().makeBlock(blockBytes);
-
-		// Blocks contain their own difficulty target. The BlockChain
-		// verification mechanism is what stops real blocks
-		// from containing artificially weak difficulties.
-		// block.setDifficultyTarget(Block.CLIENT_DIFFICULTY_TARGET);
-		block.solve();
-		// Now it should pass.
-		block.verify();
-		// Break the nonce again at the lower difficulty level so we can try
-		// solving for it.
-		block.setNonce(2);
-		try {
-			block.verify();
-			fail();
-		} catch (VerificationException e) {
-			// Expected to fail as the nonce is no longer correct.
-		}
-		// Should find an acceptable nonce.
-		block.solve();
-		block.verify();
-		assertEquals(block.getNonce(), 5);
-	}
-
-	// TODO NO BINARY @Test
 	public void testBadTransactions() throws Exception {
 		Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
 		// Re-arrange so the coinbase transaction is not first.

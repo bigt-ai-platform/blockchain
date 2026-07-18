@@ -67,7 +67,6 @@ public class EpochRewardService {
                 store.get(proto.getPrevBlockHash()),
                 store.get(proto.getPrevBranchBlockHash()));
         rewardBlock.setBlockType(BlockType.BLOCKTYPE_BEACON);
-        rewardBlock.setMinerAddress(proto.getMinerAddress());
 
         long distributed = 0;
         long pool = totalFees.longValue();

@@ -41,13 +41,12 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    block mediumblob NOT NULL,\n"
             + "    prevblockhash  binary(32) NOT NULL,\n"
             + "    prevbranchblockhash  binary(32) NOT NULL,\n" 
-            + "    mineraddress binary(20) NOT NULL,\n"
             + "    blocktype bigint NOT NULL,\n" 
             //reward block chain length is here milestone
             + "    milestone bigint NOT NULL,\n"
             + "    milestonelastupdate bigint NOT NULL,\n"  
             + "    confirmed boolean NOT NULL,\n"
-     
+      
             //solid is result of validation of the block, 
             + "    solid bigint NOT NULL,\n"
             + "    inserttime bigint NOT NULL,\n"

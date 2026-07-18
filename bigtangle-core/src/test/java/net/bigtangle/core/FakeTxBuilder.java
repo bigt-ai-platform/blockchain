@@ -264,7 +264,6 @@ public class FakeTxBuilder {
         for (Transaction tx : transactions) {
             b.addTransaction(tx);
         }
-        b.solve();
         return b;
     }
 
@@ -275,7 +274,6 @@ public class FakeTxBuilder {
         for (Transaction tx : transactions) {
             b.addTransaction(tx);
         }
-        b.solve();
         return b;
     }
 }

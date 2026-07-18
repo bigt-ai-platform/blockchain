@@ -57,9 +57,8 @@ public class UtilGeneseBlock {
 
 		public static Block createGenesis(NetworkParameters params) {
 		    Block genesisBlock =   Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-		    		BlockType.BLOCKTYPE_INITIAL.ordinal(), 0, 0, Utils.encodeCompactBits(params.getMaxTarget()));
+		    		BlockType.BLOCKTYPE_INITIAL.ordinal(), 0, 0);
 		    genesisBlock.setTime(1532896109L); 
-		    genesisBlock.setDifficultyTarget(Utils.encodeCompactBits(params.getMaxTarget())); 
 		    Transaction coinbase = new Transaction(params);
 		    final ScriptBuilder inputBuilder = new ScriptBuilder();
 		    inputBuilder.data(params.getChainId().getBytes(StandardCharsets.UTF_8));
@@ -73,7 +72,6 @@ public class UtilGeneseBlock {
 	        add(params, NetworkParameters.BigtangleCoinTotal, params.genesisPub, coinbase);
 	    }
 	    genesisBlock.addTransaction(coinbase);
-		    genesisBlock.setNonce(0);
 		    genesisBlock.setHeight(0);
 		    return genesisBlock;
 		

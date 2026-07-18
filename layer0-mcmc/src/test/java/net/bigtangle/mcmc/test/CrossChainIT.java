@@ -68,7 +68,6 @@ public class CrossChainIT {
         log.info("=== PHASE 3: L1 chain ===");
         Block proto = getTip(l1Url, params);
         Block l1Block = Block.createBlock(params, proto, proto);
-        l1Block.setMinerAddress(proto.getMinerAddress());
         Transaction tx = new Transaction(params);
         tx.addOutput(new Coin(BigInteger.valueOf(1000),
                 NetworkParameters.BIGTANGLE_TOKENID), bobKey);

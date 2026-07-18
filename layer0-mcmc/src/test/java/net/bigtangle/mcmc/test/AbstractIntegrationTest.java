@@ -1203,7 +1203,6 @@ public abstract class AbstractIntegrationTest {
 		Block block = Block.createBlock(networkParameters,
 				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
-		block.setMinerAddress(tipP.getMinerAddress());
 		block.addCoinbaseTransaction(keys.get(2).getPubKey(), basecoin, tokenInfo, new MemoInfo("coinbase"));
 		block = adjustSolve(block);
 
@@ -1388,7 +1387,6 @@ public abstract class AbstractIntegrationTest {
 		Block block = Block.createBlock(networkParameters,
 				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
-		block.setMinerAddress(tipP.getMinerAddress());
 
 		if (overrideHash1 != null && overrideHash2 != null) {
 			block.setPrevBlockHash(overrideHash1.getHash());

@@ -103,7 +103,6 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
                     store.get(proto.getPrevBlockHash()),
                     store.get(proto.getPrevBranchBlockHash()));
             depositBlock.setBlockType(BlockType.BLOCKTYPE_STAKE);
-            depositBlock.setMinerAddress(vk.getPubKey());
             Transaction tx = new Transaction(networkParameters);
             tx.addOutput(new Coin(StakeService.MIN_STAKE.longValue(),
                     NetworkParameters.BIGTANGLE_TOKENID),
@@ -139,7 +138,6 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
 
             Block block = Block.createBlock(networkParameters,
                     prevBlock, prevBlock);
-            block.setMinerAddress(proposer.getPubKey());
             block.setBlockType(BlockType.BLOCKTYPE_BEACON);
             store.put(block);
             blockHashes.add(block.getHash());

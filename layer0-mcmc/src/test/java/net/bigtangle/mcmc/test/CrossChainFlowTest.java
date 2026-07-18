@@ -80,7 +80,6 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
                 store.get(proto.getPrevBlockHash()),
                 store.get(proto.getPrevBranchBlockHash()));
         pegBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
-        pegBlock.setMinerAddress(proto.getMinerAddress());
         Transaction pegTx = new Transaction(networkParameters);
         pegTx.setToAddressInSubtangle(
                 net.bigtangle.core.Address.fromBase58(networkParameters, l1bobAddress).getHash160());
@@ -111,7 +110,6 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
                 store.get(proto.getPrevBlockHash()),
                 store.get(proto.getPrevBranchBlockHash()));
         l1Block.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
-        l1Block.setMinerAddress(proto.getMinerAddress());
         Transaction tx = new Transaction(networkParameters);
         tx.addOutput(new Coin(BigInteger.valueOf(bridged), NetworkParameters.BIGTANGLE_TOKENID), bobKey);
         l1Block.addTransaction(tx);
