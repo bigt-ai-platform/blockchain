@@ -4,14 +4,14 @@
 
 | Aspect | Bigtangle (Layer 0) | Solana | Ethereum PoS |
 |--------|--------------------|--------|--------------|
-| **Ledger structure** | DAG (DAG of blocks) | Single chain | Single chain (reorgs possible) |
-| **Consensus** | MCMC walk + PoS | PoH + Tower BFT (PBFT) | Gasper (Casper FFG + LMD-GHOST fork choice) |
-| **Validator selection** | MCMC tip selection | PoH leader schedule | RANDAO + beacon committee |
-| **Slot time** | Variable (DAG) | 400ms | 12s |
-| **Finality** | Probabilistic (MCMC depth) | Optimistic (~32 slots) | 2/3 attestations (~12.8 min) |
+| **Ledger structure** | DAG (blocks + beacon chain) | Single chain | Single chain (reorgs possible) |
+| **Consensus** | MCMC (DAG tip selection) + PoS beacon chain (Casper FFG finality + LMD-GHOST fork choice) | PoH + Tower BFT (PBFT) | Gasper (Casper FFG + LMD-GHOST fork choice) |
+| **Validator selection** | RANDAO (SlotService), 12s slots | PoH leader schedule | RANDAO + beacon committee |
+| **Slot time** | 12s (fixed, configurable) | 400ms | 12s |
+| **Finality** | Casper 2/3 checkpoint finality (deterministic) | Optimistic (~32 slots) | 2/3 attestations (~12.8 min) |
 | **State model** | UTXO | Account + program | Account (EVM) |
-| **Parallel execution** | DAG-native parallel branches | Sealevel (static TX analysis) | Sequential EVM (single-threaded) |
-| **Mempool** | Single queue → batch blocks | Gulf Stream (forward to next leader) | Global tx pool → proposer picks |
+| **Parallel execution** | DAG-native parallel branches + batch blocks (50k tx/block) | Sealevel (static TX analysis) | Sequential EVM (single-threaded) |
+| **Mempool** | ConcurrentLinkedQueue → batch blocks (100ms micro-batch) | Gulf Stream (forward to next leader) | Global tx pool → proposer picks |
 
 ## 2. Throughput
 
@@ -73,36 +73,38 @@
 
 | Phase per block | Bigtangle | Solana | Ethereum |
 |-----------------|-----------|--------|----------|
-| **Leader election** | MCMC walk (~8s) | PoH VDF hash (~400ms) | RANDAO (~1 block) |
-| **Block building** | DB batch insert (~4s/1k tx) | In-memory execution (~10ms) | EVM execution (~1-10s) |
-| **Voting** | MCMC weight update (~2ms) | Tower BFT vote (~200ms) | Attestation (2-6 slots) |
-| **Finality** | MCMC depth (probabilistic) | 32 slots (~12.8s) | 2/3 Casper (~6.4 min) |
+| **Leader election** | RANDAO (SlotService, in-memory, <1ms) | PoH VDF hash (~400ms) | RANDAO (~1 block) |
+| **Block building** | DB batch insert + PG COPY (~6s/50k tx) | In-memory execution (~10ms) | EVM execution (~1-10s) |
+| **Voting** | Casper attestation + GHOST fork choice (~200ms) | Tower BFT vote (~200ms) | Attestation (2-6 slots) |
+| **Finality** | Casper 2/3 checkpoint (deterministic, ~2 slots) | 32 slots (~12.8s) | 2/3 Casper (~6.4 min) |
+| **MCMC tip update** | Incremental weight/depth (~8ms) | — (single chain) | — (single chain) |
 
 ## 4. Scalability
 
 | Factor | Bigtangle | Solana | Ethereum |
 |--------|-----------|--------|----------|
-| **Validators** | Unlimited (DAG fans out) | ~2,000 capped | ~500k (32 ETH min) |
+| **Validators** | Unlimited (DAG fans out, PoS beacon selects proposers per slot) | ~2,000 capped | ~500k (32 ETH min) |
 | **Sharding** | DAG is natively shardable | Sharding via Solana v2 (in dev) | EIP-4844 (blobs), Danksharding |
-| **DB growth** | UTXO set per tx → O(n) | Account state → O(accounts) | State trie → O(n) |
-| **Hardware req** | PostgreSQL | 128GB RAM validator | Consumer node (L1) |
-| **Max throughput (theoretical)** | DAG width × batch rate | ~500k tx/s (lab) | ~100k (Danksharding) |
+| **DB growth** | UTXO set per tx → O(n), mitigated by batch compaction | Account state → O(accounts) | State trie → O(n) |
+| **Hardware req** | PostgreSQL (NVMe recommended), 8+ cores | 128GB RAM validator | Consumer node (L1) |
+| **Max throughput (theoretical)** | DAG width × batch rate × PoS slots | ~500k tx/s (lab) | ~100k (Danksharding) |
 
 ## 5. Key Insights
 
 ### Bigtangle
 
 **Strengths:**
-- **DAG parallelism**: Multiple validators can append blocks simultaneously — no single-leader contention.
-- **No leader schedule**: MCMC naturally selects branches; no missed slots from absent leaders.
+- **DAG + Beacon chain**: MCMC selects DAG tips for fast probabilistic confirmation; PoS beacon chain provides deterministic Casper finality. Best of both — fast confirms for low-value tx, 2/3 finality for settlements.
+- **Batch blocks**: Mempool drained every 100ms into 50k-tx blocks → high throughput with low per-tx overhead. 
 - **UTXO model**: Inherently parallel — each tx touches distinct UTXOs, enabling concurrent validation.
-- **Simple mempool**: Single queue, server-side batching; no complex forwarding protocol.
+- **No single-leader bottleneck**: Any validator can propose a DAG block within their slot; parallel branches converge via GHOST fork choice.
+- **RANDAO proposer selection**: Unpredictable leader schedule prevents targeted DoS on upcoming proposers.
 
 **Weaknesses:**
-- **DB I/O bottleneck**: Solidty checks require `getTransactionOutput()` per input — 100k DB reads for 50k tx.
-- **MCMC prototype**: ~8s walk for tip selection — grows with DAG size (mitigated by incremental updates).
-- **UTXO overhead**: Every input needs a DB lookup to verify unspent + confirmed.
-- **PostgreSQL**: General-purpose RDBMS not optimized for blockchain workloads (vs Solana's custom store).
+- **DB I/O bottleneck**: `getTransactionOutput()` per input — mitigated by batch-mode skip (batch blocks skip solidity checks entirely) and PG COPY bulk writes.
+- **UTXO overhead**: Every input needs a DB lookup to verify unspent + confirmed (not needed in batch mode).
+- **PostgreSQL**: General-purpose RDBMS not optimized for blockchain workloads. Mitigated by `reWriteBatchedInserts`, PG COPY, and direct storage tuning.
+- **MCMC prototype**: Tip selection random walk (~67ms) — grows with DAG size, mitigated by incremental updates and caching.
 
 ### Solana
 
