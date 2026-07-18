@@ -56,7 +56,7 @@ The beacon chain provides the *finality layer*: each beacon block confirms a ran
 
 ### 2.2 Tip Selection (MCMC Walk)
 
-MCMC selects two DAG tips as candidates for the next block:
+MCMC selects two DAG tips as candidates for the next transaction block:
 
 ```java
 // net.bigtangle.mcmc.service.TipsService.getValidatedBlockPair()
@@ -65,35 +65,35 @@ Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
 
 **Algorithm:**
 
-1. **Entry points**: Pull two random blocks weighted by cumulative weight (higher-weight blocks more likely to be selected).
+1. **Walk start**: Query all solid blocks in the active interval (between cutoff height and max height) into a priority queue ordered by height.
 
-2. **Walk**: From each entry point, perform a biased random walk toward the tips. At each step:
-   - Get all approvers (children) of the current block
-   - For each child, compute transition weight:
-     `P(child | parent) = exp(α × (rating(child) - rating(parent)))`
-     where α = -0.05 (configurable), rating = cumulative weight score
-   - Select the next block proportional to transition weights
-   - Repeat until no further progress
+2. **Walk**: From height-ordered blocks, propagate approver information forward:
+   - For each block, collect all its approvers (children)
+   - For each child, compute cumulative approval weight and depth
+   - Accumulate chain depthing: each block's depth = max(depth of trunk, depth of branch) + 1
 
-3. **Validation**: The two selected tips must be distinct and pass eligibility checks (height, cutoff, type constraints).
+3. **Weight computation**: `P(child | parent) = exp(α × (rating(child) - rating(parent)))`
+   where α = -0.05 (configurable), rating = cumulative approver count
+
+4. **Validation**: The two selected tips must be distinct and pass eligibility checks (height, cutoff, type constraints).
 
 ### 2.3 MCMC Update Cycle
 
-Every `mcmcrate` ms (default 1000ms), `ScheduleMCMCService` runs:
+Every `mcmcrate` ms (default **500ms**, configurable via `SERVICE_MCMC_RATE`), `ScheduleMCMCService` runs:
 
 ```java
 // MCMCService.startSingleProcessDo()
-1. Lock
+1. Lock (in-process + DB distributed lock)
 2. update(store):
    a. updateWeightAndDepth()   ← recompute DAG weights
    b. updateRating()           ← recompute MCMC ratings
    c. deleteMCMC()             ← prune stale MCMC data
-   d. evict caches
+   d. evict caches (blockMCMC, blockMCMCObject, approverHashes)
    e. calcNewBlockPrototype()  ← MCMC tip selection → TipsQueue
 3. Unlock
 ```
 
-The `TipsQueue` entry is consumed by the next block producer (wallet calls `getTip` HTTP → returns the prototype block with two MCMC-selected tips).
+The `TipsQueue` entry is consumed by the next block producer (`batchBlocksFromMempool()` reads it via `cacheBlockPrototypeService.getBlockPrototype()`).
 
 ### 2.4 Transaction Flow
 
@@ -101,18 +101,26 @@ The `TipsQueue` entry is consumed by the next block producer (wallet calls `getT
 Client                          Server
   │                               │
   ├── HTTP submitTransaction ─────► Mempool
+  │                               │   (submitTransactions deserializes + enqueues)
   │                               │
-  │                               ├── batchBlocksFromMempool()
-  │                               │   └── blocks queued to ChainBlockQueue
+  │                               ├── microBatch() (every 100ms)
+  │                               │   └── batchBlocksFromMempool() → saveBatchBlock()
+  │                               │       └── addNonChain(block, batch=true)
+  │                               │           └── connect()
+  │                               │               └── store.put() + solidifyBlock()
+  │                               │                   └── connectUTXOs() → PG COPY
   │                               │
-  │                               ├── MCMC update cycle
-  │                               │   └── calcNewBlockPrototype()
-  │                               │       └── tipsService picks two MCMC tips
+  │                               ├── MCMC update cycle (every 500ms)
+  │                               │   ├── updateWeightAndDepth()
+  │                               │   ├── calcNewBlockPrototype()
+  │                               │   │   └── tipsService picks two MCMC tips
+  │                               │   └── → TipsQueue
   │                               │
   │                               ├── blockGraph.updateChain()
   │                               │   └── processChainConnected()
-  │                               │       └── connectRewardBlock()
-  │                               │           └── extends beacon chain
+  │                               │       └── saveChainConnected()
+  │                               │           └── connectRewardBlock()
+  │                               │               └── extends reward chain
   │                               │
   ├── HTTP getOutputs ────────────► Return confirmed UTXOs
 ```
@@ -138,7 +146,7 @@ Each beacon block:
 - Carries a `RewardInfo` with `chainlength` (milestone number), `prevRewardHash`, and the set of DAG block hashes it confirms
 - Contains `SlotData` with slot number, epoch, proposer index, RANDAO reveal, and DAG state root
 - Is produced by the validator selected by `SlotService.selectProposer()` (RANDAO-based deterministic selection)
-- Adds the DAG tips from MCMC as trunk and branch parents (using `Block.createBlock(r1, r2)`)
+- Adds the DAG tips from GHOST fork choice as trunk and branch parents (using `Block.createBlock(r1, r2)`)
 
 ### 3.2 Validator Set
 
@@ -204,15 +212,15 @@ Once finalized, a beacon block can never be reverted (barring 1/3+ equivocation)
 
 The selected proposer for slot N:
 
-1. Calls `mcmcService.calcNewBlockPrototype()` — MCMC selects two DAG tips (trunk + branch)
+1. Gets two DAG tips via **GHOST fork choice** (`ghostService.getTwoTips()`) — not MCMC. The beacon chain uses GHOST for tip selection since it votes on canonical chain heads, while MCMC handles transaction-level DAG branching.
 2. Gets the current max confirmed reward (`cacheBlockService.getMaxConfirmedReward()`)
-3. Creates a `Block.createBlock(r1, r2)` with the MCMC-chosen tips
+3. Creates a `Block.createBlock(r1, r2)` with the GHOST-chosen tips
 4. Sets `BLOCKTYPE_BEACON` and builds a `RewardInfo` with `chainlength = prev + 1`
-5. Adds RANDAO reveal, `SlotData`, attestation collection
+5. Adds RANDAO reveal, `SlotData`, attestation collection from the previous slot
 6. Solves and saves via `blockSaveService.saveBlock()`
-7. Casper/Ghost process attestations from the previous slot
+7. Calls `casperService.processSlot()` to process attestations for this slot
 
-This preserves the DAG structure: MCMC picks the two parents, the beacon block records the milestone.
+This preserves the DAG structure: GHOST picks the two parents for the beacon milestone, while MCMC continues to drive transaction block tip selection between beacons.
 
 ### 3.6 DAG Parallelism in PoS
 
@@ -242,11 +250,11 @@ Between B0 and B1:
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| **MCMCService** | Permanent | `calcNewBlockPrototype()` uses `tipsService.getValidatedBlockPair()` for DAG tip selection. Weight/depth/rating cycle runs every 1s. |
+| **MCMCService** | Permanent | `calcNewBlockPrototype()` uses `tipsService.getValidatedBlockPair()` for DAG tip selection. Weight/depth/rating cycle runs every 500ms (configurable via `SERVICE_MCMC_RATE`). |
 | **TipsService** | Permanent | MCMC random walk for two DAG tips. |
 | **GhostService** | Wired | `getDagRoot()` starts from genesis. Votes are stake-weighted. DB-persisted via `attestation_votes` table. Restored on restart via `@PostConstruct`. |
 | **CasperService** | Wired | `processVote()` persists to DB, reads actual stake from `StakeRecord.amount`. SlashingService wired in. State persisted to `pos_state` table. |
-| **SlotService** | Wired | `proposeBeaconBlock()` creates proper `RewardInfo` for `saveChainConnected`. Uses MCMC-chosen tips as trunk + branch. |
+| **SlotService** | Wired | `proposeBeaconBlock()` creates proper `RewardInfo` for `saveChainConnected`. Uses GHOST-chosen tips as trunk + branch. |
 | **SlotTickService** | Wired | `@Scheduled` at `pos.slotIntervalMs`. Calls `proposeBeaconBlock()` + `ValidatorDutyService.performDuty()` + epoch processing. |
 | **StakeService** | Wired | `processDeposit()`, `activateValidator()`, `slashValidator()`, `getTotalActiveStake()`, `getEffectiveStake()`, `processWithdrawals()`. |
 | **SlashingService** | Wired | `checkDoubleVote()` / `checkSurroundVote()` called from `CasperService.processVote()`. Auto-slash on double vote. State persisted to `pos_state` table. |
