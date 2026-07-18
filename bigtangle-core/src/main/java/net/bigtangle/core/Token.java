@@ -255,9 +255,8 @@ public class Token extends SpentBlock implements java.io.Serializable {
             dos.writeInt(signnumber);
             dos.writeInt(tokentype);
             dos.writeBoolean(tokenstop);
-            dos.writeBoolean(prevblockhash != null);
-            if (prevblockhash != null) dos.write(prevblockhash.getBytes());
-            Utils.writeNBytes(dos, amount.toByteArray());
+            Utils.writeNBytes(dos, prevblockhash == null ? null : prevblockhash.getBytes());
+            Utils.writeNBytes(dos, amount == null ? BigInteger.ZERO.toByteArray() : amount.toByteArray());
             dos.writeInt(decimals);
             Utils.writeNBytesString(dos, classification);
             Utils.writeNBytesString(dos, language);
@@ -298,9 +297,8 @@ public class Token extends SpentBlock implements java.io.Serializable {
         signnumber = dis.readInt();
         tokentype = dis.readInt();
         tokenstop = dis.readBoolean();
-        if (dis.readBoolean()) {
-            prevblockhash = Sha256Hash.wrap(Utils.readNBytes(dis));
-        }
+        byte[] prevBytes = Utils.readNBytes(dis);
+        if (prevBytes != null) prevblockhash = Sha256Hash.wrap(prevBytes);
         amount = new BigInteger(Utils.readNBytes(dis));
         decimals = dis.readInt();
         classification = Utils.readNBytesString(dis);

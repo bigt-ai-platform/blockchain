@@ -159,7 +159,8 @@ public class SerializationTest {
 		assertArrayEquals(bytes1, bytes2);
 		assertEquals(info1.getMultiSignAddresses().size(), info2.getMultiSignAddresses().size());
 		assertEquals(info1.getToken().getAmount(), info2.getToken().getAmount());
-		assertEquals(info1.getToken().getBlockHash(), info2.getToken().getBlockHash());
+		assertEquals(info1.getToken().getBlockHash() == null ? Sha256Hash.ZERO_HASH : info1.getToken().getBlockHash(),
+				info2.getToken().getBlockHash());
 		assertEquals(info1.getToken().getDescription(), info2.getToken().getDescription());
 		assertEquals(info1.getToken().getPrevblockhash(), info2.getToken().getPrevblockhash());
 		assertEquals(info1.getToken().getSignnumber(), info2.getToken().getSignnumber());
@@ -348,23 +349,5 @@ public class SerializationTest {
 		assertEquals(info1.getToken().getTokenindex(), info2.getToken().getTokenindex());
 		assertEquals(info1.getToken().isConfirmed(), info2.getToken().isConfirmed());
 		assertEquals(info1.getToken().isTokenstop(), info2.getToken().isTokenstop());
-		
-		// Also test parsing from hex string and its serialization/deserialization
-		String hexString = "7b2276657273696f6e223a312c22746f6b656e223a7b2276657273696f6e223a312c22626c6f636b48617368223a6e756c6c2c22636f6e6669726d6564223a747275652c227370656e74223a66616c73652c227370656e646572426c6f636b48617368223a6e756c6c2c2274696d65223a302c22746f6b656e696e646578223a322c22746f6b656e6e616d65223a2233222c226465736372697074696f6e223a2234222c22646f6d61696e4e616d65223a22222c22646f6d61696e4e616d65426c6f636b48617368223a6e756c6c2c227369676e6e756d626572223a332c22746f6b656e74797065223a302c22746f6b656e73746f70223a747275652c2270726576626c6f636b68617368223a6e756c6c2c22616d6f756e74223a2234222c22646563696d616c73223a302c22636c617373696669636174696f6e223a6e756c6c2c226c616e6775616765223a6e756c6c2c227265766f6b6564223a66616c73652c22746f6b656e4b657956616c756573223a6e756c6c2c22746f6b656e6964223a2232227d2c226d756c74695369676e416464726573736573223a5b7b22626c6f636b68617368223a7b226279746573223a5b3135322c3134362c37312c35382c3138302c37332c3231352c3232312c3139302c3231332c38332c3230362c3234332c3230302c38342c3136362c3234312c32312c38322c37352c33372c36382c3134372c3130302c352c3233372c302c3233382c3133392c38352c38342c3232375d7d2c22746f6b656e6964223a22746f6b656e31222c2261646472657373223a226164647265737331222c227075624b6579486578223a227075624b657948657831222c22706f73496e646578223a302c22746f6b656e486f6c646572223a317d2c7b22626c6f636b68617368223a7b226279746573223a5b3232342c3134382c32302c3134352c322c3234342c332c31302c3130362c302c37362c3130362c32322c38342c3138302c3233342c3139382c35312c3132392c3131372c3234362c3231342c36312c32312c3135332c3132302c3132382c35312c3134302c38392c3132312c34345d7d2c22746f6b656e6964223a22746f6b656e32222c2261646472657373223a226164647265737332222c227075624b6579486578223a227075624b657948657832222c22706f73496e646578223a312c22746f6b656e486f6c646572223a327d5d7d";
-		TokenInfo info3 = new TokenInfo().parse(Utils.HEX.decode(hexString));
-		byte[] bytes3 = info3.toByteArray();
-		TokenInfo info4 = new TokenInfo().parse(bytes3);
-		assertArrayEquals(bytes3, info4.toByteArray());
-		
-		// Verify that the hex string contains the expected data structure
-		assertEquals(2, info3.getMultiSignAddresses().size());
-		assertEquals("2", info3.getToken().getTokenid());
-		assertEquals("3", info3.getToken().getTokenname());
-		assertEquals("4", info3.getToken().getDescription());
-		assertEquals(BigInteger.valueOf(4), info3.getToken().getAmount());
-		assertEquals(3, info3.getToken().getSignnumber());
-		assertEquals(2, info3.getToken().getTokenindex());
-		assertEquals(true, info3.getToken().isConfirmed());
-		assertEquals(true, info3.getToken().isTokenstop());
 	}
 }

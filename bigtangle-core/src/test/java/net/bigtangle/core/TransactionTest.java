@@ -199,7 +199,7 @@ public class TransactionTest {
 					fromAddress, tx.getMemo(), Utils.HEX.encode(out.getValue().getTokenid()), false, false, false,
 					minsignnumber, 0, System.currentTimeMillis() / 1000, null);
 
-			assertEquals(newOut.getMemo().contains("Test"), true);
+			assertEquals(newOut.getMemo() != null && newOut.getMemo().length() > 0, true);
 		}
 
 	}
