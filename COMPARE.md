@@ -15,14 +15,14 @@
 
 ## 2. Throughput
 
-| Metric | Bigtangle | Solana | Ethereum PoS |
-|--------|-----------|--------|-------------|
-| **Peak tx/s (lab, 4C i5 + Docker PG)** | **4,873** | ~50,000 (claimed) | ~30 (lab) |
-| **Projected (128C EPYC + NVMe PG)** | **~40,000** | 2,000-3,000 (observed) | 15-30 |
-| **Realistic tx/s (observed)** | **4,873** (32 PoS validators) | 2,000-3,000 (mainnet) | 15-30 |
-| **Tx per block** | 50,000 (configurable) | ~8,000 per 400ms slot | ~150 per 12s slot |
-| **Block time (50k tx)** | ~10s | 400ms | 12s |
-| **Latency (1 tx)** | ~100ms (submit, no batch) | ~400ms (1 slot) | ~12s (1 block) |
+| Metric | Bigtangle | Solana | Ethereum PoS | Visa |
+|--------|-----------|--------|-------------|------|
+| **Peak tx/s (lab, 4C i5 + Docker PG)** | **4,873** | ~50,000 (claimed) | ~30 (lab) | 1,700-24,000 (observed) |
+| **Projected (128C EPYC + NVMe PG)** | **~40,000** | 2,000-3,000 (observed) | 15-30 | 1,700-24,000 |
+| **Realistic tx/s (observed)** | **4,873** (32 PoS validators) | 2,000-3,000 (mainnet) | 15-30 | ~1,700 (peak ~24,000) |
+| **Tx per block** | 50,000 (configurable) | ~8,000 per 400ms slot | ~150 per 12s slot | — (continuous stream) |
+| **Block time (50k tx)** | ~10s | 400ms | 12s | — (real-time) |
+| **Latency (1 tx)** | ~100ms (submit, no batch) | ~400ms (1 slot) | ~12s (1 block) | ~200ms (authorization) |
 
 ### Bigtangle Phase Breakdown (50k tx, 200 clients, 32 PoS validators)
 
