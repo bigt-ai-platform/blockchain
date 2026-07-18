@@ -46,8 +46,9 @@ public class MemoInfoTest {
 
     @Test
     public void testNull() throws Exception {
-        assertNull(MemoInfo.parse(null));
+        assertNull(MemoInfo.parse((byte[]) null));
         assertNull(MemoInfo.parse(new byte[0]));
+        assertNull(MemoInfo.parse((String) null));
     }
 
     @Test

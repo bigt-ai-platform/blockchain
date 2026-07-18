@@ -89,6 +89,19 @@ public class MemoInfo implements java.io.Serializable {
         return m;
     }
 
+    /** Parse from a String — tries hex-encoded binary first, then legacy JSON. */
+    public static MemoInfo parse(String str) throws IOException {
+        if (str == null) return null;
+        // Try hex-encoded binary first
+        try {
+            byte[] buf = Utils.HEX.decode(str);
+            return parse(buf);
+        } catch (Exception e) {
+            // Fallback to legacy JSON
+            return fromJson(str);
+        }
+    }
+
     /*
      * used for display the memo and cutoff maximal to 20 chars
      */
