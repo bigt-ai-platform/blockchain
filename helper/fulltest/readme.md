@@ -53,7 +53,7 @@ cd /home/jcui/git/blockchain
 docker build -t bigtangle:test -f helper/bigtangle/Dockerfile .
 
 # 2. Start a 3-node L0 test network
-cd /home/jcui/git/bigtai/helper/fulltest
+cd /home/jcui/git/blockchain/helper/fulltest
 docker compose -f docker-compose.l0-test.yml up -d
 
 # 3. Check container status
@@ -62,7 +62,10 @@ docker compose -f docker-compose.l0-test.yml ps
 # 4. Run integration tests
 ./run-tests.sh
 
-# 5. Tear down
+# 5. Run benchmarks
+./benchmark.sh -b all
+
+# 6. Tear down
 docker compose -f docker-compose.l0-test.yml down -v
 ```
 
@@ -324,7 +327,7 @@ All configuration is via environment variables (defined in `layer0-server/src/ma
 | `SERVICE_MINING` | true | Enable mining |
 | `SERVICE_MINING_RATE` | 50000 | Mining interval (ms) |
 | `SERVICE_MCMC` | false | Enable MCMC (tip selection) |
-| `SERVICE_MCMC_RATE` | 1000 | MCMC interval (ms) |
+| `SERVICE_MCMC_RATE` | 500 | MCMC interval (ms) |
 | `SERVICE_SYNC` | true | Enable block sync |
 | `SERVICE_INITSYNC` | true | Initial sync on startup |
 | `REQUESTER` | (empty) | Bootstrap node URL (e.g., `http://l0-svr-0:8081`) |
@@ -335,6 +338,10 @@ All configuration is via environment variables (defined in `layer0-server/src/ma
 | `MINIO_SECRET_KEY` | adminpassword |  secret key |
 | `HIKARI_MAX_POOL` | 50 | HikariCP max pool size |
 | `IPCHECK` | false | Enable IP whitelist/blacklist |
+| `POS_ENABLED` | false | Enable PoS beacon chain (slot tick, validator duties) |
+| `POS_SLOT_INTERVAL_MS` | 12000 | Slot duration in ms |
+| `POS_SLOTS_PER_EPOCH` | 32 | Slots per epoch |
+| `POS_VALIDATOR_KEY` | (empty) | Hex-encoded validator private key |
 
 ## Test Scripts
 
@@ -386,23 +393,14 @@ mvn test -pl layer0-mcmc -Dtest=FromAddressTests
 # Cross-chain anchors (L0 → L1)
 mvn test -pl layer0-mcmc -Dtest=AnchorRoundTripTest
 
-# Performance benchmark (local)
-mvn test -pl layer0-mcmc -Dtest=Layer0PerformanceTest
-
-# Max TPS benchmark
-mvn test -pl layer0-mcmc -Dtest=MaxTPSBenchmark
-
-# Payment throughput benchmark
-mvn test -pl layer0-mcmc -Dtest=PaymentThroughputBenchmark
-
 # Full DAG validation
 mvn test -pl layer0-mcmc -Dtest=FullPrunedBlockGraphTest
 
 # Gossip / block propagation
 mvn test -pl layer0-mcmc -Dtest=GossipServiceTest
 
-# Slot tick / consensus timing
-mvn test -pl layer0-mcmc -Dtest=SlotTickServiceTest
+# PoS consensus (15 unit tests)
+mvn test -pl layer0-mcmc -Dtest=PoSTest
 ```
 
 ## Test Scenarios
@@ -476,15 +474,45 @@ curl -X POST http://localhost:8081/submitAnchor \
 
 ### 6. Performance Benchmarks
 
-```bash
-# Max TPS (single node)
-mvn test -pl layer0-mcmc -Dtest=MaxTPSBenchmark \
-  -Dmaster.url=http://localhost:8081
+Three throughput benchmarks measure Layer 0 TPS (see [PERFORMANCE.md](../../PERFORMANCE.md) for full results):
 
-# Distributed throughput (all nodes)
-mvn test -pl layer0-mcmc -Dtest=PaymentThroughputBenchmark \
-  -Dnode.urls=http://localhost:8081,http://localhost:8082,http://localhost:8083
+```bash
+# Non-PoS max throughput (zero-HTTP, direct mempool) — 3,769 tx/s
+mvn test -pl layer0-mcmc -Dtest=MaxTPSBenchmark#testMaxTPS \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432 -DDB_NAME=layer0
+
+# Non-PoS max throughput (HTTP batch submit) — 4,465 tx/s
+mvn test -pl layer0-mcmc -Dtest=MaxTpsBenchmark#testMempoolTps \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432 -DDB_NAME=layer0
+
+# Full PoS throughput (32 validators, slot tick, attestations) — 4,873 tx/s
+mvn test -pl layer0-mcmc -Dtest=PosThroughputBenchmark#testPosThroughput \
+  -DDB_HOSTNAME=localhost -DDB_PORT=5432 -DDB_NAME=layer0
 ```
+
+Or run all with the benchmark script:
+```bash
+./benchmark.sh -b all
+```
+
+#### Cumulative Optimizations (3,018 → 4,873 tx/s)
+
+| Optimization | Batch wall Δ | TPS Δ |
+|-------------|-------------|-------|
+| `BATCH_TX_PER_BLOCK` 5000→50000 (single-block fast path) | −38% | +39% |
+| Skip cache eviction in batch mode | −3% | +3% |
+| `reWriteBatchedInserts=true` (PG JDBC multi-row rewrite) | −36% | +21% |
+| Skip gzip for batch blocks | −7% | +5% |
+| PG COPY for UTXO bulk load (replaces batch INSERT) | **−48% total** | **+62% total** |
+
+#### Scale Projection (see [PERFORMANCE.md](../../PERFORMANCE.md) for details)
+
+| Hardware | TPS | Limit |
+|----------|-----|-------|
+| 4C i5 + SATA PG (current) | **4,873** | CPU + PG I/O |
+| 128C EPYC + NVMe PG | **~31,000** | Single-thread block creation |
+| + pipelining | **~40,000** | Pipeline latency |
+| Architectural ceiling | **~80,000** | Block creation + MCMC consensus |
 
 ## Topology Variations
 
@@ -537,10 +565,11 @@ docker logs l0-mcmc-0 | tail -20
 | `REQUESTER` connection refused | Bootstrap node not ready | Start bootstrap first, then peers |
 | Blocks not propagating | Kafka not connected | Check `BOOT_STRAP_SERVERS` config |
 | Mining not producing blocks | `SERVICE_MINING=false` or no miner address | Set `SERVICE_MINING=true` and valid `SERVER_MINERADDRESS` |
-| MCMC service not running | `SERVICE_MCMC=false` or rate too low | Set `SERVICE_MCMC=true` and `SERVICE_MCMC_RATE=1000` or lower |
+| MCMC service not running | `SERVICE_MCMC=false` or rate too low | Set `SERVICE_MCMC=true` and `SERVICE_MCMC_RATE=500` or lower |
 | Table creation errors on MCMC node | `CREATETABLE=false` but tables don't exist | Let server node create tables first, or set `CREATETABLE=true` |
 | High memory usage | Java heap insufficient | Reduce `HIKARI_MAX_POOL` or add `-Xmx` JVM args |
-| Test failures with  | Bucket not reset | Set `test..reset=true` or manually clear  bucket |
+| PoS slot tick not firing | `POS_ENABLED` not set or validators not registered | Set `POS_ENABLED=true` and register validators |
+| Validator never selected as proposer | Insufficient stake or wrong `POS_VALIDATOR_KEY` | Ensure ≥32 BIG stake and correct key in `ValidatorDutyService` |
 
 ## Files In This Directory
 
@@ -551,10 +580,13 @@ docker logs l0-mcmc-0 | tail -20
 | `docker-compose.l0-single.yml` | Single-node L0 test |
 | `docker-compose.l0-kafka.yml` | Kafka integration variant |
 | `run-tests.sh` | Automated test runner |
+| `benchmark.sh` | TPS benchmark runner (payment, max-tps, PoS throughput) |
 
 ## References
 
-- [Bigtangle Server](https://github.com/bigtangle/server) — source repository
+- [DESIGN.md](../../DESIGN.md) — two-layer consensus architecture (MCMC + PoS beacon chain)
+- [PERFORMANCE.md](../../PERFORMANCE.md) — benchmark results, optimizations, scale projections
+- [COMPARE.md](../../COMPARE.md) — comparison vs Solana, Ethereum PoS, Visa
 - `layer0-server/src/main/resources/application.yml` — all config options
 - `layer0-mcmc/src/test/java/net/bigtangle/mcmc/test/` — integration tests
 - `/home/jcui/git/blockchain/testall.sh` — existing test runner (local PG, no Docker)
