@@ -20,7 +20,12 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "=== Starting Docker PostgreSQL ==="
-docker compose -f "$COMPOSE_FILE" up -d
+# Remove any stale container from a prior run, then start fresh
+docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+docker compose -f "$COMPOSE_FILE" up -d || {
+    echo "WARNING: docker compose up failed, trying docker start"
+    docker start test-bigtangle-postgres 2>/dev/null || true
+}
 
 echo "=== Waiting for PostgreSQL to be healthy ==="
 for i in $(seq 1 30); do
@@ -39,8 +44,8 @@ done
 
 echo "=== Recreating databases ==="
 for db in info_l0 info_order info_contract info_pai; do
-    docker exec test-bigtangle-postgres psql -U root -d info -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
-    docker exec test-bigtangle-postgres psql -U root -d info -c "CREATE DATABASE $db;" 2>/dev/null || true
+    docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
+    docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
