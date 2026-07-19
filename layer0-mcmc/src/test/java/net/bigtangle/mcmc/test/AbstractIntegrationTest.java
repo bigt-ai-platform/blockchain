@@ -643,19 +643,10 @@ public abstract class AbstractIntegrationTest {
 
 	private Block makeBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount, String basetoken,
 			List<Block> addedBlocks) throws Exception {
-		Wallet w = new Wallet(networkParameters) {
-			@Override
-			public Block solveAndPost(Block block) throws IOException {
-				return block;
-			}
-		};
-		w.importKey(beneficiary);
+		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		Block walletBlock = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
-		for (Transaction tx : walletBlock.getTransactions()) {
-			mempoolService.submitTransaction(tx);
-		}
+		w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
 		if (block != null) {
