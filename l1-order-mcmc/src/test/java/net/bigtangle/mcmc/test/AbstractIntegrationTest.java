@@ -585,8 +585,14 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		mcmcService.calcNewBlockPrototype(store);
-		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
-		w.setSubmitToServer(false);
+		Wallet w = new Wallet(networkParameters) {
+			@Override
+			public Block solveAndPost(Block block) throws IOException {
+				return block;
+			}
+		};
+		w.importKey(beneficiary);
+		w.setServerURL(contextRoot);
 		Block walletBlock = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
 		for (Transaction tx : walletBlock.getTransactions()) {
 			mempoolService.submitTransaction(tx);
@@ -650,9 +656,14 @@ public abstract class AbstractIntegrationTest {
 
 	private Block makeBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount, String basetoken,
 			List<Block> addedBlocks) throws Exception {
-		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
+		Wallet w = new Wallet(networkParameters) {
+			@Override
+			public Block solveAndPost(Block block) throws IOException {
+				return block;
+			}
+		};
+		w.importKey(beneficiary);
 		w.setServerURL(contextRoot);
-		w.setSubmitToServer(false);
 		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		if (!beneficiary.toAddress(networkParameters).toString().equals(genesisKey.toAddress(networkParameters).toString())) {
 			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
