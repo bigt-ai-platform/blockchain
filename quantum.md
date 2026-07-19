@@ -17,6 +17,8 @@ Algorithms are identified by a protocol-level **algorithm suite identifier**, no
 
 This document refers to ML-DSA and SLH-DSA concretely, but the encoding always routes through algorithm identifiers.
 
+SLH-DSA-SHA2-256s (the "small" variant) was chosen over the "fast" variant. The "s" variant has a larger signature but a faster signing time and slightly smaller public key. For maximum security at the same category, the choice is moot — both target category 5 — but the small variant reduces per-key storage for the public key (64 B vs 128 B).
+
 FN-DSA is excluded — it offers no advantage at category 5 and has significant implementation complexity.
 
 ---
@@ -24,6 +26,8 @@ FN-DSA is excluded — it offers no advantage at category 5 and has significant 
 ## 2. KeyBundle and SignatureBundle
 
 Keys and signatures are never encoded as raw concatenation. Both use versioned bundles with explicit algorithm identifiers.
+
+Entries within each bundle are sorted by algorithm ID. This ensures the canonical encoding is deterministic for hashing.
 
 ### KeyBundle
 
@@ -65,7 +69,7 @@ Future algorithm additions add entries. The version field allows format evolutio
 
 ```
 TransactionInput:
-  key_bundle:      KeyBundle     (both public keys)
+  key_bundle:       KeyBundle       (both public keys)
   signature_bundle: SignatureBundle  (both signatures)
 
 Transaction:
@@ -120,24 +124,44 @@ Address:
   hash:        bytes[32] (SHA-256 of canonical KeyBundle encoding)
 ```
 
-The address commits to the entire KeyBundle (both public keys and their algorithm identifiers).
+The address commits to the entire KeyBundle (both public keys and their algorithm identifiers). Because the KeyBundle entries are sorted by algorithm ID, the canonical encoding is deterministic and all nodes produce the same hash.
 
 A future `suite = 2` could replace or add algorithms without changing the address format.
 
 ---
 
-## 6. Consensus Rules
+## 6. Signature Domain Separation
 
-- Every input must carry a KeyBundle and SignatureBundle
-- The bundle must contain both an ML-DSA-87 signature and an SLH-DSA-SHA2-256s signature
-- Both signatures are verified independently; both must pass
-- The address must match `SHA256(canonical_encoding(key_bundle))`
-- No grace period, no legacy mode, no hybrid, no single-sig path
-- Block proposers sign with both keys
+Each algorithm's signature must be computed over a domain-separated digest to prevent cross-protocol leakage. Signing the same raw transaction digest with both algorithms opens the possibility of cross-algorithm manipulation.
+
+```
+tx_digest      = SHA256(tx_version || inputs || outputs || "BIGTANGLE-PQ-TX-v1")
+
+mldsa_sig_hash  = SHA256("MLDSA-SIG-DOMAIN"  || tx_digest)
+slhddsa_sig_hash = SHA256("SLHDSA-SIG-DOMAIN" || tx_digest)
+
+mldsa_sig  = MLDSA.sign(priv_mldsa, mldsa_sig_hash)
+slhddsa_sig = SLHDSA.sign(priv_slhddsa, slhddsa_sig_hash)
+```
+
+Each algorithm signs a domain-separated hash of the transaction. There is no shared randomness or shared digest across algorithms.
 
 ---
 
-## 7. Script
+## 7. Consensus Rules
+
+- Every input must carry a KeyBundle and SignatureBundle
+- The bundle must contain both an ML-DSA-87 signature and an SLH-DSA-SHA2-256s signature
+- Each signature is verified against the domain-separated hash of the transaction for its algorithm
+- Both signatures must pass independently
+- The address must match `SHA256(canonical_encoding(key_bundle))`
+- No grace period, no legacy mode, no hybrid, no single-sig path
+- Block proposers sign with both keys
+- Block merkle root is computed with domain separator `"BIGTANGLE-MERKLE-v1"`
+
+---
+
+## 8. Script
 
 `OP_CHECKSIG` consumes two stack items:
 
@@ -151,20 +175,28 @@ The interpreter:
 
 1. Deserializes both bundles by version
 2. For each entry in `signature_bundle`, finds the matching algorithm entry in `key_bundle`
-3. Dispatches to the correct verifier via `SignatureProvider`
-4. All entries must pass; any failure rejects the input
+3. Computes the domain-separated sighash for that algorithm
+4. Dispatches to the correct verifier via `SignatureProvider`
+5. All entries must pass; any failure rejects the input
 
 No new opcodes. The key contents determine verification logic.
 
 ---
 
-## 8. Key Derivation
+## 9. Key Derivation
 
-From a BIP39 seed with explicit HKDF parameters:
+### Entropy Requirements
+
+The BIP39 mnemonic must contain at least 256 bits of entropy (24 words). A 12-word mnemonic has only 128 bits, which is insufficient for category 5 security. The wallet must reject seeds with less than 256 bits.
+
+The seed must be generated from a CSPRNG (Cryptographically Secure Pseudorandom Number Generator), such as `java.security.SecureRandom`. Custom entropy sources are disallowed.
+
+### Derivation
 
 ```
 seed = MnemonicCode.toSeed(mnemonic, passphrase)
 
+// HKDF with SHA-256, explicit salt and info for domain separation
 PRK = HKDF.extract(HKDF.sha256(), seed, salt = "BIGTANGLE-PQ-v1")
 
 OKM = HKDF.expand(PRK, info = "wallet root", L = 64)
@@ -176,23 +208,37 @@ ml_dsa_key  = MLDSAKey.fromSeed(ml_dsa_seed)
 slh_dsa_key = SLHDSAKey.fromSeed(slh_dsa_seed)
 ```
 
-Using explicit salt and info strings provides domain separation from any other protocol that may derive keys from the same seed.
+Each 32-byte key is independently generated from the OKM. There is no shared entropy path between the two keys.
+
+### Child Key Derivation
+
+For deterministic wallets, derive child keys per suite:
+
+```
+child_seed = HKDF.expand(PRK, info = "child-" || index || "-" || suite_id, L = 64)
+
+child_mldsa_key  = MLDSAKey.fromSeed(child_seed[0:32])
+child_slhddsa_key = SLHDSAKey.fromSeed(child_seed[32:64])
+```
+
+The suite ID in the info string ensures keys from different suites cannot collide.
 
 ---
 
-## 9. Dual-Signature Operational Cost
+## 10. Dual-Signature Operational Cost
 
 Requiring two independent signatures per input is the most conservative choice available. It carries costs:
 
 - **Verification throughput:** two verify operations per input (ML-DSA + SLH-DSA). Mitigated by fork-join parallel verification and a native provider path.
-- **Implementation surface:** two provider implementations to audit. Failure in either freezes the chain. Mitigated by the `SignatureProvider` abstraction — providers can be independently tested, validated with NIST KAT vectors, and hot-swapped during maintenance windows.
-- **Transaction size:** ~21 KB per input. See block size budget below.
+- **Implementation surface:** two provider implementations to audit. Failure in either freezes the chain. Mitigated by the `SignatureProvider` abstraction — providers can be independently tested, validated with NIST ACVP test vectors, and hot-swapped during maintenance windows.
+- **Transaction size:** ~23 KB per input. See block size budget below.
+- **Side-channel exposure:** Java BigInteger operations are not constant-time. Private key operations must run in an isolated signing oracle (cold signer) to minimize timing side-channel risk. Hot wallet signing is not recommended for production use.
 
 These costs are accepted in exchange for the guarantee that breaking both lattice assumptions AND hash function security simultaneously is required to forge a transaction.
 
 ---
 
-## 10. Block Size Budget
+## 11. Block Size Budget
 
 | Component | Size |
 |-----------|------|
@@ -216,7 +262,7 @@ The current 20 MB `MAX_DEFAULT_BLOCK_SIZE` supports up to ~500 tx/block. Scaling
 
 ---
 
-## 11. Provider Abstraction
+## 12. Provider Abstraction
 
 ```
 SignatureProvider (interface)
@@ -233,13 +279,50 @@ Consensus code depends only on `SignatureProvider`. Provider selection is deploy
 
 ---
 
-## 12. Risk
+## 13. Testing and Validation
+
+All implementations must pass NIST ACVP test vectors for both algorithms.
+
+Required test suites:
+
+| Test | Source | Coverage |
+|------|--------|----------|
+| ML-DSA-87 KeyGen/Sign/Verify | NIST ACVP FIPS 204 vectors | All 3 operations |
+| SLH-DSA-SHA2-256s KeyGen/Sign/Verify | NIST ACVP FIPS 205 vectors | All 3 operations |
+| KeyBundle canonical encoding | Custom vectors | Deterministic ordering |
+| SignatureBundle deserialization | Custom vectors | Invalid version, algorithm ID, length |
+| Address derivation | Custom vectors | Canonical hash of KeyBundle |
+| Sighash domain separation | Custom vectors | Per-algorithm digest isolation |
+| Replay protection | Cross-version vectors | Legacy vs PQ digest rejection |
+
+Providers must produce identical results for the same seed. Test vectors must be cross-validated between the BC provider and any native provider.
+
+---
+
+## 14. Governance Upgrade Path
+
+If one algorithm is catastrophically broken:
+
+1. Governance proposal to activate a new `suite` ID that removes the broken algorithm
+2. The broken algorithm's entries in new KeyBundles and SignatureBundles are ignored
+3. Existing UTXOs remain spendable under their original suite ID (the old suite's valid entries are still accepted for old UTXOs)
+4. New UTXOs use only the updated suite
+5. After a sunset period, the broken suite is fully deprecated
+
+This path is exercised periodically in testnet to ensure the mechanism works before it is needed.
+
+---
+
+## 15. Risk
 
 | Risk | Mitigation |
 |------|------------|
-| Lattice cryptography broken (ML-DSA) | SLH-DSA depends only on SHA-256; chain survives |
-| Implementation bug in either provider freezes chain | Independent KAT validation; canary testing on testnet; governance upgrade path |
+| Lattice cryptography broken (ML-DSA) | SLH-DSA depends only on SHA-256; chain survives on SLH-DSA alone |
+| Implementation bug in either provider freezes chain | Independent ACVP validation; canary testing on testnet; governance upgrade path (section 14) |
 | 23 KB per input increases block propagation | Benchmark with realistic network topology; adjust block rate or size |
 | Verification throughput bottleneck | Parallel verify across inputs; native provider |
+| Java BigInteger side-channel leakage | Signing oracle / cold-key pattern for production; hot signing only for development |
 | Hardware wallet cannot store 2.5 KB key | Signing oracle / cold-key pattern for initial deployment |
 | Future NIST deprecates or replaces ML-DSA-87 | Algorithm suite ID allows clean replacement; old UTXOs remain spendable under old suite |
+| 128-bit entropy from 12-word mnemonic insufficient | Enforce 256-bit minimum entropy (24-word mnemonic) in wallet |
+| Cross-algorithm shared digest attack | Domain-separated sighash per algorithm (section 6) |
