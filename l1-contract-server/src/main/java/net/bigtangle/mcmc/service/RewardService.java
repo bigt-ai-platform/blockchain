@@ -4,15 +4,9 @@
  *******************************************************************************/
 package net.bigtangle.mcmc.service;
 
-import java.math.BigInteger;
 import java.util.List;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -226,11 +220,6 @@ public class RewardService {
 
 		// Enforce timestamp equal to previous max for reward blocktypes
 		block.setTime(currentTime);
-		BigInteger chainTarget = Utils.decodeCompactBits(store.getRewardDifficulty(prevRewardHash));
-		if (Utils.decodeCompactBits(result.getDifficulty()).compareTo(chainTarget) < 0) {
-			chainTarget = Utils.decodeCompactBits(result.getDifficulty());
-		}
-
 		block.addTransaction(tx);
 		// Execute contracts inline in the beacon chain (Flow A).
 		// Signal to confirmContractExecution that contract work is needed
@@ -250,30 +239,7 @@ public class RewardService {
 		tx.setData(currRewardInfo.toByteArray());
 
 		blockServiceCreate.adjustHeightRequiredBlocks(block, store);
-		final BigInteger chainTargetFinal = chainTarget;
 		log.debug("prepare Reward time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-		return rewardSolve(block, chainTargetFinal);
-	}
-
-	private Block rewardSolve(Block block, final BigInteger chainTargetFinal)
-			throws InterruptedException, ExecutionException {
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit((Callable) () -> {
-			log.debug(" reward block solve started  : {} \n for block{}", chainTargetFinal, block);
-			return "";
-		});
-		Stopwatch watch = Stopwatch.createStarted();
-		try {
-			handler.get(50000L, TimeUnit.MILLISECONDS);
-		} catch (TimeoutException e) {
-			log.debug(" reward solve Timeout  {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-			handler.cancel(true);
-			return null;
-		} finally {
-			executor.shutdownNow();
-		}
-		log.debug("Reward Solved time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		return block;
 	}
 
@@ -290,18 +256,7 @@ public class RewardService {
 	}
 
 	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		BigInteger difficultyTargetReward = Utils.decodeCompactBits(currRewardInfo.getDifficultyTargetReward());
-		BigInteger difficultyChain = difficultyTargetReward
-				.multiply(BigInteger.valueOf(NetworkParameters.TARGET_MAX_TPS));
-		difficultyChain = difficultyChain.multiply(BigInteger.valueOf(NetworkParameters.TARGET_SPACING));
-
-		if (difficultyChain.compareTo(networkParameters.getMaxTarget()) > 0) {
-			// log.info("Difficulty hit proof of work limit: {}",
-			// difficultyChain.toString(16));
-			difficultyChain = networkParameters.getMaxTarget();
-		}
-
-		return Utils.encodeCompactBits(difficultyChain);
+		return Utils.encodeCompactBits(networkParameters.getDifficultyLimit());
 	}
 
 	/**

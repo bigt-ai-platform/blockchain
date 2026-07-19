@@ -109,7 +109,7 @@ public class Block extends Message {
 
 	public static Block setBlock2(NetworkParameters params, long setVersion) {
 		return Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-				BlockType.BLOCKTYPE_TRANSFER.name(), 0, Utils.encodeCompactBits(params.getMaxTarget()));
+				BlockType.BLOCKTYPE_TRANSFER.name(), 0, 0);
 	}
 
 	public static Block createBlock(NetworkParameters networkParameters, Block r1, Block r2) {
@@ -293,10 +293,6 @@ public class Block extends Message {
 		}
 	}
 
-	void writePoW(OutputStream stream) throws IOException {
-
-	}
-
 	private void writeTransactions(OutputStream stream) throws IOException {
 		// check for no transaction conditions first
 		// must be a more efficient way to do this but I'm tired atm.
@@ -343,7 +339,6 @@ public class Block extends Message {
 				length == UNKNOWN_LENGTH ? NetworkParameters.HEADER_SIZE + guessTransactionsLength() : length);
 		try {
 			writeHeader(stream);
-			writePoW(stream);
 			writeTransactions(stream);
 		} catch (IOException e) {
 			// Cannot happen, we are serializing to a memory stream.
@@ -354,8 +349,6 @@ public class Block extends Message {
 	@Override
 	protected void bitcoinSerializeToStream(OutputStream stream) throws IOException {
 		writeHeader(stream);
-		writePoW(stream);
-		// We may only have enough data to write the header and PoW.
 		writeTransactions(stream);
 	}
 

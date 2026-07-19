@@ -1843,58 +1843,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private void checkRewardDifficulty(Block rewardBlock, RewardInfo rewardInfo, Block prevRewardBlock,
 			BlockStoreInterface store) throws BlockStoreException {
-
-		// check difficulty
-		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
-		long difficulty = calculateNextChainDifficulty(prevRewardHash, rewardInfo.getChainlength(),
-				rewardBlock.getTimeSeconds(), store);
-
-		if (difficulty != rewardInfo.getDifficultyTargetReward()) {
-			throw new VerificationException("getDifficultyTargetReward does not match.");
-		}
-
+		// PoS mode — difficulty is always maxTargetReward, no retarget calculation
 	}
 
 	public long calculateNextChainDifficulty(Sha256Hash prevRewardHash, long currChainLength, long currentTime,
 			BlockStoreInterface store) throws BlockStoreException {
-
-		if (currChainLength % NetworkParameters.INTERVAL != 0) {
-			return store.getRewardDifficulty(prevRewardHash);
-		}
-
-		// Get the block INTERVAL ago
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			prevRewardHash = store.getRewardPrevBlockHash(prevRewardHash);
-		}
-		Block oldBlock = getBlock(prevRewardHash, store);
-
-		int timespan = (int) Math.max(1, (currentTime - oldBlock.getTimeSeconds()));
-		long prevDifficulty = store.getRewardDifficulty(prevRewardHash);
-
-		// Limit the adjustment step.
-		int targetTimespan = NetworkParameters.TARGET_TIMESPAN;
-		if (timespan < targetTimespan / 4)
-			timespan = targetTimespan / 4;
-		if (timespan > targetTimespan * 4)
-			timespan = targetTimespan * 4;
-
-		BigInteger newTarget = Utils.decodeCompactBits(prevDifficulty);
-		newTarget = newTarget.multiply(BigInteger.valueOf(timespan));
-		newTarget = newTarget.divide(BigInteger.valueOf(targetTimespan));
-
-		if (newTarget.compareTo(networkParameters.getMaxTargetReward()) > 0) {
-			// logger.info("Difficulty hit proof of work limit: {}",
-			// newTarget.toString(16));
-			newTarget = networkParameters.getMaxTargetReward();
-		}
-
-		if (prevDifficulty != (Utils.encodeCompactBits(newTarget))) {
-			logger.info("Difficulty  change from {} to: {} and diff={}", prevDifficulty,
-					Utils.encodeCompactBits(newTarget), prevDifficulty - Utils.encodeCompactBits(newTarget));
-
-		}
-
-		return Utils.encodeCompactBits(newTarget);
+		// PoS mode — return constant max reward difficulty
+		return Utils.encodeCompactBits(networkParameters.getRewardDifficultyLimit());
 	}
 
 	public SolidityState checkRewardReferencedBlocks(Block rewardBlock, BlockStoreInterface store)
@@ -1934,18 +1889,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		BigInteger difficultyTargetReward = Utils.decodeCompactBits(currRewardInfo.getDifficultyTargetReward());
-		BigInteger difficultyChain = difficultyTargetReward
-				.multiply(BigInteger.valueOf(NetworkParameters.TARGET_MAX_TPS));
-		difficultyChain = difficultyChain.multiply(BigInteger.valueOf(NetworkParameters.TARGET_SPACING));
-
-		if (difficultyChain.compareTo(networkParameters.getMaxTarget()) > 0) {
-			// logger.info("Difficulty hit proof of work limit: {}",
-			// difficultyChain.toString(16));
-			difficultyChain = networkParameters.getMaxTarget();
-		}
-
-		return Utils.encodeCompactBits(difficultyChain);
+		// PoS mode — return constant max difficulty (easiest)
+		return Utils.encodeCompactBits(networkParameters.getDifficultyLimit());
 	}
 
 	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, BlockStoreInterface store)

@@ -35,35 +35,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
         this.chainlength = chainlength;
     }
 
-
-    /**
-     * The number that is one greater than the largest representable SHA-256
-     * hash.
-     */
-    private static final BigInteger LARGEST_HASH = BigInteger.ONE.shiftLeft(256);
-
-    /**
-     * Returns the work represented by this block.<p>
-     *
-     * Work is defined as the number of tries needed to solve a block in the
-     * average case. Consider a difficulty target that covers 5% of all possible
-     * hash values. Then the work of the block will be 20. As the target gets
-     * lower, the amount of work goes up.
-     */
-    public BigInteger getWork()  {
-        BigInteger target = getDifficultyTargetAsInteger();
-        return LARGEST_HASH.divide(target.add(BigInteger.ONE));
-    }
-
-    /**
-     * Returns the difficulty target as a 256 bit value that can be compared to a SHA-256 hash. Inside a block the
-     * target is represented using a compact form. If this form decodes to a value that is out of bounds, an exception
-     * is thrown.
-     */
-    public BigInteger getDifficultyTargetAsInteger()  {
-        return Utils.decodeCompactBits(difficultyTargetReward);
-    }
-    
     public static long getSerialversionuid() {
         return serialVersionUID;
     }
@@ -92,40 +63,43 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
         this.chainlength = chainlength;
     }
 
-    
     public long getDifficultyTargetReward() {
         return difficultyTargetReward;
+    }
+
+    public BigInteger getDifficultyTargetAsInteger() {
+        return Utils.decodeCompactBits(difficultyTargetReward);
     }
 
     public void setDifficultyTargetReward(long difficultyTargetReward) {
         this.difficultyTargetReward = difficultyTargetReward;
     }
-  
+
     public Sha256Hash getOrdermatchingResult() {
-		return ordermatchingResult;
-	}
+        return ordermatchingResult;
+    }
 
-	public void setOrdermatchingResult(Sha256Hash ordermatchingResult) {
-		this.ordermatchingResult = ordermatchingResult;
-	}
+    public void setOrdermatchingResult(Sha256Hash ordermatchingResult) {
+        this.ordermatchingResult = ordermatchingResult;
+    }
 
-	public Sha256Hash getContractResult() {
-		return contractResult;
-	}
+    public Sha256Hash getContractResult() {
+        return contractResult;
+    }
 
-	public void setContractResult(Sha256Hash contractResult) {
-		this.contractResult = contractResult;
-	}
+    public void setContractResult(Sha256Hash contractResult) {
+        this.contractResult = contractResult;
+    }
 
-	public byte[] toByteArray() {
+    @Override
+    public byte[] toByteArray() {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
             DataOutputStream dos = new DataOutputStream(baos);
-            
             dos.writeLong(chainlength);
             dos.write(prevRewardHash.getBytes());
             dos.writeInt(blocks.size());
-            for (Sha256Hash bHash : blocks) 
+            for (Sha256Hash bHash : blocks)
                 dos.write(bHash.getBytes());
             dos.writeLong(difficultyTargetReward);
             dos.writeBoolean(ordermatchingResult != null);
@@ -134,11 +108,9 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             dos.writeBoolean(contractResult != null);
             if (contractResult != null)
                 dos.write(contractResult.getBytes());
-
-            
             dos.close();
         } catch (IOException e) {
-            throw  new RuntimeException(e);
+            throw new RuntimeException(e);
         }
         return baos.toByteArray();
     }
@@ -147,7 +119,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
         try {
             return parse(buf);
         } catch (IOException e) {
-            // Cannot happen since checked before
             throw new RuntimeException(e);
         }
     }
@@ -156,7 +127,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
         ByteArrayInputStream bain = new ByteArrayInputStream(buf);
         DataInputStream dis = new DataInputStream(bain);
         byte[] hbuf = new byte[32];
-        
         RewardInfo r = new RewardInfo();
         r.chainlength = dis.readLong();
         dis.readFully(hbuf);
@@ -169,31 +139,20 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             r.blocks.add(Sha256Hash.wrap(hbuf));
         }
         r.difficultyTargetReward = dis.readLong();
-        
         boolean hasOrderMatching = dis.readBoolean();
         if (hasOrderMatching) {
             hbuf = new byte[32];
             dis.readFully(hbuf);
             r.ordermatchingResult = Sha256Hash.wrap(hbuf);
-        } 
-        
-        boolean hasContract = dis.readBoolean();
-        if (hasContract) {
-            hbuf = new byte[32];
-            dis.readFully(hbuf);
-            r.contractResult = Sha256Hash.wrap(hbuf);
         }
-
-        dis.close();
-        bain.close();
+        if (dis.available() > 0) {
+            boolean hasContract = dis.readBoolean();
+            if (hasContract) {
+                hbuf = new byte[32];
+                dis.readFully(hbuf);
+                r.contractResult = Sha256Hash.wrap(hbuf);
+            }
+        }
         return r;
     }
-
-    @Override
-    public String toString() {
-        return "RewardInfo  \n chainlength=" + chainlength + ", \n prevRewardHash=" + prevRewardHash
-                + ", \n prevRewardDifficulty=" + difficultyTargetReward
-                + ", \n referenced block size =" + blocks.size() + "]";
-    }
-
 }

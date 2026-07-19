@@ -64,7 +64,7 @@ public class UtilGeneseBlock {
 		    inputBuilder.data(params.getChainId().getBytes(StandardCharsets.UTF_8));
 		    coinbase.addInput(  TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram())); 
 		    RewardInfo rewardInfo = new RewardInfo(Sha256Hash.ZERO_HASH,
-		            Utils.encodeCompactBits(params.getMaxTargetReward()),
+		            Utils.encodeCompactBits(params.getRewardDifficultyLimit()),
 		            new HashSet<>(), 0L);
 		
 		    coinbase.setData(rewardInfo.toByteArray());

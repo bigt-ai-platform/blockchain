@@ -63,8 +63,9 @@ public abstract class NetworkParameters {
 	/** Unit test network. */
 	public static final String ID_UNITTESTNET = "Test";
 
-	protected BigInteger maxTarget;
-	protected BigInteger maxTargetReward;
+	/* Difficulty limits — genesis hash constants, do not change the value. */
+	protected BigInteger difficultyLimit;
+	protected BigInteger rewardDifficultyLimit;
 	protected int addressHeader;
 	protected int p2shHeader;
 	protected int dumpedPrivateKeyHeader;
@@ -302,14 +303,14 @@ public abstract class NetworkParameters {
 		return dumpedPrivateKeyHeader;
 	}
 
-	/** Maximum target represents the easiest allowable proof of work. */
-	public BigInteger getMaxTarget() {
-		return maxTarget;
+	/** Difficulty limit — genesis hash constant, do not change. */
+	public BigInteger getDifficultyLimit() {
+		return difficultyLimit;
 	}
 
-	/** Maximum target represents the easiest allowable proof of work. */
-	public BigInteger getMaxTargetReward() {
-		return maxTargetReward;
+	/** Reward difficulty limit — genesis hash constant, do not change. */
+	public BigInteger getRewardDifficultyLimit() {
+		return rewardDifficultyLimit;
 	}
 
 	/** Returns the 4 byte header for BIP32 (HD) wallet - public key part. */

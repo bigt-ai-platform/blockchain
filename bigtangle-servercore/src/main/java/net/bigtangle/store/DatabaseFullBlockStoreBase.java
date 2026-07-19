@@ -737,7 +737,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			// Just fill the tables with some valid data
 			// Reward output table
 			insertReward(genesisBlock.getHash(), Sha256Hash.ZERO_HASH,
-					Utils.encodeCompactBits(params.getMaxTargetReward()), 0);
+					Utils.encodeCompactBits(params.getRewardDifficultyLimit()), 0);
 			updateRewardConfirmed(genesisBlock.getHash(), true);
 
 			// create bigtangle Token output table
