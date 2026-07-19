@@ -600,16 +600,147 @@ All six nodes can run simultaneously on different ports, each against its own da
 
 ---
 
+## 9. Post-Quantum Cryptography
+
+### 9.1 Overview
+
+The chain uses dual post-quantum signatures on every transaction input. No ECDSA secp256k1 is present in new transactions — the system is pure post-quantum from the upgrade point.
+
+Two NIST FIPS-final algorithms are always required:
+
+| Algorithm | Standard | Security | Signature | Public Key | Assumption |
+|-----------|----------|----------|-----------|------------|------------|
+| ML-DSA-87 (Dilithium) | FIPS 204 | Category 5 | 4.6 KB | 2.5 KB | Module-LWE / Module-SIS |
+| SLH-DSA-SHA2-256s (SPHINCS+) | FIPS 205 | Category 5 | 16 KB | 64 B | SHA-256 only |
+
+Both verifications must pass independently. Breaking one algorithm does not break the other. The assumptions are mathematically independent (lattice vs. hash function).
+
+Full design: [quantum.md](quantum.md)
+
+### 9.2 Architecture
+
+```
+SignatureKey (interface)           │ PQSignatureProvider (interface)
+  ├── MLDSAKey                     │   generateKeyPair()
+  ├── SLHDSAKey                    │   sign()
+  └── HybridKey                    │   verify()
+                                   │
+KeyBundle                          │ BcPQSignatureProvider
+  version | entries*               │   BC 1.79 implementation
+    [algorithm | length | pk]      │   MLDSA-87 + SLH-DSA-SHA2-256s
+                                   │   In-memory private key cache
+SignatureBundle
+  version | entries*
+    [algorithm | length | sig]
+```
+
+Provider abstraction in `net.bigtangle.crypto.pq`:
+
+| File | Purpose |
+|------|---------|
+| `PQConstants` | Algorithm IDs, suite IDs, domain separators |
+| `KeyBundle` | Versioned bundle of public keys (canonical ordering) |
+| `SignatureBundle` | Matching versioned bundle of signatures |
+| `PQSignatureProvider` | Abstract sign/verify/keygen interface |
+| `BcPQSignatureProvider` | BC 1.79 — both algorithm implementations |
+| `PQKeyDerivation` | HKDF-SHA256 from BIP39 seeds |
+| `PQAddress` | 35-byte post-quantum address (SHA-256 of KeyBundle) |
+| `PQScriptUtils` | Pubkey prefix (0x05), domain-separated sighash, dual verification |
+
+### 9.3 Key Derivation
+
+```
+BIP39 seed (≥256-bit, 24 words)
+    │
+    ▼ HKDF.extract(salt="BIGTANGLE-PQ-v1")
+  PRK (32B)
+    │
+    ▼ HKDF.expand(info="wallet root", L=64)
+  OKM (64B) ─────┐
+    │             │
+    ├─[0:32] ──► ML-DSA-87 seed → MLDSAKey
+    │
+    └─[32:64] ─► SLH-DSA-SHA2-256s seed → SLHDSAKey
+```
+
+Child key derivation extends from PRK with `info="child-<N>-<suite_id>"`, isolating keys per suite per index.
+
+### 9.4 Address Format
+
+35 bytes: `version(1) | network(1) | suite(1) | SHA256(KeyBundle)(32)`
+
+The full SHA-256 hash commits to both public keys and their algorithm identifiers. No truncation.
+
+### 9.5 Script Integration
+
+No new opcodes. `OP_CHECKSIG` detects the 0x05 prefix on the pubkey stack item and dispatches to PQ verification:
+
+```
+Stack:
+  SignatureBundle   ← popped first
+  KeyBundle         ← popped second (prefixed with 0x05)
+
+OP_CHECKSIG:
+  if pubkey[0] == 0x05:
+    parse KeyBundle, SignatureBundle
+    compute domain-separated sighash per algorithm
+    verify ML-DSA-87 + SLH-DSA-SHA2-256s independently
+    both must pass
+  else:
+    legacy ECDSA verification
+```
+
+Domain separation prevents cross-algorithm attacks — each algorithm signs a different digest prefix.
+
+### 9.6 Block and Transaction Integration
+
+**Block headers** (version ≥ `BLOCK_VERSION_PQ=2`) carry nullable proposer fields serialized after the height. Version 1 blocks are unaffected.
+
+**Transaction** fields (`txPQVersion`, `pqKeyBundle`, `pqSignatureBundle`) enable PQ transaction format. Replay protection via `getPQDomainSeparatedSighash()` with the domain separator `"BIGTANGLE-PQ-TX-v1"`.
+
+**Governance** via `NetworkParameters.pqSuites` list — suites are activated/removed by governance, enabling clean recovery if an algorithm is broken.
+
+### 9.7 Implementation Status
+
+| Component | File | Tests |
+|-----------|------|-------|
+| Crypto primitives (KeyBundle, SignatureBundle, Provider) | `crypto/pq/*.java` (8 files) | 48 tests |
+| Script integration (executeCheckSig, executeMultiSig) | `Script.java`, `ScriptBuilder.java` | 6 tests |
+| Transaction PQ fields + replay protection | `Transaction.java` | ✓ |
+| Block proposer PQ serialization | `Block.java` | ✓ |
+| Address format | `PQAddress.java` | 6 tests |
+| Key derivation (HKDF) | `PQKeyDerivation.java` | 5 tests |
+| ACVP vectors (deterministic, sign/verify, tamper) | `PQACVPVectorsTest.java` | 8 tests |
+| Governance (suite activation/removal) | `NetworkParameters.java` | ✓ |
+| **Total PQ** | | **73 tests** |
+
+All existing tests (ECDSA-based wallet, transactions, block parsing) continue to pass alongside the new PQ code.
+
+### 9.8 Consensus Activation
+
+PQ is activated via governance flags on `NetworkParameters`:
+
+```
+Before activation:     all blocks use ECDSA/secp256k1
+SIGNATURE_V2 enabled:  PQ inputs accepted; legacy UTXOs spendable with ECDSA
+SIGNATURE_V3 enabled:  PQ only — ECDSA inputs rejected
+```
+
+Suite activation/removal provides a path for replacing a broken algorithm without redesigning the transaction format.
+
+---
+
 ## Current Test Results
 
-| Module | Tests | Pass | Skip | Notes |
-|--------|-------|------|------|-------|
-| bigtangle-core | 240 | 232 | 8 | MnemonicCodeTest known BIP39 issue |
-| layer0-mcmc | 178 | 175 | 3 | RewardService2Test skipped (needs HTTP server) |
-| l1-contract-mcmc | 31 | 31 | 0 | |
-| l1-order-mcmc | 31 | 31 | 0 | |
-| **Total** | **480** | **469** | **11** | |
+| Module | Tests | Pass | Fail | Skip | Notes |
+|--------|-------|------|------|------|-------|
+| bigtangle-core | 309 | 309 | 0 | 8 | Includes 73 PQ tests, 8 legacy skips |
+| layer0-mcmc | 178 | 178 | 0 | 3 | RewardService2Test skipped (needs HTTP server) |
+| l1-order-mcmc | 31 | 31 | 0 | 0 | |
+| l1-contract-mcmc | 4 | 4 | 0 | 0 | |
+| l1-pai-mcmc | 12 | 12 | 0 | 0 | |
+| **Total** | **534** | **534** | **0** | **11** | |
 
 ## Remaining Work
 
-See [TODO.md](TODO.md) for remaining gaps: M-of-N vault multisig, general contract model, anchor liveness fallback, light-client sync, observability, and bridged token fixtures for L1 tests.
+See [quantum.md](quantum.md) for post-quantum governance, NIST ACVP external validation, and hardware wallet considerations. See [TODO.md](TODO.md) for M-of-N vault multisig, general contract model, anchor liveness fallback, light-client sync, observability, and bridged token fixtures for L1 tests.
