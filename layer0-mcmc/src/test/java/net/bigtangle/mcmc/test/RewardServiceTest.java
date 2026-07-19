@@ -57,15 +57,15 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		// Reward exactly on target -> no difficulty change
 
 		Block rollingBlock = addBlocks(1, null);
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			currentTime += NetworkParameters.TARGET_SPACING;
+		for (int i = 0; i < 360 - 1; i++) {
+			currentTime += 30;
 			Block rollingBlock2 = addBlocks(1, null);
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock2),
 					defaultBlockWrap(rollingBlock2), currentTime, store);
 			blockGraph.updateChain();
 		}
 
-		currentTime += NetworkParameters.TARGET_SPACING;
+		currentTime += 30;
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
@@ -83,8 +83,8 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		List<Block> addedBlocks = new ArrayList<>();
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			currentTime += NetworkParameters.TARGET_SPACING / 8;
+		for (int i = 0; i < 360 - 1; i++) {
+			currentTime += 30 / 8;
 
 			Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
@@ -92,7 +92,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			blockGraph.updateChain();
 		}
 
-		currentTime += NetworkParameters.TARGET_SPACING / 8;
+		currentTime += 30 / 8;
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
@@ -103,15 +103,15 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way slower -> maximum difficulty change to lower difficulty
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			currentTime += NetworkParameters.TARGET_SPACING * 8;
+		for (int i = 0; i < 360 - 1; i++) {
+			currentTime += 30 * 8;
 			Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
 					currentTime, store);
 			blockGraph.updateChain();
 		}
 
-		currentTime += NetworkParameters.TARGET_SPACING * 8;
+		currentTime += 30 * 8;
 		Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
 				currentTime, store);
@@ -140,14 +140,14 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			currentTime += NetworkParameters.TARGET_SPACING / 2;
+		for (int i = 0; i < 360 - 1; i++) {
+			currentTime += 30 / 2;
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 					defaultBlockWrap(rollingBlock), currentTime, store);
 			blockGraph.updateChain();
 		}
 
-		currentTime += NetworkParameters.TARGET_SPACING / 2;
+		currentTime += 30 / 2;
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();
@@ -158,14 +158,14 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		Block highDifficultyBlock = rollingBlock;
 
 		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		for (int i = 0; i < NetworkParameters.INTERVAL - 1; i++) {
-			currentTime += NetworkParameters.TARGET_SPACING * 2;
+		for (int i = 0; i < 360 - 1; i++) {
+			currentTime += 30 * 2;
 			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 					defaultBlockWrap(rollingBlock), currentTime, store);
 			blockGraph.updateChain();
 		}
 
-		currentTime += NetworkParameters.TARGET_SPACING * 2;
+		currentTime += 30 * 2;
 		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
 				defaultBlockWrap(rollingBlock), currentTime, store);
 		blockGraph.updateChain();

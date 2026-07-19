@@ -183,53 +183,32 @@ public abstract class NetworkParameters {
 	 */
 	public static final long ALLOWED_TIME_DRIFT = 5 * 60;
 
-	/**
-	 * How many bytes are required to represent a block header WITHOUT the trailing
-	 * 00 length byte.
-	 */
-	public static final int HEADER_SIZE = 72 // bitcoin (excluding nonce + difficultyTarget)
+	public static final int HEADER_SIZE = 72 // version + prevBlockHash + prevBranchHash + merkleRoot + time
 			+ 32 // additional branch prev block
-			+ 4 // time from int to long
-			+ 8 // sequence (lastMiningReward) long
+			+ 4 // time expanded from int to long
+			+ 8 // lastMiningRewardBlock
 			+ 4 // blockType
 			+ 8 // height
-			+ 0 // (nonce, difficultyTarget, minerAddress removed — PoS mode)
 			;
 	// max time of an order in seconds
 	public static final long ORDER_TIMEOUT_MAX = 8 * 60 * 60;
 
-	// 100 billions as Value
+	// 10^17 BIG total supply (10^(11 + 6 decimals))
 	public static BigInteger BigtangleCoinTotal = BigInteger.valueOf(LongMath.pow(10, 11 + BIGTANGLE_DECIMAL));
-	public static final long TARGET_YEARLY_MINING_PAYOUT = BigtangleCoinTotal.longValue() / 1000;
 
-	public static final int TARGET_TIMESPAN = 3 * 60 * 60;
+	// Per-block reward pool (PoS epoch rewards sourced from accumulated fees)
+	public static final long REWARD_AMOUNT_BLOCK_REWARD = 31709791L;
 
-	// cycle
-	public static int TARGET_SPACING = 30; // seconds per chain block, adjustable for testing
-	public static final int INTERVAL = TARGET_TIMESPAN / TARGET_SPACING;
-
-	public static final int TARGET_MAX_TPS = 100;
-
-	// per interval of length target_spacing, the reward is:
-	public static final long TARGET_INTERVAL_REWARD = TARGET_YEARLY_MINING_PAYOUT * TARGET_SPACING / 31536000;
-	// a third always comes directly from the consensus blocks:
-	public static final long REWARD_AMOUNT_BLOCK_REWARD = TARGET_INTERVAL_REWARD / 3;
-	// PER_BLOCK_REWARD removed — epoch-based rewards via EpochRewardService
-
-	// PoS epoch: fee-only rewards (no inflation, no new token minting)
+	// PoS epoch configuration
 	public static final long SLOTS_PER_EPOCH = 32L;
 
-	// block number can be taken in a reward block, it can not be too large for
-	// build reward.
-	// about TARGET_MAX_TPS * TARGET_SPACING
+	// Max blocks per reward milestone
 	public static final int TARGET_MAX_BLOCKS_IN_REWARD = 5000;
 	public static final int MAX_REWARD_BLOCK_SIZE = MAX_DEFAULT_BLOCK_SIZE + TARGET_MAX_BLOCKS_IN_REWARD * 200;
 
-	// MCMC and reward milestones will only take the blocks back to this confirmed
-	// reward block
+	// MCMC horizon: look back up to this many confirmed reward blocks
 	public static final int MILESTONE_CUTOFF = 40;
-	// Heuristic: MCMC will only continue up to this much above the current
-	// confirmed reward block
+	// MCMC forward horizon: look ahead up to this many blocks above confirmed reward
 	public static final int FORWARD_BLOCK_HORIZON = TARGET_MAX_BLOCKS_IN_REWARD / 4;
 
 	protected NetworkParameters() {
