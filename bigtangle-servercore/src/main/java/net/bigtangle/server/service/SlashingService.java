@@ -48,8 +48,8 @@ public class SlashingService {
             } finally {
                 store.close();
             }
-        } catch (Exception ex) {
-            log.debug("No prior slashing state to restore", ex);
+        } catch (Exception e) {
+            log.trace("No prior slashing state to restore", e);
         }
     }
 

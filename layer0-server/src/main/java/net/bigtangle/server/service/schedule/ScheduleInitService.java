@@ -15,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import net.bigtangle.kafka.BlockStreamHandler;
+import net.bigtangle.kafka.TransactionStreamHandler;
 
 @Component
 @EnableAsync
@@ -24,6 +25,8 @@ public class ScheduleInitService extends AbstractScheduleInitService {
 
     @Autowired
     BlockStreamHandler blockStreamHandler;
+    @Autowired
+    TransactionStreamHandler transactionStreamHandler;
 
     @Override
     protected Logger getLogger() {
@@ -37,6 +40,7 @@ public class ScheduleInitService extends AbstractScheduleInitService {
             initializeService();
             if (serverConfiguration.getRunKafkaStream()) {
                 blockStreamHandler.runStream();
+                transactionStreamHandler.runStream();
             }
         }
     }

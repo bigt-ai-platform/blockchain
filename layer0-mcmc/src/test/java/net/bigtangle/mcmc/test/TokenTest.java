@@ -469,10 +469,12 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> b = userWallet.pay(null, pharmacy.toAddress(networkParameters).toString(),Coin.SATOSHI,
+		userWallet.pay(null, pharmacy.toAddress(networkParameters).toString(),Coin.SATOSHI,
 				memoInfo);
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		// sendEmpty(10);
-		makeRewardBlock(b.get(b.size() - 1));
+		makeRewardBlock(b);
 
 		List<UTXO> pharmalist = getBalance(false, pharmacy);
 		String jsonString = pharmalist.get(0).getMemo();
@@ -714,10 +716,11 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
-		makeRewardBlock(b);
-
+		wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
+		makeRewardBlock(b);
 
 		return userkeys;
 	}
@@ -744,7 +747,9 @@ public class TokenTest extends AbstractIntegrationTest {
 		}
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
+		wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
 
 		makeRewardBlock(b);

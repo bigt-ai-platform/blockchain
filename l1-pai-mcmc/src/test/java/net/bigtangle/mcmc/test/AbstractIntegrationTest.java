@@ -64,6 +64,8 @@ import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
@@ -100,6 +102,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired protected CacheBlockService cacheBlockService;
     @Autowired protected ScheduleConfiguration scheduleConfiguration;
     @Autowired protected CacheBlockPrototypeService cacheBlockPrototypeService;
+    @Autowired protected MempoolService mempoolService;
     @Autowired protected BlockSaveService blockSaveService;
     @Autowired protected transient javax.sql.DataSource dataSource;
 
@@ -132,6 +135,7 @@ public abstract class AbstractIntegrationTest {
 
     public void resetStore() throws BlockStoreException {
         store.resetStore();
+        mempoolService.clear();
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         genesis.setLastMiningRewardBlock(0);
         genesis.setBlockType(BlockType.BLOCKTYPE_INITIAL);

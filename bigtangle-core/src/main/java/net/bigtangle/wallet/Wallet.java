@@ -270,7 +270,7 @@ public class Wallet extends WalletBase {
 
 		// +1 for domain name or super domain
 		token.setSignnumber(token.getSignnumber() + 1);
-		Block block = getTip();
+		Block block = fetchTipBlock();
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(pubKeyTo, basecoin, tokenInfo, memoInfo);
 
@@ -398,7 +398,7 @@ public class Wallet extends WalletBase {
 		Coin payAmount = amount;
 		for (List<FreeStandingTransactionOutput> part : parts) {
 			Coin canPay = sum(part);
-			re.add(payFromListNoSplit(aesKey, destination, payAmount, memo, part, getTip()));
+			re.add(payFromListNoSplit(aesKey, destination, payAmount, memo, part, Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS)));
 			if (canPay.compareTo(payAmount) >= 0) {
 				break;
 			}
@@ -511,7 +511,7 @@ public class Wallet extends WalletBase {
 
 		signTransaction(multispent, aesKey);
 
-		Block b = getTip();
+		Block b = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		b.addTransaction(multispent);
 		if (getFee() && !amount.isBIG()) {
 			// add big fee
@@ -522,7 +522,9 @@ public class Wallet extends WalletBase {
 		return b;
 	}
 
-	public Block getTip() throws IOException {
+	// chops a list into non-view sublists of length L
+
+	private Block fetchTipBlock() throws IOException {
 		return params.getDefaultSerializer().makeBlock(getTipData());
 	}
 
@@ -531,8 +533,6 @@ public class Wallet extends WalletBase {
 		return OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getTip,
 				Json.jsonmapper().writeValueAsString(requestParam));
 	}
-
-	// chops a list into non-view sublists of length L
 	public static <T> List<List<T>> chopped(List<T> list, final int L) {
 		List<List<T>> parts = new ArrayList<>();
 		final int N = list.size();
@@ -550,7 +550,7 @@ public class Wallet extends WalletBase {
 		}
 		Transaction multispent = payToListTransaction(aesKey, giveMoneyResult, tokenid, memo, coinList);
 
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.addTransaction(multispent);
 		if (getFee() && !Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, tokenid)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
@@ -758,7 +758,7 @@ public class Wallet extends WalletBase {
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
 		signTransaction(tx, aesKey);
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
 		block.addTransaction(tx);
 		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
@@ -858,7 +858,7 @@ public class Wallet extends WalletBase {
 		tx.setDataClassName("OrderOpen");
 
 		signTransaction(tx, aesKey);
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.addTransaction(tx);
 		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
@@ -883,6 +883,7 @@ public class Wallet extends WalletBase {
 		Transaction tx = new Transaction(params);
 		OrderCancelInfo info = new OrderCancelInfo(orderblockhash);
 		tx.setData(info.toByteArray());
+		tx.setDataClassName("OrderCancelInfo");
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
@@ -890,7 +891,7 @@ public class Wallet extends WalletBase {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
 		block.addTransaction(tx);
 		block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
@@ -916,6 +917,7 @@ public class Wallet extends WalletBase {
 		Transaction tx = new Transaction(params);
 		ContractEventCancelInfo info = new ContractEventCancelInfo(eventblockhash);
 		tx.setData(info.toByteArray());
+		tx.setDataClassName("ContractEventCancelInfo");
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
@@ -923,7 +925,7 @@ public class Wallet extends WalletBase {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
 		block.addTransaction(tx);
 		block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
@@ -973,7 +975,7 @@ public class Wallet extends WalletBase {
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("ContractEventInfo");
 		signTransaction(tx, aesKey);
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.addTransaction(tx);
 		block.setBlockType(BlockType.BLOCKTYPE_CONTRACT_EVENT);
 
@@ -983,11 +985,40 @@ public class Wallet extends WalletBase {
 		return solveAndPost(block);
 	}
 
+	public void submitTransaction(Transaction tx) throws IOException {
+		try {
+			OkHttp3Util.post(getServerURL() + ReqCmd.submitTransaction.name(), tx.bitcoinSerialize());
+		} catch (ConnectException e) {
+			this.serverPool.removeServer(getServerURL());
+			throw e;
+		}
+	}
+
+	public void submitTransactions(List<Transaction> txs) throws IOException {
+		if (txs == null || txs.isEmpty())
+			return;
+		try {
+			java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+			java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+			for (Transaction tx : txs) {
+				byte[] txBytes = tx.bitcoinSerialize();
+				dos.writeInt(txBytes.length);
+				dos.write(txBytes);
+			}
+			dos.flush();
+			OkHttp3Util.post(getServerURL() + ReqCmd.submitTransactions.name(), baos.toByteArray());
+		} catch (ConnectException e) {
+			this.serverPool.removeServer(getServerURL());
+			throw e;
+		}
+	}
+
 	public Block solveAndPost(Block block) throws IOException {
 		try {
-			// check the valid to time must be at least the block creation time
-			//System.out.println(Utils.HEX.encode( block.bitcoinSerialize()));
-			OkHttp3Util.post(getServerURL() + ReqCmd.saveBlock.name(), block.bitcoinSerialize());
+			List<Transaction> txs = block.getTransactions();
+			if (txs != null && !txs.isEmpty()) {
+				submitTransactions(txs);
+			}
 			return block;
 		} catch (ConnectException e) {
 			this.serverPool.removeServer(getServerURL());
@@ -1089,7 +1120,7 @@ public class Wallet extends WalletBase {
 				Transaction.SigHash.ALL, false);
 		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
 		input.setScriptSig(inputScript);
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.addTransaction(transaction);
 
 		return solveAndPost(block);
@@ -1147,7 +1178,7 @@ public class Wallet extends WalletBase {
 
 //no repeat here
 	public Block payTransaction(List<Transaction> txs) throws IOException {
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		for (Transaction tx : txs) {
 			block.addTransaction(tx);
 		}
@@ -1197,7 +1228,7 @@ public class Wallet extends WalletBase {
 			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
 			transaction.setData(cipher);
 		}
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
 		Sha256Hash sighash = transaction.getHash();
 		ECKey.ECDSASignature party1Signature = userKey.sign(sighash);
@@ -1365,7 +1396,7 @@ public class Wallet extends WalletBase {
 
 		int time = 60 * 60 * 8;
 		if (System.currentTimeMillis() / 1000 - oldBlock.getTimeSeconds() > time) {
-			Block block = getTip();
+			Block block = fetchTipBlock();
 			block.setBlockType(oldBlock.getBlockType());
 			for (Transaction transaction : oldBlock.getTransactions()) {
 				block.addTransaction(transaction);
@@ -1427,7 +1458,7 @@ public class Wallet extends WalletBase {
 	 */
 	public Block retryBlocks(Block oldBlock) throws IOException {
 
-		Block block = getTip();
+		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.setBlockType(oldBlock.getBlockType());
 		for (Transaction transaction : oldBlock.getTransactions()) {
 			block.addTransaction(transaction);

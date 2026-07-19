@@ -41,7 +41,7 @@ public class RandaoService {
                 store.close();
             }
         } catch (Exception ex) {
-            log.debug("No prior RANDAO state to restore", ex);
+            log.trace("No prior RANDAO state to restore", ex);
         }
     }
 

@@ -257,9 +257,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						throw e;
 				}
 		} catch (VerificationException e) {
-			logger.info("", e);
-			if (throwExceptions)
+			if (throwExceptions) {
+				logger.info("", e);
 				throw e;
+			}
+			logger.trace("", e);
 			return SolidityState.getFailState();
 		} finally {
 			scriptVerificationExecutor.shutdownNow();
@@ -1258,9 +1260,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		} catch (VerificationException e) {
 			scriptVerificationExecutor.shutdownNow();
-			logger.info("", e);
-			if (throwExceptions)
+			if (throwExceptions) {
+				logger.info("", e);
 				throw e;
+			}
+			logger.trace("", e);
 			return SolidityState.getFailState();
 		}
 

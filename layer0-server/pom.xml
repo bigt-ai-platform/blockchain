@@ -66,11 +66,6 @@
 			<scope>test</scope>
 		</dependency>
 
-		<dependency>
-			<groupId>io.minio</groupId>
-			<artifactId>minio</artifactId>
-			<version>8.6.0</version>
-		</dependency>
 
 	</dependencies>
 

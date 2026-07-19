@@ -49,7 +49,9 @@ public class UserdataTest extends AbstractIntegrationTest {
         // TODO encrypt and decrypt the  UserSettingData
 
 
-       Block dataBlock = wallet.saveUserdata(outKey, transaction,true,null);
+       wallet.saveUserdata(outKey, transaction,true,null);
+        Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+        Block dataBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
         makeRewardBlock(dataBlock);
 
 
@@ -66,7 +68,9 @@ public class UserdataTest extends AbstractIntegrationTest {
 
        // Ensure tips queue is updated before second wallet operation
        mcmcService.calcNewBlockPrototype(store);
-       Block clearBlock = wallet.saveUserdata(outKey, transaction,true,null);
+       wallet.saveUserdata(outKey, transaction,true,null);
+        Block predecessor2 = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+        Block clearBlock = drainMempoolAndCreateBlock(predecessor2, predecessor2);
         makeRewardBlock(clearBlock);
  
 
@@ -94,7 +98,9 @@ public class UserdataTest extends AbstractIntegrationTest {
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo0.toByteArray());      
         
-       Block dataBlock = wallet.saveUserdata(outKey, transaction,true,null);
+       wallet.saveUserdata(outKey, transaction,true,null);
+        Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+        Block dataBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
         makeRewardBlock(dataBlock);
 
 
@@ -135,6 +141,8 @@ public class UserdataTest extends AbstractIntegrationTest {
         transaction.setData(contactInfo0.toByteArray());
         // TODO encrypt and decrypt the contactInfo0
        wallet.saveUserdata(outKey, transaction,false,null);
+        Block predecessor2 = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+        Block dataBlock2 = drainMempoolAndCreateBlock(predecessor2, predecessor2);
 
     }
 

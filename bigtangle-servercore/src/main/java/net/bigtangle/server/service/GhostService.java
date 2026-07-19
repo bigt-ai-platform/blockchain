@@ -47,7 +47,7 @@ public class GhostService {
                 store.close();
             }
         } catch (Exception e) {
-            log.debug("No prior fork-choice state to restore", e);
+            log.trace("No prior fork-choice state to restore", e);
         }
     }
 

@@ -77,7 +77,7 @@ public class CasperService {
                 store.close();
             }
         } catch (Exception e) {
-            log.debug("No prior Casper state to restore", e);
+            log.trace("No prior Casper state to restore", e);
         }
     }
 

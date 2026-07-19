@@ -99,8 +99,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
             futures[c] = CompletableFuture.runAsync(() -> {
                 try {
                     Wallet firstW = Wallet.fromKeys(networkParameters, walletKeys.get(startIdx), contextRoot);
-                    Block tip = firstW.getTip();
-
+                    List<Transaction> txs = new ArrayList<>();
                     for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
                         ECKey wk = walletKeys.get(startIdx + i);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
@@ -108,15 +107,13 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
                                 new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay",
                                 w.calculateAllSpendCandidates(null, false));
-                        if (tx != null) tip.addTransaction(tx);
+                        if (tx != null) txs.add(tx);
                     }
 
                     long start = System.nanoTime();
-                    Block posted = firstW.solveAndPost(tip);
-                    if (posted != null) {
-                        totalNs.addAndGet(System.nanoTime() - start);
-                        ok.addAndGet(PAYMENTS_PER_CLIENT);
-                    }
+                    firstW.submitTransactions(txs);
+                    totalNs.addAndGet(System.nanoTime() - start);
+                    ok.addAndGet(PAYMENTS_PER_CLIENT);
                 } catch (Exception e) {
                     fail.addAndGet(PAYMENTS_PER_CLIENT);
                 }

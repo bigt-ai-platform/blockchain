@@ -43,7 +43,7 @@ for db in info_l0 info_order info_contract info_pai; do
     docker exec test-bigtangle-postgres psql -U root -d info -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
-DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234 -Dtest.minio.reset=false"
+DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
 echo "=== Running core tests (no DB needed) ==="
 mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml"
@@ -51,7 +51,6 @@ echo "=== Core tests passed ==="
 
 echo "=== Building all modules (serial) ==="
 # Build all server modules + core dependencies first (without tests)
-# This ensures L1 test modules get fresh JARs for MinioService etc.
 mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
   -pl layer0-server,layer0-mcmc,l1-order-server,l1-contract-server,l1-pai-server 2>&1 | tail -1
 echo "=== All modules built ==="

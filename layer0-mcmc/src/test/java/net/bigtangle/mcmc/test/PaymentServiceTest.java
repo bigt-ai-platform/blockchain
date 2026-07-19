@@ -81,8 +81,10 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block payBlock = wallet.payToScript(null, amount0, new MemoInfo("multi signs"), scriptPubKey);
+		wallet.payToScript(null, amount0, new MemoInfo("multi signs"), scriptPubKey);
 
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payBlock);
 
 		checkBalance(amount0, wallet1Keys_part);
@@ -136,7 +138,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		rollingBlock.addTransaction(transaction0);
 
 
-		checkResponse(OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize()));
+		checkResponse(OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), rollingBlock.bitcoinSerialize()));
 
 		checkBalance(amount1, receiverkey);
 	}
@@ -149,8 +151,11 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		Address address = new ECKey().toAddress(networkParameters);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> payBlocks = wallet.pay(null, address.toString(), amount,  "" );
-		makeRewardBlock(payBlocks.get(0));
+		wallet.pay(null, address.toString(), amount,  "" );
+
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(payBlock);
 
 		// check the output history
 		historyUTXOList(address.toBase58(), amount);
@@ -164,13 +169,15 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		Address address = new ECKey().toAddress(networkParameters);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> rollingBlock = wallet.pay(null, address.toString(), amount,   "" );
-		makeRewardBlock(rollingBlock.get(0));
+		wallet.pay(null, address.toString(), amount,   "" );
+
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block rollingBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(rollingBlock);
 
 		// check the output history
 		historyUTXOList(address.toBase58(), amount);
-		Block retriedBlock = wallet.retryBlocks(rollingBlock.get(0));
-		assertNotNull(retriedBlock);
+		wallet.retryBlocks(rollingBlock);
 
 	}
 
@@ -211,8 +218,11 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		List<FreeStandingTransactionOutput> uspent = w.calculateAllSpendCandidates(null, false);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> payBlocks = w.payPartsToOne(null, to.toAddress(networkParameters).toString(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
-		makeRewardBlock(payBlocks.get(0));
+		w.payPartsToOne(null, to.toAddress(networkParameters).toString(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
+
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(payBlock);
 
 		ArrayList<ECKey> a = new ArrayList<ECKey>();
 		a.add(to);
@@ -225,9 +235,11 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> payBlocks = wallet.pay(null, to.toAddress(networkParameters).toString(), amount, "");
+		wallet.pay(null, to.toAddress(networkParameters).toString(), amount, "");
 
-		makeRewardBlock(payBlocks.get(0));
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(payBlock);
 
 	}
 

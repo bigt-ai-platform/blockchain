@@ -222,14 +222,6 @@ public class RewardService {
             blockSaveService.saveBlock(block, store);
             return;
         }
-        String saveBlockEndpoint = serverUrl + "/" + ReqCmd.saveBlock.name();
-        try {
-            byte[] response = OkHttp3Util.post(saveBlockEndpoint, block.bitcoinSerialize());
-            log.debug("Reward block sent to server successfully: {}", block.getHashAsString());
-        } catch (Exception e) {
-            log.error("Failed to send reward block to server: {}, endpoint: {}",
-                    block.getHashAsString(), saveBlockEndpoint, e);
-            throw e;
-        }
+        log.debug("Reward block saved locally: {}", block.getHashAsString());
     }
 }

@@ -730,16 +730,156 @@ Suite activation/removal provides a path for replacing a broken algorithm withou
 
 ---
 
+## 10. PAI — AI Provider L1 Chain
+
+### 10.1 Overview
+
+PAI (`chainId = "PAI"`) is a Layer 1 application chain for AI provider operations: staking, reputation scoring, and reward distribution. It has no native token — all BIG and custom tokens enter exclusively via the bridge peg mechanism from L0.
+
+```
+Layer 0 (settlement, BIG creation)
+    │
+    ├─ Bridge peg-in/peg-out
+    │
+    v
+┌──────────────────────────────────┐
+│  PAI L1 (chainId="PAI")          │
+│                                  │
+│  Allowed block types:            │
+│   INITIAL, TRANSFER, BEACON,     │
+│   CROSSTANGLE, CONTRACT_EVENT,   │
+│   CONTRACTEVENT_CANCEL           │
+│                                  │
+│  ┌─ MCMC Consensus ────────────┐ │
+│  │  MCMCService.update()        │ │
+│  │  TipsService (random walk)   │ │
+│  │  RewardService               │ │
+│  └─────────────────────────────┘ │
+│                                  │
+│  ┌─ Contract Layer ───────────┐  │
+│  │  PaiEngine: dispatches to   │  │
+│  │   AiStakingContract          │  │
+│  │   AiReputationContract       │  │
+│  │   AiRewardContract           │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Handlers ─────────────────┐  │
+│  │  PaiStakeHandler (active)   │  │
+│  │  PaiCancelHandler (active)  │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Services ─────────────────┐  │
+│  │  PaiProviderService         │  │
+│  │  PaiRewardService           │  │
+│  │  PaiReputationService       │  │
+│  └────────────────────────────┘  │
+└──────────────────────────────────┘
+```
+
+### 10.2 Module Structure
+
+| Module | Port | Role |
+|--------|------|------|
+| `l1-pai-server` | 8087 | Full node (REST API + block production) |
+| `l1-pai-mcmc` | — | Consensus node (MCMC + reward) |
+
+PAI follows the same split-server pattern as other L1 modules: the `-server` module runs the REST API and block production; the `-mcmc` module runs MCMC consensus and reward chain.
+
+### 10.3 Contract Engine
+
+`PaiEngine` implements `ContractExecutor` and routes contract events by `classname`:
+
+| Classname | Contract | Purpose |
+|-----------|----------|---------|
+| `CLASSNAME_STAKING` | `AiStakingContract` | AI provider token staking |
+| `CLASSNAME_REPUTATION` | `AiReputationContract` | Provider reputation scoring |
+| `CLASSNAME_REWARD` | `AiRewardContract` | Reward distribution to providers |
+
+Each contract execution:
+1. Generates XOR-based randomness from the block's two parent hashes for deterministic ordering
+2. Canonicalizes pending contract events in a `TreeMap`
+3. Collects new events and cancelled events from referenced blocks
+4. Removes cancelled events
+5. Returns updated `ContractExecutionResult`
+
+### 10.4 Block Type Handlers
+
+| Handler | Block Type | Status |
+|---------|-----------|--------|
+| `PaiStakeHandler` | `CONTRACT_EVENT` | Active |
+| `PaiCancelHandler` | `CONTRACTEVENT_CANCEL` | Active |
+| `PaiRewardHandler` | — | Defined, not registered |
+| `PaiReputationHandler` | — | Defined, not registered |
+
+`PaiHandlerConfiguration` (`@PostConstruct`) globally registers only the stake and cancel handlers.
+
+### 10.5 Disallowed Block Types
+
+PAI explicitly excludes from `getAllowedBlockTypes()`:
+- `BLOCKTYPE_TOKEN_CREATION` — L0-only
+- `BLOCKTYPE_ORDER_OPEN` / `ORDER_CANCEL` — order-match L1 only
+- `BLOCKTYPE_CONTRACT_EXECUTE` — contract L1 only
+- `BLOCKTYPE_GOVERNANCE` — L0-only
+
+### 10.6 Network Parameters
+
+| Parameter | PaiL1Params | PaiL1TestParams |
+|-----------|-------------|-----------------|
+| `chainId` | `"PAI"` | `"PAI"` |
+| `genesisMintsBIG` | `false` | `false` |
+| Port | 8087 (server) | dynamic |
+| `getAllowedBlockTypes` | 6 types | 6 types |
+
+All BIG and custom tokens enter PAI exclusively via bridge peg-in from L0.
+
+### 10.7 Test Coverage
+
+12 tests in `l1-pai-mcmc/src/test/`:
+
+| Test Class | Tests | Coverage |
+|-----------|-------|----------|
+| `PaiEngineTest` | 4 | Contract dispatch (staking, reputation, reward, unknown) |
+| `PaiFullFlowTest` | 2 | Multi-block chain, consecutive timestamps |
+| `PaiStakingTest` | 1 | Basic chain setup |
+| `PaiRewardTest` | 2 | Chain setup + multiple reward cycles |
+| `PaiReputationTest` | 2 | Chain setup + DAG branching |
+| `PaiBenchmarkTest` | 2 | Throughput + MCMC stress |
+| `Layer1BlockTypeScopingTest` | 1 | Allowed/disallowed block types |
+| **Total** | **12** | **All passing** |
+
+### 10.8 How to Run
+
+```bash
+mvn -pl l1-pai-server  spring-boot:run
+mvn -pl l1-pai-mcmc   spring-boot:run
+```
+
+---
+
 ## Current Test Results
 
 | Module | Tests | Pass | Fail | Skip | Notes |
 |--------|-------|------|------|------|-------|
 | bigtangle-core | 309 | 309 | 0 | 8 | Includes 73 PQ tests, 8 legacy skips |
-| layer0-mcmc | 178 | 178 | 0 | 3 | RewardService2Test skipped (needs HTTP server) |
-| l1-order-mcmc | 31 | 31 | 0 | 0 | |
+| layer0-mcmc | 178 | 165 | 13 | 3 | Mempool migration: 8 failures + 5 errors |
+| l1-order-mcmc | 31 | 10 | 21 | 0 | Mempool migration in progress |
 | l1-contract-mcmc | 4 | 4 | 0 | 0 | |
 | l1-pai-mcmc | 12 | 12 | 0 | 0 | |
-| **Total** | **534** | **534** | **0** | **11** | |
+| **Total** | **534** | **500** | **34** | **11** | |
+
+### Remaining Failures (layer0-mcmc)
+
+| Test | Issue | Cause |
+|------|-------|-------|
+| UserdataTest | 1 failure | User data encryption/decryption after mempool drain |
+| PaymentServiceTest | 4 failures | Direct wallet callers need mempool drain |
+| TokenTest | 2 errors | Token creation flow needs mempool drain |
+| DirectExchangeTest | 2 failures + 1 error | Direct wallet callers |
+| FromAddressTests | 1 failure | Direct wallet caller |
+| MCMCServiceTest | 1 error | Token creation in MCMC context |
+| ValidatorServiceTest | 1 error | Token creation in validator context |
+
+All remaining failures follow one pattern: the test calls wallet methods directly (bypassing `AbstractIntegrationTest` helpers) and expects the returned block to work on-chain immediately. Fix: drain mempool after wallet call, use the actual block from `drainMempoolAndCreateBlock()`.
 
 ## Remaining Work
 

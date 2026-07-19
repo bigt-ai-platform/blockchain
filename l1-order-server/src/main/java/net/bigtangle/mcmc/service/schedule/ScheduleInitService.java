@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.service.schedule.AbstractScheduleInitService;
 import net.bigtangle.kafka.BlockStreamHandler;
+import net.bigtangle.kafka.TransactionStreamHandler;
 
 @Component("mcmcScheduleInitService")
 @EnableAsync
@@ -25,6 +26,8 @@ public class ScheduleInitService extends AbstractScheduleInitService {
 
     @Autowired(required = false)
     BlockStreamHandler blockStreamHandler;
+    @Autowired(required = false)
+    TransactionStreamHandler transactionStreamHandler;
 
     @Override
     protected Logger getLogger() {
@@ -38,6 +41,9 @@ public class ScheduleInitService extends AbstractScheduleInitService {
             initializeService();
             if (blockStreamHandler != null && serverConfiguration.getRunKafkaStream()) {
                 blockStreamHandler.runStream();
+            }
+            if (transactionStreamHandler != null && serverConfiguration.getRunKafkaStream()) {
+                transactionStreamHandler.runStream();
             }
         }
     }

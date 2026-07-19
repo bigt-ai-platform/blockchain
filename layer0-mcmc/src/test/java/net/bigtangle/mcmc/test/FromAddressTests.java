@@ -117,13 +117,13 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		log.debug("====ready buyTicket====");
 		// Ensure tips queue is populated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
+		w.pay(null, accountKey.toAddress(networkParameters).toString(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
-		makeRewardBlock(bs.get(0));
-		for (Block b : bs) {
-			blockGraph.updateTransactionOutputSpendPendingDo(b);
-		}
-		makeRewardBlock(bs.get(0));
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block bs = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(bs);
+		blockGraph.updateTransactionOutputSpendPendingDo(bs);
+		makeRewardBlock(bs);
 		log.debug("====start buyTicket====");
 		List<ECKey> userkeys = new ArrayList<ECKey>();
 		userkeys.add(key);
@@ -166,7 +166,9 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		String memo = "pay to user";
 		// Ensure tips queue is populated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
+		yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
 		makeRewardBlock(b);
 		blockGraph.updateTransactionOutputSpendPendingDo(b);

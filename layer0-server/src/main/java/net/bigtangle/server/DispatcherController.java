@@ -220,18 +220,10 @@ public class DispatcherController implements DisposableBean {
 				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
 			}
 				break;
-			case saveBlock: {
-				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-                    logger.debug("saveBlock denied {} {}", remoteAddr(httprequest), reqCmd);
-					errorLimit(httpServletResponse, watch);
-					return;
-				}
-				saveBlock(bodyByte, httpServletResponse, watch, store);
-			}
-				break;
 			case submitTransaction: {
 				Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
 				mempoolService.submitTransaction(tx);
+				blockSaveService.broadcastTransaction(tx);
 				this.outPrintJSONString(httpServletResponse, new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}
 				break;
@@ -245,6 +237,7 @@ public class DispatcherController implements DisposableBean {
 					dis.readFully(txBytes);
 					Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(txBytes);
 					mempoolService.submitTransaction(tx);
+					blockSaveService.broadcastTransaction(tx);
 					count++;
 				}
 				net.bigtangle.response.GetStringResponse resp = new net.bigtangle.response.GetStringResponse();
@@ -871,31 +864,6 @@ public class DispatcherController implements DisposableBean {
 			blockService.batchBlock(block, store);
 			// deleteRegisterBlock(block, store);
 			this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "batchBlock");
-		}
-	}
-
-	private void saveBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			BlockStoreInterface store) throws Exception {
-		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-		// miner address check removed
-		if (serverConfiguration.getMyserverblockOnly()) {
-			if (!blockService.existMyserverblocks(block.getPrevBlockHash(), store)) {
-				AbstractResponse resp = ErrorResponse.create(101);
-				resp.setErrorcode(403);
-				resp.setMessage("server accept only his tip selection for validation");
-				this.outPrintJSONString(httpServletResponse, resp, watch, "saveBlock");
-			} else {
-				blockService.checkBlockBeforeSave(block, store);
-				blockSaveService.saveBlock(block, store);
-				deleteRegisterBlock(block, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "saveBlock");
-
-			}
-		} else {
-			blockService.checkBlockBeforeSave(block, store);
-			blockSaveService.saveBlock(block, store);
-			deleteRegisterBlock(block, store);
-			this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "saveBlock");
 		}
 	}
 

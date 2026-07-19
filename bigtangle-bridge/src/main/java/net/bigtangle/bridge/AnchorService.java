@@ -99,7 +99,7 @@ public class AnchorService {
         String l0Url = anchorConfiguration.getL0Url();
         if (l0Url != null && !l0Url.isEmpty()) {
             try {
-                OkHttp3Util.post(l0Url + "/" + ReqCmd.saveBlock.name(), b.bitcoinSerialize());
+                OkHttp3Util.post(l0Url + "/" + ReqCmd.batchBlock.name(), b.bitcoinSerialize());
                 logger.info("Anchor block posted to L0: {}", b.getHashAsString());
             } catch (Exception e) {
                 logger.warn("Failed to post anchor to L0 at {}: {}", l0Url, e.getMessage());

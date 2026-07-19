@@ -123,6 +123,7 @@ import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.mcmc.service.MCMCService;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.mcmc.service.TipsService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SyncBlockService;
@@ -192,6 +193,8 @@ public abstract class AbstractIntegrationTest {
 	@Autowired
 	protected BlockSaveService blockSaveService;
 	@Autowired
+	protected MempoolService mempoolService;
+	@Autowired
 	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
@@ -213,38 +216,66 @@ public abstract class AbstractIntegrationTest {
 
 	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll, Transaction feeTransaction)
 			throws BlockStoreException, UTXOProviderException, InsufficientMoneyException, IOException,
-			InterruptedException, ExecutionException {
-		// add more blocks follow this startBlock
+			InterruptedException, ExecutionException, Exception {
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
-			rollingBlock1.addTransaction(feeTransaction);
-			blockGraph.addBlock(rollingBlock1, true, store);
+			rollingBlock1 = batchTransactions(feeTransaction, rollingBlock1, rollingBlock1);
 			blocksAddedAll.add(rollingBlock1);
 		}
 		return rollingBlock1;
 	}
 
 	protected Block addFixedBlocks(int num, Block startBlock, List<Block> blocksAddedAll) throws Exception {
-		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
 		for (int i = 0; i < num; i++) {
-			rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
-			rollingBlock1.addTransaction(wallet.feeTransaction(null));
-			blockGraph.addBlock(rollingBlock1, true, store);
+			rollingBlock1 = batchTransactions(wallet.feeTransaction(null), rollingBlock1, rollingBlock1);
 			rewardWithBlock(blocksAddedAll, rollingBlock1);
 		}
 		return rollingBlock1;
 	}
 
 	protected Block addFixedBlocks(Block startBlock, List<Block> blocksAddedAll) throws Exception {
-		// add more blocks follow this startBlock
 		Block rollingBlock1 = startBlock;
-
-		rollingBlock1 = Block.createBlock(networkParameters, rollingBlock1, rollingBlock1);
-		rollingBlock1.addTransaction(wallet.feeTransaction(null));
-		blockGraph.addBlock(rollingBlock1, true, store);
+		rollingBlock1 = batchTransactions(wallet.feeTransaction(null), rollingBlock1, rollingBlock1);
 		return rollingBlock1;
+	}
+
+	protected Block batchTransactions(Transaction tx, Block prevBlock, Block branchBlock) throws Exception {
+		submitTransactionsToMempool(java.util.Collections.singletonList(tx));
+		return drainMempoolAndCreateBlock(prevBlock, branchBlock);
+	}
+
+	protected Block batchTransactions(java.util.List<Transaction> txs, Block prevBlock, Block branchBlock) throws Exception {
+		submitTransactionsToMempool(txs);
+		return drainMempoolAndCreateBlock(prevBlock, branchBlock);
+	}
+
+	protected void submitTransactionsToMempool(java.util.List<Transaction> txs) throws java.io.IOException {
+		java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+		java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+		for (Transaction tx : txs) {
+			byte[] txBytes = tx.bitcoinSerialize();
+			dos.writeInt(txBytes.length);
+			dos.write(txBytes);
+		}
+		dos.flush();
+		OkHttp3Util.post(contextRoot + ReqCmd.submitTransactions.name(), baos.toByteArray());
+	}
+
+	protected Block drainMempoolAndCreateBlock(Block prevBlock, Block branchBlock) throws Exception {
+		java.util.List<Transaction> txns = mempoolService.drainAll();
+		if (txns.isEmpty()) {
+			return null;
+		}
+		Block block = Block.createBlock(networkParameters, prevBlock, branchBlock);
+		for (Transaction tx : txns) {
+			block.addTransaction(tx);
+		}
+		BlockSaveService.setBlockTypeFromTransactions(block);
+		blockGraph.addBlock(block, false, store);
+		blockGraph.updateChain(false);
+		store.commitDatabaseBatchWrite();
+		return block;
 	}
 
 	public void checkTokenAssertTrue(String tokenid, String domainname) throws Exception {
@@ -310,6 +341,7 @@ public abstract class AbstractIntegrationTest {
 	 */
 	public void resetStore() throws BlockStoreException {
 		store.resetStore();
+		mempoolService.clear();
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
 		genesis.setLastMiningRewardBlock(0);
 		genesis.setBlockType(BlockType.BLOCKTYPE_INITIAL);
@@ -349,16 +381,18 @@ public abstract class AbstractIntegrationTest {
 			// If update fails (e.g., not enough blocks), continue anyway
 		}
 
-		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
-		// log.debug("block " + (b == null ? "block is null" : b.toString()));
+		wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
+		if (b == null || b.getTransactions().isEmpty()) {
+			return null;
+		}
 		if (addedBlocks != null) {
 			addedBlocks.add(b);
 		}
-		if (b != null) {
-			Block re = makeRewardBlock(b);
-			if (addedBlocks != null) {
-				addedBlocks.add(re);
-			}
+		Block re = makeRewardBlock(b);
+		if (addedBlocks != null) {
+			addedBlocks.add(re);
 		}
 		return b;
 	}
@@ -374,11 +408,13 @@ public abstract class AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block b = w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
-		// log.debug("block " + (b == null ? "block is null" : b.toString()));
-
-		addedBlocks.add(b);
-		rewardWithBlock(addedBlocks,b);
+		w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
+		if (b != null) {
+			addedBlocks.add(b);
+			rewardWithBlock(addedBlocks, b);
+		}
 		// Open sell order for test tokens
 	}
 
@@ -484,11 +520,8 @@ public abstract class AbstractIntegrationTest {
 		Script inputScript = ScriptBuilder.createInputScript(sig);
 		input.setScriptSig(inputScript);
 
-		// Create block with tx
-		block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
-		block.addTransaction(tx);
-		block = adjustSolve(block);
-		this.blockGraph.addBlock(block, true, store);
+		// Submit tx to mempool and create block from batch
+		block = batchTransactions(tx, predecessor, predecessor);
 		addedBlocks.add(block);
 
 		// Confirm and return
@@ -554,8 +587,12 @@ public abstract class AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
-		Block block = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
-		addedBlocks.add(block);
+		w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
+		if (block != null) {
+			addedBlocks.add(block);
+		}
 		return block;
 
 	}
@@ -618,8 +655,12 @@ public abstract class AbstractIntegrationTest {
 		}
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block block = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
-		addedBlocks.add(block);
+		w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
+		if (block != null) {
+			addedBlocks.add(block);
+		}
 
 		return block;
 	}
@@ -651,14 +692,11 @@ public abstract class AbstractIntegrationTest {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		// Create block with order
-		Block block = Block.createBlock(networkParameters, predecessor, predecessor);
-		block.addTransaction(tx);
-		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
-		block = adjustSolve(block);
-
-		this.blockGraph.addBlock(block, true, store);
+		// Submit tx and fee to mempool and create block from batch
+		java.util.List<Transaction> txs = new java.util.ArrayList<>();
+		txs.add(tx);
+		txs.add(wallet.feeTransaction(null));
+		Block block = batchTransactions(txs, predecessor, predecessor);
 		addedBlocks.add(block);
 
 		makeOrderExecutionAndReward(addedBlocks,block);
@@ -678,14 +716,11 @@ public abstract class AbstractIntegrationTest {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		// Create block with order
-		Block block = UtilsTest.createBlock(networkParameters, predecessor, predecessor);
-		block.addTransaction(tx);
-		block.addTransaction(wallet.feeTransaction(null));
-		block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
-		block = adjustSolve(block);
-
-		this.blockGraph.addBlock(block, true, store);
+		// Submit tx and fee to mempool and create block from batch
+		java.util.List<Transaction> txs = new java.util.ArrayList<>();
+		txs.add(tx);
+		txs.add(wallet.feeTransaction(null));
+		Block block = batchTransactions(txs, predecessor, predecessor);
 		addedBlocks.add(block);
 
 		return block;
@@ -734,12 +769,18 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block makeRewardBlock(Block predecessor) throws Exception {
+		if (predecessor == null || predecessor.getHash() == null 
+				|| Sha256Hash.ZERO_HASH.equals(predecessor.getPrevBlockHash())) {
+			return makeRewardBlock(tipsService.getValidatedBlockPair(store).getLeft().getBlock().getHash());
+		}
 		return makeRewardBlock(predecessor.getHash());
 	}
 
 	protected Block makeRewardBlock(Sha256Hash predecessor) throws Exception {
-
-		Block block = makeRewardBlock(cacheBlockService.getMaxConfirmedReward(store).getBlockHash(), predecessor,
+		net.bigtangle.core.TXReward prevReward = cacheBlockService.getMaxConfirmedReward(store);
+		net.bigtangle.core.Sha256Hash prevRewardHash = prevReward != null ? prevReward.getBlockHash() 
+				: net.bigtangle.core.UtilGeneseBlock.createGenesis(networkParameters).getHash();
+		Block block = makeRewardBlock(prevRewardHash, predecessor,
 				predecessor);
 
 		return block;
@@ -910,8 +951,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block createAndAddNextBlockWithTransaction(Block b1, Block b2, Transaction prevOut)
-			throws VerificationException, BlockStoreException, JsonParseException, JsonMappingException, IOException,
-			UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
+			throws Exception {
 
 		return createAndAddNextBlockWithTransaction(b1, b2, prevOut, true);
 	}
@@ -1563,7 +1603,7 @@ public abstract class AbstractIntegrationTest {
 
 		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
 
-		OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize());
+		OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), rollingBlock.bitcoinSerialize());
 
 	}
 

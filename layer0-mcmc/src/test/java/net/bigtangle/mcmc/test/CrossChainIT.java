@@ -72,7 +72,7 @@ public class CrossChainIT {
         tx.addOutput(new Coin(BigInteger.valueOf(1000),
                 NetworkParameters.BIGTANGLE_TOKENID), bobKey);
         l1Block.addTransaction(tx);
-        byte[] saveResp = OkHttp3Util.post(l1Url + ReqCmd.saveBlock.name(),
+        byte[] saveResp = OkHttp3Util.post(l1Url + ReqCmd.batchBlock.name(),
                 l1Block.bitcoinSerialize());
         log.info("Block saved on L1 ({} bytes)", saveResp.length);
 

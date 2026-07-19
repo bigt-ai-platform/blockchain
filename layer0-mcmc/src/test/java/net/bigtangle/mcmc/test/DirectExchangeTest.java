@@ -100,10 +100,13 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		block.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 		block.addTransaction(transaction);
 		block.addTransaction(wallet.feeTransaction(null));
-		OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), block.bitcoinSerialize());
+		OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), block.bitcoinSerialize());
+
+		Block predecessor2 = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block savedBlock = drainMempoolAndCreateBlock(predecessor2, predecessor2);
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
-		requestParam.put("hashHex", Utils.HEX.encode(block.getHash().getBytes()));
+		requestParam.put("hashHex", Utils.HEX.encode(savedBlock.getHash().getBytes()));
 		data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getBlockByHash.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		block = networkParameters.getDefaultSerializer().makeBlock(data);
@@ -182,7 +185,9 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			ECKey outKey = new ECKey();
 			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
-		Block payblock = wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block payblock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payblock);
 
 		List<UTXO> balance = getBalance(false, genesiskey);
@@ -217,8 +222,10 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			ECKey outKey = new ECKey();
 			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
-		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
-		makeRewardBlock();
+		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
+		makeRewardBlock(b);
 
 		Map<String, Object> requestParam = new HashMap<String, Object>();
 
@@ -269,7 +276,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
 		rollingBlock.addTransaction(tx);
 
-		byte[] res = OkHttp3Util.post(contextRoot + ReqCmd.saveBlock.name(), rollingBlock.bitcoinSerialize());
+		byte[] res = OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), rollingBlock.bitcoinSerialize());
 		log.debug(res.toString());
 	}
 

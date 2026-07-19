@@ -39,7 +39,7 @@ public class RemoteBinaryTests extends RemoteTest {
         
         // Post to the server (commented out in original)
         /* 
-        String url = contextRoot + (ReqCmd.SAVE_BLOCK != null ? ReqCmd.SAVE_BLOCK : "/saveBlock");
+        String url = contextRoot + (ReqCmd.batchBlock != null ? ReqCmd.batchBlock : "/saveBlock");
         OkHttp3Util.post(url, block.bitcoinSerialize());
         */
     }

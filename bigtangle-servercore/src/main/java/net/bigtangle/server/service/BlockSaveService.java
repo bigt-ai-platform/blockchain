@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.exception.BlockStoreException;
@@ -81,13 +82,25 @@ public class BlockSaveService {
 	}
 
 	public void broadcastBlock(Block block) {
+		broadcastBytes(block.bitcoinSerialize());
+	}
+
+	public void broadcastTransaction(Transaction tx) {
+		try {
+			broadcastBytes(tx.bitcoinSerialize());
+		} catch (Exception e) {
+			logger.warn("broadcastTransaction error", e);
+		}
+	}
+
+	private void broadcastBytes(byte[] data) {
 		try {
 			if ("".equalsIgnoreCase(kafkaConfiguration.getBootstrapServers()))
 				return;
 			KafkaMessageProducer kafkaMessageProducer = new KafkaMessageProducer(kafkaConfiguration);
-			kafkaMessageProducer.sendMessage(block.bitcoinSerialize(), "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG");
+			kafkaMessageProducer.sendMessage(data, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG");
 		} catch (InterruptedException | ExecutionException | IOException e) {
-			logger.warn(block.toString(), e);
+			logger.warn("broadcastBytes error", e);
 		}
 	}
 
@@ -130,6 +143,7 @@ public class BlockSaveService {
 				for (Transaction tx : txns) {
 					block.addTransaction(tx);
 				}
+				setBlockTypeFromTransactions(block);
 				saveBatchBlock(block, store);
 			} finally {
 				store.close();
@@ -177,6 +191,7 @@ public class BlockSaveService {
 							for (Transaction tx : group) {
 								b.addTransaction(tx);
 							}
+							setBlockTypeFromTransactions(b);
 							saveBatchBlock(b, s);
 						} catch (Exception e) {
 							throw new RuntimeException(e);
@@ -196,5 +211,34 @@ public class BlockSaveService {
 			feeService.updateBaseFee(txns.size());
 		}
 		return txns.size();
+	}
+
+	public static void setBlockTypeFromTransactions(Block block) {
+		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
+			return;
+		}
+		String dataClassName = block.getTransactions().get(0).getDataClassName();
+		if (dataClassName == null) {
+			return;
+		}
+		switch (dataClassName) {
+		case "OrderOpen":
+			block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
+			break;
+		case "OrderCancelInfo":
+			block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
+			break;
+		case "ContractEventInfo":
+			block.setBlockType(BlockType.BLOCKTYPE_CONTRACT_EVENT);
+			break;
+		case "ContractEventCancelInfo":
+			block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+			break;
+		case "UserSettingDataInfo":
+			block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
+			break;
+		default:
+			break;
+		}
 	}
 }

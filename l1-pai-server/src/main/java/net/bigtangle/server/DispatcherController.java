@@ -40,6 +40,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
@@ -59,6 +60,7 @@ import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.layer1.service.MultiSignService;
 import net.bigtangle.layer1.service.MultiSignServiceCreate;
 import net.bigtangle.layer1.service.OutputService;
@@ -112,6 +114,8 @@ public class DispatcherController implements DisposableBean {
     private AccessGrantService accessGrantService;
     @Autowired
     protected CacheBlockPrototypeService cacheBlockPrototypeService;
+    @Autowired
+    private MempoolService mempoolService;
 
     @Override
     public void destroy() {
@@ -174,17 +178,33 @@ public class DispatcherController implements DisposableBean {
                 this.outPointBinaryArray(httpServletResponse, data, reqCmd);
             }
                 break;
-            case saveBlock: {
-                if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-                    logger.debug("saveBlock denied {} {}", remoteAddr(httprequest), reqCmd);
-                    errorLimit(httpServletResponse, watch);
-                    return;
-                }
-                saveBlock(bodyByte, httpServletResponse, watch, store);
-            }
-                break;
             case batchBlock: {
                 batchBlock(bodyByte, httpServletResponse, watch, store);
+            }
+                break;
+            case submitTransaction: {
+                Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
+                mempoolService.submitTransaction(tx);
+                blockSaveService.broadcastTransaction(tx);
+                this.outPrintJSONString(httpServletResponse, new OkResponse(), watch, reqCmd);
+            }
+                break;
+            case submitTransactions: {
+                java.io.DataInputStream dis = new java.io.DataInputStream(
+                        new java.io.ByteArrayInputStream(bodyByte));
+                int count = 0;
+                while (dis.available() > 0) {
+                    int len = dis.readInt();
+                    byte[] txBytes = new byte[len];
+                    dis.readFully(txBytes);
+                    Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(txBytes);
+                    mempoolService.submitTransaction(tx);
+                blockSaveService.broadcastTransaction(tx);
+                    count++;
+                }
+                GetStringResponse resp = new GetStringResponse();
+                resp.setMessage(String.valueOf(count));
+                this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
             }
                 break;
             case getOutputs: {
@@ -523,29 +543,6 @@ public class DispatcherController implements DisposableBean {
         } else {
             blockService.batchBlock(block, store);
             this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "batchBlock");
-        }
-    }
-
-    private void saveBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-            BlockStoreInterface store) throws Exception {
-        Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
-        if (serverConfiguration.getMyserverblockOnly()) {
-            if (!blockService.existMyserverblocks(block.getPrevBlockHash(), store)) {
-                AbstractResponse resp = ErrorResponse.create(101);
-                resp.setErrorcode(403);
-                resp.setMessage("server accept only his tip selection for validation");
-                this.outPrintJSONString(httpServletResponse, resp, watch, "saveBlock");
-            } else {
-                blockService.checkBlockBeforeSave(block, store);
-                blockSaveService.saveBlock(block, store);
-                deleteRegisterBlock(block, store);
-                this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "saveBlock");
-            }
-        } else {
-            blockService.checkBlockBeforeSave(block, store);
-            blockSaveService.saveBlock(block, store);
-            deleteRegisterBlock(block, store);
-            this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, "saveBlock");
         }
     }
 
