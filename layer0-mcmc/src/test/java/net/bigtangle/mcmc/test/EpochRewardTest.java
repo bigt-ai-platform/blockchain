@@ -77,8 +77,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
 
         // Distribute epoch rewards
         long epoch = 1;
-        long rewardPool = NetworkParameters.SLOTS_PER_EPOCH
-                * NetworkParameters.REWARD_AMOUNT_BLOCK_REWARD;
+        long rewardPool = 32L * 31709791L;
         Sha256Hash rewardBlockHash = epochRewardService.distributeEpochRewards(epoch,
                 BigInteger.valueOf(rewardPool), store);
         assertNotNull(rewardBlockHash, "distributeEpochRewards should return a block hash");

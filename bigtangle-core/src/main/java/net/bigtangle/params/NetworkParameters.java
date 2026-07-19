@@ -196,9 +196,6 @@ public abstract class NetworkParameters {
 	// 10^17 BIG total supply (10^(11 + 6 decimals))
 	public static BigInteger BigtangleCoinTotal = BigInteger.valueOf(LongMath.pow(10, 11 + BIGTANGLE_DECIMAL));
 
-	// Per-block reward pool (PoS epoch rewards sourced from accumulated fees)
-	public static final long REWARD_AMOUNT_BLOCK_REWARD = 31709791L;
-
 	// PoS epoch configuration
 	public static final long SLOTS_PER_EPOCH = 32L;
 

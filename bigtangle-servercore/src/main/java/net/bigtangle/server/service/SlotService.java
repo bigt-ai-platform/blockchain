@@ -135,7 +135,8 @@ public class SlotService {
         casperService.finalizeCheckpoint(epoch, store);
 
         long epochSlots = NetworkParameters.SLOTS_PER_EPOCH;
-        long epochRewardPool = epochSlots * NetworkParameters.REWARD_AMOUNT_BLOCK_REWARD;
+        // TODO: epoch rewards come from accumulated transaction fees (FeeService pool)
+        long epochRewardPool = 0L;
         if (epochRewardPool > 0) {
             epochRewardService.distributeEpochRewards(epoch,
                     java.math.BigInteger.valueOf(epochRewardPool), store);
