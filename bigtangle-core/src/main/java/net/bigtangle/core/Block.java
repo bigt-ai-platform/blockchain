@@ -77,6 +77,14 @@ public class Block extends Message {
 	private BlockType blockType;
 	private long height;
 
+	/** Proposer post-quantum KeyBundle (nullable, not yet serialized to wire). */
+	@Nullable
+	private byte[] proposerKeyBundle;
+
+	/** Proposer post-quantum SignatureBundle (nullable, not yet serialized to wire). */
+	@Nullable
+	private byte[] proposerSignatureBundle;
+
 	/** If null, it means this object holds only the headers. */
 	@Nullable
 	List<Transaction> transactions;
@@ -838,6 +846,20 @@ public class Block extends Message {
 
 	public BlockType getBlockType() {
 		return blockType;
+	}
+
+	@Nullable
+	public byte[] getProposerKeyBundle() { return proposerKeyBundle; }
+
+	public void setProposerKeyBundle(@Nullable byte[] proposerKeyBundle) {
+		this.proposerKeyBundle = proposerKeyBundle;
+	}
+
+	@Nullable
+	public byte[] getProposerSignatureBundle() { return proposerSignatureBundle; }
+
+	public void setProposerSignatureBundle(@Nullable byte[] proposerSignatureBundle) {
+		this.proposerSignatureBundle = proposerSignatureBundle;
 	}
 
 	public void setBlockType(long blocktype) {

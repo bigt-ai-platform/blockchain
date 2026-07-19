@@ -44,6 +44,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
+import net.bigtangle.crypto.pq.PQScriptUtils;
+
 import static com.google.common.base.Preconditions.*;
 import static net.bigtangle.script.ScriptOpCodes.*;
 
@@ -1456,21 +1458,32 @@ public class Script {
 
         // TODO: Use int for indexes everywhere, we can't have that many inputs/outputs
         boolean sigValid = false;
-        try {
-            TransactionSignature sig  = TransactionSignature.decodeFromBitcoin(sigBytes, requireCanonical,
-                verifyFlags.contains(VerifyFlag.LOW_S));
 
-            // TODO: Should check hash type is known
-            Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-            sigValid = ECKey.verify(hash.getBytes(), sig, pubKey);
-        } catch (Exception e1) {
-            // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
-            // Because I can't verify there aren't more, we use a very generic Exception catch
+        // Detect PQ pubkey by prefix (0x05)
+        if (PQScriptUtils.isPQPubkey(pubKey)) {
+            try {
+                Sha256Hash baseHash = txContainingThis.hashForSignature(index, connectedScript, (byte) 1);
+                sigValid = PQScriptUtils.verifyPQ(pubKey, sigBytes, baseHash);
+            } catch (Exception e1) {
+                log.warn("PQ signature checking failed!", e1);
+            }
+        } else {
+            try {
+                TransactionSignature sig  = TransactionSignature.decodeFromBitcoin(sigBytes, requireCanonical,
+                    verifyFlags.contains(VerifyFlag.LOW_S));
 
-            // This RuntimeException occurs when signing as we run partial/invalid scripts to see if they need more
-            // signing work to be done inside LocalTransactionSigner.signInputs.
-            if (!e1.getMessage().contains("Reached past end of ASN.1 stream"))
-                log.warn("Signature checking failed!", e1);
+                // TODO: Should check hash type is known
+                Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
+                sigValid = ECKey.verify(hash.getBytes(), sig, pubKey);
+            } catch (Exception e1) {
+                // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
+                // Because I can't verify there aren't more, we use a very generic Exception catch
+
+                // This RuntimeException occurs when signing as we run partial/invalid scripts to see if they need more
+                // signing work to be done inside LocalTransactionSigner.signInputs.
+                if (!e1.getMessage().contains("Reached past end of ASN.1 stream"))
+                    log.warn("Signature checking failed!", e1);
+            }
         }
 
         if (opcode == OP_CHECKSIG)
@@ -1531,13 +1544,18 @@ public class Script {
         boolean valid = true;
         while (sigs.size() > 0) {
             byte[] pubKey = pubkeys.pollFirst();
-            // We could reasonably move this out of the loop, but because signature verification is significantly
-            // more expensive than hashing, its not a big deal.
             try {
-                TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, false);
-                Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                if (ECKey.verify(hash.getBytes(), sig, pubKey))
-                    sigs.pollFirst();
+                if (PQScriptUtils.isPQPubkey(pubKey)) {
+                    // PQ multisig: verify all entries in SignatureBundle against KeyBundle
+                Sha256Hash baseHash = txContainingThis.hashForSignature(index, connectedScript, (byte) 1);
+                    if (PQScriptUtils.verifyPQ(pubKey, sigs.getFirst(), baseHash))
+                        sigs.pollFirst();
+                } else {
+                    TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, false);
+                    Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
+                    if (ECKey.verify(hash.getBytes(), sig, pubKey))
+                        sigs.pollFirst();
+                }
             } catch (Exception e) {
                 // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
                 // Because I can't verify there aren't more, we use a very generic Exception catch

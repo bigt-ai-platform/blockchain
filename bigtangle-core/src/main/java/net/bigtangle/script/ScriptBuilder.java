@@ -25,6 +25,9 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.KeyBundle;
+import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.crypto.pq.SignatureBundle;
 
 import javax.annotation.Nullable;
 import java.math.BigInteger;
@@ -242,6 +245,22 @@ public class ScriptBuilder {
     /** Creates a scriptPubKey that encodes payment to the given raw public key. */
     public static Script createOutputScript(ECKey key) {
         return new ScriptBuilder().data(key.getPubKey()).op(OP_CHECKSIG).build();
+    }
+
+    /**
+     * Creates a pay-to-PQ-key output script.
+     * The pubkey is prefixed with 0x05 so {@code OP_CHECKSIG} dispatches
+     * to ML-DSA + SLH-DSA dual verification.
+     */
+    public static Script createOutputScript(KeyBundle keyBundle) {
+        return new ScriptBuilder().data(PQScriptUtils.prefixedPubkey(keyBundle)).op(OP_CHECKSIG).build();
+    }
+
+    /**
+     * Creates a scriptSig that redeems a pay-to-PQ-key output.
+     */
+    public static Script createInputScriptForPQ(SignatureBundle sigBundle) {
+        return new ScriptBuilder().data(sigBundle.serialize()).build();
     }
 
     /**
