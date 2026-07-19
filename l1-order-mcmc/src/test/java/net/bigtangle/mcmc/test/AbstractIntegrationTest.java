@@ -116,6 +116,7 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.Contractresult;
+import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
@@ -309,6 +310,12 @@ public abstract class AbstractIntegrationTest {
 	 */
 	public void resetStore() throws BlockStoreException {
 		store.resetStore();
+		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+		genesis.setLastMiningRewardBlock(0);
+		genesis.setBlockType(BlockType.BLOCKTYPE_INITIAL);
+		store.put(genesis);
+		store.insertTipsQueue(new TipsQueue(genesis.getHash().getBytes(),
+				genesis.unsafeBitcoinSerialize(), genesis.getHeight(), genesis.getTimeSeconds()));
 		cacheBlockService.evictOutputs();
 		cacheBlockService.evictBlock();
 		cacheBlockService.evictAccountBalance();

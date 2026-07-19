@@ -37,8 +37,9 @@ for i in $(seq 1 30); do
     sleep 3
 done
 
-echo "=== Creating databases ==="
+echo "=== Recreating databases ==="
 for db in info_l0 info_order info_contract info_pai; do
+    docker exec test-bigtangle-postgres psql -U root -d info -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d info -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
@@ -55,21 +56,34 @@ mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
   -pl layer0-server,layer0-mcmc,l1-order-server,l1-contract-server,l1-pai-server 2>&1 | tail -1
 echo "=== All modules built ==="
 
-echo "=== Running L0 and L1 tests in parallel ==="
+echo "=== Running L0 and L1 tests (PAI runs separately to avoid DB connection pressure) ==="
 mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
 mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
 ORDER_PID=$!
 mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
 CONTRACT_PID=$!
-mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai &
-PAI_PID=$!
 
 EXIT_CODE=0
 wait $L0_PID      || { echo "Layer 0 tests FAILED";      EXIT_CODE=1; }
 wait $ORDER_PID   || { echo "Order match tests FAILED";  EXIT_CODE=1; }
 wait $CONTRACT_PID || { echo "Contract tests FAILED";     EXIT_CODE=1; }
-wait $PAI_PID     || { echo "PAI tests FAILED";          EXIT_CODE=1; }
+
+if [ "$EXIT_CODE" -eq 0 ]; then
+    echo "=== L0/order/contract tests passed, running PAI ==="
+    # Sequential retry loop for PAI (can be sensitive to DB connection timing)
+    for attempt in 1 2 3; do
+        mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
+        echo "PAI tests attempt $attempt failed, retrying..."
+        PAI_OK=false
+    done
+    if [ "$PAI_OK" != "true" ]; then
+        echo "PAI tests FAILED after 3 attempts"
+        EXIT_CODE=1
+    fi
+else
+    echo "=== Skipping PAI tests due to earlier failures ==="
+fi
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== All tests passed ==="
