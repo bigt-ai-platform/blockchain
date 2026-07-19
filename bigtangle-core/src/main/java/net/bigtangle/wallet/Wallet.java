@@ -411,7 +411,9 @@ public class Wallet extends WalletBase {
 				block.addTransaction(feeTransaction(aesKey, coinList));
 			}
 		 
-			solveAndPost(block);
+			for (Transaction tx : block.getTransactions()) {
+				submitTransaction(tx);
+			}
 		}
 		return re;
 	}
@@ -518,7 +520,9 @@ public class Wallet extends WalletBase {
 			b.addTransaction(feeTransaction(aesKey, coinList));
 		}
 	 
-		solveAndPost(b);
+		for (Transaction tx : b.getTransactions()) {
+			submitTransaction(tx);
+		}
 		return b;
 	}
 
@@ -555,7 +559,10 @@ public class Wallet extends WalletBase {
 		if (getFee() && !Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, tokenid)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
 		}
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public Transaction payToListTransaction(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult,
@@ -767,7 +774,10 @@ public class Wallet extends WalletBase {
 			block.addTransaction(feeTransaction(aesKey, candidates));
 		}
 
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	/*
@@ -864,7 +874,10 @@ public class Wallet extends WalletBase {
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
 			block.addTransaction(feeTransaction(aesKey, candidates));
 		}
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public Block cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
@@ -897,7 +910,10 @@ public class Wallet extends WalletBase {
 		block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
 		if (getFee())
 			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 
 	}
 
@@ -931,7 +947,10 @@ public class Wallet extends WalletBase {
 		block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 		if (getFee())
 			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 
 	}
 
@@ -982,7 +1001,10 @@ public class Wallet extends WalletBase {
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenId)) {
 			block.addTransaction(feeTransaction(aesKey, coinList));
 		}
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public void submitTransaction(Transaction tx) throws IOException {
@@ -994,38 +1016,7 @@ public class Wallet extends WalletBase {
 		}
 	}
 
-	public void submitTransactions(List<Transaction> txs) throws IOException {
-		if (txs == null || txs.isEmpty())
-			return;
-		try {
-			java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-			java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
-			for (Transaction tx : txs) {
-				byte[] txBytes = tx.bitcoinSerialize();
-				dos.writeInt(txBytes.length);
-				dos.write(txBytes);
-			}
-			dos.flush();
-			OkHttp3Util.post(getServerURL() + ReqCmd.submitTransactions.name(), baos.toByteArray());
-		} catch (ConnectException e) {
-			this.serverPool.removeServer(getServerURL());
-			throw e;
-		}
-	}
 
-	public Block solveAndPost(Block block) throws IOException {
-		try {
-			List<Transaction> txs = block.getTransactions();
-			if (txs != null && !txs.isEmpty()) {
-				submitTransactions(txs);
-			}
-			return block;
-		} catch (ConnectException e) {
-			this.serverPool.removeServer(getServerURL());
-			throw e;
-		}
-
-	}
 
 	private List<FreeStandingTransactionOutput> filterTokenid(byte[] tokenid, List<FreeStandingTransactionOutput> l) {
 		List<FreeStandingTransactionOutput> re = new ArrayList<>();
@@ -1123,7 +1114,10 @@ public class Wallet extends WalletBase {
 		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 		block.addTransaction(transaction);
 
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public ECKey getECKey(KeyParameter aesKey, String address) {
@@ -1182,7 +1176,10 @@ public class Wallet extends WalletBase {
 		for (Transaction tx : txs) {
 			block.addTransaction(tx);
 		}
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	/*
@@ -1246,7 +1243,10 @@ public class Wallet extends WalletBase {
 			block.addTransaction(feeTransaction(aesKey));
 		}
 		block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public UserSettingDataInfo getUserSettingDataInfo(ECKey userKey, boolean encrypt)
@@ -1467,7 +1467,10 @@ public class Wallet extends WalletBase {
 		if (block.getTransactions().isEmpty()) {
 			return null;
 		}
-		return solveAndPost(block);
+		for (Transaction tx : block.getTransactions()) {
+			submitTransaction(tx);
+		}
+		return block;
 	}
 
 	public Block rePayBlock(KeyParameter aesKey, String hashHex) throws IOException {

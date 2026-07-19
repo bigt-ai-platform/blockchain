@@ -111,7 +111,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
                     }
 
                     long start = System.nanoTime();
-                    firstW.submitTransactions(txs);
+                    for (Transaction txb : txs) firstW.submitTransaction(txb);
                     totalNs.addAndGet(System.nanoTime() - start);
                     ok.addAndGet(PAYMENTS_PER_CLIENT);
                 } catch (Exception e) {

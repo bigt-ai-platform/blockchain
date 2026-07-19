@@ -585,18 +585,8 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		mcmcService.calcNewBlockPrototype(store);
-		Wallet w = new Wallet(networkParameters) {
-			@Override
-			public Block solveAndPost(Block block) throws IOException {
-				return block;
-			}
-		};
-		w.importKey(beneficiary);
-		w.setServerURL(contextRoot);
-		Block walletBlock = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
-		for (Transaction tx : walletBlock.getTransactions()) {
-			mempoolService.submitTransaction(tx);
-		}
+		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
+		w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
 		if (block != null) {
