@@ -101,12 +101,12 @@ public class Block extends Message {
 
 	public static Block setBlock2(NetworkParameters params, long setVersion) {
 		return Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-				BlockType.BLOCKTYPE_TRANSFER.ordinal(), 0, Utils.encodeCompactBits(params.getMaxTarget()));
+				BlockType.BLOCKTYPE_TRANSFER.name(), 0, Utils.encodeCompactBits(params.getMaxTarget()));
 	}
 
 	public static Block createBlock(NetworkParameters networkParameters, Block r1, Block r2) {
 		Block block = Block.setBlock7(networkParameters, r1.getHash(), r2.getHash(),
-				BlockType.BLOCKTYPE_TRANSFER.ordinal(), Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
+				BlockType.BLOCKTYPE_TRANSFER.name(), Math.max(r1.getTimeSeconds(), r2.getTimeSeconds()),
 				Math.max(r1.getLastMiningRewardBlock(), r2.getLastMiningRewardBlock()));
 		block.setHeight(Math.max(r1.getHeight(), r2.getHeight()) + 1);
 
@@ -114,7 +114,7 @@ public class Block extends Message {
 	}
 
 	public static Block setBlock7(NetworkParameters params, Sha256Hash prevBlockHash, Sha256Hash prevBranchBlockHash,
-			int blocktype, long minTime, long lastMiningRewardBlock) {
+			String blocktype, long minTime, long lastMiningRewardBlock) {
 		Block a = new Block(params);
 		// Set up a few basic things. We are not complete after this though.
 		a.version = NetworkParameters.BLOCK_VERSION_GENESIS;
@@ -125,7 +125,7 @@ public class Block extends Message {
 		a.prevBlockHash = prevBlockHash;
 		a.prevBranchBlockHash = prevBranchBlockHash;
 
-		a.blockType = BlockType.values()[blocktype];
+		a.blockType = BlockType.valueOf(blocktype);
 		a.length = NetworkParameters.HEADER_SIZE;
 		a.transactions = new ArrayList<>();
 		return a;
@@ -213,7 +213,10 @@ public class Block extends Message {
 		merkleRoot = readHash();
 		time = readInt64();
 		lastMiningRewardBlock = readInt64();
-		blockType = BlockType.values()[(int) readUint32()];
+		{
+			String typeName = readStr();
+			blockType = typeName.isEmpty() ? BlockType.BLOCKTYPE_TRANSFER : BlockType.valueOf(typeName);
+		}
 		height = readInt64();
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
 		headerBytesValid = serializer.isParseRetainMode();
@@ -244,7 +247,12 @@ public class Block extends Message {
 		stream.write(getMerkleRoot().getReversedBytes());
 		Utils.int64ToByteStreamLE(time, stream);
 		Utils.int64ToByteStreamLE(lastMiningRewardBlock, stream);
-		Utils.uint32ToByteStreamLE(blockType.ordinal(), stream);
+		{
+			byte[] blockTypeName = (blockType != null ? blockType : BlockType.BLOCKTYPE_TRANSFER).name()
+					.getBytes("UTF-8");
+			stream.write(new VarInt(blockTypeName.length).encode());
+			stream.write(blockTypeName);
+		}
 		Utils.int64ToByteStreamLE(height, stream);
 	}
 

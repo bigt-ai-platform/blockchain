@@ -57,7 +57,7 @@ public class UtilGeneseBlock {
 
 		public static Block createGenesis(NetworkParameters params) {
 		    Block genesisBlock =   Block.setBlock7(params, Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH,
-		    		BlockType.BLOCKTYPE_INITIAL.ordinal(), 0, 0);
+		    		BlockType.BLOCKTYPE_INITIAL.name(), 0, 0);
 		    genesisBlock.setTime(1532896109L); 
 		    Transaction coinbase = new Transaction(params);
 		    final ScriptBuilder inputBuilder = new ScriptBuilder();

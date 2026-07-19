@@ -2353,7 +2353,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				BlockEvaluationDisplay blockEvaluation = BlockEvaluationDisplay.build(
 						Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
 						resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
-						resultSet.getLong("inserttime"), resultSet.getInt("blocktype"), resultSet.getLong("solid"),
+						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 						resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
 				blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
 				result.add(blockEvaluation);

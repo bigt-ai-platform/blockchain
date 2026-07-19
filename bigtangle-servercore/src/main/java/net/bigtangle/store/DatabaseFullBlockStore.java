@@ -1762,10 +1762,10 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection()
 					.prepareStatement("  select distinct( blocks.hash) from  blocks  , outputs "
 							+ " where spenderblockhash = blocks.hash    "
-							+ "  and blocks.milestone < ? and blocks.milestone > 0  " + " and ( blocks.blocktype = "
-							+ BlockType.BLOCKTYPE_TRANSFER.ordinal() + " or blocks.blocktype = "
-							+ BlockType.BLOCKTYPE_ORDER_OPEN.ordinal() + " or blocks.blocktype = "
-							+ BlockType.BLOCKTYPE_BEACON.ordinal() + "  ) limit 1000 ");
+							+ "  and blocks.milestone < ? and blocks.milestone > 0  " + " and ( blocks.blocktype = '"
+							+ BlockType.BLOCKTYPE_TRANSFER.name() + "' or blocks.blocktype = '"
+							+ BlockType.BLOCKTYPE_ORDER_OPEN.name() + "' or blocks.blocktype = '"
+							+ BlockType.BLOCKTYPE_BEACON.name() + "'  ) limit 1000 ");
 			// preparedStatement.setLong(1, height);
 			preparedStatement.setLong(1, chain);
 

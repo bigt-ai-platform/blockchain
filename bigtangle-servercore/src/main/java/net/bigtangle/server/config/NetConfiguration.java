@@ -5,6 +5,7 @@
 package net.bigtangle.server.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,6 +19,7 @@ public class NetConfiguration {
     @Autowired
     ServerConfiguration serverConfiguration;
     @Bean
+    @ConditionalOnMissingBean(NetworkParameters.class)
     public NetworkParameters networkParameters() {
         if("Mainnet".equals(serverConfiguration.getNet())) {
             return new MainNetParams();

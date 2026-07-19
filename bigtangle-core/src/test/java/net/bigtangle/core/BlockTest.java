@@ -47,7 +47,7 @@ public class BlockTest {
 	public void testSerial() throws Exception {
 		Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
 	 System.out.println("Genesis: " + block. toString());
-		assertEquals("c81fcd0f711bf27c116ad353dd981ee772ddef3f915f8ccc61e456f6baef437f", block.getHashAsString());
+		assertEquals("24dd2adf91d3a92b65e9cd9b42a6dce494d98f8a206dc5de6279e3af1a47e26d", block.getHashAsString());
 	}
 
 	// TODO NO BINARY @Test
