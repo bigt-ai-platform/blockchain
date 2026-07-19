@@ -584,7 +584,11 @@ public abstract class AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		// mcmcService.calcNewBlockPrototype(store);
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
-		w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
+		w.setSubmitToServer(false);
+		Block walletBlock = w.sellOrder(null, tokenId, sellPrice, sellAmount, null, null, basetoken, true);
+		for (Transaction tx : walletBlock.getTransactions()) {
+			mempoolService.submitTransaction(tx);
+		}
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
 		if (block != null) {
@@ -646,10 +650,12 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
+		w.setSubmitToServer(false);
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
-		// Ensure tips queue is updated before wallet operations
-		// mcmcService.calcNewBlockPrototype(store);
-		w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
+		Block walletBlock = w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
+		for (Transaction tx : walletBlock.getTransactions()) {
+			mempoolService.submitTransaction(tx);
+		}
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
 		if (block != null) {

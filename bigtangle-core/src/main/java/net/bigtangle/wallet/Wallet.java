@@ -111,6 +111,12 @@ import net.bigtangle.utils.OkHttp3Util;
 public class Wallet extends WalletBase {
 
 	private static final Logger log = LoggerFactory.getLogger(Wallet.class);
+
+	private boolean submitToServer = true;
+
+	public void setSubmitToServer(boolean submitToServer) {
+		this.submitToServer = submitToServer;
+	}
  
 	/**
 	 * Creates a wallet that tracks payments to and from the HD key hierarchy rooted
@@ -1014,9 +1020,13 @@ public class Wallet extends WalletBase {
 	}
 
 	public Block solveAndPost(Block block) throws IOException {
+		return solveAndPost(block, submitToServer);
+	}
+
+	public Block solveAndPost(Block block, boolean submitToServer) throws IOException {
 		try {
 			List<Transaction> txs = block.getTransactions();
-			if (txs != null && !txs.isEmpty()) {
+			if (submitToServer && txs != null && !txs.isEmpty()) {
 				submitTransactions(txs);
 			}
 			return block;
