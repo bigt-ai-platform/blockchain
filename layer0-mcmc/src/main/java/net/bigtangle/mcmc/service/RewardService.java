@@ -223,10 +223,6 @@ public class RewardService {
 
 		// Enforce timestamp equal to previous max for reward blocktypes
 		block.setTime(currentTime);
-		BigInteger chainTarget = Utils.decodeCompactBits(store.getRewardDifficulty(prevRewardHash));
-		if (Utils.decodeCompactBits(result.getDifficulty()).compareTo(chainTarget) < 0) {
-			chainTarget = Utils.decodeCompactBits(result.getDifficulty());
-		}
 
 		block.addTransaction(tx);
 		if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
@@ -244,7 +240,7 @@ public class RewardService {
 	}
 
 	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		return Utils.encodeCompactBits(networkParameters.getDifficultyLimit());
+		return networkParameters.getDifficultyLimitCompact();
 	}
 
 	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {

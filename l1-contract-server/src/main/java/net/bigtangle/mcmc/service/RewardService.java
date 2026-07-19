@@ -256,7 +256,7 @@ public class RewardService {
 	}
 
 	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		return Utils.encodeCompactBits(networkParameters.getDifficultyLimit());
+		return networkParameters.getDifficultyLimitCompact();
 	}
 
 	/**

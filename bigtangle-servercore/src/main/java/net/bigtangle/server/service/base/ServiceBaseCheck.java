@@ -1849,7 +1849,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public long calculateNextChainDifficulty(Sha256Hash prevRewardHash, long currChainLength, long currentTime,
 			BlockStoreInterface store) throws BlockStoreException {
 		// PoS mode — return constant max reward difficulty
-		return Utils.encodeCompactBits(networkParameters.getRewardDifficultyLimit());
+		return networkParameters.getRewardDifficultyLimitCompact();
 	}
 
 	public SolidityState checkRewardReferencedBlocks(Block rewardBlock, BlockStoreInterface store)
@@ -1890,7 +1890,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
 		// PoS mode — return constant max difficulty (easiest)
-		return Utils.encodeCompactBits(networkParameters.getDifficultyLimit());
+		return networkParameters.getDifficultyLimitCompact();
 	}
 
 	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, BlockStoreInterface store)

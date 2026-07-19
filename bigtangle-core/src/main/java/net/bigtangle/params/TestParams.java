@@ -5,7 +5,6 @@
 
 package net.bigtangle.params;
 
-import java.math.BigInteger; 
 
 import com.google.common.collect.ImmutableList;
  
@@ -21,8 +20,8 @@ public class TestParams extends NetworkParameters {
 
         id = ID_UNITTESTNET;
 
-        difficultyLimit = new BigInteger("578960377169117509212217050695880916496095398817113098493422368414323410000");
-        rewardDifficultyLimit = difficultyLimit.subtract(new BigInteger("100"));
+        difficultyLimitCompact = 536954798L;
+        rewardDifficultyLimitCompact = 536954798L;
 
         dumpedPrivateKeyHeader = 128;
         addressHeader = 111;
