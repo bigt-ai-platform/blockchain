@@ -7,11 +7,17 @@ Quantum computers threaten two cryptographic primitives currently used:
 | Primitive | Use | Quantum Threat | Priority |
 |-----------|-----|----------------|----------|
 | secp256k1 ECDSA | All signatures (tx, block, node identity) | Shor's algorithm breaks ECDLP entirely | **Critical** |
-| SHA-256 | Hashing, PoW, address derivation | Grover's algorithm halves security (256->128-bit) | **Low** |
-| RIPEMD-160 | Address (HASH160) | Grover: 160->80-bit -- addresses are just hashes, not signing keys | **Low** |
-| AES-256-CBC | Wallet encryption | Grover weakens 256->128-bit -- still safe | **Low** |
+| HASH160 (RIPEMD-160 + SHA-256) | Address derivation from pubkey | Grover halves security (160->80-bit); key is already hashed so preimage required | **Medium** |
+| SHA-256 | Hashing, PoW, merkle trees | Grover halves security (256->128-bit) | **Low** |
+| AES-256-CBC | Wallet encryption | Grover weakens 256->128-bit | **Low** |
 
-The **critical path** is replacing ECDSA with a post-quantum signature scheme.
+The critical difference is that **ECDS A public keys are exposed on-chain** at first spend. Once a public key is revealed, Shor's algorithm breaks it completely. Hash-based addresses (HASH160) provide a preimage shield before first spend, but that shield disappears once the key is published.
+
+Priority order for protection:
+1. Exposed public keys (immediately broken by Shor once revealed)
+2. Signatures (forged by Shor once the key is known)
+3. Wallet key generation (seed compromise enables future theft)
+4. Hash functions (Grover halves security, not catastrophic)
 
 ---
 
@@ -19,15 +25,19 @@ The **critical path** is replacing ECDSA with a post-quantum signature scheme.
 
 Use **NIST-standardized** algorithms only:
 
-| Algorithm | Standard | Signature Size | Public Key | Use Case | Maturity |
-|-----------|----------|---------------|------------|----------|----------|
-| **ML-DSA (FIPS 204)** Dilithium | FIPS 204 (Aug 2024) | 2.5 KB | 1.3 KB | Tx/block signatures | **Final standard** |
-| **SLH-DSA (FIPS 205)** SPHINCS+ | FIPS 205 (Aug 2024) | 8 KB (128-bit) | 32 B | Chain-level signing | **Final standard** |
-| **FN-DSA (FIPS 206)** FALCON | FIPS 206 (draft) | varies | varies | Future upgrade | Draft |
+| Algorithm | Standard | Signature Size | Public Key | Role | Maturity |
+|-----------|----------|---------------|------------|------|----------|
+| **ML-DSA-65** (Dilithium) | FIPS 204 (Aug 2024) | 2.5 KB | 1.3 KB | Primary tx/block signatures | **Final standard** |
+| **FN-DSA** (FALCON) | FIPS 206 (draft) | ~700 B | ~900 B | Experimental (smaller sigs) | Draft |
+| **SLH-DSA** (SPHINCS+) | FIPS 205 (Aug 2024) | 8 KB (128-bit) | 32 B | Emergency only | Final standard |
 
-**Recommendation: ML-DSA (FIPS 204 Dilithium) as primary, SLH-DSA (FIPS 205 SPHINCS+) as fallback.**
+**Primary: ML-DSA-65.** Best balance of signature size, verification speed, and NIST finality.
 
-ML-DSA offers the best balance of signature size, verification speed, and NIST finality for on-chain use.
+**Experimental: FN-DSA** once standardized. Smaller signatures (~700 B) benefit high-throughput scenarios.
+
+**Emergency: SLH-DSA** only if ML-DSA or FN-DSA are broken. Its 8 KB signatures make it impractical for routine use. Listed here so the architecture accommodates it.
+
+ML-DSA-65 parameter set (the "medium" security level) targets NIST security category 3 (~128-bit symmetric equivalent).
 
 ---
 
@@ -36,12 +46,59 @@ ML-DSA offers the best balance of signature size, verification speed, and NIST f
 Run **ECDSA + ML-DSA in parallel** during a transition phase:
 
 ```
-Before quantum threat:  [ECDSA sig]             ->  verify ECDSA
-Transition period:      [ECDSA sig] [ML-DSA sig] ->  verify BOTH
-Post-quantum:           [ML-DSA sig]              ->  verify ML-DSA
+Before activation:    [ECDSA sig]               ->  verify ECDSA
+Transition period:    [ECDSA sig][ML-DSA sig]    ->  verify BOTH
+Post-quantum:         [ML-DSA sig]               ->  verify ML-DSA
 ```
 
-This avoids a hard fork and lets users/validators upgrade wallets gradually.
+This avoids a hard fork and lets users and validators upgrade wallets gradually.
+
+### Hybrid Signature Wire Format
+
+Not simple concatenation. Versioned serialization for future algorithm additions:
+
+```
+HybridSignature:
+  version:     uint8      (currently 1)
+  algorithms:  uint8      (number of component signatures)
+  entries:
+    algorithm: uint8      (1=ECDSA, 2=ML-DSA, 3=FN-DSA, etc.)
+    length:    uint16     (byte length of this signature)
+    signature: bytes[length]
+```
+
+Future algorithms (FN-DSA, SLH-DSA, or any post-ECDSA scheme) add entries without changing the serialization format.
+
+### Consensus Validation Rules
+
+```
+Feature flag SIGNATURE_V2 disabled (current):
+  - ECDSA signatures only
+  - Hybrid signatures rejected
+
+Feature flag SIGNATURE_V2 enabled:
+  Legacy outputs (pre-activation UTXOs):
+    - ECDSA-only accepted
+    - Hybrid not required
+  New outputs (post-activation UTXOs):
+    - Hybrid required (ECDSA + ML-DSA)
+    - ECDSA-only rejected
+  Future outputs (flag SIGNATURE_V3):
+    - ML-DSA-only accepted
+    - ECDSA rejected
+```
+
+### Transaction Versioning
+
+Transaction format must be explicit, not inferred from signature length:
+
+```
+TxVersion 1:  ECDSA signatures only
+TxVersion 2:  Hybrid (ECDSA + ML-DSA)
+TxVersion 3:  ML-DSA only
+```
+
+This avoids heuristic detection (e.g., `if (sig.length > 100)`) in consensus code.
 
 ---
 
@@ -49,176 +106,367 @@ This avoids a hard fork and lets users/validators upgrade wallets gradually.
 
 ### Phase 1: Crypto Provider Layer (weeks 1-2)
 
-Goal: Add ML-DSA key & signature primitives without changing consensus.
+Goal: Add ML-DSA key and signature primitives without changing consensus.
 
 1. **Add ML-DSA library dependency**
-   - Use Bouncy Castle PQC (BC 1.77+ supports ML-DSA/Dilithium via NISTObjectIdentifiers)
-   - Or use jdkilmn/dilithium-jni / pqclean JNI wrappers for performance
-   - Add to pom.xml:
-     ```xml
-     <dependency>
-       <groupId>org.bouncycastle</groupId>
-       <artifactId>bcprov-jdk18on</artifactId>
-       <version>1.78</version>
-     </dependency>
-     ```
 
-2. **Create PQKey interface**
-   - New file: `bigtangle-core/.../crypto/PQKey.java`
-   - Parallel to ECKey -- holds ML-DSA public/private key bytes
-   - `sign(byte[] msg) -> byte[]`
-   - `verify(byte[] msg, byte[] sig) -> boolean`
-   - `getEncoded() -> byte[]` (X.509/SubjectPublicKeyInfo for pubkey)
+   ```xml
+   <dependency>
+     <groupId>org.bouncycastle</groupId>
+     <artifactId>bcprov-jdk18on</artifactId>
+     <version>1.78</version>
+   </dependency>
+   ```
 
-3. **Create PQSignature class**
-   - New file: `bigtangle-core/.../crypto/PQSignature.java`
-   - Wraps raw signature bytes + algorithm ID
-   - `encodeToBitcoin() -> byte[]`
-   - `decodeFromBitcoin(byte[]) -> PQSignature`
+   Bouncy Castle 1.78+ supports ML-DSA (Dilithium) via `NISTObjectIdentifiers`.
 
-4. **Create HybridSignature class**
-   - Holds ECKey.ECDSASignature ecdsaSig + PQSignature pqSig
-   - Wire format: `[1-byte flags][ECDSA sig bytes][PQ sig bytes]`
-   - Flag bits: `0x01 = has ECDSA`, `0x02 = has PQ`
+2. **Create `SignatureKey` interface**
+
+   New file: `bigtangle-core/.../crypto/SignatureKey.java`
+
+   ```java
+   interface SignatureKey {
+       Algorithm algorithm();
+       byte[] publicKey();
+       byte[] sign(byte[] msg);
+       boolean verify(byte[] msg, byte[] sig);
+       int securityLevel();
+   }
+   ```
+
+   Implementations: `ECDSAKey` (wraps existing ECKey logic), `MLDSAKey`, `HybridKey`.
+
+   The interface name avoids a `PQ` prefix — the architecture should be algorithm-agnostic. Ed25519, FN-DSA, or any future scheme all implement the same contract.
+
+3. **Create `Signature` class hierarchy**
+
+   - `ECDSASignature` — wraps existing DER-encoded signature
+   - `MLDSASignature` — wraps raw ML-DSA signature bytes
+   - `HybridSignature` — versioned container with component signatures
+
+4. **Library abstraction: SignatureProvider**
+
+   Consensus code must never import Bouncy Castle directly:
+
+   ```
+   SignatureProvider (interface)
+       -> BcSignatureProvider (Bouncy Castle implementation)
+       -> MLDSAEngine (stateless verify, may use native)
+   ```
+
+   This makes future library swaps (e.g., native libsodium, pure Java fallback) transparent.
 
 ### Phase 2: Address Format (weeks 2-3)
 
 Goal: Define how PQ public keys map to addresses.
 
-1. **New address prefix for PQ keys**
-   - Currently: HASH160(SHA256(pubkey)) for ECDSA (20 bytes)
-   - For PQ: SHA256(pubkey) truncated to 20 bytes, or use a new version byte
-   - Option A (simpler): Use existing Address format with new addressHeader values
-   - Option B (cleaner): New PQAddress class with different encoding (e.g. nano prefix)
+1. **Full SHA-256 hash, not truncated HASH160**
 
-2. **Update NetworkParameters**
-   ```java
-   int addressHeaderPQ           = 42;
-   int p2shHeaderPQ              = 43;
-   int dumpedPrivateKeyHeaderPQ  = 144;
+   Current: `HASH160(pubkey) = RIPEMD160(SHA256(pubkey))` — 20 bytes
+   New:    `SHA256(pubkey)` — 32 bytes
+
+   32 bytes provides full collision resistance. There is no meaningful storage or UX benefit to truncating to 20 bytes in a post-quantum context.
+
+2. **Versioned address payload**
+
+   Not a single `addressHeader` byte. Instead:
+
+   ```
+   Address:
+     version:  uint8     (currently 1)
+     network:  uint8     (0=mainnet, 1=testnet)
+     algorithm: uint8    (1=ECDSA, 2=ML-DSA, 3=Hybrid, etc.)
+     hash:     bytes[32] (SHA256 of public key)
    ```
 
-3. **Script support for PQ checks**
-   - New opcodes: OP_CHECKSIG_PQ, OP_CHECKMULTISIG_PQ (witness version)
-   - Or repurpose existing opcodes with version byte in the script
+   Base58-encoded (or Bech32 for future use). Adding future algorithms never requires changing the encoding format.
+
+3. **Update NetworkParameters**
+
+   ```java
+   // Address version bytes for each algorithm+network combination
+   Map<Algorithm, Map<NetworkType, Integer>> addressPrefixes;
+   ```
 
 ### Phase 3: Transaction & Block Verification (weeks 3-5)
 
 Goal: Verify hybrid signatures in transactions and blocks.
 
-1. **Extend LocalTransactionSigner**
-   - signInputs(): for each input, if wallet has PQ key, produce HybridSignature
-   - Input script format: `[hybrid_sig] [pubkey_or_hash]`
+1. **No new opcodes**
 
-2. **Extend Script.executeCheckSig()**
-   - Detect PQ signatures by examining script pubkey length/format
-   - Route to ECKey.verify() or PQSignature.verify() accordingly
-   - For hybrid: verify BOTH
+   OP_CHECKSIG_PQ, OP_CHECKMULTISIG_PQ are **not** needed. The existing `OP_CHECKSIG` opcode dispatches to the correct verifier based on the key type in the script:
+
+   ```
+   executeCheckSig():
+     pubkey = stack.pop()
+     signature = stack.pop()
+
+     switch pubkey.algorithm:
+       ECDSA  -> verifyECDSA(signature, pubkey)
+       MLDSA  -> verifyMLDSA(signature, pubkey)
+       Hybrid -> verifyECDSA(sig.ecdsa, pubkey) && verifyMLDSA(sig.pq, pubkey)
+       unknown -> fail
+   ```
+
+   This approach is cleaner than versioning opcodes (Bitcoin learned this with Taproot). Key type determines verification.
+
+2. **Extend LocalTransactionSigner**
+
+   - If wallet has both ECDSA and ML-DSA keys, produce `HybridSignature`
+   - Script format: `[hybrid_sig] [pubkey_with_algorithm_tag]`
 
 3. **Extend ScriptBuilder**
-   - `createOutputScript(PQKey) -> Script`
-   - `createInputScript(HybridSignature) -> Script`
+
+   - `createOutputScript(SignatureKey) -> Script` — embeds algorithm tag + hash or full key
+   - `createInputScript(Signature[]) -> Script` — embeds signatures
 
 4. **Extend Transaction.hashForSignature()**
-   - PQ sigs may need a different sighash algorithm (SHA-256 is fine; only the signing changes)
+
+   - Signature hash algorithm remains SHA-256 (only the signing primitive changes)
+   - Inputs referencing ML-DSA outputs use the same sighash procedure as ECDSA
 
 ### Phase 4: Key Management & Wallet (weeks 4-6)
 
 Goal: Wallets can generate, store, and spend from PQ keys.
 
 1. **Extend WalletBase**
-   - Parallel key chain for PQ keys: PQKeyChainGroup
-   - walletKeys() returns both EC and PQ keys
-   - findKeyFromPubHash() searches both key chains
+
+   - Parallel key chain: `KeyChainGroup` for EC keys, `PQKeyChainGroup` for PQ keys
+   - `walletKeys()` returns both
+   - `findKeyFromPubHash()` searches both chains
 
 2. **Wallet serialization (protobuf)**
-   - Add PQKey messages to Protos.java
-   - Update Wallet protobuf serialization to include PQ key chains
 
-3. **BIP39-style seed to PQ key**
-   - ML-DSA uses a seed (32 bytes) to deterministically generate keys
-   - Same BIP39 seed can derive seed_pq = HMAC-SHA256(seed, "PQ-DILITHIUM")
-   - Enables HD-like PQ key derivation from existing mnemonics
+   - Add `SignatureKey` messages to `Protos.java`
+   - Update `Wallet` protobuf serialization to include PQ key chains
+
+3. **BIP39 seed to ML-DSA key derivation**
+
+   ```java
+   // Use HKDF, not custom HMAC
+   byte[] seed = MnemonicCode.toSeed(mnemonic, passphrase);
+   byte[] mlDsaSeed = HKDF.extractAndExpand(
+       HKDF.sha256(), seed, "ML-DSA-SEED", 32);
+   MLDSAKey key = MLDSAKey.fromSeed(mlDsaSeed);
+   ```
+
+   HKDF is the standard tool for domain-separated key derivation. The `info` parameter ("ML-DSA-SEED") prevents cross-protocol key reuse.
 
 4. **Key encryption**
-   - KeyCrypterScrypt already encrypts any key bytes (AES-256-CBC)
-   - PQ private keys are just byte arrays -- same encryption applies
+
+   - `KeyCrypterScrypt` already encrypts arbitrary key bytes (AES-256-CBC)
+   - PQ private keys are byte arrays — same encryption applies unchanged
 
 ### Phase 5: Consensus & P2P (weeks 6-8)
 
 Goal: Blocks and nodes are authenticated with PQ signatures.
 
-1. **Block signing**
-   - Currently: blocks are PoS-validated, not "signed" by a single entity
-   - Validators sign blocks with their node key -- extend to hybrid
+1. **Feature flags, not activation height**
+
+   ```
+   FeatureFlag SIGNATURE_V2
+     - Enables hybrid (ECDSA + ML-DSA) transaction acceptance
+     - Nodes advertise supported flags in handshake
+
+   FeatureFlag ADDRESS_V2
+     - Enables 32-byte SHA-256 address format
+
+   FeatureFlag SCRIPT_V2
+     - Enables key-type-dispatch in OP_CHECKSIG
+   ```
+
+   Activation enables one flag at a time. Nodes negotiate. This is more maintainable than hardcoded block heights over years of upgrades.
 
 2. **MCMC peer identity**
-   - Nodes identify by ECKey -- add PQ public key to node identity messages
-   - NodeIdentity.pqPublicKey: byte[]
 
-3. **Network upgrade / fork mechanism**
-   - Add activation height/epoch in NetworkParameters
-   - Before activation: ECDSA-only, ignore PQ sigs
-   - After activation: require hybrid sigs for new UTXOs
-   - Legacy UTXOs remain spendable with ECDSA only (grace period)
+   - Nodes identify by ECKey currently
+   - Add `HybridKey` to node identity messages
+   - Peers verify handshake signatures using whichever algorithm the peer supports
+
+3. **Replay protection**
+
+   - If transaction format changes (TxVersion 1 -> TxVersion 2), include a `version` or `type` field in the sighash to prevent cross-version replay
+   - Rule: a transaction signed with TxVersion 1 cannot be replayed as TxVersion 2 on the same chain
 
 ### Phase 6: Performance & Validation (weeks 8-10)
 
 Goal: Production-ready performance.
 
-1. **Benchmarking**
-   - ML-DSA: sign ~30 microsec, verify ~10 microsec (reference impl) -- ~10x slower than ECDSA
-   - Block verification in MCMC -- parallelize PQ verification across transactions
+1. **Benchmarking on target JVM**
 
-2. **Signature aggregation (future)**
-   - ML-DSA does not natively support signature aggregation
-   - Consider batching: verify all PQ sigs in a block in parallel using fork-join pool
+   Published ML-DSA benchmarks use optimized C. Realistic Java performance will be slower. Plan to measure on the actual deployment hardware and JVM.
 
-3. **Test vector generation**
-   - Create deterministic test vectors for PQ signatures
-   - Update ScriptTest, TransactionTest, WalletTest
+   Expected range (JVM, reference impl):
+   - ML-DSA-65 sign:   ~200-500 microsec
+   - ML-DSA-65 verify: ~50-100 microsec
+
+   This is ~100x slower than ECDSA. Acceptable for most use cases but requires parallel verification for high-throughput nodes.
+
+2. **Block size modeling**
+
+   ECDSA signature per input:  ~70 bytes
+   ML-DSA-65 signature:        ~2,500 bytes
+
+   At the current 20 MB `MAX_DEFAULT_BLOCK_SIZE`:
+
+   | Tx count | ECDSA | ML-DSA | Hybrid |
+   |----------|-------|--------|--------|
+   | 500      | 35 KB | 1.2 MB | 1.3 MB |
+   | 2,000    | 140 KB| 4.8 MB | 4.9 MB |
+   | 10,000   | 700 KB| 24 MB  | 25 MB  |
+
+   At 2,000 tx/block, hybrid signatures add ~4.9 MB (~25% of block capacity). This is manageable but must be modeled against expected throughput, not hand-waved.
+
+3. **Parallel verification**
+
+   - Use fork-join pool to verify PQ signatures across transactions in a block concurrently
+   - ECDSA sigs verify in ~10 microsec each; PQ sigs dominate wall-clock time
+   - Target: block verification under 2 seconds
+
+4. **NIST Known Answer Tests (KATs)**
+
+   - Implement verification using NIST KAT vectors from the FIPS 204 package
+   - Test vectors must pass identically across BC, native, and any future provider
+   - Cover: ML-DSA-65 sign, verify, hybrid encoding, address derivation
 
 ---
 
-## 5. Files to Modify
+## 5. Consensus Activation Rules
+
+```
+State: SIGNATURE_V2 disabled
+
+  TxVersion 1 (ECDSA):  accepted
+  TxVersion 2 (Hybrid): rejected
+
+State: SIGNATURE_V2 enabled, on legacy UTXOs (pre-activation)
+
+  TxVersion 1 (ECDSA):  accepted
+  TxVersion 2 (Hybrid): accepted (ECDSA component must match)
+
+State: SIGNATURE_V2 enabled, on new UTXOs (post-activation)
+
+  TxVersion 1 (ECDSA):  rejected
+  TxVersion 2 (Hybrid): accepted
+  TxVersion 3 (PQ):     accepted
+```
+
+---
+
+## 6. Mempool Policy
+
+- Before `SIGNATURE_V2`: reject hybrid transactions at mempool boundary
+- After `SIGNATURE_V2`: accept hybrid transactions; relay both versions
+- Transaction replacement (RBF) must check signature version compatibility
+- Fee estimation must account for ~2.5 KB per PQ signature
+
+---
+
+## 7. RPC Versioning
+
+| RPC | Change |
+|-----|--------|
+| `getnewaddress` | New optional arg `algorithm` (ecdsa, mldsa, hybrid) |
+| `signrawtransaction` | Accept hybrid signatures; return algorithm info |
+| `validateaddress` | Return algorithm type, address version |
+| `listunspent` | Include algorithm type per UTXO |
+| `createmultisig` | Accept mixed algorithm multisig |
+
+---
+
+## 8. Hardware Wallet Considerations
+
+- ML-DSA keys are ~1.3 KB (vs ~32 B for ECDSA)
+- Signatures are ~2.5 KB
+- USB transport for 2.5 KB is fine (HID ~64 B/packet -> ~40 packets per sig)
+- Smartcard / secure element storage for 1.3 KB private keys may be constrained
+- Plan for: signing oracle pattern (hot signer + cold key) for early deployment
+
+---
+
+## 9. Algorithm Identifiers
+
+Every location where a public key or signature appears on-chain must include an algorithm identifier:
+
+| Context | Location | Identifier |
+|---------|----------|------------|
+| Script pubkey | First byte of script | Algorithm tag |
+| Address | Address payload | Algorithm field |
+| Transaction input | Signature wrapper | Algorithm in HybridSignature entry |
+| Transaction version | Tx header | TxVersion enum |
+| Node identity | P2P handshake | Supported flags bitmap |
+| Wallet serialization | Key chain protobuf | Algorithm enum |
+
+No format inference from byte length. All algorithm selection is explicit.
+
+---
+
+## 10. Architecture Summary
+
+```
+SignatureKey (interface)
+  ├── ECDSAKey    (wraps secp256k1)
+  ├── MLDSAKey    (wraps ML-DSA-65)
+  ├── HybridKey   (ECDSAKey + MLDSAKey)
+  └── FutureKey   (FN-DSA, etc.)
+
+Signature (interface)
+  ├── ECDSASignature
+  ├── MLDSASignature
+  ├── HybridSignature
+  └── FutureSignature
+
+Script.OP_CHECKSIG
+  └── dispatch by key type (no new opcodes)
+
+SignatureProvider (abstraction layer)
+  └── BcSignatureProvider  (Bouncy Castle)
+  └── NativeSignatureProvider  (JNI, future)
+
+Wallet
+  ├── KeyChainGroup  (ECDSA keys)
+  ├── PQKeyChainGroup  (PQ keys)
+  └── Key derivation (HKDF from BIP39 seed)
+
+Consensus activation
+  └── Feature flags: SIGNATURE_V2, ADDRESS_V2, SCRIPT_V2
+```
+
+---
+
+## 11. Files to Modify
 
 | File | Change |
 |------|--------|
-| pom.xml (root) | Add BC PQC dependency |
-| ECKey.java | Add HybridSignature wrapper methods |
-| Script.java | Extend executeCheckSig() for PQ |
-| ScriptBuilder.java | Add PQ script creation methods |
-| ScriptOpCodes.java | Add OP_CHECKSIG_PQ (optional) |
-| Transaction.java | Extend hashForSignature() |
-| TransactionSignature.java | Create parallel PQSignature class |
-| LocalTransactionSigner.java | Produce hybrid signatures |
-| Wallet.java / WalletBase.java | PQ key chain management |
-| KeyCrypterScrypt.java | (no change -- byte-based) |
-| NetworkParameters.java | Add PQ address version bytes |
-| Address.java | PQ address format |
-| Protos.java | PQ key serialization |
-| NativeSecp256k1.java | (not touched -- stays as fallback) |
+| pom.xml | Add BC PQC dependency |
+| crypto/SignatureKey.java | New — algorithm-agnostic key interface |
+| crypto/ECDSASignature.java | New — wraps existing ECDSA sig into Signature |
+| crypto/MLDSASignature.java | New — ML-DSA signature wrapper |
+| crypto/HybridSignature.java | New — versioned hybrid signature container |
+| crypto/SignatureProvider.java | New — provider abstraction |
+| crypto/BcSignatureProvider.java | New — Bouncy Castle implementation |
+| Script.java | Extend executeCheckSig() to dispatch by key type |
+| ScriptBuilder.java | Add algorithm-aware output/input script methods |
+| ScriptOpCodes.java | Remove OP_CHECKSIG_PQ (not adding it) |
+| Transaction.java | Add TxVersion, extend hashForSignature() |
+| LocalTransactionSigner.java | Produce HybridSignature when PQ key available |
+| Wallet.java / WalletBase.java | Add PQ key chain, HKDF derivation |
+| KeyCrypterScrypt.java | No change — byte-based encryption |
+| NetworkParameters.java | Add feature flags, address prefixes |
+| Address.java | Add versioned address payload, 32-byte SHA-256 hash |
+| Protos.java | Add SignatureKey protobuf messages |
+| NativeSecp256k1.java | No change — stays as ECDSA fallback |
 
 ---
 
-## 6. Risk & Mitigation
+## 12. Risk & Mitigation
 
 | Risk | Mitigation |
 |------|------------|
-| ML-DSA signature size (~2.5 KB vs 70 B ECDSA) increases block size | Account in MAX_DEFAULT_BLOCK_SIZE (currently 20 MB); 2.5 KB per tx is manageable for typical throughput |
-| Verification speed (ML-DSA is ~10x slower) | Parallel verification in MCMC; use native/libsodium when available |
-| NIST may update ML-DSA parameters | Use the FIPS 204 final parameters; code to abstract interface, not raw params |
-| Wallet migration complexity | Hybrid mode lets users upgrade gradually; existing EC keys continue working |
-| Bouncy Castle PQC module maturity | BC 1.78+ is production-ready; fallback to pqclean JNI if performance-critical |
-
----
-
-## 7. Quick Win (Week 1)
-
-For the shortest path to quantum readiness without rearchitecting:
-
-1. Add BC PQC dependency
-2. Implement MLDSAKey class (a thin wrapper around BcDilithiumSigner)
-3. Add a `pqsign` RPC endpoint that signs with ML-DSA alongside ECDSA
-4. Extend Wallet.toAddress() to return both ECDSA and ML-DSA addresses
-5. This doesn't change consensus but gives developers early API access
+| ML-DSA signature size (2.5 KB) stresses block capacity | Model against expected throughput; adjust MAX_DEFAULT_BLOCK_SIZE if needed |
+| Java ML-DSA verification ~100x slower than ECDSA | Parallel fork-join verification; native acceleration path |
+| Wallet migration complexity for users | Hybrid mode; legacy EC keys continue working for years |
+| Future NIST parameter updates | ML-DSA-65 is FIPS 204 final; abstract interface for provider swap |
+| Hardware wallet key storage (1.3 KB pubkey) | Signing oracle pattern for early deployment |
+| Cross-version replay attacks | Include TxVersion in sighash; explicit replay protection rule |
+| Consensus divergence during transition | Feature flags with precise validation rules (section 5) |
