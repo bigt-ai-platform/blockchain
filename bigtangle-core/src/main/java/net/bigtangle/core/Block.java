@@ -226,11 +226,25 @@ public class Block extends Message {
 			blockType = typeName.isEmpty() ? BlockType.BLOCKTYPE_TRANSFER : BlockType.valueOf(typeName);
 		}
 		height = readInt64();
+
+		// PQ extension (version >= BLOCK_VERSION_PQ)
+		if (version >= NetworkParameters.BLOCK_VERSION_PQ && cursor < offset + length) {
+			proposerKeyBundle = readNullableBytes();
+			proposerSignatureBundle = readNullableBytes();
+		}
+
 		hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(payload, offset, cursor - offset));
 		headerBytesValid = serializer.isParseRetainMode();
 		// transactions
 		parseTransactions(cursor);
 		length = cursor - offset;
+	}
+
+	private byte[] readNullableBytes() {
+		long len = readVarInt();
+		if (len == 0) return null;
+		byte[] data = readBytes((int) len);
+		return data;
 	}
 
 	public int getOptimalEncodingMessageSize() {
@@ -262,6 +276,21 @@ public class Block extends Message {
 			stream.write(blockTypeName);
 		}
 		Utils.int64ToByteStreamLE(height, stream);
+
+		// PQ extension (version >= BLOCK_VERSION_PQ)
+		if (version >= NetworkParameters.BLOCK_VERSION_PQ) {
+			writeNullableBytes(stream, proposerKeyBundle);
+			writeNullableBytes(stream, proposerSignatureBundle);
+		}
+	}
+
+	private static void writeNullableBytes(OutputStream stream, byte[] data) throws IOException {
+		if (data == null) {
+			stream.write(new VarInt(0).encode());
+		} else {
+			stream.write(new VarInt(data.length).encode());
+			stream.write(data);
+		}
 	}
 
 	void writePoW(OutputStream stream) throws IOException {

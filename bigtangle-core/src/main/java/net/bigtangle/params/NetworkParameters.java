@@ -102,6 +102,21 @@ public abstract class NetworkParameters {
 	 */
 	protected String chainId = "L0";
 
+	/** Supported post-quantum algorithm suite IDs (e.g. SUITE_CAT5_DUAL_1 = 1).
+	 *  Empty list means PQ is disabled.  Governance activates suites by
+	 *  adding entries.  A suite is sunset by removing it. */
+	protected List<Integer> pqSuites = new java.util.ArrayList<>();
+
+	/** @return immutable copy of the active PQ suite IDs. */
+	public List<Integer> getPqSuites() {
+		return java.util.Collections.unmodifiableList(new java.util.ArrayList<>(pqSuites));
+	}
+
+	public void addPqSuite(int suiteId) { pqSuites.add(suiteId); }
+	public void removePqSuite(int suiteId) { pqSuites.remove(Integer.valueOf(suiteId)); }
+	public boolean isPqEnabled() { return !pqSuites.isEmpty(); }
+	public boolean isPqSuiteActive(int suiteId) { return pqSuites.contains(suiteId); }
+
 	/**
 	 * The set of {@link BlockType}s that a node running these parameters will
 	 * accept. Layer 0 accepts the full settlement set; a Layer 1 sub-chain
@@ -143,6 +158,7 @@ public abstract class NetworkParameters {
 	 * The version number at the start of the network.
 	 */
 	public static final long BLOCK_VERSION_GENESIS = 1;
+	public static final long BLOCK_VERSION_PQ      = 2;
 
 	/**
 	 * A constant shared by the entire network: how large in bytes a block is

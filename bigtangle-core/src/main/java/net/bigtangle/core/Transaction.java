@@ -108,6 +108,17 @@ public class Transaction extends ChildMessage {
 
 	private long lockTime;
 
+	/** Post-quantum transaction version: 0 = legacy, 1 = PQ. */
+	private byte txPQVersion;
+
+	/** Post-quantum KeyBundle for PQ inputs (nullable). */
+	@Nullable
+	private byte[] pqKeyBundle;
+
+	/** Post-quantum SignatureBundle for PQ inputs (nullable). */
+	@Nullable
+	private byte[] pqSignatureBundle;
+
 	// This is an in memory helper only.
 	private Sha256Hash hash;
 
@@ -325,6 +336,33 @@ public class Transaction extends ChildMessage {
 
 	public String getHashAsString() {
 		return getHash().toString();
+	}
+
+	/* ── Post-quantum fields ────────────────────────────────────────── */
+
+	public byte getTxPQVersion() { return txPQVersion; }
+	public void setTxPQVersion(byte v) { this.txPQVersion = v; }
+
+	@Nullable public byte[] getPqKeyBundle() { return pqKeyBundle; }
+	public void setPqKeyBundle(@Nullable byte[] pk) { this.pqKeyBundle = pk; }
+
+	@Nullable public byte[] getPqSignatureBundle() { return pqSignatureBundle; }
+	public void setPqSignatureBundle(@Nullable byte[] sig) { this.pqSignatureBundle = sig; }
+
+	/**
+	 * Compute the domain-separated sighash for PQ transactions.
+	 * Includes the tx internal data plus the domain separator so
+	 * legacy and PQ signatures cannot be replayed across each other.
+	 */
+	public Sha256Hash getPQDomainSeparatedSighash(int inputIndex, byte[] connectedScript,
+			String domain) {
+		Sha256Hash baseHash = hashForSignature(inputIndex, connectedScript, (byte) 1);
+		byte[] base = baseHash.getBytes();
+		byte[] domainBytes = domain.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+		byte[] combined = new byte[domainBytes.length + base.length];
+		System.arraycopy(domainBytes, 0, combined, 0, domainBytes.length);
+		System.arraycopy(base, 0, combined, domainBytes.length, base.length);
+		return Sha256Hash.wrap(Sha256Hash.hash(combined));
 	}
 
 	/**
