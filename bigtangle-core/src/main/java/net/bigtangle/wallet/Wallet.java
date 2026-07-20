@@ -664,7 +664,7 @@ public class Wallet extends WalletBase {
 	 * offerToken=orderBaseToken
 	 * 
 	 */
-	public Block buyOrder(KeyParameter aesKey, String targetTokenId, long buyPrice, long targetValue, Long validToTime,
+	public Transaction buyOrder(KeyParameter aesKey, String targetTokenId, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
 			throws IOException, InsufficientMoneyException, NoTokenException {
 		Token targetToken = checkTokenId(targetTokenId);
@@ -672,7 +672,7 @@ public class Wallet extends WalletBase {
 				allowRemainder);
 	}
 
-	public Block buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
+	public Transaction buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
 			throws IOException, InsufficientMoneyException, NoTokenException {
 
@@ -685,7 +685,7 @@ public class Wallet extends WalletBase {
 				allowRemainder, candidates);
 	}
 
-	public Block buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
+	public Transaction buyOrder(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
 			throws IOException, InsufficientMoneyException, NoTokenException {
@@ -694,7 +694,7 @@ public class Wallet extends WalletBase {
 				allowRemainder, candidates);
 	}
 
-	public Block buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
+	public Transaction buyOrderDo(KeyParameter aesKey, Token targetToken, long buyPrice, long targetValue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
 			throws IOException, InsufficientMoneyException, NoTokenException {
@@ -747,33 +747,26 @@ public class Wallet extends WalletBase {
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
 		signTransaction(tx, aesKey);
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
-		block.addTransaction(tx);
-		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
-
+		submitTransaction(tx);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(orderBaseToken)) {
-			block.addTransaction(feeTransaction(aesKey, candidates));
+			submitTransaction(feeTransaction(aesKey, candidates));
 		}
-
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return tx;
 	}
 
 	/*
 	 * Sell Order is defined as targetvalue = offervalue * price / 10**offerDecimal
 	 * targetToken=orderBaseToken
 	 */
-	public Block sellOrder(KeyParameter aesKey, String offerTokenId, long sellPrice, long offervalue, Long validToTime,
+	public Transaction sellOrder(KeyParameter aesKey, String offerTokenId, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
 			throws IOException, NoTokenException, InsufficientMoneyException {
 		Token t = checkTokenId(offerTokenId);
 		return sellOrder(aesKey, t, sellPrice, offervalue, validToTime, validFromTime, orderBaseToken, allowRemainder);
 	}
 
-	public Block sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
+	public Transaction sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder)
 			throws IOException, InsufficientMoneyException {
 		if (t.getTokenid().equals(orderBaseToken))
@@ -785,7 +778,7 @@ public class Wallet extends WalletBase {
 				candidates);
 	}
 
-	public Block sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
+	public Transaction sellOrder(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates)
 			throws IOException, InsufficientMoneyException {
@@ -793,7 +786,7 @@ public class Wallet extends WalletBase {
 				candidates);
 	}
 
-	public Block sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
+	public Transaction sellOrderDo(KeyParameter aesKey, Token t, long sellPrice, long offervalue, Long validToTime,
 			Long validFromTime, String orderBaseToken, boolean allowRemainder,
 			List<FreeStandingTransactionOutput> candidates) throws IOException, InsufficientMoneyException {
 		if (t.getTokenid().equals(orderBaseToken))
@@ -850,19 +843,15 @@ public class Wallet extends WalletBase {
 		tx.setDataClassName("OrderOpen");
 
 		signTransaction(tx, aesKey);
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		block.addTransaction(tx);
-		block.setBlockType(BlockType.BLOCKTYPE_ORDER_OPEN);
+
+		submitTransaction(tx);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
-			block.addTransaction(feeTransaction(aesKey, candidates));
+			submitTransaction(feeTransaction(aesKey, candidates));
 		}
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return tx;
 	}
 
-	public Block cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
+	public Transaction cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
@@ -886,20 +875,14 @@ public class Wallet extends WalletBase {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-
-		block.addTransaction(tx);
-		block.setBlockType(BlockType.BLOCKTYPE_ORDER_CANCEL);
+		submitTransaction(tx);
 		if (getFee())
-			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+			submitTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
+		return tx;
 
 	}
 
-	public Block contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
+	public Transaction contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
 		ECKey legitimatingKey = null;
 		for (ECKey ecKey : walletKeys(aesKey)) {
@@ -923,16 +906,10 @@ public class Wallet extends WalletBase {
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-
-		block.addTransaction(tx);
-		block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+		submitTransaction(tx);
 		if (getFee())
-			block.addTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+			submitTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
+		return tx;
 
 	}
 
@@ -1183,14 +1160,12 @@ public class Wallet extends WalletBase {
 		return pay(aesKey, destination, summe, new MemoInfo(memo));
 	}
 
-	public Block saveUserdata(ECKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
+	public Transaction saveUserdata(ECKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
 			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
-		// transaction.getData() is not encrypted
 		if (encrypt) {
 			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
 			transaction.setData(cipher);
 		}
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
 
 		Sha256Hash sighash = transaction.getHash();
 		ECKey.ECDSASignature party1Signature = userKey.sign(sighash);
@@ -1203,15 +1178,12 @@ public class Wallet extends WalletBase {
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
 		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignBies));
-		block.addTransaction(transaction);
+
+		submitTransaction(transaction);
 		if (getFee()) {
-			block.addTransaction(feeTransaction(aesKey));
+			submitTransaction(feeTransaction(aesKey));
 		}
-		block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return transaction;
 	}
 
 	public UserSettingDataInfo getUserSettingDataInfo(ECKey userKey, boolean encrypt)
@@ -1413,7 +1385,7 @@ public class Wallet extends WalletBase {
 		return params.getDefaultSerializer().makeBlock(data);
 	}
 
-	public Block retryBlock(String hashHex) throws IOException {
+	public Transaction retryBlock(String hashHex) throws IOException {
 		return retryBlocks(getBlock(hashHex));
 	}
 
@@ -1421,24 +1393,18 @@ public class Wallet extends WalletBase {
 	 * if a block is failed due to rating without conflict, it can be retried by
 	 * setting new BlockProtoBlockType.
 	 */
-	public Block retryBlocks(Block oldBlock) throws IOException {
-
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		block.setBlockType(oldBlock.getBlockType());
-		for (Transaction transaction : oldBlock.getTransactions()) {
-			block.addTransaction(transaction);
-
-		}
-		if (block.getTransactions().isEmpty()) {
+	public Transaction retryBlocks(Block oldBlock) throws IOException {
+		List<Transaction> txs = oldBlock.getTransactions();
+		if (txs.isEmpty()) {
 			return null;
 		}
-		for (Transaction txn : block.getTransactions()) {
+		for (Transaction txn : txs) {
 			submitTransaction(txn);
 		}
-		return block;
+		return txs.get(0);
 	}
 
-	public Block rePayBlock(KeyParameter aesKey, String hashHex) throws IOException {
+	public Transaction rePayBlock(KeyParameter aesKey, String hashHex) throws IOException {
 		return retryBlocks(getBlock(hashHex));
 	}
 

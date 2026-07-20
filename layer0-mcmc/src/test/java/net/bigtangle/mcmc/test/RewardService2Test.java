@@ -221,9 +221,9 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			if (!NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(utxo.getTokenId())) {
 				wallet.setServerURL(contextRoot);
 				try {
-					Block sellOrder = wallet.sellOrder(null, utxo.getTokenId(), 10000000,
+					Block sellOrder = wrapTransaction(wallet.sellOrder(null, utxo.getTokenId(), 10000000,
 							utxo.getValue().getValue().longValue(), null, null,
-							NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+							NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 					blocksAddedAll.add(sellOrder);
 					makeOrderExecutionAndReward(blocksAddedAll,sellOrder);
 				} catch (InsufficientMoneyException e) {
@@ -272,8 +272,8 @@ public class RewardService2Test extends AbstractIntegrationTest {
 			// sell order and make buy
 			long price = orderRecord.getTargetValue() / orderRecord.getOfferValue();
 
-			Block buyOrder = wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
-					null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false);
+			Block buyOrder = wrapTransaction(wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
+					null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false));
 			blocksAddedAll.add(buyOrder);
 			makeOrderExecutionAndReward(blocksAddedAll,buyOrder);
 

@@ -1956,8 +1956,8 @@ public abstract class AbstractIntegrationTest {
 					&& utxo.getValue().isGreaterThan(Coin.ZERO)) {
 				wallet.setServerURL(contextRoot);
 				try {
-					Block sellOrder = wallet.sellOrder(null, utxo.getTokenId(), 100, 1000, null, null,
-							NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+				Block sellOrder = wrapTransaction(wallet.sellOrder(null, utxo.getTokenId(), 100, 1000, null, null,
+						NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 					blocksAddedAll.add(sellOrder);
 
 				} catch (InsufficientMoneyException e) {
@@ -2010,8 +2010,8 @@ public abstract class AbstractIntegrationTest {
 			// sell order and make buy
 			long price = orderRecord.getTargetValue() / orderRecord.getOfferValue();
 
-			Block buyOrder = wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
-					null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false);
+		Block buyOrder = wrapTransaction(wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
+				null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false));
 			blocksAddedAll.add(buyOrder);
 			// makeOrderExecutionAndReward(blocksAddedAll);
 

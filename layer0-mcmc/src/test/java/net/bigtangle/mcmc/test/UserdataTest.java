@@ -169,7 +169,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         transaction.setDataClassName(DataClassName.CONTACTINFO.name());
         transaction.setData(contactInfo0.toByteArray());
 
-       Block b=wallet.saveUserdata(outKey, transaction,false,null);
+       Block b=wrapTransaction(wallet.saveUserdata(outKey, transaction,false,null));
         makeRewardBlock(b);
         UserSettingDataInfo contactInfo1 =wallet.getUserSettingDataInfo(outKey,false);
         assertTrue(contactInfo1.getUserSettingDatas().size() == 1);

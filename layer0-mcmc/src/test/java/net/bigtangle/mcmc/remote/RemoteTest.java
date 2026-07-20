@@ -251,8 +251,10 @@ public abstract class RemoteTest {
 			// sell order and make buy
 			long price = orderRecord.getTargetValue() / orderRecord.getOfferValue();
 
-			Block buyOrder = wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
+			Transaction buyOrderTx = wallet.buyOrder(null, orderRecord.getOfferTokenid(), price, orderRecord.getOfferValue(),
 					null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, false);
+			Block buyOrder = Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
+			buyOrder.addTransaction(buyOrderTx);
 			blocksAddedAll.add(buyOrder);
 			// makeOrderExecutionAndReward(blocksAddedAll);
 

@@ -1240,8 +1240,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block block = Wallet.fromKeys(networkParameters, testKey, contextRoot).sellOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+		Block block = wrapTransaction(Wallet.fromKeys(networkParameters, testKey, contextRoot).sellOrder(null, testTokenId, price,
+				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 
 		makeOrderExecutionAndReward(addedBlocks, null);
 
@@ -1254,8 +1254,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open buy order for test tokens
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+		block = wrapTransaction(Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
+				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 		addedBlocks.add(block);
 		makeOrderExecutionAndReward(addedBlocks, null);
 
@@ -1289,8 +1289,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open buy order for test tokens
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		Block block = Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
-				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true);
+		Block block = wrapTransaction(Wallet.fromKeys(networkParameters, testKeyBuy, contextRoot).buyOrder(null, testTokenId, price,
+				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 		addedBlocks.add(block);
 
 		mcmcServiceUpdate();
