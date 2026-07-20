@@ -83,8 +83,8 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         for (ECKey vk : validatorKeys) {
             HashMap<String, BigInteger> fund = new HashMap<>();
             fund.put(vk.toAddress(networkParameters).toString(), BigInteger.valueOf(10000000));
-            Block b = genesisWallet.payToList(null, fund,
-                    NetworkParameters.BIGTANGLE_TOKENID, "fund");
+            Block b = wrapTransaction(genesisWallet.payToList(null, fund,
+                    NetworkParameters.BIGTANGLE_TOKENID, "fund"));
             if (b != null) {
                 makeRewardBlock(b);
                 blockGraph.updateChain(false);

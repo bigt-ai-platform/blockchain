@@ -98,9 +98,10 @@ public abstract class RemoteTest {
 
 	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
-		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
-		// log.debug("block " + (b == null ? "block is null" : b.toString()));
-		if (addedBlocks != null) {
+		Transaction tx = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
+		Block b = tx == null ? null : Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
+		if (b != null) b.addTransaction(tx);
+		if (addedBlocks != null && b != null) {
 			addedBlocks.add(b);
 		}
 	 

@@ -336,7 +336,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 
-		List<Block> rollingBlock = wallet.pay(null, destination.toString(), amount, "");
+		List<Block> rollingBlock = wrapTransactions(wallet.pay(null, destination.toString(), amount, ""));
 
 		log.info("req block, hex : " + rollingBlock.get(0));
 

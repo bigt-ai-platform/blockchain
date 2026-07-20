@@ -347,6 +347,22 @@ public abstract class AbstractIntegrationTest {
 		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
 	}
 
+	protected Block wrapTransaction(Transaction tx) {
+		if (tx == null) return null;
+		Block block = Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
+		block.addTransaction(tx);
+		return block;
+	}
+
+	protected List<Block> wrapTransactions(List<Transaction> txs) {
+		if (txs == null) return null;
+		List<Block> blocks = new ArrayList<>();
+		for (Transaction tx : txs) {
+			blocks.add(wrapTransaction(tx));
+		}
+		return blocks;
+	}
+
 	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
 		// Ensure tips queue is populated before wallet operations that need getTip
@@ -607,7 +623,7 @@ public abstract class AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		// mcmcService.calcNewBlockPrototype(store);
-		Block block = w.payContract(null, tokenId, buyAmount, null, null, contractTokenid);
+		Block block = wrapTransaction(w.payContract(null, tokenId, buyAmount, null, null, contractTokenid));
 		addedBlocks.add(block);
 		makeRewardBlock(addedBlocks);
 		return block;
@@ -1943,7 +1959,7 @@ public abstract class AbstractIntegrationTest {
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, 1)));
 		}
 
-		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1");
+		Block b = wrapTransaction(wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1"));
 		blocksAddedAll.add(b);
 		// makeRewardBlock(blocksAddedAll);
 	}

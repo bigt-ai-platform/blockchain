@@ -319,26 +319,26 @@ public class Wallet extends WalletBase {
 	// giveMoneyResult of
 	// address and amount and return the remainder back to fromkey.
 
-	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo)
+	public Transaction payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo,
 				calculateAllSpendCandidates(aesKey, false));
 	}
 
-	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
+	public Transaction payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo) throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
-	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo,
+	public Transaction payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, String memo,
 			List<FreeStandingTransactionOutput> coinList) throws IOException, InsufficientMoneyException {
 
 		return payMoneyToECKeyList(aesKey, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, memo, coinList);
 	}
 
-	public Block payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
+	public Transaction payMoneyToECKeyList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo, List<FreeStandingTransactionOutput> coinList)
 			throws IOException, InsufficientMoneyException {
 		try {
@@ -361,23 +361,23 @@ public class Wallet extends WalletBase {
 
 	// pay the tokenid from the list HashMap<String, Long> giveMoneyResult of
 	// address and amount and return the remainder back to fromkey.
-	public Block payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
+	public Transaction payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo) throws IOException, InsufficientMoneyException {
 		return payToList(aesKey, giveMoneyResult, tokenid, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
-	public List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
+	public List<Transaction> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
 			throws IOException, InsufficientMoneyException {
 		return payFromList(aesKey, destination, amount, memo, calculateAllSpendCandidates(aesKey, false));
 	}
 
-	public List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
+	public List<Transaction> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
 			List<FreeStandingTransactionOutput> coinList) throws IOException, InsufficientMoneyException {
 		return payFromList(aesKey, destination, amount, memo, coinList,
 				NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 4);
 	}
 
-	private List<Block> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
+	private List<Transaction> payFromList(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
 			List<FreeStandingTransactionOutput> coinList, int split) throws IOException, InsufficientMoneyException {
 
 		List<FreeStandingTransactionOutput> coinTokenList = filterTokenid(amount.getTokenid(), coinList);
@@ -390,29 +390,24 @@ public class Wallet extends WalletBase {
 			logInsufficientMoney("payFromList", info, aesKey, coinTokenList);
 			throw new InsufficientMoneyException("to pay " + amount + " account sum: " + sum);
 		}
-		// split the coinList into sub list, there is limit for transactions in a block
-		// NetworkParameters.TARGET_MAX_BLOCKS_IN_REWARD / 4);
 		List<List<FreeStandingTransactionOutput>> parts = chopped(coinTokenList, split);
 
-		List<Block> re = new ArrayList<>();
+		List<Transaction> re = new ArrayList<>();
 		Coin payAmount = amount;
 		for (List<FreeStandingTransactionOutput> part : parts) {
 			Coin canPay = sum(part);
-			re.add(payFromListNoSplit(aesKey, destination, payAmount, memo, part, Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS)));
+			Transaction tx = payFromListNoSplit(aesKey, destination, payAmount, memo, part);
+			re.add(tx);
 			if (canPay.compareTo(payAmount) >= 0) {
 				break;
 			}
 			payAmount = payAmount.subtract(canPay);
 		}
 
-		for (Block block : re) {
+		for (Transaction tx : re) {
+			submitTransaction(tx);
 			if (getFee() && !amount.isBIG()) {
-				// add big fee
-				block.addTransaction(feeTransaction(aesKey, coinList));
-			}
-		 
-			for (Transaction txn : block.getTransactions()) {
-				submitTransaction(txn);
+				submitTransaction(feeTransaction(aesKey, coinList));
 			}
 		}
 		return re;
@@ -428,13 +423,10 @@ public class Wallet extends WalletBase {
 
 	// List<UTXO> coinList may not pay the amount, the rest to be paid is
 	// restAmount
-	private Block payFromListNoSplit(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
-			List<FreeStandingTransactionOutput> coinList, Block tipBlock) throws InsufficientMoneyException {
+	private Transaction payFromListNoSplit(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo,
+			List<FreeStandingTransactionOutput> coinList) throws InsufficientMoneyException {
 
-		Transaction multispent = payFromListNoSplitTransaction(aesKey, destination, amount, memo, coinList);
-		tipBlock.addTransaction(multispent);
-
-		return tipBlock;
+		return payFromListNoSplitTransaction(aesKey, destination, amount, memo, coinList);
 
 	}
 
@@ -475,7 +467,7 @@ public class Wallet extends WalletBase {
 		return multispent;
 	}
 
-	public Block payToScript(KeyParameter aesKey, Coin amount, MemoInfo memo, Script script)
+	public Transaction payToScript(KeyParameter aesKey, Coin amount, MemoInfo memo, Script script)
 			throws InsufficientMoneyException, IOException {
 
 		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
@@ -513,17 +505,11 @@ public class Wallet extends WalletBase {
 
 		signTransaction(multispent, aesKey);
 
-		Block b = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		b.addTransaction(multispent);
+		submitTransaction(multispent);
 		if (getFee() && !amount.isBIG()) {
-			// add big fee
-			b.addTransaction(feeTransaction(aesKey, coinList));
+			submitTransaction(feeTransaction(aesKey, coinList));
 		}
-	 
-		for (Transaction txn : b.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return b;
+		return multispent;
 	}
 
 	// chops a list into non-view sublists of length L
@@ -546,7 +532,7 @@ public class Wallet extends WalletBase {
 		return parts;
 	}
 
-	public Block payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
+	public Transaction payToList(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid,
 			String memo, List<FreeStandingTransactionOutput> coinList) throws IOException, InsufficientMoneyException {
 
 		if (giveMoneyResult.isEmpty()) {
@@ -554,15 +540,11 @@ public class Wallet extends WalletBase {
 		}
 		Transaction multispent = payToListTransaction(aesKey, giveMoneyResult, tokenid, memo, coinList);
 
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		block.addTransaction(multispent);
+		submitTransaction(multispent);
 		if (getFee() && !Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, tokenid)) {
-			block.addTransaction(feeTransaction(aesKey, coinList));
+			submitTransaction(feeTransaction(aesKey, coinList));
 		}
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return multispent;
 	}
 
 	public Transaction payToListTransaction(KeyParameter aesKey, HashMap<String, BigInteger> giveMoneyResult,
@@ -954,12 +936,9 @@ public class Wallet extends WalletBase {
 
 	}
 
-	public Block payContract(KeyParameter aesKey, String tokenId, BigInteger payAmount, Long validToTime,
+	public Transaction payContract(KeyParameter aesKey, String tokenId, BigInteger payAmount, Long validToTime,
 			Long validFromTime, String contractTokenid)
 			throws IOException, InsufficientMoneyException, NoTokenException {
-		// add client check if the tokenid exists
-		// Token t = checkTokenId(tokenId);
-		// Burn BIG to buy
 
 		Coin amount = new Coin(payAmount, tokenId).negate();
 
@@ -994,17 +973,12 @@ public class Wallet extends WalletBase {
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("ContractEventInfo");
 		signTransaction(tx, aesKey);
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		block.addTransaction(tx);
-		block.setBlockType(BlockType.BLOCKTYPE_CONTRACT_EVENT);
 
+		submitTransaction(tx);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenId)) {
-			block.addTransaction(feeTransaction(aesKey, coinList));
+			submitTransaction(feeTransaction(aesKey, coinList));
 		}
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return tx;
 	}
 
 	public void submitTransaction(Transaction tx) throws IOException {
@@ -1085,7 +1059,7 @@ public class Wallet extends WalletBase {
 		return total;
 	}
 
-	public Block paySubtangle(KeyParameter aesKey, String outputStr, ECKey connectKey, Address toAddressInSubtangle,
+	public Transaction paySubtangle(KeyParameter aesKey, String outputStr, ECKey connectKey, Address toAddressInSubtangle,
 			Coin coin, Address address) throws IOException {
 
 		HashMap<String, Object> requestParam = new HashMap<>();
@@ -1111,13 +1085,9 @@ public class Wallet extends WalletBase {
 				Transaction.SigHash.ALL, false);
 		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
 		input.setScriptSig(inputScript);
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
-		block.addTransaction(transaction);
 
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		submitTransaction(transaction);
+		return transaction;
 	}
 
 	public ECKey getECKey(KeyParameter aesKey, String address) {
@@ -1133,19 +1103,19 @@ public class Wallet extends WalletBase {
 		throw new RuntimeException("no key in wallet is found for this address " + address);
 	}
 
-	public List<Block> pay(KeyParameter aesKey, String destination, Coin amount, String memo)
+	public List<Transaction> pay(KeyParameter aesKey, String destination, Coin amount, String memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payFromList(aesKey, destination, amount, new MemoInfo(memo));
 	}
 
-	public List<Block> pay(KeyParameter aesKey, Address destination, Coin amount, String memo)
+	public List<Transaction> pay(KeyParameter aesKey, Address destination, Coin amount, String memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payFromList(aesKey, destination.toString(), amount, new MemoInfo(memo));
 	}
 
-	public List<Block> pay(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
+	public List<Transaction> pay(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payFromList(aesKey, destination, amount, memo);
@@ -1170,23 +1140,18 @@ public class Wallet extends WalletBase {
 		return payFromListNoSplitTransaction(aesKey, destination.toString(), amount, new MemoInfo(memo), candidates);
 	}
 
-//no repeat here
-	public Block payTransaction(List<Transaction> txs) throws IOException {
-		Block block = Block.setBlock2(params, NetworkParameters.BLOCK_VERSION_GENESIS);
+	public Transaction payTransaction(List<Transaction> txs) throws IOException {
 		for (Transaction tx : txs) {
-			block.addTransaction(tx);
+			submitTransaction(tx);
 		}
-		for (Transaction txn : block.getTransactions()) {
-			submitTransaction(txn);
-		}
-		return block;
+		return txs.isEmpty() ? null : txs.get(0);
 	}
 
 	/*
 	 * pay all small coins in a wallet to one destination. This destination can be
 	 * in same wallet.
 	 */
-	public List<Block> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo)
+	public List<Transaction> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo)
 			throws IOException, InsufficientMoneyException {
 
 		return payPartsToOne(aesKey, destination, tokenid, memo, BigInteger.ZERO);
@@ -1196,7 +1161,7 @@ public class Wallet extends WalletBase {
 	 * pay all small coins in a wallet to one destination. This destination can be
 	 * in same wallet.
 	 */
-	public List<Block> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo,
+	public List<Transaction> payPartsToOne(KeyParameter aesKey, String destination, byte[] tokenid, String memo,
 			BigInteger low) throws IOException, InsufficientMoneyException {
 
 		List<UTXO> l = calculateAllSpendCandidatesUTXO(aesKey, false);

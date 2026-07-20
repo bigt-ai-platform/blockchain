@@ -23,6 +23,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.TokenType;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.MainNetParams;
@@ -87,7 +88,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 	public void buyTicket(ECKey key, ECKey accountKey) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 		log.debug("====ready buyTicket====");
-		List<Block> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
+		List<Transaction> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
 
 		log.debug("====start buyTicket====");
@@ -121,7 +122,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 		userkeys.add(key2);
 
 		String memo = "pay to user";
-		Block b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
+		Transaction b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
 
  

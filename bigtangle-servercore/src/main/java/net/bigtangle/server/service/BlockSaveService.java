@@ -3,6 +3,7 @@ package net.bigtangle.server.service;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -132,10 +133,21 @@ public class BlockSaveService {
 	}
 
 	public int batchBlocksFromMempool() throws Exception {
-		List<Transaction> txns = mempoolService.drainAll();
-		if (txns.isEmpty()) {
+		Map<BlockType, List<Transaction>> txnsByType = mempoolService.drainAllByType();
+		if (txnsByType.isEmpty()) {
 			return 0;
 		}
+		int totalBatched = 0;
+		for (List<Transaction> txns : txnsByType.values()) {
+			totalBatched += batchTransactionGroup(txns);
+		}
+		if (scheduleConfiguration.isPosEnabled()) {
+			feeService.updateBaseFee(totalBatched);
+		}
+		return totalBatched;
+	}
+
+	private int batchTransactionGroup(List<Transaction> txns) throws Exception {
 		if (txns.size() <= BATCH_TX_PER_BLOCK) {
 			BlockStoreInterface store = storeService.getStore();
 			try {
@@ -147,9 +159,6 @@ public class BlockSaveService {
 				saveBatchBlock(block, store);
 			} finally {
 				store.close();
-			}
-			if (scheduleConfiguration.isPosEnabled()) {
-				feeService.updateBaseFee(txns.size());
 			}
 			return txns.size();
 		}
@@ -206,9 +215,6 @@ public class BlockSaveService {
 			}
 		} finally {
 			store.close();
-		}
-		if (scheduleConfiguration.isPosEnabled()) {
-			feeService.updateBaseFee(txns.size());
 		}
 		return txns.size();
 	}

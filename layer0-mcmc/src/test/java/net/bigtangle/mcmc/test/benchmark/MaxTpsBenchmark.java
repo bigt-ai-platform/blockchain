@@ -77,8 +77,8 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
-        Block fb = genesisWallet.payToList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund");
+        Block fb = wrapTransaction(genesisWallet.payToList(null, funding,
+                NetworkParameters.BIGTANGLE_TOKENID, "fund"));
         if (fb != null) {
             makeRewardBlock(fb);
             blockGraph.updateChain(false);

@@ -72,8 +72,8 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
-        Block fb = wallet.payMoneyToECKeyList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund");
+        Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, funding,
+                NetworkParameters.BIGTANGLE_TOKENID, "fund"));
         if (fb != null) {
             Block rb = makeRewardBlock(fb);
             blockGraph.updateChain(false);

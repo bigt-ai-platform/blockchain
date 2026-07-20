@@ -94,8 +94,9 @@ public class PosThroughputBenchmark extends AbstractIntegrationTest {
         for (ECKey vk : validatorKeys) {
             HashMap<String, BigInteger> fund = new HashMap<>();
             fund.put(vk.toAddress(networkParameters).toString(), BigInteger.valueOf(10000000));
-            Block b = genesisWallet.payToList(null, fund,
+            Transaction fundingTx = genesisWallet.payToList(null, fund,
                     NetworkParameters.BIGTANGLE_TOKENID, "fund-val");
+            Block b = wrapTransaction(fundingTx);
             if (b != null) {
                 makeRewardBlock(b);
                 blockGraph.updateChain(false);
@@ -145,8 +146,8 @@ public class PosThroughputBenchmark extends AbstractIntegrationTest {
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
-        Block fb = genesisWallet.payToList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund-tx");
+        Block fb = wrapTransaction(genesisWallet.payToList(null, funding,
+                NetworkParameters.BIGTANGLE_TOKENID, "fund-tx"));
         if (fb != null) {
             makeRewardBlock(fb);
             blockGraph.updateChain(false);

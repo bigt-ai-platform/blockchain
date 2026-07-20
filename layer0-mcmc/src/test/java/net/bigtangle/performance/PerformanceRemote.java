@@ -129,8 +129,8 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 		try {
 			for (ECKey key : createUserkey()) {
 				Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
-				a1.add(w.payContract(null, yuanTokenPub, payContractAmount, null, null,
-						contractKey.getPublicKeyAsHex()));
+				a1.add(wrapTransaction(w.payContract(null, yuanTokenPub, payContractAmount, null, null,
+						contractKey.getPublicKeyAsHex())));
 			}
 			return "";
 		} catch (Exception e) {
@@ -150,7 +150,7 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 				for (ECKey key : list) {
 					giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(5));
 				}
-				Block b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID,
+				Transaction b = wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID,
 						"pay big to user");
 
 			}
@@ -166,7 +166,7 @@ public class PerformanceRemote extends AbstractIntegrationTest {
 				for (ECKey key : list) {
 					giveMoneyResult.put(key.toAddress(networkParameters).toString(), payContractAmount);
 				}
-				Block b = wallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), "pay yuan to user");
+				Transaction b = wallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), "pay yuan to user");
 
 			}
 		}

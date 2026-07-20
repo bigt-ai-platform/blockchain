@@ -119,8 +119,8 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
         fund.put(key.toAddress(networkParameters).toString(),
                 amount.add(BigInteger.valueOf(100000)));
-        Block fb = wallet.payMoneyToECKeyList(null, fund,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund");
+		Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, fund,
+				NetworkParameters.BIGTANGLE_TOKENID, "fund"));
         if (fb != null) {
             makeRewardBlock(fb);
             blockGraph.updateChain(false);

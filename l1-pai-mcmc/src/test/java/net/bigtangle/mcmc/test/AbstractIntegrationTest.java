@@ -245,13 +245,29 @@ public abstract class AbstractIntegrationTest {
 
     private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
             throws Exception {
-        Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
+        Block b = wrapTransaction(wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList"));
         if (addedBlocks != null) addedBlocks.add(b);
         if (b != null) {
             Block re = makeRewardBlock(b);
             if (addedBlocks != null) addedBlocks.add(re);
         }
         return b;
+    }
+
+    protected Block wrapTransaction(Transaction tx) {
+        if (tx == null) return null;
+        Block block = Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
+        block.addTransaction(tx);
+        return block;
+    }
+
+    protected List<Block> wrapTransactions(List<Transaction> txs) {
+        if (txs == null) return null;
+        List<Block> blocks = new ArrayList<>();
+        for (Transaction tx : txs) {
+            blocks.add(wrapTransaction(tx));
+        }
+        return blocks;
     }
 
     protected ContractExecutionResult executePaiContract(Block block, BlockStoreInterface store,

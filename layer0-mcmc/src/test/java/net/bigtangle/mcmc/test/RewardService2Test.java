@@ -242,7 +242,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, j)));
 		}
 		mcmcService.calcNewBlockPrototype(store);	
-		Block b = wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1");
+		Block b = wrapTransaction(wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1"));
 		blocksAddedAll.add(b);
 		makeRewardBlock(blocksAddedAll);
 	}

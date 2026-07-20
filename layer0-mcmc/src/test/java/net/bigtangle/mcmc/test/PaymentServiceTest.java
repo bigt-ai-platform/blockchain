@@ -251,8 +251,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		Coin aCoin = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 
-		List<Block> rollingBlock = wallet.pay(null, to.toAddress(networkParameters).toString(), aCoin,
-				"");
+		List<Block> rollingBlock = wrapTransactions(wallet.pay(null, to.toAddress(networkParameters).toString(), aCoin,
+				""));
 
 		makeRewardBlock();
 		// pay from burned address

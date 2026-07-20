@@ -81,9 +81,10 @@ public class MaxTPSBenchmark extends AbstractIntegrationTest {
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
-        Block fb = wallet.payMoneyToECKeyList(null, funding,
+        Transaction fundingTx = wallet.payMoneyToECKeyList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund");
-        if (fb != null) {
+        if (fundingTx != null) {
+            Block fb = wrapTransaction(fundingTx);
             Block rb = makeRewardBlock(fb);
             blockGraph.updateChain(false);
             log.info("Funded {} wallets", walletKeys.size());
@@ -92,12 +93,11 @@ public class MaxTPSBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        Sha256Hash fundBlockHash = fb.getHash();
-        Sha256Hash fundTxHash = fb.getTransactions().get(0).getHash();
+        Sha256Hash fundTxHash = fundingTx.getHash();
 
         Map<String, FreeStandingTransactionOutput> addrToCandidate = new HashMap<>();
-        for (int i = 0; i < fb.getTransactions().get(0).getOutputs().size(); i++) {
-            UTXO utxo = store.getTransactionOutput(fundBlockHash, fundTxHash, i);
+        for (int i = 0; i < fundingTx.getOutputs().size(); i++) {
+            UTXO utxo = store.getTransactionOutput(fundTxHash, fundTxHash, i);
             if (utxo != null) {
                 addrToCandidate.put(utxo.getAddress(),
                         new FreeStandingTransactionOutput(networkParameters, utxo));
