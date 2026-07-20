@@ -21,7 +21,7 @@ package net.bigtangle.crypto;
 
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import net.bigtangle.wallet.Protos.Wallet.EncryptionType;
+import net.bigtangle.crypto.EncryptionType;
 
 import java.io.Serializable;
 

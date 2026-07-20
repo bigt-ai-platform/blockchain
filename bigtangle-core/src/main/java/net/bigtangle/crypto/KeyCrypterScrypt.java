@@ -23,13 +23,10 @@ package net.bigtangle.crypto;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Stopwatch;
-import com.google.protobuf.ByteString;
 import com.lambdaworks.crypto.SCrypt;
 
 import net.bigtangle.core.Utils;
-import net.bigtangle.wallet.Protos;
-import net.bigtangle.wallet.Protos.ScryptParameters;
-import net.bigtangle.wallet.Protos.Wallet.EncryptionType;
+import net.bigtangle.crypto.EncryptionType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,9 +106,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
      * Encryption/Decryption using default parameters and a random salt.
      */
     public KeyCrypterScrypt() {
-        Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder().setSalt(
-                ByteString.copyFrom(randomSalt()));
-        this.scryptParameters = scryptParametersBuilder.build();
+        this.scryptParameters = new ScryptParameters(randomSalt(), 32768, 8, 6);
     }
 
     /**
@@ -122,9 +117,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
      *            number of scrypt iterations
      */
     public KeyCrypterScrypt(int iterations) {
-        Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder()
-                .setSalt(ByteString.copyFrom(randomSalt())).setN(iterations);
-        this.scryptParameters = scryptParametersBuilder.build();
+        this.scryptParameters = new ScryptParameters(randomSalt(), iterations, 8, 6);
     }
 
     /**
@@ -137,9 +130,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
         this.scryptParameters = checkNotNull(scryptParameters);
         // Check there is a non-empty salt.
         // (Some early MultiBit wallets has a missing salt so it is not a hard fail).
-        if (scryptParameters.getSalt() == null
-                || scryptParameters.getSalt().toByteArray() == null
-                || scryptParameters.getSalt().toByteArray().length == 0) {
+        if (scryptParameters.getSalt() == null || scryptParameters.getSalt().length == 0) {
             log.warn("You are using a ScryptParameters with no salt. Your encryption may be vulnerable to a dictionary attack.");
         }
     }
@@ -160,7 +151,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
             passwordBytes = convertToByteArray(password);
             byte[] salt = new byte[0];
             if ( scryptParameters.getSalt() != null) {
-                salt = scryptParameters.getSalt().toByteArray();
+                salt = scryptParameters.getSalt();
             } else {
                 // Warn the user that they are not using a salt.
                 // (Some early MultiBit wallets had a blank salt).

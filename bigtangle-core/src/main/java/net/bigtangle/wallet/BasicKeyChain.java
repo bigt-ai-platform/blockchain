@@ -37,7 +37,6 @@ import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.crypto.EncryptableItem;
@@ -56,8 +55,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
     private final ReentrantLock lock = Threading.lock("BasicKeyChain");
 
     // Maps used to let us quickly look up a key given data we find in transcations or the block chain.
-    private final LinkedHashMap<ByteString, ECKey> hashToKeys;
-    private final LinkedHashMap<ByteString, ECKey> pubkeyToKeys;
+    private final LinkedHashMap<ByteArrayKey, ECKey> hashToKeys;
+    private final LinkedHashMap<ByteArrayKey, ECKey> pubkeyToKeys;
     @Nullable private final KeyCrypter keyCrypter;
     private boolean isWatching;
 
@@ -68,8 +67,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
 
     public BasicKeyChain(@Nullable KeyCrypter crypter) {
         this.keyCrypter = crypter;
-        hashToKeys = new LinkedHashMap<ByteString, ECKey>();
-        pubkeyToKeys = new LinkedHashMap<ByteString, ECKey>();
+        hashToKeys = new LinkedHashMap<ByteArrayKey, ECKey>();
+        pubkeyToKeys = new LinkedHashMap<ByteArrayKey, ECKey>();
    
     }
 
@@ -186,8 +185,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
             if (!key.isWatching() && isWatching)
                 throw new IllegalArgumentException("Key is not watching but chain is");
         }
-        ECKey previousKey = pubkeyToKeys.put(ByteString.copyFrom(key.getPubKey()), key);
-        hashToKeys.put(ByteString.copyFrom(key.getPubKeyHash()), key);
+        ECKey previousKey = pubkeyToKeys.put(new ByteArrayKey(key.getPubKey()), key);
+        hashToKeys.put(new ByteArrayKey(key.getPubKeyHash()), key);
         checkState(previousKey == null);
     }
 
@@ -215,7 +214,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
     public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
         lock.lock();
         try {
-            return hashToKeys.get(ByteString.copyFrom(pubkeyHash));
+            return hashToKeys.get(new ByteArrayKey(pubkeyHash));
         } finally {
             lock.unlock();
         }
@@ -224,7 +223,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
     public ECKey findKeyFromPubKey(byte[] pubkey) {
         lock.lock();
         try {
-            return pubkeyToKeys.get(ByteString.copyFrom(pubkey));
+            return pubkeyToKeys.get(new ByteArrayKey(pubkey));
         } finally {
             lock.unlock();
         }
@@ -270,8 +269,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
     public boolean removeKey(ECKey key) {
         lock.lock();
         try {
-            boolean a = hashToKeys.remove(ByteString.copyFrom(key.getPubKeyHash())) != null;
-            boolean b = pubkeyToKeys.remove(ByteString.copyFrom(key.getPubKey())) != null;
+            boolean a = hashToKeys.remove(new ByteArrayKey(key.getPubKeyHash())) != null;
+            boolean b = pubkeyToKeys.remove(new ByteArrayKey(key.getPubKey())) != null;
             checkState(a == b);   // Should be in both maps or neither.
             return a;
         } finally {
@@ -298,25 +297,25 @@ public class BasicKeyChain implements EncryptableKeyChain {
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    Map<ECKey, Protos.Key.Builder> serializeToEditableProtobufs() {
+    List<byte[]> serializeToEditableProtobufs() {
         Map<ECKey, Protos.Key.Builder> result = new LinkedHashMap<ECKey, Protos.Key.Builder>();
         for (ECKey ecKey : hashToKeys.values()) {
             Protos.Key.Builder protoKey = serializeEncryptableItem(ecKey);
-            protoKey.setPublicKey(ByteString.copyFrom(ecKey.getPubKey()));
+            protoKey.setPublicKey(new ByteArrayKey(ecKey.getPubKey()));
             result.put(ecKey, protoKey);
         }
         return result;
     }
 
     @Override
-    public List<Protos.Key> serializeToProtobuf() {
+    public List<byte[]> serializeToProtobuf() {
         Collection<Protos.Key.Builder> builders = serializeToEditableProtobufs().values();
         List<Protos.Key> result = new ArrayList<Protos.Key>(builders.size());
         for (Protos.Key.Builder builder : builders) result.add(builder.build());
         return result;
     }
 
-    /*package*/ static Protos.Key.Builder serializeEncryptableItem(EncryptableItem item) {
+    /*package*/ static List<byte[]> serializeEncryptableItem(EncryptableItem item) {
         Protos.Key.Builder proto = Protos.Key.newBuilder();
         proto.setCreationTimestamp(item.getCreationTimeSeconds() * 1000);
         if (item.isEncrypted() && item.getEncryptedData() != null) {
@@ -325,8 +324,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
             // case the caller in DeterministicKeyChain will take care of setting the type.
             EncryptedData data = item.getEncryptedData();
             proto.getEncryptedDataBuilder()
-                    .setEncryptedPrivateKey(ByteString.copyFrom(data.encryptedBytes))
-                    .setInitialisationVector(ByteString.copyFrom(data.initialisationVector));
+                    .setEncryptedPrivateKey(new ByteArrayKey(data.encryptedBytes))
+                    .setInitialisationVector(new ByteArrayKey(data.initialisationVector));
             // We don't allow mixing of encryption types at the moment.
             checkState(item.getEncryptionType() == Protos.Wallet.EncryptionType.ENCRYPTED_SCRYPT_AES);
             proto.setType(Protos.Key.Type.ENCRYPTED_SCRYPT_AES);
@@ -335,7 +334,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             // The secret might be missing in the case of a watching wallet, or a key for which the private key
             // is expected to be rederived on the fly from its parent.
             if (secret != null)
-                proto.setSecretBytes(ByteString.copyFrom(secret));
+                proto.setSecretBytes(new ByteArrayKey(secret));
             proto.setType(Protos.Key.Type.ORIGINAL);
         }
         return proto;

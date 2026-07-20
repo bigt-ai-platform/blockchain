@@ -53,8 +53,8 @@ public interface KeyChain {
     /** Obtains a key intended for the given purpose. The chain may create a new key, derive one, or re-use an old one. */
     ECKey getKey(KeyPurpose purpose);
 
-    /** Returns a list of keys serialized to the bitcoinj protobuf format. */
-    List<Protos.Key> serializeToProtobuf();
+    /** Returns a list of keys serialized. */
+    List<byte[]> serializeToProtobuf();
 
  
     /** Returns the number of keys this key chain manages. */

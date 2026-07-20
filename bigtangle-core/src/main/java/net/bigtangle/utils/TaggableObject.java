@@ -18,8 +18,6 @@
 
 package net.bigtangle.utils;
 
-import com.google.protobuf.ByteString;
-
 import javax.annotation.Nullable;
 import java.util.Map;
 
@@ -37,18 +35,18 @@ import java.util.Map;
  * in string parameters causing confusing bugs!</p>
  */
 public interface TaggableObject {
-    /** Returns the immutable byte array associated with the given tag name, or null if there is none. */
-    @Nullable ByteString maybeGetTag(String tag);
+    /** Returns the byte array associated with the given tag name, or null if there is none. */
+    @Nullable byte[] maybeGetTag(String tag);
 
     /**
-     * Returns the immutable byte array associated with the given tag name, or throws {@link java.lang.IllegalArgumentException}
+     * Returns the byte array associated with the given tag name, or throws {@link java.lang.IllegalArgumentException}
      * if that tag wasn't set yet.
      */
-    ByteString getTag(String tag);
+    byte[] getTag(String tag);
 
-    /** Associates the given immutable byte array with the string tag. See the docs for TaggableObject to learn more. */
-    void setTag(String tag, ByteString value);
+    /** Associates the given byte array with the string tag. See the docs for TaggableObject to learn more. */
+    void setTag(String tag, byte[] value);
 
     /** Returns a copy of all the tags held by this object. */
-    Map<String, ByteString> getTags();
+    Map<String, byte[]> getTags();
 }

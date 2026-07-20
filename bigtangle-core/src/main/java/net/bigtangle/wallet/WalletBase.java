@@ -35,7 +35,6 @@ import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Transaction;
@@ -52,7 +51,7 @@ import net.bigtangle.signers.MissingSigResolutionSigner;
 import net.bigtangle.signers.TransactionSigner;
 import net.bigtangle.utils.BaseTaggableObject;
 import net.bigtangle.utils.Threading;
-import net.bigtangle.wallet.Protos.Wallet.EncryptionType;
+
 import net.jcip.annotations.GuardedBy;
 
 /**
@@ -413,7 +412,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// region Serialization support
 
 	/** Internal use only. */
-	protected List<Protos.Key> serializeKeyChainGroupToProtobuf() {
+	protected List<Key> serializeKeyChainGroupToProtobuf() {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.serializeToProtobuf();
@@ -547,8 +546,8 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	public void changePassword(String password, String oldPassword) {
 
-		Protos.ScryptParameters SCRYPT_PARAMETERS = Protos.ScryptParameters.newBuilder().setP(6).setR(8).setN(32768)
-				.setSalt(ByteString.copyFrom(KeyCrypterScrypt.randomSalt())).build();
+		ScryptParameters SCRYPT_PARAMETERS = ScryptParameters.newBuilder().setP(6).setR(8).setN(32768)
+				.setSalt(new ByteArrayKey(KeyCrypterScrypt.randomSalt())).build();
 		KeyCrypterScrypt scrypt = new KeyCrypterScrypt(SCRYPT_PARAMETERS);
 		KeyParameter aesKey = scrypt.deriveKey(password);
 		if (isEncrypted()) {

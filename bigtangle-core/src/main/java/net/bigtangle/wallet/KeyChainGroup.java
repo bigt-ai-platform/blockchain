@@ -42,7 +42,6 @@ import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.ECKey;
@@ -356,7 +355,7 @@ public class KeyChainGroup implements KeyBag {
         // Iterate in reverse order, since the active keychain is the one most likely to have the hit
         for (Iterator<DeterministicKeyChain> iter = chains.descendingIterator() ; iter.hasNext() ; ) {
             DeterministicKeyChain chain = iter.next();
-            RedeemData redeemData = chain.findRedeemDataByScriptHash(ByteString.copyFrom(scriptHash));
+            RedeemData redeemData = chain.findRedeemDataByScriptHash(new ByteArrayKey(scriptHash));
             if (redeemData != null)
                 return redeemData;
         }

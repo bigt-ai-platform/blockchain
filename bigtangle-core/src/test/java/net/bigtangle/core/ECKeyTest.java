@@ -35,19 +35,16 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.protobuf.ByteString;
-
 import net.bigtangle.core.ECKey.ECDSASignature;
 import net.bigtangle.crypto.EncryptedData;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterScrypt;
+import net.bigtangle.crypto.ScryptParameters;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.utils.DumpedPrivateKey;
-import net.bigtangle.wallet.Protos;
-import net.bigtangle.wallet.Protos.ScryptParameters;
 
 public class ECKeyTest {
 	private static final Logger log = LoggerFactory.getLogger(ECKeyTest.class);
@@ -59,11 +56,7 @@ public class ECKeyTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
-		Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder()
-				.setSalt(ByteString.copyFrom(KeyCrypterScrypt.randomSalt()));
-		ScryptParameters scryptParameters = scryptParametersBuilder.build();
-		keyCrypter = new KeyCrypterScrypt(scryptParameters);
- 
+		keyCrypter = new KeyCrypterScrypt();
 	}
 
 	@Test

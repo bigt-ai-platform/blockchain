@@ -47,7 +47,6 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
-import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
@@ -734,7 +733,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         LinkedList<Protos.Key> entries = newLinkedList();
         if (seed != null) {
             Protos.Key.Builder mnemonicEntry = BasicKeyChain.serializeEncryptableItem(seed);
-            mnemonicEntry.setType(Protos.Key.Type.DETERMINISTIC_MNEMONIC);
+            mnemonicEntry.setType(.DETERMINISTIC_MNEMONIC);
             serializeSeedEncryptableItem(seed, mnemonicEntry);
             entries.add(mnemonicEntry.build());
         }
@@ -742,9 +741,9 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         for (Map.Entry<ECKey, Protos.Key.Builder> entry : keys.entrySet()) {
             DeterministicKey key = (DeterministicKey) entry.getKey();
             Protos.Key.Builder proto = entry.getValue();
-            proto.setType(Protos.Key.Type.DETERMINISTIC_KEY);
-            final Protos.DeterministicKey.Builder detKey = proto.getDeterministicKeyBuilder();
-            detKey.setChainCode(ByteString.copyFrom(key.getChainCode()));
+            proto.setType(.DETERMINISTIC_KEY);
+            final byte[] detKey = proto.getDeterministicKeyBuilder();
+            detKey.setChainCode(new ByteArrayKey(key.getChainCode()));
             for (ChildNumber num : key.getPath())
                 detKey.addPath(num.i());
             if (key.equals(externalParentKey)) {
@@ -788,8 +787,8 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         PeekingIterator<Protos.Key> iter = Iterators.peekingIterator(keys.iterator());
         while (iter.hasNext()) {
             Protos.Key key = iter.next();
-            final Protos.Key.Type t = key.getType();
-            if (t == Protos.Key.Type.DETERMINISTIC_MNEMONIC) {
+            final  t = key.getType();
+            if (t == .DETERMINISTIC_MNEMONIC) {
                 if (chain != null) {
                     checkState(lookaheadSize >= 0);
                     chain.setLookaheadSize(lookaheadSize);
@@ -825,7 +824,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
                 }
                 if (log.isDebugEnabled())
                     log.debug("Deserializing: DETERMINISTIC_MNEMONIC: {}", seed);
-            } else if (t == Protos.Key.Type.DETERMINISTIC_KEY) {
+            } else if (t == .DETERMINISTIC_KEY) {
                 if (!key.hasDeterministicKey())
                     throw new UnreadableWalletException("Deterministic key missing extra data: " + key.toString());
                 byte[] chainCode = key.getDeterministicKey().getChainCode().toByteArray();
@@ -1264,14 +1263,14 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         if (seed.isEncrypted() && seed.getEncryptedSeedData() != null) {
             EncryptedData data = seed.getEncryptedSeedData();
             proto.getEncryptedDeterministicSeedBuilder()
-                    .setEncryptedPrivateKey(ByteString.copyFrom(data.encryptedBytes))
-                    .setInitialisationVector(ByteString.copyFrom(data.initialisationVector));
+                    .setEncryptedPrivateKey(new ByteArrayKey(data.encryptedBytes))
+                    .setInitialisationVector(new ByteArrayKey(data.initialisationVector));
             // We don't allow mixing of encryption types at the moment.
             checkState(seed.getEncryptionType() == Protos.Wallet.EncryptionType.ENCRYPTED_SCRYPT_AES);
         } else {
             final byte[] secret = seed.getSeedBytes();
             if (secret != null)
-                proto.setDeterministicSeed(ByteString.copyFrom(secret));
+                proto.setDeterministicSeed(new ByteArrayKey(secret));
         }
     }
 
@@ -1349,7 +1348,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
 
     /** Returns the redeem script by its hash or null if this keychain did not generate the script. */
     @Nullable
-    public RedeemData findRedeemDataByScriptHash(ByteString bytes) {
+    public RedeemData findRedeemDataByScriptHash(ByteArrayKey bytes) {
         return null;
     }
 }

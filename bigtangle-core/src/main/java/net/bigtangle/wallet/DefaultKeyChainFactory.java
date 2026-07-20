@@ -26,26 +26,13 @@ import net.bigtangle.crypto.*;
  */
 public class DefaultKeyChainFactory implements KeyChainFactory {
     @Override
-    public DeterministicKeyChain makeKeyChain(Protos.Key key, Protos.Key firstSubKey, DeterministicSeed seed, KeyCrypter crypter, boolean isMarried) {
-        DeterministicKeyChain chain;
-        if (isMarried)
-            chain = new MarriedKeyChain(seed, crypter);
-        else
-            chain = new DeterministicKeyChain(seed, crypter);
-        return chain;
+    public DeterministicKeyChain makeKeyChain(byte[] key, byte[] firstSubKey, DeterministicSeed seed, KeyCrypter crypter, boolean isMarried) {
+        throw new UnsupportedOperationException("Wallet deserialization removed");
     }
 
     @Override
-    public DeterministicKeyChain makeWatchingKeyChain(Protos.Key key, Protos.Key firstSubKey, DeterministicKey accountKey,
+    public DeterministicKeyChain makeWatchingKeyChain(byte[] key, byte[] firstSubKey, DeterministicKey accountKey,
                                                       boolean isFollowingKey, boolean isMarried) throws UnreadableWalletException {
-        if (!accountKey.getPath().equals(DeterministicKeyChain.ACCOUNT_ZERO_PATH))
-            throw new UnreadableWalletException("Expecting account key but found key with path: " +
-                    HDUtils.formatPath(accountKey.getPath()));
-        DeterministicKeyChain chain;
-        if (isMarried)
-            chain = new MarriedKeyChain(accountKey);
-        else
-            chain = new DeterministicKeyChain(accountKey, isFollowingKey);
-        return chain;
+        throw new UnsupportedOperationException("Wallet deserialization removed");
     }
 }

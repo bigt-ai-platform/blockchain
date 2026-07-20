@@ -165,8 +165,8 @@ public class DeterministicSeed implements EncryptableItem {
     }
 
     @Override
-    public Protos.Wallet.EncryptionType getEncryptionType() {
-        return Protos.Wallet.EncryptionType.ENCRYPTED_SCRYPT_AES;
+    public EncryptionType getEncryptionType() {
+        return EncryptionType.ENCRYPTED_SCRYPT_AES;
     }
 
     @Nullable

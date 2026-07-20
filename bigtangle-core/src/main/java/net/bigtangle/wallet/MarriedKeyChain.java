@@ -34,7 +34,6 @@ import javax.annotation.Nullable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.hash.BloomFilter;
-import com.google.protobuf.ByteString;
 
 import net.bigtangle.core.ECKey;
 import net.bigtangle.core.Utils;
@@ -60,7 +59,7 @@ import net.bigtangle.script.ScriptBuilder;
 public class MarriedKeyChain extends DeterministicKeyChain {
     // The map holds P2SH redeem script and corresponding ECKeys issued by this KeyChainGroup (including lookahead)
     // mapped to redeem script hashes.
-    private LinkedHashMap<ByteString, RedeemData> marriedKeysRedeemData = new LinkedHashMap<ByteString, RedeemData>();
+    private LinkedHashMap<ByteArrayKey, RedeemData> marriedKeysRedeemData = new LinkedHashMap<ByteArrayKey, RedeemData>();
 
     private List<DeterministicKeyChain> followingKeyChains;
 
@@ -269,13 +268,13 @@ public class MarriedKeyChain extends DeterministicKeyChain {
         for (DeterministicKey followedKey : getLeafKeys()) {
             RedeemData redeemData = getRedeemData(followedKey);
             Script scriptPubKey = ScriptBuilder.createP2SHOutputScript(redeemData.redeemScript);
-            marriedKeysRedeemData.put(ByteString.copyFrom(scriptPubKey.getPubKeyHash()), redeemData);
+            marriedKeysRedeemData.put(new ByteArrayKey(scriptPubKey.getPubKeyHash()), redeemData);
         }
     }
 
     @Nullable
     @Override
-    public RedeemData findRedeemDataByScriptHash(ByteString bytes) {
+    public RedeemData findRedeemDataByScriptHash(ByteArrayKey bytes) {
         return marriedKeysRedeemData.get(bytes);
     }
 

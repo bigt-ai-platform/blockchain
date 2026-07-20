@@ -80,12 +80,12 @@ import net.bigtangle.crypto.EncryptableItem;
 import net.bigtangle.crypto.EncryptedData;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
+import net.bigtangle.crypto.EncryptionType;
 import net.bigtangle.crypto.LazyECPoint;
 import net.bigtangle.crypto.LinuxSecureRandom;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.DumpedPrivateKey;
-import net.bigtangle.wallet.Protos;
 import net.bigtangle.wallet.Wallet;
 
 // TODO: Move this class to tracking compression state itself.
@@ -1086,8 +1086,8 @@ public class ECKey implements EncryptableItem {
 
     @Nullable
     @Override
-    public Protos.Wallet.EncryptionType getEncryptionType() {
-        return keyCrypter != null ? keyCrypter.getUnderstoodEncryptionType() : Protos.Wallet.EncryptionType.UNENCRYPTED;
+    public EncryptionType getEncryptionType() {
+        return keyCrypter != null ? keyCrypter.getUnderstoodEncryptionType() : EncryptionType.UNENCRYPTED;
     }
 
     /**

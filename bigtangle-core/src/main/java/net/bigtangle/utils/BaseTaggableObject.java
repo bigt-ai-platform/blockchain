@@ -19,9 +19,9 @@
 package net.bigtangle.utils;
 
 import com.google.common.collect.Maps;
-import com.google.protobuf.ByteString;
 
 import javax.annotation.Nullable;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,12 +32,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * synchronized on this objects Java monitor.
  */
 public class BaseTaggableObject implements TaggableObject {
-    @Nullable protected Map<String, ByteString> tags;
+    @Nullable protected Map<String, byte[]> tags;
 
     /** {@inheritDoc} */
     @Override
     @Nullable
-    public synchronized ByteString maybeGetTag(String tag) {
+    public synchronized byte[] maybeGetTag(String tag) {
         if (tags == null)
             return null;
         else
@@ -46,8 +46,8 @@ public class BaseTaggableObject implements TaggableObject {
 
     /** {@inheritDoc} */
     @Override
-    public ByteString getTag(String tag) {
-        ByteString b = maybeGetTag(tag);
+    public byte[] getTag(String tag) {
+        byte[] b = maybeGetTag(tag);
         if (b == null)
             throw new IllegalArgumentException("Unknown tag " + tag);
         return b;
@@ -55,17 +55,17 @@ public class BaseTaggableObject implements TaggableObject {
 
     /** {@inheritDoc} */
     @Override
-    public synchronized void setTag(String tag, ByteString value) {
+    public synchronized void setTag(String tag, byte[] value) {
         checkNotNull(tag);
         checkNotNull(value);
         if (tags == null)
-            tags = new HashMap<String, ByteString>();
+            tags = new HashMap<String, byte[]>();
         tags.put(tag, value);
     }
 
     /** {@inheritDoc} */
     @Override
-    public synchronized Map<String, ByteString> getTags() {
+    public synchronized Map<String, byte[]> getTags() {
         if (tags != null)
             return Maps.newHashMap(tags);
         else
