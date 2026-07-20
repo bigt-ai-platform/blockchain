@@ -236,8 +236,6 @@ public class TransactionOutput extends ChildMessage {
 
         checkNotNull(scriptBytes);
         byte[] valuebytes = value.getValue().toByteArray();
-   // System.out.println("Length: " + valuebytes.length);
-  //  System.out.println("Bytes: " + Arrays.toString(valuebytes));
          stream.write(new VarInt(valuebytes.length).encode()); 
          stream.write(valuebytes); 
 
@@ -447,7 +445,7 @@ public class TransactionOutput extends ChildMessage {
      * need be.
      */
     public TransactionOutput duplicateDetached() {
-        return new TransactionOutput(params, null, value, org.spongycastle.util.Arrays.clone(scriptBytes));
+        return new TransactionOutput(params, null, value, org.bouncycastle.util.Arrays.clone(scriptBytes));
     }
 
     @Override
@@ -465,21 +463,6 @@ public class TransactionOutput extends ChildMessage {
     public int hashCode() {
         return Objects.hashCode(value, parent, Arrays.hashCode(scriptBytes));
     }
-
-//    public String getFromaddress() {
-//        try {
-//            Script script = getScriptPubKey(); 
-//            if (script.isSentToAddress() || script.isPayToScriptHash())
-//                return script.getToAddress(params).toString();
-//            else if (script.isSentToRawPubKey())
-//                ECKey.fromPublicOnly(script.getPubKey()).toAddress(params).toString();
-//
-//            return "";
-//
-//        } catch (ScriptException e) {
-//            return "";
-//        }
-//    }
 
     public String getDescription() {
         return description;

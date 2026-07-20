@@ -68,41 +68,7 @@ public class OrderYuanTest extends AbstractIntegrationTest {
 
     }
 
-   // @Test
-    public void buyBaseToken() throws Exception {
-        wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)));
-        wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(testPriv)));
 
-        ECKey testKey = wallet.walletKeys().get(0);
-        List<Block> addedBlocks = new ArrayList<>();
-
-        // base token
-        ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
-
-        long tokennumber = 100000000;
-        makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
-        // Make test token
-        makeTestToken(testKey, BigInteger.valueOf(tokennumber), addedBlocks, 2);
-
-        while (true) {
-            try {
-                int num = Math.abs((new Random()).nextInt() % 10);
-                for (int i = 0; i < num; i++) {
-                    sell();
-                    makeRewardBlock();
-                }
-                buy();
-                // Execute order matching
-                makeRewardBlock(addedBlocks);
-
-              //  checkSum();
-            } catch (Exception e) {
-                log.warn("", e);
-                ;
-            }
-        }
-
-    }
 
  
 

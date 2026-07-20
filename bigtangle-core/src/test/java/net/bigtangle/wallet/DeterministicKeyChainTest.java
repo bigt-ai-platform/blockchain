@@ -19,7 +19,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -51,55 +51,12 @@ public class DeterministicKeyChainTest {
 		assertEquals(secs, checkNotNull(chain.getSeed()).getCreationTimeSeconds());
 	}
 
-	// TODO fix for params @Test
-	public void derive() throws Exception {
-		ECKey key1 = chain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		assertFalse(key1.isPubKeyOnly());
-		ECKey key2 = chain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		assertFalse(key2.isPubKeyOnly());
-
-		final Address address = Address.fromBase58(MainNetParams.get(), "n1bQNoEx8uhmCzzA5JPG6sFdtsUQhwiQJV");
-		assertEquals(address, key1.toAddress(MainNetParams.get()));
-		assertEquals("mnHUcqUVvrfi5kAaXJDQzBb9HsWs78b42R", key2.toAddress(MainNetParams.get()).toString());
-		assertEquals(key1, chain.findKeyFromPubHash(address.getHash160()));
-		assertEquals(key2, chain.findKeyFromPubKey(key2.getPubKey()));
-
-		key1.sign(Sha256Hash.ZERO_HASH);
-		assertFalse(key1.isPubKeyOnly());
-
-		ECKey key3 = chain.getKey(KeyChain.KeyPurpose.CHANGE);
-		assertFalse(key3.isPubKeyOnly());
-		assertEquals("mqumHgVDqNzuXNrszBmi7A2UpmwaPMx4HQ", key3.toAddress(MainNetParams.get()).toString());
-		key3.sign(Sha256Hash.ZERO_HASH);
-		assertFalse(key3.isPubKeyOnly());
-	}
-
 	@Test
 	public void getKeys() throws Exception {
 		chain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
 		chain.getKey(KeyChain.KeyPurpose.CHANGE);
 		chain.maybeLookAhead();
 		assertEquals(2, chain.getKeys(false).size());
-	}
-
-	// TODO fix for params @Test
-	public void deriveAccountOne() throws Exception {
-		long secs = 1389353062L;
-		DeterministicKeyChain chain1 = new AccountOneChain(ENTROPY, "", secs);
-		ECKey key1 = chain1.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		ECKey key2 = chain1.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-
-		final Address address = Address.fromBase58(MainNetParams.get(), "n2nHHRHs7TiZScTuVhZUkzZfTfVgGYwy6X");
-		assertEquals(address, key1.toAddress(MainNetParams.get()));
-		assertEquals("mnp2j9za5zMuz44vNxrJCXXhZsCdh89QXn", key2.toAddress(MainNetParams.get()).toString());
-		assertEquals(key1, chain1.findKeyFromPubHash(address.getHash160()));
-		assertEquals(key2, chain1.findKeyFromPubKey(key2.getPubKey()));
-
-		key1.sign(Sha256Hash.ZERO_HASH);
-
-		ECKey key3 = chain1.getKey(KeyChain.KeyPurpose.CHANGE);
-		assertEquals("mpjRhk13rvV7vmnszcUQVYVQzy4HLTPTQU", key3.toAddress(MainNetParams.get()).toString());
-		key3.sign(Sha256Hash.ZERO_HASH);
 	}
 
 	static class AccountOneChain extends DeterministicKeyChain {
@@ -115,48 +72,6 @@ public class DeterministicKeyChainTest {
 		protected ImmutableList<ChildNumber> getAccountPath() {
 			return ImmutableList.of(ChildNumber.ONE);
 		}
-	}
-
-	// TODO fix for params @Test
-	public void serializeAccountOne() throws Exception {
-		long secs = 1389353062L;
-		DeterministicKeyChain chain1 = new AccountOneChain(ENTROPY, "", secs);
-		ECKey key1 = chain1.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-
-		final Address address = Address.fromBase58(MainNetParams.get(), "n2nHHRHs7TiZScTuVhZUkzZfTfVgGYwy6X");
-		assertEquals(address, key1.toAddress(MainNetParams.get()));
-
-		DeterministicKey watching = chain1.getWatchingKey();
-
-		List<Protos.Key> keys = chain1.serializeToProtobuf();
-		KeyChainFactory factory = new KeyChainFactory() {
-			@Override
-			public DeterministicKeyChain makeKeyChain(Protos.Key key, Protos.Key firstSubKey, DeterministicSeed seed,
-					KeyCrypter crypter, boolean isMarried) {
-				return new AccountOneChain(crypter, seed);
-			}
-
-			@Override
-			public DeterministicKeyChain makeWatchingKeyChain(Protos.Key key, Protos.Key firstSubKey,
-					DeterministicKey accountKey, boolean isFollowingKey, boolean isMarried) {
-				throw new UnsupportedOperationException();
-			}
-		};
-
-		chain1 = DeterministicKeyChain.fromProtobuf(keys, null, factory).get(0);
-
-		ECKey key2 = chain1.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		assertEquals("mnp2j9za5zMuz44vNxrJCXXhZsCdh89QXn", key2.toAddress(MainNetParams.get()).toString());
-		assertEquals(key1, chain1.findKeyFromPubHash(address.getHash160()));
-		assertEquals(key2, chain1.findKeyFromPubKey(key2.getPubKey()));
-
-		key1.sign(Sha256Hash.ZERO_HASH);
-
-		ECKey key3 = chain1.getKey(KeyChain.KeyPurpose.CHANGE);
-		assertEquals("mpjRhk13rvV7vmnszcUQVYVQzy4HLTPTQU", key3.toAddress(MainNetParams.get()).toString());
-		key3.sign(Sha256Hash.ZERO_HASH);
-
-		assertEquals(watching, chain1.getWatchingKey());
 	}
 
 	@Test

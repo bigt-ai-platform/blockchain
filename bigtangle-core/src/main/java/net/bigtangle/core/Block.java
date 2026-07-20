@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -36,6 +37,10 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+
+import net.bigtangle.crypto.pq.KeyBundle;
+import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.crypto.pq.SignatureBundle;
 
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
@@ -227,8 +232,8 @@ public class Block extends Message {
 		}
 		height = readInt64();
 
-		// PQ extension (version >= BLOCK_VERSION_PQ)
-		if (version >= NetworkParameters.BLOCK_VERSION_PQ && cursor < offset + length) {
+		// Proposer PQ fields (always written for new blocks, backward compat for old)
+		if (version > NetworkParameters.BLOCK_VERSION_GENESIS && cursor < offset + length) {
 			proposerKeyBundle = readNullableBytes();
 			proposerSignatureBundle = readNullableBytes();
 		}
@@ -277,8 +282,7 @@ public class Block extends Message {
 		}
 		Utils.int64ToByteStreamLE(height, stream);
 
-		// PQ extension (version >= BLOCK_VERSION_PQ)
-		if (version >= NetworkParameters.BLOCK_VERSION_PQ) {
+		if (version > NetworkParameters.BLOCK_VERSION_GENESIS) {
 			writeNullableBytes(stream, proposerKeyBundle);
 			writeNullableBytes(stream, proposerSignatureBundle);
 		}
@@ -449,6 +453,8 @@ public class Block extends Message {
 		block.lastMiningRewardBlock = lastMiningRewardBlock;
 
 		block.blockType = blockType;
+		block.proposerKeyBundle = proposerKeyBundle != null ? Arrays.copyOf(proposerKeyBundle, proposerKeyBundle.length) : null;
+		block.proposerSignatureBundle = proposerSignatureBundle != null ? Arrays.copyOf(proposerSignatureBundle, proposerSignatureBundle.length) : null;
 		block.transactions = null;
 		block.hash = getHash();
 	}
@@ -622,6 +628,60 @@ public class Block extends Message {
 	 */
 	public void verifyHeader() throws VerificationException {
 		checkTimestamp();
+		if (version > NetworkParameters.BLOCK_VERSION_GENESIS) {
+			if (proposerKeyBundle == null || proposerSignatureBundle == null)
+				throw new VerificationException("Block proposer PQ fields required at version " + version);
+			if (!verifyProposer())
+				throw new VerificationException("Block proposer PQ signature verification failed");
+		}
+	}
+
+	/**
+	 * Verify the proposer's post-quantum dual signature.
+	 * Breaks the circular dependency by signing the header hash
+	 * with the proposer signature field excluded.
+	 */
+	public boolean verifyProposer() {
+		if (proposerKeyBundle == null || proposerSignatureBundle == null) {
+			log.debug("No proposer PQ sigs to verify (version={})", version);
+			return true;
+		}
+		try {
+			KeyBundle keys = KeyBundle.deserialize(proposerKeyBundle);
+			SignatureBundle sigs = SignatureBundle.deserialize(proposerSignatureBundle);
+			byte[] signingHash = computeProposerSigningHash();
+			return PQScriptUtils.verifyProposerSignature(keys, sigs, signingHash);
+		} catch (Exception e) {
+			log.warn("Block proposer verification failed: {}", e.getMessage());
+			return false;
+		}
+	}
+
+	/** Hash of the header including proposerKeyBundle but excluding proposerSignatureBundle
+	 *  (signature excluded to break the circular signing dependency). */
+	private byte[] computeProposerSigningHash() {
+		try {
+			ByteArrayOutputStream bos = new ByteArrayOutputStream();
+			Utils.uint32ToByteStreamLE(version, bos);
+			bos.write(prevBlockHash.getReversedBytes());
+			bos.write(prevBranchBlockHash.getReversedBytes());
+			bos.write(getMerkleRoot().getReversedBytes());
+			Utils.int64ToByteStreamLE(time, bos);
+			Utils.int64ToByteStreamLE(lastMiningRewardBlock, bos);
+			byte[] blockTypeName = (blockType != null ? blockType : BlockType.BLOCKTYPE_TRANSFER).name()
+					.getBytes("UTF-8");
+			bos.write(new VarInt(blockTypeName.length).encode());
+			bos.write(blockTypeName);
+			Utils.int64ToByteStreamLE(height, bos);
+			// Include proposerKeyBundle (data, no circular dependency).
+			// proposerSignatureBundle is EXCLUDED — the signature cannot sign itself.
+			if (version > NetworkParameters.BLOCK_VERSION_GENESIS) {
+				writeNullableBytes(bos, proposerKeyBundle);
+			}
+			return Sha256Hash.hashTwice(bos.toByteArray());
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	/**
@@ -637,8 +697,6 @@ public class Block extends Message {
 		// valid block from the network and simply replace the transactions in
 		// it with their own fictional
 		// transactions that reference spent or non-existant inputs.
-		// if (transactions.isEmpty())
-		// throw new VerificationException("Block had no transactions");
 		if (this.getOptimalEncodingMessageSize() > getMaxBlockSize())
 			throw new LargerThanMaxBlockSize();
 		checkMerkleRoot();

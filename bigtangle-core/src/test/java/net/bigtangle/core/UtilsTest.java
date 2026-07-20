@@ -44,33 +44,6 @@ public class UtilsTest {
 		}
 	}
 
-	// @Test
-	public void testSolveMain() throws Exception {
-
-		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(MainNetParams.get(),	UtilGeneseBlock.createGenesis( MainNetParams.get() ),
-					UtilGeneseBlock.createGenesis(MainNetParams.get() ));
-
-			// save block
-			Stopwatch watch = Stopwatch.createStarted();
-			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-		}
-	}
-
-	// @Test
-	public void testSolveMainReward() throws Exception {
-
-		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(MainNetParams.get(),
-					UtilGeneseBlock.createGenesis(MainNetParams.get() ),
-					UtilGeneseBlock.createGenesis(	MainNetParams.get() ));
-
-			// save block
-			Stopwatch watch = Stopwatch.createStarted();
-			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-		}
-	}
-
 	@Test
 	public void testReverseBytes() {
 		assertArrayEquals(new byte[] { 1, 2, 3, 4, 5 }, Utils.reverseBytes(new byte[] { 5, 4, 3, 2, 1 }));

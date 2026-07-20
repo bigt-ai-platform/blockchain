@@ -22,8 +22,6 @@ import net.bigtangle.utils.Gzip;
 
 public class KafkaMessageProducer {
 
-    // public String topic;
-
     private String kafkaserver;
     private String topic;
     private boolean binaryMessageKey = true;

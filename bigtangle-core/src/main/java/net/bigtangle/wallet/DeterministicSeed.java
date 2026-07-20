@@ -27,7 +27,7 @@ import com.google.common.base.Splitter;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.*;
 
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import javax.annotation.Nullable;
 import java.security.SecureRandom;

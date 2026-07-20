@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
-import org.spongycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.InvalidCipherTextException;
 
 import net.bigtangle.apps.data.IdentityCore;
 import net.bigtangle.apps.data.IdentityData;

@@ -31,7 +31,7 @@ import javax.annotation.Nullable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -298,7 +298,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	/**
 	 * Convenience wrapper around
-	 * {@link WalletBase#encrypt(net.bigtangle.crypto.KeyCrypter, org.spongycastle.crypto.params.KeyParameter)}
+	 * {@link WalletBase#encrypt(net.bigtangle.crypto.KeyCrypter, org.bouncycastle.crypto.params.KeyParameter)}
 	 * which uses the default Scrypt key derivation algorithm and parameters to
 	 * derive a key from the given password.
 	 */

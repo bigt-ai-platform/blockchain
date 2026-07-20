@@ -155,12 +155,4 @@ public class BlockTest {
 		// mapper.writeValue(System.out, response);
 	}
 
-	// @Test
-	public void testJSON() throws Exception {
-		Block block = PARAMS.getDefaultSerializer().makeBlock(blockBytes);
-		Block header = block.cloneAsHeader();
-		Block reparsed = PARAMS.getDefaultSerializer().makeBlock(header.bitcoinSerialize());
-		assertEquals(reparsed, header);
-	}
-
 }

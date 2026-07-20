@@ -34,10 +34,16 @@ public final class PQScriptUtils {
 
     /** Lazy init to avoid classloading order issues. */
     private static PQSignatureProvider provider() {
-        if (provider == null) {
-            provider = new BcPQSignatureProvider();
+        PQSignatureProvider p = provider;
+        if (p == null) {
+            synchronized (PQScriptUtils.class) {
+                p = provider;
+                if (p == null) {
+                    provider = p = new BcPQSignatureProvider();
+                }
+            }
         }
-        return provider;
+        return p;
     }
 
     /** Set provider (primarily for testing). */
@@ -68,9 +74,13 @@ public final class PQScriptUtils {
 
     /* ── Domain-separated sighash ──────────────────────────────────────── */
 
-    /** Compute a domain-separated sighash for a given algorithm. */
+    /** Compute a domain-separated hash (domain || base). */
     public static byte[] domainSeparatedHash(Sha256Hash baseSighash, String domain) {
-        byte[] base = baseSighash.getBytes();
+        return domainSeparatedHash(baseSighash.getBytes(), domain);
+    }
+
+    /** Compute a domain-separated hash from raw bytes (domain || base). */
+    public static byte[] domainSeparatedHash(byte[] base, String domain) {
         byte[] domainBytes = domain.getBytes(StandardCharsets.UTF_8);
         byte[] combined = new byte[domainBytes.length + base.length];
         System.arraycopy(domainBytes, 0, combined, 0, domainBytes.length);
@@ -82,6 +92,9 @@ public final class PQScriptUtils {
 
     /**
      * Verify a PQ signature against a pubkey.
+     *
+     * <p>Applies TX-level domain separator for replay protection, then
+     * per-algorithm domain separators to each signature.
      *
      * @param prefixedPubkey pubkey from script stack (with 0x05 prefix)
      * @param sigBytes       raw SignatureBundle from script stack
@@ -95,8 +108,11 @@ public final class PQScriptUtils {
 
             PQSignatureProvider p = provider();
 
+            // Apply TX-level domain separator for replay protection (quantum.md §6)
+            byte[] txHash = domainSeparatedHash(baseSighash.getBytes(), PQConstants.TX_DOMAIN);
+
             // ML-DSA-87
-            byte[] mlMsg = domainSeparatedHash(baseSighash, PQConstants.MLDSA_SIG_DOMAIN);
+            byte[] mlMsg = domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
             KeyBundle.Entry mlKey = keyBundle.getEntry(PQConstants.ALG_ML_DSA_87);
             SignatureBundle.Entry mlSig = sigBundle.getEntry(PQConstants.ALG_ML_DSA_87);
             if (mlKey == null || mlSig == null) return false;
@@ -104,7 +120,7 @@ public final class PQScriptUtils {
                 return false;
 
             // SLH-DSA-SHA2-256s
-            byte[] slhMsg = domainSeparatedHash(baseSighash, PQConstants.SLHDSA_SIG_DOMAIN);
+            byte[] slhMsg = domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
             KeyBundle.Entry slhKey = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
             SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
             if (slhKey == null || slhSig == null) return false;
@@ -114,6 +130,39 @@ public final class PQScriptUtils {
             return true;
         } catch (Exception e) {
             log.warn("PQ signature verification failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Verify a block proposer's PQ signatures.
+     *
+     * @param keyBundle the proposer's public key bundle
+     * @param sigBundle the proposer's signature bundle
+     * @param signingHash block hash without proposer sig fields (breaks circular dependency)
+     * @return true iff both ML-DSA and SLH-DSA verify against the signing hash
+     */
+    public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash) {
+        try {
+            PQSignatureProvider p = provider();
+
+            byte[] mlMsg = domainSeparatedHash(signingHash, PQConstants.MLDSA_SIG_DOMAIN);
+            KeyBundle.Entry mlKey = keyBundle.getEntry(PQConstants.ALG_ML_DSA_87);
+            SignatureBundle.Entry mlSig = sigBundle.getEntry(PQConstants.ALG_ML_DSA_87);
+            if (mlKey == null || mlSig == null) return false;
+            if (!p.verify(PQConstants.ALG_ML_DSA_87, mlKey.publicKey(), mlMsg, mlSig.signature()))
+                return false;
+
+            byte[] slhMsg = domainSeparatedHash(signingHash, PQConstants.SLHDSA_SIG_DOMAIN);
+            KeyBundle.Entry slhKey = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
+            SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
+            if (slhKey == null || slhSig == null) return false;
+            if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
+                return false;
+
+            return true;
+        } catch (Exception e) {
+            log.warn("Proposer PQ signature verification failed: {}", e.getMessage());
             return false;
         }
     }

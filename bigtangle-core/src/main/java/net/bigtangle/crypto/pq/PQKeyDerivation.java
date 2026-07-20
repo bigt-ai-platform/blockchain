@@ -46,7 +46,7 @@ public final class PQKeyDerivation {
     public static byte[] deriveChildKey(byte[] prk, int index, int suite) {
         byte[] info = ("child-" + index + "-" + suite).getBytes(
                 java.nio.charset.StandardCharsets.UTF_8);
-        return hkdfExpand(prk, info, 64);
+        return hkdfExpand(prk.clone(), info, 64);
     }
 
     /**
@@ -56,9 +56,9 @@ public final class PQKeyDerivation {
     public static byte[] hkdfExtract(byte[] salt, byte[] ikm) {
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-            javax.crypto.spec.SecretKeySpec spec = new javax.crypto.spec.SecretKeySpec(salt, "HmacSHA256");
+            javax.crypto.spec.SecretKeySpec spec = new javax.crypto.spec.SecretKeySpec(salt.clone(), "HmacSHA256");
             mac.init(spec);
-            return mac.doFinal(ikm);
+            return mac.doFinal(ikm.clone());
         } catch (Exception e) {
             throw new RuntimeException("HKDF extract failed", e);
         }
@@ -71,7 +71,7 @@ public final class PQKeyDerivation {
     public static byte[] hkdfExpand(byte[] prk, byte[] info, int length) {
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-            javax.crypto.spec.SecretKeySpec spec = new javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256");
+            javax.crypto.spec.SecretKeySpec spec = new javax.crypto.spec.SecretKeySpec(prk.clone(), "HmacSHA256");
             mac.init(spec);
 
             byte[] result = new byte[length];
@@ -81,7 +81,7 @@ public final class PQKeyDerivation {
             for (int i = 1; offset < length; i++) {
                 mac.update(t);
                 mac.update(info);
-                mac.update((byte) i);
+                mac.update((byte) (i & 0xFF));
                 t = mac.doFinal();
 
                 int copyLen = Math.min(t.length, length - offset);

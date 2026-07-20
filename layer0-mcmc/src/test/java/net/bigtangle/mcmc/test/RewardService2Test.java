@@ -290,23 +290,4 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		}
 	}
 
-	// @Test
-	public void testSyncCheckChain() throws Exception {
-		List<Block> a1 = new ArrayList<Block>();
-		testToken(a1);
-		makeRewardBlock(a1);
-
-		for (int i = 0; i < 3; i++) {
-			createNonChain(a1);
-		}
-		serverConfiguration.setRequester(contextRoot);
-		syncBlockService.startSingleProcess();
-		for (int i = 0; i < 130; i++) {
-			createReward(a1);
-		}
-		List<TXReward> allConfirmedReward = store.getAllConfirmedReward();
-		MissingNumberCheckService missingNumberCheckService = new MissingNumberCheckService();
-		missingNumberCheckService.check(allConfirmedReward);
-	}
-
 }

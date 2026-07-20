@@ -658,7 +658,6 @@ public abstract class ServiceBase {
 				address = script.getToAddress(networkParameters, true).toString();
 			}
 		} catch (Exception e) {
-			// e.printStackTrace();
 		}
 		return address;
 	}

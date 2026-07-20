@@ -162,10 +162,6 @@ public class BlockStoreService {
 					store.deleteLockobject(LOCKID);
 					store.insertLockobject(new LockObject(LOCKID, System.currentTimeMillis()));
 					canrun = true;
-				} else {
-					// if (lock.getLocktime() < System.currentTimeMillis() - 10000)
-					// log.info("updateChain running start = " +
-					// Utils.dateTimeFormat(lock.getLocktime()));
 				}
 			}
 			if (canrun) {
@@ -528,10 +524,6 @@ public class BlockStoreService {
 				serviceBase.dagBlockHashesFrom(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
 						blockStore);
 			}
-			// if (resolveConflict) {
-			// VALIDITY CHECKS, remove the conflicts
-			// serviceBase.resolveAllConflicts(blocksToAdd, cutoffHeight, blockStore);
-			// }
 			// Execute must be chained for confirm
 			serviceBase.checkExecutionChained(blockStore, blocks);
 

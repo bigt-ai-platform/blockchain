@@ -28,31 +28,6 @@ import net.bigtangle.core.Utils;
 
 public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
-	// PoS conversion: reward path confirmation needs PoS upgrade
-	// @Test
-	public void disabled_testConfirmTokenUTXOs() throws Exception {
-
-		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
-		byte[] pubKey = outKey.getPubKey();
-		TokenInfo tokenInfo = new TokenInfo();
-
-		Coin coinbase = Coin.valueOf(77777L, pubKey);
-		BigInteger amount = coinbase.getValue();
-		Token tokens = Token.buildSimpleTokenInfo(true, null, Utils.HEX.encode(pubKey), "Test", "Test", 1, 0, amount,
-				true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
-
-		tokenInfo.setToken(tokens);
-
-		// This (saveBlock) calls milestoneUpdate currently
-		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
-		makeRewardBlock();
-
-		// Should be confirmed now
-		assertTrue(store.getTokenSpent(block1.getHash()).isConfirmed());
-		assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
-	}
-
 	@Test
 	public void testConfirmOrderMatchUTXOs2() throws Exception {
 

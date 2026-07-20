@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import net.bigtangle.crypto.pq.PQConstants;
+
 /**
  * A versioned bundle of signatures matching a KeyBundle.  Each entry
  * identifies its algorithm and carries the raw signature bytes.
@@ -100,6 +102,8 @@ public final class SignatureBundle {
             offset += length;
             entries.add(new Entry(algorithm, sig));
         }
+        if (version > PQConstants.BUNDLE_VERSION)
+            throw new IllegalArgumentException("unsupported bundle version: " + version);
         return new SignatureBundle(version, entries);
     }
 

@@ -6,10 +6,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  * Block may contains data with the dataClassName and the class has a version number
  */
 public abstract class DataClass {
+    private static final Logger log = LoggerFactory.getLogger(DataClass.class);
     private long version = 1L;
 
     public byte[] toByteArray() {
@@ -21,7 +25,7 @@ public abstract class DataClass {
             
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to serialize DataClass", e);
         }
         return baos.toByteArray();
     }

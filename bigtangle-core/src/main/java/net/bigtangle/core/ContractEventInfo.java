@@ -12,12 +12,16 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class ContractEventInfo extends DataClass implements java.io.Serializable {
 
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
+	private static final Logger log = LoggerFactory.getLogger(ContractEventInfo.class);
 
 	private String beneficiaryAddress;
 
@@ -58,7 +62,7 @@ public class ContractEventInfo extends DataClass implements java.io.Serializable
 			Utils.writeNBytes(dos, offerValue.toByteArray());
 			dos.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			log.error("Failed to serialize ContractEventInfo", e);
 		}
 		return baos.toByteArray();
 	}

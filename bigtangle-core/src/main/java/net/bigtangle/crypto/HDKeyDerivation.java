@@ -23,7 +23,7 @@ import com.google.common.collect.*;
 
 import net.bigtangle.core.*;
 
-import org.spongycastle.math.ec.*;
+import org.bouncycastle.math.ec.*;
 
 import java.math.*;
 import java.nio.*;

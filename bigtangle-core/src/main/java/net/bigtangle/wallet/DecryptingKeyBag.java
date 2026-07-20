@@ -19,7 +19,7 @@
  */
 package net.bigtangle.wallet;
 
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import net.bigtangle.core.ECKey;
 

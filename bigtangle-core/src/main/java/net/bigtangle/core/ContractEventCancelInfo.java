@@ -11,10 +11,14 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 // This object being part of a signed transaction's data legitimates it
 public class ContractEventCancelInfo implements java.io.Serializable {
 
     private static final long serialVersionUID = 5955604810374397496L;
+    private static final Logger log = LoggerFactory.getLogger(ContractEventCancelInfo.class);
 
     private Sha256Hash blockHash;
 
@@ -49,7 +53,7 @@ public class ContractEventCancelInfo implements java.io.Serializable {
             
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to serialize ContractEventCancelInfo", e);
         }
         return baos.toByteArray();
     }

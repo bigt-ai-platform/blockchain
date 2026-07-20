@@ -23,7 +23,6 @@ public class OrderBook {
     private Long2ObjectRBTreeMap<PriceLevel> bids;
     private Long2ObjectRBTreeMap<PriceLevel> asks;
 
-//    private Long2ObjectOpenHashMap<Order> orders;
     private ConcurrentHashMap<String, Order> orders;
 
     private OrderBookListener listener;

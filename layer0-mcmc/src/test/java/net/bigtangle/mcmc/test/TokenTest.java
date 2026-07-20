@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
-import org.spongycastle.crypto.InvalidCipherTextException;
+import org.bouncycastle.crypto.InvalidCipherTextException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -871,49 +871,6 @@ public class TokenTest extends AbstractIntegrationTest {
 		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		this.wallet.multiSign(tokenid, genesiskey, null);
-	}
-
-	// TODO not the exception at save, but test from network
-	// @Test
-	public void testTokenConflicts() throws Exception {
-		// all token has the same name, but different id, tokenname and
-		// domainBlockHash are unique
-
-		Block block = testCreateToken(new ECKey(), "test");
-		makeRewardBlock(block);
-
-		block = testCreateToken(new ECKey(), "test");
-		makeRewardBlock(block);
-
-		block = testCreateToken(new ECKey(), "test");
-		makeRewardBlock(block);
-
-		block = testCreateToken(new ECKey(), "test");
-		makeRewardBlock(block);
-
-		// only one is ok.
-
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
-		requestParam.put("tokenid", wallet.walletKeys().get(0).getPublicKeyAsHex());
-		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		log.info("getTokenById resp : " + resp);
-		GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-		log.info("getTokensResponse : " + getTokensResponse);
-		assertTrue(getTokensResponse.getTokens().size() == 1);
-		assertTrue(getBlockEvaluation(getTokensResponse.getTokens().get(0).getBlockHash(), store)
-				.isConfirmed());
-
-		requestParam.put("tokenid", wallet.walletKeys().get(1).getPublicKeyAsHex());
-		resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		log.info("getTokenById resp : " + resp);
-		getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-		log.info("getTokensResponse : " + getTokensResponse);
-		assertTrue(getTokensResponse.getTokens().size() == 1);
-		assertTrue(!getBlockEvaluation(getTokensResponse.getTokens().get(0).getBlockHash(), store)
-				.isConfirmed());
-
 	}
 
 	@Test

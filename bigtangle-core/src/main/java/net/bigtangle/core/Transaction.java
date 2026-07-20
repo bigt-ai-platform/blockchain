@@ -46,6 +46,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
@@ -71,8 +72,6 @@ import net.bigtangle.wallet.Wallet;
  * </p>
  */
 public class Transaction extends ChildMessage {
-
-	// private static final long serialVersionUID = -1834484825483010857L;
 
 	private static final Logger log = LoggerFactory.getLogger(Transaction.class);
 
@@ -108,14 +107,11 @@ public class Transaction extends ChildMessage {
 
 	private long lockTime;
 
-	/** Post-quantum transaction version: 0 = legacy, 1 = PQ. */
-	private byte txPQVersion;
-
-	/** Post-quantum KeyBundle for PQ inputs (nullable). */
+	/** Post-quantum KeyBundle for PQ inputs. */
 	@Nullable
 	private byte[] pqKeyBundle;
 
-	/** Post-quantum SignatureBundle for PQ inputs (nullable). */
+	/** Post-quantum SignatureBundle for PQ inputs. */
 	@Nullable
 	private byte[] pqSignatureBundle;
 
@@ -339,9 +335,6 @@ public class Transaction extends ChildMessage {
 	}
 
 	/* ── Post-quantum fields ────────────────────────────────────────── */
-
-	public byte getTxPQVersion() { return txPQVersion; }
-	public void setTxPQVersion(byte v) { this.txPQVersion = v; }
 
 	@Nullable public byte[] getPqKeyBundle() { return pqKeyBundle; }
 	public void setPqKeyBundle(@Nullable byte[] pk) { this.pqKeyBundle = pk; }
@@ -568,11 +561,6 @@ public class Transaction extends ChildMessage {
 			TransactionOutput output = TransactionOutput.fromTransactionOutput(params, this, payload, cursor,
 					serializer);
 			outputs.add(output);
-			// long t = readVarInt(8);
-			// long scriptLen = readVarInt((int) t);
-			// optimalEncodingMessageSize += 8 + 8 + 8 +
-			// VarInt.sizeOf(scriptLen) + scriptLen + VarInt.sizeOf(t) + t;
-			// cursor += scriptLen;
 			cursor += output.length;
 			optimalEncodingMessageSize += output.length;
 		}
@@ -613,6 +601,22 @@ public class Transaction extends ChildMessage {
 		if (len > 0) {
 			this.dataSignature = readBytes((int) len);
 			optimalEncodingMessageSize += len;
+		}
+
+		if (version >= PQConstants.TX_PQ_VERSION) {
+			len = readUint32();
+			optimalEncodingMessageSize += 4;
+			if (len > 0) {
+				this.pqKeyBundle = readBytes((int) len);
+				optimalEncodingMessageSize += len;
+			}
+
+			len = readUint32();
+			optimalEncodingMessageSize += 4;
+			if (len > 0) {
+				this.pqSignatureBundle = readBytes((int) len);
+				optimalEncodingMessageSize += len;
+			}
 		}
 
 		length = cursor - offset;
@@ -862,26 +866,7 @@ public class Transaction extends ChildMessage {
 		return addSignedInput(prevOut, scriptPubKey, sigKey, SigHash.ALL, false);
 	}
 
-	// /**
-	// * Adds an input that points to the given output and contains a valid
-	// * signature for it, calculated using the signing key.
-	// */
-	// public TransactionInput addSignedInput(TransactionOutput output, ECKey
-	// signingKey) {
-	// return addSignedInput(output.getOutPointFor(), output.getScriptPubKey(),
-	// signingKey);
-	// }
-	//
-	// /**
-	// * Adds an input that points to the given output and contains a valid
-	// * signature for it, calculated using the signing key.
-	// */
-	// public TransactionInput addSignedInput(TransactionOutput output, ECKey
-	// signingKey, SigHash sigHash,
-	// boolean anyoneCanPay) {
-	// return addSignedInput(output.getOutPointFor(), output.getScriptPubKey(),
-	// signingKey, sigHash, anyoneCanPay);
-	// }
+
 
 	/**
 	 * Removes all the outputs from this transaction. Note that this also
@@ -1062,6 +1047,14 @@ public class Transaction extends ChildMessage {
 			for (int i = 0; i < tx.inputs.size(); i++) {
 				tx.inputs.get(i).clearScriptBytes();
 			}
+			// Clear PQ witness data to break circular dependency:
+			// the PQ signature bundle cannot sign itself.  Treat PQ bundles
+			// as witness data (analogous to SegWit) — excluded from the
+			// sighash computation.
+			if (tx.version >= PQConstants.TX_PQ_VERSION) {
+				tx.pqKeyBundle = null;
+				tx.pqSignatureBundle = null;
+			}
 
 			// This step has no purpose beyond being synchronized with Bitcoin
 			// Core's bugs. OP_CODESEPARATOR
@@ -1203,6 +1196,22 @@ public class Transaction extends ChildMessage {
 		} else {
 			uint32ToByteStreamLE(this.dataSignature.length, stream);
 			stream.write(this.dataSignature);
+		}
+
+		if (version >= PQConstants.TX_PQ_VERSION) {
+			if (this.pqKeyBundle == null) {
+				uint32ToByteStreamLE(0L, stream);
+			} else {
+				uint32ToByteStreamLE(this.pqKeyBundle.length, stream);
+				stream.write(this.pqKeyBundle);
+			}
+
+			if (this.pqSignatureBundle == null) {
+				uint32ToByteStreamLE(0L, stream);
+			} else {
+				uint32ToByteStreamLE(this.pqSignatureBundle.length, stream);
+				stream.write(this.pqSignatureBundle);
+			}
 		}
 	}
 

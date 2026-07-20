@@ -11,7 +11,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MyHomeAddress implements java.io.Serializable {
+    private static final Logger log = LoggerFactory.getLogger(MyHomeAddress.class);
     /**
      * 
      */
@@ -66,7 +70,7 @@ public class MyHomeAddress implements java.io.Serializable {
             
             dos.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to serialize MyHomeAddress", e);
         }
         return baos.toByteArray();
     }
@@ -86,31 +90,6 @@ public class MyHomeAddress implements java.io.Serializable {
         bain.close();
         return this;
     }
-
-//    public byte[] toByteArray() {
-//        try {
-//            String jsonStr = Json.jsonmapper().writeValueAsString(this);
-//            return jsonStr.getBytes();
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//        return new byte[0];
-//    }
-//
-//    public MyHomeAddress parse(byte[] buf) throws JsonParseException, JsonMappingException, IOException {
-//        String jsonStr = new String(buf);
-//
-//        MyHomeAddress myHomeAddress = Json.jsonmapper().readValue(jsonStr, MyHomeAddress.class);
-//        if (myHomeAddress == null)
-//            return this;
-//        this.city = myHomeAddress.city;
-//        this.country = myHomeAddress.country;
-//        this.email = myHomeAddress.email;
-//        this.province = myHomeAddress.province;
-//        this.remark = myHomeAddress.remark;
-//        this.street = myHomeAddress.street;
-//        return this;
-//    }
 
     public String getCountry() {
         return country;

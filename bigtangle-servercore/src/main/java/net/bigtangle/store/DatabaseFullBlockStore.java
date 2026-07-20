@@ -947,8 +947,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			boolean spendPending = results.getBoolean("spendpending");
 			String tokenid = results.getString("tokenid");
 
-			// long outputindex = results.getLong("outputindex");
-
 			return new UTXO(Sha256Hash.wrap(hash), outputindex, amount, coinbase, new Script(scriptBytes), address,
 					blockhash, fromaddress, memo, tokenid, spent, confirmed, spendPending, 0,
 					results.getLong("spendpendingtime"), results.getLong("time"), spenderblockhash);

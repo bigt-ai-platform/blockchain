@@ -36,9 +36,6 @@ public class CheckpointService {
 	@Autowired
 	protected StoreService storeService; 
  
-	// private static final Logger log =
-	// LoggerFactory.getLogger(CheckpointService.class);
-
 	private List<UTXO> getOutputs(String tokenid, BlockStoreInterface store)
 			throws UTXOProviderException, BlockStoreException {
 		// Must be sorted with the key of

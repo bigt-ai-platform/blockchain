@@ -123,13 +123,6 @@ public class TransactionOutPoint extends ChildMessage {
 		blockHash = readHash();
 		txHash = readHash();
 		index = readUint32();
-		// length += 4;
-		// if (readUint32() == 1) {
-		// this.connectedOutput = new TransactionOutput(params, (Transaction)
-		// this.parent, payload, cursor);
-		// cursor += this.connectedOutput.getMessageSize();
-		// length += this.connectedOutput.getMessageSize();
-		// }
 	}
 
 	@Override
@@ -137,11 +130,6 @@ public class TransactionOutPoint extends ChildMessage {
 		stream.write(blockHash.getReversedBytes());
 		stream.write(txHash.getReversedBytes());
 		Utils.uint32ToByteStreamLE(index, stream);
-		// Utils.uint32ToByteStreamLE(this.connectedOutput != null ? 1 : 0,
-		// stream);
-		// if (this.connectedOutput != null) {
-		// this.connectedOutput.bitcoinSerializeToStream(stream);
-		// }
 	}
 
 	/**

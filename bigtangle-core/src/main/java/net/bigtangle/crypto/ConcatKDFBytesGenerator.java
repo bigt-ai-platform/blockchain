@@ -5,13 +5,13 @@
 
 package net.bigtangle.crypto;
 
-import org.spongycastle.crypto.DataLengthException;
-import org.spongycastle.crypto.DerivationParameters;
-import org.spongycastle.crypto.Digest;
-import org.spongycastle.crypto.DigestDerivationFunction;
-import org.spongycastle.crypto.params.ISO18033KDFParameters;
-import org.spongycastle.crypto.params.KDFParameters;
-import org.spongycastle.util.Pack;
+import org.bouncycastle.crypto.DataLengthException;
+import org.bouncycastle.crypto.DerivationParameters;
+import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.DigestDerivationFunction;
+import org.bouncycastle.crypto.params.ISO18033KDFParameters;
+import org.bouncycastle.crypto.params.KDFParameters;
+import org.bouncycastle.util.Pack;
 
 public class ConcatKDFBytesGenerator
     implements DigestDerivationFunction

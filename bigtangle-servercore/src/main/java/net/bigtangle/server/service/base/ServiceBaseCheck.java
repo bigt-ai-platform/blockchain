@@ -912,7 +912,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 			} catch (BlockStoreException e) {
 				// Cannot happen, previous token must exist
-				e.printStackTrace();
+				logger.error("Failed to get permissioned addresses for reissuance", e);
 			}
 		} else {
 			// First time issuances must sign for the token id
@@ -980,7 +980,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		// Return whether sufficient signatures exist
 		int requiredSignatureCount = prevToken != null ? prevToken.getSignnumber() : 1;
-		// int requiredSignatureCount = signNumberCount;
 		if (signatureCount >= requiredSignatureCount)
 			return SolidityState.getSuccessState();
 
@@ -1058,12 +1057,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				throw new InvalidTransactionDataException("getTokenid is null");
 			return SolidityState.getFailState();
 		}
-		// if (currentToken.getToken().getPrevblockhash() == null) {
-		// if (throwExceptions)
-		// throw new InvalidTransactionDataException("getPrevblockhash is
-		// null");
-		// return SolidityState.getFailState();
-		// }
 		if (currentToken.getToken().getTokenid().equals(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
 			if (throwExceptions)
 				throw new InvalidTransactionDataException("Not allowed");
@@ -1740,8 +1733,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			BlockStoreInterface store) throws BlockStoreException {
 		//
 		for (BlockWrap pred : allRequirements) {
-			// final BlockWrap pred = store.getBlockWrap(predecessorReq);
-			if (pred == null)
+				if (pred == null)
 				return SolidityState.from(Sha256Hash.ZERO_HASH, true);
 			if (pred.getBlock().getBlockType().requiresCalculation() && pred.getBlockEvaluation().getSolid() != 2)
 				return SolidityState.fromMissingCalculation(pred.getBlockHash());

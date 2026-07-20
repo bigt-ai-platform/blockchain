@@ -148,8 +148,8 @@ public class DispatcherController implements DisposableBean {
 			try {
 				processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
 			} catch (Throwable t) {
-				System.err.println("ERROR in processDo reqCmd=" + reqCmd + ": " + t.getClass().getName() + ": " + t.getMessage());
-				t.printStackTrace();
+				logger.error("ERROR in processDo reqCmd={}: {}: {}", reqCmd, t.getClass().getName(), t.getMessage());
+				logger.error("Error processing request", t);
 				throw t;
 			}
             return "";
@@ -164,7 +164,7 @@ public class DispatcherController implements DisposableBean {
 			resp.setMessage(sw.toString());
 			gzipBinary(httpServletResponse, resp, reqCmd);
 		} catch (java.util.concurrent.ExecutionException e) {
-			System.err.println("ERROR ExecutionException reqCmd=" + reqCmd + " cause=" + (e.getCause() != null ? e.getCause().getClass().getName() + ": " + e.getCause().getMessage() : "null"));
+			logger.error("ERROR ExecutionException reqCmd={} cause={}", reqCmd, e.getCause() != null ? e.getCause().getClass().getName() + ": " + e.getCause().getMessage() : "null");
 			logger.error("process ExecutionException for reqCmd={}", reqCmd, e.getCause());
 			Stopwatch watch = Stopwatch.createStarted();
 			AbstractResponse resp = ErrorResponse.create(101);

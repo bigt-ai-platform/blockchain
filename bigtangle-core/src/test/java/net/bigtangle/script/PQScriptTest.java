@@ -70,8 +70,9 @@ class PQScriptTest {
     void pqVerifyWithCorrectSigsReturnsTrue() {
         byte[] msg = Sha256Hash.hash("test".getBytes(StandardCharsets.UTF_8));
         Sha256Hash baseHash = Sha256Hash.twiceOf(msg);
-        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.MLDSA_SIG_DOMAIN);
-        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.SLHDSA_SIG_DOMAIN);
+        byte[] txHash = PQScriptUtils.domainSeparatedHash(baseHash.getBytes(), PQConstants.TX_DOMAIN);
+        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
+        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
 
         byte[] mlSig = provider.sign(PQConstants.ALG_ML_DSA_87, mlKp.privateKey(), mlMsg);
         byte[] slhSig = provider.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKp.privateKey(), slhMsg);
@@ -87,8 +88,9 @@ class PQScriptTest {
     void pqVerifyWithBadMlSigReturnsFalse() {
         byte[] msg = Sha256Hash.hash("bad".getBytes(StandardCharsets.UTF_8));
         Sha256Hash baseHash = Sha256Hash.twiceOf(msg);
-        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.MLDSA_SIG_DOMAIN);
-        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.SLHDSA_SIG_DOMAIN);
+        byte[] txHash = PQScriptUtils.domainSeparatedHash(baseHash.getBytes(), PQConstants.TX_DOMAIN);
+        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
+        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
 
         byte[] mlSig = provider.sign(PQConstants.ALG_ML_DSA_87, mlKp.privateKey(), mlMsg);
         byte[] slhSig = provider.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKp.privateKey(), slhMsg);
@@ -108,8 +110,9 @@ class PQScriptTest {
     void scriptBuilderProducesValidInputScript() throws Exception {
         byte[] msg = Sha256Hash.hash("roundtrip".getBytes(StandardCharsets.UTF_8));
         Sha256Hash baseHash = Sha256Hash.twiceOf(msg);
-        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.MLDSA_SIG_DOMAIN);
-        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(baseHash, PQConstants.SLHDSA_SIG_DOMAIN);
+        byte[] txHash = PQScriptUtils.domainSeparatedHash(baseHash.getBytes(), PQConstants.TX_DOMAIN);
+        byte[] mlMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
+        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
         byte[] mlSig = provider.sign(PQConstants.ALG_ML_DSA_87, mlKp.privateKey(), mlMsg);
         byte[] slhSig = provider.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKp.privateKey(), slhMsg);
 

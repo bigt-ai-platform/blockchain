@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.BloomFilter;
@@ -344,25 +344,6 @@ public class KeyChainGroupTest {
 		key.setCreationTimeSeconds(yesterday);
 		group.importKeys(key);
 		assertEquals(yesterday, group.getEarliestKeyCreationTime());
-	}
-
-	//@Test
-	public void events() throws Exception {
-		// Check that events are registered with the right chains and that if a chain is
-		// added, it gets the event
-		// listeners attached properly even post-hoc.
-		final AtomicReference<ECKey> ran = new AtomicReference<ECKey>(null);
-		 
- 
-		ECKey key = group.freshKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-		assertEquals(key, ran.getAndSet(null));
-		ECKey key2 = new ECKey();
-		group.importKeys(key2);
-		assertEquals(key2, ran.getAndSet(null));
- 
-		ECKey key3 = new ECKey();
-		group.importKeys(key3);
-		assertNull(ran.get());
 	}
 
 	@Test

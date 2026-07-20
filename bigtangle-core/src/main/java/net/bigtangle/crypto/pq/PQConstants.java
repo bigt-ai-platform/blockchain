@@ -77,4 +77,7 @@ public final class PQConstants {
 
     /** Current KeyBundle / SignatureBundle version. */
     public static final int BUNDLE_VERSION = 1;
+
+    /** Transaction version required for PQ fields (uint32 on wire). */
+    public static final int TX_PQ_VERSION = 2;
 }

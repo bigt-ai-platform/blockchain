@@ -28,8 +28,8 @@ import net.bigtangle.core.*;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Base58;
 
-import org.spongycastle.crypto.params.KeyParameter;
-import org.spongycastle.math.ec.ECPoint;
+import org.bouncycastle.crypto.params.KeyParameter;
+import org.bouncycastle.math.ec.ECPoint;
 
 import javax.annotation.Nullable;
 import java.math.BigInteger;

@@ -330,43 +330,6 @@ public class ScriptTest {
 		return flags;
 	}
 
-	// @Test
-	public void dataDrivenValidScripts() throws Exception {
-		JsonNode json = new ObjectMapper()
-				.readTree(new InputStreamReader(getClass().getResourceAsStream("script_valid.json"), Charsets.UTF_8));
-		for (JsonNode test : json) {
-			Script scriptSig = parseScriptString(test.get(0).asText());
-			Script scriptPubKey = parseScriptString(test.get(1).asText());
-			Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-			try {
-				scriptSig.correctlySpends(new Transaction(PARAMS), 0, scriptPubKey, verifyFlags);
-			} catch (ScriptException e) {
-				System.err.println(test);
-				System.err.flush();
-				throw e;
-			}
-		}
-	}
-
-	// @Test
-	public void dataDrivenInvalidScripts() throws Exception {
-		JsonNode json = new ObjectMapper()
-				.readTree(new InputStreamReader(getClass().getResourceAsStream("script_invalid.json"), Charsets.UTF_8));
-		for (JsonNode test : json) {
-			try {
-				Script scriptSig = parseScriptString(test.get(0).asText());
-				Script scriptPubKey = parseScriptString(test.get(1).asText());
-				Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-				scriptSig.correctlySpends(new Transaction(PARAMS), 0, scriptPubKey, verifyFlags);
-				System.err.println(test);
-				System.err.flush();
-				fail();
-			} catch (VerificationException e) {
-				// Expected.
-			}
-		}
-	}
-
 	private Map<TransactionOutPoint, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
 		Map<TransactionOutPoint, Script> scriptPubKeys = new HashMap<TransactionOutPoint, Script>();
 		for (JsonNode input : inputs) {

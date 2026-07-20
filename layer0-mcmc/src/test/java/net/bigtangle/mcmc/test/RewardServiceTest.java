@@ -48,131 +48,6 @@ public class RewardServiceTest extends AbstractIntegrationTest {
     @Autowired
     private StakeService stakeService;
 
-	// Test difficulty transition
-	// @Test
-	public void testDifficultyTransition1() throws Exception {
-
-		long currentTime = UtilGeneseBlock.createGenesis(networkParameters).getTimeSeconds();
-
-		// Reward exactly on target -> no difficulty change
-
-		Block rollingBlock = addBlocks(1, null);
-		for (int i = 0; i < 360 - 1; i++) {
-			currentTime += 30;
-			Block rollingBlock2 = addBlocks(1, null);
-			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock2),
-					defaultBlockWrap(rollingBlock2), currentTime, store);
-			blockGraph.updateChain();
-		}
-
-		currentTime += 30;
-		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-				defaultBlockWrap(rollingBlock), currentTime, store);
-		blockGraph.updateChain();
-		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService,jsonmapper);
-		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger(),
-				 servicebase.getRewardInfo(UtilGeneseBlock.createGenesis(networkParameters)).getDifficultyTargetAsInteger());
-	}
-
-	// Test difficulty transition
-	// @Test
-	public void testDifficultyTransition2() throws Exception {
-		ECKey genesiskey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
-		long currentTime = UtilGeneseBlock.createGenesis(networkParameters).getTimeSeconds();
-		List<Block> addedBlocks = new ArrayList<>();
-		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
-		for (int i = 0; i < 360 - 1; i++) {
-			currentTime += 30 / 8;
-
-			Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
-			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
-					currentTime, store);
-			blockGraph.updateChain();
-		}
-
-		currentTime += 30 / 8;
-		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-				defaultBlockWrap(rollingBlock), currentTime, store);
-		blockGraph.updateChain();
-		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService,jsonmapper);
-		assertEquals( servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().multiply(BigInteger.valueOf(4)),
-				servicebase.getRewardInfo(UtilGeneseBlock.createGenesis(networkParameters)).getDifficultyTargetAsInteger());
-		Block highDifficultyBlock = rollingBlock;
-
-		// Rewards way slower -> maximum difficulty change to lower difficulty
-		for (int i = 0; i < 360 - 1; i++) {
-			currentTime += 30 * 8;
-			Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
-			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
-					currentTime, store);
-			blockGraph.updateChain();
-		}
-
-		currentTime += 30 * 8;
-		Block b = payBigTo(genesiskey, BigInteger.valueOf(500000), addedBlocks);
-		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(b), defaultBlockWrap(b),
-				currentTime, store);
-		blockGraph.updateChain();
-		assertEquals(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger().divide(BigInteger.valueOf(4)),
-				servicebase.getRewardInfo(highDifficultyBlock).getDifficultyTargetAsInteger());
-	}
-
-	// @Test
-	public void testDifficultyTransitionPruned() throws Exception {
-		serverConfiguration.setServermode("fullpruned");
-		testDifficultyTransition2();
-	}
-
-	// @Test
-	public void testDifficultyTransitionPruned3() throws Exception {
-		serverConfiguration.setServermode("fullpruned");
-		testDifficultyTransition3();
-	}
-
-	// Test difficulty transition
-	// @Test
-	public void testDifficultyTransition3() throws Exception {
-
-		long currentTime = UtilGeneseBlock.createGenesis(networkParameters).getTimeSeconds();
-
-		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);
-		for (int i = 0; i < 360 - 1; i++) {
-			currentTime += 30 / 2;
-			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-					defaultBlockWrap(rollingBlock), currentTime, store);
-			blockGraph.updateChain();
-		}
-
-		currentTime += 30 / 2;
-		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-				defaultBlockWrap(rollingBlock), currentTime, store);
-		blockGraph.updateChain();
-		ServiceBaseConnect servicebase = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService,jsonmapper);
-		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
-				.compareTo(servicebase.getRewardInfo(UtilGeneseBlock.createGenesis(networkParameters)).getDifficultyTargetAsInteger()) < 0);
-		Block highDifficultyBlock = rollingBlock;
-
-		// Rewards way too fast -> maximum difficulty change to higher difficulty
-		for (int i = 0; i < 360 - 1; i++) {
-			currentTime += 30 * 2;
-			rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-					defaultBlockWrap(rollingBlock), currentTime, store);
-			blockGraph.updateChain();
-		}
-
-		currentTime += 30 * 2;
-		rollingBlock = rewardService.createReward(rollingBlock.getHash(), defaultBlockWrap(rollingBlock),
-				defaultBlockWrap(rollingBlock), currentTime, store);
-		blockGraph.updateChain();
-		assertTrue(servicebase.getRewardInfo(rollingBlock).getDifficultyTargetAsInteger()
-				.compareTo(servicebase.getRewardInfo(highDifficultyBlock).getDifficultyTargetAsInteger()) > 0);
-	}
-
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
 
 		Block rollingBlock1 = addBlocks(5, blocksAddedAll);
@@ -320,35 +195,6 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 	 * cutoff height
 	 * Stop at the check and select of cutoff height, no exception, this is not a real attack to rewrite the chain
 	 */
-	//@Test
-	public void testReorgMiningRewardCutoff() throws Exception {
-
-		List<Block> blocksAddedAll = new ArrayList<Block>();
-
-		Block rewardBlock2 = makeRewardBlock(blocksAddedAll);
-
-		for (int i = 0; i < NetworkParameters.MILESTONE_CUTOFF + 5; i++) {
-			rewardBlock2 = makeRewardBlock(rewardBlock2.getHash());
-		}
-	
-		Block rollingBlock2 = addFixedBlocks(1, UtilGeneseBlock.createGenesis(networkParameters), blocksAddedAll,
-				wallet.feeTransaction(null));
-	 
-		// rewardBlock3 takes the long block graph behind cutoff
-		try {
-			rewardService.createReward(rewardBlock2.getHash(), defaultBlockWrap(rollingBlock2),
-					defaultBlockWrap(rollingBlock2), store);
-			blockGraph.updateChain();
-			fail();
-		} catch (VerificationException e) {
-			// TODO: handle exception
-		}
-
-		assertTrue(getBlockEvaluation(rewardBlock2.getHash(), store).isConfirmed());
-		assertTrue(getBlockEvaluation(rewardBlock2.getHash(), store).getMilestone() >= 0);
-
-	}
-
 	// generate a list of block using mcmc and return the last block
 	private Block addBlocks(int num, List<Block> blocksAddedAll) throws BlockStoreException, JsonProcessingException,
 			IOException, UTXOProviderException, InsufficientMoneyException, InterruptedException, ExecutionException {
@@ -369,27 +215,6 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			blocksAddedAll.add(rollingBlock1);
 		}
 		return rollingBlock1;
-	}
-
-	// @Test
-	public void blocksFromChainlength() throws Exception {
-		// create some blocks
-		// testReorgMiningReward();
-
-		HashMap<String, Object> request = new HashMap<String, Object>();
-		request.put("start", "0");
-		request.put("end", "0");
-		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.blocksFromChainLength.name(),
-				Json.jsonmapper().writeValueAsString(request).getBytes());
-
-		GetBlockListResponse blockListResponse = Json.jsonmapper().readValue(response, GetBlockListResponse.class);
-
-		// log.info("searchBlock resp : " + response);
-		assertTrue(blockListResponse.getBlockbytelist().size() > 0);
-
-		for (byte[] data : blockListResponse.getBlockbytelist()) {
-			blockService.addConnected(data, false);
-		}
 	}
 
 }

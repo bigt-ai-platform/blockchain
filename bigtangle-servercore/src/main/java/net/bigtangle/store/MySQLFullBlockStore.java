@@ -24,7 +24,6 @@ import net.bigtangle.server.service.base.MinioService;
 public class MySQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String MYSQL_DUPLICATE_KEY_ERROR_CODE = "23000";
- //   private static final String DATABASE_DRIVER_CLASS = "com.mysql.jdbc.Driver";
     public static final String DATABASE_CONNECTION_URL_PREFIX = "jdbc:mysql://"; // "jdbc:log4jdbc:mysql://";
 
     // create table SQL

@@ -247,64 +247,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	}
 
-	// @Test
-	public void orderTickerSearchWithLastdayPriceAPI() throws Exception {
-
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<Block> addedBlocks = new ArrayList<>();
-
-		// Make test token
-		makeTestTokenWithSpare(testKey, addedBlocks);
-		String testTokenId = testKey.getPublicKeyAsHex();
-
-		// Get current existing token amount
-		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();
-
-		// Open sell order for test tokens
-		makeAndConfirmSellOrder(testKey, testTokenId, 1000, 100, addedBlocks);
-
-		// Open buy order for test tokens
-		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1001, 99, addedBlocks);
-
-		// Verify token amount invariance
-		assertCurrentTokenAmountEquals(origTokenAmounts, true);
-
-		// 200, 300 avg daily 200+300/2
-		store.batchAddAvgPrice();
-		// get the data
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
-		List<String> tokenids = new ArrayList<String>();
-		tokenids.add(testTokenId);
-		requestParam.put("tokenids", tokenids);
-		requestParam.put("count", 1);
-		requestParam.put("basetoken", NetworkParameters.BIGTANGLE_TOKENID_STRING);
-
-		byte[] response0 = OkHttp3Util.post(contextRoot + ReqCmd.getOrdersTicker.name(),
-				Json.jsonmapper().writeValueAsString(requestParam).getBytes());
-		OrderTickerResponse orderTickerResponse = Json.jsonmapper().readValue(response0, OrderTickerResponse.class);
-
-		assertTrue(orderTickerResponse.getTickers().size() > 0);
-		for (MatchLastdayResult m : orderTickerResponse.getTickers()) {
-			if (m.getTokenid().equals(testTokenId)) {
-				// assertTrue(m.getExecutedQuantity() == 78||
-				// m.getExecutedQuantity() == 22);
-				// TODO check the execute ordering. price is 1000 or 1001
-				log.info("price:" + m.getPrice() + ";ExecutedQuantity:" + m.getExecutedQuantity() + ";getLastdayprice:"
-						+ m.getLastdayprice());
-				assertTrue(m.getPrice() == 1000 || m.getPrice() == 1001);
-				assertTrue(m.getLastdayprice() == 1001);
-			}
-		}
-
-		// check wallet
-
-		BigDecimal b = wallet.getLastPrice(testTokenId, NetworkParameters.BIGTANGLE_TOKENID_STRING);
-		assertTrue(b.compareTo(new BigDecimal("0.001")) == 0);
-
-	}
-
 	@Test
 	public void buy() throws Exception {
 

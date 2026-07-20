@@ -49,8 +49,6 @@ public abstract class Message {
     public static final int UNKNOWN_LENGTH = Integer.MIN_VALUE;
 
     // Useful to ensure serialize/deserialize are consistent with each other.
-   // private static final boolean SELF_CHECK = false;
-
     // The offset is how many bytes into the provided byte array this message payload starts at.
     protected int offset;
     // The cursor keeps track of where we are in the byte array as we parse it.

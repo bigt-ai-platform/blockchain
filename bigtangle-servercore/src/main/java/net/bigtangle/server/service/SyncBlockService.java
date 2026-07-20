@@ -275,15 +275,7 @@ public class SyncBlockService {
 		for (Block block : sortedBlocks) {
 			// no genesis block and no spend pending set
 			if (block.getHeight() > 0) {
-//				Set<Sha256Hash> missing = blockgraph.checkMissing(block, store);
-//				if (!missing.isEmpty())
-//					log.info("missing  size {}", missing.size());
-//				for (Sha256Hash hash : missing) {
-//					requestBlock(hash, store);
-//				}
-				// if (anyMatchConfirmedReward(block, remotes)) {
 				blockgraph.addFromSync(block, true, store);
-				// }
 			}
 		}
 

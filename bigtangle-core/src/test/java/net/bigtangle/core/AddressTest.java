@@ -52,18 +52,6 @@ public class AddressTest {
         assertEquals(mainAddress, mainAddressCopy);
     }
 
-   // @Test
-    public void stringification() throws Exception {
-//        // Test a testnet address.
-//        Address a = new Address(testParams, HEX.decode("fda79a24e50ff70ff42f7d89585da5bd19d9e5cc"));
-//        assertEquals("n4eA2nbYqErp7H6jebchxAN59DmNpksexv", a.toString());
-//        assertFalse(a.isP2SHAddress());
-
-        Address b =   Address.fromP2SHHash(mainParams, HEX.decode("4a22c3c4cbb31e4d03b15550636762bda0baf85a"));
-        assertEquals("17kzeh4N8g49GFvdDzSf8PjaPfyoD1MndL", b.toString());
-        assertFalse(b.isP2SHAddress());
-    }
-    
     @Test
     public void decoding() throws Exception {
         Address a = Address.fromBase58(testParams, "n4eA2nbYqErp7H6jebchxAN59DmNpksexv");

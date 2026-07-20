@@ -28,7 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Futures;
@@ -125,23 +125,6 @@ public class ECKeyTest {
 	//	log.debug( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58());
 	}
 	
-	// @Test
-	public void base58Encoding() throws Exception {
-		String addr = "mqAJmaxMcG5pPHHc3H3NtyXzY7kGbJLuMF";
-		String privkey = "92shANodC6Y4evT5kFzjNFQAdjqTtHAnDTLzqBBq4BbKUPyx6CD";
-		ECKey key = DumpedPrivateKey.fromBase58(MainNetParams.get(), privkey).getKey();
-		assertEquals(privkey, key.getPrivateKeyEncoded(MainNetParams.get()).toString());
-		assertEquals(addr, key.toAddress(MainNetParams.get()).toString());
-	}
-
-	// @Test
-	public void base58Encoding_leadingZero() throws Exception {
-		String privkey = "91axuYLa8xK796DnBXXsMbjuc8pDYxYgJyQMvFzrZ6UfXaGYuqL";
-		ECKey key = DumpedPrivateKey.fromBase58(MainNetParams.get(), privkey).getKey();
-		assertEquals(privkey, key.getPrivateKeyEncoded(MainNetParams.get()).toString());
-		assertEquals(0, key.getPrivKeyBytes()[0]);
-	}
-
 	@Test
 	public void base58Encoding_stress() throws Exception {
 		// Replace the loop bound with 1000 to get some keys with leading zero byte
@@ -373,33 +356,6 @@ public class ECKeyTest {
 				sig.append((char) c);
 
 			assertTrue(TransactionSignature.isEncodingCanonical(HEX.decode(sig.toString())));
-		}
-		in.close();
-	}
-
-	// @Test
-	public void testNonCanonicalSigs() throws Exception {
-		// Tests the noncanonical sigs from Bitcoin Core unit tests
-		InputStream in = getClass().getResourceAsStream("sig_noncanonical.json");
-
-		// Poor man's JSON parser (because pulling in a lib for this is overkill)
-		while (in.available() > 0) {
-			while (in.available() > 0 && in.read() != '"')
-				;
-			if (in.available() < 1)
-				break;
-
-			StringBuilder sig = new StringBuilder();
-			int c;
-			while (in.available() > 0 && (c = in.read()) != '"')
-				sig.append((char) c);
-
-			try {
-				final String sigStr = sig.toString();
-				assertFalse(TransactionSignature.isEncodingCanonical(HEX.decode(sigStr)));
-			} catch (IllegalArgumentException e) {
-				// Expected for non-hex strings in the JSON that we should ignore
-			}
 		}
 		in.close();
 	}

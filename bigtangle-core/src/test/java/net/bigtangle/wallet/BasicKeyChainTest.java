@@ -46,38 +46,6 @@ public class BasicKeyChainTest {
 
 	}
 
-	// @Test
-	public void importKeys() {
-		long now = Utils.currentTimeSeconds();
-		Utils.setMockClock(now);
-		final ECKey key1 = new ECKey();
-		Utils.rollMockClock(86400);
-		final ECKey key2 = new ECKey();
-		final ArrayList<ECKey> keys = Lists.newArrayList(key1, key2);
-
-		// Import two keys, check the event is correct.
-		assertEquals(2, chain.importKeys(keys));
-		assertEquals(2, chain.numKeys());
-		// assertTrue(onKeysAddedRan.getAndSet(false));
-		assertArrayEquals(keys.toArray(), onKeysAdded.get().toArray());
-		assertEquals(now, chain.getEarliestKeyCreationTime());
-		// Check we ignore duplicates.
-		final ECKey newKey = new ECKey();
-		keys.add(newKey);
-		assertEquals(1, chain.importKeys(keys));
-		assertTrue(onKeysAddedRan.getAndSet(false));
-		assertEquals(newKey, onKeysAdded.getAndSet(null).get(0));
-		assertEquals(0, chain.importKeys(keys));
-		assertFalse(onKeysAddedRan.getAndSet(false));
-		assertNull(onKeysAdded.get());
-
-		assertTrue(chain.hasKey(key1));
-		assertTrue(chain.hasKey(key2));
-		assertEquals(key1, chain.findKeyFromPubHash(key1.getPubKeyHash()));
-		assertEquals(key2, chain.findKeyFromPubKey(key2.getPubKey()));
-		assertNull(chain.findKeyFromPubKey(key2.getPubKeyHash()));
-	}
-
 	@Test
 	public void removeKey() {
 		ECKey key = new ECKey();

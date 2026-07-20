@@ -243,27 +243,4 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 	}
 
-	// @Test
-	public void testBurnedAddress() throws Exception {
-
-		ECKey to = ECKey
-				.fromPrivate(Utils.HEX.decode("34c4fc283cd9ac303deb6617b8dcd4c033b007782fd15bd168d7fc0e1819f3f8"));
-
-		Coin aCoin = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-
-		List<Block> rollingBlock = wrapTransactions(wallet.pay(null, to.toAddress(networkParameters).toString(), aCoin,
-				""));
-
-		makeRewardBlock();
-		// pay from burned address
-		try {
-			Wallet wallet = Wallet.fromKeys(networkParameters, to, contextRoot);
-			wallet.setServerURL(contextRoot);
-			wallet.pay(null, to.toAddress(networkParameters).toString(), aCoin, "");
-			fail();
-		} catch (RuntimeException e) {
-			assertTrue(e.getMessage().contains("Burned"));
-		}
-
-	}
 }

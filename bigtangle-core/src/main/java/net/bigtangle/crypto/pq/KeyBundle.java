@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import net.bigtangle.crypto.pq.PQConstants;
+
 /**
  * A versioned bundle of public keys used in post-quantum addresses and
  * transaction inputs.  Entries are sorted by algorithm ID so the canonical
@@ -118,6 +120,8 @@ public final class KeyBundle {
             entries.add(new Entry(algorithm, pk));
         }
         // Re-sort to canonical order in case the serialized form wasn't sorted
+        if (version > PQConstants.BUNDLE_VERSION)
+            throw new IllegalArgumentException("unsupported bundle version: " + version);
         return new KeyBundle(version, entries);
     }
 

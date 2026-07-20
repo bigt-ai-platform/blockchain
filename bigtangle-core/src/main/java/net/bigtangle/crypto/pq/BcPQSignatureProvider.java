@@ -1,8 +1,15 @@
 package net.bigtangle.crypto.pq;
 
+import java.security.Provider;
 import java.security.SecureRandom;
-import java.util.concurrent.ConcurrentHashMap;
+import java.security.SecureRandomSpi;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+
+import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
+import org.bouncycastle.crypto.digests.SHA256Digest;
+import org.bouncycastle.crypto.prng.DigestRandomGenerator;
 import org.bouncycastle.pqc.crypto.mldsa.MLDSAKeyGenerationParameters;
 import org.bouncycastle.pqc.crypto.mldsa.MLDSAKeyPairGenerator;
 import org.bouncycastle.pqc.crypto.mldsa.MLDSAParameters;
@@ -13,7 +20,9 @@ import org.bouncycastle.pqc.crypto.slhdsa.SLHDSAParameters;
 import org.bouncycastle.pqc.crypto.slhdsa.SLHDSAPrivateKeyParameters;
 import org.bouncycastle.pqc.crypto.slhdsa.SLHDSAPublicKeyParameters;
 import org.bouncycastle.pqc.crypto.slhdsa.SLHDSASigner;
-import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Bouncy Castle implementation of {@link PQSignatureProvider}
@@ -25,17 +34,17 @@ import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
  */
 public final class BcPQSignatureProvider implements PQSignatureProvider {
 
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Logger log = LoggerFactory.getLogger(BcPQSignatureProvider.class);
 
     private static final int[] SUPPORTED = {
         PQConstants.ALG_ML_DSA_87,
         PQConstants.ALG_SLH_DSA_SHA2_256S
     };
 
-    private final ConcurrentHashMap<ByteArrayWrapper, MLDSAPrivateKeyParameters>
-            mldsaPrivCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<ByteArrayWrapper, SLHDSAPrivateKeyParameters>
-            slhdsaPrivCache = new ConcurrentHashMap<>();
+    private final Cache<ByteArrayWrapper, MLDSAPrivateKeyParameters>
+            mldsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
+    private final Cache<ByteArrayWrapper, SLHDSAPrivateKeyParameters>
+            slhdsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
 
     @Override
     public int[] supportedAlgorithms() {
@@ -82,8 +91,8 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
 
     private KeyPair generateMLDSA(byte[] seed) {
         MLDSAParameters params = MLDSAParameters.ml_dsa_87;
-        MLDSAKeyGenerationParameters genParams = new MLDSAKeyGenerationParameters(
-                SECURE_RANDOM, params);
+        SecureRandom rng = deterministicRng(seed);
+        MLDSAKeyGenerationParameters genParams = new MLDSAKeyGenerationParameters(rng, params);
         MLDSAKeyPairGenerator generator = new MLDSAKeyPairGenerator();
         generator.init(genParams);
         AsymmetricCipherKeyPair pair = generator.generateKeyPair();
@@ -97,9 +106,11 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
 
     private byte[] signMLDSA(byte[] privateKey, byte[] message) {
         MLDSAParameters params = MLDSAParameters.ml_dsa_87;
-        MLDSAPrivateKeyParameters priv = mldsaPrivCache.get(new ByteArrayWrapper(privateKey));
+        ByteArrayWrapper key = new ByteArrayWrapper(privateKey);
+        MLDSAPrivateKeyParameters priv = mldsaPrivCache.getIfPresent(key);
         if (priv == null) {
             priv = new MLDSAPrivateKeyParameters(params, privateKey);
+            mldsaPrivCache.put(key, priv);
         }
         MLDSASigner signer = new MLDSASigner();
         signer.init(true, priv);
@@ -120,6 +131,7 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
             signer.update(message, 0, message.length);
             return signer.verifySignature(signature);
         } catch (Exception e) {
+            log.debug("ML-DSA-87 verify failed: {}", e.getMessage());
             return false;
         }
     }
@@ -128,8 +140,7 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
 
     private KeyPair generateSLHDSA(byte[] seed) {
         SLHDSAParameters params = SLHDSAParameters.sha2_256s;
-        SecureRandom rng = new SecureRandom();
-        rng.setSeed(seed);
+        SecureRandom rng = deterministicRng(seed);
         org.bouncycastle.pqc.crypto.slhdsa.SLHDSAKeyGenerationParameters genParams =
             new org.bouncycastle.pqc.crypto.slhdsa.SLHDSAKeyGenerationParameters(rng, params);
         org.bouncycastle.pqc.crypto.slhdsa.SLHDSAKeyPairGenerator generator =
@@ -146,9 +157,11 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
 
     private byte[] signSLHDSA(byte[] privateKey, byte[] message) {
         SLHDSAParameters params = SLHDSAParameters.sha2_256s;
-        SLHDSAPrivateKeyParameters priv = slhdsaPrivCache.get(new ByteArrayWrapper(privateKey));
+        ByteArrayWrapper key = new ByteArrayWrapper(privateKey);
+        SLHDSAPrivateKeyParameters priv = slhdsaPrivCache.getIfPresent(key);
         if (priv == null) {
             priv = new SLHDSAPrivateKeyParameters(params, privateKey);
+            slhdsaPrivCache.put(key, priv);
         }
         SLHDSASigner signer = new SLHDSASigner();
         signer.init(true, priv);
@@ -163,8 +176,29 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
             signer.init(false, pub);
             return signer.verifySignature(message, signature);
         } catch (Exception e) {
+            log.debug("SLH-DSA-256s verify failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    /* ── Deterministic RNG for seed-based key generation ──────────────── */
+
+    private static final class DetRng extends SecureRandom {
+        DetRng(SecureRandomSpi spi, Provider p) { super(spi, p); }
+    }
+
+    private static SecureRandom deterministicRng(byte[] seed) {
+        byte[] seedCopy = seed.clone();
+        DigestRandomGenerator drg = new DigestRandomGenerator(new SHA256Digest());
+        drg.addSeedMaterial(seedCopy);
+        SecureRandomSpi spi = new SecureRandomSpi() {
+            @Override protected void engineSetSeed(byte[] s) { drg.addSeedMaterial(s); }
+            @Override protected void engineNextBytes(byte[] bytes) { drg.nextBytes(bytes); }
+            @Override protected byte[] engineGenerateSeed(int n) {
+                byte[] b = new byte[n]; drg.nextBytes(b); return b;
+            }
+        };
+        return new DetRng(spi, new Provider("Drg", 1.0, "") {});
     }
 
     /* ── Internal key cache ───────────────────────────────────────────── */

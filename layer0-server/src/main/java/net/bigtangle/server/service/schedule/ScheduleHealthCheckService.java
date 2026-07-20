@@ -6,6 +6,7 @@ package net.bigtangle.server.service.schedule;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.config.ScheduleConfiguration;
@@ -28,7 +29,7 @@ public class ScheduleHealthCheckService {
     /*
      * check the heath of the system, database and kafka stream 
      */
-   // @Scheduled(fixedRate = 2000)
+   @Scheduled(fixedRate = 2000)
     public void checkService() {
         if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
             heathCheckService.startSingleProcess();

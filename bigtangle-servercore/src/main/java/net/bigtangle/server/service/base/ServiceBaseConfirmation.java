@@ -604,7 +604,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				long m = hasConflictDependencyMilestone(c, false, store);  
 				return hasConflictDependency(m, false );
 			} catch (BlockStoreException e) {
-				// e.printStackTrace();
 			}
 			return false;
 		});
@@ -982,7 +981,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				long m = hasConflictDependencyMilestone(c, true, store); 
 				return !hasConflictDependency(m, true );
 			} catch (BlockStoreException e) {
-				// e.printStackTrace();
 				return true;
 			}
 		});
@@ -1616,7 +1614,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		arrayList.sort(Comparator.comparingLong((BlockWrap w) -> w.getBlock().getHeight()) );
 		for (BlockWrap block : arrayList) {
 			unconfirm(block, traversedConfirms, -1, store);
-			// if (checksum)
 
 		}
 		checkSum(store);

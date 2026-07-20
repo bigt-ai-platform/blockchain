@@ -235,27 +235,4 @@ public class TransactionTest {
 	 * Ensure that hashForSignature() doesn't modify a transaction's data, which
 	 * could wreak multithreading havoc.
 	 */
-	// @Test
-//    public void testHashForSignatureThreadSafety() {
-//        Block genesis = MainNetParams.get().getGenesisBlock();
-//        Block block1 = BlockForTest.createNextBlock(genesis,new ECKey().toAddress(MainNetParams.get()),
-//                genesis.getTransactions().get(0).getOutput(0).getOutPointFor(), genesis.getHash());
-//
-//        final Transaction tx = block1.getTransactions().get(1);
-//        final String txHash = tx.getHashAsString();
-//        final String txNormalizedHash = tx.hashForSignature(0, new byte[0], Transaction.SigHash.ALL.byteValue())
-//                .toString();
-//
-//        for (int i = 0; i < 100; i++) {
-//            // ensure the transaction object itself was not modified; if it was,
-//            // the hash will change
-//            assertEquals(txHash, tx.getHashAsString());
-//            new Thread() {
-//                public void run() {
-//                    assertEquals(txNormalizedHash,
-//                            tx.hashForSignature(0, new byte[0], Transaction.SigHash.ALL.byteValue()).toString());
-//                }
-//            };
-//        }
-//    }
 }

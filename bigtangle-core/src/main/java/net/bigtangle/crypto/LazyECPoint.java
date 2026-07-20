@@ -18,9 +18,9 @@
 
 package net.bigtangle.crypto;
 
-import org.spongycastle.math.ec.ECCurve;
-import org.spongycastle.math.ec.ECFieldElement;
-import org.spongycastle.math.ec.ECPoint;
+import org.bouncycastle.math.ec.ECCurve;
+import org.bouncycastle.math.ec.ECFieldElement;
+import org.bouncycastle.math.ec.ECPoint;
 
 import javax.annotation.Nullable;
 import java.math.BigInteger;
@@ -38,6 +38,7 @@ public class LazyECPoint {
 
     private final ECCurve curve;
     private final byte[] bits;
+    private final boolean compressed;
 
     // This field is effectively final - once set it won't change again. However it can be set after
     // construction.
@@ -47,12 +48,18 @@ public class LazyECPoint {
     public LazyECPoint(ECCurve curve, byte[] bits) {
         this.curve = curve;
         this.bits = bits;
+        this.compressed = bits != null && bits.length > 0 && (bits[0] == 2 || bits[0] == 3);
     }
 
     public LazyECPoint(ECPoint point) {
+        this(point, true);
+    }
+
+    public LazyECPoint(ECPoint point, boolean compressed) {
         this.point = checkNotNull(point);
         this.curve = null;
         this.bits = null;
+        this.compressed = compressed;
     }
 
     public ECPoint get() {
@@ -71,7 +78,7 @@ public class LazyECPoint {
         if (bits != null)
             return Arrays.copyOf(bits, bits.length);
         else
-            return get().getEncoded();
+            return get().getEncoded(compressed);
     }
 
     public boolean isInfinity() {
@@ -98,7 +105,7 @@ public class LazyECPoint {
         if (bits != null)
             return bits[0] == 2 || bits[0] == 3;
         else
-            return get().isCompressed();
+            return compressed;
     }
 
     public ECPoint multiply(BigInteger k) {

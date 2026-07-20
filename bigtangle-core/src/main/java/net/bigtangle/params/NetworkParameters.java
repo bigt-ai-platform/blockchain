@@ -159,7 +159,6 @@ public abstract class NetworkParameters {
 	 * The version number at the start of the network.
 	 */
 	public static final long BLOCK_VERSION_GENESIS = 1;
-	public static final long BLOCK_VERSION_PQ      = 2;
 
 	/**
 	 * A constant shared by the entire network: how large in bytes a block is

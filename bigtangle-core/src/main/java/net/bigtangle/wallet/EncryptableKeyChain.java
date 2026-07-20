@@ -19,7 +19,7 @@
  */
 package net.bigtangle.wallet;
 
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
@@ -32,7 +32,7 @@ import javax.annotation.Nullable;
 public interface EncryptableKeyChain extends KeyChain {
     /**
      * Takes the given password, which should be strong, derives a key from it and then invokes
-     * {@link #toEncrypted(net.bigtangle.crypto.KeyCrypter, org.spongycastle.crypto.params.KeyParameter)} with
+     * {@link #toEncrypted(net.bigtangle.crypto.KeyCrypter, org.bouncycastle.crypto.params.KeyParameter)} with
      * {@link net.bigtangle.crypto.KeyCrypterScrypt} as the crypter.
      *
      * @return The derived key, in case you wish to cache it for future use.
@@ -46,7 +46,7 @@ public interface EncryptableKeyChain extends KeyChain {
     EncryptableKeyChain toEncrypted(KeyCrypter keyCrypter, KeyParameter aesKey);
 
     /**
-     * Decrypts the key chain with the given password. See {@link #toDecrypted(org.spongycastle.crypto.params.KeyParameter)}
+     * Decrypts the key chain with the given password. See {@link #toDecrypted(org.bouncycastle.crypto.params.KeyParameter)}
      * for details.
      */
     EncryptableKeyChain toDecrypted(CharSequence password);
