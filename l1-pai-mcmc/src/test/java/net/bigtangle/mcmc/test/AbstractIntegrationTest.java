@@ -36,11 +36,13 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
+import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
@@ -277,5 +279,26 @@ public abstract class AbstractIntegrationTest {
                 cacheBlockService, objectMapper);
         return new PaiEngine().executeContract(support, networkParameters, block, store,
                 contractid, prevHash, referencedblocks);
+    }
+
+    protected ContractExecutionResult executePaiContract(Block block, BlockStoreInterface store,
+            Token contract, Contractresult prevHash, Set<Sha256Hash> referencedblocks)
+            throws BlockStoreException {
+        ServiceBaseConnect support = new ServiceBaseConnect(serverConfiguration, networkParameters,
+                cacheBlockService, objectMapper);
+        return new PaiEngine().executeContract(support, networkParameters, block, store,
+                contract, prevHash, referencedblocks);
+    }
+
+    protected Token createContractTokenWithClassname(String classname) {
+        TokenKeyValues kvs = new TokenKeyValues();
+        KeyValue kv = new KeyValue();
+        kv.setKey("classname");
+        kv.setValue(classname);
+        kvs.addKeyvalue(kv);
+        Token token = new Token();
+        token.setTokenid(Sha256Hash.create(classname.getBytes()).toString());
+        token.setTokenKeyValues(kvs);
+        return token;
     }
 }

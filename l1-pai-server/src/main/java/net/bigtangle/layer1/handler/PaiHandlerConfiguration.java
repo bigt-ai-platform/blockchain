@@ -13,6 +13,8 @@ public class PaiHandlerConfiguration {
     @PostConstruct
     public void registerHandlers() {
         ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACT_EVENT, PaiStakeHandler::new);
+        ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACT_EVENT, PaiRewardHandler::new);
+        ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACT_EVENT, PaiReputationHandler::new);
         ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL, PaiCancelHandler::new);
     }
 }

@@ -275,7 +275,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey, null);
-		Block confBlock = makeRewardBlock(block1);
+		Block confBlock = makeRewardBlock();
 
 		// Generate two subsequent issuances
 		TokenInfo tokenInfo2 = new TokenInfo();
@@ -300,7 +300,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		boolean hit1 = false;
 		boolean hit2 = false;
-		mcmcService.update(store);
 		for (int i = 0; i < 150; i++) {
 			Pair<BlockWrap, BlockWrap> tips = tipsService.getValidatedBlockPair(store);
 			hit1 |= tips.getLeft().getBlockHash().equals(b1.getHash())

@@ -48,10 +48,12 @@ for db in info_l0 info_order info_contract info_pai; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
+JVM_ARGS=(-DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
+FORK_ARGS=(-Dsurefire.forkCount=1)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
 echo "=== Running core tests (no DB needed) ==="
-mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml"
+mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}"
 echo "=== Core tests passed ==="
 
 echo "=== Building all modules (serial) ==="
@@ -61,11 +63,11 @@ mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
 echo "=== All modules built ==="
 
 echo "=== Running L0 and L1 tests (PAI runs separately to avoid DB connection pressure) ==="
-mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
+mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
-mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
+mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
 ORDER_PID=$!
-mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
+mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
 CONTRACT_PID=$!
 
 EXIT_CODE=0
@@ -77,7 +79,7 @@ if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== L0/order/contract tests passed, running PAI ==="
     # Sequential retry loop for PAI (can be sensitive to DB connection timing)
     for attempt in 1 2 3; do
-        mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
+        mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
         echo "PAI tests attempt $attempt failed, retrying..."
         PAI_OK=false
     done

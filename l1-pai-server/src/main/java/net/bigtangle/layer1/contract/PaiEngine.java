@@ -3,8 +3,10 @@ package net.bigtangle.layer1.contract;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -35,9 +37,11 @@ public class PaiEngine implements ContractExecutor {
 
     private static final String KEY_CLASSNAME = "classname";
 
-    private static final String CLASSNAME_STAKING = "net.bigtangle.server.service.AiStakingContract";
-    private static final String CLASSNAME_REPUTATION = "net.bigtangle.server.service.AiReputationContract";
-    private static final String CLASSNAME_REWARD = "net.bigtangle.server.service.AiRewardContract";
+    public static final String CLASSNAME_STAKING = "net.bigtangle.server.service.AiStakingContract";
+    public static final String CLASSNAME_REPUTATION = "net.bigtangle.server.service.AiReputationContract";
+    public static final String CLASSNAME_REWARD = "net.bigtangle.server.service.AiRewardContract";
+
+    static final long MAX_REPUTATION = 1000L;
 
     @Override
     public ContractExecutionResult executeContract(ContractConnectSupport support,
@@ -55,31 +59,23 @@ public class PaiEngine implements ContractExecutor {
 
         String classname = getValue(KEY_CLASSNAME, contract.getTokenKeyValues());
         if (CLASSNAME_STAKING.equals(classname)) {
-            return stakingContract(support, block, blockStore, contract, prevHash, referencedblocks);
+            return processEvents(support, block, blockStore, contract, prevHash, referencedblocks);
         } else if (CLASSNAME_REPUTATION.equals(classname)) {
-            return reputationContract(support, block, blockStore, contract, prevHash, referencedblocks);
+            return processEvents(support, block, blockStore, contract, prevHash, referencedblocks);
         } else if (CLASSNAME_REWARD.equals(classname)) {
-            return rewardContract(support, networkParameters, block, blockStore, contract, prevHash, referencedblocks);
+            return distributeRewards(support, networkParameters, block, blockStore, contract, prevHash, referencedblocks);
         }
         return null;
     }
 
-    private ContractExecutionResult stakingContract(ContractConnectSupport support,
+    public ContractExecutionResult processEvents(ContractConnectSupport support,
             Block block, BlockStoreInterface store,
             Token contract, Contractresult prevContractresult, Set<Sha256Hash> collectedBlocks)
             throws BlockStoreException {
 
-        byte[] randomness = Utils.xor(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes());
-        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = new TreeMap<>(
-                Comparator.comparing(h -> Sha256Hash.wrap(Utils.xor(h.getBytes(), randomness))));
-
-        if (!Sha256Hash.ZERO_HASH.equals(prevContractresult.getBlockHash())) {
-            toBeSpent.putAll(store.getContractEventPrev(contract.getTokenid(), prevContractresult.getBlockHash()));
-        }
-
+        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = loadEvents(block, store, contract, prevContractresult);
         List<ContractEventCancelInfo> cancels = new ArrayList<>();
         collectEvents(support, collectedBlocks, cancels, toBeSpent, store);
-
         Set<ContractEventRecord> cancelled = cancelEvents(cancels, toBeSpent);
 
         return new ContractExecutionResult(contract.getTokenid(), Sha256Hash.ZERO_HASH, null,
@@ -89,66 +85,41 @@ public class PaiEngine implements ContractExecutor {
                 prevContractresult.getChainlength() + 1);
     }
 
-    private ContractExecutionResult reputationContract(ContractConnectSupport support,
-            Block block, BlockStoreInterface store,
-            Token contract, Contractresult prevContractresult, Set<Sha256Hash> collectedBlocks)
-            throws BlockStoreException {
-
-        byte[] randomness = Utils.xor(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes());
-        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = new TreeMap<>(
-                Comparator.comparing(h -> Sha256Hash.wrap(Utils.xor(h.getBytes(), randomness))));
-
-        if (!Sha256Hash.ZERO_HASH.equals(prevContractresult.getBlockHash())) {
-            toBeSpent.putAll(store.getContractEventPrev(contract.getTokenid(), prevContractresult.getBlockHash()));
-        }
-
-        List<ContractEventCancelInfo> cancels = new ArrayList<>();
-        collectEvents(support, collectedBlocks, cancels, toBeSpent, store);
-
-        Set<ContractEventRecord> cancelled = cancelEvents(cancels, toBeSpent);
-
-        return new ContractExecutionResult(contract.getTokenid(), Sha256Hash.ZERO_HASH, null,
-                prevContractresult.getBlockHash(),
-                getHashSet(cancelled), getHashSet(toBeSpent.values()),
-                block.getTimeSeconds(), new HashSet<>(toBeSpent.values()), collectedBlocks,
-                prevContractresult.getChainlength() + 1);
-    }
-
-    private ContractExecutionResult rewardContract(ContractConnectSupport support,
+    public ContractExecutionResult distributeRewards(ContractConnectSupport support,
             NetworkParameters networkParameters, Block block, BlockStoreInterface store,
             Token contract, Contractresult prevContractresult, Set<Sha256Hash> collectedBlocks)
             throws BlockStoreException {
 
-        byte[] randomness = Utils.xor(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes());
-        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = new TreeMap<>(
-                Comparator.comparing(h -> Sha256Hash.wrap(Utils.xor(h.getBytes(), randomness))));
-
-        if (!Sha256Hash.ZERO_HASH.equals(prevContractresult.getBlockHash())) {
-            toBeSpent.putAll(store.getContractEventPrev(contract.getTokenid(), prevContractresult.getBlockHash()));
-        }
-
+        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = loadEvents(block, store, contract, prevContractresult);
         List<ContractEventCancelInfo> cancels = new ArrayList<>();
         collectEvents(support, collectedBlocks, cancels, toBeSpent, store);
-
         Set<ContractEventRecord> cancelled = cancelEvents(cancels, toBeSpent);
 
-        return new ContractExecutionResult(contract.getTokenid(), Sha256Hash.ZERO_HASH, null,
+        Map<String, BigInteger> perBeneficiary = aggregateByBeneficiary(toBeSpent.values());
+        BigInteger totalReward = sumValue(toBeSpent.values());
+
+        Transaction payoutTx = null;
+        if (totalReward.signum() > 0 && !perBeneficiary.isEmpty()) {
+            payoutTx = buildPayoutTx(networkParameters, perBeneficiary);
+        }
+
+        return new ContractExecutionResult(contract.getTokenid(),
+                payoutTx != null ? payoutTx.getHash() : Sha256Hash.ZERO_HASH, payoutTx,
                 prevContractresult.getBlockHash(),
                 getHashSet(cancelled), getHashSet(toBeSpent.values()),
                 block.getTimeSeconds(), new HashSet<>(toBeSpent.values()), collectedBlocks,
                 prevContractresult.getChainlength() + 1);
     }
 
-    private Set<ContractEventRecord> cancelEvents(List<ContractEventCancelInfo> cancels,
-            TreeMap<Sha256Hash, ContractEventRecord> toBeSpent) {
-        Set<ContractEventRecord> cancelled = new HashSet<>();
-        for (ContractEventCancelInfo c : cancels) {
-            ContractEventRecord removed = toBeSpent.remove(c.getBlockHash());
-            if (removed != null) {
-                cancelled.add(removed);
-            }
+    private TreeMap<Sha256Hash, ContractEventRecord> loadEvents(Block block, BlockStoreInterface store,
+            Token contract, Contractresult prevContractresult) throws BlockStoreException {
+        byte[] randomness = Utils.xor(block.getPrevBlockHash().getBytes(), block.getPrevBranchBlockHash().getBytes());
+        TreeMap<Sha256Hash, ContractEventRecord> toBeSpent = new TreeMap<>(
+                Comparator.comparing(h -> Sha256Hash.wrap(Utils.xor(h.getBytes(), randomness))));
+        if (!Sha256Hash.ZERO_HASH.equals(prevContractresult.getBlockHash())) {
+            toBeSpent.putAll(store.getContractEventPrev(contract.getTokenid(), prevContractresult.getBlockHash()));
         }
-        return cancelled;
+        return toBeSpent;
     }
 
     private void collectEvents(ContractConnectSupport support, Set<Sha256Hash> collectedBlocks,
@@ -173,6 +144,76 @@ public class PaiEngine implements ContractExecutor {
                 cancels.add(info);
             }
         }
+    }
+
+    private Set<ContractEventRecord> cancelEvents(List<ContractEventCancelInfo> cancels,
+            TreeMap<Sha256Hash, ContractEventRecord> toBeSpent) {
+        Set<ContractEventRecord> cancelled = new HashSet<>();
+        for (ContractEventCancelInfo c : cancels) {
+            ContractEventRecord removed = toBeSpent.remove(c.getBlockHash());
+            if (removed != null) {
+                cancelled.add(removed);
+            }
+        }
+        return cancelled;
+    }
+
+    private Map<String, BigInteger> aggregateByBeneficiary(Iterable<ContractEventRecord> records) {
+        Map<String, BigInteger> perBeneficiary = new HashMap<>();
+        for (ContractEventRecord r : records) {
+            perBeneficiary.merge(r.getBeneficiaryAddress(), r.getTargetValue(), BigInteger::add);
+        }
+        return perBeneficiary;
+    }
+
+    private BigInteger sumValue(Iterable<ContractEventRecord> events) {
+        BigInteger total = BigInteger.ZERO;
+        for (ContractEventRecord r : events) {
+            total = total.add(r.getTargetValue());
+        }
+        return total;
+    }
+
+    public static Transaction buildPayoutTx(NetworkParameters networkParameters,
+            Map<String, BigInteger> perBeneficiary) {
+        Transaction tx = new Transaction(networkParameters);
+        for (Map.Entry<String, BigInteger> e : perBeneficiary.entrySet()) {
+            if (e.getValue().signum() > 0) {
+                tx.addOutput(new Coin(e.getValue(), NetworkParameters.BIGTANGLE_TOKENID),
+                        Address.fromBase58(networkParameters, e.getKey()));
+            }
+        }
+        TransactionInput input = TransactionInput.fromScriptBytes(networkParameters, tx,
+                Script.createInputScript(Sha256Hash.ZERO_HASH.getBytes(), Sha256Hash.ZERO_HASH.getBytes()));
+        tx.addInput(input);
+        tx.setMemo(new MemoInfo("pai reward"));
+        return tx;
+    }
+
+    public static Map<String, Long> computeReputationScores(List<ContractEventRecord> allEvents) {
+        Map<String, Long> scores = new HashMap<>();
+        for (ContractEventRecord r : allEvents) {
+            if (r.isSpent()) continue;
+            String addr = r.getBeneficiaryAddress();
+            long current = scores.getOrDefault(addr, 100L);
+            long delta = r.getTargetValue().longValue();
+            long updated = Math.min(MAX_REPUTATION, Math.max(0, current + delta));
+            scores.put(addr, updated);
+        }
+        for (Map.Entry<String, Long> e : scores.entrySet()) {
+            scores.put(e.getKey(), Math.max(0, e.getValue() * 95 / 100));
+        }
+        return scores;
+    }
+
+    public static BigInteger computeTotalStaked(List<ContractEventRecord> events, String providerAddr) {
+        BigInteger total = BigInteger.ZERO;
+        for (ContractEventRecord r : events) {
+            if (providerAddr.equals(r.getBeneficiaryAddress())) {
+                total = total.add(r.getTargetValue());
+            }
+        }
+        return total;
     }
 
     private Set<Sha256Hash> getHashSet(java.util.Collection<ContractEventRecord> records) {

@@ -9,42 +9,94 @@ PAI has no native token — all BIG and custom tokens enter exclusively via brid
 ```
 Layer 0 (settlement, BIG creation)
     │
-    ├─ Bridge peg-in/peg-out
+    ├─ Bridge peg-in / peg-out
     │
     v
-┌──────────────────────────────────┐
-│  PAI L1 (chainId="PAI")          │
-│                                  │
-│  Allowed block types:            │
-│   INITIAL, TRANSFER, BEACON,     │
-│   CROSSTANGLE, CONTRACT_EVENT,   │
-│   CONTRACTEVENT_CANCEL           │
-│                                  │
-│  ┌─ MCMC Consensus ────────────┐ │
-│  │  MCMCService.update()        │ │
-│  │  TipsService (random walk)   │ │
-│  │  RewardService               │ │
-│  └─────────────────────────────┘ │
-│                                  │
-│  ┌─ Contract Layer ───────────┐  │
-│  │  PaiEngine: dispatches to   │  │
-│  │   AiStakingContract          │  │
-│  │   AiReputationContract       │  │
-│  │   AiRewardContract           │  │
-│  └────────────────────────────┘  │
-│                                  │
-│  ┌─ Handlers ─────────────────┐  │
-│  │  PaiStakeHandler (active)   │  │
-│  │  PaiCancelHandler (active)  │  │
-│  └────────────────────────────┘  │
-│                                  │
-│  ┌─ Services ─────────────────┐  │
-│  │  PaiProviderService         │  │
-│  │  PaiRewardService           │  │
-│  │  PaiReputationService       │  │
-│  └────────────────────────────┘  │
-└──────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  PAI L1 (chainId="PAI")              │
+│                                      │
+│  Allowed block types:                │
+│   INITIAL (bridge deposits)          │
+│   TRANSFER (stake, receipts, reward) │
+│   BEACON (identical to other L1s)    │
+│   CROSSTANGLE (bridge sync)          │
+│   CONTRACT_EVENT                     │
+│   CONTRACTEVENT_CANCEL               │
+│                                      │
+│  ┌─ MCMC Consensus ────────────────┐ │
+│  │  DagRewardService (reward chain) │ │
+│  │  TipsService (random walk)       │ │
+│  │  MCMCService.update()            │ │
+│  └─────────────────────────────────┘ │
+│                                      │
+│  ┌─ Contract Layer ───────────────┐  │
+│  │  PaiEngine dispatches to:       │  │
+│  │   AiStakingContract              │  │
+│  │   AiReputationContract           │  │
+│  │   AiRewardContract               │  │
+│  └────────────────────────────────┘  │
+│                                      │
+│  ┌─ Handlers ─────────────────────┐  │
+│  │  PaiStakeHandler (active)       │  │
+│  │  PaiCancelHandler (active)      │  │
+│  └────────────────────────────────┘  │
+│                                      │
+│  ┌─ Services ─────────────────────┐  │
+│  │  PaiProviderService              │  │
+│  │  ProviderRewardService           │  │
+│  │  PaiReputationService            │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
 ```
+
+### Transaction Flow
+
+```
+CONTRACT_EVENT (user submit)
+      │
+      ▼
+PaiStakeHandler
+      │
+      ▼
+PaiEngine.dispatch()
+      │
+      ▼
+AiStakingContract (or AiReputationContract / AiRewardContract)
+      │
+      ▼
+State update (DB)
+```
+
+### State Ownership
+
+| Data | Owner | Storage |
+|------|-------|---------|
+| Provider metadata (url, key, status) | `PaiProviderService` | DB table |
+| Stake balance per provider | `AiStakingContract` | Contract state |
+| Reputation score per provider | `AiReputationContract` | Contract state |
+| Reward calculation results | `ProviderRewardService` | DB table |
+
+`PaiProviderService` owns provider identity and status; contracts own the economic and scoring state.
+
+## Allowed Block Types
+
+| Type | Purpose |
+|------|---------|
+| `INITIAL` | Bridge peg-in deposits and account initialization |
+| `TRANSFER` | Stake movement, bridge receipts, reward payouts |
+| `BEACON` | Identical to other L1 beacons — no AI-specific metadata |
+| `CROSSTANGLE` | Bridge synchronization only (not cross-L1 messaging) |
+| `CONTRACT_EVENT` | Staking, reputation, and reward triggers |
+| `CONTRACTEVENT_CANCEL` | Cancel a pending contract event |
+
+`TRANSFER` is required for stake movement, bridge receipts, and reward payouts.
+
+## Disallowed Block Types
+
+- `BLOCKTYPE_TOKEN_CREATION` — L0-only
+- `BLOCKTYPE_ORDER_OPEN` / `ORDER_CANCEL` — order-match L1 only
+- `BLOCKTYPE_CONTRACT_EXECUTE` — contract L1 only
+- `BLOCKTYPE_GOVERNANCE` — L0-only
 
 ## Modules
 
@@ -63,6 +115,8 @@ Layer 0 (settlement, BIG creation)
 | `CLASSNAME_REPUTATION` | `AiReputationContract` | Provider reputation scoring |
 | `CLASSNAME_REWARD` | `AiRewardContract` | Reward distribution to providers |
 
+`AiRewardContract` is triggered via `CONTRACT_EVENT` (not automatic).
+
 ## Block Type Handlers
 
 | Handler | Block Type | Status |
@@ -70,12 +124,62 @@ Layer 0 (settlement, BIG creation)
 | `PaiStakeHandler` | `CONTRACT_EVENT` | Active |
 | `PaiCancelHandler` | `CONTRACTEVENT_CANCEL` | Active |
 
-## Disallowed Block Types
+## Staking Lifecycle
 
-- `BLOCKTYPE_TOKEN_CREATION` — L0-only
-- `BLOCKTYPE_ORDER_OPEN` / `ORDER_CANCEL` — order-match L1 only
-- `BLOCKTYPE_CONTRACT_EXECUTE` — contract L1 only
-- `BLOCKTYPE_GOVERNANCE` — L0-only
+```
+                 Bridge peg-in (BIG enters PAI)
+                           │
+                           v
+                    Provider stakes
+                           │
+                           v
+                     ┌───────────┐
+                     │  staking  │
+                     └───────────┘
+                           │
+                           v
+                     ┌───────────┐
+                     │  active   │ ← reputation updates, reward earning
+                     └───────────┘
+                           │
+                           v
+                   Unstake request
+                           │
+                           v
+                   ┌───────────────┐
+                   │  unlock period│  (configurable duration)
+                   └───────────────┘
+                           │
+                           v
+                     ┌───────────┐
+                     │  withdraw │ → Bridge peg-out (BIG leaves PAI)
+                     └───────────┘
+```
+
+## Reputation
+
+`AiReputationContract` maintains per-provider scores:
+
+| Property | Detail |
+|----------|--------|
+| Score range | 0 – 1000 |
+| Initial | 100 |
+| Update trigger | Completed jobs (via `CONTRACT_EVENT`) |
+| Weighting | Stake-weighted — higher stake amplifies score changes |
+| Decay | 5 % per month without activity |
+| Persistence | Stored per provider in contract state, survives restarts |
+
+## Reward Model
+
+Rewards redistribute bridged BIG (or supported tokens); the chain does not mint new assets.
+
+| Property | Detail |
+|----------|--------|
+| Funding source | Bridge-funded (fees collected on L0, pegged in as reward pool) |
+| Trigger | `CONTRACT_EVENT` submitted to `AiRewardContract` |
+| Calculation | Proportion of reputation score × stake amount |
+| Emission model | No inflation — fixed pool, distributed periodically |
+| Payout | `TRANSFER` block from reward pool to provider address |
 
 ## Network Parameters
 
@@ -125,6 +229,39 @@ mvn -pl l1-pai-server  spring-boot:run
 mvn -pl l1-pai-mcmc   spring-boot:run
 ```
 
+## Lifecycle Diagram
+
+```
+Bridge Peg-In (INITIAL / TRANSFER)
+      │
+      v
+Provider receives BIG
+      │
+      v
+Stake CONTRACT_EVENT
+      │
+      v
+Provider Active (earning, reputation updates)
+      │
+      v
+Reputation Updates (CONTRACT_EVENT)
+      │
+      v
+Reward Distribution (CONTRACT_EVENT → TRANSFER)
+      │
+      v
+Unstake Request (CONTRACTEVENT_CANCEL)
+      │
+      v
+Unlock Period
+      │
+      v
+Withdraw (TRANSFER)
+      │
+      v
+Bridge Peg-Out (CROSSTANGLE)
+```
+
 ## Test Coverage
 
 12 tests in `l1-pai-mcmc/src/test/`, all passing:
@@ -138,3 +275,13 @@ mvn -pl l1-pai-mcmc   spring-boot:run
 | `PaiReputationTest` | 2 | DAG branching |
 | `PaiBenchmarkTest` | 2 | Performance |
 | `Layer1BlockTypeScopingTest` | 1 | Block type validation |
+
+### Suggested Additional Tests
+
+| Test | Purpose |
+|------|---------|
+| Double stake | Same provider submits duplicate stake — reject |
+| Reputation rollback | Event → cancel → score restored |
+| Invalid bridge asset | Unsupported token peg-in → reject |
+| Reward determinism | Multiple MCMC nodes compute identical allocations |
+| Unauthorized contract | `CLASSNAME_UNKNOWN` → fail |
