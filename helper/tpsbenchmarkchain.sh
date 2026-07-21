@@ -90,6 +90,7 @@ mcmc=$(grep -oP 'MCMC update:\s+\K[\d.]+' "$REPORT" | tail -1)
 proto=$(grep -oP 'Prototype:\s+\K[\d.]+' "$REPORT" | tail -1)
 chainupd=$(grep -oP 'Chain update:\s+\K[\d.]+' "$REPORT" | tail -1)
 total=$(grep -oP 'Total wall:\s+\K[\d.]+' "$REPORT" | tail -1)
+tps=$(grep -oP 'Build TPS:\s+\K[\d.]+' "$REPORT" | tail -1)
 
 if [ -z "$mcmc" ]; then
     echo -e "${RED}No MCMC metric found — benchmark may have failed.${NC}"
@@ -100,12 +101,17 @@ fi
 echo ""
 printf "  %-20s %s\n" "Configuration:" "${blocks} blocks × ${txpb} tx = ${totaltx} total"
 echo ""
-printf "  %-20s %12s\n" "Phase" "Time (ms)"
-printf "  %-20s %12s\n" "────────────────────" "────────────"
-printf "  %-20s %12s\n" "Chain build" "${build:-N/A}"
-printf "  %-20s %12s\n" "MCMC update" "${mcmc:-N/A}"
-printf "  %-20s %12s\n" "Prototype" "${proto:-N/A}"
-printf "  %-20s %12s\n" "Chain update" "${chainupd:-N/A}"
-printf "  %-20s %12s\n" "Total wall" "${total:-N/A}"
+printf "  %-20s %12s  %s\n" "Phase" "Time (ms)" "TPS"
+printf "  %-20s %12s  %s\n" "────────────────────" "────────────" "────────"
+if [ -n "$build" ] && [ "$build" != "0" ]; then
+    build_tps=$(echo "scale=0; $totaltx * 1000 / $build" | bc 2>/dev/null || echo "-")
+else
+    build_tps="-"
+fi
+printf "  %-20s %12s  %s\n" "Chain build" "${build:-N/A}" "${build_tps} tx/s"
+printf "  %-20s %12s  %s\n" "MCMC update" "${mcmc:-N/A}" "-"
+printf "  %-20s %12s  %s\n" "Prototype" "${proto:-N/A}" "-"
+printf "  %-20s %12s  %s\n" "Chain update" "${chainupd:-N/A}" "-"
+printf "  %-20s %12s  %s\n" "Total wall" "${total:-N/A}" "${tps:-N/A} tx/s"
 echo ""
-log "Benchmark passed — ${blocks} blocks, ${mcmc} ms MCMC"
+log "Benchmark passed — ${blocks} blocks, ${mcmc} ms MCMC, ${tps:-0} tx/s"

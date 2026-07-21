@@ -177,6 +177,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         log.info("Prototype:    {} ms", protoMs);
         log.info("Chain update: {} ms", chainUpdMs);
         log.info("Total wall:   {} ms", wallMs);
+        log.info("Build TPS:    {} tx/s", wallMs > 0 ? (long) ((double) coinIdx / wallMs * 1000) : 0);
         log.info("==============================================");
         assertTrue(coinIdx > 0, "Must have successful transactions");
     }
