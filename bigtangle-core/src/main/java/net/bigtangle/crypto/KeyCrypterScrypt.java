@@ -23,7 +23,7 @@ package net.bigtangle.crypto;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Stopwatch;
-import com.lambdaworks.crypto.SCrypt;
+import org.bouncycastle.crypto.generators.SCrypt;
 
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.EncryptionType;
@@ -159,7 +159,7 @@ public class KeyCrypterScrypt implements KeyCrypter {
             }
 
             final Stopwatch watch = Stopwatch.createStarted();
-            byte[] keyBytes = SCrypt.scrypt(passwordBytes, salt, (int) scryptParameters.getN(), scryptParameters.getR(), scryptParameters.getP(), KEY_LENGTH);
+            byte[] keyBytes = SCrypt.generate(passwordBytes, salt, (int) scryptParameters.getN(), scryptParameters.getR(), scryptParameters.getP(), KEY_LENGTH);
             watch.stop();
            // logStack();
             log.info("Deriving key took {} for {} scrypt iterations.", watch, scryptParameters.getN());
