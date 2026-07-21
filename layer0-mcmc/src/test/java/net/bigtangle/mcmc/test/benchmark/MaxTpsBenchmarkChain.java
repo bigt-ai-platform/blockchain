@@ -2,12 +2,18 @@ package net.bigtangle.mcmc.test.benchmark;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +35,7 @@ import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
+import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
@@ -55,24 +62,23 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testChainMcmc() throws Exception {
-        // Configurable: number of blocks and transactions per block
-        int numBlocks = Integer.parseInt(System.getProperty("chain.blocks", "100"));
-        int txPerBlock = Integer.parseInt(System.getProperty("chain.txPerBlock", "10"));
-        int totalTx = numBlocks * txPerBlock;
+    public void testChainRealtime() throws Exception {
+        int totalTx = Integer.parseInt(System.getProperty("chain.tx", "50000"));
+        int clients = Integer.parseInt(System.getProperty("chain.clients", "200"));
+        int batchSize = Integer.parseInt(System.getProperty("chain.batchSize", "250"));
+        int mcmcInterval = Integer.parseInt(System.getProperty("chain.mcmcInterval", "10"));
 
         log.info("==============================================");
-        log.info("  Chain MCMC Benchmark");
+        log.info("  Real-Time Chain Benchmark");
         log.info("==============================================");
-        log.info("Blocks:       {}", numBlocks);
-        log.info("Tx/block:     {}", txPerBlock);
         log.info("Total tx:     {}", totalTx);
+        log.info("Clients:      {}", clients);
+        log.info("Batch size:   {}", batchSize);
+        log.info("MCMC every:   {} blocks", mcmcInterval);
 
-        // Create wallet keys: one per transaction
         List<ECKey> walletKeys = new ArrayList<>();
         for (int i = 0; i < totalTx; i++) walletKeys.add(new ECKey());
 
-        // Fund all wallets from genesis
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
                 ECKey.fromPrivate(Utils.HEX.decode(genesisPriv)), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
@@ -83,7 +89,6 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
                 NetworkParameters.BIGTANGLE_TOKENID, "fund");
         log.info("Funding sent to {} wallets", walletKeys.size());
 
-        // Batch funding into a block and connect it
         Sha256Hash fundBlockHash;
         {
             BlockStoreInterface bs = storeService.getStore();
@@ -98,7 +103,6 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
             blockGraph.updateChain(false);
         }
 
-        // Retrieve funding UTXOs
         Sha256Hash fundTxHash = fundingTx.getHash();
         Map<String, FreeStandingTransactionOutput> addrToCoin = new HashMap<>();
         for (int i = 0; i < fundingTx.getOutputs().size(); i++) {
@@ -119,94 +123,107 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         ECKey finalRecipient = new ECKey();
         String finalAddr = finalRecipient.toAddress(networkParameters).toString();
 
-        // Track cumulative per-phase times across ALL blocks
-        long cumSubmitNs = 0, cumBatchNs = 0, cumMcmcNs = 0, cumProtoNs = 0, cumChainNs = 0;
-        int submittedTx = 0;
+        // Phase 1: Parallel submit all tx to mempool (like real usage)
+        log.info("Submitting {} transactions via {} parallel clients...", totalTx, clients);
+        AtomicInteger ok = new AtomicInteger(0);
+        AtomicInteger fail = new AtomicInteger(0);
+        ExecutorService pool = Executors.newFixedThreadPool(clients);
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void>[] futures = new CompletableFuture[clients];
+        int txPerClient = totalTx / clients;
 
-        long wallStart = System.nanoTime();
-        for (int blockNum = 0; blockNum < numBlocks; blockNum++) {
-            // Phase 1: Submit transactions to mempool
-            long t0 = System.nanoTime();
-            for (int j = 0; j < txPerBlock; j++) {
-                int idx = blockNum * txPerBlock + j;
-                if (idx >= allCoins.size()) break;
-                FreeStandingTransactionOutput coin = allCoins.get(idx);
-                ECKey wk = walletKeys.get(idx);
-                Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
-                Transaction tx = w.payToListTransaction(null,
-                        new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
-                        NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
-                if (tx != null) {
-                    w.submitTransaction(tx);
-                    submittedTx++;
+        long submitWallStart = System.nanoTime();
+        for (int c = 0; c < clients; c++) {
+            int startIdx = c * txPerClient;
+            futures[c] = CompletableFuture.runAsync(() -> {
+                try {
+                    List<Transaction> txs = new ArrayList<>();
+                    for (int i = 0; i < txPerClient; i++) {
+                        int idx = startIdx + i;
+                        ECKey wk = walletKeys.get(idx);
+                        FreeStandingTransactionOutput coin = allCoins.get(idx);
+                        Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
+                        Transaction tx = w.payToListTransaction(null,
+                                new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
+                                NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
+                        if (tx != null) txs.add(tx);
+
+                        if (txs.size() == batchSize || i == txPerClient - 1) {
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            DataOutputStream dos = new DataOutputStream(baos);
+                            for (Transaction bt : txs) {
+                                byte[] btBytes = bt.bitcoinSerialize();
+                                dos.writeInt(btBytes.length);
+                                dos.write(btBytes);
+                            }
+                            dos.close();
+                            OkHttp3Util.post(contextRoot + "submitTransactions", baos.toByteArray());
+                            txs.clear();
+                        }
+                    }
+                    ok.addAndGet(txPerClient);
+                } catch (Exception e) {
+                    fail.addAndGet(txPerClient);
+                    log.error("Client failed", e);
                 }
-            }
-            cumSubmitNs += System.nanoTime() - t0;
+            }, pool);
+        }
+        CompletableFuture.allOf(futures).get(10, TimeUnit.MINUTES);
+        pool.shutdownNow();
+        long submitWallMs = (System.nanoTime() - submitWallStart) / 1_000_000;
+        log.info("Submit done: {} ms (OK {}, fail {})", submitWallMs, ok.get(), fail.get());
 
-            // Phase 2: Batch mempool into block
+        // Phase 2: Drain mempool into blocks, MCMC every mcmcInterval blocks
+        log.info("Draining mempool into blocks, MCMC every {} blocks...", mcmcInterval);
+        long cumBatchNs = 0, cumMcmcNs = 0, cumProtoNs = 0, cumChainNs = 0;
+        int blocksCreated = 0;
+
+        long drainStart = System.nanoTime();
+        while (true) {
             long t1 = System.nanoTime();
-            blockSaveService.batchBlocksFromMempool();
+            int batched = blockSaveService.batchBlocksFromMempool();
             cumBatchNs += System.nanoTime() - t1;
+            if (batched == 0) break;
+            blocksCreated++;
 
-            // Phase 3: MCMC update
             long t2 = System.nanoTime();
-            mcmcService.update(store);
-            cumMcmcNs += System.nanoTime() - t2;
-
-            // Phase 4: Prototype
-            long t3 = System.nanoTime();
-            mcmcService.calcNewBlockPrototype(store);
-            cumProtoNs += System.nanoTime() - t3;
-
-            // Phase 5: Chain update
-            long t4 = System.nanoTime();
             blockGraph.updateChain(false);
-            cumChainNs += System.nanoTime() - t4;
+            cumChainNs += System.nanoTime() - t2;
 
-            if (blockNum > 0 && blockNum % 50 == 0) {
-                long elapsed = (System.nanoTime() - wallStart) / 1_000_000;
-                log.info("  Block {}/{} — {} ms elapsed, {} tx submitted", blockNum, numBlocks, elapsed, submittedTx);
+            if (blocksCreated % mcmcInterval == 0) {
+                long t3 = System.nanoTime();
+                mcmcService.update(store);
+                cumMcmcNs += System.nanoTime() - t3;
+
+                long t4 = System.nanoTime();
+                mcmcService.calcNewBlockPrototype(store);
+                cumProtoNs += System.nanoTime() - t4;
             }
         }
-        long wallMs = (System.nanoTime() - wallStart) / 1_000_000;
-
-        double submitAvg = txPerBlock > 0 ? (double) cumSubmitNs / numBlocks / 1_000_000 : 0;
-        double batchAvg = (double) cumBatchNs / numBlocks / 1_000_000;
-        double mcmcAvg = (double) cumMcmcNs / numBlocks / 1_000_000;
-        double protoAvg = (double) cumProtoNs / numBlocks / 1_000_000;
-        double chainAvg = (double) cumChainNs / numBlocks / 1_000_000;
-        double tps = wallMs > 0 ? (double) submittedTx / wallMs * 1000 : 0;
+        long drainWallMs = (System.nanoTime() - drainStart) / 1_000_000;
+        long totalWallMs = (System.nanoTime() - submitWallStart) / 1_000_000;
+        double tps = totalWallMs > 0 ? (double) ok.get() / totalWallMs * 1000 : 0;
 
         log.info("");
         log.info("==============================================");
-        log.info("  Chain Throughput Benchmark");
+        log.info("  Real-Time Chain Results");
         log.info("==============================================");
-        log.info("Blocks:        {}", numBlocks);
-        log.info("Tx/block:      {}", txPerBlock);
-        log.info("Total tx:      {}", submittedTx);
-        log.info("Total wall:    {} ms", wallMs);
+        log.info("Total tx:      {} (OK {}, fail {})", ok.get() + fail.get(), ok.get(), fail.get());
+        log.info("Blocks:        {}", blocksCreated);
+        log.info("MCMC interval: {} blocks", mcmcInterval);
+        log.info("Submit wall:   {} ms", submitWallMs);
+        log.info("Drain wall:    {} ms", drainWallMs);
+        log.info("Total wall:    {} ms", totalWallMs);
         log.info("Throughput:    {} tx/s", (long) tps);
         log.info("");
-        log.info("  Phase           Total (ms)  Avg/block (ms)  % of wall");
-        log.info("  -------------  -----------  --------------  --------");
-        long cumTotal = cumSubmitNs + cumBatchNs + cumMcmcNs + cumProtoNs + cumChainNs;
-        long cumTotalMs = cumTotal / 1_000_000;
-        log.info("  Submit          {}             {}               {}%",
-                cumSubmitNs / 1_000_000, cumSubmitNs / numBlocks / 1_000_000,
-                cumTotalMs > 0 ? cumSubmitNs / 1_000_000 * 100 / cumTotalMs : 0);
-        log.info("  Batch           {}             {}               {}%",
-                cumBatchNs / 1_000_000, cumBatchNs / numBlocks / 1_000_000,
-                cumTotalMs > 0 ? cumBatchNs / 1_000_000 * 100 / cumTotalMs : 0);
-        log.info("  MCMC update     {}             {}               {}%",
-                cumMcmcNs / 1_000_000, cumMcmcNs / numBlocks / 1_000_000,
-                cumTotalMs > 0 ? cumMcmcNs / 1_000_000 * 100 / cumTotalMs : 0);
-        log.info("  Prototype       {}             {}               {}%",
-                cumProtoNs / 1_000_000, cumProtoNs / numBlocks / 1_000_000,
-                cumTotalMs > 0 ? cumProtoNs / 1_000_000 * 100 / cumTotalMs : 0);
-        log.info("  Chain update    {}             {}               {}%",
-                cumChainNs / 1_000_000, cumChainNs / numBlocks / 1_000_000,
-                cumTotalMs > 0 ? cumChainNs / 1_000_000 * 100 / cumTotalMs : 0);
+        log.info("  Phase            Total (ms)");
+        log.info("  ---------------  -----------");
+        log.info("  Submit           {}", submitWallMs);
+        log.info("  Batch (cum)      {}", cumBatchNs / 1_000_000);
+        log.info("  MCMC (cum)       {}", cumMcmcNs / 1_000_000);
+        log.info("  Prototype (cum)  {}", cumProtoNs / 1_000_000);
+        log.info("  Chain (cum)      {}", cumChainNs / 1_000_000);
         log.info("==============================================");
-        assertTrue(submittedTx > 0, "Must have successful transactions");
+        assertTrue(ok.get() > 0, "Must have successful payments");
     }
 }
