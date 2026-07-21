@@ -10,8 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
@@ -51,9 +49,6 @@ public class AnchorService {
 
     @Autowired
     private CacheBlockPrototypeService cacheBlockPrototypeService;
-
-    @Autowired
-    private ObjectMapper jsonmapper;
 
     public void postAnchor(BlockStoreInterface store) throws Exception {
         if (!anchorConfiguration.isActive()) {
