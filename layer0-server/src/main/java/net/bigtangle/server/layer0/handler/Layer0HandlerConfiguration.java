@@ -26,7 +26,6 @@ public class Layer0HandlerConfiguration {
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_BEACON, RewardHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_TRANSFER, NoOpConfirmHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CROSSTANGLE, () -> new L0AnchorHandler(anchorService));
-		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_GOVERNANCE, NoOpConfirmHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_INITIAL, NoOpConfirmHandler::new);
 	}
 }
