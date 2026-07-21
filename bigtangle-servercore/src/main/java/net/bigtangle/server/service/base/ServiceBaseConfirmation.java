@@ -64,6 +64,7 @@ import net.bigtangle.script.Script;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
+import net.bigtangle.server.core.ConflictPoint;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.service.base.handler.ContractConnectSupport;
 import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
@@ -82,6 +83,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	private static final long NoConflict = -10;
 	private static final long ConflictWithConfirmed = -5;
+
+	// Per-MCMC-cycle cache for conflict checks: UTXO key → result.
+	// Avoids re-checking the same 50k UTXOs across multiple eligibility calls.
+	private static final ThreadLocal<Map<String, Long>> conflictCache =
+			ThreadLocal.withInitial(HashMap::new);
+
+	public static void clearConflictCache() {
+		conflictCache.get().clear();
+	}
 
 	public ServiceBaseConfirmation(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
@@ -388,10 +398,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 */
 	public long hasConflictDependencyMilestone(ConflictCandidate c, boolean checkMilestone, BlockStoreInterface store)
 			throws BlockStoreException {
+		Map<String, Long> cache = conflictCache.get();
 		SpentBlockData s;
 		switch (c.getConflictPoint().getType()) {
 		case TXOUT:
-			return checkUTXOSpent(c, checkMilestone, store);
+			TransactionOutPoint op = c.getConflictPoint().getConnectedOutpoint();
+			String key = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
+			Long cached = cache.get(key);
+			if (cached != null) return cached;
+			long txoutResult = checkUTXOSpent(c, checkMilestone, store);
+			cache.put(key, txoutResult);
+			return txoutResult;
 		case TOKENISSUANCE:
 			final Token connectedToken = c.getConflictPoint().getConnectedToken();
 			if (connectedToken.getTokenindex() == 0) {
@@ -594,19 +611,71 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * chained execution or the input/prev is not confirmed.
 	 */
 	public boolean findBlockWithSpentOrUnconfirmedInputs(Set<BlockWrap> blocks, BlockStoreInterface store) {
-		// Get all conflict candidates in blocks
-		Stream<ConflictCandidate> candidates = blocks.stream().map(BlockWrap::toConflictCandidates)
-				.flatMap(Collection::stream);
-
-		// Find conflict candidates whose used outputs are already spent and confirmed
-		return candidates.anyMatch((ConflictCandidate c) -> {
+		// Collect all TXOUT candidates, grouped by (blockhash, txhash) for batch DB query
+		List<ConflictCandidate> nonTxCandidates = new ArrayList<>();
+		Map<String, List<ConflictCandidate>> txCandidatesByKey = new HashMap<>();
+		for (BlockWrap bw : blocks) {
+			for (ConflictCandidate c : bw.toConflictCandidates()) {
+				if (c.getConflictPoint().getType() == ConflictPoint.ConflictType.TXOUT) {
+					TransactionOutPoint op = c.getConflictPoint().getConnectedOutpoint();
+					String groupKey = op.getBlockHash() + ":" + op.getTxHash();
+					txCandidatesByKey.computeIfAbsent(groupKey, k -> new ArrayList<>()).add(c);
+				} else {
+					nonTxCandidates.add(c);
+				}
+			}
+		}
+		// Batch-query each (blockhash, txhash) group
+		Map<String, Long> cache = conflictCache.get();
+		for (Map.Entry<String, List<ConflictCandidate>> entry : txCandidatesByKey.entrySet()) {
+			List<ConflictCandidate> group = entry.getValue();
+			TransactionOutPoint first = group.get(0).getConflictPoint().getConnectedOutpoint();
+			Sha256Hash blockHash = first.getBlockHash();
+			Sha256Hash txHash = first.getTxHash();
+			List<Long> indices = group.stream()
+					.map(c -> c.getConflictPoint().getConnectedOutpoint().getIndex())
+					.collect(Collectors.toList());
+			Map<Long, UTXO> utxos;
 			try {
-				long m = hasConflictDependencyMilestone(c, false, store);  
-				return hasConflictDependency(m, false );
+				utxos = store.getTransactionOutputs(blockHash, txHash, indices);
+			} catch (BlockStoreException e) {
+				continue;
+			}
+			for (ConflictCandidate c : group) {
+				long idx = c.getConflictPoint().getConnectedOutpoint().getIndex();
+				String cacheKey = "TXOUT:" + blockHash + ":" + txHash + ":" + idx;
+				UTXO utxo = utxos.get(idx);
+				if (utxo == null) {
+					cache.put(cacheKey, -10L);
+				} else {
+					boolean spentByOther = utxo.getSpenderBlockHash() != null
+							&& !c.getBlock().getBlockHash().equals(utxo.getSpenderBlockHash())
+							&& utxo.isSpent();
+					long result = spentByOther ? -5L : (utxo.isConfirmed() ? -10L : -10L);
+					cache.put(cacheKey, result);
+				}
+			}
+		}
+		// Process all candidates: TXOUT use cache, others use individual calls
+		for (ConflictCandidate c : nonTxCandidates) {
+			try {
+				long m = hasConflictDependencyMilestone(c, false, store);
+				if (hasConflictDependency(m, false)) return true;
 			} catch (BlockStoreException e) {
 			}
-			return false;
-		});
+		}
+		for (Map.Entry<String, List<ConflictCandidate>> entry : txCandidatesByKey.entrySet()) {
+			for (ConflictCandidate c : entry.getValue()) {
+				TransactionOutPoint op = c.getConflictPoint().getConnectedOutpoint();
+				String cacheKey = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
+				Long m = cache.get(cacheKey);
+				try {
+					if (m != null && hasConflictDependency(m, false)) return true;
+				} catch (BlockStoreException e) {
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

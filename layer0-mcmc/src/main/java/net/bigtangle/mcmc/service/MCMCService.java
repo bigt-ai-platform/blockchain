@@ -45,6 +45,7 @@ import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.base.ServiceBaseConfirmation;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
@@ -151,6 +152,7 @@ public class MCMCService {
 	private long lastProcessedMaxHeight = -1;
 
 	public void update(BlockStoreInterface store) throws InterruptedException, ExecutionException, BlockStoreException {
+		ServiceBaseConfirmation.clearConflictCache();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
@@ -163,9 +165,7 @@ public class MCMCService {
 			cacheBlockService.evictBlockMCMC();
 			cacheBlockService.evictBlockMCMCObject();
 			cacheBlockService.evictApproverHashes();
-			// Track for next incremental cycle
 			lastProcessedMaxHeight = maxHeight;
-			// generate new
 			calcNewBlockPrototype(store);
 		} catch (Exception e) {
 			log.debug("update  ", e);

@@ -41,7 +41,9 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.crypto.DeterministicKey;
+import net.bigtangle.crypto.EncryptionType;
 import net.bigtangle.crypto.KeyCrypter;
+import net.bigtangle.crypto.ScryptParameters;
 import net.bigtangle.crypto.KeyCrypterException;
 import net.bigtangle.crypto.KeyCrypterScrypt;
 import net.bigtangle.params.NetworkParameters;
@@ -412,7 +414,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	// region Serialization support
 
 	/** Internal use only. */
-	protected List<Key> serializeKeyChainGroupToProtobuf() {
+	protected List<byte[]> serializeKeyChainGroupToProtobuf() {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.serializeToProtobuf();
@@ -546,8 +548,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	public void changePassword(String password, String oldPassword) {
 
-		ScryptParameters SCRYPT_PARAMETERS = ScryptParameters.newBuilder().setP(6).setR(8).setN(32768)
-				.setSalt(new ByteArrayKey(KeyCrypterScrypt.randomSalt())).build();
+		ScryptParameters SCRYPT_PARAMETERS = new ScryptParameters(KeyCrypterScrypt.randomSalt(), 32768, 8, 6);
 		KeyCrypterScrypt scrypt = new KeyCrypterScrypt(SCRYPT_PARAMETERS);
 		KeyParameter aesKey = scrypt.deriveKey(password);
 		if (isEncrypted()) {

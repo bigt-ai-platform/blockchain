@@ -51,7 +51,6 @@ import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceVerifyReward;
-import net.bigtangle.utils.Gzip;
 
 /**
  * <p>
@@ -194,7 +193,7 @@ public class BlockStoreService {
 		try {
 			store.beginDatabaseBatchWrite();
 			ChainBlockQueue chainBlockQueue = new ChainBlockQueue(block.getHash().getBytes(),
-					Gzip.compress(block.unsafeBitcoinSerialize()), block.getLastMiningRewardBlock(), orphan,
+					block.unsafeBitcoinSerialize(), block.getLastMiningRewardBlock(), orphan,
 					block.getTimeSeconds());
 			store.insertChainBlockQueue(chainBlockQueue);
 			store.commitDatabaseBatchWrite();

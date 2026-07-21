@@ -119,6 +119,8 @@ public interface BlockStoreInterface {
 	 */
 	UTXO getTransactionOutput(Sha256Hash blockHash, Sha256Hash txHash, long index) throws BlockStoreException;
 
+	Map<Long, UTXO> getTransactionOutputs(Sha256Hash blockHash, Sha256Hash hash, Collection<Long> indices) throws BlockStoreException;
+
 	/**
 	 * Adds a {@link net.bigtangle.core.UTXO} to the list of unspent
 	 * TransactionOutputs

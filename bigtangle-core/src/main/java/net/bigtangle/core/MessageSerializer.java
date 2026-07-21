@@ -28,7 +28,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 import net.bigtangle.exception.ProtocolException;
-import net.bigtangle.utils.Gzip;
 
 /**
  * Generic interface for classes which serialize/deserialize messages.
@@ -69,8 +68,7 @@ public abstract class MessageSerializer {
 	 * @throws IOException
 	 */
 	public final Block makeZippedBlock(byte[] payloadBytes) throws ProtocolException, IOException {
-		byte[] unzipped = Gzip.decompressOut(payloadBytes);
-		return makeBlock(unzipped, 0, unzipped.length);
+		return makeBlock(payloadBytes, 0, payloadBytes.length);
 	}
 
 	/**
@@ -83,8 +81,8 @@ public abstract class MessageSerializer {
 		if (inputStream == null) {
 			return null; // Return null if no value available.
 		}
-		byte[] unzipped = Gzip.decompressOutStream(inputStream);
-		return makeBlock(unzipped, 0, unzipped.length);
+		byte[] raw = inputStream.readAllBytes();
+		return makeBlock(raw, 0, raw.length);
 	}
 
 	/**

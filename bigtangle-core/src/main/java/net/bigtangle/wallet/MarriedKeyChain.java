@@ -26,6 +26,7 @@ import static com.google.common.collect.Lists.newArrayList;
 
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -221,18 +222,8 @@ public class MarriedKeyChain extends DeterministicKeyChain {
     }
 
     @Override
-    public List<Protos.Key> serializeToProtobuf() {
-        List<Protos.Key> result = newArrayList();
-        lock.lock();
-        try {
-            for (DeterministicKeyChain chain : followingKeyChains) {
-                result.addAll(chain.serializeMyselfToProtobuf());
-            }
-            result.addAll(serializeMyselfToProtobuf());
-        } finally {
-            lock.unlock();
-        }
-        return result;
+    public List<byte[]> serializeToProtobuf() {
+        return new LinkedList<>();
     }
 
     @Override

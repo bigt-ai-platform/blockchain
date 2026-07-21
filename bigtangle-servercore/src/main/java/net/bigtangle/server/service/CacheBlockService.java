@@ -49,7 +49,6 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.UTXOProviderException;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.utils.Gzip;
 import net.bigtangle.utils.Json;
 
 @Service
@@ -86,7 +85,7 @@ public class CacheBlockService {
 	@CachePut(value = "blocksCache", key = "#block.hash")
 	public byte[] cachePutBlock(final Block block, BlockStoreInterface store) throws BlockStoreException {
 		// logger.debug("CachePut " + block.toString());
-		return Gzip.compress(block.unsafeBitcoinSerialize());
+		return block.unsafeBitcoinSerialize();
 	}
 
 	/**

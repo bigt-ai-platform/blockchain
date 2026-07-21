@@ -18,6 +18,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -58,7 +59,6 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.Rating;
 import net.bigtangle.server.service.base.MinioService;
-import net.bigtangle.utils.Gzip;
 
 /**
  * <p>
@@ -802,7 +802,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setBytes(1, block.getHash().getBytes());
 			s.setLong(2, block.getHeight());
 			byte[] rawBlock = block.unsafeBitcoinSerialize();
-			s.setBytes(3, SKIP_GZIP.get() ? rawBlock : Gzip.compress(rawBlock));
+			s.setBytes(3, rawBlock);
 
 			s.setBytes(4, block.getPrevBlockHash().getBytes());
 			s.setBytes(5, block.getPrevBranchBlockHash().getBytes());
@@ -854,17 +854,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	public static boolean isCacheSkipped() {
 		return SKIP_CACHE.get();
-	}
-
-	/** Thread-local flag to skip gzip compression during batch.
-	 *  Batch blocks are transient mempool dumps — gzip adds CPU cost
-	 *  with no benefit since the blocks are never transmitted over the
-	 *  network or archived to MinIO. */
-	private static final ThreadLocal<Boolean> SKIP_GZIP = ThreadLocal.withInitial(() -> false);
-
-	public static AutoCloseable skipGzipForBatch() {
-		SKIP_GZIP.set(true);
-		return () -> SKIP_GZIP.remove();
 	}
 
 	/** Thread-local flag to use PostgreSQL COPY instead of batch INSERT
@@ -939,7 +928,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setLong(4, end);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
-				re.add(Gzip.decompressOut(results.getBytes("block")));
+				re.add(results.getBytes("block"));
 			}
 			return re;
 		} catch (Exception ex) {
@@ -957,7 +946,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setLong(1, heigth);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
-				re.add(Gzip.decompressOut(results.getBytes("block")));
+				re.add(results.getBytes("block"));
 			}
 			return re;
 		} catch (Exception ex) {
@@ -1096,7 +1085,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 		try (PreparedStatement s = getConnection().prepareStatement(SELECT_OUTPUTS_SQL)) {
 			s.setBytes(1, hash.getBytes());
-			// index is actually an unsigned int
 			s.setLong(2, index);
 			s.setBytes(3, blockHash.getBytes());
 			ResultSet results = s.executeQuery();
@@ -1109,6 +1097,38 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			throw new BlockStoreException(ex);
 		}
 
+	}
+
+	@Override
+	public Map<Long, UTXO> getTransactionOutputs(Sha256Hash blockHash, Sha256Hash hash, Collection<Long> indices)
+			throws BlockStoreException {
+		Map<Long, UTXO> result = new HashMap<>();
+		if (indices.isEmpty()) return result;
+		StringBuilder sql = new StringBuilder(
+				"SELECT coinvalue, scriptbytes, coinbase, toaddress, addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND blockhash = ? AND outputindex IN (");
+		Iterator<Long> iter = indices.iterator();
+		while (iter.hasNext()) {
+			iter.next();
+			sql.append("?");
+			if (iter.hasNext()) sql.append(",");
+		}
+		sql.append(")");
+		try (PreparedStatement s = getConnection().prepareStatement(sql.toString())) {
+			int param = 1;
+			s.setBytes(param++, hash.getBytes());
+			s.setBytes(param++, blockHash.getBytes());
+			for (long idx : indices) {
+				s.setLong(param++, idx);
+			}
+			ResultSet rs = s.executeQuery();
+			while (rs.next()) {
+				long idx = rs.getLong("outputindex");
+				result.put(idx, setUTXO(hash, idx, rs));
+			}
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+		return result;
 	}
 
 	protected SpentBlockData setSpentBlock(Sha256Hash blockHash, ResultSet results) throws SQLException {

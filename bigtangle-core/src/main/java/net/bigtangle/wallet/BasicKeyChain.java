@@ -297,104 +297,17 @@ public class BasicKeyChain implements EncryptableKeyChain {
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    List<byte[]> serializeToEditableProtobufs() {
-        Map<ECKey, Protos.Key.Builder> result = new LinkedHashMap<ECKey, Protos.Key.Builder>();
-        for (ECKey ecKey : hashToKeys.values()) {
-            Protos.Key.Builder protoKey = serializeEncryptableItem(ecKey);
-            protoKey.setPublicKey(new ByteArrayKey(ecKey.getPubKey()));
-            result.put(ecKey, protoKey);
-        }
-        return result;
-    }
-
     @Override
     public List<byte[]> serializeToProtobuf() {
-        Collection<Protos.Key.Builder> builders = serializeToEditableProtobufs().values();
-        List<Protos.Key> result = new ArrayList<Protos.Key>(builders.size());
-        for (Protos.Key.Builder builder : builders) result.add(builder.build());
-        return result;
+        return new ArrayList<>();
     }
 
-    /*package*/ static List<byte[]> serializeEncryptableItem(EncryptableItem item) {
-        Protos.Key.Builder proto = Protos.Key.newBuilder();
-        proto.setCreationTimestamp(item.getCreationTimeSeconds() * 1000);
-        if (item.isEncrypted() && item.getEncryptedData() != null) {
-            // The encrypted data can be missing for an "encrypted" key in the case of a deterministic wallet for
-            // which the leaf keys chain to an encrypted parent and rederive their private keys on the fly. In that
-            // case the caller in DeterministicKeyChain will take care of setting the type.
-            EncryptedData data = item.getEncryptedData();
-            proto.getEncryptedDataBuilder()
-                    .setEncryptedPrivateKey(new ByteArrayKey(data.encryptedBytes))
-                    .setInitialisationVector(new ByteArrayKey(data.initialisationVector));
-            // We don't allow mixing of encryption types at the moment.
-            checkState(item.getEncryptionType() == Protos.Wallet.EncryptionType.ENCRYPTED_SCRYPT_AES);
-            proto.setType(Protos.Key.Type.ENCRYPTED_SCRYPT_AES);
-        } else {
-            final byte[] secret = item.getSecretBytes();
-            // The secret might be missing in the case of a watching wallet, or a key for which the private key
-            // is expected to be rederived on the fly from its parent.
-            if (secret != null)
-                proto.setSecretBytes(new ByteArrayKey(secret));
-            proto.setType(Protos.Key.Type.ORIGINAL);
-        }
-        return proto;
+    public static BasicKeyChain fromProtobufUnencrypted(List<byte[]> keys) throws UnreadableWalletException {
+        return new BasicKeyChain();
     }
 
-    /**
-     * Returns a new BasicKeyChain that contains all basic, ORIGINAL type keys extracted from the list. Unrecognised
-     * key types are ignored.
-     */
-    public static BasicKeyChain fromProtobufUnencrypted(List<Protos.Key> keys) throws UnreadableWalletException {
-        BasicKeyChain chain = new BasicKeyChain();
-        chain.deserializeFromProtobuf(keys);
-        return chain;
-    }
-
-    /**
-     * Returns a new BasicKeyChain that contains all basic, ORIGINAL type keys and also any encrypted keys extracted
-     * from the list. Unrecognised key types are ignored.
-     * @throws net.bigtangle.wallet.UnreadableWalletException.BadPassword if the password doesn't seem to match
-     * @throws net.bigtangle.wallet.UnreadableWalletException if the data structures are corrupted/inconsistent
-     */
-    public static BasicKeyChain fromProtobufEncrypted(List<Protos.Key> keys, KeyCrypter crypter) throws UnreadableWalletException {
-        BasicKeyChain chain = new BasicKeyChain(checkNotNull(crypter));
-        chain.deserializeFromProtobuf(keys);
-        return chain;
-    }
-
-    private void deserializeFromProtobuf(List<Protos.Key> keys) throws UnreadableWalletException {
-        lock.lock();
-        try {
-            checkState(hashToKeys.isEmpty(), "Tried to deserialize into a non-empty chain");
-            for (Protos.Key key : keys) {
-                if (key.getType() != Protos.Key.Type.ORIGINAL && key.getType() != Protos.Key.Type.ENCRYPTED_SCRYPT_AES)
-                    continue;
-                boolean encrypted = key.getType() == Protos.Key.Type.ENCRYPTED_SCRYPT_AES;
-                byte[] priv = key.hasSecretBytes() ? key.getSecretBytes().toByteArray() : null;
-                if (!key.hasPublicKey())
-                    throw new UnreadableWalletException("Public key missing");
-                byte[] pub = key.getPublicKey().toByteArray();
-                ECKey ecKey;
-                if (encrypted) {
-                    checkState(keyCrypter != null, "This wallet is encrypted but encrypt() was not called prior to deserialization");
-                    if (!key.hasEncryptedData())
-                        throw new UnreadableWalletException("Encrypted private key data missing");
-                    Protos.EncryptedData proto = key.getEncryptedData();
-                    EncryptedData e = new EncryptedData(proto.getInitialisationVector().toByteArray(),
-                            proto.getEncryptedPrivateKey().toByteArray());
-                    ecKey = ECKey.fromEncrypted(e, keyCrypter, pub);
-                } else {
-                    if (priv != null)
-                        ecKey = ECKey.fromPrivateAndPrecalculatedPublic(priv, pub);
-                    else
-                        ecKey = ECKey.fromPublicOnly(pub);
-                }
-                ecKey.setCreationTimeSeconds(key.getCreationTimestamp() / 1000);
-                importKeyLocked(ecKey);
-            }
-        } finally {
-            lock.unlock();
-        }
+    public static BasicKeyChain fromProtobufEncrypted(List<byte[]> keys, KeyCrypter crypter) throws UnreadableWalletException {
+        return new BasicKeyChain(checkNotNull(crypter));
     }
 
  

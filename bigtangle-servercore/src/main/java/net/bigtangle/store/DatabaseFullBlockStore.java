@@ -69,7 +69,6 @@ import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.server.service.base.MinioService;
-import net.bigtangle.utils.Gzip;
 
 /**
  * <p>
@@ -977,7 +976,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(INSERT_BATCHBLOCK_SQL)) {
 			preparedStatement.setBytes(1, block.getHash().getBytes());
-			preparedStatement.setBytes(2, Gzip.compress(block.bitcoinSerialize()));
+			preparedStatement.setBytes(2, block.bitcoinSerialize());
 			preparedStatement.setTimestamp(3, new java.sql.Timestamp(System.currentTimeMillis()));
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
@@ -1007,7 +1006,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			while (resultSet.next()) {
 				BatchBlock batchBlock = new BatchBlock();
 				batchBlock.setHash(Sha256Hash.wrap(resultSet.getBytes("hash")));
-				batchBlock.setBlock(Gzip.decompressOut(resultSet.getBytes("block")));
+				batchBlock.setBlock(resultSet.getBytes("block"));
 				batchBlock.setInsertTime(resultSet.getDate("inserttime"));
 				list.add(batchBlock);
 			}
@@ -2533,8 +2532,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
-	private ChainBlockQueue setChainBlockQueue(ResultSet resultSet) throws SQLException, IOException {
-		return new ChainBlockQueue(resultSet.getBytes("hash"), Gzip.decompressOut(resultSet.getBytes("block")),
+	private ChainBlockQueue setChainBlockQueue(ResultSet resultSet) throws SQLException {
+		return new ChainBlockQueue(resultSet.getBytes("hash"), resultSet.getBytes("block"),
 				resultSet.getLong("chainlength"), resultSet.getBoolean("orphan"), resultSet.getLong("inserttime"));
 	}
 

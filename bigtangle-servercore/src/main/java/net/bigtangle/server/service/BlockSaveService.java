@@ -75,7 +75,6 @@ public class BlockSaveService {
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
 		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch();
 		     AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
-		     AutoCloseable gzipFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipGzipForBatch();
 		     AutoCloseable copyFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.usePgCopyForBatch()) {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}

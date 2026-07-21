@@ -609,46 +609,24 @@ public class KeyChainGroup implements KeyBag {
 
  
     /** Returns a list of key protobufs obtained by merging the chains. */
-    public List<Protos.Key> serializeToProtobuf() {
-        List<Protos.Key> result;
-        if (basic != null)
-            result = basic.serializeToProtobuf();
-        else
-            result = Lists.newArrayList();
-        for (DeterministicKeyChain chain : chains) {
-            List<Protos.Key> protos = chain.serializeToProtobuf();
-            result.addAll(protos);
-        }
-        return result;
+    public List<byte[]> serializeToProtobuf() {
+        return new LinkedList<>();
     }
 
-    static KeyChainGroup fromProtobufUnencrypted(NetworkParameters params, List<Protos.Key> keys) throws UnreadableWalletException {
+    static KeyChainGroup fromProtobufUnencrypted(NetworkParameters params, List<byte[]> keys) throws UnreadableWalletException {
         return fromProtobufUnencrypted(params, keys, new DefaultKeyChainFactory());
     }
 
-    public static KeyChainGroup fromProtobufUnencrypted(NetworkParameters params, List<Protos.Key> keys, KeyChainFactory factory) throws UnreadableWalletException {
-        BasicKeyChain basicKeyChain = BasicKeyChain.fromProtobufUnencrypted(keys);
-        List<DeterministicKeyChain> chains = DeterministicKeyChain.fromProtobuf(keys, null, factory);
-        EnumMap<KeyChain.KeyPurpose, DeterministicKey> currentKeys = null;
-        if (!chains.isEmpty())
-            currentKeys = createCurrentKeysMap(chains);
-        extractFollowingKeychains(chains);
-        return new KeyChainGroup(params, basicKeyChain, chains, currentKeys, null);
+    public static KeyChainGroup fromProtobufUnencrypted(NetworkParameters params, List<byte[]> keys, KeyChainFactory factory) throws UnreadableWalletException {
+        throw new UnreadableWalletException("Protobuf deserialization removed");
     }
 
-    static KeyChainGroup fromProtobufEncrypted(NetworkParameters params, List<Protos.Key> keys, KeyCrypter crypter) throws UnreadableWalletException {
+    static KeyChainGroup fromProtobufEncrypted(NetworkParameters params, List<byte[]> keys, KeyCrypter crypter) throws UnreadableWalletException {
         return fromProtobufEncrypted(params, keys, crypter, new DefaultKeyChainFactory());
     }
 
-    public static KeyChainGroup fromProtobufEncrypted(NetworkParameters params, List<Protos.Key> keys, KeyCrypter crypter, KeyChainFactory factory) throws UnreadableWalletException {
-        checkNotNull(crypter);
-        BasicKeyChain basicKeyChain = BasicKeyChain.fromProtobufEncrypted(keys, crypter);
-        List<DeterministicKeyChain> chains = DeterministicKeyChain.fromProtobuf(keys, crypter, factory);
-        EnumMap<KeyChain.KeyPurpose, DeterministicKey> currentKeys = null;
-        if (!chains.isEmpty())
-            currentKeys = createCurrentKeysMap(chains);
-        extractFollowingKeychains(chains);
-        return new KeyChainGroup(params, basicKeyChain, chains, currentKeys, crypter);
+    public static KeyChainGroup fromProtobufEncrypted(NetworkParameters params, List<byte[]> keys, KeyCrypter crypter, KeyChainFactory factory) throws UnreadableWalletException {
+        throw new UnreadableWalletException("Protobuf deserialization removed");
     }
  
 

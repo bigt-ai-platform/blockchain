@@ -27,6 +27,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.ECKey;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
@@ -77,20 +78,28 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         for (ECKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
-        Block fb = wrapTransaction(genesisWallet.payToList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund"));
-        if (fb != null) {
-            makeRewardBlock(fb);
-            blockGraph.updateChain(false);
-            mcmcService.update(store);
-            mcmcService.calcNewBlockPrototype(store);
-        }
+        Transaction fundingTx = genesisWallet.payToList(null, funding,
+                NetworkParameters.BIGTANGLE_TOKENID, "fund");
         log.info("Funded {} wallets", walletKeys.size());
 
-        Sha256Hash fundBlockHash = fb.getHash();
-        Sha256Hash fundTxHash = fb.getTransactions().get(0).getHash();
+        // Create a block containing the funding transaction and connect it
+        Sha256Hash fundBlockHash;
+        {
+            BlockStoreInterface bs = storeService.getStore();
+            try {
+                Block proto = cacheBlockPrototypeService.getBlockPrototype(bs);
+                proto.addTransaction(fundingTx);
+                blockSaveService.saveBatchBlock(proto, bs);
+                fundBlockHash = proto.getHash();
+            } finally {
+                bs.close();
+            }
+            blockGraph.updateChain(false);
+        }
+
+        Sha256Hash fundTxHash = fundingTx.getHash();
         Map<String, FreeStandingTransactionOutput> addrToCoin = new HashMap<>();
-        for (int i = 0; i < fb.getTransactions().get(0).getOutputs().size(); i++) {
+        for (int i = 0; i < fundingTx.getOutputs().size(); i++) {
             UTXO utxo = store.getTransactionOutput(fundBlockHash, fundTxHash, i);
             if (utxo != null) {
                 addrToCoin.put(utxo.getAddress(),
