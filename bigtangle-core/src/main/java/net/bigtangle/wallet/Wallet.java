@@ -1385,29 +1385,6 @@ public class Wallet extends WalletBase {
 		return params.getDefaultSerializer().makeBlock(data);
 	}
 
-	public Transaction retryBlock(String hashHex) throws IOException {
-		return retryBlocks(getBlock(hashHex));
-	}
-
-	/*
-	 * if a block is failed due to rating without conflict, it can be retried by
-	 * setting new BlockProtoBlockType.
-	 */
-	public Transaction retryBlocks(Block oldBlock) throws IOException {
-		List<Transaction> txs = oldBlock.getTransactions();
-		if (txs.isEmpty()) {
-			return null;
-		}
-		for (Transaction txn : txs) {
-			submitTransaction(txn);
-		}
-		return txs.get(0);
-	}
-
-	public Transaction rePayBlock(KeyParameter aesKey, String hashHex) throws IOException {
-		return retryBlocks(getBlock(hashHex));
-	}
-
 	public BigDecimal getLastPrice(String tokenid, String basetoken) throws IOException, NoDataException {
 		List<String> tokenids = new ArrayList<>();
 		tokenids.add(tokenid);
