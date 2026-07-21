@@ -32,7 +32,7 @@ import net.bigtangle.params.NetworkParameters;
 
 import java.util.Arrays;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 /**
  * Parses and generates private keys in the form used by the Bitcoin "dumpprivkey" command. This is the private key

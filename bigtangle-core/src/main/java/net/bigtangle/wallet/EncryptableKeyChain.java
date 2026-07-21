@@ -24,7 +24,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterException;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 /**
  * An encryptable key chain is a key-chain that can be encrypted with a user-provided password or AES key.

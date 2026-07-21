@@ -19,7 +19,7 @@
  */
 package net.bigtangle.core;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import net.bigtangle.params.NetworkParameters;
 

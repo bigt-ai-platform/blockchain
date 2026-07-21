@@ -25,7 +25,7 @@ package net.bigtangle.core;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.WrongNetworkException;

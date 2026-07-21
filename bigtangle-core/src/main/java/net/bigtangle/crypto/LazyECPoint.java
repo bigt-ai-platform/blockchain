@@ -22,7 +22,7 @@ import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECFieldElement;
 import org.bouncycastle.math.ec.ECPoint;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.math.BigInteger;
 import java.util.Arrays;
 

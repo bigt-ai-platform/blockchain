@@ -35,7 +35,7 @@ import java.security.SignatureException;
 import java.util.Arrays;
 import java.util.Comparator;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import org.bitcoin.NativeSecp256k1;
 import org.bitcoin.NativeSecp256k1Util;

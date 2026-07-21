@@ -19,7 +19,7 @@
  */
 package net.bigtangle.wallet;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import net.bigtangle.core.ECKey;
 

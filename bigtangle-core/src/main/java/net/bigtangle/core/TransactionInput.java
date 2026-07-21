@@ -27,7 +27,7 @@ import java.io.OutputStream;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;

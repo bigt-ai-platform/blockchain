@@ -29,7 +29,7 @@ import net.bigtangle.crypto.pq.KeyBundle;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;

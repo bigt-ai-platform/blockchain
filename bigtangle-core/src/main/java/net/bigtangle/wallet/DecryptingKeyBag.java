@@ -23,7 +23,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 
 import net.bigtangle.core.ECKey;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;

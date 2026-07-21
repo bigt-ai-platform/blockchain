@@ -6,7 +6,7 @@
 package net.bigtangle.net;
 
 import java.net.InetAddress;
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 /**
  * A factory which generates new {@link StreamConnection}s when a new connection is opened.

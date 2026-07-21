@@ -25,7 +25,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import org.postgresql.copy.CopyIn;
 import org.postgresql.copy.CopyManager;

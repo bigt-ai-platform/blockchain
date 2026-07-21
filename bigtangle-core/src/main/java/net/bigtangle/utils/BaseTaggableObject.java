@@ -20,7 +20,7 @@ package net.bigtangle.utils;
 
 import com.google.common.collect.Maps;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;

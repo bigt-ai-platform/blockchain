@@ -17,7 +17,7 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeSet;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;

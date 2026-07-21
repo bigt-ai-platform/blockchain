@@ -27,7 +27,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import com.google.common.base.Objects;
 

@@ -29,7 +29,7 @@ import net.bigtangle.crypto.*;
 
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.security.SecureRandom;
 import java.util.List;
 

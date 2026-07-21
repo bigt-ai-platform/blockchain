@@ -31,7 +31,7 @@ import net.bigtangle.utils.Base58;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.math.ec.ECPoint;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;

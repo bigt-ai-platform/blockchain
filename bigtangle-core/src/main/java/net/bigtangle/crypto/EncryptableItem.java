@@ -19,7 +19,7 @@
  */
 package net.bigtangle.crypto;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 /**
  * Provides a uniform way to access something that can be optionally encrypted with a

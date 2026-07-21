@@ -5,7 +5,7 @@
 
 package net.bigtangle.server.core;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 
 import com.google.common.base.Objects;
 

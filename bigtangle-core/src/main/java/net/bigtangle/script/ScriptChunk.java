@@ -24,7 +24,7 @@ import com.google.common.base.Objects;
 
 import net.bigtangle.core.Utils;
 
-import javax.annotation.Nullable;
+import jakarta.annotation.Nullable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
