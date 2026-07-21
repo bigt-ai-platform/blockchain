@@ -18,8 +18,8 @@
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<org.slf4j-version>2.0.6</org.slf4j-version>
-		<mysql-version>8.0.18</mysql-version>
-		<jackson.version>2.17.2</jackson.version>
+		<mysql-version>8.0.33</mysql-version>
+		<jackson.version>2.18.3</jackson.version>
 		<org.springframework.boot.version>3.4.4</org.springframework.boot.version>
 		<kafka.version>1.1.0</kafka.version>
 		<junit.jupiter.version>5.11.4</junit.jupiter.version>
@@ -62,7 +62,7 @@
 		<dependency>
 			<groupId>org.json</groupId>
 			<artifactId>json</artifactId>
-			<version>20231013</version>
+			<version>20250107</version>
 		</dependency>
 	</dependencies>
 	<build>
