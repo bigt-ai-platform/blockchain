@@ -39,6 +39,8 @@
 		<module>l1-pai-mcmc</module>
 		<module>l1-nft-server</module>
 		<module>l1-nft-mcmc</module>
+		<module>l1-payment-server</module>
+		<module>l1-payment-mcmc</module>
 
 	</modules>
 	<dependencies>

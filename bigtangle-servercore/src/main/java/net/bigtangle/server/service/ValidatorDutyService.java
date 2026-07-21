@@ -76,7 +76,7 @@ public class ValidatorDutyService {
     }
 
     public void performDuty() throws Exception {
-        if (!scheduleConfiguration.isPosEnabled() || validatorKey == null) {
+        if (validatorKey == null) {
             return;
         }
         long slot = slotService.getCurrentSlot();

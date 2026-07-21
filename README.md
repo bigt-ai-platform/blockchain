@@ -1,67 +1,79 @@
 # BigTangle Blockchain Server
 
-BigTangle is a distributed blockchain platform implementation featuring:
+BigTangle is a distributed blockchain platform with a two-layer consensus
+architecture: **MCMC DAG** for transaction throughput + **PoS Beacon Chain**
+for deterministic Casper FFG finality.
 
-## Key Components
-- **Core Blockchain**: Implements the main blockchain protocol with proof-of-work consensus
-- **Server Nodes**: Multiple node types including core servers, seed nodes, and subtangle servers
-- **Wallet**: Secure cryptocurrency wallet implementation
+## Architecture
 
+One Layer 0 (settlement) chain worldwide; many L1 application chains.
+
+| Layer | Chains | Purpose |
+|-------|--------|---------|
+| **Layer 0** | `L0` | BIG mint, token creation, anchors |
+| **L1** | `ordermatch`, `L1-contract`, `PAI`, `NFT`, `PAYMENT` | Application-specific |
+
+Full design: [blockchain.md](blockchain.md)
 
 ## Technical Stack
-- **Languages**: Java (main), C++ (proof-of-work),
+
+- **Languages**: Java (main), C++ (secp256k1 native)
 - **Build System**: Maven
 - **Runtime**: Java 25
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL 16
 - **Messaging**: Kafka integration
 
-## Deployment Options
-1. **Docker Development**:
+## Modules
+
+| Module | Port | Role |
+|--------|------|------|
+| `bigtangle-core` | — | Data model, crypto |
+| `bigtangle-servercore` | — | Consensus engine, DB schema, services |
+| `bigtangle-bridge` | — | Cross-layer anchors + peg logic |
+| `layer0-server` | 8081 | L0 full node |
+| `layer0-mcmc` | 8082 | L0 MCMC consensus |
+| `l1-order-server` | 8083 | L1 order-match |
+| `l1-order-mcmc` | 8084 | L1 order-match consensus |
+| `l1-contract-server` | 8085 | L1 smart contracts |
+| `l1-contract-mcmc` | 8086 | L1 contract consensus |
+| `l1-pai-server` | 8087 | L1 AI provider chain |
+| `l1-pai-mcmc` | — | L1 PAI consensus |
+| `l1-nft-server` | 8089 | L1 NFT chain |
+| `l1-nft-mcmc` | — | L1 NFT consensus |
+| `l1-payment-server` | 8091 | L1 transfer-only chain |
+| `l1-payment-mcmc` | — | L1 payment consensus |
+
+## Quick Start
+
 ```bash
-git clone https://github.com/bigtangle/server.git
-cd server/helper/bigtangle
-cd server
-docker build -t  bigtangle  -f helper/bigtangle/Dockerfile . 
-sh helper/testdocker.sh
+# Start PostgreSQL
+docker compose -f helper/docker-compose-base.yml up -d
+
+# Run all tests
+bash helper/testall.sh
+
+# Start individual nodes
+mvn -pl layer0-server spring-boot:run
+mvn -pl l1-payment-server spring-boot:run -DCHAIN_ID=PAYMENT-US
 ```
 
-2. **Production Deployment**:
-```bash
-git clone https://github.com/bigtangle/server.git
-cd server/helper/divers
-sh db.sh
-sh bigtangle.sh
-```
+## Key Features
 
-3. **Local Development**:
-```bash
-git clone https://github.com/bigtangle/server.git
-cd server
-mvn -DskipTests=true clean install
-java -jar layer0-server/target/layer0-server-0.5.0-exec.jar
-```
-
-## Project Structure
-- **bigtangle-core**: Core blockchain implementation
-- **layer0-server**: Layer 0 server runtime
-- **layer1-server**: Layer 1 server runtime
-- **layer0-mcmc**: Layer 0 MCMC runtime
-- **layer1-mcmc**: Layer 1 MCMC runtime
-- **bigtangle-subtangle**: Subtangle implementation
-- **helper**: Deployment and testing scripts
-
-> **Note**: The seed/discovery service (`bigtangle-seeds`) lives in its own
-> repo: [bigt-ai-platform/seeds](https://github.com/bigt-ai-platform/seeds).
-
-## Testing
-The project includes extensive test resources including:
-- PostgreSQL test databases
-- Protocol definitions
-- Unit tests
-- Integration tests
+- **MCMC + PoS consensus**: Probabilistic DAG tips + deterministic Casper finality
+- **Multi-layer**: Isolated L1 chains with bridge peg-in/peg-out
+- **Configurable L1 chain ID**: Run many instances via `CHAIN_ID` env var
+- **Post-quantum crypto**: ML-DSA-87 + SLH-DSA-SHA2-256s dual signatures
+- **Fee pool**: Per-chain fee accumulation distributed to validators at epoch boundaries
+- **Attack resilience**: Mempool double-spend + signature verification at ingress
 
 ## Requirements
-- Java 25
+
+- Java 25 (Temurin)
 - Maven 3.6+
-- Docker (for containerized deployment)
-- PostgreSQL (for production deployment)
+- Docker (for PostgreSQL)
+- PostgreSQL 16
+
+## Repositories
+
+- **Server** (this repo): All chain modules
+- **Seeds**: [bigt-ai-platform/seeds](https://github.com/bigt-ai-platform/seeds)

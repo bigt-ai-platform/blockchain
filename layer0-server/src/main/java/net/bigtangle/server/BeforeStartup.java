@@ -15,7 +15,6 @@ import jakarta.annotation.PostConstruct;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.server.service.base.MinioService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
@@ -33,14 +32,10 @@ public class BeforeStartup {
 		// set false in test
 		if (serverConfiguration.getCreatetable()) {
 			BlockStoreInterface store;
-			MinioService minioService = new MinioService();
 			if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-				store = new MySQLFullBlockStore(networkParameters, dataSource.getConnection(),
-						minioService);
+				store = new MySQLFullBlockStore(networkParameters, dataSource.getConnection());
 			} else {
-				store = new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection(),
-						minioService);
-
+				store = new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
 			}
 			try {
 				store.create();

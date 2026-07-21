@@ -30,8 +30,6 @@ public class ScheduleConfiguration {
     @Value("${service.schedule.microbatch:false}")
     boolean microBatch_active;
 
-    @Value("${pos.enabled:false}")
-    boolean posEnabled;
     @Value("${pos.slotIntervalMs:12000}")
     long posSlotIntervalMs;
     @Value("${pos.slotsPerEpoch:32}")
@@ -93,8 +91,8 @@ public class ScheduleConfiguration {
         this.microBatch_active = microBatch_active;
     }
 
-    public boolean isPosEnabled() { return posEnabled; }
-    public void setPosEnabled(boolean v) { this.posEnabled = v; }
+    public boolean isPosEnabled() { return true; }
+    public void setPosEnabled(boolean v) { }
     public long getPosSlotIntervalMs() { return posSlotIntervalMs; }
     public void setPosSlotIntervalMs(long v) { this.posSlotIntervalMs = v; }
     public long getPosSlotsPerEpoch() { return posSlotsPerEpoch; }

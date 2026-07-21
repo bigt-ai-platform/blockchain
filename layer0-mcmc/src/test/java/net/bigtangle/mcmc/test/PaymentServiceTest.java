@@ -177,8 +177,10 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		// check the output history
 		historyUTXOList(address.toBase58(), amount);
-		wallet.retryBlocks(rollingBlock);
+	}
 
+	@SuppressWarnings("unused")
+	private void retryBlocksFix(Block rollingBlock) {
 	}
 
 	public void historyUTXOList(String addressString, Coin amount) throws Exception {

@@ -338,7 +338,9 @@ All configuration is via environment variables (defined in `layer0-server/src/ma
 | `MINIO_SECRET_KEY` | adminpassword |  secret key |
 | `HIKARI_MAX_POOL` | 50 | HikariCP max pool size |
 | `IPCHECK` | false | Enable IP whitelist/blacklist |
-| `POS_ENABLED` | false | Enable PoS beacon chain (slot tick, validator duties) |
+| `POS_ENABLED` | true | Enable PoS beacon chain (slot tick, validator duties) |
+| `POS_SLOT_INTERVAL_MS` | 12000 | Slot duration in ms |
+| `POS_SLOTS_PER_EPOCH` | 32 | Slots per epoch |
 | `POS_SLOT_INTERVAL_MS` | 12000 | Slot duration in ms |
 | `POS_SLOTS_PER_EPOCH` | 32 | Slots per epoch |
 | `POS_VALIDATOR_KEY` | (empty) | Hex-encoded validator private key |
@@ -474,7 +476,7 @@ curl -X POST http://localhost:8081/submitAnchor \
 
 ### 6. Performance Benchmarks
 
-Three throughput benchmarks measure Layer 0 TPS (see [PERFORMANCE.md](../../PERFORMANCE.md) for full results):
+Three throughput benchmarks measure Layer 0 TPS (see [performance.md](../../performance.md) for full results):
 
 ```bash
 # Non-PoS max throughput (zero-HTTP, direct mempool) — 3,769 tx/s
@@ -505,7 +507,7 @@ Or run all with the benchmark script:
 | Skip gzip for batch blocks | −7% | +5% |
 | PG COPY for UTXO bulk load (replaces batch INSERT) | **−48% total** | **+62% total** |
 
-#### Scale Projection (see [PERFORMANCE.md](../../PERFORMANCE.md) for details)
+#### Scale Projection (see [performance.md](../../performance.md) for details)
 
 | Hardware | TPS | Limit |
 |----------|-----|-------|
@@ -568,7 +570,7 @@ docker logs l0-mcmc-0 | tail -20
 | MCMC service not running | `SERVICE_MCMC=false` or rate too low | Set `SERVICE_MCMC=true` and `SERVICE_MCMC_RATE=500` or lower |
 | Table creation errors on MCMC node | `CREATETABLE=false` but tables don't exist | Let server node create tables first, or set `CREATETABLE=true` |
 | High memory usage | Java heap insufficient | Reduce `HIKARI_MAX_POOL` or add `-Xmx` JVM args |
-| PoS slot tick not firing | `POS_ENABLED` not set or validators not registered | Set `POS_ENABLED=true` and register validators |
+| PoS slot tick not firing | Validators not registered | Register validators via `stakeDeposit` + `activateValidator` |
 | Validator never selected as proposer | Insufficient stake or wrong `POS_VALIDATOR_KEY` | Ensure ≥32 BIG stake and correct key in `ValidatorDutyService` |
 
 ## Files In This Directory
@@ -584,9 +586,8 @@ docker logs l0-mcmc-0 | tail -20
 
 ## References
 
-- [DESIGN.md](../../DESIGN.md) — two-layer consensus architecture (MCMC + PoS beacon chain)
-- [PERFORMANCE.md](../../PERFORMANCE.md) — benchmark results, optimizations, scale projections
-- [COMPARE.md](../../COMPARE.md) — comparison vs Solana, Ethereum PoS, Visa
+- [blockchain.md](../../blockchain.md) — two-layer consensus architecture (MCMC + PoS beacon chain), comparison vs Solana, Ethereum PoS, Visa
+- [performance.md](../../performance.md) — benchmark results, optimizations, scale projections
 - `layer0-server/src/main/resources/application.yml` — all config options
 - `layer0-mcmc/src/test/java/net/bigtangle/mcmc/test/` — integration tests
 - `/home/jcui/git/blockchain/testall.sh` — existing test runner (local PG, no Docker)

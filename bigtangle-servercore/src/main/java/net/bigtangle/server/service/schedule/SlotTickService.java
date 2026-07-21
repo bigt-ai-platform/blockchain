@@ -40,7 +40,7 @@ public class SlotTickService {
     @Async
     @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
     public void tick() {
-        if (!scheduleConfiguration.isPosEnabled() || !serverConfiguration.checkService()) {
+        if (!serverConfiguration.checkService()) {
             return;
         }
 

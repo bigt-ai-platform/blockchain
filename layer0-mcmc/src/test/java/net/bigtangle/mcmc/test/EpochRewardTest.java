@@ -62,6 +62,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
 
         // Fund and register two validators with different stakes
         fundAndStake(validator1, StakeService.MIN_STAKE);
+        mempoolService.drainAll();
         fundAndStake(validator2, StakeService.MIN_STAKE.multiply(BigInteger.valueOf(2)));
 
         stakeService.activateValidator(validator1.getPubKey(), 0, store);

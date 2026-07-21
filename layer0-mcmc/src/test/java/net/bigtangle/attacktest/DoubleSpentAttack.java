@@ -1,0 +1,177 @@
+/*******************************************************************************
+ *  Copyright   2018  Inasset GmbH. 
+ *  
+ *******************************************************************************/
+package net.bigtangle.attacktest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import net.bigtangle.core.Block;
+import net.bigtangle.core.Coin;
+import net.bigtangle.core.ECKey;
+import net.bigtangle.core.TokenType;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.Utils;
+import net.bigtangle.exception.VerificationException;
+import net.bigtangle.mcmc.test.AbstractIntegrationTest;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
+import net.bigtangle.wallet.Wallet;
+
+public class DoubleSpentAttack extends AbstractIntegrationTest {
+
+    @Autowired
+    private NetworkParameters networkParameters;
+
+    private static final Logger log = LoggerFactory.getLogger(DoubleSpentAttack.class);
+
+    @Test
+    public void testMempoolRejectsDoubleSpend() throws Exception {
+        ECKey alice = new ECKey();
+        ECKey bob = new ECKey();
+
+        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+
+        List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
+        assertTrue(candidates.stream().anyMatch(c -> c.getValue().isBIG()
+                && c.getValue().getValue().compareTo(BigInteger.valueOf(2000)) >= 0),
+                "Need a BIG UTXO >= 2000 for the test");
+
+        Coin sendAmount = Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID);
+        Transaction tx1 = w.createTransaction(null, candidates,
+                alice.toAddress(networkParameters).toString(), sendAmount, "double-spend 1");
+        Transaction tx2 = w.createTransaction(null, candidates,
+                bob.toAddress(networkParameters).toString(), sendAmount, "double-spend 2");
+
+        assertTrue(tx1.getInputs().stream().anyMatch(i -> !i.getOutpoint().isCoinBase()),
+                "tx1 should have real inputs");
+        assertTrue(tx2.getInputs().stream().anyMatch(i -> !i.getOutpoint().isCoinBase()),
+                "tx2 should have real inputs");
+
+        log.info("tx1 inputs: {}", tx1.getInputs().size());
+        log.info("tx2 inputs: {}", tx2.getInputs().size());
+
+        mempoolService.submitTransaction(tx1);
+        assertEquals(1, mempoolService.size(), "First tx should be accepted");
+        assertTrue(mempoolService.getSpentOutpointsCount() > 0,
+                "At least one outpoint should be tracked after first tx");
+
+        VerificationException.ConflictPossibleException ex = assertThrows(
+                VerificationException.ConflictPossibleException.class,
+                () -> mempoolService.submitTransaction(tx2),
+                "Second tx spending same UTXO should be rejected");
+        log.info("Got expected conflict exception: {}", ex.getMessage());
+
+        assertEquals(1, mempoolService.size(), "Mempool must still have only the first tx");
+
+        mempoolService.drainAll();
+        assertEquals(0, mempoolService.size(), "Mempool should be empty after drain");
+        assertEquals(0, mempoolService.getSpentOutpointsCount(),
+                "All outpoints released after drain");
+    }
+
+    @Test
+    public void testThousandDoubleSpendAttack() throws Exception {
+        int ATTACK_COUNT = 1000;
+
+        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+
+        List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
+        assertTrue(candidates.stream().anyMatch(c -> c.getValue().isBIG()
+                && c.getValue().getValue().compareTo(BigInteger.valueOf(10000)) >= 0),
+                "Need a BIG UTXO >= 10000 for the 1000-attack test");
+
+        Coin sendAmount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
+
+        List<Transaction> attackTxs = new ArrayList<>();
+        List<ECKey> dummyKeys = new ArrayList<>();
+        for (int i = 0; i < ATTACK_COUNT; i++) {
+            dummyKeys.add(new ECKey());
+        }
+
+        for (int i = 0; i < ATTACK_COUNT; i++) {
+            Transaction tx = w.createTransaction(null, candidates,
+                    dummyKeys.get(i).toAddress(networkParameters).toString(),
+                    sendAmount, "attack tx " + i);
+            attackTxs.add(tx);
+        }
+
+        long startNs = System.nanoTime();
+        int accepted = 0;
+        int rejected = 0;
+
+        for (int i = 0; i < ATTACK_COUNT; i++) {
+            try {
+                mempoolService.submitTransaction(attackTxs.get(i));
+                accepted++;
+            } catch (VerificationException.ConflictPossibleException e) {
+                rejected++;
+            }
+        }
+
+        long elapsedMs = (System.nanoTime() - startNs) / 1_000_000;
+
+        log.info("Double-spend attack results: accepted={}, rejected={}, mempoolSize={}, elapsedMs={}",
+                accepted, rejected, mempoolService.size(), elapsedMs);
+
+        assertEquals(1, accepted, "Exactly one tx should be accepted");
+        assertEquals(ATTACK_COUNT - 1, rejected, "All other " + (ATTACK_COUNT - 1) + " should be rejected");
+        assertEquals(1, mempoolService.size(), "Mempool size should be 1 after attack");
+
+        mempoolService.drainAll();
+        assertEquals(0, mempoolService.getSpentOutpointsCount(), "All outpoints released after drain");
+    }
+
+    @Test
+    public void testThousandTokenCreationAttack() throws Exception {
+        int ATTACK_COUNT = 1000;
+
+        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        String domain = "";
+        String tokenHex = Utils.HEX.encode(testKey.getPubKey());
+        int tokentype = TokenType.currency.ordinal();
+
+        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+
+        List<Block> tokenBlocks = new ArrayList<>();
+        for (int i = 0; i < ATTACK_COUNT; i++) {
+            mcmcService.calcNewBlockPrototype(store);
+            Block b = createToken(testKey, "attack-token-" + i, 2, domain,
+                    "attack token " + i, BigInteger.valueOf(1000), true,
+                    null, tokentype, tokenHex, w);
+            tokenBlocks.add(b);
+        }
+
+        assertEquals(ATTACK_COUNT, tokenBlocks.size(), "All " + ATTACK_COUNT + " tokens should be created");
+        log.info("Created {} token blocks, running MCMC consensus...", tokenBlocks.size());
+
+        mcmcService.update(store);
+        blockGraph.confirmDo(store);
+        log.info("MCMC consensus updated");
+
+        for (int i = 0; i < 5; i++) {
+            Block reward = rewardService.createReward(
+                    cacheBlockService.getMaxConfirmedReward(store).getBlockHash(), store);
+            if (reward != null) {
+                blockGraph.updateChain(false);
+                log.info("Reward block #{}: {}", i, reward.getHashAsString());
+            }
+        }
+
+        blockGraph.updateChain(false);
+        log.info("Chain updated with reward blocks");
+    }
+}

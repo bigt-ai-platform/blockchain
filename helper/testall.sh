@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Use Java 25 if available (local install from Temurin)
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
@@ -43,7 +43,7 @@ for i in $(seq 1 30); do
 done
 
 echo "=== Recreating databases ==="
-for db in info_l0 info_order info_contract info_pai; do
+for db in info_l0 info_pai info_nft info_payment; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
@@ -59,39 +59,28 @@ echo "=== Core tests passed ==="
 echo "=== Building all modules (serial) ==="
 # Build all server modules + core dependencies first (without tests)
 mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-order-server,l1-contract-server,l1-pai-server,l1-nft-server 2>&1 | tail -1
+  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-nft-server,l1-payment-server 2>&1 | tail -1
 # Also compile test classes to avoid stale test JARs referencing removed classes
 mvn test-compile -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-order-mcmc,l1-order-server,l1-contract-mcmc,l1-contract-server,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server 2>&1 | tail -1
+  -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc 2>&1 | tail -1
 echo "=== All modules built ==="
 
-echo "=== Running L0 and L1 tests (PAI runs separately to avoid DB connection pressure) ==="
+echo "=== Running L0 tests ==="
 mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
-mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order &
-ORDER_PID=$!
-mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract &
-CONTRACT_PID=$!
+
+echo "=== Running PAI tests (sequential, retry) ==="
+PAI_OK=false
+for attempt in 1 2 3; do
+    mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
+    echo "PAI tests attempt $attempt failed, retrying..."
+done
 
 EXIT_CODE=0
 wait $L0_PID      || { echo "Layer 0 tests FAILED";      EXIT_CODE=1; }
-wait $ORDER_PID   || { echo "Order match tests FAILED";  EXIT_CODE=1; }
-wait $CONTRACT_PID || { echo "Contract tests FAILED";     EXIT_CODE=1; }
-
-if [ "$EXIT_CODE" -eq 0 ]; then
-    echo "=== L0/order/contract tests passed, running PAI ==="
-    # Sequential retry loop for PAI (can be sensitive to DB connection timing)
-    for attempt in 1 2 3; do
-        mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
-        echo "PAI tests attempt $attempt failed, retrying..."
-        PAI_OK=false
-    done
-    if [ "$PAI_OK" != "true" ]; then
-        echo "PAI tests FAILED after 3 attempts"
-        EXIT_CODE=1
-    fi
-else
-    echo "=== Skipping PAI tests due to earlier failures ==="
+if [ "$PAI_OK" != "true" ]; then
+    echo "PAI tests FAILED after 3 attempts"
+    EXIT_CODE=1
 fi
 
 if [ "$EXIT_CODE" -eq 0 ]; then

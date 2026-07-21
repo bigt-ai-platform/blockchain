@@ -1,24 +1,42 @@
 package net.bigtangle.server.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.script.Script;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutPoint;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.core.UTXO;
+import net.bigtangle.core.Utils;
+import net.bigtangle.exception.VerificationException;
+import net.bigtangle.store.BlockStoreInterface;
 
 @Service
 public class MempoolService {
 
     private static final Logger log = LoggerFactory.getLogger(MempoolService.class);
+
+    @Autowired
+    private StoreService storeService;
 
     private final ConcurrentLinkedQueue<Transaction> pendingTxns = new ConcurrentLinkedQueue<>();
 
@@ -27,6 +45,10 @@ public class MempoolService {
 
     private final AtomicInteger totalSubmitted = new AtomicInteger(0);
 
+    private final ConcurrentHashMap<TransactionOutPoint, Transaction> spentOutpoints = new ConcurrentHashMap<>();
+
+    private final ConcurrentHashMap<Transaction, Set<TransactionOutPoint>> txOutpoints = new ConcurrentHashMap<>();
+
     public void submit(Block block) {
         BlockType blockType = block.getBlockType();
         List<Transaction> txs = block.getTransactions();
@@ -34,6 +56,7 @@ public class MempoolService {
             ConcurrentLinkedQueue<Transaction> typeQueue = pendingTxnsByType
                     .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
             for (Transaction tx : txs) {
+                checkAndAdd(tx);
                 pendingTxns.add(tx);
                 typeQueue.add(tx);
             }
@@ -42,6 +65,7 @@ public class MempoolService {
     }
 
     public void submitTransaction(Transaction tx) {
+        checkAndAdd(tx);
         BlockType blockType = getTransactionType(tx);
         ConcurrentLinkedQueue<Transaction> typeQueue = pendingTxnsByType
                 .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
@@ -50,10 +74,132 @@ public class MempoolService {
         totalSubmitted.incrementAndGet();
     }
 
+    private void checkAndAdd(Transaction tx) {
+        List<TransactionInput> inputs = tx.getInputs();
+        if (inputs == null || inputs.isEmpty()) {
+            return;
+        }
+        Set<TransactionOutPoint> outpoints = new HashSet<>();
+        for (TransactionInput in : inputs) {
+            TransactionOutPoint outpoint = in.getOutpoint();
+            if (outpoint == null || outpoint.isCoinBase()) {
+                continue;
+            }
+            if (spentOutpoints.containsKey(outpoint)) {
+                throw new VerificationException.ConflictPossibleException(
+                        "Mempool double-spend: outpoint " + outpoint + " already spent by pending tx");
+            }
+            outpoints.add(outpoint);
+        }
+        if (!outpoints.isEmpty()) {
+            verifyTransaction(tx);
+            for (TransactionOutPoint outpoint : outpoints) {
+                spentOutpoints.put(outpoint, tx);
+            }
+            txOutpoints.put(tx, outpoints);
+        }
+    }
+
+    private void verifyTransaction(Transaction tx) {
+        tx.verify();
+        List<TransactionInput> inputs = tx.getInputs();
+        if (inputs == null || inputs.isEmpty()) {
+            return;
+        }
+
+        Map<String, net.bigtangle.core.Coin> valueIn = new HashMap<>();
+        Map<String, net.bigtangle.core.Coin> valueOut = new HashMap<>();
+
+        for (TransactionOutput out : tx.getOutputs()) {
+            String tokenKey = Utils.HEX.encode(out.getValue().getTokenid());
+            if (valueOut.containsKey(tokenKey)) {
+                valueOut.put(tokenKey, valueOut.get(tokenKey).add(out.getValue()));
+            } else {
+                valueOut.put(tokenKey, out.getValue());
+            }
+            if (out.getValue().signum() < 0) {
+                throw new VerificationException.InvalidTransactionException(
+                        "Transaction output value negative");
+            }
+        }
+
+        BlockStoreInterface store;
+        try {
+            store = storeService.getStore();
+        } catch (Exception e) {
+            throw new VerificationException("Mempool: cannot open store for verification");
+        }
+        try {
+            for (int index = 0; index < inputs.size(); index++) {
+                TransactionInput in = inputs.get(index);
+                TransactionOutPoint outpoint = in.getOutpoint();
+                if (outpoint == null || outpoint.isCoinBase()) {
+                    continue;
+                }
+                UTXO utxo = store.getTransactionOutput(outpoint.getBlockHash(),
+                        outpoint.getTxHash(), outpoint.getIndex());
+                if (utxo == null) {
+                    throw new VerificationException("Mempool: UTXO not found for " + outpoint);
+                }
+                String tokenKey = Utils.HEX.encode(utxo.getValue().getTokenid());
+                if (valueIn.containsKey(tokenKey)) {
+                    valueIn.put(tokenKey, valueIn.get(tokenKey).add(utxo.getValue()));
+                } else {
+                    valueIn.put(tokenKey, utxo.getValue());
+                }
+                Script scriptPubKey = utxo.getScript();
+                if (scriptPubKey == null) {
+                    throw new VerificationException("Mempool: no scriptPubKey for UTXO " + outpoint);
+                }
+                in.getScriptSig().correctlySpends(tx, index, scriptPubKey, Script.ALL_VERIFY_FLAGS);
+            }
+
+            boolean feePaid = false;
+            for (Map.Entry<String, net.bigtangle.core.Coin> entry : valueOut.entrySet()) {
+                net.bigtangle.core.Coin inVal = valueIn.get(entry.getKey());
+                if (inVal == null) {
+                    throw new VerificationException.InvalidTransactionException(
+                            "Transaction input and output values do not match");
+                }
+                if (entry.getValue().isBIG() && !feePaid) {
+                    if (inVal.compareTo(entry.getValue().add(net.bigtangle.core.Coin.FEE_DEFAULT)) >= 0) {
+                        feePaid = true;
+                    }
+                }
+                if (inVal.compareTo(entry.getValue()) < 0) {
+                    throw new VerificationException.InvalidTransactionException(
+                            "Transaction input and output values do not match");
+                }
+            }
+            if (!feePaid) {
+                net.bigtangle.core.Coin bigInput = valueIn.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+                net.bigtangle.core.Coin bigOutput = valueOut.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+                if (bigOutput == null && bigInput != null
+                        && bigInput.compareTo(net.bigtangle.core.Coin.FEE_DEFAULT) >= 0) {
+                    feePaid = true;
+                }
+            }
+            if (!feePaid && valueIn.containsKey(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
+                throw new VerificationException.NoFeeException(net.bigtangle.core.Coin.FEE_DEFAULT.toString());
+            }
+        } catch (VerificationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new VerificationException("Mempool transaction verification failed: " + e.getMessage());
+        } finally {
+            try {
+                store.close();
+            } catch (Exception e) {
+                log.warn("Error closing store in mempool verification", e);
+            }
+        }
+    }
+
     public List<Transaction> drainAll() {
         List<Transaction> batch = new ArrayList<>();
         Transaction tx;
         while ((tx = pendingTxns.poll()) != null) {
+            removeOutpoints(tx);
             batch.add(tx);
         }
         for (ConcurrentLinkedQueue<Transaction> queue : pendingTxnsByType.values()) {
@@ -64,6 +210,9 @@ public class MempoolService {
 
     public Map<BlockType, List<Transaction>> drainAllByType() {
         Map<BlockType, List<Transaction>> result = new EnumMap<>(BlockType.class);
+        for (Transaction tx : pendingTxns) {
+            removeOutpoints(tx);
+        }
         pendingTxns.clear();
         for (Map.Entry<BlockType, ConcurrentLinkedQueue<Transaction>> entry : pendingTxnsByType.entrySet()) {
             List<Transaction> batch = new ArrayList<>();
@@ -78,6 +227,15 @@ public class MempoolService {
         return result;
     }
 
+    private void removeOutpoints(Transaction tx) {
+        Set<TransactionOutPoint> outpoints = txOutpoints.remove(tx);
+        if (outpoints != null) {
+            for (TransactionOutPoint outpoint : outpoints) {
+                spentOutpoints.remove(outpoint, tx);
+            }
+        }
+    }
+
     public int size() {
         return pendingTxns.size();
     }
@@ -89,6 +247,16 @@ public class MempoolService {
     public void clear() {
         pendingTxns.clear();
         pendingTxnsByType.clear();
+        spentOutpoints.clear();
+        txOutpoints.clear();
+    }
+
+    public Set<TransactionOutPoint> getSpentOutpoints() {
+        return Collections.unmodifiableSet(spentOutpoints.keySet());
+    }
+
+    public int getSpentOutpointsCount() {
+        return spentOutpoints.size();
     }
 
     public static BlockType getTransactionType(Transaction tx) {

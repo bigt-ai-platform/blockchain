@@ -134,16 +134,24 @@ public class SlotService {
     public void processEpoch(long epoch, BlockStoreInterface store) throws Exception {
         casperService.finalizeCheckpoint(epoch, store);
 
-        long epochSlots = NetworkParameters.SLOTS_PER_EPOCH;
-        // TODO: epoch rewards come from accumulated transaction fees (FeeService pool)
-        long epochRewardPool = 0L;
-        if (epochRewardPool > 0) {
-            epochRewardService.distributeEpochRewards(epoch,
-                    java.math.BigInteger.valueOf(epochRewardPool), store);
+        String chainId = networkParameters.getChainId();
+        byte[] poolBytes = store.getPosState("fee", chainId);
+        java.math.BigInteger epochRewardPool = poolBytes == null
+                ? java.math.BigInteger.ZERO
+                : new java.math.BigInteger(poolBytes);
+
+        if (epochRewardPool.compareTo(java.math.BigInteger.ZERO) > 0) {
+            net.bigtangle.core.Sha256Hash rewardHash = epochRewardService.distributeEpochRewards(
+                    epoch, epochRewardPool, store);
+            if (rewardHash != null) {
+                store.deletePosState("fee", chainId);
+                log.info("Epoch {} ({}): distributed {} to validators, rewardBlock={}",
+                        epoch, chainId, epochRewardPool, rewardHash);
+            }
         }
 
         stakeService.processWithdrawals(epoch, store);
 
-        log.info("Epoch {} processed: finality updated, {} pool distributed", epoch, epochRewardPool);
+        log.info("Epoch {} ({}) processed: finality updated", epoch, chainId);
     }
 }

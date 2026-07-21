@@ -58,8 +58,6 @@ import net.bigtangle.script.Script;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.Rating;
-import net.bigtangle.server.service.base.MinioService;
-
 /**
  * <p>
  * A generic full block store for a relational database. This generic class
@@ -473,7 +471,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected NetworkParameters params;
 	protected Connection conn;
-	protected MinioService minioService;
 
 	public Connection getConnection() throws SQLException {
 
@@ -486,10 +483,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	 * a hostname and password, and optionally allowing a schema to be specified.
 	 * </p>
 	 */
-	public DatabaseFullBlockStoreBase(NetworkParameters params, Connection conn, MinioService minioService) {
+	public DatabaseFullBlockStoreBase(NetworkParameters params, Connection conn) {
 		this.params = params;
 		this.conn = conn;
-		this.minioService = minioService;
 	}
 
 	public void create() throws BlockStoreException {
@@ -823,15 +819,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 	}
 
-	/** Thread-local flag to skip Minio object storage during batch.
-	 *  Set before calling put() and the flag is consumed automatically. */
-	private static final ThreadLocal<Boolean> SKIP_MINIO = ThreadLocal.withInitial(() -> false);
-
-	public static AutoCloseable skipMinioForBatch() {
-		SKIP_MINIO.set(true);
-		return () -> SKIP_MINIO.remove();
-	}
-
 	/** Convert a blocktype DB value (String name or legacy int ordinal) to int ordinal. */
 	protected static int blockTypeFromDB(ResultSet rs) throws SQLException {
 		String bt = rs.getString("blocktype");
@@ -869,9 +856,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public void put(Block block) throws BlockStoreException {
 		try {
 			BlockEvaluation blockEval = BlockEvaluation.buildInitial(block);
-			if (!SKIP_MINIO.get()) {
-				minioService.put(block);
-			}
 			putUpdateStoredBlock(block, blockEval);
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);

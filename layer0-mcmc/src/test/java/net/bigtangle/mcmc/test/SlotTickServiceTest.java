@@ -44,14 +44,13 @@ public class SlotTickServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testTickNoOpWhenPosDisabled() {
-        boolean wasEnabled = scheduleConfiguration.isPosEnabled();
-        scheduleConfiguration.setPosEnabled(false);
-        try {
-            assertDoesNotThrow(() -> slotTickService.tick());
-        } finally {
-            scheduleConfiguration.setPosEnabled(wasEnabled);
-        }
+    public void testTickWithValidators() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        assertDoesNotThrow(() -> slotTickService.tick());
     }
 
     @Test
@@ -67,18 +66,12 @@ public class SlotTickServiceTest extends AbstractIntegrationTest {
 
     @Test
     public void testTickWithPosEnabledAndServiceReady() throws Exception {
-        boolean wasEnabled = scheduleConfiguration.isPosEnabled();
-        scheduleConfiguration.setPosEnabled(true);
-        try {
-            store.saveStakeDeposit(new StakeRecord(
-                    validatorKey.getPubKey(), StakeService.MIN_STAKE,
-                    validatorKey.getPubKeyHash()));
-            stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 
-            assertDoesNotThrow(() -> slotTickService.tick());
-        } finally {
-            scheduleConfiguration.setPosEnabled(wasEnabled);
-        }
+        assertDoesNotThrow(() -> slotTickService.tick());
     }
 
     @Test

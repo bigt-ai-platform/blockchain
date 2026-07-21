@@ -57,26 +57,8 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testPerformDutyWithPosDisabled() throws Exception {
-        boolean wasEnabled = scheduleConfiguration.isPosEnabled();
-        scheduleConfiguration.setPosEnabled(false);
-        validatorDutyService.setValidatorKey(validatorKey);
-        try {
-            validatorDutyService.performDuty();
-        } finally {
-            scheduleConfiguration.setPosEnabled(wasEnabled);
-        }
-    }
-
-    @Test
     public void testPerformDutyWithoutKey() throws Exception {
-        boolean wasEnabled = scheduleConfiguration.isPosEnabled();
-        scheduleConfiguration.setPosEnabled(true);
-        try {
-            validatorDutyService.performDuty();
-        } finally {
-            scheduleConfiguration.setPosEnabled(wasEnabled);
-        }
+        validatorDutyService.performDuty();
     }
 
     @Test

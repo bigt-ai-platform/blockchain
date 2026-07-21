@@ -12,7 +12,6 @@ import java.util.List;
 
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.server.service.base.MinioService;
  
 
 /**
@@ -465,8 +464,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     
     
   
-    public PostgreSQLFullBlockStore(NetworkParameters params, Connection conn, MinioService minioService )  {
-        super(  params,   conn, minioService);
+    public PostgreSQLFullBlockStore(NetworkParameters params, Connection conn )  {
+        super(  params,   conn);
     }
 
     @Override

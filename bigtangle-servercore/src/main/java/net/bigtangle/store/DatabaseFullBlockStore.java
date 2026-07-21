@@ -68,8 +68,6 @@ import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
 import net.bigtangle.server.data.TipsQueue;
-import net.bigtangle.server.service.base.MinioService;
-
 /**
  * <p>
  * A generic full block store for a relational database. This generic class
@@ -85,8 +83,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	 * a hostname and password, and optionally allowing a schema to be specified.
 	 * </p>
 	 */
-	public DatabaseFullBlockStore(NetworkParameters params, Connection conn, MinioService minioService) {
-		super(params, conn,minioService);
+	public DatabaseFullBlockStore(NetworkParameters params, Connection conn) {
+		super(params, conn);
 	}
 
 	@Override

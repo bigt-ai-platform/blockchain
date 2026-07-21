@@ -31,7 +31,6 @@ service:
     mcmcrate: ${SERVICE_MCMC_RATE:1000}
 
 pos:
-  enabled: ${POS_ENABLED:false}
   slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}
   slotsPerEpoch: ${POS_SLOTS_PER_EPOCH:32}
 kafka:

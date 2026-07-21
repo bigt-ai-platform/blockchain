@@ -19,6 +19,9 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.KafkaConfiguration;
 import net.bigtangle.kafka.KafkaMessageProducer;
@@ -65,20 +68,60 @@ public class BlockSaveService {
 
 	public void saveBlock(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.addBlock(block, false, store);
+		accumulateBlockFees(block, store);
 		broadcastBlock(block);
 	}
 
 	/** Batch variant: skips transaction re-verification, solidity checks,
-	 *  Minio object storage, AND cache operations.  Batch blocks are
+	 *  AND cache operations.  Batch blocks are
 	 *  transient mempool dumps that don't need archival — the PostgreSQL
 	 *  row alone suffices for the MCMC bridge. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
-		try (AutoCloseable flag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipMinioForBatch();
-		     AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
+		try (AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
 		     AutoCloseable copyFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.usePgCopyForBatch()) {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
+		accumulateBlockFees(block, store);
 		broadcastBlock(block);
+	}
+
+	private void accumulateBlockFees(Block block, BlockStoreInterface store) throws Exception {
+		if (block.getTransactions() == null) return;
+
+		String chainId = networkParameters.getChainId();
+		java.math.BigInteger feeSurplus = java.math.BigInteger.ZERO;
+		for (Transaction tx : block.getTransactions()) {
+			if (tx.isCoinBase() || tx.getInputs() == null) continue;
+			java.math.BigInteger txIn = java.math.BigInteger.ZERO;
+			java.math.BigInteger txOut = java.math.BigInteger.ZERO;
+			for (TransactionOutput out : tx.getOutputs()) {
+				if (out.getValue().isBIG()) {
+					txOut = txOut.add(out.getValue().getValue());
+				}
+			}
+			for (TransactionInput in : tx.getInputs()) {
+				net.bigtangle.core.UTXO utxo = store.getTransactionOutput(
+						in.getOutpoint().getBlockHash(),
+						in.getOutpoint().getTxHash(),
+						in.getOutpoint().getIndex());
+				if (utxo != null && utxo.getValue().isBIG()) {
+					txIn = txIn.add(utxo.getValue().getValue());
+				}
+			}
+			java.math.BigInteger surplus = txIn.subtract(txOut);
+			if (surplus.compareTo(java.math.BigInteger.ZERO) > 0) {
+				feeSurplus = feeSurplus.add(surplus);
+			}
+		}
+
+		if (feeSurplus.compareTo(java.math.BigInteger.ZERO) <= 0) return;
+
+		byte[] existing = store.getPosState("fee", chainId);
+		java.math.BigInteger current = existing == null
+				? java.math.BigInteger.ZERO
+				: new java.math.BigInteger(existing);
+		java.math.BigInteger updated = current.add(feeSurplus);
+		store.savePosState("fee", chainId, updated.toByteArray());
 	}
 
 	public void broadcastBlock(Block block) {
@@ -140,7 +183,7 @@ public class BlockSaveService {
 		for (List<Transaction> txns : txnsByType.values()) {
 			totalBatched += batchTransactionGroup(txns);
 		}
-		if (scheduleConfiguration.isPosEnabled()) {
+		if (feeService != null) {
 			feeService.updateBaseFee(totalBatched);
 		}
 		return totalBatched;
