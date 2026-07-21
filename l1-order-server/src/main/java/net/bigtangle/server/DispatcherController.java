@@ -47,7 +47,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.exception.VerificationException;
-import net.bigtangle.net.MyGZIPOutputStream;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.AbstractResponse;
@@ -75,7 +74,6 @@ import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.server.service.UserDataService;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.utils.Gzip;
 import net.bigtangle.utils.Json;
 
 @RestController
@@ -185,7 +183,7 @@ public class DispatcherController implements DisposableBean {
 			logger.trace("reqCmd : {} from {}, size : {}, started.", reqCmd, httprequest.getRemoteAddr(),
 					contentBytes.length);
 
-			bodyByte = Gzip.decompressOut(contentBytes);
+			bodyByte = contentBytes;
 			ReqCmd reqCmd0000 = ReqCmd.valueOf(reqCmd);
 			if (!checkPermission(httpServletResponse, httprequest, watch, store)) {
 				return;
@@ -720,26 +718,13 @@ public class DispatcherController implements DisposableBean {
 		return flag;
 	}
 
-	private static final int GZIP_MIN_SIZE = 256;
 
 	public void gzipBinary(HttpServletResponse httpServletResponse, AbstractResponse response, String reqCmd)
 			throws Exception {
 		byte[] data = Json.jsonmapper().writeValueAsBytes(response);
-		if (data.length < GZIP_MIN_SIZE) {
-			httpServletResponse.setContentLength(data.length);
-			httpServletResponse.getOutputStream().write(data);
-			httpServletResponse.getOutputStream().flush();
-			return;
-		}
-		MyGZIPOutputStream servletOutputStream = new MyGZIPOutputStream(httpServletResponse.getOutputStream());
-
-		servletOutputStream.write(data);
-		if (servletOutputStream.getBytesWritten() > 1000000) {
-			logger.info(" reqCmd {}  output size {} ", reqCmd, servletOutputStream.getBytesWritten());
-		}
-
-		servletOutputStream.flush();
-		servletOutputStream.close();
+		httpServletResponse.setContentLength(data.length);
+		httpServletResponse.getOutputStream().write(data);
+		httpServletResponse.getOutputStream().flush();
 	}
 
 	public void outPointBinaryArray(HttpServletResponse httpServletResponse, byte[] data, String reqCmd)
@@ -748,16 +733,8 @@ public class DispatcherController implements DisposableBean {
 
 		HashMap<String, Object> result = new HashMap<>();
 		result.put("dataHex", Utils.HEX.encode(data));
-		MyGZIPOutputStream servletOutputStream = new MyGZIPOutputStream(httpServletResponse.getOutputStream());
-
-		servletOutputStream.write(Json.jsonmapper().writeValueAsBytes(result));
-
-		if (servletOutputStream.getBytesWritten() > 1000000) {
-			logger.info(" reqCmd {}  output size {} ", reqCmd, servletOutputStream.getBytesWritten());
-		}
-
-		servletOutputStream.flush();
-		servletOutputStream.close();
+		httpServletResponse.getOutputStream().write(Json.jsonmapper().writeValueAsBytes(result));
+		httpServletResponse.getOutputStream().flush();
 	}
 
 	public void outPrintJSONString(HttpServletResponse httpServletResponse, AbstractResponse response, Stopwatch watch,

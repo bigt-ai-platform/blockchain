@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.service.MempoolService;
-import net.bigtangle.utils.Gzip;
 
 @Service
 public class TransactionStreamHandler extends AbstractStreamHandler {
@@ -33,7 +32,7 @@ public class TransactionStreamHandler extends AbstractStreamHandler {
         final KStream<byte[], byte[]> input = streamBuilder.stream(kafkaConfiguration.getTopicOutName());
         input.map((key, bytes) -> {
             try {
-                byte[] decompressed = Gzip.decompressOut(bytes);
+                byte[] decompressed = bytes;
                 Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(decompressed);
                 mempoolService.submitTransaction(tx);
                 log.debug("Transaction from kafka added to mempool");

@@ -60,6 +60,9 @@ echo "=== Building all modules (serial) ==="
 # Build all server modules + core dependencies first (without tests)
 mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
   -pl layer0-server,layer0-mcmc,l1-order-server,l1-contract-server,l1-pai-server 2>&1 | tail -1
+# Also compile test classes to avoid stale test JARs referencing removed classes
+mvn test-compile -q -f "$ROOT/pom.xml" -am \
+  -pl layer0-server,layer0-mcmc,l1-order-mcmc,l1-order-server,l1-contract-mcmc,l1-contract-server,l1-pai-mcmc,l1-pai-server 2>&1 | tail -1
 echo "=== All modules built ==="
 
 echo "=== Running L0 and L1 tests (PAI runs separately to avoid DB connection pressure) ==="

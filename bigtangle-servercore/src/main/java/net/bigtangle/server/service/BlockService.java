@@ -33,7 +33,6 @@ import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
-import net.bigtangle.utils.Gzip;
 
 /**
  * <p>
@@ -141,7 +140,7 @@ public class BlockService {
 
 		try {
 			logger.debug("addConnectedFromKafka from sendkey:{}", Arrays.toString(key));
-			return addConnected(Gzip.decompressOut(bytes), true);
+			return addConnected(bytes, true);
 		} catch (VerificationException e) {
 			return Optional.empty();
 		} catch (Exception e) {

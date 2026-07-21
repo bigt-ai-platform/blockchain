@@ -18,7 +18,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.utils.Gzip;
 
 public class KafkaMessageProducer {
 
@@ -52,7 +51,7 @@ public class KafkaMessageProducer {
         final String key = serveraddress;// UUID.randomUUID().toString();
         try (KafkaProducer<String, byte[]> messageProducer = new KafkaProducer<String, byte[]>(producerConfig())) {
             ProducerRecord<String, byte[]> producerRecord = null;
-            byte[] bytes = Gzip.compress(data);
+            byte[] bytes = data;
          //   log.debug(" compress  " + bytes.length);
             producerRecord = new ProducerRecord<String, byte[]>(topic, key, bytes);
             final Future<RecordMetadata> result = messageProducer.send(producerRecord);

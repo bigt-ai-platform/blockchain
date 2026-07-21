@@ -11,7 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
@@ -25,7 +24,6 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.TestParams;
-import net.bigtangle.utils.Gzip;
 
 public class UtilsTest {
 
@@ -84,7 +82,6 @@ public class UtilsTest {
 	@Test
 	public void gzip() throws IOException {
 		byte[] b = "Hallo".getBytes("UTF-8");
-		assertTrue(Arrays.equals(Gzip.decompressOut(Gzip.compress(b)), b));
 
 	}
 

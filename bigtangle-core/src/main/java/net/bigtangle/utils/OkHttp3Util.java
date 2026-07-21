@@ -32,7 +32,6 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okio.BufferedSink;
-import okio.GzipSink;
 import okio.Okio;
 
 public class OkHttp3Util {
@@ -96,7 +95,7 @@ public class OkHttp3Util {
                 throw new RuntimeException("Server:" + url + "  HTTP  Error: " + response);
             }
 
-            byte[] resp = Gzip.decompressOut(response.body().bytes());
+            byte[] resp = response.body().bytes();
             // logger.debug(resp);
             checkResponse(resp, url);
             return resp;
@@ -132,7 +131,7 @@ public class OkHttp3Util {
             if (!response.isSuccessful()) {
                 throw new RuntimeException("Server:" + url + "  HTTP  Error: " + response);
             }
-            byte[] resp = Gzip.decompressOut(response.body().bytes());
+            byte[] resp = response.body().bytes();
             checkResponse(resp, url);
             return resp;
         } finally {
@@ -201,8 +200,7 @@ public class OkHttp3Util {
                         }
                     }).connectTimeout(timeoutMinute, TimeUnit.MINUTES).writeTimeout(timeoutMinute, TimeUnit.MINUTES)
                     .addInterceptor(new BasicAuthInterceptor(pubkey, signHex, contentHex))
-                    .addInterceptor(new GzipRequestInterceptor()).readTimeout(timeoutMinute, TimeUnit.MINUTES).build();
-
+                    .readTimeout(timeoutMinute, TimeUnit.MINUTES).build();
             return client;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -213,41 +211,6 @@ public class OkHttp3Util {
      * This interceptor compresses the HTTP request body. Many webservers can't
      * handle this!
      */
-    static class GzipRequestInterceptor implements Interceptor {
-        @Override
-        public Response intercept(Chain chain) throws IOException {
-            Request originalRequest = chain.request();
-            if (originalRequest.body() == null || originalRequest.header("Content-Encoding") != null) {
-                return chain.proceed(originalRequest);
-            }
-
-            Request compressedRequest = originalRequest.newBuilder().header("Content-Encoding", "gzip")
-                    .method(originalRequest.method(), gzip(originalRequest.body())).build();
-            return chain.proceed(compressedRequest);
-        }
-
-        private RequestBody gzip(final RequestBody body) {
-            return new RequestBody() {
-                @Override
-                public MediaType contentType() {
-                    return body.contentType();
-                }
-
-                @Override
-                public long contentLength() {
-                    return -1; // We don't know the compressed length in
-                               // advance!
-                }
-
-                @Override
-                public void writeTo(BufferedSink sink) throws IOException {
-                    BufferedSink gzipSink = Okio.buffer(new GzipSink(sink));
-                    body.writeTo(gzipSink);
-                    gzipSink.close();
-                }
-            };
-        }
-    }
 
     public static byte[] post(String url, byte[] b, String header) throws IOException {
         logger.debug("start:  " + url);
@@ -261,7 +224,7 @@ public class OkHttp3Util {
                 throw new RuntimeException("Server:" + url + "  HTTP  Error: " + response);
             }
 
-            byte[] resp = Gzip.decompressOut(response.body().bytes());
+            byte[] resp = response.body().bytes();
             // logger.debug(resp);
             checkResponse(resp, url);
             return resp;
@@ -285,7 +248,7 @@ public class OkHttp3Util {
             if (!response.isSuccessful()) {
                 throw new RuntimeException("Server:" + url + "  HTTP  Error: " + response);
             }
-            byte[] resp = Gzip.decompressOut(response.body().bytes());
+            byte[] resp = response.body().bytes();
             checkResponse(resp, url);
             return resp;
         } finally {
