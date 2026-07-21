@@ -9,5 +9,5 @@ public enum DataClassName {
 
     TOKEN, PAYMULTISIGN, CONTACTINFO, MYHOMEADDRESS, UPLOADFILE, VOS,
     SERVERURL, LANG,  BlockSolveType, UserSettingDataInfo, OrderOpenInfo, IdentityData, KeyValueList,
-    Prescription, Certificate,
+    Prescription, Certificate, NFT,
 }
