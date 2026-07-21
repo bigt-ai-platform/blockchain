@@ -452,6 +452,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX orders_collectinghash_idx ON orders (collectinghash) ";
     private static final String CREATE_BLOCKS_MILESTONE_INDEX = "CREATE INDEX blocks_milestone_idx ON blocks (milestone)   ";
     private static final String CREATE_BLOCKS_HEIGHT_INDEX = "CREATE INDEX blocks_height_idx ON blocks (height)   ";
+    private static final String CREATE_BLOCKS_SOLID_HEIGHT_INDEX = "CREATE INDEX blocks_solid_height_idx ON blocks (solid, height)   ";
     private static final String CREATE_TXREARD_CHAINLENGTH_INDEX = "CREATE INDEX txreard_chainlength_idx ON txreward (chainlength, confirmed)  ";
     private static final String CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX = "CREATE INDEX contractevent_contracttokenid_idx ON contractevent (contracttokenid) ";
     private static final String CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX contractevent_collectinghash_idx ON contractevent (collectinghash)";
@@ -571,6 +572,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_OUTPUTS_BRIN_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_ADDRESS_MULTI_INDEX); 
         sqlStatements.add(CREATE_BLOCKS_HEIGHT_INDEX);
+        sqlStatements.add(CREATE_BLOCKS_SOLID_HEIGHT_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_TOADDRESS_INDEX);
         sqlStatements.add(CREATE_PREVBRANCH_HASH_INDEX);
         sqlStatements.add(CREATE_PREVTRUNK_HASH_INDEX);
