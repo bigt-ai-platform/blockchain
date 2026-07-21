@@ -85,12 +85,13 @@ REPORT="$ROOT/layer0-mcmc/target/surefire-reports/net.bigtangle.mcmc.test.benchm
 blocks=$(grep -oP 'Blocks:\s+\K[\d]+' "$REPORT" | tail -1)
 txpb=$(grep -oP 'Tx/block:\s+\K[\d]+' "$REPORT" | tail -1)
 totaltx=$(grep -oP 'Total tx:\s+\K[\d]+' "$REPORT" | tail -1)
-build=$(grep -oP 'Chain build:\s+\K[\d.]+' "$REPORT" | tail -1)
-mcmc=$(grep -oP 'MCMC update:\s+\K[\d.]+' "$REPORT" | tail -1)
-proto=$(grep -oP 'Prototype:\s+\K[\d.]+' "$REPORT" | tail -1)
-chainupd=$(grep -oP 'Chain update:\s+\K[\d.]+' "$REPORT" | tail -1)
 total=$(grep -oP 'Total wall:\s+\K[\d.]+' "$REPORT" | tail -1)
-tps=$(grep -oP 'Build TPS:\s+\K[\d.]+' "$REPORT" | tail -1)
+tps=$(grep -oP 'Throughput:\s+\K[\d.]+' "$REPORT" | tail -1)
+submit=$(grep -oP 'Submit\s+\K[\d]+' "$REPORT" | head -1)
+batch=$(grep -oP 'Batch\s+\K[\d]+' "$REPORT" | head -1)
+mcmc=$(grep -oP 'MCMC update\s+\K[\d]+' "$REPORT" | head -1)
+proto=$(grep -oP 'Prototype\s+\K[\d]+' "$REPORT" | head -1)
+chainupd=$(grep -oP 'Chain update\s+\K[\d]+' "$REPORT" | head -1)
 
 if [ -z "$mcmc" ]; then
     echo -e "${RED}No MCMC metric found — benchmark may have failed.${NC}"
@@ -100,18 +101,15 @@ fi
 
 echo ""
 printf "  %-20s %s\n" "Configuration:" "${blocks} blocks × ${txpb} tx = ${totaltx} total"
+printf "  %-20s %s\n" "Throughput:" "${tps:-N/A} tx/s"
+printf "  %-20s %s\n" "Total wall:" "${total} ms"
 echo ""
-printf "  %-20s %12s  %s\n" "Phase" "Time (ms)" "TPS"
+printf "  %-20s %12s  %s\n" "Phase" "Total (ms)" "% of wall"
 printf "  %-20s %12s  %s\n" "────────────────────" "────────────" "────────"
-if [ -n "$build" ] && [ "$build" != "0" ]; then
-    build_tps=$(echo "scale=0; $totaltx * 1000 / $build" | bc 2>/dev/null || echo "-")
-else
-    build_tps="-"
-fi
-printf "  %-20s %12s  %s\n" "Chain build" "${build:-N/A}" "${build_tps} tx/s"
-printf "  %-20s %12s  %s\n" "MCMC update" "${mcmc:-N/A}" "-"
-printf "  %-20s %12s  %s\n" "Prototype" "${proto:-N/A}" "-"
-printf "  %-20s %12s  %s\n" "Chain update" "${chainupd:-N/A}" "-"
-printf "  %-20s %12s  %s\n" "Total wall" "${total:-N/A}" "${tps:-N/A} tx/s"
+printf "  %-20s %12s  %s\n" "Submit" "${submit:-N/A}" "$([ -n "$submit" ] && [ -n "$total" ] && [ "$total" -gt 0 ] && echo "$(( submit * 100 / total ))%" || echo "-")"
+printf "  %-20s %12s  %s\n" "Batch" "${batch:-N/A}" "$([ -n "$batch" ] && [ -n "$total" ] && [ "$total" -gt 0 ] && echo "$(( batch * 100 / total ))%" || echo "-")"
+printf "  %-20s %12s  %s\n" "MCMC update" "${mcmc:-N/A}" "$([ -n "$mcmc" ] && [ -n "$total" ] && [ "$total" -gt 0 ] && echo "$(( mcmc * 100 / total ))%" || echo "-")"
+printf "  %-20s %12s  %s\n" "Prototype" "${proto:-N/A}" "$([ -n "$proto" ] && [ -n "$total" ] && [ "$total" -gt 0 ] && echo "$(( proto * 100 / total ))%" || echo "-")"
+printf "  %-20s %12s  %s\n" "Chain update" "${chainupd:-N/A}" "$([ -n "$chainupd" ] && [ -n "$total" ] && [ "$total" -gt 0 ] && echo "$(( chainupd * 100 / total ))%" || echo "-")"
 echo ""
-log "Benchmark passed — ${blocks} blocks, ${mcmc} ms MCMC, ${tps:-0} tx/s"
+log "Benchmark passed — ${blocks} blocks, ${tps} tx/s"
