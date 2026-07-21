@@ -481,35 +481,6 @@ public class Block extends Message {
 				s.append(tx);
 			}
 		}
-		if (blockType == BlockType.BLOCKTYPE_BEACON) {
-			try {
-				if (transactions != null && !transactions.isEmpty()) {
-					RewardInfo rewardInfo = new RewardInfo().parse(getTransactions().get(0).getData());
-					s.append(rewardInfo.toString());
-				}
-			} catch (Exception e) {
-				// ignore throw new RuntimeException(e);
-			}
-		}
-		if (blockType == BlockType.BLOCKTYPE_ORDER_OPEN) {
-
-			try {
-				OrderOpenInfo info = new OrderOpenInfo().parse(transactions.get(0).getData());
-				s.append(info.toString());
-			} catch (Exception e) {
-				// ignore throw new RuntimeException(e);
-			}
-		}
-		if (blockType == BlockType.BLOCKTYPE_TOKEN_CREATION) {
-
-			try {
-				TokenInfo info = new TokenInfo().parse(transactions.get(0).getData());
-				s.append(info.toString());
-			} catch (Exception e) {
-				// ignore throw new RuntimeException(e);
-			}
-
-		}
 		return s.toString();
 	}
 
