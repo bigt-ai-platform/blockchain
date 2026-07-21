@@ -161,6 +161,13 @@ public class TipsService {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
 		BlockWrap right = entryPoints.get(1);
+		// When both entry points select the same block in a simple chain,
+		// the MCMC walk will always converge to the same tip. Skip the
+		// retry loop — it wastes time on redundant walks.
+		if (left.getBlockHash().equals(right.getBlockHash())) {
+			return getValidatedBlockPair(maxConfirmedReward,
+					currentApprovedNonMilestoneBlocks, left, right, store);
+		}
 		Pair<BlockWrap, BlockWrap> candidate = getValidatedBlockPair(maxConfirmedReward,
 				currentApprovedNonMilestoneBlocks, left, right, store);
 		if (!candidate.getLeft().equals(candidate.getRight())) {

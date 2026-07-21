@@ -151,6 +151,10 @@ public class MCMCService {
 	// A value of -1 means no previous cycle (full recomputation on first run).
 	private long lastProcessedMaxHeight = -1;
 
+	// Caches the last prototype block hash to skip redundant MCMC walks
+	// when no new blocks have been added since the last prototype.
+	private Sha256Hash lastPrototypeHash;
+
 	public void update(BlockStoreInterface store) throws InterruptedException, ExecutionException, BlockStoreException {
 		ServiceBaseConfirmation.clearConflictCache();
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
@@ -175,16 +179,23 @@ public class MCMCService {
 
 	
 
-	 public synchronized   void calcNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
-	 //	log.debug("calcNewBlockPrototype start" ) ;
-		   Stopwatch watch = Stopwatch.createStarted();
+	public synchronized void calcNewBlockPrototype(BlockStoreInterface store) throws BlockStoreException {
+		Stopwatch watch = Stopwatch.createStarted();
+		// Check if the chain has grown since the last prototype
+		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+		Sha256Hash chainTipHash = maxConfirmedReward != null ? maxConfirmedReward.getBlockHash() : null;
+		if (chainTipHash != null && chainTipHash.equals(lastPrototypeHash)) {
+			log.trace("calcNewBlockPrototype skipped (no new blocks), {} ms", watch.elapsed(TimeUnit.MILLISECONDS));
+			return;
+		}
 		Pair<BlockWrap, BlockWrap> tipsToApprove = tipsService.getValidatedBlockPair(store);
 		Block b = Block.createBlock(networkParameters, tipsToApprove.getLeft().getBlock(),
 				tipsToApprove.getRight().getBlock());
-		if(watch.elapsed(TimeUnit.MILLISECONDS)>2000)
-		log.debug("calcNewBlockPrototype finish MILLISECONDS {} ", watch.elapsed(TimeUnit.MILLISECONDS) ) ;
-		TipsQueue t= new TipsQueue(b.getHash().getBytes(), b.unsafeBitcoinSerialize(), b.getHeight(), b.getTimeSeconds() );
-		 store.insertTipsQueue(t);
+		if (watch.elapsed(TimeUnit.MILLISECONDS) > 2000)
+			log.debug("calcNewBlockPrototype finish MILLISECONDS {} ", watch.elapsed(TimeUnit.MILLISECONDS));
+		TipsQueue t = new TipsQueue(b.getHash().getBytes(), b.unsafeBitcoinSerialize(), b.getHeight(), b.getTimeSeconds());
+		store.insertTipsQueue(t);
+		lastPrototypeHash = chainTipHash;
 	}
 	private void deleteMCMC(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
 		store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
