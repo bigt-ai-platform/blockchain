@@ -198,13 +198,13 @@ public final class HDKeyDerivation {
         ECPoint Ki;
         switch (mode) {
             case NORMAL:
-                Ki = publicPointFromPrivate(ilInt).add(parentDeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
+                Ki = publicPointFromPrivate(ilInt).add(DeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
                 break;
             case WITH_INVERSION:
                 Ki = publicPointFromPrivate(ilInt.add(RAND_INT).mod(N));
                 BigInteger additiveInverse = RAND_INT.negate().mod(N);
                 Ki = Ki.add(publicPointFromPrivate(additiveInverse));
-                Ki = Ki.add(parentDeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
+                Ki = Ki.add(DeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
                 break;
             default: throw new AssertionError();
         }
