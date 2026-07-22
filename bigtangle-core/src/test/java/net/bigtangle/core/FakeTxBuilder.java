@@ -28,13 +28,13 @@ public class FakeTxBuilder {
 
     /** Create a fake transaction, without change. */
     public static Transaction createFakeTx(final NetworkParameters params) {
-        return createFakeTxWithoutChangeAddress(params, Coin.COIN, PQKey.createNew().toAddress(params));
+        return createFakeTxWithoutChangeAddress(params, Coin.COIN, Address.fromHash160(params, Utils.sha256hash160(PQKey.createNew().getPubKey())));
     }
 
     /** Create a fake transaction, without change. */
     public static Transaction createFakeTxWithoutChange(final NetworkParameters params,
             final TransactionOutput output) {
-        Transaction prevTx = FakeTxBuilder.createFakeTx(params, Coin.COIN, PQKey.createNew().toAddress(params));
+        Transaction prevTx = FakeTxBuilder.createFakeTx(params, Coin.COIN, Address.fromHash160(params, Utils.sha256hash160(PQKey.createNew().getPubKey())));
         Transaction tx = new Transaction(params);
         tx.addOutput(output);
         tx.addInput(UtilGeneseBlock.createGenesis(params) .getHash(), prevTx.getOutput(0));
@@ -48,7 +48,7 @@ public class FakeTxBuilder {
         Transaction tx = new Transaction(params);
         tx.addInput(input);
         TransactionOutput outputToMe =   TransactionOutput.fromAddress(params, tx, Coin.COIN.multiply(50),
-                PQKey.createNew().toAddress(params));
+                Address.fromHash160(params, Utils.sha256hash160(PQKey.createNew().getPubKey())));
         tx.addOutput(outputToMe);
 
         checkState(tx.isCoinBase());
@@ -134,7 +134,7 @@ public class FakeTxBuilder {
      * one random input.
      */
     public static Transaction createFakeTx(NetworkParameters params, Coin value, Address to) {
-        return createFakeTxWithChangeAddress(params, value, to, PQKey.createNew().toAddress(params));
+        return createFakeTxWithChangeAddress(params, value, to, Address.fromHash160(params, Utils.sha256hash160(PQKey.createNew().getPubKey())));
     }
 
     /**
@@ -174,7 +174,7 @@ public class FakeTxBuilder {
         TransactionOutput outputToMe =   TransactionOutput.fromAddress(params, t, value, to);
         t.addOutput(outputToMe);
         TransactionOutput change =   TransactionOutput.fromAddress(params, t,
-                valueOf(Coin.COIN.getValue().longValue() * 1 + 11, NetworkParameters.BIGTANGLE_TOKENID), PQKey.createNew().toAddress(params));
+                valueOf(Coin.COIN.getValue().longValue() * 1 + 11, NetworkParameters.BIGTANGLE_TOKENID), Address.fromHash160(params, Utils.sha256hash160(PQKey.createNew().getPubKey())));
         t.addOutput(change);
         // Make a feeder tx that sends to the from address specified. This
         // feeder tx is not really valid but it doesn't
@@ -224,7 +224,8 @@ public class FakeTxBuilder {
     public static DoubleSpends createFakeDoubleSpendTxns(NetworkParameters params, Address to) {
         DoubleSpends doubleSpends = new DoubleSpends();
         Coin value = COIN;
-        Address someBadGuy = PQKey.createNew();
+        PQKey badKey = PQKey.createNew();
+        Address someBadGuy = Address.fromHash160(params, Utils.sha256hash160(badKey.getPubKey()));
 
         doubleSpends.prevTx = new Transaction(params);
         TransactionOutput prevOut =   TransactionOutput.fromAddress(params, doubleSpends.prevTx, value, someBadGuy);

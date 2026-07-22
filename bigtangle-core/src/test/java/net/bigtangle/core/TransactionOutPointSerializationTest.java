@@ -129,7 +129,7 @@ public class TransactionOutPointSerializationTest {
         // Create a transaction and output to connect
         Transaction transaction = new Transaction(PARAMS);
         PQKey key = PQKey.createNew();
-        Address address = key.toAddress(PARAMS);
+        Address address = Address.fromHash160(PARAMS, Utils.sha256hash160(key.getPubKey()));
         Coin coinValue = Coin.valueOf(100000L, NetworkParameters.BIGTANGLE_TOKENID);
         TransactionOutput connectedOutput = TransactionOutput.fromAddress(PARAMS, transaction, coinValue, address);
         
@@ -189,7 +189,7 @@ public class TransactionOutPointSerializationTest {
         // Create a transaction and output to connect
         Transaction transaction = new Transaction(PARAMS);
         PQKey key = PQKey.createNew();
-        Address address = key.toAddress(PARAMS);
+        Address address = Address.fromHash160(PARAMS, Utils.sha256hash160(key.getPubKey()));
         Coin coinValue = Coin.valueOf(50000L, NetworkParameters.BIGTANGLE_TOKENID);
         TransactionOutput connectedOutput = TransactionOutput.fromAddress(PARAMS, transaction, coinValue, address);
         

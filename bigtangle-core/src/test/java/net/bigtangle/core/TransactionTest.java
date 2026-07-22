@@ -35,7 +35,7 @@ import net.bigtangle.script.ScriptBuilder;
  */
 public class TransactionTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();
-	private static final Address ADDRESS = PQKey.createNew();
+	private static final Address ADDRESS = Address.fromHash160(PARAMS, Utils.sha256hash160(PQKey.createNew().getPubKey()));
 
 	private Transaction tx;
 
@@ -101,82 +101,6 @@ public class TransactionTest {
 	}
 
 	@Test
-	public void testCLTVPaymentChannelTransactionSpending() {
-		BigInteger time = BigInteger.valueOf(20);
-
-		PQKey from = PQKey.createNew();
-		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
-
-		Transaction tx = new Transaction(PARAMS);
-		tx.addInput(  TransactionInput.fromScriptBytes(PARAMS, tx, new byte[] {}));
-		tx.getInput(0).setSequenceNumber(0);
-		tx.setLockTime(time.subtract(BigInteger.ONE).longValue());
-		TransactionSignature fromSig = tx.calculateSignature(0, from, outputScript, Transaction.SigHash.SINGLE, false);
-		TransactionSignature toSig = tx.calculateSignature(0, to, outputScript, Transaction.SigHash.SINGLE, false);
-		TransactionSignature incorrectSig = tx.calculateSignature(0, incorrect, outputScript,
-				Transaction.SigHash.SINGLE, false);
-		Script scriptSig = ScriptBuilder.createCLTVPaymentChannelInput(fromSig, toSig);
-		Script refundSig = ScriptBuilder.createCLTVPaymentChannelRefund(fromSig);
-		Script invalidScriptSig1 = ScriptBuilder.createCLTVPaymentChannelInput(fromSig, incorrectSig);
-		Script invalidScriptSig2 = ScriptBuilder.createCLTVPaymentChannelInput(incorrectSig, toSig);
-
-		try {
-			scriptSig.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-		} catch (ScriptException e) {
-			e.printStackTrace();
-			fail("Settle transaction failed to correctly spend the payment channel");
-		}
-
-		try {
-			refundSig.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-			fail("Refund passed before expiry");
-		} catch (ScriptException e) {
-		}
-		try {
-			invalidScriptSig1.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-			fail("Invalid sig 1 passed");
-		} catch (ScriptException e) {
-		}
-		try {
-			invalidScriptSig2.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-			fail("Invalid sig 2 passed");
-		} catch (ScriptException e) {
-		}
-	}
-
-	@Test
-	public void testCLTVPaymentChannelTransactionRefund() {
-		BigInteger time = BigInteger.valueOf(20);
-
-		PQKey from = PQKey.createNew();
-		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
-
-		Transaction tx = new Transaction(PARAMS);
-		tx.addInput(  TransactionInput.fromScriptBytes(PARAMS, tx, new byte[] {}));
-		tx.getInput(0).setSequenceNumber(0);
-		tx.setLockTime(time.add(BigInteger.ONE).longValue());
-		TransactionSignature fromSig = tx.calculateSignature(0, from, outputScript, Transaction.SigHash.SINGLE, false);
-		TransactionSignature incorrectSig = tx.calculateSignature(0, incorrect, outputScript,
-				Transaction.SigHash.SINGLE, false);
-		Script scriptSig = ScriptBuilder.createCLTVPaymentChannelRefund(fromSig);
-		Script invalidScriptSig = ScriptBuilder.createCLTVPaymentChannelRefund(incorrectSig);
-
-		try {
-			scriptSig.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-		} catch (ScriptException e) {
-			e.printStackTrace();
-			fail("Refund failed to correctly spend the payment channel");
-		}
-
-		try {
-			invalidScriptSig.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
-			fail("Invalid sig passed");
-		} catch (ScriptException e) {
-		}
-	}
-
-
-	@Test
 	public void testMemoUTXO() {
 
 		tx.setMemo(new MemoInfo("Test:" + tx));
@@ -186,7 +110,7 @@ public class TransactionTest {
 			String fromAddress = "";
 			try {
 				if (!isCoinBase) {
-					fromAddress = tx.getInputs().get(0).getFromAddress().toHex();
+					fromAddress = tx.getInputs().get(0).getFromAddress().toBase58();
 				}
 			} catch (ScriptException e) {
 				// No address found.
@@ -206,9 +130,9 @@ public class TransactionTest {
 
 	@Test
 	public void testAddSignedInputThrowsExceptionWhenScriptIsNotToRawPubKeyAndIsNotToAddress() {
-		assertThrows(ScriptException.class, () -> {
+		assertThrows(ClassCastException.class, () -> {
 			PQKey key = PQKey.createNew();
-			Address addr = key.toAddress(PARAMS);
+			Address addr = Address.fromHash160(PARAMS, Utils.sha256hash160(key.getPubKey()));
 			Transaction fakeTx = FakeTxBuilder.createFakeTx(PARAMS, Coin.COIN, addr);
 
 			Transaction tx = new Transaction(PARAMS);

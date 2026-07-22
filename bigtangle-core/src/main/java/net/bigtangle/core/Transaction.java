@@ -48,6 +48,7 @@ import com.google.common.collect.ImmutableMap;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.crypto.pq.PQConstants;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
@@ -936,19 +937,19 @@ public class Transaction extends ChildMessage {
 	 * @return A newly calculated signature object that wraps the r, s and sighash
 	 *         components.
 	 */
-	public TransactionSignature calculateSignature(int inputIndex, PQKey key, byte[] redeemScript, SigHash hashType,
-			boolean anyoneCanPay) {
-		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
-		TransactionSignature sig = ((DeterministicKey) key).ecSign(hash, null);
-		return new TransactionSignature(sig.r, sig.s, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
-	}
-
-	public TransactionSignature calculateSignature(int inputIndex, PQKey key, Script redeemScript, SigHash hashType,
-			boolean anyoneCanPay) {
-		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
-		TransactionSignature sig = ((DeterministicKey) key).ecSign(hash, null);
-		return new TransactionSignature(sig.r, sig.s, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
-	}
+ 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, byte[] redeemScript, SigHash hashType,
+ 			boolean anyoneCanPay) {
+ 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
+ 		SignatureBundle sigBundle = key.sign(hash);
+ 		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
+ 	}
+ 
+ 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, Script redeemScript, SigHash hashType,
+ 			boolean anyoneCanPay) {
+ 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
+ 		SignatureBundle sigBundle = key.sign(hash);
+ 		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
+ 	}
 
 	/**
 	 * <p>

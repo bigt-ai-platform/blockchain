@@ -312,7 +312,7 @@ public abstract class AbstractIntegrationTest {
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
 		resetStore();
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
 		serverConfiguration.setServiceReady(true);
 
 	}

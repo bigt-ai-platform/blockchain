@@ -31,7 +31,7 @@ public class DumpedPrivateKeyTest {
     @Test
     public void testJavaSerialization() throws Exception {
 
-        DumpedPrivateKey key = new DumpedPrivateKey(MAINNET, PQKey.createNew());
+        DumpedPrivateKey key = new DumpedPrivateKey(MAINNET, new byte[32], true);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         new ObjectOutputStream(os).writeObject(key);
         DumpedPrivateKey keyCopy = (DumpedPrivateKey) new ObjectInputStream(new ByteArrayInputStream(os.toByteArray()))
@@ -41,7 +41,7 @@ public class DumpedPrivateKeyTest {
 
     @Test
     public void cloning() throws Exception {
-        DumpedPrivateKey a = new DumpedPrivateKey(MAINNET, PQKey.createNew());
+        DumpedPrivateKey a = new DumpedPrivateKey(MAINNET, new byte[32], true);
         // TODO: Consider overriding clone() in DumpedPrivateKey to narrow the type
         DumpedPrivateKey b = (DumpedPrivateKey) a.clone();
 
@@ -52,6 +52,6 @@ public class DumpedPrivateKeyTest {
     @Test
     public void roundtripBase58() throws Exception {
         String base58 = "5HtUCLMFWNueqN9unpgX2DzjMg6SDNZyKRb8s3LJgpFg5ubuMrk";
-        assertEquals(base58, DumpedPrivateKey.fromBase58(null, base58).toHex());
+        assertEquals(base58, DumpedPrivateKey.fromBase58(null, base58).toString());
     }
 }

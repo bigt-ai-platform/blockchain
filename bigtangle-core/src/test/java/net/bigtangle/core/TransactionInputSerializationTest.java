@@ -31,7 +31,7 @@ public class TransactionInputSerializationTest {
     public void setUp() throws Exception {
         transaction = new Transaction(PARAMS);
         key = PQKey.createNew();
-        address = key.toAddress(PARAMS);
+        address = Address.fromHash160(PARAMS, Utils.sha256hash160(key.getPubKey()));
     }
 
     @Test

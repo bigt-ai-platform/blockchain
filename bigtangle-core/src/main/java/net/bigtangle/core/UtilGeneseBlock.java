@@ -38,14 +38,24 @@ import net.bigtangle.script.ScriptBuilder;
 public class UtilGeneseBlock { 
 	
 	 
-	    public static void add(NetworkParameters params, BigInteger amount, String account, Transaction coinbase) {
-	        // amount, many public keys
-	        String[] list = account.split(",");
-	        Coin base = new Coin(amount,NetworkParameters. BIGTANGLE_TOKENID);
-	        List<PQKey> keys = new ArrayList<>();
-	        for (String s : list) {
-	            keys.add(PQKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
-	        }
+    public static void add(NetworkParameters params, BigInteger amount, String account, Transaction coinbase) {
+        // amount, many public keys
+        String[] list = account.split(",");
+        Coin base = new Coin(amount,NetworkParameters. BIGTANGLE_TOKENID);
+        List<PQKey> keys = new ArrayList<>();
+        for (String s : list) {
+            byte[] pubBytes = Utils.HEX.decode(s.trim());
+            // Legacy EC pubkeys (0x02/0x03/0x04 prefix, 33-65 bytes) - wrap in KeyBundle
+            if (pubBytes.length > 0 && (pubBytes[0] == 0x02 || pubBytes[0] == 0x03 || pubBytes[0] == 0x04)) {
+                List<net.bigtangle.crypto.pq.KeyBundle.Entry> entries = new ArrayList<>();
+                entries.add(new net.bigtangle.crypto.pq.KeyBundle.Entry(
+                    net.bigtangle.crypto.pq.PQConstants.ALG_ML_DSA_87, pubBytes));
+                net.bigtangle.crypto.pq.KeyBundle bundle = new net.bigtangle.crypto.pq.KeyBundle(entries);
+                keys.add(net.bigtangle.core.PQKey.fromPublicOnly(bundle));
+            } else {
+                keys.add(PQKey.fromPublicOnly(pubBytes));
+            }
+        }
 	        if (keys.size() <= 1) {
 	            coinbase.addOutput(new TransactionOutput(params, coinbase, base,
 	                    ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));

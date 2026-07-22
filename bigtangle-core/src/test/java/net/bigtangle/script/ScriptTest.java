@@ -218,7 +218,7 @@ public class ScriptTest {
 	public void getToAddress() throws Exception {
 		// pay to pubkey
 		PQKey toKey = PQKey.createNew();
-		Address toAddress = toKey.toAddress(PARAMS);
+		Address toAddress = Address.fromHash160(PARAMS, Utils.sha256hash160(toKey.getPubKey()));
 		assertEquals(toAddress, ScriptBuilder.createOutputScript(toKey).getToAddress(PARAMS, true));
 		// pay to pubkey hash
 		assertEquals(toAddress, ScriptBuilder.createOutputScript(toAddress).getToAddress(PARAMS, true));

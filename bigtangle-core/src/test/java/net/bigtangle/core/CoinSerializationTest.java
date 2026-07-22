@@ -30,7 +30,7 @@ public class CoinSerializationTest {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
             PQKey key = PQKey.createNew();
-            Address address = key.toAddress(MainNetParams.get());
+            Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -63,7 +63,7 @@ public class CoinSerializationTest {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
             PQKey key = PQKey.createNew();
-            Address address = key.toAddress(MainNetParams.get());
+            Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -94,7 +94,7 @@ public class CoinSerializationTest {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
             PQKey key = PQKey.createNew();
-            Address address = key.toAddress(MainNetParams.get());
+            Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -121,7 +121,7 @@ public class CoinSerializationTest {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
             PQKey key = PQKey.createNew();
-            Address address = key.toAddress(MainNetParams.get());
+            Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -150,7 +150,7 @@ public class CoinSerializationTest {
         // Test serialization and deserialization through TransactionOutput
         Transaction transaction = new Transaction(MainNetParams.get());
         PQKey key = PQKey.createNew();
-        Address address = key.toAddress(MainNetParams.get());
+        Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
         TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
         
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -180,7 +180,7 @@ public class CoinSerializationTest {
         // Test serialization and deserialization
         Transaction transaction = new Transaction(MainNetParams.get());
         PQKey key = PQKey.createNew();
-        Address address = key.toAddress(MainNetParams.get());
+        Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
         TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin1, address);
         
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -211,7 +211,7 @@ public class CoinSerializationTest {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
             PQKey key = PQKey.createNew();
-            Address address = key.toAddress(MainNetParams.get());
+            Address address = Address.fromHash160(MainNetParams.get(), Utils.sha256hash160(key.getPubKey()));
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
