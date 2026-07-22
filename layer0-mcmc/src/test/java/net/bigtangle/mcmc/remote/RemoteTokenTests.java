@@ -72,9 +72,7 @@ public class RemoteTokenTests    {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			PQKey signkey = PQKey.createNew();
-
-			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+			PQKey signkey = PQKey.createNew(), signkey, null);
 
 		} catch (Exception e) {
 			// TODO: handle exception

@@ -72,11 +72,10 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         List<PQKey> walletKeys = new ArrayList<>();
         for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew();
 
-        Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew();
+        Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
+            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
         }
         Transaction fundingTx = genesisWallet.payToList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund");
@@ -108,14 +107,13 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         }
         List<FreeStandingTransactionOutput> allCoins = new ArrayList<>();
         for (PQKey k : walletKeys) {
-            String addr = k.toAddress(networkParameters).toString();
+            String addr = k.toAddress(networkParameters).toHex();
             FreeStandingTransactionOutput c = addrToCoin.get(addr);
             if (c != null) allCoins.add(c);
         }
         log.info("Pre-fetched {} UTXOs", allCoins.size());
 
-        PQKey finalRecipient = PQKey.createNew();
-        String finalAddr = finalRecipient.toAddress(networkParameters).toString();
+        PQKey finalRecipient = PQKey.createNew().toString();
 
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);

@@ -43,7 +43,7 @@ public class MarketOrderItem implements java.io.Serializable {
         marketOrderItem.setValidateTo( new Date(orderRecord.getValidToTime() * 1000) );
         marketOrderItem.setValidateFrom( new Date(orderRecord.getValidFromTime() * 1000)) ;
         marketOrderItem.setAddress(
-                PQKey.fromPublicOnly(orderRecord.getBeneficiaryPubKey()).toAddress(networkParameters).toString());
+                PQKey.fromPublicOnly(orderRecord.getBeneficiaryPubKey()).toAddress(networkParameters).toHex());
         marketOrderItem.setInitialBlockHashHex(orderRecord.getBlockHashHex());
         marketOrderItem.setCancelPending(orderRecord.isCancelPending());
         marketOrderItem.setOrderBaseToken(base.getTokennameDisplay());

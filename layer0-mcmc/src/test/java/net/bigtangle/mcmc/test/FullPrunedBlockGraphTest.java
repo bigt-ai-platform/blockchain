@@ -72,7 +72,6 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	public void testConnectTokenUTXOs() throws Exception {
 
 		PQKey ecKey1 = PQKey.createNew();
-		byte[] pubKey = ecKey1.getPubKey();
 		// System.out.println(Utils.HEX.encode(pubKey));
 
 		// Generate an eligible issuance
@@ -109,19 +108,14 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 					1, amount, true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 			tokenInfo.setToken(tokens);
-			PQKey ecKey = PQKey.createNew();
-			tokenInfo.getMultiSignAddresses()
-					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey.getPublicKeyAsHex()));
-			PQKey ecKey2 = PQKey.createNew();
-			tokenInfo.getMultiSignAddresses()
-					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey2.getPublicKeyAsHex()));
+			PQKey ecKey = PQKey.createNew(), "", ecKey.getPublicKeyAsHex()));
+			PQKey ecKey2 = PQKey.createNew(), "", ecKey2.getPublicKeyAsHex()));
 
 			;
 
 			// This (saveBlock) calls milestoneUpdate currently, that's why we
 			// need other blocks beforehand.
 			PQKey outKey3 = PQKey.createNew();
-			wallet.importKey(ecKey);
 			wallet.importKey(ecKey2);
 			wallet.importKey(outKey3);
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey3, null);
@@ -266,7 +260,6 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);

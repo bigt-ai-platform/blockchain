@@ -27,7 +27,7 @@ public class AccessPermissionedService {
         Sha256Hash hash = Sha256Hash.wrapReversed(Sha256Hash.hashTwice(buf, 0, buf.length));
         byte[] payload = hash.getBytes();
 
-        byte[] bytes = ECIESCoder.encrypt(ecKey.getPubKeyPoint(), payload);
+        byte[] bytes = ECIESCoder.encrypt(net.bigtangle.crypto.DeterministicKey.CURVE.getCurve().decodePoint(ecKey.getPubKey()), payload);
         String verifyHex = Utils.HEX.encode(bytes);
         store .insertAccessPermission(pubKey, Utils.HEX.encode(payload));
         return SessionRandomNumResponse.create(verifyHex);

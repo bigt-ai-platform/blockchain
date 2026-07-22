@@ -39,7 +39,6 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     @Test
     public void testMempoolRejectsDoubleSpend() throws Exception {
         PQKey alice = PQKey.createNew();
-        PQKey bob = PQKey.createNew();
 
         PQKey testKey = PQKey.createNew();
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
@@ -51,9 +50,9 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
 
         Coin sendAmount = Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID);
         Transaction tx1 = w.createTransaction(null, candidates,
-                alice.toAddress(networkParameters).toString(), sendAmount, "double-spend 1");
+                alice.toAddress(networkParameters).toHex(), sendAmount, "double-spend 1");
         Transaction tx2 = w.createTransaction(null, candidates,
-                bob.toAddress(networkParameters).toString(), sendAmount, "double-spend 2");
+                bob.toAddress(networkParameters).toHex(), sendAmount, "double-spend 2");
 
         assertTrue(tx1.getInputs().stream().anyMatch(i -> !i.getOutpoint().isCoinBase()),
                 "tx1 should have real inputs");
@@ -104,7 +103,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
 
         for (int i = 0; i < ATTACK_COUNT; i++) {
             Transaction tx = w.createTransaction(null, candidates,
-                    dummyKeys.get(i).toAddress(networkParameters).toString(),
+                    dummyKeys.get(i).toAddress(networkParameters).toHex(),
                     sendAmount, "attack tx " + i);
             attackTxs.add(tx);
         }

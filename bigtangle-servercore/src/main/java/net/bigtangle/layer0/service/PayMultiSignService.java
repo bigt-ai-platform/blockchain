@@ -79,7 +79,7 @@ public class PayMultiSignService {
         }
 
         String pubKey0 = (String) request.get("pubKey");
-        String address0 = PQKey.fromPublicOnly(Utils.HEX.decode(pubKey0)).toAddress(networkParameters).toString();
+        String address0 = PQKey.fromPublicOnly(Utils.HEX.decode(pubKey0)).toAddress(networkParameters).toHex();
         if (!payMultiSignAddresseRes.containsKey(address0)) {
             throw new BlockStoreException("pay multisign addresse list is empty");
         }

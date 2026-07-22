@@ -131,7 +131,6 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
 		TokenInfo tokenInfo = new TokenInfo();
@@ -224,7 +223,6 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -256,7 +254,6 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 
 		// Generate an issuance
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);

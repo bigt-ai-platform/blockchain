@@ -83,7 +83,7 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
                 for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
                     try {
                         HashMap<String, BigInteger> payment = new HashMap<>();
-                        payment.put(toKey.toAddress(networkParameters).toString(), BigInteger.valueOf(1));
+                        payment.put(toKey.toAddress(networkParameters).toHex(), BigInteger.valueOf(1));
 
                         long txStart = System.nanoTime();
                         mcmcService.calcNewBlockPrototype(store);

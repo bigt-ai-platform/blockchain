@@ -53,7 +53,6 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         validator1 = PQKey.createNew();
-        validator2 = PQKey.createNew();
     }
 
     @Test
@@ -118,7 +117,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
 
     private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
         java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
-        fund.put(key.toAddress(networkParameters).toString(),
+        fund.put(key.toAddress(networkParameters).toHex(),
                 amount.add(BigInteger.valueOf(100000)));
 		Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, fund,
 				NetworkParameters.BIGTANGLE_TOKENID, "fund"));

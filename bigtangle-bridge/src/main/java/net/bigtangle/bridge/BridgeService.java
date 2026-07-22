@@ -153,7 +153,6 @@ public class BridgeService {
         }
 
         PQKey signKey = PQKey.createNew();
-
         List<PQKey> keys = new ArrayList<>();
         keys.add(signKey);
 

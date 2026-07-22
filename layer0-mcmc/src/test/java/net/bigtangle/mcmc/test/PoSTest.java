@@ -147,7 +147,6 @@ public class PoSTest extends AbstractIntegrationTest {
     @Test
     public void testActiveValidatorsQuery() throws Exception {
         PQKey v1 = PQKey.createNew();
-        PQKey v2 = PQKey.createNew();
 
         store.saveStakeDeposit(new StakeRecord(v1.getPubKey(),
                 StakeService.MIN_STAKE, v1.getPubKeyHash()));

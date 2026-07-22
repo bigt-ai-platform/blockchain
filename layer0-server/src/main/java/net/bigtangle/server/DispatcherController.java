@@ -774,7 +774,6 @@ public class DispatcherController implements DisposableBean {
 				String keyHex = (String) request.get("privateKey");
 				if (keyHex != null && !keyHex.isEmpty()) {
 					PQKey key = PQKey.createNew();
-					validatorDutyService.setValidatorKey(key);
 				}
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}

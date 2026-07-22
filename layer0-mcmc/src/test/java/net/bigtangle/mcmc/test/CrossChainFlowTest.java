@@ -59,7 +59,6 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         bobKey = PQKey.createNew();
-        addedBlocks = new ArrayList<>();
     }
 
     @Test
@@ -73,7 +72,7 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         List<UTXO> bobUtxos = bobWallet.calculateAllSpendCandidatesUTXO(null, false);
         assertTrue(bobUtxos.size() > 0, "Bob must have UTXOs");
         UTXO bigUtxo = bobUtxos.get(0);
-        String l1bobAddress = bobKey.toAddress(networkParameters).toString();
+        String l1bobAddress = bobKey.toAddress(networkParameters).toHex();
 
         Block proto = cacheBlockPrototypeService.getBlockPrototype(store);
         Block pegBlock = Block.createBlock(networkParameters,

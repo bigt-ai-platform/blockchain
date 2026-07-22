@@ -91,7 +91,6 @@ public class BasicKeyChain implements EncryptableKeyChain {
             if (hashToKeys.isEmpty()) {
                 checkState(keyCrypter == null);   // We will refuse to encrypt an empty key chain.
                 final PQKey key = PQKey.createNew();
-                importKeyLocked(key);
          
             }
             return hashToKeys.values().iterator().next();

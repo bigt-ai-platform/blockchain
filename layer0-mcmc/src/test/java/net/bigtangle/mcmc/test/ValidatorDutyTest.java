@@ -49,7 +49,6 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
     public void testValidatorKeySetAndGet() {
         PQKey original = validatorDutyService.getValidatorKey();
         PQKey testKey = PQKey.createNew();
-        validatorDutyService.setValidatorKey(testKey);
         assertNotNull(validatorDutyService.getValidatorKey());
         assertEquals(Utils.HEX.encode(testKey.getPubKey()),
                 Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));
@@ -65,7 +64,6 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
     public void testValidatorKeyInitFromConfig() {
         PQKey configured = validatorDutyService.getValidatorKey();
         PQKey testKey = PQKey.createNew();
-        validatorDutyService.setValidatorKey(testKey);
         assertNotNull(validatorDutyService.getValidatorKey());
         assertEquals(Utils.HEX.encode(testKey.getPubKey()),
                 Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));

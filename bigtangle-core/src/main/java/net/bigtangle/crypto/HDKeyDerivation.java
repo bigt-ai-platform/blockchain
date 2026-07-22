@@ -154,7 +154,7 @@ public final class HDKeyDerivation {
     public static RawKeyBytes deriveChildKeyBytesFromPrivate(DeterministicKey parent,
                                                               ChildNumber childNumber) throws HDDerivationException {
         checkArgument(parent.hasPrivKey(), "Parent key must have private key bytes for this method.");
-        byte[] parentPublicKey = parent.getPubKeyPoint().getEncoded(true);
+        byte[] parentPublicKey = parent.getPubKey();
         checkState(parentPublicKey.length == 33, "Parent pubkey must be 33 bytes, but is " + parentPublicKey.length);
         ByteBuffer data = ByteBuffer.allocate(37);
         if (childNumber.isHardened()) {
@@ -182,7 +182,7 @@ public final class HDKeyDerivation {
 
     public static RawKeyBytes deriveChildKeyBytesFromPublic(DeterministicKey parent, ChildNumber childNumber, PublicDeriveMode mode) throws HDDerivationException {
         checkArgument(!childNumber.isHardened(), "Can't use private derivation with public keys only.");
-        byte[] parentPublicKey = parent.getPubKeyPoint().getEncoded(true);
+        byte[] parentPublicKey = parent.getPubKey();
         checkState(parentPublicKey.length == 33, "Parent pubkey must be 33 bytes, but is " + parentPublicKey.length);
         ByteBuffer data = ByteBuffer.allocate(37);
         data.put(parentPublicKey);
@@ -198,13 +198,13 @@ public final class HDKeyDerivation {
         ECPoint Ki;
         switch (mode) {
             case NORMAL:
-                Ki = publicPointFromPrivate(ilInt).add(parent.getPubKeyPoint());
+                Ki = publicPointFromPrivate(ilInt).add(parentDeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
                 break;
             case WITH_INVERSION:
                 Ki = publicPointFromPrivate(ilInt.add(RAND_INT).mod(N));
                 BigInteger additiveInverse = RAND_INT.negate().mod(N);
                 Ki = Ki.add(publicPointFromPrivate(additiveInverse));
-                Ki = Ki.add(parent.getPubKeyPoint());
+                Ki = Ki.add(parentDeterministicKey.CURVE.getCurve().decodePoint(parent.getPubKey()));
                 break;
             default: throw new AssertionError();
         }

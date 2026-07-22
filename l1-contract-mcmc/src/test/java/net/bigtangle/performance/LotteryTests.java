@@ -65,7 +65,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 	public void lotteryDo() throws Exception {
 		wallet.importKey(PQKey.createNew());
 		accountKey = PQKey.createNew();
-		wallet.importKey(accountKey);
 		testTokens();
 		List<PQKey> ulist = createUserkey();
 		payUserKeys(ulist);
@@ -122,7 +121,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public Coin accountSum() throws Exception {
-		List<UTXO> users = getBalance(accountKey.toAddress(networkParameters).toString());
+		List<UTXO> users = getBalance(accountKey.toAddress(networkParameters).toHex());
 
 		Coin sum = Coin.valueOf(0, Utils.HEX.decode(yuanTokenPub));
 		for (UTXO u : users) {
@@ -194,7 +193,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 
 		int satoshis = 1000;
-		return w.createTransaction(null, accountKey.toAddress(networkParameters).toString(),
+		return w.createTransaction(null, accountKey.toAddress(networkParameters).toHex(),
 				Coin.valueOf(satoshis, Utils.HEX.decode(yuanTokenPub)), new MemoInfo("buy ticket"));
 
 	}
@@ -229,7 +228,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 		try {
 			int satoshis = Math.abs(new Random().nextInt()) % 1000;
-			w.pay(null, accountKey.toAddress(networkParameters).toString(),
+			w.pay(null, accountKey.toAddress(networkParameters).toHex(),
 					Coin.valueOf(satoshis, Utils.HEX.decode(yuanTokenPub)), new MemoInfo(" buy ticket"));
 		} catch (InsufficientMoneyException e) {
 			// TODO: handle exception
@@ -244,7 +243,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 		for (List<PQKey> list : parts) {
 			HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 			for (PQKey key : list) {
-				giveMoneyResult.put(key.toAddress(networkParameters).toString(), winnerAmount);
+				giveMoneyResult.put(key.toAddress(networkParameters).toHex(), winnerAmount);
 			}
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
 			makeRewardBlock();
@@ -261,7 +260,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 		for (List<PQKey> list : parts) {
 			HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 			for (PQKey key : list) {
-				giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(10000));
+				giveMoneyResult.put(key.toAddress(networkParameters).toHex(), BigInteger.valueOf(10000));
 			}
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
 			makeRewardBlock();
@@ -273,7 +272,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
 		for (int i = 0; i < usernumber; i++) {
 			PQKey key = PQKey.createNew();
-			userkeys.add(key);
 		}
 		return userkeys;
 	}
@@ -304,9 +302,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			PQKey signkey = PQKey.createNew();
-
-			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+			PQKey signkey = PQKey.createNew(), signkey, null);
 
 		} catch (Exception e) {
 			// TODO: handle exception

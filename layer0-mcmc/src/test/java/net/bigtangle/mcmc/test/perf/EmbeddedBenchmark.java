@@ -70,7 +70,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         // Fund all in ONE transaction
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
+            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
         }
         Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund"));
@@ -83,8 +83,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        PQKey finalRecipient = PQKey.createNew();
-        String finalAddr = finalRecipient.toAddress(networkParameters).toString();
+        PQKey finalRecipient = PQKey.createNew().toString();
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);

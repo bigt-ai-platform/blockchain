@@ -79,10 +79,9 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         // -- Phase 1: Fund validators --
         log.info("--- Phase 1: Fund validators ---");
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew();
-        for (PQKey vk : validatorKeys) {
+                PQKey.createNew() {
             HashMap<String, BigInteger> fund = new HashMap<>();
-            fund.put(vk.toAddress(networkParameters).toString(), BigInteger.valueOf(10000000));
+            fund.put(vk.toAddress(networkParameters).toHex(), BigInteger.valueOf(10000000));
             Block b = wrapTransaction(genesisWallet.payToList(null, fund,
                     NetworkParameters.BIGTANGLE_TOKENID, "fund"));
             if (b != null) {

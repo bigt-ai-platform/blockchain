@@ -1581,7 +1581,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
 		PQKey outKey2 = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -1884,7 +1883,6 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate a subsequent issuance that does not work
 		byte[] pubKey2 = PQKey.createNew();
-		TokenInfo tokenInfo2 = new TokenInfo();
 		Coin coinbase2 = Coin.valueOf(666, pubKey2);
 
 		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey2), "Test", "Test",

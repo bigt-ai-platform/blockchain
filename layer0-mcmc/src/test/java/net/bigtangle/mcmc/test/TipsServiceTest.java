@@ -183,7 +183,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		TokenInfo tokenInfo = new TokenInfo();
@@ -262,7 +261,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenidSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		// Generate an eligible issuance
@@ -358,7 +356,6 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);

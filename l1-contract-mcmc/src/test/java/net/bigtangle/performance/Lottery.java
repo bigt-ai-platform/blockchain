@@ -186,7 +186,7 @@ public class Lottery {
         List<String> keyStrHex000 = new ArrayList<String>();
 
         for (PQKey ecKey : keys) {
-            // keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
+            // keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
             keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
         }
           byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),

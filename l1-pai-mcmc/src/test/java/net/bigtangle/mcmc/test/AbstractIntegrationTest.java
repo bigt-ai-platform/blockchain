@@ -125,8 +125,7 @@ public abstract class AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         store = storeService.getStore();
         resetStore();
-        wallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew(), contextRoot);
+        wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         serverConfiguration.setServiceReady(true);
     }
 
@@ -241,7 +240,7 @@ public abstract class AbstractIntegrationTest {
 
     protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
         HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
-        giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
+        giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
         return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
     }
 

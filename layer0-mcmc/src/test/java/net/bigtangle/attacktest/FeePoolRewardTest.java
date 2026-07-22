@@ -64,7 +64,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
                 w.calculateAllSpendCandidates(null, false);
 
         Transaction tx = w.createTransaction(null, candidates,
-                receiver.toAddress(networkParameters).toString(),
+                receiver.toAddress(networkParameters).toHex(),
                 Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID),
                 "fee-pool-test");
 
@@ -151,7 +151,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
 
     private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
         java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
-        fund.put(key.toAddress(networkParameters).toString(),
+        fund.put(key.toAddress(networkParameters).toHex(),
                 amount.add(BigInteger.valueOf(100000)));
         Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, fund,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund"));

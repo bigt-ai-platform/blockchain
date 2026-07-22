@@ -102,7 +102,7 @@ public class ScriptTest {
 
 	@Test
 	public void testMultiSig() throws Exception {
-		List<PQKey> keys = Lists.newArrayList(PQKey.createNew(), PQKey.createNew(), PQKey.createNew());
+		List<PQKey> keys = Lists.newArrayList(PQKey.createNew(), PQKey.createNew());
 		assertTrue(ScriptBuilder.createMultiSigOutputScript(2, keys).isSentToMultiSig());
 		Script script = ScriptBuilder.createMultiSigOutputScript(3, keys);
 		assertTrue(script.isSentToMultiSig());
@@ -210,7 +210,7 @@ public class ScriptTest {
 
 	@Test
 	public void testCLTVPaymentChannelOutput() {
-		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew(), PQKey.createNew());
+		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew());
 		assertTrue(script.isSentToCLTVPaymentChannel(), "script is locktime-verify");
 	}
 

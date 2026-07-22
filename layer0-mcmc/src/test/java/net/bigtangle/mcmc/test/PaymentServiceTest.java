@@ -65,7 +65,6 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		List<PQKey> wallet1Keys_part = new ArrayList<PQKey>();
 		wallet1Keys_part.add(PQKey.createNew();
-		wallet1Keys_part.add(PQKey.createNew();
 		createMultiSigns( wallet1Keys_part);
 
 	}
@@ -220,7 +219,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		List<FreeStandingTransactionOutput> uspent = w.calculateAllSpendCandidates(null, false);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		w.payPartsToOne(null, to.toAddress(networkParameters).toString(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
+		w.payPartsToOne(null, to.toAddress(networkParameters).toHex(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
@@ -237,7 +236,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, to.toAddress(networkParameters).toString(), amount, "");
+		wallet.pay(null, to.toAddress(networkParameters).toHex(), amount, "");
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);

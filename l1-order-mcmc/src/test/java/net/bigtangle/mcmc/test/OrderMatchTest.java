@@ -59,7 +59,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderTickerPrice() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -116,7 +115,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderWithCheck() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<PQKey> genesisKeykeys = new ArrayList<PQKey>();
 		genesisKeykeys.add(genesisKey);
 		getBalanceAccount(false, genesisKeykeys);
@@ -150,7 +148,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderTickerSearchAPI() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -189,7 +186,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderTickerSearchAVGAPI() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -247,7 +243,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void buy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -282,7 +277,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBaseToken() throws Exception {
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
 		PQKey yuan = PQKey.createNew();
@@ -384,7 +378,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBaseTokenSmall() throws Exception {
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
 		PQKey yuan = PQKey.createNew();
@@ -420,10 +413,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBaseTokenSmallRemainder() throws Exception {
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// base token
 		PQKey yuan = PQKey.createNew();
-		String orderbaseToken = yuan.getPublicKeyAsHex();
 		int amount = 1000000;
 		long tokennumber = amount * 1000;
 		// Make yuan token
@@ -454,7 +445,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void buyBaseTokenMixed() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// yuan token
@@ -509,7 +499,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void sell() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -544,7 +533,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void multiLevelBuy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -582,7 +570,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void multiLevelSell() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -622,7 +609,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialBuy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -656,7 +642,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialSell() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -692,7 +677,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialBidFill() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -728,7 +712,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialAskFill() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -766,7 +749,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void cancel() throws Exception {
 
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -794,7 +776,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// PQKey genesisKey =
 		// PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -829,7 +810,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void effectiveCancel() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -867,7 +847,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testValidToTime() throws Exception {
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -929,7 +908,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testAllOrdersSpent() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -968,7 +946,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// we execute many times for order matchings, then do the reward to confirm all
 		// orders
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -994,7 +971,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testManyExecutions() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
@@ -1025,7 +1001,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testMultiMatching1() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
@@ -1060,7 +1035,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void checkDecimalFormat() throws Exception {
 
 		PQKey dollarKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// base token yuan with decimal 2
 		PQKey yuan = PQKey.createNew();
@@ -1103,7 +1077,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void payToWalletECKey() throws Exception {
 
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestToken(testKey, addedBlocks);
@@ -1122,7 +1095,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testOrderLargeThanLONGMAX() throws Exception {
 
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestToken(testKey, addedBlocks);
@@ -1151,7 +1123,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testBuySellWithDecimalDo(long price, long tradeAmount, int tokendecimal) throws Exception {
 
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 
@@ -1169,8 +1140,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeOrderExecutionAndReward(addedBlocks, null);
 
 		PQKey testKeyBuy = PQKey.createNew();
-
-		BigInteger amount = BigInteger.valueOf(7700000000000l);
 
 		payBigTo(testKeyBuy, amount, addedBlocks);
 		checkBalanceSum(new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID), testKeyBuy);
@@ -1193,7 +1162,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testBuyMCMC() throws Exception {
 
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestToken(testKey, addedBlocks);
@@ -1203,7 +1171,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		long price = 1;
 
 		PQKey testKeyBuy = PQKey.createNew();
-		BigInteger amount = BigInteger.valueOf(77);
 		// split BIG
 		payBigTo(testKeyBuy, amount.add(Coin.FEE_DEFAULT.getValue()), addedBlocks);
 
@@ -1227,7 +1194,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// and a matching buy order executes and closes the order.
 	public void testOrderConfirmedViaReward() throws Exception {
 		PQKey testKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();

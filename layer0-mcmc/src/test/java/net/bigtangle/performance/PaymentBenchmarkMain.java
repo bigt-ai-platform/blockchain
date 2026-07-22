@@ -50,7 +50,7 @@ public class PaymentBenchmarkMain {
         }
         for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
-            funding.put(key.toAddress(params).toString(), BigInteger.valueOf(100000));
+            funding.put(key.toAddress(params).toHex(), BigInteger.valueOf(100000));
             genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
         }
         log.info("Funded {} client wallets", clientKeys.size());
@@ -80,7 +80,7 @@ public class PaymentBenchmarkMain {
                 for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
                     try {
                         HashMap<String, BigInteger> payment = new HashMap<>();
-                        payment.put(recipients.get(clientId).toAddress(params).toString(), BigInteger.valueOf(1));
+                        payment.put(recipients.get(clientId).toAddress(params).toHex(), BigInteger.valueOf(1));
 
                         long txStart = System.nanoTime();
                         Block b = clientWallet.payToList(null, payment,

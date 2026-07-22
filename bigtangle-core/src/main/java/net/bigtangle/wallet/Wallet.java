@@ -1163,7 +1163,7 @@ public class Wallet extends WalletBase {
 	public Transaction saveUserdata(PQKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
 			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
 		if (encrypt && userKey instanceof DeterministicKey) {
-			byte[] cipher = ECIESCoder.encrypt(((DeterministicKey)userKey).getPubKeyPoint(), transaction.getData());
+			byte[] cipher = ECIESCoder.encrypt(DeterministicKey.CURVE.getCurve().decodePoint(((DeterministicKey)userKey).getPubKey()), transaction.getData());
 			transaction.setData(cipher);
 		}
 

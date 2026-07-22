@@ -773,7 +773,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         DeterministicSeed decSeed = seed.decrypt(getKeyCrypter(), passphrase, aesKey);
         DeterministicKeyChain chain = makeKeyChainFromSeed(decSeed);
         // Now double check that the keys match to catch the case where the key is wrong but padding didn't catch it.
-        if (!chain.getWatchingKey().getPubKeyPoint().equals(getWatchingKey().getPubKeyPoint()))
+        if (!chain.getWatchingKey().getPubKey().equals(getWatchingKey().getPubKey()))
             throw new KeyCrypterException("Provided AES key is wrong");
         chain.lookaheadSize = lookaheadSize;
         // Now copy the (pubkey only) leaf keys across to avoid rederiving them. The private key bytes are missing
@@ -815,7 +815,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         checkNotNull(aesKey);
         checkState(getKeyCrypter() != null, "Key chain not encrypted");
         try {
-            return rootKey.decrypt(aesKey).getPubKeyPoint().equals(rootKey.getPubKeyPoint());
+            return rootKey.decrypt(aesKey).getPubKey().equals(rootKey.getPubKey());
         } catch (KeyCrypterException e) {
             return false;
         }

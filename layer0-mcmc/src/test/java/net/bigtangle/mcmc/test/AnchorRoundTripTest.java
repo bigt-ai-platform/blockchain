@@ -59,8 +59,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         long l1Height = 1;
 
@@ -80,8 +78,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
@@ -106,8 +102,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
@@ -140,8 +134,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
@@ -171,8 +163,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
@@ -200,8 +190,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
@@ -281,8 +269,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        List<Sha256Hash> leaves = new ArrayList<>();
         Sha256Hash targetHash = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
         leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
         leaves.add(targetHash);
@@ -309,8 +295,6 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
         PQKey signKey = PQKey.createNew();
-
-        Sha256Hash targetHash = Sha256Hash.wrap("2222222222222222222222222222222222222222222222222222222222222222");
         Sha256Hash otherHash = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
 
         List<Sha256Hash> leaves = new ArrayList<>();

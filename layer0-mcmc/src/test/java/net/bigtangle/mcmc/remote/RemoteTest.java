@@ -84,14 +84,14 @@ public abstract class RemoteTest {
 	@BeforeEach
 	public void setUp() throws Exception { 
  
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
  
 	} 
 
 	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
 
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
 
 		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
 	}
@@ -161,7 +161,7 @@ public abstract class RemoteTest {
 		List<String> keyStrHex000 = new ArrayList<String>();
 
 		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
+			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
@@ -186,7 +186,7 @@ public abstract class RemoteTest {
 		List<String> keyStrHex000 = new ArrayList<String>();
 
 		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
+			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getAccountBalances.name(),

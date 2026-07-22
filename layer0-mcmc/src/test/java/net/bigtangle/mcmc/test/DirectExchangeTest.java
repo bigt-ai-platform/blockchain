@@ -119,7 +119,6 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	public void createTokenSubtangle() throws Exception {
 		PQKey ecKey = PQKey.createNew();
-		byte[] pubKey = ecKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Token tokens = Token.buildSubtangleTokenInfo(false, null, Utils.HEX.encode(pubKey), "subtangle", "", "");
@@ -181,8 +180,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
-			PQKey outKey = PQKey.createNew();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toHex(), Coin.COIN.getValue());
+			PQKey outKey = PQKey.createNew().toHex(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
@@ -217,8 +215,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
-			PQKey outKey = PQKey.createNew();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toHex(), Coin.COIN.getValue());
+			PQKey outKey = PQKey.createNew().toHex(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();

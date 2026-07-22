@@ -69,8 +69,6 @@ public class AnchorService {
         long l1Height = maxConfirmedReward.getChainLength();
 
         PQKey signKey = PQKey.createNew();
-
-
         SignatureBundle sig = signKey.sign(l1RewardHeadHash);
         byte[] sigBytes = sig.serialize();
 

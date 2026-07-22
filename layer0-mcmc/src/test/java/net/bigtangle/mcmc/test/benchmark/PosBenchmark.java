@@ -65,19 +65,14 @@ public class PosBenchmark extends AbstractIntegrationTest {
         // Create validator keys and wallet keys for funding
         List<PQKey> validatorKeys = new ArrayList<>();
         for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew();
-
-        List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew();
-
-        // Fund all wallets (validators + tx senders) via genesis
-        Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew();
+        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew() via genesis
+        Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : validatorKeys) {
-            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(500000));
+            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(500000));
         }
         for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
+            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
         }
         Block fb = wrapTransaction(genesisWallet.payToList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund"));
@@ -102,15 +97,14 @@ public class PosBenchmark extends AbstractIntegrationTest {
         }
         List<FreeStandingTransactionOutput> walletCoins = new ArrayList<>();
         for (PQKey k : walletKeys) {
-            String addr = k.toAddress(networkParameters).toString();
+            String addr = k.toAddress(networkParameters).toHex();
             FreeStandingTransactionOutput c = addrToCoin.get(addr);
             if (c != null) walletCoins.add(c);
         }
         log.info("Pre-fetched {} UTXOs", walletCoins.size());
 
         // Pre-create transactions (ECDSA in parallel before timing)
-        PQKey finalRecipient = PQKey.createNew();
-        String finalAddr = finalRecipient.toAddress(networkParameters).toString();
+        PQKey finalRecipient = PQKey.createNew().toString();
 
         List<Transaction> allTxs = new ArrayList<>();
         for (int i = 0; i < TOTAL_TX; i++) {

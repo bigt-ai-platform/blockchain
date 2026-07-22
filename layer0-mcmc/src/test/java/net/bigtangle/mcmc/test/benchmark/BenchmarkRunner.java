@@ -48,22 +48,16 @@ public class BenchmarkRunner {
 
         Wallet genesisWallet = Wallet.fromKeys(params,
                 PQKey.createNew();
-
-        List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew();
-
-        log.info("Funding wallets...");
         for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
-            funding.put(key.toAddress(params).toString(), BigInteger.valueOf(100000));
+            funding.put(key.toAddress(params).toHex(), BigInteger.valueOf(100000));
             genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
         }
         log.info("Funding done");
 
         List<PQKey> recipients = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew();
-
-        AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
 
@@ -82,7 +76,7 @@ public class BenchmarkRunner {
                     try {
                         long start = System.nanoTime();
                         HashMap<String, BigInteger> pmt = new HashMap<>();
-                        pmt.put(toKey.toAddress(params).toString(), BigInteger.valueOf(1));
+                        pmt.put(toKey.toAddress(params).toHex(), BigInteger.valueOf(1));
                         w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
                         totalNs.addAndGet(System.nanoTime() - start);
                         ok.incrementAndGet();

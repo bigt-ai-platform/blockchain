@@ -37,7 +37,7 @@ public class CrossChainIT {
         Wallet genesis = Wallet.fromKeys(params,
                 PQKey.createNew();
         HashMap<String, BigInteger> fundReq = new HashMap<>();
-        fundReq.put(bobKey.toAddress(params).toString(), BigInteger.valueOf(50000));
+        fundReq.put(bobKey.toAddress(params).toHex(), BigInteger.valueOf(50000));
         genesis.payToList(null, fundReq, NetworkParameters.BIGTANGLE_TOKENID, "fund");
         log.info("Paid 50000 BIG to bob on L0");
 
@@ -59,7 +59,7 @@ public class CrossChainIT {
 
         Map<String, String> pegInReq = new HashMap<>();
         pegInReq.put("utxo", utxo.getTxHash().toString() + ":" + utxo.getIndex());
-        pegInReq.put("beneficiary", bobKey.toAddress(params).toString());
+        pegInReq.put("beneficiary", bobKey.toAddress(params).toHex());
         OkHttp3Util.postString(l0Url + ReqCmd.processPegIn.name(),
                 Json.jsonmapper().writeValueAsString(pegInReq));
         log.info("Peg-in executed");

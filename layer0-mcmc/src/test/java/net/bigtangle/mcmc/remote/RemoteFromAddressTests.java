@@ -48,7 +48,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 	@Test
 	public void testUserpay() throws Exception {
 
-		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
+		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
 
 	//	payBigTo(accountKey,
 	//			Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
@@ -86,7 +86,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 	public void buyTicket(PQKey key, PQKey accountKey) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 		log.debug("====ready buyTicket====");
-		List<Transaction> bs = w.pay(null, accountKey.toAddress(networkParameters).toString(),
+		List<Transaction> bs = w.pay(null, accountKey.toAddress(networkParameters).toHex(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
 
 		log.debug("====start buyTicket====");
@@ -112,11 +112,9 @@ public class RemoteFromAddressTests extends RemoteTest {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
-		PQKey key = PQKey.createNew();
-		giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
+		PQKey key = PQKey.createNew().toString(), BigInteger.valueOf(100));
 		userkeys.add(key);
-		PQKey key2 = PQKey.createNew();
-		giveMoneyResult.put(key2.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
+		PQKey key2 = PQKey.createNew().toString(), BigInteger.valueOf(100));
 		userkeys.add(key2);
 
 		String memo = "pay to user";
@@ -154,9 +152,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.currency.ordinal(), key.getPublicKeyAsHex(),
 					Wallet.fromKeys(networkParameters, key, contextRoot));
-			PQKey signkey = PQKey.createNew();
-
-			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
+			PQKey signkey = PQKey.createNew(), signkey, null);
 
 		} catch (Exception e) {
 			// TODO: handle exception

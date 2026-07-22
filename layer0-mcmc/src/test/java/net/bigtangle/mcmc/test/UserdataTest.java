@@ -31,7 +31,6 @@ public class UserdataTest extends AbstractIntegrationTest {
         mcmcService.calcNewBlockPrototype(store);
 
         PQKey outKey = PQKey.createNew();
-        Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
         contact.setKey("testname");
@@ -84,7 +83,6 @@ public class UserdataTest extends AbstractIntegrationTest {
         mcmcService.calcNewBlockPrototype(store);
 
         PQKey outKey = PQKey.createNew();
-        Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
         contact.setKey("testname");
@@ -127,8 +125,6 @@ public class UserdataTest extends AbstractIntegrationTest {
         Block block = networkParameters.getDefaultSerializer().makeBlock(data);
         block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
         PQKey outKey = PQKey.createNew();
-
-        Transaction transaction = new Transaction(networkParameters);
         Contact contact = new Contact();
         contact.setName("bigtangle.org");
         contact.setAddress(outKey.toAddress(networkParameters).toHex());

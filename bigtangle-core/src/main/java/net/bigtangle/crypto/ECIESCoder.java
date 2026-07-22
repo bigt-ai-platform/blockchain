@@ -201,7 +201,7 @@ public class ECIESCoder {
 //
 //            @Override
 //            public AsymmetricCipherKeyPair generateKeyPair() {
-//                return new AsymmetricCipherKeyPair(new ECPublicKeyParameters(priv.getPubKeyPoint(), CURVE),
+//                return new AsymmetricCipherKeyPair(new ECPublicKeyParameters(priv.getPubKey(), CURVE),
 //                        new ECPrivateKeyParameters(priv.getPrivKey(), CURVE));
 //            }
 //        };

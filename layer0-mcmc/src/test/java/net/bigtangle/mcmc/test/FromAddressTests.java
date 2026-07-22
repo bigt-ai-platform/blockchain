@@ -48,9 +48,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 	@Test
 	public void testUserpay() throws Exception {
 
-		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
-
-		payBigTo(PQKey.createNew().multiply(BigInteger.valueOf(1000)), null);
+		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew().multiply(BigInteger.valueOf(1000)), null);
 
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
 		for (Coin coin : list) {
@@ -70,8 +68,6 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		}
 
 		accountKey = PQKey.createNew();
-
-		testTokens();
 
 		list = getBalanceAccount(false, yuanWallet.walletKeys());
 		for (Coin coin : list) {
@@ -115,7 +111,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		log.debug("====ready buyTicket====");
 		// Ensure tips queue is populated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		w.pay(null, accountKey.toAddress(networkParameters).toString(),
+		w.pay(null, accountKey.toAddress(networkParameters).toHex(),
 				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block bs = drainMempoolAndCreateBlock(predecessor, predecessor);
@@ -154,11 +150,9 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
-		PQKey key = PQKey.createNew();
-		giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
+		PQKey key = PQKey.createNew().toString(), BigInteger.valueOf(100));
 		userkeys.add(key);
-		PQKey key2 = PQKey.createNew();
-		giveMoneyResult.put(key2.toAddress(networkParameters).toString(), BigInteger.valueOf(100));
+		PQKey key2 = PQKey.createNew().toString(), BigInteger.valueOf(100));
 		userkeys.add(key2);
 
 		String memo = "pay to user";

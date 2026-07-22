@@ -357,7 +357,7 @@ public abstract class AbstractIntegrationTest {
 	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
 
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
 
 		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
 	}
@@ -393,7 +393,7 @@ public abstract class AbstractIntegrationTest {
 		makeRewardBlock(addedBlocks);
 		HashMap<String, BigInteger> giveMoneyTestToken = new HashMap<String, BigInteger>();
 
-		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toString(), amount);
+		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toHex(), amount);
 		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
 		// Ensure tips queue is updated before wallet operations
@@ -422,15 +422,15 @@ public abstract class AbstractIntegrationTest {
 		 * HashMap<String, BigInteger> giveMoneyResult = new HashMap<String,
 		 * BigInteger>();
 		 *
-		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
+		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toHex(),
 		 * BigInteger.valueOf(500000));
-		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
+		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toHex(),
 		 * BigInteger.valueOf(400000));
-		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
+		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toHex(),
 		 * BigInteger.valueOf(300000));
-		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
+		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toHex(),
 		 * BigInteger.valueOf(200000));
-		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toString(),
+		 * giveMoneyResult.put(testKey.toAddress(networkParameters).toHex(),
 		 * BigInteger.valueOf(100000)); payList(addedBlocks, giveMoneyResult,
 		 * testKey.getPubKey());
 		 */
@@ -442,11 +442,11 @@ public abstract class AbstractIntegrationTest {
 
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
 
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), BigInteger.valueOf(500000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), BigInteger.valueOf(400000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), BigInteger.valueOf(300000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), BigInteger.valueOf(200000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), BigInteger.valueOf(100000000));
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(500000000));
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(400000000));
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(300000000));
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(200000000));
+		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(100000000));
 		payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
 
 	}
@@ -659,8 +659,7 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
-		PQKey genesisKey = PQKey.createNew();
-		if (!beneficiary.toAddress(networkParameters).toString().equals(genesisKey.toAddress(networkParameters).toString())) {
+		PQKey genesisKey = PQKey.createNew().toHex().equals(genesisKey.toAddress(networkParameters).toHex())) {
 			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
 		}
 		w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
@@ -1029,7 +1028,7 @@ public abstract class AbstractIntegrationTest {
 		List<String> keyStrHex000 = new ArrayList<String>();
 
 		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
+			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
@@ -1054,7 +1053,7 @@ public abstract class AbstractIntegrationTest {
 		List<String> keyStrHex000 = new ArrayList<String>();
 
 		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
+			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getAccountBalances.name(),
@@ -1423,8 +1422,7 @@ public abstract class AbstractIntegrationTest {
 		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
 
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew();
-		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), genesiskey, null);
+		PQKey genesiskey = PQKey.createNew().getTokenid(), genesiskey, null);
 
 		return block;
 	}
@@ -1973,7 +1971,7 @@ public abstract class AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(PQKey.createNew().toString(),
+			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toHex(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, 1)));
 		}
 
@@ -2069,7 +2067,6 @@ public abstract class AbstractIntegrationTest {
 		};
 		for (String priv : s) {
 			PQKey key = PQKey.createNew();
-			userkeys.add(key);
 		}
 		return userkeys;
 	}
