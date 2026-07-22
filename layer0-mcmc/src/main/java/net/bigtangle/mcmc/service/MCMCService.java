@@ -160,8 +160,10 @@ public class MCMCService {
 			long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
 			long maxHeight = serviceBase.getCurrentMaxHeight(maxConfirmedReward, store);
 			updateWeightAndDepth(cutoffHeight, maxHeight, store);
-			updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
-			deleteMCMC(maxConfirmedReward, store);
+			if (maxConfirmedReward != null) {
+				updateRating(maxConfirmedReward, cutoffHeight, maxHeight, store);
+				deleteMCMC(maxConfirmedReward, store);
+			}
 			cacheBlockService.evictBlockMCMC();
 			cacheBlockService.evictBlockMCMCObject();
 			cacheBlockService.evictApproverHashes();

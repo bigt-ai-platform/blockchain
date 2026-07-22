@@ -152,10 +152,15 @@ network evaluates which blocks have received enough validator support:
 
 ### Fee pool and validator rewards
 
+The system has **zero inflation** — no new tokens are minted as block
+subsidies. The total supply of BIG is fixed at genesis and never increases.
+
 Every transaction pays a fee. Fees accumulate throughout each epoch and are
 distributed to validators at the epoch boundary. Each validator receives
 rewards in proportion to the amount they have staked. This aligns incentives:
-validators earn more by committing more resources to the network.
+validators earn more by committing more resources to the network, and the
+entire reward pool comes entirely from network usage rather than monetary
+expansion.
 
 ---
 
@@ -280,8 +285,8 @@ horizontal scaling across specialized applications without cross-chain
 coordination overhead.
 
 Together, these design choices deliver high transaction throughput, rapid
-confirmation, modular scalability, and post-quantum security within a unified
-architecture.
+confirmation, modular scalability, fixed token supply, and post-quantum
+security within a unified architecture.
 
 ---
 

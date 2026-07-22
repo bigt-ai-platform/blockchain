@@ -26,7 +26,7 @@ public class SubtanglePermissionService {
         boolean flag = key.verify(Sha256Hash.ZERO_HASH.getBytes(), signOutput);
         if (flag) {
             store.deleteSubtanglePermission(pubkey);
-            store.insertSubtanglePermission(pubkey, null, SubtangleStatus.wait);
+            store.insertSubtanglePermission(pubkey, "", SubtangleStatus.wait);
         }
         return flag;
 

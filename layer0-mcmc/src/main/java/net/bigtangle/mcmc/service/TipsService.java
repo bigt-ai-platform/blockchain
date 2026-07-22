@@ -43,6 +43,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Stopwatch;
 
+import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
@@ -426,7 +427,17 @@ public class TipsService {
 		List<BlockWrap> candidates = new ArrayList<>();
 		List<Sha256Hash> hashs = getEntryPointCandidates(currChainLength, store);
 		if (hashs.isEmpty()) {
-			candidates.add(store.getBlockWrap(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()));
+			TXReward reward = cacheBlockService.getMaxConfirmedReward(store);
+			if (reward != null) {
+				candidates.add(store.getBlockWrap(reward.getBlockHash()));
+			} else {
+				// No reward yet — fall back to genesis block so the MCMC can start
+				Block genesis = net.bigtangle.core.UtilGeneseBlock.createGenesis(networkParameters);
+				BlockWrap genesisWrap = store.getBlockWrap(genesis.getHash());
+				if (genesisWrap != null) {
+					candidates.add(genesisWrap);
+				}
+			}
 		} else {
 			ServiceBaseConnect serviceBaseConnect = new ServiceBaseConnect(serverConfiguration, networkParameters,
 					cacheBlockService, jsonmapper);
