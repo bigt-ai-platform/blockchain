@@ -24,6 +24,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.params.NetworkParameters;
 
@@ -127,7 +128,7 @@ public class AlertMessage extends Message {
      * doesn't verify, because that would allow arbitrary attackers to spam your users.
      */
     public boolean isSignatureValid() {
-        return PQScriptUtils.verifyPQ(Sha256Hash.hashTwice(content), signature, params.getAlertSigningKey());
+        return PQScriptUtils.verifyPQ(params.getAlertSigningKey(), signature, Sha256Hash.twiceOf(content));
     }
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -123,7 +123,7 @@ public class ValidatorDutyService {
 
             Sha256Hash msgHash = Sha256Hash.twiceOf(
                     (slot + ":" + beaconHead.toString()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            byte[] sig = validatorKey.sign(msgHash).encodeToDER();
+            byte[] sig = validatorKey.sign(msgHash).serialize();
             att.setSignature(sig);
 
             casperService.processVote(att, store);

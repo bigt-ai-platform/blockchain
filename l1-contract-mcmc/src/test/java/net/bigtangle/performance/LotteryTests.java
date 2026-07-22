@@ -63,7 +63,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public void lotteryDo() throws Exception {
-		wallet.importKey(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)));
+		wallet.importKey(PQKey.createNew());
 		accountKey = PQKey.createNew();
 		wallet.importKey(accountKey);
 		testTokens();
@@ -140,7 +140,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 		Coin sum = Coin.valueOf(0, Utils.HEX.decode(yuanTokenPub));
 		for (UTXO u : users) {
 			if (coin.getTokenHex().equals(u.getTokenId())
-					&& u.getFromaddress().equals(accountKey.toAddress(networkParameters).toBase58())) {
+					&& u.getFromaddress().equals(accountKey.toAddress(networkParameters).toHex())) {
 				sum = sum.add(u.getValue());
 
 			}
@@ -282,7 +282,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 		String domain = "";
 
-		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew();
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY",
 				winnerAmount.multiply(BigInteger.valueOf(usernumber * 10000l)));
@@ -290,7 +290,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public Address getAddress() {
-		return PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)).toAddress(networkParameters);
+		return PQKey.createNew().toAddress(networkParameters);
 	}
 
 	// create a token with multi sign
@@ -304,7 +304,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew();
 
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 

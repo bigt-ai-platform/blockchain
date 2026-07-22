@@ -69,6 +69,7 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.NoDataException;
 import net.bigtangle.exception.NoTokenException;
@@ -279,7 +280,7 @@ public class Wallet extends WalletBase {
 		Sha256Hash sighash = transaction.getHash();
 
 		SignatureBundle party1Signature = ownerKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -872,7 +873,7 @@ public class Wallet extends WalletBase {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		submitTransaction(tx);
@@ -903,7 +904,7 @@ public class Wallet extends WalletBase {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		submitTransaction(tx);
@@ -1058,8 +1059,7 @@ public class Wallet extends WalletBase {
 		Sha256Hash sighash = transaction.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 				false);
 
-		TransactionSignature tsrecsig = new TransactionSignature(connectKey.sign(sighash, aesKey),
-				Transaction.SigHash.ALL, false);
+		TransactionSignature tsrecsig = ((DeterministicKey) connectKey).ecSign(sighash, aesKey);
 		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
 		input.setScriptSig(inputScript);
 
@@ -1162,14 +1162,14 @@ public class Wallet extends WalletBase {
 
 	public Transaction saveUserdata(PQKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
 			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
-		if (encrypt) {
-			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
+		if (encrypt && userKey instanceof DeterministicKey) {
+			byte[] cipher = ECIESCoder.encrypt(((DeterministicKey)userKey).getPubKeyPoint(), transaction.getData());
 			transaction.setData(cipher);
 		}
 
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = userKey.sign(sighash);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1195,8 +1195,8 @@ public class Wallet extends WalletBase {
 				Json.jsonmapper().writeValueAsString(requestParam0));
 		UserSettingDataInfo userSettingDataInfo = null;
 		if (buf != null && buf.length > 0) {
-			if (encrypt) {
-				byte[] decryptedPayload = ECIESCoder.decrypt(userKey.getPrivKey(), buf);
+			if (encrypt && userKey instanceof DeterministicKey) {
+				byte[] decryptedPayload = ECIESCoder.decrypt(((DeterministicKey)userKey).getPrivKey(), buf);
 				userSettingDataInfo = new UserSettingDataInfo().parse(decryptedPayload);
 			} else {
 				userSettingDataInfo = new UserSettingDataInfo().parse(buf);
@@ -1313,7 +1313,7 @@ public class Wallet extends WalletBase {
 		}
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 

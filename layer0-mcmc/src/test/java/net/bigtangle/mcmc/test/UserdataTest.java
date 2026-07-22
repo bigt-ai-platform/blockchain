@@ -35,7 +35,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
         contact.setKey("testname");
-        contact.setValue(outKey.toAddress(networkParameters).toBase58());
+        contact.setValue(outKey.toAddress(networkParameters).toHex());
         UserSettingDataInfo contactInfo0 = new UserSettingDataInfo();
         List<UserSettingData> list = new ArrayList<UserSettingData>();
         list.add(contact);
@@ -88,7 +88,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
         contact.setKey("testname");
-        contact.setValue(outKey.toAddress(networkParameters).toBase58());
+        contact.setValue(outKey.toAddress(networkParameters).toHex());
         UserSettingDataInfo contactInfo0 = new UserSettingDataInfo();
         List<UserSettingData> list = new ArrayList<UserSettingData>();
         list.add(contact);
@@ -131,7 +131,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         Transaction transaction = new Transaction(networkParameters);
         Contact contact = new Contact();
         contact.setName("bigtangle.org");
-        contact.setAddress(outKey.toAddress(networkParameters).toBase58());
+        contact.setAddress(outKey.toAddress(networkParameters).toHex());
         ContactInfo contactInfo0 = new ContactInfo();
         List<Contact> list = new ArrayList<Contact>();
         list.add(contact);

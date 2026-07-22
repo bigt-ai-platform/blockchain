@@ -153,7 +153,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(Utils.HEX.encode(pubKey));
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(ecKey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(ecKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(ecKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
@@ -175,15 +175,14 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
 			PQKey outKey = PQKey.createNew();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
+			giveMoneyResult.put(outKey.toAddress(networkParameters).toHex(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
@@ -212,15 +211,14 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
 			PQKey outKey = PQKey.createNew();
-			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
+			giveMoneyResult.put(outKey.toAddress(networkParameters).toHex(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
@@ -249,7 +247,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		List<PQKey> keys = wallet.walletKeys(null);
 		List<String> address = new ArrayList<String>();
 		for (PQKey ecKey : keys) {
-			address.add(ecKey.toAddress(networkParameters).toBase58());
+			address.add(ecKey.toAddress(networkParameters).toHex());
 		}
 		HashMap<String, Object> request = new HashMap<String, Object>();
 		request.put("address", address);

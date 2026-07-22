@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import net.bigtangle.core.*;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.wallet.KeyBag;
@@ -89,7 +90,8 @@ public abstract class CustomTransactionSigner extends StatelessTransactionSigner
 
             Sha256Hash sighash = tx.hashForSignature(i, redeemData.redeemScript, Transaction.SigHash.ALL, false);
             SignatureAndKey sigKey = getSignature(sighash, propTx.keyPaths.get(scriptPubKey));
-            TransactionSignature txSig = new TransactionSignature(sigKey.sig, Transaction.SigHash.ALL, false);
+            int sighashFlags = TransactionSignature.calcSigHashValue(Transaction.SigHash.ALL, false);
+            TransactionSignature txSig = new TransactionSignature(sigKey.sig.serialize(), sighashFlags);
             int sigIndex = inputScript.getSigInsertionIndex(sighash, sigKey.pubKey);
             inputScript = scriptPubKey.getScriptSigWithSignature(inputScript, txSig.encodeToBitcoin(), sigIndex);
             txIn.setScriptSig(inputScript);

@@ -42,6 +42,7 @@ import net.bigtangle.core.OrderOpenInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenType;
@@ -672,7 +673,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		byte[] signature = block.getTransactions().get(0).getDataSignature();
 
 		// If signature of beneficiary is missing, fail
-		if (!PQScriptUtils.verifyPQ(data, signature, pubKey)) {
+		if (!PQScriptUtils.verifyPQ(pubKey, signature, Sha256Hash.wrap(data))) {
 			if (throwExceptions)
 				throw new InsufficientSignaturesException();
 			return SolidityState.getFailState();
@@ -969,7 +970,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			byte[] data = tx.getHash().getBytes();
 			byte[] signature = Utils.HEX.decode(multiSignBy.getSignature());
 
-			if (PQScriptUtils.verifyPQ(data, signature, pubKey)) {
+			if (PQScriptUtils.verifyPQ(pubKey, signature, Sha256Hash.wrap(data))) {
 				signatureCount++;
 			} else {
 				if (throwExceptions)
@@ -1022,7 +1023,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			byte[] data = txHash.getBytes();
 			byte[] signature = Utils.HEX.decode(multiSignBy.getSignature());
 
-			if (PQScriptUtils.verifyPQ(data, signature, pubKey)) {
+			if (PQScriptUtils.verifyPQ(pubKey, signature, Sha256Hash.wrap(data))) {
 				signatureCount++;
 			} else {
 				if (throwExceptions)

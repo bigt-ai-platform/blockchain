@@ -312,7 +312,7 @@ public abstract class AbstractIntegrationTest {
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
 		resetStore();
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
 		serverConfiguration.setServiceReady(true);
 
 	}
@@ -659,7 +659,7 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		if (!beneficiary.toAddress(networkParameters).toString().equals(genesisKey.toAddress(networkParameters).toString())) {
 			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
 		}
@@ -973,8 +973,7 @@ public abstract class AbstractIntegrationTest {
 
 	protected Transaction createTestTransaction() throws Exception {
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		List<UTXO> outputs = getBalance(false, genesiskey);
 		UTXO output = getLargeUTXO(outputs);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
@@ -1293,7 +1292,7 @@ public abstract class AbstractIntegrationTest {
 
 		for (PQKey ecKey : ecKeys) {
 			HashMap<String, Object> requestParam0 = new HashMap<String, Object>();
-			requestParam0.put("address", ecKey.toAddress(networkParameters).toBase58());
+			requestParam0.put("address", ecKey.toAddress(networkParameters).toHex());
 			byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
 					Json.jsonmapper().writeValueAsString(requestParam0));
 			System.out.println(resp);
@@ -1324,7 +1323,7 @@ public abstract class AbstractIntegrationTest {
 			MultiSignBy multiSignBy0 = new MultiSignBy();
 			multiSignBy0.setTokenid(tokenid);
 			multiSignBy0.setTokenindex(tokenindex_);
-			multiSignBy0.setAddress(ecKey.toAddress(networkParameters).toBase58());
+			multiSignBy0.setAddress(ecKey.toAddress(networkParameters).toHex());
 			multiSignBy0.setPublickey(Utils.HEX.encode(ecKey.getPubKey()));
 			multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 			multiSignBies.add(multiSignBy0);
@@ -1424,8 +1423,7 @@ public abstract class AbstractIntegrationTest {
 		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
 
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), genesiskey, null);
 
 		return block;
@@ -1488,19 +1486,18 @@ public abstract class AbstractIntegrationTest {
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		SignatureBundle party2Signature = genesiskey.sign(sighash, aesKey);
 		byte[] buf2 = party2Signature.encodeToDER();
 		multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(genesiskey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf2));
 		multiSignBies.add(multiSignBy0);
@@ -1530,7 +1527,7 @@ public abstract class AbstractIntegrationTest {
 	public Block pullBlockDoMultiSign(final String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
 
-		String address = outKey.toAddress(networkParameters).toBase58();
+		String address = outKey.toAddress(networkParameters).toHex();
 		requestParam.put("address", address);
 		requestParam.put("tokenid", tokenid);
 
@@ -1562,7 +1559,7 @@ public abstract class AbstractIntegrationTest {
 
 		multiSignBy0.setTokenid(multiSign.getTokenid());
 		multiSignBy0.setTokenindex(multiSign.getTokenindex());
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
@@ -1976,7 +1973,7 @@ public abstract class AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toString(),
+			giveMoneyResult.put(PQKey.createNew().toString(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, 1)));
 		}
 
@@ -2071,7 +2068,7 @@ public abstract class AbstractIntegrationTest {
 
 		};
 		for (String priv : s) {
-			PQKey key = PQKey.createNew()Utils.HEX.decode(priv));
+			PQKey key = PQKey.createNew();
 			userkeys.add(key);
 		}
 		return userkeys;

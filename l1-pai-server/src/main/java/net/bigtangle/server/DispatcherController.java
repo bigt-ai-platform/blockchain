@@ -563,7 +563,7 @@ public class DispatcherController implements DisposableBean {
         String pubkey = header.split(",")[0];
         byte[] pub = Utils.HEX.decode(pubkey);
         PQKey ecKey = PQKey.fromPublicOnly(pub);
-        final String address = ecKey.toAddress(networkParameters).toBase58();
+        final String address = ecKey.toAddress(networkParameters).toHex();
         if (!Utils.isBlank(serverConfiguration.getPermissionadmin())
                 && serverConfiguration.getPermissionadmin().equals(address)) {
             return true;
@@ -609,7 +609,7 @@ public class DispatcherController implements DisposableBean {
             PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(pubkey));
             byte[] buf = Utils.HEX.decode(accessToken);
             byte[] signature = Utils.HEX.decode(signHex);
-            flag = key.verify(buf, signature);
+            flag = net.bigtangle.crypto.pq.PQScriptUtils.verifyPQ(key.getPubKey(), signature, Sha256Hash.of(buf));
             if (flag) {
                 int count = this.accessPermissionedService.checkSessionRandomNumResp(pubkey, accessToken, store);
                 flag = count > 0;

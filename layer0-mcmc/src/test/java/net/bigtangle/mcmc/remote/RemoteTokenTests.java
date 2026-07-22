@@ -41,7 +41,7 @@ public class RemoteTokenTests    {
 	@BeforeEach
 	public void setUp() throws Exception {
 		contextRoot = System.getProperty("server.url", "http://localhost:8089/");
-		wallet = Wallet.fromKeys(TestParams.get(), PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(TestParams.get(), PQKey.createNew();
 
 	}
 
@@ -55,7 +55,7 @@ public class RemoteTokenTests    {
 
 		String domain = "";
 
-		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew();
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY", BigInteger.valueOf(1000000000l));
 
@@ -72,7 +72,7 @@ public class RemoteTokenTests    {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew();
 
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 

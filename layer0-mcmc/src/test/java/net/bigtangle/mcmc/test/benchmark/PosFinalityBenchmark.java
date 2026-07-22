@@ -68,7 +68,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew();
     }
 
     @Test
@@ -79,7 +79,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         // -- Phase 1: Fund validators --
         log.info("--- Phase 1: Fund validators ---");
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
+                PQKey.createNew();
         for (PQKey vk : validatorKeys) {
             HashMap<String, BigInteger> fund = new HashMap<>();
             fund.put(vk.toAddress(networkParameters).toString(), BigInteger.valueOf(10000000));

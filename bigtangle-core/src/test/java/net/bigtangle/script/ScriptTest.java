@@ -7,7 +7,6 @@ package net.bigtangle.script;
 
 import static net.bigtangle.core.Utils.HEX;
 import static net.bigtangle.script.ScriptOpCodes.OP_0;
-import static net.bigtangle.script.ScriptOpCodes.OP_INVALIDOPCODE;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,49 +16,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.math.BigInteger;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
-import org.hamcrest.core.IsNot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.Transaction.SigHash;
 import net.bigtangle.core.TransactionInput;
-import net.bigtangle.core.TransactionOutPoint;
-import net.bigtangle.core.TransactionOutput;
-import net.bigtangle.core.UnsafeByteArrayOutputStream;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.exception.ScriptException;
-import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script.VerifyFlag;
-import net.bigtangle.utils.DumpedPrivateKey;
 
 public class ScriptTest {
 	// From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on
@@ -122,13 +102,13 @@ public class ScriptTest {
 
 	@Test
 	public void testMultiSig() throws Exception {
-		List<PQKey> keys = Lists.newArrayList(PQKey.createNew();
+		List<PQKey> keys = Lists.newArrayList(PQKey.createNew(), PQKey.createNew(), PQKey.createNew());
 		assertTrue(ScriptBuilder.createMultiSigOutputScript(2, keys).isSentToMultiSig());
 		Script script = ScriptBuilder.createMultiSigOutputScript(3, keys);
 		assertTrue(script.isSentToMultiSig());
 		List<PQKey> pubkeys = new ArrayList<PQKey>(3);
 		for (PQKey key : keys)
-			pubkeys.add(PQKey.fromPublicOnly(key.getPubKeyPoint()));
+			pubkeys.add(PQKey.fromPublicOnly(key.getPubKey()));
 		assertEquals(script.getPubKeys(), pubkeys);
 		assertFalse(ScriptBuilder.createOutputScript(PQKey.createNew()).isSentToMultiSig());
 		try {
@@ -159,58 +139,6 @@ public class ScriptTest {
 				"41043e96222332ea7848323c08116dddafbfa917b8e37f0bdf63841628267148588a09a43540942d58d49717ad3fabfe14978cf4f0a8b84d2435dad16e9aa4d7f935ac");
 		Script s = new Script(bytes);
 		assertTrue(s.isSentToRawPubKey());
-	}
-
-	// TODO new binary @Test
-	public void testCreateMultiSigInputScript() {
-		// Setup transaction and signatures
-		PQKey key1 = DumpedPrivateKey.fromBase58(PARAMS, "cVLwRLTvz3BxDAWkvS3yzT9pUcTCup7kQnfT2smRjvmmm1wAP6QT")
-				.getKey();
-		PQKey key2 = DumpedPrivateKey.fromBase58(PARAMS, "cTine92s8GLpVqvebi8rYce3FrUYq78ZGQffBYCS1HmDPJdSTxUo")
-				.getKey();
-		PQKey key3 = DumpedPrivateKey.fromBase58(PARAMS, "cVHwXSPRZmL9adctwBwmn4oTZdZMbaCsR5XF6VznqMgcvt1FDDxg")
-				.getKey();
-		Script multisigScript = ScriptBuilder.createMultiSigOutputScript(2, Arrays.asList(key1, key2, key3));
-		byte[] bytes = HEX.decode(
-				"01000000013df681ff83b43b6585fa32dd0e12b0b502e6481e04ee52ff0fdaf55a16a4ef61000000006b483045022100a84acca7906c13c5895a1314c165d33621cdcf8696145080895cbf301119b7cf0220730ff511106aa0e0a8570ff00ee57d7a6f24e30f592a10cae1deffac9e13b990012102b8d567bcd6328fd48a429f9cf4b315b859a58fd28c5088ef3cb1d98125fc4e8dffffffff02364f1c00000000001976a91439a02793b418de8ec748dd75382656453dc99bcb88ac40420f000000000017a9145780b80be32e117f675d6e0ada13ba799bf248e98700000000");
-		Transaction transaction = PARAMS.getDefaultSerializer().makeTransaction(bytes);
-		TransactionOutput output = transaction.getOutput(1);
-		Transaction spendTx = new Transaction(PARAMS);
-		;
-		Address address = Address.fromBase58(PARAMS, "n3CFiCmBXVt5d3HXKQ15EFZyhPz4yj5F3H");
-		Script outputScript = ScriptBuilder.createOutputScript(address);
-		spendTx.addOutput(output.getValue(), outputScript);
-		spendTx.addInput(Sha256Hash.ZERO_HASH, output);
-		Sha256Hash sighash = spendTx.hashForSignature(0, multisigScript, SigHash.ALL, false);
-		SignatureBundle party1Signature = key1.sign(sighash);
-		SignatureBundle party2Signature = key2.sign(sighash);
-		TransactionSignature party1TransactionSignature = new TransactionSignature(party1Signature, SigHash.ALL, false);
-		TransactionSignature party2TransactionSignature = new TransactionSignature(party2Signature, SigHash.ALL, false);
-
-		// Create p2sh multisig input script
-		Script inputScript = ScriptBuilder.createP2SHMultiSigInputScript(
-				ImmutableList.of(party1TransactionSignature, party2TransactionSignature), multisigScript);
-
-		// Assert that the input script contains 4 chunks
-		assertTrue(inputScript.getChunks().size() == 4);
-
-		// Assert that the input script created contains the original multisig
-		// script as the last chunk
-		ScriptChunk scriptChunk = inputScript.getChunks().get(inputScript.getChunks().size() - 1);
-		assertArrayEquals(scriptChunk.data, multisigScript.getProgram());
-
-		// Create regular multisig input script
-		inputScript = ScriptBuilder
-				.createMultiSigInputScript(ImmutableList.of(party1TransactionSignature, party2TransactionSignature));
-
-		// Assert that the input script only contains 3 chunks
-		assertTrue(inputScript.getChunks().size() == 3);
-
-		// Assert that the input script created does not end with the original
-		// multisig script
-		scriptChunk = inputScript.getChunks().get(inputScript.getChunks().size() - 1);
-		
-		assertThat(scriptChunk.data, IsNot.not(equalTo(multisigScript.getProgram())));
 	}
 
 	@Test
@@ -280,149 +208,9 @@ public class ScriptTest {
 		assertEquals(0, stack.get(0).length, "OP_0 push length");
 	}
 
-	private Script parseScriptString(String string) throws IOException {
-		String[] words = string.split("[ \\t\\n]");
-
-		UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
-
-		for (String w : words) {
-			if (w.equals(""))
-				continue;
-			if (w.matches("^-?[0-9]*$")) {
-				// Number
-				long val = Long.parseLong(w);
-				if (val >= -1 && val <= 16)
-					out.write(Script.encodeToOpN((int) val));
-				else
-					Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
-			} else if (w.matches("^0x[0-9a-fA-F]*$")) {
-				// Raw hex data, inserted NOT pushed onto stack:
-				out.write(HEX.decode(w.substring(2).toLowerCase()));
-			} else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
-				// Single-quoted string, pushed as data. NOTE: this is poor-man's
-				// parsing, spaces/tabs/newlines in single-quoted strings won't work.
-				Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(Charset.forName("UTF-8")));
-			} else if (ScriptOpCodes.getOpCode(w) != OP_INVALIDOPCODE) {
-				// opcode, e.g. OP_ADD or OP_1:
-				out.write(ScriptOpCodes.getOpCode(w));
-			} else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != OP_INVALIDOPCODE) {
-				// opcode, e.g. OP_ADD or OP_1:
-				out.write(ScriptOpCodes.getOpCode(w.substring(3)));
-			} else {
-				throw new RuntimeException("Invalid Data");
-			}
-		}
-
-		return new Script(out.toByteArray());
-	}
-
-	private Set<VerifyFlag> parseVerifyFlags(String str) {
-		Set<VerifyFlag> flags = EnumSet.noneOf(VerifyFlag.class);
-		if (!"NONE".equals(str)) {
-			for (String flag : str.split(",")) {
-				try {
-					flags.add(VerifyFlag.valueOf(flag));
-				} catch (IllegalArgumentException x) {
-					log.debug("Cannot handle verify flag {} -- ignored.", flag);
-				}
-			}
-		}
-		return flags;
-	}
-
-	private Map<TransactionOutPoint, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
-		Map<TransactionOutPoint, Script> scriptPubKeys = new HashMap<TransactionOutPoint, Script>();
-		for (JsonNode input : inputs) {
-			String hash = input.get(0).asText();
-			int index = input.get(1).asInt();
-			String script = input.get(2).asText();
-			Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
-			scriptPubKeys.put(  TransactionOutPoint.fromTransactionOutPoint4(PARAMS, index, Sha256Hash.ZERO_HASH, sha256Hash),
-					parseScriptString(script));
-		}
-		return scriptPubKeys;
-	}
-
-	// TODO new binary @Test
-	public void dataDrivenValidTransactions() throws Exception {
-		JsonNode json = new ObjectMapper()
-				.readTree(new InputStreamReader(getClass().getResourceAsStream("tx_valid.json"), Charsets.UTF_8));
-		for (JsonNode test : json) {
-			if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-				continue; // This is a comment.
-			Transaction transaction = null;
-			try {
-				Map<TransactionOutPoint, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-				transaction = PARAMS.getDefaultSerializer()
-						.makeTransaction(HEX.decode(test.get(1).asText().toLowerCase()));
-				transaction.verify();
-				Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-
-				for (int i = 0; i < transaction.getInputs().size(); i++) {
-					TransactionInput input = transaction.getInputs().get(i);
-					if (input.getOutpoint().getIndex() == 0xffffffffL)
-						input.getOutpoint().setIndex(-1);
-					assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
-					input.getScriptSig().correctlySpends(transaction, i, scriptPubKeys.get(input.getOutpoint()),
-							verifyFlags);
-				}
-			} catch (Exception e) {
-				System.err.println(test);
-				if (transaction != null)
-					System.err.println(transaction);
-				throw e;
-			}
-		}
-	}
-
-	// TODO new binary @Test
-	public void dataDrivenInvalidTransactions() throws Exception {
-		JsonNode json = new ObjectMapper()
-				.readTree(new InputStreamReader(getClass().getResourceAsStream("tx_invalid.json"), Charsets.UTF_8));
-		for (JsonNode test : json) {
-			if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-				continue; // This is a comment.
-			Map<TransactionOutPoint, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-			Transaction transaction = PARAMS.getDefaultSerializer()
-					.makeTransaction(HEX.decode(test.get(1).asText().toLowerCase()));
-			Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-
-			boolean valid = true;
-			try {
-				transaction.verify();
-			} catch (VerificationException e) {
-				valid = false;
-			}
-
-			// Bitcoin Core checks this case in CheckTransaction, but we leave it to
-			// later where we will see an attempt to double-spend, so we explicitly check
-			// here
-			HashSet<TransactionOutPoint> set = new HashSet<TransactionOutPoint>();
-			for (TransactionInput input : transaction.getInputs()) {
-				if (set.contains(input.getOutpoint()))
-					valid = false;
-				set.add(input.getOutpoint());
-			}
-
-			for (int i = 0; i < transaction.getInputs().size() && valid; i++) {
-				TransactionInput input = transaction.getInputs().get(i);
-				assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
-				try {
-					input.getScriptSig().correctlySpends(transaction, i, scriptPubKeys.get(input.getOutpoint()),
-							verifyFlags);
-				} catch (VerificationException e) {
-					valid = false;
-				}
-			}
-
-			if (valid)
-				fail();
-		}
-	}
-
 	@Test
 	public void testCLTVPaymentChannelOutput() {
-		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew();
+		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew(), PQKey.createNew());
 		assertTrue(script.isSentToCLTVPaymentChannel(), "script is locktime-verify");
 	}
 

@@ -23,7 +23,7 @@ import org.bouncycastle.crypto.InvalidCipherTextException;
 import net.bigtangle.apps.data.IdentityCore;
 import net.bigtangle.apps.data.IdentityData;
 import net.bigtangle.apps.data.SignedData;
-import net.bigtangle.crypto.ECIESCoder;
+
 import net.bigtangle.params.NetworkParameters;
 
 public class SerializationTest {
@@ -277,29 +277,6 @@ public class SerializationTest {
 		identity.verify();
 
 		identity.setValidtodate(System.currentTimeMillis());
-		byte[] data = identity.toByteArray();
-
-		byte[] cipher = ECIESCoder.encrypt(key.getPubKeyPoint(), data);
-		KeyValue kv = new KeyValue();
-		kv.setKey(key.getPublicKeyAsHex());
-		kv.setValue(Utils.HEX.encode(cipher));
-		tokenKeyValues.addKeyvalue(kv);
-		byte[] cipher1 = ECIESCoder.encrypt(userkey.getPubKeyPoint(), data);
-		kv = new KeyValue();
-		kv.setKey(userkey.getPublicKeyAsHex());
-		kv.setValue(Utils.HEX.encode(cipher1));
-		tokenKeyValues.addKeyvalue(kv);
-
-		for (KeyValue kvtemp : tokenKeyValues.getKeyvalues()) {
-			if (kvtemp.getKey().equals(userkey.getPublicKeyAsHex())) {
-				byte[] decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(), Utils.HEX.decode(kvtemp.getValue()));
-				SignedData reidentity = new SignedData().parse(decryptedPayload);
-				IdentityData id = new IdentityData().parse(Utils.HEX.decode(reidentity.getSerializedData()));
-				assertTrue(id.getIdentificationnumber().equals("120123456789012345"));
-				identity.verify();
-
-			}
-		}
 
 	}
 

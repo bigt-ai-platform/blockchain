@@ -224,7 +224,7 @@ public class FakeTxBuilder {
     public static DoubleSpends createFakeDoubleSpendTxns(NetworkParameters params, Address to) {
         DoubleSpends doubleSpends = new DoubleSpends();
         Coin value = COIN;
-        Address someBadGuy = PQKey.createNew().toAddress(params);
+        Address someBadGuy = PQKey.createNew();
 
         doubleSpends.prevTx = new Transaction(params);
         TransactionOutput prevOut =   TransactionOutput.fromAddress(params, doubleSpends.prevTx, value, someBadGuy);
@@ -258,7 +258,7 @@ public class FakeTxBuilder {
  
  
     public static Block makeSolvedTestBlock(Block prev, Transaction... transactions) throws BlockStoreException {
-       // Address to = PQKey.createNew().toAddress(prev.getParams());
+       // Address to = PQKey.createNew();
         Block b = UtilsTest.createBlock(MainNetParams.get(), prev, prev);
         // Coinbase tx already exists.
         for (Transaction tx : transactions) {

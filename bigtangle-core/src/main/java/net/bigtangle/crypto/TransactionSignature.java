@@ -21,7 +21,6 @@ package net.bigtangle.crypto;
 
 import com.google.common.base.Preconditions;
 
-import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Transaction.SigHash;
 import net.bigtangle.exception.VerificationException;
@@ -30,78 +29,67 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Integer;
+import org.bouncycastle.asn1.DLSequence;
+
 /**
- * A TransactionSignature wraps an {@link net.bigtangle.core.SignatureBundle} and adds methods for handling
+ * A TransactionSignature wraps an ECDSA signature (r, s) and adds methods for handling
  * the additional SIGHASH mode byte that is used.
  */
-public class TransactionSignature extends SignatureBundle {
-    /**
-     * A byte that controls which parts of a transaction are signed. This is exposed because signatures
-     * parsed off the wire may have sighash flags that aren't "normal" serializations of the enum values.
-     * Because Bitcoin Core works via bit testing, we must not lose the exact value when round-tripping
-     * otherwise we'll fail to verify signature hashes.
-     */
+public class TransactionSignature {
+    public final BigInteger r;
+    public final BigInteger s;
     public final int sighashFlags;
 
-    /** Constructs a signature with the given components and SIGHASH_ALL. */
     public TransactionSignature(BigInteger r, BigInteger s) {
         this(r, s, Transaction.SigHash.ALL.value);
     }
 
-    /** Constructs a signature with the given components and raw sighash flag bytes (needed for rule compatibility). */
     public TransactionSignature(BigInteger r, BigInteger s, int sighashFlags) {
-        super(r, s);
+        this.r = r;
+        this.s = s;
         this.sighashFlags = sighashFlags;
     }
 
-    /** Constructs a transaction signature based on the ECDSA signature. */
-    public TransactionSignature(SignatureBundle signature, Transaction.SigHash mode, boolean anyoneCanPay) {
-        super(signature.r, signature.s);
-        sighashFlags = calcSigHashValue(mode, anyoneCanPay);
+    public TransactionSignature(byte[] derEncoded) {
+        this(derEncoded, Transaction.SigHash.ALL.value);
     }
 
-    /**
-     * Returns a dummy invalid signature whose R/S values are set such that they will take up the same number of
-     * encoded bytes as a real signature. This can be useful when you want to fill out a transaction to be of the
-     * right size (e.g. for fee calculations) but don't have the requisite signing key yet and will fill out the
-     * real signature later.
-     */
+    public TransactionSignature(byte[] derEncoded, int sighashFlags) {
+        try {
+            ASN1InputStream decoder = new ASN1InputStream(derEncoded);
+            DLSequence seq = (DLSequence) decoder.readObject();
+            this.r = ((ASN1Integer) seq.getObjectAt(0)).getPositiveValue();
+            this.s = ((ASN1Integer) seq.getObjectAt(1)).getPositiveValue();
+            decoder.close();
+        } catch (Exception e) {
+            throw new RuntimeException("Could not decode DER signature", e);
+        }
+        this.sighashFlags = sighashFlags;
+    }
+
     public static TransactionSignature dummy() {
-        BigInteger val = PQKey.HALF_CURVE_ORDER;
+        BigInteger val = BigInteger.ONE;
         return new TransactionSignature(val, val);
     }
 
-    /** Calculates the byte used in the protocol to represent the combination of mode and anyoneCanPay. */
     public static int calcSigHashValue(Transaction.SigHash mode, boolean anyoneCanPay) {
-        Preconditions.checkArgument(SigHash.ALL == mode || SigHash.NONE == mode || SigHash.SINGLE == mode); // enforce compatibility since this code was made before the SigHash enum was updated
+        Preconditions.checkArgument(SigHash.ALL == mode || SigHash.NONE == mode || SigHash.SINGLE == mode);
         int sighashFlags = mode.value;
         if (anyoneCanPay)
             sighashFlags |= Transaction.SigHash.ANYONECANPAY.value;
         return sighashFlags;
     }
 
-    /**
-     * Returns true if the given signature is has canonical encoding, and will thus be accepted as standard by
-     * Bitcoin Core. DER and the SIGHASH encoding allow for quite some flexibility in how the same structures
-     * are encoded, and this can open up novel attacks in which a man in the middle takes a transaction and then
-     * changes its signature such that the transaction hash is different but it's still valid. This can confuse wallets
-     * and generally violates people's mental model of how Bitcoin should work, thus, non-canonical signatures are now
-     * not relayed by default.
-     */
     public static boolean isEncodingCanonical(byte[] signature) {
-        // See Bitcoin Core's IsCanonicalSignature, https://bitcointalk.org/index.php?topic=8392.msg127623#msg127623
-        // A canonical signature exists of: <30> <total len> <02> <len R> <R> <02> <len S> <S> <hashtype>
-        // Where R and S are not negative (their first byte has its highest bit not set), and not
-        // excessively padded (do not start with a 0 byte, unless an otherwise negative number follows,
-        // in which case a single 0 byte is necessary and even required).
         if (signature.length < 9 || signature.length > 73)
             return false;
 
-        int hashType = (signature[signature.length-1] & 0xff) & ~Transaction.SigHash.ANYONECANPAY.value; // mask the byte to prevent sign-extension hurting us
+        int hashType = (signature[signature.length-1] & 0xff) & ~Transaction.SigHash.ANYONECANPAY.value;
         if (hashType < Transaction.SigHash.ALL.value || hashType > Transaction.SigHash.SINGLE.value)
             return false;
 
-        //                   "wrong type"                  "wrong length marker"
         if ((signature[0] & 0xff) != 0x30 || (signature[1] & 0xff) != signature.length-3)
             return false;
 
@@ -112,17 +100,15 @@ public class TransactionSignature extends SignatureBundle {
         if (lenR + lenS + 7 != signature.length || lenS == 0)
             return false;
 
-        //    R value type mismatch          R value negative
         if (signature[4-2] != 0x02 || (signature[4] & 0x80) == 0x80)
             return false;
         if (lenR > 1 && signature[4] == 0x00 && (signature[4+1] & 0x80) != 0x80)
-            return false; // R value excessively padded
+            return false;
 
-        //       S value type mismatch                    S value negative
         if (signature[6 + lenR - 2] != 0x02 || (signature[6 + lenR] & 0x80) == 0x80)
             return false;
         if (lenS > 1 && signature[6 + lenR] == 0x00 && (signature[6 + lenR + 1] & 0x80) != 0x80)
-            return false; // S value excessively padded
+            return false;
 
         return true;
     }
@@ -141,52 +127,61 @@ public class TransactionSignature extends SignatureBundle {
             return Transaction.SigHash.ALL;
     }
 
-    /**
-     * What we get back from the signer are the two components of a signature, r and s. To get a flat byte stream
-     * of the type used by Bitcoin we have to encode them using DER encoding, which is just a way to pack the two
-     * components into a structure, and then we append a byte to the end for the sighash flags.
-     */
     public byte[] encodeToBitcoin() {
+        ByteArrayOutputStream bos = derByteStream();
+        bos.write(sighashFlags);
+        return bos.toByteArray();
+    }
+
+    public TransactionSignature toCanonicalised() {
+        BigInteger canonicalS = s;
+        if (s.compareTo(TransactionSignature.HALF_CURVE_ORDER) > 0)
+            canonicalS = TransactionSignature.CURVE.getN().subtract(s);
+        return new TransactionSignature(r, canonicalS, sighashFlags);
+    }
+
+    public static final BigInteger HALF_CURVE_ORDER;
+    public static final org.bouncycastle.crypto.params.ECDomainParameters CURVE;
+
+    static {
+        org.bouncycastle.asn1.x9.X9ECParameters params = org.bouncycastle.asn1.sec.SECNamedCurves.getByName("secp256k1");
+        CURVE = new org.bouncycastle.crypto.params.ECDomainParameters(params.getCurve(), params.getG(), params.getN(), params.getH());
+        HALF_CURVE_ORDER = params.getN().shiftRight(1);
+    }
+
+    public ByteArrayOutputStream derByteStream() {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream(72);
         try {
-            ByteArrayOutputStream bos = derByteStream();
-            bos.write(sighashFlags);
-            return bos.toByteArray();
+            org.bouncycastle.asn1.DERSequenceGenerator seq = new org.bouncycastle.asn1.DERSequenceGenerator(bos);
+            seq.addObject(new ASN1Integer(r));
+            seq.addObject(new ASN1Integer(s));
+            seq.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);  // Cannot happen.
+            throw new RuntimeException(e);
         }
+        return bos;
     }
 
-    @Override
-    public SignatureBundle toCanonicalised() {
-        return new TransactionSignature(super.toCanonicalised(), sigHashMode(), anyoneCanPay());
-    }
-
-    /**
-     * Returns a decoded signature.
-     *
-     * @param requireCanonicalEncoding if the encoding of the signature must
-     * be canonical.
-     * @param requireCanonicalSValue if the S-value must be canonical (below half
-     * the order of the curve).
-     * @throws RuntimeException if the signature is invalid or unparseable in some way.
-     */
     public static TransactionSignature decodeFromBitcoin(byte[] bytes,
-                                                         boolean requireCanonicalEncoding,
-                                                         boolean requireCanonicalSValue) throws VerificationException {
-        // Bitcoin encoding is DER signature + sighash byte.
+                                                          boolean requireCanonicalEncoding,
+                                                          boolean requireCanonicalSValue) throws VerificationException {
         if (requireCanonicalEncoding && !isEncodingCanonical(bytes))
             throw new VerificationException("Signature encoding is not canonical.");
-        SignatureBundle sig;
+        TransactionSignature sig;
         try {
-            sig = SignatureBundle.decodeFromDER(bytes);
-        } catch (IllegalArgumentException e) {
+            byte[] derBytes = new byte[bytes.length - 1];
+            System.arraycopy(bytes, 0, derBytes, 0, derBytes.length);
+            int hashType = bytes[bytes.length - 1] & 0xff;
+            sig = new TransactionSignature(derBytes, hashType);
+        } catch (Exception e) {
             throw new VerificationException("Could not decode DER", e);
         }
         if (requireCanonicalSValue && !sig.isCanonical())
             throw new VerificationException("S-value is not canonical.");
+        return sig;
+    }
 
-        // In Bitcoin, any value of the final byte is valid, but not necessarily canonical. See javadocs for
-        // isEncodingCanonical to learn more about this. So we must store the exact byte found.
-        return new TransactionSignature(sig.r, sig.s, bytes[bytes.length - 1]);
+    public boolean isCanonical() {
+        return s.compareTo(HALF_CURVE_ORDER) <= 0;
     }
 }

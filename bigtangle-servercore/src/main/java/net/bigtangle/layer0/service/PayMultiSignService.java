@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.OutputsMulti;
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.PayMultiSignExt;
@@ -88,7 +90,7 @@ public class PayMultiSignService {
         byte[] pubKey = Utils.HEX.decode(pubKey0);
         byte[] data = transaction.getHash().getBytes();
         byte[] signature = Utils.HEX.decode((String) request.get("signature"));
-        boolean success = PQScriptUtils.verifyPQ(data, signature, pubKey);
+        boolean success = PQScriptUtils.verifyPQ(pubKey, signature, Sha256Hash.wrap(data));
         if (!success) {
             throw new BlockStoreException("multisign signature error");
         }

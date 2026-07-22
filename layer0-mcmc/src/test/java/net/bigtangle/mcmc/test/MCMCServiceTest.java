@@ -62,12 +62,12 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 		// Generate two conflicting blocks
-		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew();
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -99,12 +99,12 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXOSimple() throws Exception {
 
-		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew();
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
+		doublespendTX.addOutput(TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -295,15 +295,14 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUpdateConflictingTransactionalMilestoneCandidates() throws Exception {
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		// use UTXO to create double spending, this can not be created with
 		// wallet
 		List<UTXO> outputs = getBalance(false, genesiskey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);

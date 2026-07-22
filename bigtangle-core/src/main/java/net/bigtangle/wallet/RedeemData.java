@@ -20,9 +20,12 @@
 package net.bigtangle.wallet;
 
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Utils;
 import net.bigtangle.script.Script;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.List;
 
@@ -43,7 +46,19 @@ public class RedeemData {
     private RedeemData(List<PQKey> keys, Script redeemScript) {
         this.redeemScript = redeemScript;
         List<PQKey> sortedKeys = new ArrayList<PQKey>(keys);
-        Collections.sort(sortedKeys, PQKey.PUBKEY_COMPARATOR);
+        Collections.sort(sortedKeys, new Comparator<PQKey>() {
+            @Override
+            public int compare(PQKey k1, PQKey k2) {
+                byte[] b1 = k1.getPublicKeyBytes();
+                byte[] b2 = k2.getPublicKeyBytes();
+                int len = Math.min(b1.length, b2.length);
+                for (int i = 0; i < len; i++) {
+                    int cmp = (b1[i] & 0xFF) - (b2[i] & 0xFF);
+                    if (cmp != 0) return cmp;
+                }
+                return b1.length - b2.length;
+            }
+        });
         this.keys = sortedKeys;
     }
 
@@ -65,7 +80,7 @@ public class RedeemData {
      */
     public PQKey getFullKey() {
         for (PQKey key : keys)
-            if (key.hasPrivKey())
+            if (key.hasPrivateKey())
                 return key;
         return null;
     }

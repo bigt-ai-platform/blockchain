@@ -48,11 +48,9 @@ public class FromAddressTests extends AbstractIntegrationTest {
 	@Test
 	public void testUserpay() throws Exception {
 
-		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)),
-				contextRoot);
+		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
 
-		payBigTo(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)),
-				Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
+		payBigTo(PQKey.createNew().multiply(BigInteger.valueOf(1000)), null);
 
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
 		for (Coin coin : list) {
@@ -149,7 +147,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		log.debug("====start check admin wallet====");
 		getBalanceAccount(false, wallet.walletKeys());
 
-		// checkResult(accountKey, key.toAddress(networkParameters).toBase58());
+		// checkResult(accountKey, key.toAddress(networkParameters).toHex());
 	}
 
 	public List<PQKey> payKeys() throws Exception {
@@ -186,7 +184,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 			}
 
 		}
-//		checkResult(key, yuanWallet.walletKeys().get(0).toAddress(networkParameters).toBase58(), memo);
+//		checkResult(key, yuanWallet.walletKeys().get(0).toAddress(networkParameters).toHex(), memo);
 		// fee=1000
 		payBigTo(key, Coin.FEE_DEFAULT.getValue(), null);
 		makeRewardBlock();
@@ -224,14 +222,14 @@ public class FromAddressTests extends AbstractIntegrationTest {
 
 	public void testTokens() throws JsonProcessingException, Exception {
 		String domain = "";
-		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew();
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY", BigInteger.valueOf(10000000l));
 		makeRewardBlock();
 	}
 
 	public Address getAddress() {
-		return PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)).toAddress(networkParameters);
+		return PQKey.createNew().toAddress(networkParameters);
 	}
 
 	// create a token with multi sign
@@ -244,7 +242,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.currency.ordinal(), key.getPublicKeyAsHex(),
 					Wallet.fromKeys(networkParameters, key, contextRoot));
-			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew();
 
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);

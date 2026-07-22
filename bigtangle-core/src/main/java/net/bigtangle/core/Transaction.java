@@ -45,6 +45,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 
+import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.exception.ProtocolException;
@@ -828,8 +829,7 @@ public class Transaction extends ChildMessage {
 		TransactionInput input = TransactionInput.fromOutpoint4(params, this, new byte[] {}, prevOut);
 		addInput(input);
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, sigHash, anyoneCanPay);
-		SignatureBundle ecSig = sigKey.sign(hash);
-		TransactionSignature txSig = new TransactionSignature(ecSig, sigHash, anyoneCanPay);
+		TransactionSignature txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
 		if (scriptPubKey.isSentToRawPubKey() || scriptPubKey.isSentToMultiSig())
 			input.setScriptSig(ScriptBuilder.createInputScript(txSig));
 		else if (scriptPubKey.isSentToAddress())
@@ -841,8 +841,7 @@ public class Transaction extends ChildMessage {
 
 	public void signInputs(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey) throws ScriptException {
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, SigHash.ALL, false);
-		SignatureBundle ecSig = sigKey.sign(hash);
-		TransactionSignature txSig = new TransactionSignature(ecSig, SigHash.ALL, false);
+		TransactionSignature txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
 		for (TransactionInput input : getInputs()) {
 			// TODO only sign if valid signature can be created
 			if (input.getScriptBytes().length != 0)
@@ -940,29 +939,15 @@ public class Transaction extends ChildMessage {
 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, byte[] redeemScript, SigHash hashType,
 			boolean anyoneCanPay) {
 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
-		return new TransactionSignature(key.sign(hash), hashType, anyoneCanPay);
+		TransactionSignature sig = ((DeterministicKey) key).ecSign(hash, null);
+		return new TransactionSignature(sig.r, sig.s, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
 	}
 
-	/**
-	 * Calculates a signature that is valid for being inserted into the input at the
-	 * given position. This is simply a wrapper around calling
-	 * {@link Transaction#hashForSignature(int, byte[], net.bigtangle.core.Transaction.SigHash, boolean)}
-	 * followed by {@link PQKey#sign(Sha256Hash)} and then returning a new
-	 * {@link TransactionSignature}.
-	 *
-	 * @param inputIndex   Which input to calculate the signature for, as an index.
-	 * @param key          The private key used to calculate the signature.
-	 * @param redeemScript The scriptPubKey that is being satisified, or the P2SH
-	 *                     redeem script.
-	 * @param hashType     Signing mode, see the enum for documentation.
-	 * @param anyoneCanPay Signing mode, see the SigHash enum for documentation.
-	 * @return A newly calculated signature object that wraps the r, s and sighash
-	 *         components.
-	 */
 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, Script redeemScript, SigHash hashType,
 			boolean anyoneCanPay) {
 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
-		return new TransactionSignature(key.sign(hash), hashType, anyoneCanPay);
+		TransactionSignature sig = ((DeterministicKey) key).ecSign(hash, null);
+		return new TransactionSignature(sig.r, sig.s, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
 	}
 
 	/**

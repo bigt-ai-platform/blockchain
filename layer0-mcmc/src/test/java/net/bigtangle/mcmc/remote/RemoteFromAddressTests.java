@@ -48,14 +48,12 @@ public class RemoteFromAddressTests extends RemoteTest {
 	@Test
 	public void testUserpay() throws Exception {
 
-		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)),
-				contextRoot);
+		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
 
 	//	payBigTo(accountKey,
 	//			Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
 
-		payBigTo(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)),
-				Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(1000)), null);
+		payBigTo(PQKey.createNew().multiply(BigInteger.valueOf(1000)), null);
 
 		testTokens();
 
@@ -107,7 +105,7 @@ public class RemoteFromAddressTests extends RemoteTest {
  
 		getBalanceAccount(false, wallet.walletKeys());
 
-		// checkResult(accountKey, key.toAddress(networkParameters).toBase58());
+		// checkResult(accountKey, key.toAddress(networkParameters).toHex());
 	}
 
 	public List<PQKey> payKeys() throws Exception {
@@ -138,14 +136,14 @@ public class RemoteFromAddressTests extends RemoteTest {
 
 	public void testTokens() throws JsonProcessingException, Exception {
 		String domain = "";
-		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew();
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY", BigInteger.valueOf(10000000l));
 
 	}
 
 	public Address getAddress() {
-		return PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)).toAddress(networkParameters);
+		return PQKey.createNew().toAddress(networkParameters);
 	}
 
 	// create a token with multi sign
@@ -156,7 +154,7 @@ public class RemoteFromAddressTests extends RemoteTest {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.currency.ordinal(), key.getPublicKeyAsHex(),
 					Wallet.fromKeys(networkParameters, key, contextRoot));
-			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew();
 
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 

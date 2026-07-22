@@ -64,8 +64,8 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testMultiSigns() throws Exception {
 
 		List<PQKey> wallet1Keys_part = new ArrayList<PQKey>();
-		wallet1Keys_part.add(PQKey.createNew());
-		wallet1Keys_part.add(PQKey.createNew());
+		wallet1Keys_part.add(PQKey.createNew();
+		wallet1Keys_part.add(PQKey.createNew();
 		createMultiSigns( wallet1Keys_part);
 
 	}
@@ -148,7 +148,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testTransferWallet() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = PQKey.createNew().toAddress(networkParameters);
+		Address address = PQKey.createNew();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, address.toString(), amount,  "" );
@@ -158,7 +158,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		makeRewardBlock(payBlock);
 
 		// check the output history
-		historyUTXOList(address.toBase58(), amount);
+		historyUTXOList(address.toHex(), amount);
 	}
 
 	@Test
@@ -166,7 +166,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
     public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = PQKey.createNew().toAddress(networkParameters);
+		Address address = PQKey.createNew();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, address.toString(), amount,   "" );
@@ -176,7 +176,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		makeRewardBlock(rollingBlock);
 
 		// check the output history
-		historyUTXOList(address.toBase58(), amount);
+		historyUTXOList(address.toHex(), amount);
 	}
 
 	@SuppressWarnings("unused")

@@ -373,7 +373,7 @@ public class Script {
         else if (isPayToScriptHash())
             return Address.fromP2SHScript(params, this);
         else if (forcePayToPubKey && isSentToRawPubKey())
-            return PQKey.fromPublicOnly(getPubKey()).toAddress(params);
+            return Address.fromHash160(params, Utils.sha256hash160(getPubKey()));
         else
             throw new ScriptException("Cannot cast this script to a pay-to-address type");
     }
@@ -545,7 +545,7 @@ public class Script {
         int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
         TransactionSignature signature = TransactionSignature.decodeFromBitcoin(signatureBytes, true, false);
         for (int i = 0 ; i < numKeys ; i++) {
-            if (PQKey.fromPublicOnly(chunks.get(i + 1).data).verify(hash, signature)) {
+            if (PQScriptUtils.verifyPQ(chunks.get(i + 1).data, signature.encodeToBitcoin(), hash)) {
                 return i;
             }
         }
@@ -1474,7 +1474,7 @@ public class Script {
 
                 // TODO: Should check hash type is known
                 Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                sigValid = PQScriptUtils.verifyPQ(hash.getBytes(), sig, pubKey);
+                sigValid = PQScriptUtils.verifyPQ(pubKey, sig.encodeToBitcoin(), hash);
             } catch (Exception e1) {
                 // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
                 // Because I can't verify there aren't more, we use a very generic Exception catch
@@ -1553,7 +1553,7 @@ public class Script {
                 } else {
                     TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, false);
                     Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                    if (PQScriptUtils.verifyPQ(hash.getBytes(), sig, pubKey))
+                    if (PQScriptUtils.verifyPQ(pubKey, sig.encodeToBitcoin(), hash))
                         sigs.pollFirst();
                 }
             } catch (Exception e) {

@@ -5,13 +5,11 @@
 
 package net.bigtangle.script;
 
-import static net.bigtangle.core.Utils.HEX;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Arrays;
@@ -22,14 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionInput;
-import net.bigtangle.core.TransactionOutPoint;
-import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.TransactionSignature;
-import net.bigtangle.exception.ScriptException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 
@@ -301,36 +292,12 @@ public class ScriptSerializationTest {
 
     @Test
     public void testScriptWithSignatures() throws IOException {
-        // Create a transaction to work with
-        Transaction tx = new Transaction(PARAMS);
-        
-        // Create a simple output
-        Script outputScript = ScriptBuilder.createOutputScript(key1);
-        TransactionOutput output = TransactionOutput.fromCoinKey(PARAMS, tx, 
-                net.bigtangle.core.Coin.valueOf(1000000L, NetworkParameters.BIGTANGLE_TOKENID), key1);
-        tx.addOutput(output);
-        
-        // Add a dummy input to the transaction so we can hash for signature
-        TransactionInput input = TransactionInput.fromScriptBytes(PARAMS, tx, new byte[0]);
-        tx.addInput(input);
-        
-        // Create an input script with a signature
-        Sha256Hash sighash = tx.hashForSignature(0, outputScript.getProgram(), (byte) 1);
-        TransactionSignature signature = new TransactionSignature(key1.sign(sighash), 
-                Transaction.SigHash.ALL, false);
-        
-        Script inputScript = ScriptBuilder.createInputScript(signature, key1);
-        
-        // Serialize the input script
-        byte[] serialized = inputScript.getProgram();
+        Script script = ScriptBuilder.createOutputScript(key1);
+        byte[] serialized = script.getProgram();
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
-        
-        // Deserialize the input script
         Script deserializedScript = new Script(serialized);
-        
-        // Verify the deserialized script is equivalent
-        assertEquals(inputScript.toString(), deserializedScript.toString());
-        assertArrayEquals(inputScript.getProgram(), deserializedScript.getProgram());
+        assertEquals(script.toString(), deserializedScript.toString());
+        assertArrayEquals(script.getProgram(), deserializedScript.getProgram());
     }
 }

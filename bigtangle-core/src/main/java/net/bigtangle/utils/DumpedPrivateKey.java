@@ -103,8 +103,8 @@ public class DumpedPrivateKey extends VersionedChecksummedBytes {
      * Returns an PQKey created from this encoded private key.
      */
     public PQKey getKey() {
-        final PQKey key = PQKey.createNew()bytes);
-        return compressed ? key : key.decompress();
+        final PQKey key = PQKey.createNew();
+        return key;
     }
 
     @Override

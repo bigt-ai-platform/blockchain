@@ -77,10 +77,10 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         log.info("MCMC every:   {} blocks", mcmcInterval);
 
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew());
+        for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew();
 
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
+                PQKey.createNew();
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));

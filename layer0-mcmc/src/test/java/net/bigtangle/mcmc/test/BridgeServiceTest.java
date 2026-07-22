@@ -119,7 +119,7 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         Sha256Hash root = MerkleProof.computeRoot(blockHashes);
         MerkleProof proof = MerkleProof.buildProofFor(blockHashes, tipProto.getHash());
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
         byte[] sigBytes = signKey.sign(tipProto.getHash()).encodeToDER();
 
         LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, tipProto.getHash(),

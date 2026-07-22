@@ -199,7 +199,7 @@ public class KeyChainGroup implements KeyBag {
             }
             return current;
         } else {
-            return currentKey(purpose).toAddress(params);
+            return Address.fromHash160(params, currentKey(purpose).getPubKeyHash());
         }
     }
 
@@ -253,7 +253,7 @@ public class KeyChainGroup implements KeyBag {
             currentAddresses.put(purpose, freshAddress);
             return freshAddress;
         } else {
-            return freshKey(purpose).toAddress(params);
+            return Address.fromHash160(params, freshKey(purpose).getPubKeyHash());
         }
     }
 
@@ -320,8 +320,8 @@ public class KeyChainGroup implements KeyBag {
     }
 
     /** Imports the given keys into the basic chain, creating it if necessary. */
-    public int importKeys(ECKey... keys) {
-        return importKeys(ImmutableList.copyOf(keys));
+    public int importKeys(PQKey... keys) {
+        return importKeys(java.util.Arrays.asList(keys));
     }
 
     public boolean checkPassword(CharSequence password) {

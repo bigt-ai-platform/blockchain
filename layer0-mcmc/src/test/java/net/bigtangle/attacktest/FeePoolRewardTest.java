@@ -51,7 +51,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
 
     @Test
     public void testFeeAccumulationAndDistribution() throws Exception {
-        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew();
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         String chainId = networkParameters.getChainId();

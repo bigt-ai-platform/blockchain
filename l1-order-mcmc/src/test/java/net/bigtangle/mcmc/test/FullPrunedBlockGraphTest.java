@@ -31,7 +31,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	@Test
 	public void testConfirmOrderMatchUTXOs2() throws Exception {
 
-		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew();
 		// Make the "test" token
 		List<Block> addedBlocks = new ArrayList<>();
 		makeTestToken(testKey, addedBlocks);

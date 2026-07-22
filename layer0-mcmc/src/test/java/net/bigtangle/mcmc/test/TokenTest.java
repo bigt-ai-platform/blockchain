@@ -97,7 +97,7 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateDomainToken() throws Exception {
 
-		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv));
+		PQKey preKey = PQKey.createNew();
 
 		{
 			PQKey key = PQKey.createNew();
@@ -182,7 +182,7 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testWrongDomainname() throws Exception {
 
-		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew();
 
 		{
 			PQKey key = PQKey.createNew();
@@ -205,7 +205,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	public void testWrongSignnumber() throws Exception {
 
-		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew();
 
 		{
 			PQKey key = PQKey.createNew();
@@ -327,9 +327,9 @@ public class TokenTest extends AbstractIntegrationTest {
 		TokenKeyValues kvs = signedata.toTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
 		List<PQKey> keys = wallet.walletKeys();
-		List<String> addresses = keys.stream().map(key -> key.toAddress(networkParameters).toBase58())
+		List<String> addresses = keys.stream().map(key -> key.toAddress(networkParameters).toHex())
 				.collect(Collectors.toList());
-		String tokenid = PQKey.createNew().getPublicKeyAsHex();
+		String tokenid = PQKey.createNew();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
@@ -394,7 +394,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		SignedData signedata = signeddata(issuer);
 		TokenKeyValues kvs = signedata.toTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
-		String tokenid = PQKey.createNew().getPublicKeyAsHex();
+		String tokenid = PQKey.createNew();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
@@ -437,7 +437,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet, userkey.getPubKey(),
+				TokenType.identity.ordinal(), PQKey.createNew(),
 				signedata.encryptToMemo(userkey));
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
@@ -576,7 +576,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet, userkey.getPubKey(), null);
+				TokenType.identity.ordinal(), PQKey.createNew(), null);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -854,7 +854,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		keys.add(outKey4);
 		keys.add(signKey);
 
-		final String tokenid = PQKey.createNew().getPublicKeyAsHex();
+		final String tokenid = PQKey.createNew();
 		final String tokenname = "bigtangle.de";
 
 		// don't use the first key which is in the wallet
@@ -868,8 +868,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		this.wallet.multiSign(tokenid, outKey4, aesKey);
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		this.wallet.multiSign(tokenid, genesiskey, null);
 	}
 
@@ -916,7 +915,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.publishDomainName(shopKey, tokenid, tokenname, aesKey, "");
 
-		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew();
 		wallet.importKey(shopKey);
 		Block lastBlock = wallet.multiSign(tokenid, preKey, aesKey);
 

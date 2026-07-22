@@ -84,7 +84,7 @@ public abstract class RemoteTest {
 	@BeforeEach
 	public void setUp() throws Exception { 
  
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew();
  
 	} 
 

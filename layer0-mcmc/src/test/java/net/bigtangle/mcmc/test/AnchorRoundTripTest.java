@@ -58,7 +58,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -79,7 +79,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -105,7 +105,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -139,7 +139,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -170,7 +170,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -199,7 +199,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
@@ -280,7 +280,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         List<Sha256Hash> leaves = new ArrayList<>();
         Sha256Hash targetHash = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
@@ -308,7 +308,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        PQKey signKey = PQKey.createNew());
+        PQKey signKey = PQKey.createNew();
 
         Sha256Hash targetHash = Sha256Hash.wrap("2222222222222222222222222222222222222222222222222222222222222222");
         Sha256Hash otherHash = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");

@@ -35,14 +35,14 @@ public class OrderYuanTest extends AbstractIntegrationTest {
 
     @Test
     public void payTokenTime() throws Exception {
-        wallet.importKey(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)));
-        wallet.importKey(PQKey.createNew()Utils.HEX.decode(testPriv)));
+        wallet.importKey(PQKey.createNew());
+        wallet.importKey(PQKey.createNew());
 
         PQKey testKey = wallet.walletKeys().get(0);
         List<Block> addedBlocks = new ArrayList<>();
 
         // base token
-        PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+        PQKey yuan = PQKey.createNew();
 
         long tokennumber = 100000000;
         makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);

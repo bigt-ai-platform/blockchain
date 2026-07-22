@@ -174,7 +174,7 @@ public class PoSTest extends AbstractIntegrationTest {
         long effective = stakeService.getEffectiveStake(validatorKey.getPubKey(), store);
         assertEquals(StakeService.MIN_STAKE.longValue(), effective);
 
-        long noStake = stakeService.getEffectiveStake(PQKey.createNew().getPubKey(), store);
+        long noStake = stakeService.getEffectiveStake(PQKey.createNew();
         assertEquals(0L, noStake);
     }
 

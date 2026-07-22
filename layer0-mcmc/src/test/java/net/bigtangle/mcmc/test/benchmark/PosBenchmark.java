@@ -64,14 +64,14 @@ public class PosBenchmark extends AbstractIntegrationTest {
     public void testPosChain() throws Exception {
         // Create validator keys and wallet keys for funding
         List<PQKey> validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew();
 
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew());
+        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew();
 
         // Fund all wallets (validators + tx senders) via genesis
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
+                PQKey.createNew();
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : validatorKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(500000));

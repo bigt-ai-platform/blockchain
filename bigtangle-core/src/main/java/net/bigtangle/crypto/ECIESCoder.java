@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
+import org.bouncycastle.asn1.sec.SECNamedCurves;
+import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.BufferedBlockCipher;
 import org.bouncycastle.crypto.InvalidCipherTextException;
@@ -23,6 +25,7 @@ import org.bouncycastle.crypto.generators.ECKeyPairGenerator;
 import org.bouncycastle.crypto.generators.EphemeralKeyPairGenerator;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.modes.SICBlockCipher;
+import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.crypto.params.ECKeyGenerationParameters;
 import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
@@ -36,6 +39,12 @@ import org.bouncycastle.math.ec.ECPoint;
 
 public class ECIESCoder {
 
+    public static final ECDomainParameters CURVE;
+
+    static {
+        X9ECParameters params = SECNamedCurves.getByName("secp256k1");
+        CURVE = new ECDomainParameters(params.getCurve(), params.getG(), params.getN(), params.getH());
+    }
 
     public static final int KEY_SIZE = 128;
 
@@ -48,10 +57,10 @@ public class ECIESCoder {
         byte[] plaintext;
 
         ByteArrayInputStream is = new ByteArrayInputStream(cipher);
-        byte[] ephemBytes = new byte[2*((ECKey.CURVE.getCurve().getFieldSize()+7)/8) + 1];
+        byte[] ephemBytes = new byte[2*((CURVE.getCurve().getFieldSize()+7)/8) + 1];
 
         is.read(ephemBytes);
-        ECPoint ephem = ECKey.CURVE.getCurve().decodePoint(ephemBytes);
+        ECPoint ephem = CURVE.getCurve().decodePoint(ephemBytes);
         byte[] IV = new byte[KEY_SIZE /8];
         is.read(IV);
         byte[] cipherBody = new byte[is.available()];
@@ -80,7 +89,7 @@ public class ECIESCoder {
         ParametersWithIV parametersWithIV =
                 new ParametersWithIV(p, IV);
 
-        iesEngine.init(false, new ECPrivateKeyParameters(prv, ECKey.CURVE), new ECPublicKeyParameters(ephem, ECKey.CURVE), parametersWithIV);
+        iesEngine.init(false, new ECPrivateKeyParameters(prv, CURVE), new ECPublicKeyParameters(ephem, CURVE), parametersWithIV);
 
         return iesEngine.processBlock(cipher, 0, cipher.length, macData);
     }
@@ -109,8 +118,8 @@ public class ECIESCoder {
 
         iesEngine.setHashMacKey(false);
 
-        iesEngine.init(new ECPrivateKeyParameters(privKey, ECKey.CURVE), parametersWithIV,
-                new ECIESPublicKeyParser(ECKey.CURVE));
+        iesEngine.init(new ECPrivateKeyParameters(privKey, CURVE), parametersWithIV,
+                new ECIESPublicKeyParser(CURVE));
 
         return iesEngine.processBlock(cipher, 0, cipher.length);
     }
@@ -123,7 +132,7 @@ public class ECIESCoder {
 
         ECKeyPairGenerator eGen = new ECKeyPairGenerator();
         SecureRandom random = new SecureRandom();
-        KeyGenerationParameters gParam = new ECKeyGenerationParameters(ECKey.CURVE, random);
+        KeyGenerationParameters gParam = new ECKeyGenerationParameters(CURVE, random);
 
         eGen.init(gParam);
 
@@ -136,12 +145,12 @@ public class ECIESCoder {
         IESEngine iesEngine = makeIESEngine(true, toPub, prv, IV);
 
 
-        ECKeyGenerationParameters keygenParams = new ECKeyGenerationParameters(ECKey.CURVE, random);
+        ECKeyGenerationParameters keygenParams = new ECKeyGenerationParameters(CURVE, random);
         ECKeyPairGenerator generator = new ECKeyPairGenerator();
         generator.init(keygenParams);
 
         ECKeyPairGenerator gen = new ECKeyPairGenerator();
-        gen.init(new ECKeyGenerationParameters(ECKey.CURVE, random));
+        gen.init(new ECKeyGenerationParameters(CURVE, random));
 
         byte[] cipher;
         
@@ -180,7 +189,7 @@ public class ECIESCoder {
 
         ECKeyPairGenerator eGen = new ECKeyPairGenerator();
         SecureRandom random = new SecureRandom();
-        KeyGenerationParameters gParam = new ECKeyGenerationParameters(ECKey.CURVE, random);
+        KeyGenerationParameters gParam = new ECKeyGenerationParameters(CURVE, random);
         eGen.init(gParam);
 
 //        AsymmetricCipherKeyPairGenerator testGen = new AsymmetricCipherKeyPairGenerator() {
@@ -200,7 +209,7 @@ public class ECIESCoder {
         EphemeralKeyPairGenerator ephemeralKeyPairGenerator =
                 new EphemeralKeyPairGenerator(/*testGen*/eGen, new ECIESPublicKeyEncoder());
 
-        iesEngine.init(new ECPublicKeyParameters(pub, ECKey.CURVE), parametersWithIV, ephemeralKeyPairGenerator);
+        iesEngine.init(new ECPublicKeyParameters(pub, CURVE), parametersWithIV, ephemeralKeyPairGenerator);
 
         return iesEngine.processBlock(plaintext, 0, plaintext.length);
     }
@@ -223,7 +232,7 @@ public class ECIESCoder {
         IESParameters p = new IESWithCipherParameters(d, e, KEY_SIZE, KEY_SIZE);
         ParametersWithIV parametersWithIV = new ParametersWithIV(p, IV);
 
-        iesEngine.init(isEncrypt, new ECPrivateKeyParameters(prv, ECKey.CURVE), new ECPublicKeyParameters(pub, ECKey.CURVE), parametersWithIV);
+        iesEngine.init(isEncrypt, new ECPrivateKeyParameters(prv, CURVE), new ECPublicKeyParameters(pub, CURVE), parametersWithIV);
         return iesEngine;
     }
 

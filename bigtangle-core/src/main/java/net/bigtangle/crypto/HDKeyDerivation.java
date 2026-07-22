@@ -94,7 +94,7 @@ public final class HDKeyDerivation {
     }
 
     public static DeterministicKey createMasterPubKeyFromBytes(byte[] pubKeyBytes, byte[] chainCode) {
-        return new DeterministicKey(ImmutableList.<ChildNumber>of(), chainCode, new LazyECPoint(PQKey.CURVE.getCurve(), pubKeyBytes), null, null);
+        return new DeterministicKey(ImmutableList.<ChildNumber>of(), chainCode, new LazyECPoint(DeterministicKey.CURVE.getCurve(), pubKeyBytes), null, null);
     }
 
     /**
@@ -138,7 +138,7 @@ public final class HDKeyDerivation {
             return new DeterministicKey(
                     HDUtils.append(parent.getPath(), childNumber),
                     rawKey.chainCode,
-                    new LazyECPoint(PQKey.CURVE.getCurve(), rawKey.keyBytes),
+                    new LazyECPoint(DeterministicKey.CURVE.getCurve(), rawKey.keyBytes),
                     null,
                     parent);
         } else {
@@ -170,7 +170,7 @@ public final class HDKeyDerivation {
         BigInteger ilInt = new BigInteger(1, il);
         assertLessThanN(ilInt, "Illegal derived key: I_L >= n");
         final BigInteger priv = parent.getPrivKey();
-        BigInteger ki = priv.add(ilInt).mod(PQKey.CURVE.getN());
+        BigInteger ki = priv.add(ilInt).mod(DeterministicKey.CURVE.getN());
         assertNonZero(ki, "Illegal derived key: derived private key equals 0.");
         return new RawKeyBytes(ki.toByteArray(), chainCode);
     }
@@ -194,20 +194,16 @@ public final class HDKeyDerivation {
         BigInteger ilInt = new BigInteger(1, il);
         assertLessThanN(ilInt, "Illegal derived key: I_L >= n");
 
-        final BigInteger N = PQKey.CURVE.getN();
+        final BigInteger N = DeterministicKey.CURVE.getN();
         ECPoint Ki;
         switch (mode) {
             case NORMAL:
-                Ki = PQKey.publicPointFromPrivate(ilInt).add(parent.getPubKeyPoint());
+                Ki = publicPointFromPrivate(ilInt).add(parent.getPubKeyPoint());
                 break;
             case WITH_INVERSION:
-                // This trick comes from Gregory Maxwell. Check the homomorphic properties of our curve hold. The
-                // below calculations should be redundant and give the same result as NORMAL but if the precalculated
-                // tables have taken a bit flip will yield a different answer. This mode is used when vending a key
-                // to perform a last-ditch sanity check trying to catch bad RAM.
-                Ki = PQKey.publicPointFromPrivate(ilInt.add(RAND_INT).mod(N));
+                Ki = publicPointFromPrivate(ilInt.add(RAND_INT).mod(N));
                 BigInteger additiveInverse = RAND_INT.negate().mod(N);
-                Ki = Ki.add(PQKey.publicPointFromPrivate(additiveInverse));
+                Ki = Ki.add(publicPointFromPrivate(additiveInverse));
                 Ki = Ki.add(parent.getPubKeyPoint());
                 break;
             default: throw new AssertionError();
@@ -217,18 +213,22 @@ public final class HDKeyDerivation {
         return new RawKeyBytes(Ki.getEncoded(true), chainCode);
     }
 
+    private static ECPoint publicPointFromPrivate(BigInteger priv) {
+        return DeterministicKey.CURVE.getG().multiply(priv);
+    }
+
     private static void assertNonZero(BigInteger integer, String errorMessage) {
         if (integer.equals(BigInteger.ZERO))
             throw new HDDerivationException(errorMessage);
     }
 
     private static void assertNonInfinity(ECPoint point, String errorMessage) {
-        if (point.equals(PQKey.CURVE.getCurve().getInfinity()))
+        if (point.equals(DeterministicKey.CURVE.getCurve().getInfinity()))
             throw new HDDerivationException(errorMessage);
     }
 
     private static void assertLessThanN(BigInteger integer, String errorMessage) {
-        if (integer.compareTo(PQKey.CURVE.getN()) > 0)
+        if (integer.compareTo(DeterministicKey.CURVE.getN()) > 0)
             throw new HDDerivationException(errorMessage);
     }
 

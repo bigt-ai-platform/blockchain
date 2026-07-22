@@ -54,9 +54,12 @@ class PQScriptTest {
     @Test
     void pqPubkeyDetection() {
         assertTrue(PQScriptUtils.isPQPubkey(prefixedPubkey));
-        assertFalse(PQScriptUtils.isPQPubkey(PQKey.createNew().getPubKey()));
+        assertTrue(PQScriptUtils.isPQPubkey(PQKey.createNew().getPubKey()));
         assertFalse(PQScriptUtils.isPQPubkey(null));
         assertFalse(PQScriptUtils.isPQPubkey(new byte[0]));
+        byte[] ecPubkey = new byte[33];
+        ecPubkey[0] = 0x02;
+        assertFalse(PQScriptUtils.isPQPubkey(ecPubkey));
     }
 
     @Test

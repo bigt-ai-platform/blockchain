@@ -58,8 +58,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderTickerPrice() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -116,8 +115,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderWithCheck() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<PQKey> genesisKeykeys = new ArrayList<PQKey>();
 		genesisKeykeys.add(genesisKey);
@@ -151,8 +149,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderTickerSearchAPI() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -191,8 +188,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// TODO no data @Test
 	public void orderTickerSearchAVGAPI() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -250,8 +246,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buy() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -290,7 +285,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 
 		long tokennumber = 888888 * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
@@ -343,7 +338,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		List<Block> addedBlocks = new ArrayList<>();
 		// base token
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 
 		long tokennumber = 888888 * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
@@ -392,7 +387,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 		int priceshift = 1000000;
 		long tokennumber = priceshift * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
@@ -427,7 +422,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// base token
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 		String orderbaseToken = yuan.getPublicKeyAsHex();
 		int amount = 1000000;
 		long tokennumber = amount * 1000;
@@ -458,13 +453,12 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBaseTokenMixed() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// yuan token
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 		makeTestToken(yuan, addedBlocks);
 
 		// Make test token
@@ -514,8 +508,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void sell() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -550,8 +543,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void multiLevelBuy() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -589,8 +581,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void multiLevelSell() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
@@ -630,8 +621,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialBuy() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
@@ -665,8 +655,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialSell() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
@@ -702,8 +691,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialBidFill() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -739,8 +727,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialAskFill() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -806,8 +793,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void cancelTwoStep() throws Exception {
 
 		// PQKey genesisKey =
-		// PQKey.createNew()Utils.HEX.decode(testPriv),
-		// Utils.HEX.decode(testPub));
+		// PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
@@ -842,8 +828,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void effectiveCancel() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 
 		List<Block> addedBlocks = new ArrayList<>();
@@ -897,7 +882,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		Transaction tx = new Transaction(networkParameters);
 		OrderOpenInfo info = new OrderOpenInfo((long) 1000 * sellAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
 				testKey.getPubKey(), System.currentTimeMillis() - 10000, null, Side.SELL,
-				testKey.toAddress(networkParameters).toBase58(), NetworkParameters.BIGTANGLE_TOKENID_STRING, 1l,
+				testKey.toAddress(networkParameters).toHex(), NetworkParameters.BIGTANGLE_TOKENID_STRING, 1l,
 				sellAmount, testTokenId);
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
@@ -943,8 +928,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testAllOrdersSpent() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
@@ -983,8 +967,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// we execute many times for order matchings, then do the reward to confirm all
 		// orders
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -1010,8 +993,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testManyExecutions() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
@@ -1042,8 +1024,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testMultiMatching1() throws Exception {
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
@@ -1082,7 +1063,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// base token yuan with decimal 2
-		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew();
 		makeTestToken(yuan, BigInteger.valueOf(10000000), addedBlocks, 2);
 
 		// Make test token with decimal 2
@@ -1267,8 +1248,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeOrderExecutionAndReward(addedBlocks, sell);
 		checkAllOpenOrders(1);
 
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		payBigToAmount(genesisKey, addedBlocks);
 
 		// Create matching buy order (auto-confirmed)

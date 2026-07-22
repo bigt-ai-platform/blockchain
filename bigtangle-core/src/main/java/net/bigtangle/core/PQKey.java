@@ -1,13 +1,16 @@
 package net.bigtangle.core;
 
+import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import jakarta.annotation.Nullable;
 
 import org.bouncycastle.crypto.params.KeyParameter;
+import org.bouncycastle.math.ec.ECPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +55,12 @@ public class PQKey implements EncryptableItem {
         this.slhDsaPrivateKey = slhDsaPrivateKey;
         this.keyBundle = keyBundle;
         this.creationTimeSeconds = Utils.currentTimeSeconds();
+    }
+
+    protected PQKey() {
+        this.mlDsaPrivateKey = null;
+        this.slhDsaPrivateKey = null;
+        this.keyBundle = null;
     }
 
     public static PQKey createNew() {
@@ -247,6 +256,65 @@ public class PQKey implements EncryptableItem {
         return "PQKey{addr=" + (address != null ? address.toHex().substring(0, 16) + "..." : "no-addr")
              + " hasPriv=" + hasPrivateKey()
              + " enc=" + isEncrypted() + "}";
+    }
+
+    public static final Comparator<PQKey> PUBKEY_COMPARATOR = new Comparator<PQKey>() {
+        @Override
+        public int compare(PQKey k1, PQKey k2) {
+            byte[] b1 = k1.getPublicKeyBytes();
+            byte[] b2 = k2.getPublicKeyBytes();
+            int len = Math.min(b1.length, b2.length);
+            for (int i = 0; i < len; i++) {
+                int cmp = (b1[i] & 0xFF) - (b2[i] & 0xFF);
+                if (cmp != 0) return cmp;
+            }
+            return b1.length - b2.length;
+        }
+    };
+
+    public static final Comparator<PQKey> AGE_COMPARATOR = new Comparator<PQKey>() {
+        @Override
+        public int compare(PQKey k1, PQKey k2) {
+            long t1 = k1.getCreationTimeSeconds();
+            long t2 = k2.getCreationTimeSeconds();
+            return Long.compare(t1, t2);
+        }
+    };
+
+    public byte[] getPubKeyHash() {
+        return Utils.sha256hash160(getPubKey());
+    }
+
+    public SignatureBundle sign(Sha256Hash input, @Nullable KeyParameter aesKey) throws KeyCrypterException {
+        if (isEncrypted()) {
+            if (aesKey == null)
+                throw new KeyCrypterException("AES key required for encrypted key");
+            PQKey decrypted = decrypt(aesKey);
+            return decrypted.sign(input);
+        }
+        return sign(input);
+    }
+
+    public ECPoint getPubKeyPoint() {
+        return null;
+    }
+
+    public BigInteger getPrivKey() {
+        throw new UnsupportedOperationException("PQKey does not have a single EC private key");
+    }
+
+    public byte[] getPrivKeyBytes() {
+        throw new UnsupportedOperationException("PQKey does not have EC private key bytes");
+    }
+
+    public boolean isWatching() {
+        return !hasPrivateKey();
+    }
+
+    public void formatKeyWithAddress(boolean includePrivateKeys, StringBuilder builder, NetworkParameters params) {
+        builder.append("  addr:").append(toAddress(params).toHex());
+        builder.append("  hash160:").append(Utils.HEX.encode(getPubKeyHash()));
+        builder.append("\n");
     }
 
     public static class MissingPrivateKeyException extends RuntimeException {

@@ -41,12 +41,12 @@ public class PaymentBenchmarkMain {
         // Create genesis wallet (has all the money on testnet)
         String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
         Wallet genesisWallet = Wallet.fromKeys(params,
-                PQKey.createNew()Utils.HEX.decode(testPriv)), serverUrl);
+                PQKey.createNew();
 
         // Create 10 client wallets and fund them
         List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) {
-            clientKeys.add(PQKey.createNew());
+            clientKeys.add(PQKey.createNew();
         }
         for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
@@ -58,7 +58,7 @@ public class PaymentBenchmarkMain {
         // Create recipient wallets
         List<PQKey> recipients = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) {
-            recipients.add(PQKey.createNew());
+            recipients.add(PQKey.createNew();
         }
 
         // Run benchmark

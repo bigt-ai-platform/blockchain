@@ -41,7 +41,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
         PQKey alice = PQKey.createNew();
         PQKey bob = PQKey.createNew();
 
-        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew();
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
@@ -86,7 +86,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandDoubleSpendAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew();
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
@@ -99,7 +99,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
         List<Transaction> attackTxs = new ArrayList<>();
         List<PQKey> dummyKeys = new ArrayList<>();
         for (int i = 0; i < ATTACK_COUNT; i++) {
-            dummyKeys.add(PQKey.createNew());
+            dummyKeys.add(PQKey.createNew();
         }
 
         for (int i = 0; i < ATTACK_COUNT; i++) {
@@ -139,7 +139,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandTokenCreationAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew();
         String domain = "";
         String tokenHex = Utils.HEX.encode(testKey.getPubKey());
         int tokentype = TokenType.currency.ordinal();

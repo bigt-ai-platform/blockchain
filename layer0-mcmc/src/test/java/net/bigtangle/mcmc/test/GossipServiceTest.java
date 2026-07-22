@@ -31,7 +31,7 @@ public class GossipServiceTest extends AbstractIntegrationTest {
         att.setSlot(1);
         att.setEpoch(0);
         att.setBeaconBlockHash(Sha256Hash.of("test".getBytes()));
-        att.setValidatorPubkey(PQKey.createNew().getPubKey());
+        att.setValidatorPubkey(PQKey.createNew();
 
         assertDoesNotThrow(() -> gossipService.broadcastAttestation(att));
     }
@@ -40,12 +40,12 @@ public class GossipServiceTest extends AbstractIntegrationTest {
     public void testBroadcastSlashingProofWithEmptyPeers() {
         AttestationData att1 = new AttestationData();
         att1.setSlot(1);
-        att1.setValidatorPubkey(PQKey.createNew().getPubKey());
+        att1.setValidatorPubkey(PQKey.createNew();
         att1.setBeaconBlockHash(Sha256Hash.of("blockA".getBytes()));
 
         AttestationData att2 = new AttestationData();
         att2.setSlot(2);
-        att2.setValidatorPubkey(PQKey.createNew().getPubKey());
+        att2.setValidatorPubkey(PQKey.createNew();
         att2.setBeaconBlockHash(Sha256Hash.of("blockB".getBytes()));
 
         assertDoesNotThrow(() -> gossipService.broadcastSlashingProof(att1, att2));

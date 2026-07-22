@@ -21,8 +21,8 @@ public class AccessGrantService {
     public void addAccessGrant(String pubKey,BlockStoreInterface store) throws BlockStoreException {
         byte[] buf = Utils.HEX.decode(pubKey);
         PQKey ecKey = PQKey.fromPublicOnly(buf);
-        Address address = ecKey.toAddress(networkParameters); 
-        store. insertAccessGrant(address.toBase58());
+        String address = ecKey.toAddress(networkParameters).toBase58(); 
+        store.insertAccessGrant(address);
     
     }
 
@@ -30,8 +30,8 @@ public class AccessGrantService {
     {
         byte[] buf = Utils.HEX.decode(pubKey);
         PQKey ecKey = PQKey.fromPublicOnly(buf);
-        Address address = ecKey.toAddress(networkParameters);
-        store .deleteAccessGrant(address.toBase58());
+        String address = ecKey.toAddress(networkParameters).toBase58();
+        store.deleteAccessGrant(address);
     }
 
     public int getCountAccessGrantByAddress(String address, BlockStoreInterface store) {

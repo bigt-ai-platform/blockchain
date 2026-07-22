@@ -47,10 +47,10 @@ public class BenchmarkRunner {
         log.info("Server: {}", serverUrl);
 
         Wallet genesisWallet = Wallet.fromKeys(params,
-                PQKey.createNew()Utils.HEX.decode(testPriv)), serverUrl);
+                PQKey.createNew();
 
         List<PQKey> clientKeys = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
+        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew();
 
         log.info("Funding wallets...");
         for (PQKey key : clientKeys) {
@@ -61,7 +61,7 @@ public class BenchmarkRunner {
         log.info("Funding done");
 
         List<PQKey> recipients = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
+        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew();
 
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);

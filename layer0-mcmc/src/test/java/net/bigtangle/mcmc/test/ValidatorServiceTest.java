@@ -399,7 +399,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				try {
 					// Build transaction
 					Transaction tx = new Transaction(networkParameters);
-					tx.addOutput(Coin.COIN.times(2), PQKey.createNew().toAddress(networkParameters));
+					tx.addOutput(Coin.COIN.times(2), PQKey.createNew();
 
 					// The input does not really need to be a valid signature,
 					// as long
@@ -481,8 +481,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Again but with less output coins
 		{
 
-			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-					Utils.HEX.decode(testPub));
+			PQKey testKey = PQKey.createNew();
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -506,8 +505,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Again but with more output coins
 		try {
 
-			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-					Utils.HEX.decode(testPub));
+			PQKey testKey = PQKey.createNew();
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -540,8 +538,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with negative outputs
 		try {
 
-			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-					Utils.HEX.decode(testPub));
+			PQKey testKey = PQKey.createNew();
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -587,8 +584,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with outputs
 		try {
 
-			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
-					Utils.HEX.decode(testPub));
+			PQKey testKey = PQKey.createNew();
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -646,7 +642,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = rewardBlock.getTransactions().get(0);
 
-		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew();
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -946,7 +942,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testSolidityTokenMutatedData() throws Exception {
 
-		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew();
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
@@ -1455,7 +1451,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					public void preApply(TokenInfo tokenInfo5) {
 
 						tokenInfo5.getMultiSignAddresses().get(0)
-								.setPubKeyHex(Utils.HEX.encode(PQKey.createNew().getPubKey()));
+								.setPubKeyHex(Utils.HEX.encode(PQKey.createNew());
 					}
 
 					@Override
@@ -1540,13 +1536,12 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				else
 					multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
 				multiSignBy0.setTokenindex(0);
-				multiSignBy0.setAddress(outKey.toAddress(networkParameters).toBase58());
+				multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 				multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 				multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 				multiSignBies.add(multiSignBy0);
 
-				PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-						Utils.HEX.decode(testPub));
+				PQKey genesiskey = PQKey.createNew();
 				SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
 				byte[] buf2 = party2Signature.encodeToDER();
 				multiSignBy0 = new MultiSignBy();
@@ -1555,7 +1550,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				else
 					multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
 				multiSignBy0.setTokenindex(0);
-				multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toBase58());
+				multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toHex());
 				multiSignBy0.setPublickey(Utils.HEX.encode(genesiskey.getPubKey()));
 				multiSignBy0.setSignature(Utils.HEX.encode(buf2));
 				multiSignBies.add(multiSignBy0);
@@ -1614,13 +1609,12 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
 
-		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
-				Utils.HEX.decode(testPub));
+		PQKey genesiskey = PQKey.createNew();
 		SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
 		byte[] buf2 = party2Signature.encodeToDER();
 		multiSignBy0 = new MultiSignBy();
@@ -1629,7 +1623,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		else
 			multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(genesiskey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf2));
 		multiSignBies.add(multiSignBy0);
@@ -1889,7 +1883,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
 
 		// Generate a subsequent issuance that does not work
-		byte[] pubKey2 = PQKey.createNew().getPubKey();
+		byte[] pubKey2 = PQKey.createNew();
 		TokenInfo tokenInfo2 = new TokenInfo();
 		Coin coinbase2 = Coin.valueOf(666, pubKey2);
 
@@ -1897,7 +1891,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo2.setToken(tokens2);
 		tokenInfo2.getMultiSignAddresses()
-				.add(new MultiSignAddress(tokens2.getTokenid(), "", PQKey.createNew().getPublicKeyAsHex()));
+				.add(new MultiSignAddress(tokens2.getTokenid(), "", PQKey.createNew());
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
@@ -2083,7 +2077,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toBase58());
+		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);

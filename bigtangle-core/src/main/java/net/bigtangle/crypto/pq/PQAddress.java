@@ -75,6 +75,11 @@ public final class PQAddress {
         return Utils.HEX.encode(serialize());
     }
 
+    /** Encode as base58 string (alias for backward compatibility). */
+    public String toBase58() {
+        return toHex();
+    }
+
     /** Decode from hex string. */
     public static PQAddress fromHex(String hex) {
         return deserialize(Utils.HEX.decode(hex));

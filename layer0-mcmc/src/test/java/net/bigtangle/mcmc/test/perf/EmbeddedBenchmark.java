@@ -65,7 +65,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
         // Create wallet keys — one per payment
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(PQKey.createNew());
+        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(PQKey.createNew();
 
         // Fund all in ONE transaction
         HashMap<String, BigInteger> funding = new HashMap<>();

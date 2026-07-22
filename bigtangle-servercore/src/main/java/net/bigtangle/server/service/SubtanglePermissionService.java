@@ -23,7 +23,7 @@ public class SubtanglePermissionService {
         PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(pubkey));
 
         byte[] signOutput = Utils.HEX.decode(signHex);
-        boolean flag = key.verify(Sha256Hash.ZERO_HASH.getBytes(), signOutput);
+        boolean flag = net.bigtangle.crypto.pq.PQScriptUtils.verifyPQ(key.getPubKey(), signOutput, Sha256Hash.ZERO_HASH);
         if (flag) {
             store.deleteSubtanglePermission(pubkey);
             store.insertSubtanglePermission(pubkey, "", SubtangleStatus.wait);

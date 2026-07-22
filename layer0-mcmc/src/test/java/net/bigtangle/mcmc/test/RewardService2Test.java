@@ -39,7 +39,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
-		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew();
 		try {
 			payBigTo(genesisKey, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(5)), blocksAddedAll);
 		} catch (InsufficientMoneyException e) {
@@ -238,7 +238,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toString(),
+			giveMoneyResult.put(PQKey.createNew().toString(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, j)));
 		}
 		mcmcService.calcNewBlockPrototype(store);	

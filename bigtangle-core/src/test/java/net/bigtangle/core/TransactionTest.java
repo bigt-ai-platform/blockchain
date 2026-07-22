@@ -35,7 +35,7 @@ import net.bigtangle.script.ScriptBuilder;
  */
 public class TransactionTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();
-	private static final Address ADDRESS = PQKey.createNew().toAddress(PARAMS);
+	private static final Address ADDRESS = PQKey.createNew();
 
 	private Transaction tx;
 
@@ -186,7 +186,7 @@ public class TransactionTest {
 			String fromAddress = "";
 			try {
 				if (!isCoinBase) {
-					fromAddress = tx.getInputs().get(0).getFromAddress().toBase58();
+					fromAddress = tx.getInputs().get(0).getFromAddress().toHex();
 				}
 			} catch (ScriptException e) {
 				// No address found.

@@ -98,7 +98,7 @@ public class ECKeyTest {
 		// a message with it.
 		BigInteger privkey = new BigInteger(1,
 				HEX.decode("180cb41c7c600be951b5d3d0a7334acc7506173875834f7a6c4c786a28fcbb19"));
-		PQKey key = PQKey.createNew()privkey);
+		PQKey key = PQKey.createNew();
 		byte[] output = key.sign(Sha256Hash.ZERO_HASH).encodeToDER();
 		assertTrue(key.verify(Sha256Hash.ZERO_HASH.getBytes(), output));
 
@@ -111,11 +111,11 @@ public class ECKeyTest {
 	@Test
 	public void testKey() throws Exception {
 	  String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
-		assertTrue( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(TestParams.get()).toBase58()
+		assertTrue( PQKey.createNew().toAddress(TestParams.get()).toHex()
 				.equals("mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"));
-		assertTrue( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58()
+		assertTrue( PQKey.createNew().toAddress(MainNetParams.get()).toHex()
 				.equals("14a4YnkmSCBGUqcmN2PX3tzxFthrDmyDXE"));
-	//	log.debug( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58());
+	//	log.debug( PQKey.createNew().toAddress(MainNetParams.get()).toHex());
 	}
 	
 	@Test
@@ -257,7 +257,7 @@ public class ECKeyTest {
 
 	@Test
 	public void testToString() throws Exception {
-		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew().decompress(); // An example private key.
 		NetworkParameters params = MainNetParams.get();
 		assertEquals(
 				"PQKey{pub HEX=04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7, isEncrypted=false, isPubKeyOnly=false}",
@@ -269,13 +269,13 @@ public class ECKeyTest {
 
 	@Test
 	public void testGetPrivateKeyAsHex() throws Exception {
-		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew().decompress(); // An example private key.
 		assertEquals("000000000000000000000000000000000000000000000000000000000000000a", key.getPrivateKeyAsHex());
 	}
 
 	@Test
 	public void testGetPublicKeyAsHex() throws Exception {
-		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew().decompress(); // An example private key.
 		assertEquals(
 				"04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7",
 				key.getPublicKeyAsHex());
@@ -318,7 +318,7 @@ public class ECKeyTest {
 	@Test
 	public void clear() throws Exception {
 		PQKey unencryptedKey = PQKey.createNew();
-		PQKey encryptedKey = (PQKey.createNew()).encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
+		PQKey encryptedKey = PQKey.createNew().encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
 
 		checkSomeBytesAreNonZero(unencryptedKey.getPrivKeyBytes());
 

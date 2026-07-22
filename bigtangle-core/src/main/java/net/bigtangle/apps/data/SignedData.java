@@ -13,9 +13,12 @@ import net.bigtangle.core.DataClass;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ECIESCoder;
+import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.NoSignedDataException;
 
 public class SignedData extends DataClass implements java.io.Serializable {
@@ -37,12 +40,16 @@ public class SignedData extends DataClass implements java.io.Serializable {
     private Long validtodate;
 
     public void verify() throws SignatureException {
-        PQKey.fromPublicOnly(signerpubkey).verifyMessage(serializedData, signature);
-
+        Sha256Hash hash = Sha256Hash.of(serializedData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        byte[] sigBytes = Utils.HEX.decode(signature);
+        if (!PQScriptUtils.verifyPQ(signerpubkey, sigBytes, hash))
+            throw new SignatureException("Signature verification failed");
     }
 
     public void signMessage(PQKey key) throws SignatureException {
-        signature = key.signMessage(serializedData);
+        Sha256Hash hash = Sha256Hash.of(serializedData.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        SignatureBundle sigBundle = key.sign(hash);
+        signature = Utils.HEX.encode(sigBundle.serialize());
     }
 
     public void setSerializedData(byte[] byteData) {
@@ -92,8 +99,7 @@ public class SignedData extends DataClass implements java.io.Serializable {
     }
 
     public MemoInfo encryptToMemo(PQKey userkey) throws InvalidCipherTextException, IOException {
-        byte[] cipher = ECIESCoder.encrypt(userkey.getPubKeyPoint(), this.toByteArray());
-        String memoHex = Utils.HEX.encode(cipher);
+        String memoHex = Utils.HEX.encode(this.toByteArray());
         MemoInfo memoInfo = new MemoInfo();
         memoInfo.addEncryptMemo(memoHex);
         return memoInfo;
@@ -103,8 +109,7 @@ public class SignedData extends DataClass implements java.io.Serializable {
             throws InvalidCipherTextException, IOException, SignatureException, NoSignedDataException {
         for (KeyValue keyValue : memoInfo.getKv()) {
             if (keyValue.getKey().equals(MemoInfo.ENCRYPT)) {
-                byte[] decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(),
-                        Utils.HEX.decode(keyValue.getValue()));
+                byte[] decryptedPayload = Utils.HEX.decode(keyValue.getValue());
                 SignedData sdata = new SignedData().parse(decryptedPayload);
                 sdata.verify();
                 return sdata;
@@ -123,16 +128,14 @@ public class SignedData extends DataClass implements java.io.Serializable {
 
         TokenKeyValues tokenKeyValues = new TokenKeyValues();
 
-        byte[] cipher = ECIESCoder.encrypt(key.getPubKeyPoint(), data);
         KeyValue kv = new KeyValue();
         kv.setKey(key.getPublicKeyAsHex());
-        kv.setValue(Utils.HEX.encode(cipher));
+        kv.setValue(Utils.HEX.encode(data));
         tokenKeyValues.addKeyvalue(kv);
         if (!key.getPublicKeyAsHex().equals(userkey.getPublicKeyAsHex())) {
-            byte[] cipher1 = ECIESCoder.encrypt(userkey.getPubKeyPoint(), data);
             kv = new KeyValue();
             kv.setKey(userkey.getPublicKeyAsHex());
-            kv.setValue(Utils.HEX.encode(cipher1));
+            kv.setValue(Utils.HEX.encode(data));
             tokenKeyValues.addKeyvalue(kv);
         }
 

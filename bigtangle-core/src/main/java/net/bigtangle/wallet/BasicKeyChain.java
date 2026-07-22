@@ -140,11 +140,11 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-    public int importKeys(ECKey... keys) {
-        return importKeys(ImmutableList.copyOf(keys));
+    public int importKeys(PQKey... keys) {
+        return importKeys(Arrays.asList(keys));
     }
 
-    public int importKeys(List<? > keys) {
+    public int importKeys(List<? extends PQKey> keys) {
         lock.lock();
         try {
             // Check that if we're encrypted, the keys are all encrypted, and if we're not, that none are.
@@ -354,8 +354,11 @@ public class BasicKeyChain implements EncryptableKeyChain {
                 // (all bitcoin controlled by that private key is lost forever).
                 // For a correctly constructed keyCrypter the encryption should always be reversible so it is just
                 // being as cautious as possible.
-                if (!ECKey.encryptionIsReversible(key, encryptedKey, keyCrypter, aesKey))
-                    throw new KeyCrypterException("The key " + key.toString() + " cannot be successfully decrypted after encryption so aborting wallet encryption.");
+                try {
+                    encryptedKey.decrypt(keyCrypter, aesKey);
+                } catch (KeyCrypterException e) {
+                    throw new KeyCrypterException("The key " + key.toString() + " cannot be successfully decrypted after encryption so aborting wallet encryption.", e);
+                }
                 encrypted.importKeyLocked(encryptedKey);
             }
             return encrypted;

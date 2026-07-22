@@ -126,7 +126,7 @@ public abstract class AbstractIntegrationTest {
         store = storeService.getStore();
         resetStore();
         wallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
+                PQKey.createNew();
         serverConfiguration.setServiceReady(true);
     }
 
