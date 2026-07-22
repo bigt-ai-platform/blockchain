@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -44,12 +44,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Generate two conflicting blocks
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -88,12 +88,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -182,7 +182,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -261,7 +261,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenidSubsequentIssuance() throws Exception {
 
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -333,7 +333,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {
 
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		byte[] pubKey = outKey.getPubKey();
@@ -357,7 +357,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -416,12 +416,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Generate two conflicting blocks
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);

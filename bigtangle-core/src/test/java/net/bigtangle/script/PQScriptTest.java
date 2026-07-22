@@ -9,7 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.crypto.pq.*;
 
@@ -54,7 +54,7 @@ class PQScriptTest {
     @Test
     void pqPubkeyDetection() {
         assertTrue(PQScriptUtils.isPQPubkey(prefixedPubkey));
-        assertFalse(PQScriptUtils.isPQPubkey(new ECKey().getPubKey()));
+        assertFalse(PQScriptUtils.isPQPubkey(PQKey.createNew().getPubKey()));
         assertFalse(PQScriptUtils.isPQPubkey(null));
         assertFalse(PQScriptUtils.isPQPubkey(new byte[0]));
     }

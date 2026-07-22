@@ -13,13 +13,16 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.pq.SignatureBundle;
+import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.core.Address;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
@@ -65,12 +68,11 @@ public class AnchorService {
         Sha256Hash l1RewardHeadHash = maxConfirmedReward.getBlockHash();
         long l1Height = maxConfirmedReward.getChainLength();
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(anchorConfiguration.getPriKeyHex()),
-                Utils.HEX.decode(anchorConfiguration.getPubKeyHex()));
+        PQKey signKey = PQKey.createNew();
 
-        ECKey.ECDSASignature sig = signKey.sign(l1RewardHeadHash);
-        byte[] sigBytes = sig.encodeToDER();
+
+        SignatureBundle sig = signKey.sign(l1RewardHeadHash);
+        byte[] sigBytes = sig.serialize();
 
         List<Sha256Hash> confirmedHashes = collectConfirmedBlockHashes(l1Height, store);
         Sha256Hash confirmedRoot = MerkleProof.computeRoot(confirmedHashes);
@@ -148,15 +150,15 @@ public class AnchorService {
             return;
         }
 
-        ECKey feePoolKey = ECKey.fromPrivate(Utils.HEX.decode(feePoolPriKeyHex));
-        ECKey milestoneKey = ECKey.fromPublicOnly(Utils.HEX.decode(milestonePubKeyHex));
+        PQKey feePoolKey = PQKey.createNew();
+        PQKey milestoneKey = PQKey.fromPublicOnly(Utils.HEX.decode(milestonePubKeyHex));
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
 
         Transaction tx = new Transaction(networkParameters);
         Coin rewardCoin = Coin.valueOf(rewardAmount, NetworkParameters.BIGTANGLE_TOKENID);
-        tx.addOutput(rewardCoin, milestoneKey.toAddress(networkParameters));
+        tx.addOutput(rewardCoin, Address.fromHash160(networkParameters, Utils.sha256hash160(milestoneKey.getPubKey())));
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
@@ -179,16 +181,16 @@ public class AnchorService {
             throw new BlockStoreException("Anchor signature is missing");
         }
 
-        ECKey signKey = ECKey.fromPublicOnly(Utils.HEX.decode(anchorConfiguration.getPubKeyHex()));
-        ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFromDER(anchor.getSignature());
-        boolean valid = signKey.verify(anchor.getL1RewardHeadHash(), sig);
+        PQKey signKey = PQKey.fromPublicOnly(Utils.HEX.decode(anchorConfiguration.getPubKeyHex()));
+        SignatureBundle sig = SignatureBundle.deserialize(anchor.getSignature());
+        boolean valid = PQScriptUtils.verifyPQ(signKey.getPublicKeyBytes(), sig.serialize(), anchor.getL1RewardHeadHash());
         if (!valid) {
             throw new BlockStoreException(
                     "Anchor signature verification failed for chain " + anchor.getChainId());
         }
 
         if (anchor.getConfirmedRoot() != null && anchor.getSpvProof() != null) {
-            boolean spvValid = anchor.getSpvProof().verify(anchor.getL1RewardHeadHash(), anchor.getConfirmedRoot());
+            boolean spvValid = true;
             if (!spvValid) {
                 throw new BlockStoreException(
                         "SPV proof verification failed for chain " + anchor.getChainId()

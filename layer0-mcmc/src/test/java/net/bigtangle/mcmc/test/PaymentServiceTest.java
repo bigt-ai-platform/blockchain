@@ -23,7 +23,7 @@ import com.google.common.collect.ImmutableList;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -63,16 +63,16 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	// transfer the coin to address with multisign for spent
 	public void testMultiSigns() throws Exception {
 
-		List<ECKey> wallet1Keys_part = new ArrayList<ECKey>();
-		wallet1Keys_part.add(new ECKey());
-		wallet1Keys_part.add(new ECKey());
+		List<PQKey> wallet1Keys_part = new ArrayList<PQKey>();
+		wallet1Keys_part.add(PQKey.createNew());
+		wallet1Keys_part.add(PQKey.createNew());
 		createMultiSigns( wallet1Keys_part);
 
 	}
 
 	// pay to mutilsigns keys wallet1Keys_part
-	public void createMultiSigns(List<ECKey> wallet1Keys_part) throws Exception {
-		for (ECKey ecKey : wallet1Keys_part)
+	public void createMultiSigns(List<PQKey> wallet1Keys_part) throws Exception {
+		for (PQKey ecKey : wallet1Keys_part)
 			log.debug(ecKey.getPublicKeyAsHex());
 
 		Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(2, wallet1Keys_part);
@@ -90,7 +90,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		checkBalance(amount0, wallet1Keys_part);
 	}
 
-	public void multiSigns(ECKey receiverkey, List<ECKey> wallet1Keys_part) throws Exception {
+	public void multiSigns(PQKey receiverkey, List<PQKey> wallet1Keys_part) throws Exception {
 		payBigTo(wallet1Keys_part.get(0), Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), null);
 
 		List<UTXO> ulist = getBalance(false, wallet1Keys_part);
@@ -148,7 +148,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testTransferWallet() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = new ECKey().toAddress(networkParameters);
+		Address address = PQKey.createNew().toAddress(networkParameters);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, address.toString(), amount,  "" );
@@ -166,7 +166,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
     public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = new ECKey().toAddress(networkParameters);
+		Address address = PQKey.createNew().toAddress(networkParameters);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.pay(null, address.toString(), amount,   "" );
@@ -208,7 +208,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	// coins in wallet to one coin to address
 	public void testPartsToOne() throws Exception {
 
-		ECKey to = new ECKey();
+		PQKey to = PQKey.createNew();
 		payBigTo(to, Coin.FEE_DEFAULT.getValue(), null);
 		Wallet w = Wallet.fromKeys(networkParameters, to, contextRoot);
 		Coin aCoin = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
@@ -226,14 +226,14 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payBlock);
 
-		ArrayList<ECKey> a = new ArrayList<ECKey>();
+		ArrayList<PQKey> a = new ArrayList<PQKey>();
 		a.add(to);
 		List<UTXO> ulist = getBalance(false, a);
 		assertTrue(ulist.size() == 1);
 
 	}
 
-	public void testPartsToOne(Coin amount, ECKey to) throws Exception {
+	public void testPartsToOne(Coin amount, PQKey to) throws Exception {
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);

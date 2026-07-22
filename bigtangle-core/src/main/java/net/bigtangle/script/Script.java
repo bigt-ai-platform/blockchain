@@ -373,7 +373,7 @@ public class Script {
         else if (isPayToScriptHash())
             return Address.fromP2SHScript(params, this);
         else if (forcePayToPubKey && isSentToRawPubKey())
-            return ECKey.fromPublicOnly(getPubKey()).toAddress(params);
+            return PQKey.fromPublicOnly(getPubKey()).toAddress(params);
         else
             throw new ScriptException("Cannot cast this script to a pay-to-address type");
     }
@@ -403,7 +403,7 @@ public class Script {
     }
 
     /** Creates a program that requires at least N of the given keys to sign, using OP_CHECKMULTISIG. */
-    public static byte[] createMultiSigOutputScript(int threshold, List<ECKey> pubkeys) {
+    public static byte[] createMultiSigOutputScript(int threshold, List<PQKey> pubkeys) {
         checkArgument(threshold > 0);
         checkArgument(threshold <= pubkeys.size());
         checkArgument(pubkeys.size() <= 16);  // That's the max we can represent with a single opcode.
@@ -413,7 +413,7 @@ public class Script {
         try {
             ByteArrayOutputStream bits = new ByteArrayOutputStream();
             bits.write(encodeToOpN(threshold));
-            for (ECKey key : pubkeys) {
+            for (PQKey key : pubkeys) {
                 writeBytes(bits, key.getPubKey());
             }
             bits.write(encodeToOpN(pubkeys.size()));
@@ -453,7 +453,7 @@ public class Script {
      * Having incomplete input script allows to pass around partially signed tx.
      * It is expected that this program later on will be updated with proper signatures.
      */
-    public Script createEmptyInputScript(@Nullable ECKey key, @Nullable Script redeemScript) {
+    public Script createEmptyInputScript(@Nullable PQKey key, @Nullable Script redeemScript) {
         if (isSentToAddress()) {
             checkArgument(key != null, "Key required to create pay-to-address input script");
             return ScriptBuilder.createInputScript(null, key);
@@ -489,7 +489,7 @@ public class Script {
      * Returns the index where a signature by the key should be inserted.  Only applicable to
      * a P2SH scriptSig.
      */
-    public int getSigInsertionIndex(Sha256Hash hash, ECKey signingKey) {
+    public int getSigInsertionIndex(Sha256Hash hash, PQKey signingKey) {
         // Iterate over existing signatures, skipping the initial OP_0, the final redeem script
         // and any placeholder OP_0 sigs.
         List<ScriptChunk> existingChunks = chunks.subList(1, chunks.size() - 1);
@@ -512,7 +512,7 @@ public class Script {
         return sigCount;
     }
 
-    private int findKeyInRedeem(ECKey key) {
+    private int findKeyInRedeem(PQKey key) {
         checkArgument(chunks.get(0).isOpCode()); // P2SH scriptSig
         int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
         for (int i = 0 ; i < numKeys ; i++) {
@@ -529,14 +529,14 @@ public class Script {
      *
      * @throws ScriptException if the script type is not understood or is pay to address or is P2SH (run this method on the "Redeem script" instead).
      */
-    public List<ECKey> getPubKeys() {
+    public List<PQKey> getPubKeys() {
         if (!isSentToMultiSig())
             throw new ScriptException("Only usable for multisig scripts.");
 
-        ArrayList<ECKey> result = Lists.newArrayList();
+        ArrayList<PQKey> result = Lists.newArrayList();
         int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
         for (int i = 0 ; i < numKeys ; i++)
-            result.add(ECKey.fromPublicOnly(chunks.get(1 + i).data));
+            result.add(PQKey.fromPublicOnly(chunks.get(1 + i).data));
         return result;
     }
 
@@ -545,7 +545,7 @@ public class Script {
         int numKeys = Script.decodeFromOpN(chunks.get(chunks.size() - 2).opcode);
         TransactionSignature signature = TransactionSignature.decodeFromBitcoin(signatureBytes, true, false);
         for (int i = 0 ; i < numKeys ; i++) {
-            if (ECKey.fromPublicOnly(chunks.get(i + 1).data).verify(hash, signature)) {
+            if (PQKey.fromPublicOnly(chunks.get(i + 1).data).verify(hash, signature)) {
                 return i;
             }
         }
@@ -654,10 +654,10 @@ public class Script {
     }
 
     /**
-     * Returns number of bytes required to spend this script. It accepts optional ECKey and redeemScript that may
+     * Returns number of bytes required to spend this script. It accepts optional PQKey and redeemScript that may
      * be required for certain types of script to estimate target size.
      */
-    public int getNumberOfBytesRequiredToSpend(@Nullable ECKey pubKey, @Nullable Script redeemScript) {
+    public int getNumberOfBytesRequiredToSpend(@Nullable PQKey pubKey, @Nullable Script redeemScript) {
         if (isPayToScriptHash()) {
             // scriptSig: <sig> [sig] [sig...] <redeemscript>
             checkArgument(redeemScript != null, "P2SH script requires redeemScript to be spent");
@@ -1474,7 +1474,7 @@ public class Script {
 
                 // TODO: Should check hash type is known
                 Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                sigValid = ECKey.verify(hash.getBytes(), sig, pubKey);
+                sigValid = PQScriptUtils.verifyPQ(hash.getBytes(), sig, pubKey);
             } catch (Exception e1) {
                 // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
                 // Because I can't verify there aren't more, we use a very generic Exception catch
@@ -1553,7 +1553,7 @@ public class Script {
                 } else {
                     TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, false);
                     Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                    if (ECKey.verify(hash.getBytes(), sig, pubKey))
+                    if (PQScriptUtils.verifyPQ(hash.getBytes(), sig, pubKey))
                         sigs.pollFirst();
                 }
             } catch (Exception e) {

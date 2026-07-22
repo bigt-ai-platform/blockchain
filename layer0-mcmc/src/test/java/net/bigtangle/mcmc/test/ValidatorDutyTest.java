@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
@@ -34,7 +34,7 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
     @Autowired
     private ScheduleConfiguration scheduleConfiguration;
 
-    private ECKey validatorKey;
+    private PQKey validatorKey;
 
     @Override
     @BeforeEach
@@ -42,13 +42,13 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
         super.setUp();
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
-        validatorKey = new ECKey();
+        validatorKey = PQKey.createNew();
     }
 
     @Test
     public void testValidatorKeySetAndGet() {
-        ECKey original = validatorDutyService.getValidatorKey();
-        ECKey testKey = new ECKey();
+        PQKey original = validatorDutyService.getValidatorKey();
+        PQKey testKey = PQKey.createNew();
         validatorDutyService.setValidatorKey(testKey);
         assertNotNull(validatorDutyService.getValidatorKey());
         assertEquals(Utils.HEX.encode(testKey.getPubKey()),
@@ -63,8 +63,8 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
 
     @Test
     public void testValidatorKeyInitFromConfig() {
-        ECKey configured = validatorDutyService.getValidatorKey();
-        ECKey testKey = new ECKey();
+        PQKey configured = validatorDutyService.getValidatorKey();
+        PQKey testKey = PQKey.createNew();
         validatorDutyService.setValidatorKey(testKey);
         assertNotNull(validatorDutyService.getValidatorKey());
         assertEquals(Utils.HEX.encode(testKey.getPubKey()),

@@ -8,7 +8,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
@@ -77,7 +77,7 @@ public class PayMultiSignService {
         }
 
         String pubKey0 = (String) request.get("pubKey");
-        String address0 = ECKey.fromPublicOnly(Utils.HEX.decode(pubKey0)).toAddress(networkParameters).toString();
+        String address0 = PQKey.fromPublicOnly(Utils.HEX.decode(pubKey0)).toAddress(networkParameters).toString();
         if (!payMultiSignAddresseRes.containsKey(address0)) {
             throw new BlockStoreException("pay multisign addresse list is empty");
         }
@@ -88,7 +88,7 @@ public class PayMultiSignService {
         byte[] pubKey = Utils.HEX.decode(pubKey0);
         byte[] data = transaction.getHash().getBytes();
         byte[] signature = Utils.HEX.decode((String) request.get("signature"));
-        boolean success = ECKey.verify(data, signature, pubKey);
+        boolean success = PQScriptUtils.verifyPQ(data, signature, pubKey);
         if (!success) {
             throw new BlockStoreException("multisign signature error");
         }

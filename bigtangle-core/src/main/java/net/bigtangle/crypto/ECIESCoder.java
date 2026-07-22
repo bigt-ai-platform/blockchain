@@ -32,7 +32,6 @@ import org.bouncycastle.crypto.params.ParametersWithIV;
 import org.bouncycastle.crypto.parsers.ECIESPublicKeyParser;
 import org.bouncycastle.math.ec.ECPoint;
 
-import net.bigtangle.core.ECKey;
 
 
 public class ECIESCoder {

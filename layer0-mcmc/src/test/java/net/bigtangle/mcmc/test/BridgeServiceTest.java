@@ -19,7 +19,7 @@ import net.bigtangle.bridge.BridgeConfiguration;
 import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.bridge.LayerAnchor;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
@@ -119,8 +119,7 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         Sha256Hash root = MerkleProof.computeRoot(blockHashes);
         MerkleProof proof = MerkleProof.buildProofFor(blockHashes, tipProto.getHash());
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+        PQKey signKey = PQKey.createNew());
         byte[] sigBytes = signKey.sign(tipProto.getHash()).encodeToDER();
 
         LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, tipProto.getHash(),

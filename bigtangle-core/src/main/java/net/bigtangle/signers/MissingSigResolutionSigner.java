@@ -22,7 +22,7 @@ package net.bigtangle.signers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.script.Script;
@@ -88,7 +88,7 @@ public class MissingSigResolutionSigner extends StatelessTransactionSigner {
                 if (!inputScript.getChunks().isEmpty() ) {
                        if( inputScript.getChunks().get(0).equalsOpCode(0)) {
                     if (missingSigsMode == Wallet.MissingSigsMode.THROW) {
-                        throw new ECKey.MissingPrivateKeyException();
+                        throw new PQKey.MissingPrivateKeyException();
                     } else if (missingSigsMode == Wallet.MissingSigsMode.USE_DUMMY_SIG) {
                         txIn.setScriptSig(scriptPubKey.getScriptSigWithSignature(inputScript, dummySig, 0));
                     }

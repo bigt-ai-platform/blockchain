@@ -40,13 +40,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.data.VaultRecord;
@@ -62,7 +63,7 @@ import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
@@ -715,9 +716,9 @@ public class DispatcherController implements DisposableBean {
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubkeyHex = (String) request.get("pubkey");
 				String amountStr = (String) request.get("amount");
-				ECKey depositKey = ECKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				PQKey depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
 				BigInteger amount = new BigInteger(amountStr);
-				Address addr = depositKey.toAddress(networkParameters);
+				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
 				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());
 				UTXO selected = null;
 				for (UTXO u : utxos) {
@@ -772,7 +773,7 @@ public class DispatcherController implements DisposableBean {
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String keyHex = (String) request.get("privateKey");
 				if (keyHex != null && !keyHex.isEmpty()) {
-					ECKey key = ECKey.fromPrivate(Utils.HEX.decode(keyHex));
+					PQKey key = PQKey.createNew();
 					validatorDutyService.setValidatorKey(key);
 				}
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
@@ -781,7 +782,7 @@ public class DispatcherController implements DisposableBean {
 			case getValidatorKey: {
 				Map<String, Object> result = new HashMap<>();
 				result.put("configured", validatorDutyService.getValidatorKey() != null);
-				ECKey key = validatorDutyService.getValidatorKey();
+				PQKey key = validatorDutyService.getValidatorKey();
 				if (key != null) {
 					result.put("pubkey", Utils.HEX.encode(key.getPubKey()));
 				}
@@ -886,9 +887,9 @@ public class DispatcherController implements DisposableBean {
 		String header = httprequest.getHeader("accessToken");
 		String pubkey = header.split(",")[0];
 		byte[] pub = Utils.HEX.decode(pubkey);
-		ECKey ecKey = ECKey.fromPublicOnly(pub);
+		PQKey ecKey = PQKey.fromPublicOnly(pub);
 
-		final String address = ecKey.toAddress(networkParameters).toBase58();
+		final String address = ecKey.toAddress(networkParameters).toHex();
 		if (!Utils.isBlank(serverConfiguration.getPermissionadmin())
 				&& serverConfiguration.getPermissionadmin().equals(address)) {
 			return true;
@@ -936,11 +937,11 @@ public class DispatcherController implements DisposableBean {
 			String pubkey = header.split(",")[0];
 			String signHex = header.split(",")[1];
 			String accessToken = header.split(",")[2];
-			ECKey key = ECKey.fromPublicOnly(Utils.HEX.decode(pubkey));
+			PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(pubkey));
 
 			byte[] buf = Utils.HEX.decode(accessToken);
 			byte[] signature = Utils.HEX.decode(signHex);
-			flag = key.verify(buf, signature);
+			flag = PQScriptUtils.verifyPQ(key.getPublicKeyBytes(), signature, Sha256Hash.wrap(buf));
 
 			if (flag) {
 				int count = this.accessPermissionedService.checkSessionRandomNumResp(pubkey, accessToken, store);

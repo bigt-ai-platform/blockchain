@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.wallet.Wallet;
@@ -47,21 +47,21 @@ public class BenchmarkRunner {
         log.info("Server: {}", serverUrl);
 
         Wallet genesisWallet = Wallet.fromKeys(params,
-                ECKey.fromPrivate(Utils.HEX.decode(testPriv)), serverUrl);
+                PQKey.createNew()Utils.HEX.decode(testPriv)), serverUrl);
 
-        List<ECKey> clientKeys = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) clientKeys.add(new ECKey());
+        List<PQKey> clientKeys = new ArrayList<>();
+        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
 
         log.info("Funding wallets...");
-        for (ECKey key : clientKeys) {
+        for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
             funding.put(key.toAddress(params).toString(), BigInteger.valueOf(100000));
             genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
         }
         log.info("Funding done");
 
-        List<ECKey> recipients = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) recipients.add(new ECKey());
+        List<PQKey> recipients = new ArrayList<>();
+        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
 
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
@@ -74,9 +74,9 @@ public class BenchmarkRunner {
         long wallStart = System.nanoTime();
         for (int c = 0; c < CLIENTS; c++) {
             int clientId = c;
-            ECKey fromKey = clientKeys.get(c);
+            PQKey fromKey = clientKeys.get(c);
             Wallet w = Wallet.fromKeys(params, fromKey, serverUrl);
-            ECKey toKey = recipients.get(c);
+            PQKey toKey = recipients.get(c);
             futures[c] = CompletableFuture.runAsync(() -> {
                 for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
                     try {

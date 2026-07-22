@@ -38,11 +38,11 @@ public class PermissionDomainname {
         return Utils.HEX.decode(this.pubKeyHex);
     }
 
-    public ECKey getOutKey() {
+    public PQKey getOutKey() {
      //   byte[] privKeyBytes = this.getPriKeyBuf();
         byte[] pubKey = this.getPubKeyBuf();
 
-        ECKey outKey = ECKey.fromPublicOnly(  pubKey);
+        PQKey outKey = PQKey.fromPublicOnly(  pubKey);
         return outKey;
     }
 }

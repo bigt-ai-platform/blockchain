@@ -16,7 +16,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -76,8 +76,8 @@ public class BridgeService {
         if (!bridgeConfiguration.isActive()) {
             return;
         }
-        ECKey vaultKey = ECKey.fromPublicOnly(Utils.HEX.decode(bridgeConfiguration.getVaultPubKeyHex()));
-        Address vaultAddress = vaultKey.toAddress(networkParameters);
+        PQKey vaultKey = PQKey.fromPublicOnly(Utils.HEX.decode(bridgeConfiguration.getVaultPubKeyHex()));
+        Address vaultAddress = Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -152,10 +152,9 @@ public class BridgeService {
             return;
         }
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(anchorConfiguration.getPriKeyHex()),
-                Utils.HEX.decode(anchorConfiguration.getPubKeyHex()));
-        List<ECKey> keys = new ArrayList<>();
+        PQKey signKey = PQKey.createNew();
+
+        List<PQKey> keys = new ArrayList<>();
         keys.add(signKey);
 
         List<UTXO> outputs = getRemoteBalances(l0Url, keys);
@@ -183,7 +182,7 @@ public class BridgeService {
         }
     }
 
-    private void issueWrappedTokens(ECKey signKey, Address address, Coin amount,
+    private void issueWrappedTokens(PQKey signKey, Address address, Coin amount,
             BlockStoreInterface store) throws Exception {
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -194,10 +193,10 @@ public class BridgeService {
         blockSaveService.saveBlock(b, store);
     }
 
-    private List<UTXO> getRemoteBalances(String l0Url, List<ECKey> keys) throws Exception {
+    private List<UTXO> getRemoteBalances(String l0Url, List<PQKey> keys) throws Exception {
         List<String> keyStrHex = new ArrayList<>();
-        for (ECKey ecKey : keys) {
-            keyStrHex.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
+        for (PQKey ecKey : keys) {
+            keyStrHex.add(Utils.HEX.encode(Utils.sha256hash160(ecKey.getPubKey())));
         }
         byte[] response = OkHttp3Util.post(l0Url + "/" + ReqCmd.getBalances.name(),
                 Json.jsonmapper().writeValueAsString(keyStrHex).getBytes());
@@ -219,7 +218,7 @@ public class BridgeService {
         return networkParameters.getDefaultSerializer().makeBlock(data);
     }
 
-    private List<UTXO> getLocalBalances(ECKey signKey, byte[] tokenid, BlockStoreInterface store) {
+    private List<UTXO> getLocalBalances(PQKey signKey, byte[] tokenid, BlockStoreInterface store) {
         return new ArrayList<>();
     }
 }

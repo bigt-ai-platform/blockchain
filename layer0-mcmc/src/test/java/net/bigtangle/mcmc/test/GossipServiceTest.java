@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.AttestationData;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.server.service.GossipService;
 
@@ -31,7 +31,7 @@ public class GossipServiceTest extends AbstractIntegrationTest {
         att.setSlot(1);
         att.setEpoch(0);
         att.setBeaconBlockHash(Sha256Hash.of("test".getBytes()));
-        att.setValidatorPubkey(new ECKey().getPubKey());
+        att.setValidatorPubkey(PQKey.createNew().getPubKey());
 
         assertDoesNotThrow(() -> gossipService.broadcastAttestation(att));
     }
@@ -40,12 +40,12 @@ public class GossipServiceTest extends AbstractIntegrationTest {
     public void testBroadcastSlashingProofWithEmptyPeers() {
         AttestationData att1 = new AttestationData();
         att1.setSlot(1);
-        att1.setValidatorPubkey(new ECKey().getPubKey());
+        att1.setValidatorPubkey(PQKey.createNew().getPubKey());
         att1.setBeaconBlockHash(Sha256Hash.of("blockA".getBytes()));
 
         AttestationData att2 = new AttestationData();
         att2.setSlot(2);
-        att2.setValidatorPubkey(new ECKey().getPubKey());
+        att2.setValidatorPubkey(PQKey.createNew().getPubKey());
         att2.setBeaconBlockHash(Sha256Hash.of("blockB".getBytes()));
 
         assertDoesNotThrow(() -> gossipService.broadcastSlashingProof(att1, att2));

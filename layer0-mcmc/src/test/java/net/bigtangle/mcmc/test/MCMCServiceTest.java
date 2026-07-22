@@ -18,7 +18,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -62,12 +62,12 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 		// Generate two conflicting blocks
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -99,12 +99,12 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXOSimple() throws Exception {
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -130,7 +130,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -174,7 +174,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenidSubsequentIssuance() throws Exception {
 
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		;
 		byte[] pubKey = outKey.getPubKey();
 
@@ -223,7 +223,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenFirstIssuance() throws Exception {
 
 		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
@@ -255,7 +255,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
 
 		// Generate an issuance
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
@@ -295,7 +295,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUpdateConflictingTransactionalMilestoneCandidates() throws Exception {
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		// use UTXO to create double spending, this can not be created with
 		// wallet
@@ -303,7 +303,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, new ECKey()));
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
@@ -334,7 +334,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testUpdateConflictingTokenMilestoneCandidates() throws Exception {
 
 		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		;
 		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -547,7 +547,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	public void testReorgToken() throws Exception {
 
 		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		;
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();

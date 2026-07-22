@@ -36,7 +36,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
@@ -150,7 +150,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * 
 	 * @return Whether the key was removed or not.
 	 */
-	public boolean removeKey(ECKey key) {
+	public boolean removeKey(PQKey key) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.removeImportedKey(key);
@@ -163,7 +163,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Returns a list of the non-deterministic keys that have been imported into the
 	 * wallet, or the empty list if none.
 	 */
-	public List<ECKey> getImportedKeys() {
+	public List<PQKey> getImportedKeys() {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.getImportedKeys();
@@ -174,7 +174,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	/**
 	 * <p>
-	 * Imports the given ECKey to the wallet.
+	 * Imports the given PQKey to the wallet.
 	 * </p>
 	 *
 	 * <p>
@@ -183,7 +183,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * the wallet, does nothing and returns false.
 	 * </p>
 	 */
-	public boolean importKey(ECKey key) {
+	public boolean importKey(PQKey key) {
 		return importKeys(Lists.newArrayList(key)) == 1;
 	}
 
@@ -193,7 +193,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * of keys added, after duplicates are ignored. The onKeyAdded event will be
 	 * called for each key in the list that was not already present.
 	 */
-	public int importKeys(final List<ECKey> keys) {
+	public int importKeys(final List<PQKey> keys) {
 		// API usage check.
 		checkNoDeterministicKeys(keys);
 		int result;
@@ -207,11 +207,11 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		return result;
 	}
 
-	private void checkNoDeterministicKeys(List<ECKey> keys) {
+	private void checkNoDeterministicKeys(List<PQKey> keys) {
 		// Watch out for someone doing
 		// wallet.importKey(wallet.freshReceiveKey()); or equivalent: we never
 		// tested this.
-		for (ECKey key : keys)
+		for (PQKey key : keys)
 			if (key instanceof DeterministicKey)
 				throw new IllegalArgumentException("Cannot import HD keys back into the wallet");
 	}
@@ -220,7 +220,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Takes a list of keys and a password, then encrypts and imports them in one
 	 * step using the current keycrypter.
 	 */
-	public int importKeysAndEncrypt(final List<ECKey> keys, CharSequence password) {
+	public int importKeysAndEncrypt(final List<PQKey> keys, CharSequence password) {
 		keyChainGroupLock.lock();
 		int result;
 		try {
@@ -237,7 +237,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Takes a list of keys and an AES key, then encrypts and imports them in one
 	 * step using the current keycrypter.
 	 */
-	public int importKeysAndEncrypt(final List<ECKey> keys, KeyParameter aesKey) {
+	public int importKeysAndEncrypt(final List<PQKey> keys, KeyParameter aesKey) {
 		keyChainGroupLock.lock();
 		try {
 			checkNoDeterministicKeys(keys);
@@ -252,11 +252,11 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * This is needed when finding out which key we need to use to redeem a
 	 * transaction output.
 	 *
-	 * @return ECKey object or null if no such key was found.
+	 * @return PQKey object or null if no such key was found.
 	 */
 	@Override
 	@Nullable
-	public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
+	public PQKey findKeyFromPubHash(byte[] pubkeyHash) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findKeyFromPubHash(pubkeyHash);
@@ -268,11 +268,11 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	/**
 	 * Locates a keypair from the basicKeyChain given the raw public key bytes.
 	 * 
-	 * @return ECKey or null if no such key was found.
+	 * @return PQKey or null if no such key was found.
 	 */
 	@Override
 	@Nullable
-	public ECKey findKeyFromPubKey(byte[] pubkey) {
+	public PQKey findKeyFromPubKey(byte[] pubkey) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findKeyFromPubKey(pubkey);
@@ -373,7 +373,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 
 	/**
 	 * Get the wallet's KeyCrypter, or null if the wallet is not encrypted. (Used in
-	 * encrypting/ decrypting an ECKey).
+	 * encrypting/ decrypting an PQKey).
 	 */
 	@Nullable
 	public KeyCrypter getKeyCrypter() {
@@ -462,7 +462,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		USE_DUMMY_SIG,
 		/**
 		 * If signature is missing, will be thrown for P2SH and
-		 * {@link ECKey.MissingPrivateKeyException} for other tx types.
+		 * {@link PQKey.MissingPrivateKeyException} for other tx types.
 		 */
 		THROW
 	}
@@ -560,23 +560,23 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	/*
 	 * get all keys in the wallet
 	 */
-	public List<ECKey> walletKeys(@Nullable KeyParameter aesKey) {
+	public List<PQKey> walletKeys(@Nullable KeyParameter aesKey) {
 		DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-		List<ECKey> walletKeys = new ArrayList<>();
-		for (ECKey key : getImportedKeys()) {
-			ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+		List<PQKey> walletKeys = new ArrayList<>();
+		for (PQKey key : getImportedKeys()) {
+			PQKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 			walletKeys.add(ecKey);
 		}
 		for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
-			for (ECKey key : chain.getLeafKeys()) {
-				ECKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+			for (PQKey key : chain.getLeafKeys()) {
+				PQKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 				walletKeys.add(ecKey);
 			}
 		}
 		return walletKeys;
 	}
 
-	public List<ECKey> walletKeys() {
+	public List<PQKey> walletKeys() {
 		return walletKeys(null);
 	}
 

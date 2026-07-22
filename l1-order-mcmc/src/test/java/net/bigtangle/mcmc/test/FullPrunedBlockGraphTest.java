@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
@@ -31,7 +31,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	@Test
 	public void testConfirmOrderMatchUTXOs2() throws Exception {
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		// Make the "test" token
 		List<Block> addedBlocks = new ArrayList<>();
 		makeTestToken(testKey, addedBlocks);

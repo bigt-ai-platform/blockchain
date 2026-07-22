@@ -821,14 +821,14 @@ public class Transaction extends ChildMessage {
 	 * @throws ScriptException if the scriptPubKey is not a pay to address or pay to
 	 *                         pubkey script.
 	 */
-	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, ECKey sigKey,
+	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey,
 			SigHash sigHash, boolean anyoneCanPay) throws ScriptException {
 		// Verify the API user didn't try to do operations out of order.
 		checkState(!outputs.isEmpty(), "Attempting to sign tx without outputs.");
 		TransactionInput input = TransactionInput.fromOutpoint4(params, this, new byte[] {}, prevOut);
 		addInput(input);
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, sigHash, anyoneCanPay);
-		ECKey.ECDSASignature ecSig = sigKey.sign(hash);
+		SignatureBundle ecSig = sigKey.sign(hash);
 		TransactionSignature txSig = new TransactionSignature(ecSig, sigHash, anyoneCanPay);
 		if (scriptPubKey.isSentToRawPubKey() || scriptPubKey.isSentToMultiSig())
 			input.setScriptSig(ScriptBuilder.createInputScript(txSig));
@@ -839,9 +839,9 @@ public class Transaction extends ChildMessage {
 		return input;
 	}
 
-	public void signInputs(TransactionOutPoint prevOut, Script scriptPubKey, ECKey sigKey) throws ScriptException {
+	public void signInputs(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey) throws ScriptException {
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, SigHash.ALL, false);
-		ECKey.ECDSASignature ecSig = sigKey.sign(hash);
+		SignatureBundle ecSig = sigKey.sign(hash);
 		TransactionSignature txSig = new TransactionSignature(ecSig, SigHash.ALL, false);
 		for (TransactionInput input : getInputs()) {
 			// TODO only sign if valid signature can be created
@@ -858,11 +858,11 @@ public class Transaction extends ChildMessage {
 
 	/**
 	 * Same as
-	 * {@link #addSignedInput(TransactionOutPoint, net.bigtangle.script.Script, ECKey, net.bigtangle.core.Transaction.SigHash, boolean)}
+	 * {@link #addSignedInput(TransactionOutPoint, net.bigtangle.script.Script, PQKey, net.bigtangle.core.Transaction.SigHash, boolean)}
 	 * but defaults to {@link SigHash#ALL} and "false" for the anyoneCanPay flag.
 	 * This is normally what you want.
 	 */
-	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, ECKey sigKey)
+	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey)
 			throws ScriptException {
 		return addSignedInput(prevOut, scriptPubKey, sigKey, SigHash.ALL, false);
 	}
@@ -907,7 +907,7 @@ public class Transaction extends ChildMessage {
 	 * Creates an output that pays to the given pubkey directly (no address) with
 	 * the given value, adds it to this transaction, and returns the new output.
 	 */
-	public TransactionOutput addOutput(Coin value, ECKey pubkey) {
+	public TransactionOutput addOutput(Coin value, PQKey pubkey) {
 		return addOutput(TransactionOutput.fromCoinKey(params, this, value, pubkey));
 	}
 
@@ -924,7 +924,7 @@ public class Transaction extends ChildMessage {
 	 * Calculates a signature that is valid for being inserted into the input at the
 	 * given position. This is simply a wrapper around calling
 	 * {@link Transaction#hashForSignature(int, byte[], net.bigtangle.core.Transaction.SigHash, boolean)}
-	 * followed by {@link ECKey#sign(Sha256Hash)} and then returning a new
+	 * followed by {@link PQKey#sign(Sha256Hash)} and then returning a new
 	 * {@link TransactionSignature}. The key must be usable for signing as-is: if
 	 * the key is encrypted it must be decrypted first external to this method.
 	 *
@@ -937,7 +937,7 @@ public class Transaction extends ChildMessage {
 	 * @return A newly calculated signature object that wraps the r, s and sighash
 	 *         components.
 	 */
-	public TransactionSignature calculateSignature(int inputIndex, ECKey key, byte[] redeemScript, SigHash hashType,
+	public TransactionSignature calculateSignature(int inputIndex, PQKey key, byte[] redeemScript, SigHash hashType,
 			boolean anyoneCanPay) {
 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
 		return new TransactionSignature(key.sign(hash), hashType, anyoneCanPay);
@@ -947,7 +947,7 @@ public class Transaction extends ChildMessage {
 	 * Calculates a signature that is valid for being inserted into the input at the
 	 * given position. This is simply a wrapper around calling
 	 * {@link Transaction#hashForSignature(int, byte[], net.bigtangle.core.Transaction.SigHash, boolean)}
-	 * followed by {@link ECKey#sign(Sha256Hash)} and then returning a new
+	 * followed by {@link PQKey#sign(Sha256Hash)} and then returning a new
 	 * {@link TransactionSignature}.
 	 *
 	 * @param inputIndex   Which input to calculate the signature for, as an index.
@@ -959,7 +959,7 @@ public class Transaction extends ChildMessage {
 	 * @return A newly calculated signature object that wraps the r, s and sighash
 	 *         components.
 	 */
-	public TransactionSignature calculateSignature(int inputIndex, ECKey key, Script redeemScript, SigHash hashType,
+	public TransactionSignature calculateSignature(int inputIndex, PQKey key, Script redeemScript, SigHash hashType,
 			boolean anyoneCanPay) {
 		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
 		return new TransactionSignature(key.sign(hash), hashType, anyoneCanPay);

@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.PermissionDomainname;
 import net.bigtangle.core.Sha256Hash;
@@ -39,7 +39,7 @@ public class TokenDomainnameService {
         if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ) .getHashAsString())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-                ECKey ecKey = permissionDomainname.getOutKey();
+                PQKey ecKey = permissionDomainname.getOutKey();
                 multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
             }
             return (PermissionedAddressesResponse) PermissionedAddressesResponse
@@ -65,7 +65,7 @@ public class TokenDomainnameService {
         if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
             List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
             for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-                ECKey ecKey = permissionDomainname.getOutKey();
+                PQKey ecKey = permissionDomainname.getOutKey();
                 multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
             }
             return multiSignAddresses;

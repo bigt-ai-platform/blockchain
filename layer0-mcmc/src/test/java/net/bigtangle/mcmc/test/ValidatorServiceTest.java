@@ -23,7 +23,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
@@ -399,7 +399,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				try {
 					// Build transaction
 					Transaction tx = new Transaction(networkParameters);
-					tx.addOutput(Coin.COIN.times(2), new ECKey().toAddress(networkParameters));
+					tx.addOutput(Coin.COIN.times(2), PQKey.createNew().toAddress(networkParameters));
 
 					// The input does not really need to be a valid signature,
 					// as long
@@ -481,7 +481,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Again but with less output coins
 		{
 
-			ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 					Utils.HEX.decode(testPub));
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
@@ -506,7 +506,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Again but with more output coins
 		try {
 
-			ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 					Utils.HEX.decode(testPub));
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
@@ -540,7 +540,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with negative outputs
 		try {
 
-			ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 					Utils.HEX.decode(testPub));
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
@@ -587,7 +587,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with outputs
 		try {
 
-			ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+			PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 					Utils.HEX.decode(testPub));
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
@@ -646,7 +646,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = rewardBlock.getTransactions().get(0);
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -807,7 +807,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenMalformedData1() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -841,7 +841,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenMalformedData2() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -875,7 +875,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenMalformedDataSignature1() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -911,7 +911,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenMalformedDataSignature2() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -946,10 +946,10 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testSolidityTokenMutatedData() throws Exception {
 
-		ECKey testKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo0 = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -1455,7 +1455,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					public void preApply(TokenInfo tokenInfo5) {
 
 						tokenInfo5.getMultiSignAddresses().get(0)
-								.setPubKeyHex(Utils.HEX.encode(new ECKey().getPubKey()));
+								.setPubKeyHex(Utils.HEX.encode(PQKey.createNew().getPubKey()));
 					}
 
 					@Override
@@ -1530,7 +1530,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				block.addCoinbaseTransaction(outKey.getPubKey(), coinbase, tokenInfo, new MemoInfo("coinbase"));
 				Transaction transaction = block.getTransactions().get(0);
 				Sha256Hash sighash1 = transaction.getHash();
-				ECKey.ECDSASignature party1Signature = outKey.sign(sighash1, null);
+				SignatureBundle party1Signature = outKey.sign(sighash1, null);
 				byte[] buf1 = party1Signature.encodeToDER();
 
 				List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
@@ -1545,9 +1545,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 				multiSignBies.add(multiSignBy0);
 
-				ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+				PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 						Utils.HEX.decode(testPub));
-				ECKey.ECDSASignature party2Signature = genesiskey.sign(sighash1, aesKey);
+				SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
 				byte[] buf2 = party2Signature.encodeToDER();
 				multiSignBy0 = new MultiSignBy();
 				if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
@@ -1584,8 +1584,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenMutatedDataSignatures() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
-		ECKey outKey2 = new ECKey();
+		PQKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey2 = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -1607,7 +1607,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Transaction transaction = block.getTransactions().get(0);
 
 		Sha256Hash sighash1 = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = outKey.sign(sighash1, null);
+		SignatureBundle party1Signature = outKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
@@ -1619,9 +1619,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey.ECDSASignature party2Signature = genesiskey.sign(sighash1, aesKey);
+		SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
 		byte[] buf2 = party2Signature.encodeToDER();
 		multiSignBy0 = new MultiSignBy();
 		if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
@@ -1876,7 +1876,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
     public void testSolidityTokenPredecessorWrongTokenid() throws JsonProcessingException, Exception {
 
 		// Generate an eligible issuance
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -1889,7 +1889,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
 
 		// Generate a subsequent issuance that does not work
-		byte[] pubKey2 = new ECKey().getPubKey();
+		byte[] pubKey2 = PQKey.createNew().getPubKey();
 		TokenInfo tokenInfo2 = new TokenInfo();
 		Coin coinbase2 = Coin.valueOf(666, pubKey2);
 
@@ -1897,7 +1897,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo2.setToken(tokens2);
 		tokenInfo2.getMultiSignAddresses()
-				.add(new MultiSignAddress(tokens2.getTokenid(), "", new ECKey().getPublicKeyAsHex()));
+				.add(new MultiSignAddress(tokens2.getTokenid(), "", PQKey.createNew().getPublicKeyAsHex()));
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
@@ -1910,7 +1910,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
     public void testSolidityTokenWrongTokenindex() throws JsonProcessingException, Exception {
 
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -1945,7 +1945,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
     public void testSolidityTokenPredecessorStopped() throws JsonProcessingException, Exception {
 
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -1980,7 +1980,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
     public void testSolidityTokenPredecessorConflictingType() throws JsonProcessingException, Exception {
 
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -2016,7 +2016,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	@Test
     public void testSolidityTokenPredecessorConflictingName() throws JsonProcessingException, Exception {
 
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 
 		// Generate an eligible issuance
@@ -2052,7 +2052,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 	public void testSolidityTokenWrongTokenCoinbase() throws Exception {
 
 		// Generate an eligible issuance tokenInfo
-		ECKey outKey = wallet.walletKeys().get(0);
+		PQKey outKey = wallet.walletKeys().get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -2076,7 +2076,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		block.getTransactions().get(0).addOutput(Coin.COIN.times(2), outKey.toAddress(networkParameters));
 
 		Sha256Hash sighash1 = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = outKey.sign(sighash1, null);
+		SignatureBundle party1Signature = outKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();

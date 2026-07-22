@@ -24,7 +24,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.macs.HMac;
@@ -63,7 +63,7 @@ public final class HDUtils {
     }
 
     static byte[] toCompressed(byte[] uncompressedPoint) {
-        return ECKey.CURVE.getCurve().decodePoint(uncompressedPoint).getEncoded(true);
+        return PQKey.CURVE.getCurve().decodePoint(uncompressedPoint).getEncoded(true);
     }
 
     static byte[] longTo4ByteArray(long n) {

@@ -32,7 +32,7 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.DataClassName;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.OrderRecord;
@@ -170,7 +170,7 @@ public abstract class ServiceBase {
 		if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-				ECKey ecKey = permissionDomainname.getOutKey();
+				PQKey ecKey = permissionDomainname.getOutKey();
 				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
 			}
 			return multiSignAddresses;
@@ -439,7 +439,7 @@ public abstract class ServiceBase {
 		if (domainNameBlockHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHashAsString())) {
 			List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 			for (PermissionDomainname permissionDomainname : networkParameters.getPermissionDomainnameList()) {
-				ECKey ecKey = permissionDomainname.getOutKey();
+				PQKey ecKey = permissionDomainname.getOutKey();
 				multiSignAddresses.add(new MultiSignAddress("", "", ecKey.getPublicKeyAsHex()));
 			}
 			return (PermissionedAddressesResponse) PermissionedAddressesResponse.create("", false, multiSignAddresses);

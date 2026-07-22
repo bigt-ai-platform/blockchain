@@ -21,10 +21,10 @@ package net.bigtangle.wallet;
 
 import jakarta.annotation.Nullable;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 
 /**
- * A KeyBag is simply an object that can map public keys, their 160-bit hashes and script hashes to ECKey
+ * A KeyBag is simply an object that can map public keys, their 160-bit hashes and script hashes to PQKey
  * and {@link RedeemData} objects.
  */
 public interface KeyBag {
@@ -32,18 +32,18 @@ public interface KeyBag {
      * Locates a keypair from the keychain given the hash of the public key. This is needed when finding out which
      * key we need to use to redeem a transaction output.
      *
-     * @return ECKey object or null if no such key was found.
+     * @return PQKey object or null if no such key was found.
      */
     @Nullable
-    ECKey findKeyFromPubHash(byte[] pubkeyHash);
+    PQKey findKeyFromPubHash(byte[] pubkeyHash);
 
     /**
      * Locates a keypair from the keychain given the raw public key bytes.
      *
-     * @return ECKey or null if no such key was found.
+     * @return PQKey or null if no such key was found.
      */
     @Nullable
-    ECKey findKeyFromPubKey(byte[] pubkey);
+    PQKey findKeyFromPubKey(byte[] pubkey);
 
     /**
      * Locates a redeem data (redeem script and keys) from the keychain given the hash of the script.

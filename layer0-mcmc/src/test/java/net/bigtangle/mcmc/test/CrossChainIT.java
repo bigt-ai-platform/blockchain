@@ -7,7 +7,7 @@ import java.util.Map;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
@@ -30,12 +30,12 @@ public class CrossChainIT {
         log.info("L0: {}  L1: {}", l0Url, l1Url);
 
         Layer0TestParams params = new Layer0TestParams();
-        ECKey bobKey = new ECKey();
+        PQKey bobKey = PQKey.createNew();
 
         // ---- PHASE 1: L0 payment ----
         log.info("=== PHASE 1: L0 BIG payment ===");
         Wallet genesis = Wallet.fromKeys(params,
-                ECKey.fromPrivate(Utils.HEX.decode(TEST_PRIV)), l0Url);
+                PQKey.createNew()Utils.HEX.decode(TEST_PRIV)), l0Url);
         HashMap<String, BigInteger> fundReq = new HashMap<>();
         fundReq.put(bobKey.toAddress(params).toString(), BigInteger.valueOf(50000));
         genesis.payToList(null, fundReq, NetworkParameters.BIGTANGLE_TOKENID, "fund");

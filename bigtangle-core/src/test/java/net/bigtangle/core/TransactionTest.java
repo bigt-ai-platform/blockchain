@@ -35,7 +35,7 @@ import net.bigtangle.script.ScriptBuilder;
  */
 public class TransactionTest {
 	private static final NetworkParameters PARAMS = MainNetParams.get();
-	private static final Address ADDRESS = new ECKey().toAddress(PARAMS);
+	private static final Address ADDRESS = PQKey.createNew().toAddress(PARAMS);
 
 	private Transaction tx;
 
@@ -104,7 +104,7 @@ public class TransactionTest {
 	public void testCLTVPaymentChannelTransactionSpending() {
 		BigInteger time = BigInteger.valueOf(20);
 
-		ECKey from = new ECKey(), to = new ECKey(), incorrect = new ECKey();
+		PQKey from = PQKey.createNew();
 		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
 
 		Transaction tx = new Transaction(PARAMS);
@@ -148,7 +148,7 @@ public class TransactionTest {
 	public void testCLTVPaymentChannelTransactionRefund() {
 		BigInteger time = BigInteger.valueOf(20);
 
-		ECKey from = new ECKey(), to = new ECKey(), incorrect = new ECKey();
+		PQKey from = PQKey.createNew();
 		Script outputScript = ScriptBuilder.createCLTVPaymentChannelOutput(time, from, to);
 
 		Transaction tx = new Transaction(PARAMS);
@@ -207,7 +207,7 @@ public class TransactionTest {
 	@Test
 	public void testAddSignedInputThrowsExceptionWhenScriptIsNotToRawPubKeyAndIsNotToAddress() {
 		assertThrows(ScriptException.class, () -> {
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			Address addr = key.toAddress(PARAMS);
 			Transaction fakeTx = FakeTxBuilder.createFakeTx(PARAMS, Coin.COIN, addr);
 

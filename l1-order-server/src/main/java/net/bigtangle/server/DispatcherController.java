@@ -40,7 +40,7 @@ import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -648,7 +648,7 @@ public class DispatcherController implements DisposableBean {
 		String header = httprequest.getHeader("accessToken");
 		String pubkey = header.split(",")[0];
 		byte[] pub = Utils.HEX.decode(pubkey);
-		ECKey ecKey = ECKey.fromPublicOnly(pub);
+		PQKey ecKey = PQKey.fromPublicOnly(pub);
 
 		final String address = ecKey.toAddress(networkParameters).toBase58();
 		if (!Utils.isBlank(serverConfiguration.getPermissionadmin())
@@ -698,7 +698,7 @@ public class DispatcherController implements DisposableBean {
 			String pubkey = header.split(",")[0];
 			String signHex = header.split(",")[1];
 			String accessToken = header.split(",")[2];
-			ECKey key = ECKey.fromPublicOnly(Utils.HEX.decode(pubkey));
+			PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(pubkey));
 
 			byte[] buf = Utils.HEX.decode(accessToken);
 			byte[] signature = Utils.HEX.decode(signHex);

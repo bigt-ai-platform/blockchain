@@ -128,7 +128,7 @@ public class TransactionOutPointSerializationTest {
         
         // Create a transaction and output to connect
         Transaction transaction = new Transaction(PARAMS);
-        ECKey key = new ECKey();
+        PQKey key = PQKey.createNew();
         Address address = key.toAddress(PARAMS);
         Coin coinValue = Coin.valueOf(100000L, NetworkParameters.BIGTANGLE_TOKENID);
         TransactionOutput connectedOutput = TransactionOutput.fromAddress(PARAMS, transaction, coinValue, address);
@@ -188,7 +188,7 @@ public class TransactionOutPointSerializationTest {
         
         // Create a transaction and output to connect
         Transaction transaction = new Transaction(PARAMS);
-        ECKey key = new ECKey();
+        PQKey key = PQKey.createNew();
         Address address = key.toAddress(PARAMS);
         Coin coinValue = Coin.valueOf(50000L, NetworkParameters.BIGTANGLE_TOKENID);
         TransactionOutput connectedOutput = TransactionOutput.fromAddress(PARAMS, transaction, coinValue, address);

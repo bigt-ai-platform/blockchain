@@ -21,7 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.server.config.ScheduleConfiguration;
@@ -42,7 +42,7 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
     @Autowired
     protected ScheduleConfiguration scheduleConfiguration;
 
-    private List<ECKey> userKeys;
+    private List<PQKey> userKeys;
 
     @Override
     @BeforeEach
@@ -56,7 +56,7 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
     }
 
     private void fundClientKeys() throws Exception {
-        for (ECKey key : userKeys) {
+        for (PQKey key : userKeys) {
             payBigTo(key, BigInteger.valueOf(1000000), null);
         }
         log.info("Funded {} client keys", userKeys.size());
@@ -64,7 +64,7 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
 
     @Test
     public void testPaymentThroughput10Clients() throws Exception {
-        ECKey[] recipients = createRecipients(CLIENTS);
+        PQKey[] recipients = createRecipients(CLIENTS);
         AtomicLong totalLatencyNanos = new AtomicLong(0);
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
@@ -75,8 +75,8 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
 
         for (int c = 0; c < CLIENTS; c++) {
             int clientId = c;
-            ECKey fromKey = userKeys.get(c % userKeys.size());
-            ECKey toKey = recipients[c];
+            PQKey fromKey = userKeys.get(c % userKeys.size());
+            PQKey toKey = recipients[c];
 
             futures[c] = CompletableFuture.runAsync(() -> {
                 Wallet clientWallet = Wallet.fromKeys(networkParameters, fromKey, contextRoot);
@@ -129,10 +129,10 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
         log.info("=============================================");
     }
 
-    private ECKey[] createRecipients(int count) {
-        ECKey[] keys = new ECKey[count];
+    private PQKey[] createRecipients(int count) {
+        PQKey[] keys = new PQKey[count];
         for (int i = 0; i < count; i++) {
-            keys[i] = new ECKey();
+            keys[i] = PQKey.createNew();
         }
         return keys;
     }

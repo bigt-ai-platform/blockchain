@@ -100,10 +100,10 @@ public abstract class CustomTransactionSigner extends StatelessTransactionSigner
     protected abstract SignatureAndKey getSignature(Sha256Hash sighash, List<ChildNumber> derivationPath);
 
     public static class SignatureAndKey {
-        public final ECKey.ECDSASignature sig;
-        public final ECKey pubKey;
+        public final SignatureBundle sig;
+        public final PQKey pubKey;
 
-        public SignatureAndKey(ECKey.ECDSASignature sig, ECKey pubKey) {
+        public SignatureAndKey(SignatureBundle sig, PQKey pubKey) {
             this.sig = sig;
             this.pubKey = pubKey;
         }

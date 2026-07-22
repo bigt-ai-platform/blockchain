@@ -44,7 +44,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Transaction.SigHash;
@@ -122,15 +122,15 @@ public class ScriptTest {
 
 	@Test
 	public void testMultiSig() throws Exception {
-		List<ECKey> keys = Lists.newArrayList(new ECKey(), new ECKey(), new ECKey());
+		List<PQKey> keys = Lists.newArrayList(PQKey.createNew();
 		assertTrue(ScriptBuilder.createMultiSigOutputScript(2, keys).isSentToMultiSig());
 		Script script = ScriptBuilder.createMultiSigOutputScript(3, keys);
 		assertTrue(script.isSentToMultiSig());
-		List<ECKey> pubkeys = new ArrayList<ECKey>(3);
-		for (ECKey key : keys)
-			pubkeys.add(ECKey.fromPublicOnly(key.getPubKeyPoint()));
+		List<PQKey> pubkeys = new ArrayList<PQKey>(3);
+		for (PQKey key : keys)
+			pubkeys.add(PQKey.fromPublicOnly(key.getPubKeyPoint()));
 		assertEquals(script.getPubKeys(), pubkeys);
-		assertFalse(ScriptBuilder.createOutputScript(new ECKey()).isSentToMultiSig());
+		assertFalse(ScriptBuilder.createOutputScript(PQKey.createNew()).isSentToMultiSig());
 		try {
 			// Fail if we ask for more signatures than keys.
 			Script.createMultiSigOutputScript(4, keys);
@@ -164,11 +164,11 @@ public class ScriptTest {
 	// TODO new binary @Test
 	public void testCreateMultiSigInputScript() {
 		// Setup transaction and signatures
-		ECKey key1 = DumpedPrivateKey.fromBase58(PARAMS, "cVLwRLTvz3BxDAWkvS3yzT9pUcTCup7kQnfT2smRjvmmm1wAP6QT")
+		PQKey key1 = DumpedPrivateKey.fromBase58(PARAMS, "cVLwRLTvz3BxDAWkvS3yzT9pUcTCup7kQnfT2smRjvmmm1wAP6QT")
 				.getKey();
-		ECKey key2 = DumpedPrivateKey.fromBase58(PARAMS, "cTine92s8GLpVqvebi8rYce3FrUYq78ZGQffBYCS1HmDPJdSTxUo")
+		PQKey key2 = DumpedPrivateKey.fromBase58(PARAMS, "cTine92s8GLpVqvebi8rYce3FrUYq78ZGQffBYCS1HmDPJdSTxUo")
 				.getKey();
-		ECKey key3 = DumpedPrivateKey.fromBase58(PARAMS, "cVHwXSPRZmL9adctwBwmn4oTZdZMbaCsR5XF6VznqMgcvt1FDDxg")
+		PQKey key3 = DumpedPrivateKey.fromBase58(PARAMS, "cVHwXSPRZmL9adctwBwmn4oTZdZMbaCsR5XF6VznqMgcvt1FDDxg")
 				.getKey();
 		Script multisigScript = ScriptBuilder.createMultiSigOutputScript(2, Arrays.asList(key1, key2, key3));
 		byte[] bytes = HEX.decode(
@@ -182,8 +182,8 @@ public class ScriptTest {
 		spendTx.addOutput(output.getValue(), outputScript);
 		spendTx.addInput(Sha256Hash.ZERO_HASH, output);
 		Sha256Hash sighash = spendTx.hashForSignature(0, multisigScript, SigHash.ALL, false);
-		ECKey.ECDSASignature party1Signature = key1.sign(sighash);
-		ECKey.ECDSASignature party2Signature = key2.sign(sighash);
+		SignatureBundle party1Signature = key1.sign(sighash);
+		SignatureBundle party2Signature = key2.sign(sighash);
 		TransactionSignature party1TransactionSignature = new TransactionSignature(party1Signature, SigHash.ALL, false);
 		TransactionSignature party2TransactionSignature = new TransactionSignature(party2Signature, SigHash.ALL, false);
 
@@ -216,7 +216,7 @@ public class ScriptTest {
 	@Test
 	public void createAndUpdateEmptyInputScript() throws Exception {
 		TransactionSignature dummySig = TransactionSignature.dummy();
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 
 		// pay-to-pubkey
 		Script inputScript = ScriptBuilder.createInputScript(dummySig);
@@ -232,7 +232,7 @@ public class ScriptTest {
 		assertThat(inputScript.getChunks().get(1).data, equalTo(key.getPubKey()));
 
 		// pay-to-script-hash
-		ECKey key2 = new ECKey();
+		PQKey key2 = PQKey.createNew();
 		Script multisigScript = ScriptBuilder.createMultiSigOutputScript(2, Arrays.asList(key, key2));
 		inputScript = ScriptBuilder.createP2SHMultiSigInputScript(Arrays.asList(dummySig, dummySig), multisigScript);
 		assertThat(inputScript.getChunks().get(0).opcode, equalTo(OP_0));
@@ -422,14 +422,14 @@ public class ScriptTest {
 
 	@Test
 	public void testCLTVPaymentChannelOutput() {
-		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), new ECKey(), new ECKey());
+		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew();
 		assertTrue(script.isSentToCLTVPaymentChannel(), "script is locktime-verify");
 	}
 
 	@Test
 	public void getToAddress() throws Exception {
 		// pay to pubkey
-		ECKey toKey = new ECKey();
+		PQKey toKey = PQKey.createNew();
 		Address toAddress = toKey.toAddress(PARAMS);
 		assertEquals(toAddress, ScriptBuilder.createOutputScript(toKey).getToAddress(PARAMS, true));
 		// pay to pubkey hash
@@ -443,7 +443,7 @@ public class ScriptTest {
 	@Test
 	public void getToAddressNoPubKey() throws Exception {
 		assertThrows(ScriptException.class, () -> {
-			ScriptBuilder.createOutputScript(new ECKey()).getToAddress(PARAMS, false);
+			ScriptBuilder.createOutputScript(PQKey.createNew()).getToAddress(PARAMS, false);
 		});
 
 	}

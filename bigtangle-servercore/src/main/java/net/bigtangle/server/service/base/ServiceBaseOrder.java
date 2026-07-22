@@ -28,7 +28,7 @@ import com.google.common.math.LongMath;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.OrderCancelInfo;
 import net.bigtangle.core.OrderExecutionResult;
@@ -345,7 +345,7 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 				BigInteger proceedsValue = tokenProceeds.getValue();
 
 				if (proceedsValue.signum() != 0)
-					tx.addOutput(new Coin(proceedsValue, tokenId), ECKey.fromPublicOnly(beneficiaryPubKey));
+					tx.addOutput(new Coin(proceedsValue, tokenId), PQKey.fromPublicOnly(beneficiaryPubKey));
 			}
 		}
 

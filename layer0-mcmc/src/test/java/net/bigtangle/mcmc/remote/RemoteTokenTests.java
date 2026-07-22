@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
@@ -41,7 +41,7 @@ public class RemoteTokenTests    {
 	@BeforeEach
 	public void setUp() throws Exception {
 		contextRoot = System.getProperty("server.url", "http://localhost:8089/");
-		wallet = Wallet.fromKeys(TestParams.get(), ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(TestParams.get(), PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
 
 	}
 
@@ -55,24 +55,24 @@ public class RemoteTokenTests    {
 
 		String domain = "";
 
-		ECKey fromPrivate = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY", BigInteger.valueOf(1000000000l));
 
 	}
 
 	// create a token with multi sign
-	protected void testCreateMultiSigToken(ECKey key, String tokename, int decimals, String domainname,
+	protected void testCreateMultiSigToken(PQKey key, String tokename, int decimals, String domainname,
 			String description, BigInteger amount) throws JsonProcessingException, Exception {
 		try {
 			wallet.setServerURL(contextRoot);
 
-			// pay fee to ECKey key
+			// pay fee to PQKey key
 
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			ECKey signkey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
 
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 
@@ -83,7 +83,7 @@ public class RemoteTokenTests    {
 
 	}
 
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
+	public Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
 			Wallet w) throws Exception {
 		w.importKey(key);
@@ -97,13 +97,13 @@ public class RemoteTokenTests    {
 
 	}
 
-		public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+		public Block createToken(PQKey key, String domainname, boolean increment, Token token,
 			List<MultiSignAddress> addresses,Wallet w) throws Exception {
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
 	}
 
 
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
+	public Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
 			Wallet w, byte[] pubkeyTo, MemoInfo memoInfo) throws Exception {
 

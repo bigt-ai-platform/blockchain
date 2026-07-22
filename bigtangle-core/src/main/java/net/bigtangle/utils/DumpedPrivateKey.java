@@ -24,7 +24,7 @@ package net.bigtangle.utils;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.VersionedChecksummedBytes;
 import net.bigtangle.exception.AddressFormatException;
 import net.bigtangle.exception.WrongNetworkException;
@@ -100,10 +100,10 @@ public class DumpedPrivateKey extends VersionedChecksummedBytes {
     }
 
     /**
-     * Returns an ECKey created from this encoded private key.
+     * Returns an PQKey created from this encoded private key.
      */
-    public ECKey getKey() {
-        final ECKey key = ECKey.fromPrivate(bytes);
+    public PQKey getKey() {
+        final PQKey key = PQKey.createNew()bytes);
         return compressed ? key : key.decompress();
     }
 

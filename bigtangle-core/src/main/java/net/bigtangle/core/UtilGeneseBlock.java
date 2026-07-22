@@ -42,13 +42,13 @@ public class UtilGeneseBlock {
 	        // amount, many public keys
 	        String[] list = account.split(",");
 	        Coin base = new Coin(amount,NetworkParameters. BIGTANGLE_TOKENID);
-	        List<ECKey> keys = new ArrayList<>();
+	        List<PQKey> keys = new ArrayList<>();
 	        for (String s : list) {
-	            keys.add(ECKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
+	            keys.add(PQKey.fromPublicOnly(Utils.HEX.decode(s.trim())));
 	        }
 	        if (keys.size() <= 1) {
 	            coinbase.addOutput(new TransactionOutput(params, coinbase, base,
-	                    ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));
+	                    ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(keys.get(0).getPubKey())).getProgram()));
 	        } else {
 	            Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(keys.size() - 1, keys);
 	            coinbase.addOutput(new TransactionOutput(params, coinbase, base, scriptPubKey.getProgram()));

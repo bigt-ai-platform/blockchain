@@ -17,7 +17,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
@@ -44,16 +44,16 @@ public class EpochRewardTest extends AbstractIntegrationTest {
     @Autowired
     protected StakeService stakeService;
 
-    private ECKey validator1;
-    private ECKey validator2;
+    private PQKey validator1;
+    private PQKey validator2;
 
     @Override
     @BeforeEach
     public void setUp() throws Exception {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
-        validator1 = new ECKey();
-        validator2 = new ECKey();
+        validator1 = PQKey.createNew();
+        validator2 = PQKey.createNew();
     }
 
     @Test
@@ -116,7 +116,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         log.info("=== TEST PASSED ===");
     }
 
-    private void fundAndStake(ECKey key, BigInteger amount) throws Exception {
+    private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
         java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
         fund.put(key.toAddress(networkParameters).toString(),
                 amount.add(BigInteger.valueOf(100000)));

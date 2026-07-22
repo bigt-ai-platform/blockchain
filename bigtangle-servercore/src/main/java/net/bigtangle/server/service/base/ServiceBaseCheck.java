@@ -34,7 +34,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventInfo;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
 import net.bigtangle.core.OrderCancelInfo;
@@ -525,7 +525,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 
-		if (!ECKey.fromPublicOnly(orderInfo.getBeneficiaryPubKey()).toAddress(networkParameters).toBase58()
+		if (!PQKey.fromPublicOnly(orderInfo.getBeneficiaryPubKey()).toAddress(networkParameters).toBase58()
 				.equals(orderInfo.getBeneficiaryAddress())) {
 			if (throwExceptions)
 				throw new InvalidOrderException("The address does not match with the given pubkey.");
@@ -672,7 +672,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		byte[] signature = block.getTransactions().get(0).getDataSignature();
 
 		// If signature of beneficiary is missing, fail
-		if (!ECKey.verify(data, signature, pubKey)) {
+		if (!PQScriptUtils.verifyPQ(data, signature, pubKey)) {
 			if (throwExceptions)
 				throw new InsufficientSignaturesException();
 			return SolidityState.getFailState();
@@ -969,7 +969,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			byte[] data = tx.getHash().getBytes();
 			byte[] signature = Utils.HEX.decode(multiSignBy.getSignature());
 
-			if (ECKey.verify(data, signature, pubKey)) {
+			if (PQScriptUtils.verifyPQ(data, signature, pubKey)) {
 				signatureCount++;
 			} else {
 				if (throwExceptions)
@@ -1022,7 +1022,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			byte[] data = txHash.getBytes();
 			byte[] signature = Utils.HEX.decode(multiSignBy.getSignature());
 
-			if (ECKey.verify(data, signature, pubKey)) {
+			if (PQScriptUtils.verifyPQ(data, signature, pubKey)) {
 				signatureCount++;
 			} else {
 				if (throwExceptions)
@@ -1371,7 +1371,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 
-		if (!ECKey.fromPublicOnly(orderInfo.getBeneficiaryPubKey()).toAddress(networkParameters).toBase58()
+		if (!PQKey.fromPublicOnly(orderInfo.getBeneficiaryPubKey()).toAddress(networkParameters).toBase58()
 				.equals(orderInfo.getBeneficiaryAddress())) {
 			if (throwExceptions)
 				throw new InvalidOrderException("The address does not match with the given pubkey.");

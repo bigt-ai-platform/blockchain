@@ -31,7 +31,7 @@ public class DumpedPrivateKeyTest {
     @Test
     public void testJavaSerialization() throws Exception {
 
-        DumpedPrivateKey key = new DumpedPrivateKey(MAINNET, new ECKey().getPrivKeyBytes(), true);
+        DumpedPrivateKey key = new DumpedPrivateKey(MAINNET, PQKey.createNew().getPrivKeyBytes(), true);
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         new ObjectOutputStream(os).writeObject(key);
         DumpedPrivateKey keyCopy = (DumpedPrivateKey) new ObjectInputStream(new ByteArrayInputStream(os.toByteArray()))
@@ -41,7 +41,7 @@ public class DumpedPrivateKeyTest {
 
     @Test
     public void cloning() throws Exception {
-        DumpedPrivateKey a = new DumpedPrivateKey(MAINNET, new ECKey().getPrivKeyBytes(), true);
+        DumpedPrivateKey a = new DumpedPrivateKey(MAINNET, PQKey.createNew().getPrivKeyBytes(), true);
         // TODO: Consider overriding clone() in DumpedPrivateKey to narrow the type
         DumpedPrivateKey b = (DumpedPrivateKey) a.clone();
 

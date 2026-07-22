@@ -36,7 +36,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.hash.BloomFilter;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.KeyCrypter;
@@ -156,19 +156,19 @@ public class MarriedKeyChain extends DeterministicKeyChain {
     @Override
     public Script freshOutputScript(KeyPurpose purpose) {
         DeterministicKey followedKey = getKey(purpose);
-        ImmutableList.Builder<ECKey> keys = ImmutableList.<ECKey>builder().add(followedKey);
+        ImmutableList.Builder<PQKey> keys = ImmutableList.<PQKey>builder().add(followedKey);
         for (DeterministicKeyChain keyChain : followingKeyChains) {
             DeterministicKey followingKey = keyChain.getKey(purpose);
             checkState(followedKey.getChildNumber().equals(followingKey.getChildNumber()), "Following keychains should be in sync");
             keys.add(followingKey);
         }
-        List<ECKey> marriedKeys = keys.build();
+        List<PQKey> marriedKeys = keys.build();
         Script redeemScript = ScriptBuilder.createRedeemScript(sigsRequiredToSpend, marriedKeys);
         return ScriptBuilder.createP2SHOutputScript(redeemScript);
     }
 
-    private List<ECKey> getMarriedKeysWithFollowed(DeterministicKey followedKey) {
-        ImmutableList.Builder<ECKey> keys = ImmutableList.builder();
+    private List<PQKey> getMarriedKeysWithFollowed(DeterministicKey followedKey) {
+        ImmutableList.Builder<PQKey> keys = ImmutableList.builder();
         for (DeterministicKeyChain keyChain : followingKeyChains) {
             keyChain.maybeLookAhead();
             keys.add(keyChain.getKeyByPath(followedKey.getPath()));
@@ -180,7 +180,7 @@ public class MarriedKeyChain extends DeterministicKeyChain {
     /** Get the redeem data for a key in this married chain */
     @Override
     public RedeemData getRedeemData(DeterministicKey followedKey) {
-        List<ECKey> marriedKeys = getMarriedKeysWithFollowed(followedKey);
+        List<PQKey> marriedKeys = getMarriedKeysWithFollowed(followedKey);
         Script redeemScript = ScriptBuilder.createRedeemScript(sigsRequiredToSpend, marriedKeys);
         return RedeemData.of(marriedKeys, redeemScript);
     }

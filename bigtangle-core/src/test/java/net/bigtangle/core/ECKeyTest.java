@@ -35,7 +35,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import net.bigtangle.core.ECKey.ECDSASignature;
+import net.bigtangle.core.SignatureBundle;
 import net.bigtangle.crypto.EncryptedData;
 import net.bigtangle.crypto.KeyCrypter;
 import net.bigtangle.crypto.KeyCrypterScrypt;
@@ -67,38 +67,38 @@ public class ECKeyTest {
 		// invalidating the signature.
 		final int ITERATIONS = 10;
 		ListeningExecutorService executor = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(ITERATIONS));
-		List<ListenableFuture<ECKey.ECDSASignature>> sigFutures = Lists.newArrayList();
-		final ECKey key = new ECKey();
+		List<ListenableFuture<SignatureBundle>> sigFutures = Lists.newArrayList();
+		final PQKey key = PQKey.createNew();
 		for (byte i = 0; i < ITERATIONS; i++) {
 			final Sha256Hash hash = Sha256Hash.of(new byte[] { i });
-			sigFutures.add(executor.submit(new Callable<ECKey.ECDSASignature>() {
+			sigFutures.add(executor.submit(new Callable<SignatureBundle>() {
 				@Override
-				public ECKey.ECDSASignature call() throws Exception {
+				public SignatureBundle call() throws Exception {
 					return key.sign(hash);
 				}
 			}));
 		}
-		List<ECKey.ECDSASignature> sigs = Futures.allAsList(sigFutures).get();
-		for (ECKey.ECDSASignature signature : sigs) {
+		List<SignatureBundle> sigs = Futures.allAsList(sigFutures).get();
+		for (SignatureBundle signature : sigs) {
 			assertTrue(signature.isCanonical());
 		}
 		final ECDSASignature first = sigs.get(0);
-		final ECKey.ECDSASignature duplicate = new ECKey.ECDSASignature(first.r, first.s);
+		final SignatureBundle duplicate = new SignatureBundle(first.r, first.s);
 		assertEquals(first, duplicate);
 		assertEquals(first.hashCode(), duplicate.hashCode());
 
-		final ECKey.ECDSASignature highS = new ECKey.ECDSASignature(first.r, ECKey.CURVE.getN().subtract(first.s));
+		final SignatureBundle highS = new SignatureBundle(first.r, PQKey.CURVE.getN().subtract(first.s));
 		assertFalse(highS.isCanonical());
 	}
 
 	@Test
 	public void testSignatures() throws Exception {
-		// Test that we can construct an ECKey from a private key (deriving the public
+		// Test that we can construct an PQKey from a private key (deriving the public
 		// from the private), then signing
 		// a message with it.
 		BigInteger privkey = new BigInteger(1,
 				HEX.decode("180cb41c7c600be951b5d3d0a7334acc7506173875834f7a6c4c786a28fcbb19"));
-		ECKey key = ECKey.fromPrivate(privkey);
+		PQKey key = PQKey.createNew()privkey);
 		byte[] output = key.sign(Sha256Hash.ZERO_HASH).encodeToDER();
 		assertTrue(key.verify(Sha256Hash.ZERO_HASH.getBytes(), output));
 
@@ -111,19 +111,19 @@ public class ECKeyTest {
 	@Test
 	public void testKey() throws Exception {
 	  String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
-		assertTrue( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(TestParams.get()).toBase58()
+		assertTrue( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(TestParams.get()).toBase58()
 				.equals("mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"));
-		assertTrue( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58()
+		assertTrue( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58()
 				.equals("14a4YnkmSCBGUqcmN2PX3tzxFthrDmyDXE"));
-	//	log.debug( ECKey.fromPrivate(Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58());
+	//	log.debug( PQKey.createNew()Utils.HEX.decode(testPriv)).toAddress(MainNetParams.get()).toBase58());
 	}
 	
 	@Test
 	public void base58Encoding_stress() throws Exception {
 		// Replace the loop bound with 1000 to get some keys with leading zero byte
 		for (int i = 0; i < 20; i++) {
-			ECKey key = new ECKey();
-			ECKey key1 = DumpedPrivateKey
+			PQKey key = PQKey.createNew();
+			PQKey key1 = DumpedPrivateKey
 					.fromBase58(MainNetParams.get(), key.getPrivateKeyEncoded(MainNetParams.get()).toString()).getKey();
 			assertEquals(Utils.HEX.encode(key.getPrivKeyBytes()), Utils.HEX.encode(key1.getPrivKeyBytes()));
 		}
@@ -131,7 +131,7 @@ public class ECKeyTest {
 
 	@Test
 	public void signTextMessage() throws Exception {
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		String message = "聡中本";
 		String signatureBase64 = key.signMessage(message);
 		log.info("Message signed with " + key.toAddress(MainNetParams.get()) + ": " + signatureBase64);
@@ -151,21 +151,21 @@ public class ECKeyTest {
 		String message = "hello";
 		String sigBase64 = "HxNZdo6ggZ41hd3mM3gfJRqOQPZYcO8z8qdX2BwmpbF11CaOQV+QiZGGQxaYOncKoNW61oRuSMMF8udfK54XqI8=";
 		Address expectedAddress = Address.fromBase58(MainNetParams.get(), "14YPSNPi6NSXnUxtPAsyJSuw3pv7AU3Cag");
-		ECKey key = ECKey.signedMessageToKey(message, sigBase64);
+		PQKey key = PQKey.signedMessageToKey(message, sigBase64);
 		Address gotAddress = key.toAddress(MainNetParams.get());
 		assertEquals(expectedAddress, gotAddress);
 	}
 
 	@Test
 	public void keyRecovery() throws Exception {
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		String message = "Hello World!";
 		Sha256Hash hash = Sha256Hash.of(message.getBytes());
-		ECKey.ECDSASignature sig = key.sign(hash);
-		key = ECKey.fromPublicOnly(key.getPubKeyPoint());
+		SignatureBundle sig = key.sign(hash);
+		key = PQKey.fromPublicOnly(key.getPubKeyPoint());
 		boolean found = false;
 		for (int i = 0; i < 4; i++) {
-			ECKey key2 = ECKey.recoverFromSignature(i, sig, hash, true);
+			PQKey key2 = PQKey.recoverFromSignature(i, sig, hash, true);
 			checkNotNull(key2);
 			if (key.equals(key2)) {
 				found = true;
@@ -178,12 +178,12 @@ public class ECKeyTest {
 	@Test
 	public void testUnencryptedCreate() throws Exception {
 		Utils.setMockClock();
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		long time = key.getCreationTimeSeconds();
 		assertNotEquals(0, time);
 		assertTrue(!key.isEncrypted());
 		byte[] originalPrivateKeyBytes = key.getPrivKeyBytes();
-		ECKey encryptedKey = key.encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
+		PQKey encryptedKey = key.encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
 		assertEquals(time, encryptedKey.getCreationTimeSeconds());
 		assertTrue(encryptedKey.isEncrypted());
 		assertNull(encryptedKey.getSecretBytes());
@@ -195,12 +195,12 @@ public class ECKeyTest {
 	@Test
 	public void testGenesisPublicKeyCreate() throws Exception {
 		Utils.setMockClock();
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		long time = key.getCreationTimeSeconds();
 		assertNotEquals(0, time);
 		assertTrue(!key.isEncrypted());
 		// byte[] originalPrivateKeyBytes = key.getPrivKeyBytes();
-		ECKey encryptedKey = key.encrypt(keyCrypter, keyCrypter.deriveKey("NeverUsed"));
+		PQKey encryptedKey = key.encrypt(keyCrypter, keyCrypter.deriveKey("NeverUsed"));
 		assertEquals(time, encryptedKey.getCreationTimeSeconds());
 		assertTrue(encryptedKey.isEncrypted());
 		assertNull(encryptedKey.getSecretBytes());
@@ -209,25 +209,25 @@ public class ECKeyTest {
 
 	@Test
 	public void testEncryptedCreate() throws Exception {
-		ECKey unencryptedKey = new ECKey();
+		PQKey unencryptedKey = PQKey.createNew();
 		byte[] originalPrivateKeyBytes = checkNotNull(unencryptedKey.getPrivKeyBytes());
 		log.info("Original private key = " + Utils.HEX.encode(originalPrivateKeyBytes));
 		EncryptedData encryptedPrivateKey = keyCrypter.encrypt(unencryptedKey.getPrivKeyBytes(),
 				keyCrypter.deriveKey(PASSWORD1));
-		ECKey encryptedKey = ECKey.fromEncrypted(encryptedPrivateKey, keyCrypter, unencryptedKey.getPubKey());
+		PQKey encryptedKey = PQKey.fromEncrypted(encryptedPrivateKey, keyCrypter, unencryptedKey.getPubKey());
 		assertTrue(encryptedKey.isEncrypted());
 		assertNull(encryptedKey.getSecretBytes());
-		ECKey rebornUnencryptedKey = encryptedKey.decrypt(keyCrypter.deriveKey(PASSWORD1));
+		PQKey rebornUnencryptedKey = encryptedKey.decrypt(keyCrypter.deriveKey(PASSWORD1));
 		assertTrue(!rebornUnencryptedKey.isEncrypted());
 		assertArrayEquals(originalPrivateKeyBytes, rebornUnencryptedKey.getPrivKeyBytes());
 	}
 
 	@Test
 	public void testEncryptionIsReversible() throws Exception {
-		ECKey originalUnencryptedKey = new ECKey();
+		PQKey originalUnencryptedKey = PQKey.createNew();
 		EncryptedData encryptedPrivateKey = keyCrypter.encrypt(originalUnencryptedKey.getPrivKeyBytes(),
 				keyCrypter.deriveKey(PASSWORD1));
-		ECKey encryptedKey = ECKey.fromEncrypted(encryptedPrivateKey, keyCrypter, originalUnencryptedKey.getPubKey());
+		PQKey encryptedKey = PQKey.fromEncrypted(encryptedPrivateKey, keyCrypter, originalUnencryptedKey.getPubKey());
 
 		// The key should be encrypted
 		assertTrue(encryptedKey.isEncrypted(), "Key not encrypted at start");
@@ -249,7 +249,7 @@ public class ECKeyTest {
 		// Break the encrypted private key and check it is broken.
 		byte[] badEncryptedPrivateKeyBytes = new byte[goodEncryptedPrivateKeyBytes.length];
 		encryptedPrivateKey = new EncryptedData(encryptedPrivateKey.initialisationVector, badEncryptedPrivateKeyBytes);
-		ECKey badEncryptedKey = ECKey.fromEncrypted(encryptedPrivateKey, keyCrypter,
+		PQKey badEncryptedKey = PQKey.fromEncrypted(encryptedPrivateKey, keyCrypter,
 				originalUnencryptedKey.getPubKey());
 		assertTrue(!ECKey.encryptionIsReversible(originalUnencryptedKey, badEncryptedKey, keyCrypter,
 				keyCrypter.deriveKey(PASSWORD1)), "Key encryption is reversible with faulty encrypted bytes");
@@ -257,25 +257,25 @@ public class ECKeyTest {
 
 	@Test
 	public void testToString() throws Exception {
-		ECKey key = ECKey.fromPrivate(BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
 		NetworkParameters params = MainNetParams.get();
 		assertEquals(
-				"ECKey{pub HEX=04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7, isEncrypted=false, isPubKeyOnly=false}",
+				"PQKey{pub HEX=04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7, isEncrypted=false, isPubKeyOnly=false}",
 				key.toString());
 		assertEquals(
-				"ECKey{pub HEX=04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7, priv HEX=000000000000000000000000000000000000000000000000000000000000000a, priv WIF=5HpHagT65TZzG1PH3CSu63k8DbpvD8s5ip4nEB3kEsreBoNWTw6, isEncrypted=false, isPubKeyOnly=false}",
+				"PQKey{pub HEX=04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7, priv HEX=000000000000000000000000000000000000000000000000000000000000000a, priv WIF=5HpHagT65TZzG1PH3CSu63k8DbpvD8s5ip4nEB3kEsreBoNWTw6, isEncrypted=false, isPubKeyOnly=false}",
 				key.toStringWithPrivate(params));
 	}
 
 	@Test
 	public void testGetPrivateKeyAsHex() throws Exception {
-		ECKey key = ECKey.fromPrivate(BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
 		assertEquals("000000000000000000000000000000000000000000000000000000000000000a", key.getPrivateKeyAsHex());
 	}
 
 	@Test
 	public void testGetPublicKeyAsHex() throws Exception {
-		ECKey key = ECKey.fromPrivate(BigInteger.TEN).decompress(); // An example private key.
+		PQKey key = PQKey.createNew()BigInteger.TEN).decompress(); // An example private key.
 		assertEquals(
 				"04a0434d9e47f3c86235477c7b1ae6ae5d3442d49b1943c2b752a68e2a47e247c7893aba425419bc27a3b6c7e693a24c696f794c2ed877a1593cbee53b037368d7",
 				key.getPublicKeyAsHex());
@@ -283,17 +283,17 @@ public class ECKeyTest {
 
 	@Test
 	public void keyRecoveryWithEncryptedKey() throws Exception {
-		ECKey unencryptedKey = new ECKey();
+		PQKey unencryptedKey = PQKey.createNew();
 		KeyParameter aesKey = keyCrypter.deriveKey(PASSWORD1);
-		ECKey encryptedKey = unencryptedKey.encrypt(keyCrypter, aesKey);
+		PQKey encryptedKey = unencryptedKey.encrypt(keyCrypter, aesKey);
 
 		String message = "Goodbye Jupiter!";
 		Sha256Hash hash = Sha256Hash.of(message.getBytes());
-		ECKey.ECDSASignature sig = encryptedKey.sign(hash, aesKey);
-		unencryptedKey = ECKey.fromPublicOnly(unencryptedKey.getPubKeyPoint());
+		SignatureBundle sig = encryptedKey.sign(hash, aesKey);
+		unencryptedKey = PQKey.fromPublicOnly(unencryptedKey.getPubKeyPoint());
 		boolean found = false;
 		for (int i = 0; i < 4; i++) {
-			ECKey key2 = ECKey.recoverFromSignature(i, sig, hash, true);
+			PQKey key2 = PQKey.recoverFromSignature(i, sig, hash, true);
 			checkNotNull(key2);
 			if (unencryptedKey.equals(key2)) {
 				found = true;
@@ -305,11 +305,11 @@ public class ECKeyTest {
 
 	@Test
 	public void roundTripDumpedPrivKey() throws Exception {
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		assertTrue(key.isCompressed());
 		NetworkParameters params = MainNetParams.get();
 		String base58 = key.getPrivateKeyEncoded(params).toString();
-		ECKey key2 = DumpedPrivateKey.fromBase58(params, base58).getKey();
+		PQKey key2 = DumpedPrivateKey.fromBase58(params, base58).getKey();
 		assertTrue(key2.isCompressed());
 		assertTrue(Arrays.equals(key.getPrivKeyBytes(), key2.getPrivKeyBytes()));
 		assertTrue(Arrays.equals(key.getPubKey(), key2.getPubKey()));
@@ -317,12 +317,12 @@ public class ECKeyTest {
 
 	@Test
 	public void clear() throws Exception {
-		ECKey unencryptedKey = new ECKey();
-		ECKey encryptedKey = (new ECKey()).encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
+		PQKey unencryptedKey = PQKey.createNew();
+		PQKey encryptedKey = (PQKey.createNew()).encrypt(keyCrypter, keyCrypter.deriveKey(PASSWORD1));
 
 		checkSomeBytesAreNonZero(unencryptedKey.getPrivKeyBytes());
 
-		// The encryptedPrivateKey should be null in an unencrypted ECKey anyhow but
+		// The encryptedPrivateKey should be null in an unencrypted PQKey anyhow but
 		// check all the same.
 		assertTrue(unencryptedKey.getEncryptedPrivateKey() == null);
 
@@ -358,7 +358,7 @@ public class ECKeyTest {
 		// Tests that we will not generate non-canonical pubkeys or signatures
 		// We dump failed data to error log because this test is not expected to be
 		// deterministic
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		if (!ECKey.isPubKeyCanonical(key.getPubKey())) {
 			log.error(Utils.HEX.encode(key.getPubKey()));
 			fail();

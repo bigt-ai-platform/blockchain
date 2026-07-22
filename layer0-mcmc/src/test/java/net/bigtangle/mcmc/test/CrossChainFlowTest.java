@@ -20,7 +20,7 @@ import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
@@ -50,7 +50,7 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
     @Autowired(required = false)
     protected BridgeService bridgeService;
 
-    private ECKey bobKey;
+    private PQKey bobKey;
     private List<Block> addedBlocks;
 
     @Override
@@ -58,7 +58,7 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
     public void setUp() throws Exception {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
-        bobKey = new ECKey();
+        bobKey = PQKey.createNew();
         addedBlocks = new ArrayList<>();
     }
 
@@ -84,7 +84,7 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         pegTx.setToAddressInSubtangle(
                 net.bigtangle.core.Address.fromBase58(networkParameters, l1bobAddress).getHash160());
         pegTx.addOutput(bigUtxo.getValue(),
-                ECKey.fromPublicOnly(Utils.HEX.decode(
+                PQKey.fromPublicOnly(Utils.HEX.decode(
                         "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975"))
                         .toAddress(networkParameters));
         pegBlock.addTransaction(pegTx);

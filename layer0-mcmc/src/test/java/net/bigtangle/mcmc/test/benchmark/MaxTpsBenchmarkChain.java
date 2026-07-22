@@ -25,7 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -76,13 +76,13 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         log.info("Batch size:   {}", batchSize);
         log.info("MCMC every:   {} blocks", mcmcInterval);
 
-        List<ECKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < totalTx; i++) walletKeys.add(new ECKey());
+        List<PQKey> walletKeys = new ArrayList<>();
+        for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew());
 
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                ECKey.fromPrivate(Utils.HEX.decode(genesisPriv)), contextRoot);
+                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
-        for (ECKey k : walletKeys) {
+        for (PQKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
         Transaction fundingTx = genesisWallet.payToList(null, funding,
@@ -113,14 +113,14 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
             }
         }
         List<FreeStandingTransactionOutput> allCoins = new ArrayList<>();
-        for (ECKey k : walletKeys) {
+        for (PQKey k : walletKeys) {
             String addr = k.toAddress(networkParameters).toString();
             FreeStandingTransactionOutput c = addrToCoin.get(addr);
             if (c != null) allCoins.add(c);
         }
         log.info("Pre-fetched {} UTXOs", allCoins.size());
 
-        ECKey finalRecipient = new ECKey();
+        PQKey finalRecipient = PQKey.createNew();
         String finalAddr = finalRecipient.toAddress(networkParameters).toString();
 
         // Phase 1: Parallel submit all tx to mempool (like real usage)
@@ -140,7 +140,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
                     List<Transaction> txs = new ArrayList<>();
                     for (int i = 0; i < txPerClient; i++) {
                         int idx = startIdx + i;
-                        ECKey wk = walletKeys.get(idx);
+                        PQKey wk = walletKeys.get(idx);
                         FreeStandingTransactionOutput coin = allCoins.get(idx);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,

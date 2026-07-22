@@ -39,7 +39,7 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
@@ -782,7 +782,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			addUnspentTransactionOutput(a);
 			if (script.isSentToMultiSig()) {
 
-				for (ECKey ecKey : script.getPubKeys()) {
+				for (PQKey ecKey : script.getPubKeys()) {
 					String toaddress = ecKey.toAddress(params).toBase58();
 					OutputsMulti outputsMulti = new OutputsMulti(newOut.getTxHash(), toaddress, newOut.getIndex());
 					this.insertOutputsMulti(outputsMulti);

@@ -19,7 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -38,10 +38,10 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
 
     @Test
     public void testMempoolRejectsDoubleSpend() throws Exception {
-        ECKey alice = new ECKey();
-        ECKey bob = new ECKey();
+        PQKey alice = PQKey.createNew();
+        PQKey bob = PQKey.createNew();
 
-        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
@@ -86,7 +86,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandDoubleSpendAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
@@ -97,9 +97,9 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
         Coin sendAmount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 
         List<Transaction> attackTxs = new ArrayList<>();
-        List<ECKey> dummyKeys = new ArrayList<>();
+        List<PQKey> dummyKeys = new ArrayList<>();
         for (int i = 0; i < ATTACK_COUNT; i++) {
-            dummyKeys.add(new ECKey());
+            dummyKeys.add(PQKey.createNew());
         }
 
         for (int i = 0; i < ATTACK_COUNT; i++) {
@@ -139,7 +139,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandTokenCreationAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
         String domain = "";
         String tokenHex = Utils.HEX.encode(testKey.getPubKey());
         int tokentype = TokenType.currency.ordinal();

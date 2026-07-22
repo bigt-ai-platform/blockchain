@@ -38,7 +38,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.crypto.EncryptableItem;
 import net.bigtangle.crypto.EncryptedData;
 import net.bigtangle.crypto.KeyCrypter;
@@ -55,8 +55,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
     private final ReentrantLock lock = Threading.lock("BasicKeyChain");
 
     // Maps used to let us quickly look up a key given data we find in transcations or the block chain.
-    private final LinkedHashMap<ByteArrayKey, ECKey> hashToKeys;
-    private final LinkedHashMap<ByteArrayKey, ECKey> pubkeyToKeys;
+    private final LinkedHashMap<ByteArrayKey, PQKey> hashToKeys;
+    private final LinkedHashMap<ByteArrayKey, PQKey> pubkeyToKeys;
     @Nullable private final KeyCrypter keyCrypter;
     private boolean isWatching;
 
@@ -67,8 +67,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
 
     public BasicKeyChain(@Nullable KeyCrypter crypter) {
         this.keyCrypter = crypter;
-        hashToKeys = new LinkedHashMap<ByteArrayKey, ECKey>();
-        pubkeyToKeys = new LinkedHashMap<ByteArrayKey, ECKey>();
+        hashToKeys = new LinkedHashMap<ByteArrayKey, PQKey>();
+        pubkeyToKeys = new LinkedHashMap<ByteArrayKey, PQKey>();
    
     }
 
@@ -85,12 +85,12 @@ public class BasicKeyChain implements EncryptableKeyChain {
     }
 
     @Override
-    public ECKey getKey(@Nullable KeyPurpose ignored) {
+    public PQKey getKey(@Nullable KeyPurpose ignored) {
         lock.lock();
         try {
             if (hashToKeys.isEmpty()) {
                 checkState(keyCrypter == null);   // We will refuse to encrypt an empty key chain.
-                final ECKey key = new ECKey();
+                final PQKey key = PQKey.createNew();
                 importKeyLocked(key);
          
             }
@@ -101,24 +101,24 @@ public class BasicKeyChain implements EncryptableKeyChain {
     }
 
     @Override
-    public List<ECKey> getKeys(@Nullable KeyPurpose purpose, int numberOfKeys) {
+    public List<PQKey> getKeys(@Nullable KeyPurpose purpose, int numberOfKeys) {
         checkArgument(numberOfKeys > 0);
         lock.lock();
         try {
             if (hashToKeys.size() < numberOfKeys) {
                 checkState(keyCrypter == null);
 
-                List<ECKey> keys = new ArrayList<ECKey>();
+                List<PQKey> keys = new ArrayList<PQKey>();
                 for (int i = 0; i < numberOfKeys - hashToKeys.size(); i++) {
-                    keys.add(new ECKey());
+                    keys.add(PQKey.createNew());
                 }
 
-                ImmutableList<ECKey> immutableKeys = ImmutableList.copyOf(keys);
+                ImmutableList<PQKey> immutableKeys = ImmutableList.copyOf(keys);
                 importKeysLocked(immutableKeys);
         
             }
 
-            List<ECKey> keysToReturn = new ArrayList<ECKey>();
+            List<PQKey> keysToReturn = new ArrayList<PQKey>();
             int count = 0;
             while (hashToKeys.values().iterator().hasNext() && numberOfKeys != count) {
                 keysToReturn.add(hashToKeys.values().iterator().next());
@@ -131,10 +131,10 @@ public class BasicKeyChain implements EncryptableKeyChain {
     }
 
     /** Returns a copy of the list of keys that this chain is managing. */
-    public List<ECKey> getKeys() {
+    public List<PQKey> getKeys() {
         lock.lock();
         try {
-            return new ArrayList<ECKey>(hashToKeys.values());
+            return new ArrayList<PQKey>(hashToKeys.values());
         } finally {
             lock.unlock();
         }
@@ -144,18 +144,18 @@ public class BasicKeyChain implements EncryptableKeyChain {
         return importKeys(ImmutableList.copyOf(keys));
     }
 
-    public int importKeys(List<? extends ECKey> keys) {
+    public int importKeys(List<? > keys) {
         lock.lock();
         try {
             // Check that if we're encrypted, the keys are all encrypted, and if we're not, that none are.
             // We are NOT checking that the actual password matches here because we don't have access to the password at
             // this point: if you screw up and import keys with mismatched passwords, you lose! So make sure the
             // password is checked first.
-            for (ECKey key : keys) {
+            for (PQKey key : keys) {
                 checkKeyEncryptionStateMatches(key);
             }
-            List<ECKey> actuallyAdded = new ArrayList<ECKey>(keys.size());
-            for (final ECKey key : keys) {
+            List<PQKey> actuallyAdded = new ArrayList<PQKey>(keys.size());
+            for (final PQKey key : keys) {
                 if (hasKey(key)) continue;
                 actuallyAdded.add(key);
                 importKeyLocked(key);
@@ -167,7 +167,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-    private void checkKeyEncryptionStateMatches(ECKey key) {
+    private void checkKeyEncryptionStateMatches(PQKey key) {
         if (keyCrypter == null && key.isEncrypted())
             throw new KeyCrypterException("Key is encrypted but chain is not");
         else if (keyCrypter != null && !key.isEncrypted())
@@ -176,7 +176,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             throw new KeyCrypterException("Key encrypted under different parameters to chain");
     }
 
-    private void importKeyLocked(ECKey key) {
+    private void importKeyLocked(PQKey key) {
         if (hashToKeys.isEmpty()) {
             isWatching = key.isWatching();
         } else {
@@ -185,13 +185,13 @@ public class BasicKeyChain implements EncryptableKeyChain {
             if (!key.isWatching() && isWatching)
                 throw new IllegalArgumentException("Key is not watching but chain is");
         }
-        ECKey previousKey = pubkeyToKeys.put(new ByteArrayKey(key.getPubKey()), key);
+        PQKey previousKey = pubkeyToKeys.put(new ByteArrayKey(key.getPubKey()), key);
         hashToKeys.put(new ByteArrayKey(key.getPubKeyHash()), key);
         checkState(previousKey == null);
     }
 
-    private void importKeysLocked(List<ECKey> keys) {
-        for (ECKey key : keys) {
+    private void importKeysLocked(List<PQKey> keys) {
+        for (PQKey key : keys) {
             importKeyLocked(key);
         }
     }
@@ -199,7 +199,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
     /**
      * Imports a key to the key chain. If key is present in the key chain, ignore it.
      */
-    public void importKey(ECKey key) {
+    public void importKey(PQKey key) {
         lock.lock();
         try {
             checkKeyEncryptionStateMatches(key);
@@ -211,7 +211,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-    public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
+    public PQKey findKeyFromPubHash(byte[] pubkeyHash) {
         lock.lock();
         try {
             return hashToKeys.get(new ByteArrayKey(pubkeyHash));
@@ -220,7 +220,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         }
     }
 
-    public ECKey findKeyFromPubKey(byte[] pubkey) {
+    public PQKey findKeyFromPubKey(byte[] pubkey) {
         lock.lock();
         try {
             return pubkeyToKeys.get(new ByteArrayKey(pubkey));
@@ -230,7 +230,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
     }
 
     @Override
-    public boolean hasKey(ECKey key) {
+    public boolean hasKey(PQKey key) {
         return findKeyFromPubKey(key.getPubKey()) != null;
     }
 
@@ -266,7 +266,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
      * money associated with it</b>.
      * @return Whether the key was removed or not.
      */
-    public boolean removeKey(ECKey key) {
+    public boolean removeKey(PQKey key) {
         lock.lock();
         try {
             boolean a = hashToKeys.remove(new ByteArrayKey(key.getPubKeyHash())) != null;
@@ -283,7 +283,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
         lock.lock();
         try {
             long time = Long.MAX_VALUE;
-            for (ECKey key : hashToKeys.values())
+            for (PQKey key : hashToKeys.values())
                 time = Math.min(key.getCreationTimeSeconds(), time);
             return time;
         } finally {
@@ -347,8 +347,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
             checkNotNull(keyCrypter);
             checkState(this.keyCrypter == null, "Key chain is already encrypted");
             BasicKeyChain encrypted = new BasicKeyChain(keyCrypter);
-            for (ECKey key : hashToKeys.values()) {
-                ECKey encryptedKey = key.encrypt(keyCrypter, aesKey);
+            for (PQKey key : hashToKeys.values()) {
+                PQKey encryptedKey = key.encrypt(keyCrypter, aesKey);
                 // Check that the encrypted key can be successfully decrypted.
                 // This is done as it is a critical failure if the private key cannot be decrypted successfully
                 // (all bitcoin controlled by that private key is lost forever).
@@ -380,7 +380,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             if (numKeys() > 0 && !checkAESKey(aesKey))
                 throw new KeyCrypterException("Password/key was incorrect.");
             BasicKeyChain decrypted = new BasicKeyChain();
-            for (ECKey key : hashToKeys.values()) {
+            for (PQKey key : hashToKeys.values()) {
                 decrypted.importKeyLocked(key.decrypt(aesKey));
             }
             return decrypted;
@@ -414,8 +414,8 @@ public class BasicKeyChain implements EncryptableKeyChain {
             checkState(keyCrypter != null, "Key chain is not encrypted");
 
             // Find the first encrypted key in the wallet.
-            ECKey first = null;
-            for (ECKey key : hashToKeys.values()) {
+            PQKey first = null;
+            for (PQKey key : hashToKeys.values()) {
                 if (key.isEncrypted()) {
                     first = key;
                     break;
@@ -424,7 +424,7 @@ public class BasicKeyChain implements EncryptableKeyChain {
             checkState(first != null, "No encrypted keys in the wallet");
 
             try {
-                ECKey rebornKey = first.decrypt(aesKey);
+                PQKey rebornKey = first.decrypt(aesKey);
                 return Arrays.equals(first.getPubKey(), rebornKey.getPubKey());
             } catch (KeyCrypterException e) {
                 // The AES key supplied is incorrect.
@@ -449,13 +449,13 @@ public class BasicKeyChain implements EncryptableKeyChain {
     //
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    /** Returns the first ECKey created after the given UNIX time, or null if there is none. */
+    /** Returns the first PQKey created after the given UNIX time, or null if there is none. */
     @Nullable
-    public ECKey findOldestKeyAfter(long timeSecs) {
+    public PQKey findOldestKeyAfter(long timeSecs) {
         lock.lock();
         try {
-            ECKey oldest = null;
-            for (ECKey key : hashToKeys.values()) {
+            PQKey oldest = null;
+            for (PQKey key : hashToKeys.values()) {
                 final long keyTime = key.getCreationTimeSeconds();
                 if (keyTime > timeSecs) {
                     if (oldest == null || oldest.getCreationTimeSeconds() > keyTime)
@@ -469,11 +469,11 @@ public class BasicKeyChain implements EncryptableKeyChain {
     }
 
     /** Returns a list of all ECKeys created after the given UNIX time. */
-    public List<ECKey> findKeysBefore(long timeSecs) {
+    public List<PQKey> findKeysBefore(long timeSecs) {
         lock.lock();
         try {
-            List<ECKey> results = Lists.newLinkedList();
-            for (ECKey key : hashToKeys.values()) {
+            List<PQKey> results = Lists.newLinkedList();
+            for (PQKey key : hashToKeys.values()) {
                 final long keyTime = key.getCreationTimeSeconds();
                 if (keyTime < timeSecs) {
                     results.add(key);

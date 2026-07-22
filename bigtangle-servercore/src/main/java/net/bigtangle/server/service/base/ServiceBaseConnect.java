@@ -22,7 +22,7 @@ import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.OrderCancel;
 import net.bigtangle.core.OrderCancelInfo;
@@ -121,7 +121,7 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 				if (!newOut.isZero()) {
 					allUtxos.add(newOut);
 					if (script.isSentToMultiSig()) {
-						for (ECKey ecKey : script.getPubKeys()) {
+						for (PQKey ecKey : script.getPubKeys()) {
 							String toaddress = ecKey.toAddress(networkParameters).toBase58();
 							OutputsMulti outputsMulti = new OutputsMulti(newOut.getTxHash(), toaddress,
 									newOut.getIndex());

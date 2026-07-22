@@ -252,8 +252,8 @@ public class SerializationTest {
 
 	@Test
 	public void testIdentitySerialization() throws InvalidCipherTextException, IOException, SignatureException {
-		ECKey key = new ECKey();
-		ECKey userkey = new ECKey();
+		PQKey key = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
 		TokenKeyValues tokenKeyValues = new TokenKeyValues();
 		SignedData identity = new SignedData();
 		IdentityCore identityCore = new IdentityCore();

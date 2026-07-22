@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 import java.util.Map;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Token;
 import net.bigtangle.params.NetworkParameters;
@@ -43,7 +43,7 @@ public class MarketOrderItem implements java.io.Serializable {
         marketOrderItem.setValidateTo( new Date(orderRecord.getValidToTime() * 1000) );
         marketOrderItem.setValidateFrom( new Date(orderRecord.getValidFromTime() * 1000)) ;
         marketOrderItem.setAddress(
-                ECKey.fromPublicOnly(orderRecord.getBeneficiaryPubKey()).toAddress(networkParameters).toString());
+                PQKey.fromPublicOnly(orderRecord.getBeneficiaryPubKey()).toAddress(networkParameters).toString());
         marketOrderItem.setInitialBlockHashHex(orderRecord.getBlockHashHex());
         marketOrderItem.setCancelPending(orderRecord.isCancelPending());
         marketOrderItem.setOrderBaseToken(base.getTokennameDisplay());

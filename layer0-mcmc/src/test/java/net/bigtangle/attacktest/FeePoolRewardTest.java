@@ -20,7 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -51,7 +51,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
 
     @Test
     public void testFeeAccumulationAndDistribution() throws Exception {
-        ECKey testKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+        PQKey testKey = PQKey.createNew()Utils.HEX.decode(testPriv));
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         String chainId = networkParameters.getChainId();
@@ -59,7 +59,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
         BigInteger poolBeforeVal = poolBefore == null ? BigInteger.ZERO : new BigInteger(poolBefore);
         log.info("Fee pool before ({}): {}", chainId, poolBeforeVal);
 
-        ECKey receiver = new ECKey();
+        PQKey receiver = PQKey.createNew();
         List<FreeStandingTransactionOutput> candidates =
                 w.calculateAllSpendCandidates(null, false);
 
@@ -109,7 +109,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
         assertEquals(expectedFee, accumulated,
                 "Accumulated fee should equal the transaction fee surplus");
 
-        ECKey validator = new ECKey();
+        PQKey validator = PQKey.createNew();
         BigInteger stakeAmount = StakeService.MIN_STAKE;
         fundAndStake(validator, stakeAmount);
         stakeService.activateValidator(validator.getPubKey(), 0, store);
@@ -149,7 +149,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
         log.info("=== TEST PASSED ===");
     }
 
-    private void fundAndStake(ECKey key, BigInteger amount) throws Exception {
+    private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
         java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
         fund.put(key.toAddress(networkParameters).toString(),
                 amount.add(BigInteger.valueOf(100000)));

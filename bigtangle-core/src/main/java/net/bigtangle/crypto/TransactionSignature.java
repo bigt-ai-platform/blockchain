@@ -21,7 +21,7 @@ package net.bigtangle.crypto;
 
 import com.google.common.base.Preconditions;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Transaction.SigHash;
 import net.bigtangle.exception.VerificationException;
@@ -31,10 +31,10 @@ import java.io.IOException;
 import java.math.BigInteger;
 
 /**
- * A TransactionSignature wraps an {@link net.bigtangle.core.ECKey.ECDSASignature} and adds methods for handling
+ * A TransactionSignature wraps an {@link net.bigtangle.core.SignatureBundle} and adds methods for handling
  * the additional SIGHASH mode byte that is used.
  */
-public class TransactionSignature extends ECKey.ECDSASignature {
+public class TransactionSignature extends SignatureBundle {
     /**
      * A byte that controls which parts of a transaction are signed. This is exposed because signatures
      * parsed off the wire may have sighash flags that aren't "normal" serializations of the enum values.
@@ -55,7 +55,7 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     }
 
     /** Constructs a transaction signature based on the ECDSA signature. */
-    public TransactionSignature(ECKey.ECDSASignature signature, Transaction.SigHash mode, boolean anyoneCanPay) {
+    public TransactionSignature(SignatureBundle signature, Transaction.SigHash mode, boolean anyoneCanPay) {
         super(signature.r, signature.s);
         sighashFlags = calcSigHashValue(mode, anyoneCanPay);
     }
@@ -67,7 +67,7 @@ public class TransactionSignature extends ECKey.ECDSASignature {
      * real signature later.
      */
     public static TransactionSignature dummy() {
-        BigInteger val = ECKey.HALF_CURVE_ORDER;
+        BigInteger val = PQKey.HALF_CURVE_ORDER;
         return new TransactionSignature(val, val);
     }
 
@@ -157,7 +157,7 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     }
 
     @Override
-    public ECKey.ECDSASignature toCanonicalised() {
+    public SignatureBundle toCanonicalised() {
         return new TransactionSignature(super.toCanonicalised(), sigHashMode(), anyoneCanPay());
     }
 
@@ -176,9 +176,9 @@ public class TransactionSignature extends ECKey.ECDSASignature {
         // Bitcoin encoding is DER signature + sighash byte.
         if (requireCanonicalEncoding && !isEncodingCanonical(bytes))
             throw new VerificationException("Signature encoding is not canonical.");
-        ECKey.ECDSASignature sig;
+        SignatureBundle sig;
         try {
-            sig = ECKey.ECDSASignature.decodeFromDER(bytes);
+            sig = SignatureBundle.decodeFromDER(bytes);
         } catch (IllegalArgumentException e) {
             throw new VerificationException("Could not decode DER", e);
         }

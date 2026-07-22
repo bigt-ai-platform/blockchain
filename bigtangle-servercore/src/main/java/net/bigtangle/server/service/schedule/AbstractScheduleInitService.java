@@ -4,7 +4,6 @@
  *******************************************************************************/
 package net.bigtangle.server.service.schedule;
 
-import org.bitcoin.Secp256k1Context;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -33,8 +32,7 @@ public abstract class AbstractScheduleInitService {
         try {
             getLogger().debug("AbstractScheduleInitService starting: " + scheduleConfiguration.toString());
 
-            Secp256k1Context.getContext();
-
+            
             if (scheduleConfiguration.isMilestone_active()) {
                 try {
                     getLogger().debug("syncBlockService startInit");

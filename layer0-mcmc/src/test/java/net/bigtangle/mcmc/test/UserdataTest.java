@@ -14,7 +14,7 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Contact;
 import net.bigtangle.core.ContactInfo;
 import net.bigtangle.core.DataClassName;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UserSettingData;
 import net.bigtangle.core.UserSettingDataInfo;
@@ -30,7 +30,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         // Ensure tips queue is populated before wallet operations
         mcmcService.calcNewBlockPrototype(store);
 
-        ECKey outKey = new ECKey();
+        PQKey outKey = PQKey.createNew();
         Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
@@ -83,7 +83,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         // Ensure tips queue is populated before wallet operations
         mcmcService.calcNewBlockPrototype(store);
 
-        ECKey outKey = new ECKey();
+        PQKey outKey = PQKey.createNew();
         Transaction transaction = new Transaction(networkParameters);
         UserSettingData contact = new UserSettingData();
         contact.setDomain("contact");
@@ -126,7 +126,7 @@ public class UserdataTest extends AbstractIntegrationTest {
                 Json.jsonmapper().writeValueAsString(requestParam));
         Block block = networkParameters.getDefaultSerializer().makeBlock(data);
         block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
-        ECKey outKey = new ECKey();
+        PQKey outKey = PQKey.createNew();
 
         Transaction transaction = new Transaction(networkParameters);
         Contact contact = new Contact();

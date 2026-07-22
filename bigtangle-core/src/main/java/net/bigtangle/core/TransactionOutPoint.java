@@ -160,16 +160,16 @@ public class TransactionOutPoint extends ChildMessage {
 	}
 
 	/**
-	 * Returns the ECKey identified in the connected output, for either
+	 * Returns the PQKey identified in the connected output, for either
 	 * pay-to-address scripts or pay-to-key scripts. For P2SH scripts you can use
 	 * {@link #getConnectedRedeemData(net.bigtangle.wallet.KeyBag)} and then get the
 	 * key from RedeemData. If the script form cannot be understood, throws
 	 * ScriptException.
 	 *
-	 * @return an ECKey or null if the connected key cannot be found in the wallet.
+	 * @return an PQKey or null if the connected key cannot be found in the wallet.
 	 */
 	@Nullable
-	public ECKey getConnectedKey(KeyBag keyBag) throws ScriptException {
+	public PQKey getConnectedKey(KeyBag keyBag) throws ScriptException {
 		TransactionOutput connectedOutput = getConnectedOutput();
 		checkNotNull(connectedOutput, "Input is not connected so cannot retrieve key");
 		Script connectedScript = connectedOutput.getScriptPubKey();
@@ -186,10 +186,10 @@ public class TransactionOutPoint extends ChildMessage {
 		}
 	}
 
-	public ECKey getConnectedKey(KeyBag keyBag, List<ECKey> ecs) throws ScriptException {
+	public PQKey getConnectedKey(KeyBag keyBag, List<PQKey> ecs) throws ScriptException {
 
-		for (ECKey ec : ecs) {
-			ECKey a = keyBag.findKeyFromPubKey(ec.getPubKey());
+		for (PQKey ec : ecs) {
+			PQKey a = keyBag.findKeyFromPubKey(ec.getPubKey());
 			if (a != null)
 				return a;
 		}

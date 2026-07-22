@@ -26,7 +26,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import net.bigtangle.core.Block;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
@@ -86,7 +86,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testReorgMiningReward() throws Exception {
 		// PoS chain reorg: a beacon chain with higher chain length wins
-		ECKey validatorKey = new ECKey();
+		PQKey validatorKey = PQKey.createNew();
 		store.saveStakeDeposit(new StakeRecord(
 				validatorKey.getPubKey(), StakeService.MIN_STAKE,
 				validatorKey.getPubKeyHash()));

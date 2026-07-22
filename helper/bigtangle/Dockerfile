@@ -19,26 +19,6 @@ RUN apt-get update \
 RUN apt-get update \
  && apt-get -y install git openjdk-25-jdk maven autoconf libtool make
 
-RUN git clone https://github.com/bigtangle/secp256k1.git \
- && cd secp256k1 \
- && git checkout jni \
- && ./autogen.sh \
- && ./configure --enable-jni --enable-experimental --enable-module-schnorr --enable-module-ecdh \
- && make \
- && cp .libs/libsecp256k1.so /usr/lib/
-
-COPY . .
-RUN mvn -DskipTests=true clean install
-
-## runtime
-FROM ${JAVA_RUNTIME}
-
-RUN ulimit -n 65536 \
- && mkdir -p /app
-
-COPY helper/bigtangle/ca.pkcs12 /app/
-COPY --from=builder /usr/lib/libsecp256k1.so /usr/lib/
-
 ARG BIGTANGLEVERSION=0.5.0
 COPY --from=builder \
      /layer0-server/target/layer0-server-${BIGTANGLEVERSION}-exec.jar \

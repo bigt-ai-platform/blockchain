@@ -49,7 +49,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
 import net.bigtangle.core.DataClassName;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
 import net.bigtangle.core.MultiSignAddress;
@@ -117,8 +117,8 @@ public class Wallet extends WalletBase {
 	 * by the given watching key. A watching key corresponds to account zero in the
 	 * recommended BIP32 key hierarchy.
 	 */
-	public static Wallet fromKeys(NetworkParameters params, List<ECKey> keys) {
-		for (ECKey key : keys)
+	public static Wallet fromKeys(NetworkParameters params, List<PQKey> keys) {
+		for (PQKey key : keys)
 			checkArgument(!(key instanceof DeterministicKey));
 
 		KeyChainGroup group = new KeyChainGroup(params);
@@ -134,15 +134,15 @@ public class Wallet extends WalletBase {
 	 * Creates a wallet containing a given set of keys. All further keys will be
 	 * derived from the oldest key.
 	 */
-	public static Wallet fromKeys(NetworkParameters params, ECKey key) {
+	public static Wallet fromKeys(NetworkParameters params, PQKey key) {
 
 		return fromKeys(params, key, null);
 	}
 
-	public static Wallet fromKeys(NetworkParameters params, ECKey key, String url) {
+	public static Wallet fromKeys(NetworkParameters params, PQKey key, String url) {
 
 		checkArgument(!(key instanceof DeterministicKey));
-		List<ECKey> keys = new ArrayList<>();
+		List<PQKey> keys = new ArrayList<>();
 		keys.add(key);
 		KeyChainGroup group = new KeyChainGroup(params);
 		group.importKeys(keys);
@@ -209,7 +209,7 @@ public class Wallet extends WalletBase {
 
 		List<UTXO> candidates = new ArrayList<>();
 		List<String> pubKeyHashs = new ArrayList<>();
-		for (ECKey ecKey : walletKeys(aesKey)) {
+		for (PQKey ecKey : walletKeys(aesKey)) {
 			pubKeyHashs.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(getServerURL() + ReqCmd.getOutputs.name(),
@@ -234,7 +234,7 @@ public class Wallet extends WalletBase {
 
 	
 
-	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey, byte[] pubKeyTo,
+	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, PQKey ownerKey, KeyParameter aesKey, byte[] pubKeyTo,
 			MemoInfo memoInfo) throws Exception {
 		final Token token = tokenInfo.getToken();
 
@@ -278,7 +278,7 @@ public class Wallet extends WalletBase {
 
 		Sha256Hash sighash = transaction.getHash();
 
-		ECKey.ECDSASignature party1Signature = ownerKey.sign(sighash, aesKey);
+		SignatureBundle party1Signature = ownerKey.sign(sighash, aesKey);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<>();
@@ -436,7 +436,7 @@ public class Wallet extends WalletBase {
 		multispent.setMemo(memo);
 		multispent.addOutput(amount, Address.fromBase58(params, destination));
 		Coin restAmount = amount.negate();
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		if (getFee() && amount.isBIG()) {
 			restAmount = restAmount.add(Coin.FEE_DEFAULT.negate());
 		}
@@ -476,7 +476,7 @@ public class Wallet extends WalletBase {
 		multispent.setMemo(memo);
 		multispent.addOutput(amount, script);
 		Coin restAmount = amount.negate();
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		if (getFee() && amount.isBIG()) {
 			restAmount = restAmount.add(Coin.FEE_DEFAULT.negate());
 		}
@@ -565,7 +565,7 @@ public class Wallet extends WalletBase {
 			amount = amount.add(Coin.FEE_DEFAULT.negate());
 		}
 
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		// filter only for tokenid
 		List<FreeStandingTransactionOutput> coinListTokenid = filterTokenid(tokenid, coinList);
 		for (FreeStandingTransactionOutput spendableOutput : coinListTokenid) {
@@ -600,7 +600,7 @@ public class Wallet extends WalletBase {
 		spent.setMemo(new MemoInfo("fee"));
 		// Fixed fee in BIG
 		Coin amount = Coin.FEE_DEFAULT.negate();
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		// filter only for NetworkParameters.BIGTANGLE_TOKENID
 		List<FreeStandingTransactionOutput> coinListTokenid = filterTokenid(NetworkParameters.BIGTANGLE_TOKENID,
 				coinList);
@@ -711,7 +711,7 @@ public class Wallet extends WalletBase {
 		}
 		Transaction tx = new Transaction(params);
 
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 
 		for (FreeStandingTransactionOutput spendableOutput : candidates) {
 			if (orderBaseToken.equals(spendableOutput.getUTXO().getTokenId())) {
@@ -801,7 +801,7 @@ public class Wallet extends WalletBase {
 
 		Transaction tx = new Transaction(params);
 
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		for (FreeStandingTransactionOutput spendableOutput : candidates) {
 			if (t.getTokenid().equals(spendableOutput.getUTXO().getTokenId())) {
 				beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
@@ -853,8 +853,8 @@ public class Wallet extends WalletBase {
 
 	public Transaction cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
-		ECKey legitimatingKey = null;
-		for (ECKey ecKey : walletKeys(aesKey)) {
+		PQKey legitimatingKey = null;
+		for (PQKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
 				legitimatingKey = ecKey;
 				break;
@@ -871,7 +871,7 @@ public class Wallet extends WalletBase {
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
-		ECKey.ECDSASignature party1Signature = legitimatingKey.sign(sighash1, null);
+		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
@@ -884,8 +884,8 @@ public class Wallet extends WalletBase {
 
 	public Transaction contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
-		ECKey legitimatingKey = null;
-		for (ECKey ecKey : walletKeys(aesKey)) {
+		PQKey legitimatingKey = null;
+		for (PQKey ecKey : walletKeys(aesKey)) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
 				legitimatingKey = ecKey;
 				break;
@@ -902,7 +902,7 @@ public class Wallet extends WalletBase {
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
-		ECKey.ECDSASignature party1Signature = legitimatingKey.sign(sighash1, null);
+		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
@@ -925,7 +925,7 @@ public class Wallet extends WalletBase {
 
 		Transaction tx = new Transaction(params);
 		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
-		ECKey beneficiary = null;
+		PQKey beneficiary = null;
 		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(amount.getTokenid(), coinList)) {
 
 			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
@@ -1001,12 +1001,12 @@ public class Wallet extends WalletBase {
 
 	private void logWalletKeys(KeyParameter aesKey) {
 		try {
-			List<ECKey> keys = walletKeys(aesKey);
+			List<PQKey> keys = walletKeys(aesKey);
 			if (keys == null || keys.isEmpty()) {
 				log.info("Wallet keys unavailable (no keys returned)");
 				return;
 			}
-			for (ECKey ecKey : keys) {
+			for (PQKey ecKey : keys) {
 				log.info("Wallet key: {}", ecKey.toAddress(params));
 			}
 		} catch (Exception e) {
@@ -1036,7 +1036,7 @@ public class Wallet extends WalletBase {
 		return total;
 	}
 
-	public Transaction paySubtangle(KeyParameter aesKey, String outputStr, ECKey connectKey, Address toAddressInSubtangle,
+	public Transaction paySubtangle(KeyParameter aesKey, String outputStr, PQKey connectKey, Address toAddressInSubtangle,
 			Coin coin, Address address) throws IOException {
 
 		HashMap<String, Object> requestParam = new HashMap<>();
@@ -1067,11 +1067,11 @@ public class Wallet extends WalletBase {
 		return transaction;
 	}
 
-	public ECKey getECKey(KeyParameter aesKey, String address) {
+	public PQKey getECKey(KeyParameter aesKey, String address) {
 
-		List<ECKey> keys = walletKeys(aesKey);
-		ECKey beneficiary;
-		for (ECKey ecKey : keys) {
+		List<PQKey> keys = walletKeys(aesKey);
+		PQKey beneficiary;
+		for (PQKey ecKey : keys) {
 			if (address.equals(ecKey.toAddress(params).toString())) {
 				beneficiary = ecKey;
 				return beneficiary;
@@ -1160,7 +1160,7 @@ public class Wallet extends WalletBase {
 		return pay(aesKey, destination, summe, new MemoInfo(memo));
 	}
 
-	public Transaction saveUserdata(ECKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
+	public Transaction saveUserdata(PQKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
 			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
 		if (encrypt) {
 			byte[] cipher = ECIESCoder.encrypt(userKey.getPubKeyPoint(), transaction.getData());
@@ -1168,7 +1168,7 @@ public class Wallet extends WalletBase {
 		}
 
 		Sha256Hash sighash = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = userKey.sign(sighash);
+		SignatureBundle party1Signature = userKey.sign(sighash);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<>();
@@ -1186,7 +1186,7 @@ public class Wallet extends WalletBase {
 		return transaction;
 	}
 
-	public UserSettingDataInfo getUserSettingDataInfo(ECKey userKey, boolean encrypt)
+	public UserSettingDataInfo getUserSettingDataInfo(PQKey userKey, boolean encrypt)
 			throws IOException, InvalidCipherTextException {
 		HashMap<String, String> requestParam0 = new HashMap<>();
 		requestParam0.put("dataclassname", DataClassName.UserSettingDataInfo.name());
@@ -1208,19 +1208,19 @@ public class Wallet extends WalletBase {
 	}
 
 	
-	public void publishDomainName(ECKey ownerKey, String tokenid, String tokenname, KeyParameter aesKey,
+	public void publishDomainName(PQKey ownerKey, String tokenid, String tokenname, KeyParameter aesKey,
 			String description) throws Exception {
 		GetDomainTokenResponse getDomainBlockHashResponse = this.getDomainNameBlockHash(tokenname);
 		Token domainName = getDomainBlockHashResponse.getdomainNameToken();
 
-		List<ECKey> walletKeys = new ArrayList<>();
+		List<PQKey> walletKeys = new ArrayList<>();
 		walletKeys.add(ownerKey);
 
 		final int signnumber = walletKeys.size();
 		this.publishDomainName(walletKeys, ownerKey, tokenid, tokenname, domainName, aesKey, description, signnumber);
 	}
 
-	public void publishDomainName(List<ECKey> signKeys, ECKey ownerKey, String tokenid, String tokenname,
+	public void publishDomainName(List<PQKey> signKeys, PQKey ownerKey, String tokenid, String tokenname,
 			KeyParameter aesKey, String description) throws Exception {
 		GetDomainTokenResponse getDomainBlockHashResponse = this.getDomainNameBlockHash(tokenname);
 		Token domainNameBlockHash = getDomainBlockHashResponse.getdomainNameToken();
@@ -1229,7 +1229,7 @@ public class Wallet extends WalletBase {
 				signnumber);
 	}
 
-	public void publishDomainName(List<ECKey> multiSigns, ECKey ownerKey, String tokenid, String tokenname,
+	public void publishDomainName(List<PQKey> multiSigns, PQKey ownerKey, String tokenid, String tokenname,
 			Token domainNameBlockHash, KeyParameter aesKey, String description, int signnumber) throws Exception {
 
 		TokenIndexResponse tokenIndexResponse = this.getServerCalTokenIndex(tokenid);
@@ -1245,7 +1245,7 @@ public class Wallet extends WalletBase {
 		List<MultiSignAddress> multiSignAddresses = new ArrayList<>();
 		tokenInfo.setMultiSignAddresses(multiSignAddresses);
 
-		for (ECKey ecKey : multiSigns) {
+		for (PQKey ecKey : multiSigns) {
 			multiSignAddresses.add(new MultiSignAddress(tokenid, "", ecKey.getPublicKeyAsHex()));
 		}
 
@@ -1283,7 +1283,7 @@ public class Wallet extends WalletBase {
 		return Json.jsonmapper().readValue(resp, GetDomainTokenResponse.class);
 	}
 
-	public Block multiSign(final String tokenid, ECKey outKey, KeyParameter aesKey) throws Exception {
+	public Block multiSign(final String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
 		HashMap<String, Object> requestParam = new HashMap<>();
 
 		String address = outKey.toAddress(params).toBase58();
@@ -1312,7 +1312,7 @@ public class Wallet extends WalletBase {
 			multiSignBies = multiSignByRequest.getMultiSignBies();
 		}
 		Sha256Hash sighash = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = outKey.sign(sighash, aesKey);
+		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1349,7 +1349,7 @@ public class Wallet extends WalletBase {
 	}
 
 
-	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+	public Block createToken(PQKey key, String domainname, boolean increment, Token token,
 			List<MultiSignAddress> addresses, byte[] pubkeyTo, MemoInfo memoInfo) throws Exception {
 		Token domain = getDomainNameBlockHash(domainname, "token").getdomainNameToken();
 		token.setDomainName(domain.getTokenname());

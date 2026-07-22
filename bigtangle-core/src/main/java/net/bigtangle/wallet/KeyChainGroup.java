@@ -44,7 +44,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicKey;
@@ -315,7 +315,7 @@ public class KeyChainGroup implements KeyBag {
     }
 
     /** Imports the given keys into the basic chain, creating it if necessary. */
-    public int importKeys(List<ECKey> keys) {
+    public int importKeys(List<PQKey> keys) {
         return basic.importKeys(keys);
     }
 
@@ -337,11 +337,11 @@ public class KeyChainGroup implements KeyBag {
     }
 
     /** Imports the given unencrypted keys into the basic chain, encrypting them along the way with the given key. */
-    public int importKeysAndEncrypt(final List<ECKey> keys, KeyParameter aesKey) {
+    public int importKeysAndEncrypt(final List<PQKey> keys, KeyParameter aesKey) {
         // TODO: Firstly check if the aes key can decrypt any of the existing keys successfully.
         checkState(keyCrypter != null, "Not encrypted");
-        LinkedList<ECKey> encryptedKeys = Lists.newLinkedList();
-        for (ECKey key : keys) {
+        LinkedList<PQKey> encryptedKeys = Lists.newLinkedList();
+        for (PQKey key : keys) {
             if (key.isEncrypted())
                 throw new IllegalArgumentException("Cannot provide already encrypted keys");
             encryptedKeys.add(key.encrypt(keyCrypter, aesKey));
@@ -367,7 +367,7 @@ public class KeyChainGroup implements KeyBag {
         RedeemData data = findRedeemDataFromScriptHash(address.getHash160());
         if (data == null)
             return;   // Not our P2SH address.
-        for (ECKey key : data.keys) {
+        for (PQKey key : data.keys) {
             for (DeterministicKeyChain chain : chains) {
                 DeterministicKey k = chain.findKeyFromPubKey(key.getPubKey());
                 if (k == null) continue;
@@ -379,8 +379,8 @@ public class KeyChainGroup implements KeyBag {
 
     @Nullable
     @Override
-    public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
-        ECKey result;
+    public PQKey findKeyFromPubHash(byte[] pubkeyHash) {
+        PQKey result;
         if ((result = basic.findKeyFromPubHash(pubkeyHash)) != null)
             return result;
         for (DeterministicKeyChain chain : chains) {
@@ -429,7 +429,7 @@ public class KeyChainGroup implements KeyBag {
         }
     }
 
-    public boolean hasKey(ECKey key) {
+    public boolean hasKey(PQKey key) {
         if (basic.hasKey(key))
             return true;
         for (DeterministicKeyChain chain : chains)
@@ -440,8 +440,8 @@ public class KeyChainGroup implements KeyBag {
 
     @Nullable
     @Override
-    public ECKey findKeyFromPubKey(byte[] pubkey) {
-        ECKey result;
+    public PQKey findKeyFromPubKey(byte[] pubkey) {
+        PQKey result;
         if ((result = basic.findKeyFromPubKey(pubkey)) != null)
             return result;
         for (DeterministicKeyChain chain : chains) {
@@ -477,7 +477,7 @@ public class KeyChainGroup implements KeyBag {
      * Removes a key that was imported into the basic key chain. You cannot remove deterministic keys.
      * @throws java.lang.IllegalArgumentException if the key is deterministic.
      */
-    public boolean removeImportedKey(ECKey key) {
+    public boolean removeImportedKey(PQKey key) {
         checkNotNull(key);
         checkArgument(!(key instanceof DeterministicKey));
         return basic.removeKey(key);
@@ -577,7 +577,7 @@ public class KeyChainGroup implements KeyBag {
     /**
      * Returns a list of the non-deterministic keys that have been imported into the wallet, or the empty list if none.
      */
-    public List<ECKey> getImportedKeys() {
+    public List<PQKey> getImportedKeys() {
         return basic.getKeys();
     }
 
@@ -681,9 +681,9 @@ public class KeyChainGroup implements KeyBag {
     public String toString(boolean includePrivateKeys) {
         final StringBuilder builder = new StringBuilder();
         if (basic != null) {
-            List<ECKey> keys = basic.getKeys();
-            Collections.sort(keys, ECKey.AGE_COMPARATOR);
-            for (ECKey key : keys)
+            List<PQKey> keys = basic.getKeys();
+            Collections.sort(keys, PQKey.AGE_COMPARATOR);
+            for (PQKey key : keys)
                 key.formatKeyWithAddress(includePrivateKeys, builder, params);
         }
         for (DeterministicKeyChain chain : chains)

@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
@@ -20,7 +20,7 @@ public class AccessGrantService {
     
     public void addAccessGrant(String pubKey,BlockStoreInterface store) throws BlockStoreException {
         byte[] buf = Utils.HEX.decode(pubKey);
-        ECKey ecKey = ECKey.fromPublicOnly(buf);
+        PQKey ecKey = PQKey.fromPublicOnly(buf);
         Address address = ecKey.toAddress(networkParameters); 
         store. insertAccessGrant(address.toBase58());
     
@@ -29,7 +29,7 @@ public class AccessGrantService {
     public void deleteAccessGrant(String pubKey,BlockStoreInterface store) throws BlockStoreException 
     {
         byte[] buf = Utils.HEX.decode(pubKey);
-        ECKey ecKey = ECKey.fromPublicOnly(buf);
+        PQKey ecKey = PQKey.fromPublicOnly(buf);
         Address address = ecKey.toAddress(networkParameters);
         store .deleteAccessGrant(address.toBase58());
     }

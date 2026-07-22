@@ -15,7 +15,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.UTXO;
@@ -35,14 +35,14 @@ public class OrderYuanTest extends AbstractIntegrationTest {
 
     @Test
     public void payTokenTime() throws Exception {
-        wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)));
-        wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(testPriv)));
+        wallet.importKey(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)));
+        wallet.importKey(PQKey.createNew()Utils.HEX.decode(testPriv)));
 
-        ECKey testKey = wallet.walletKeys().get(0);
+        PQKey testKey = wallet.walletKeys().get(0);
         List<Block> addedBlocks = new ArrayList<>();
 
         // base token
-        ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+        PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 
         long tokennumber = 100000000;
         makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);

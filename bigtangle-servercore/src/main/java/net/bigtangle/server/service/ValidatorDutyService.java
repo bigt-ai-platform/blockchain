@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import net.bigtangle.core.AttestationData;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Utils;
@@ -54,24 +54,24 @@ public class ValidatorDutyService {
     @Value("${pos.validatorKey:}")
     private String configuredValidatorKey;
 
-    private ECKey validatorKey;
+    private PQKey validatorKey;
 
     @PostConstruct
     public void init() {
         if (configuredValidatorKey != null && !configuredValidatorKey.isEmpty()) {
             try {
-                this.validatorKey = ECKey.fromPrivate(Utils.HEX.decode(configuredValidatorKey));
+                this.validatorKey = PQKey.createNew();
             } catch (Exception e) {
                 log.warn("Invalid pos.validatorKey config: {}", e.getMessage());
             }
         }
     }
 
-    public void setValidatorKey(ECKey key) {
+    public void setValidatorKey(PQKey key) {
         this.validatorKey = key;
     }
 
-    public ECKey getValidatorKey() {
+    public PQKey getValidatorKey() {
         return validatorKey;
     }
 

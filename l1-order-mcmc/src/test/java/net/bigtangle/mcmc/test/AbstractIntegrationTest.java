@@ -70,7 +70,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
@@ -299,7 +299,7 @@ public abstract class AbstractIntegrationTest {
 		// In production BIG arrives via cross-chain bridge from L0.
 		// For tests we create genesis BIG UTXOs directly so wallet can pay fees.
 		fundGenesisBIG();
-		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
 		serverConfiguration.setServiceReady(true);
 		mcmcService.update(store);
 		mcmcService.calcNewBlockPrototype(store);
@@ -315,7 +315,7 @@ public abstract class AbstractIntegrationTest {
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
 		Transaction coinbase = genesis.getTransactions().get(0);
 		Script script = ScriptBuilder.createOutputScript(
-			ECKey.fromPublicOnly(Utils.HEX.decode(testPub)));
+			PQKey.fromPublicOnly(Utils.HEX.decode(testPub)));
 		Coin value = new Coin(NetworkParameters.BigtangleCoinTotal, NetworkParameters.BIGTANGLE_TOKENID);
 		TransactionOutput out = new TransactionOutput(networkParameters, coinbase, value, script.getProgram());
 		UTXO utxo = new UTXO(coinbase.getHash(), 0, value, true,
@@ -360,7 +360,7 @@ public abstract class AbstractIntegrationTest {
 	public void resetBucket() throws BlockStoreException {
 	}
 
-	protected void payTestTokenTo(ECKey beneficiary, ECKey testKey, BigInteger amount) throws Exception {
+	protected void payTestTokenTo(PQKey beneficiary, PQKey testKey, BigInteger amount) throws Exception {
 		payTestTokenTo(beneficiary, testKey, amount, new ArrayList<>());
 	}
 
@@ -380,7 +380,7 @@ public abstract class AbstractIntegrationTest {
         return blocks;
     }
 
-	protected Block payBigTo(ECKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
+	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
 
 		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
@@ -413,7 +413,7 @@ public abstract class AbstractIntegrationTest {
 		return b;
 	}
 
-	protected void payTestTokenTo(ECKey beneficiary, ECKey testKey, BigInteger amount, List<Block> addedBlocks)
+	protected void payTestTokenTo(PQKey beneficiary, PQKey testKey, BigInteger amount, List<Block> addedBlocks)
 			throws Exception {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		makeRewardBlock(addedBlocks);
@@ -434,13 +434,13 @@ public abstract class AbstractIntegrationTest {
 		// Open sell order for test tokens
 	}
 
-	protected Block makeTestToken(ECKey testKey, List<Block> addedBlocks)
+	protected Block makeTestToken(PQKey testKey, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
 		Block block = makeTestToken(testKey, BigInteger.valueOf(77777L), addedBlocks, 0);
 		return block;
 	}
 
-	protected Block makeTestTokenWithSpare(ECKey testKey, List<Block> addedBlocks)
+	protected Block makeTestTokenWithSpare(PQKey testKey, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
 
 		Block block = makeTestToken(testKey, BigInteger.valueOf(77777L), addedBlocks, 0);
@@ -463,7 +463,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected void payBigToAmount(ECKey beneficiary, List<Block> addedBlocks)
+	protected void payBigToAmount(PQKey beneficiary, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
 
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
@@ -477,12 +477,12 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block resetAndMakeTestToken(ECKey testKey, BigInteger amount, List<Block> addedBlocks)
+	protected Block resetAndMakeTestToken(PQKey testKey, BigInteger amount, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
 		return makeTestToken(testKey, amount, addedBlocks, 0);
 	}
 
-	protected Block makeTestToken(ECKey testKey, BigInteger amount, List<Block> addedBlocks, int decimal)
+	protected Block makeTestToken(PQKey testKey, BigInteger amount, List<Block> addedBlocks, int decimal)
 			throws JsonProcessingException, Exception, BlockStoreException {
 
 		// Make the "test" token
@@ -506,14 +506,14 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeAndConfirmTransaction(ECKey fromKey, ECKey beneficiary, String tokenId, long sellAmount,
+	protected Block makeAndConfirmTransaction(PQKey fromKey, PQKey beneficiary, String tokenId, long sellAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		return makeAndConfirmTransaction(fromKey, beneficiary, tokenId, sellAmount, addedBlocks, predecessor);
 	}
 
-	protected Block makeAndConfirmTransaction(ECKey fromKey, ECKey beneficiary, String tokenId, long sellAmount,
+	protected Block makeAndConfirmTransaction(PQKey fromKey, PQKey beneficiary, String tokenId, long sellAmount,
 			List<Block> addedBlocks, Block predecessor) throws Exception {
 		Block block = null;
 
@@ -569,14 +569,14 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount,
+	protected Block makeSellOrder(PQKey beneficiary, String tokenId, long sellPrice, long sellAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		return makeAndConfirmSellOrder(beneficiary, tokenId, sellPrice, sellAmount,
 				NetworkParameters.BIGTANGLE_TOKENID_STRING, addedBlocks);
 	}
 
-	protected Block makeAndConfirmSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount,
+	protected Block makeAndConfirmSellOrder(PQKey beneficiary, String tokenId, long sellPrice, long sellAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		Block block = makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount,
@@ -585,7 +585,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected void makeSellOrderNoReward(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount,
+	protected void makeSellOrderNoReward(PQKey beneficiary, String tokenId, long sellPrice, long sellAmount,
 			List<Block> addedBlocks) throws Exception {
 		makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
 				addedBlocks);
@@ -597,7 +597,7 @@ public abstract class AbstractIntegrationTest {
 		makeRewardBlock(addedBlocks);
 	}
 
-	protected Block makeSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
+	protected Block makeSellOrder(PQKey beneficiary, String tokenId, long sellPrice, long sellAmount, String basetoken,
 			List<Block> addedBlocks) throws Exception {
 		payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		mcmcService.calcNewBlockPrototype(store);
@@ -612,7 +612,7 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block makeAndConfirmSellOrder(ECKey beneficiary, String tokenId, long sellPrice, long sellAmount,
+	protected Block makeAndConfirmSellOrder(PQKey beneficiary, String tokenId, long sellPrice, long sellAmount,
 			String basetoken, List<Block> addedBlocks) throws Exception {
 
 		Block block = makeSellOrder(beneficiary, tokenId, sellPrice, sellAmount, basetoken, addedBlocks);
@@ -620,7 +620,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeAndConfirmPayContract(ECKey beneficiary, String tokenId, BigInteger buyAmount,
+	protected Block makeAndConfirmPayContract(PQKey beneficiary, String tokenId, BigInteger buyAmount,
 			String contractTokenid, List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 
@@ -633,7 +633,7 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block makeBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount,
+	protected Block makeBuyOrder(PQKey beneficiary, String tokenId, long buyPrice, long buyAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		Block block = makeAndConfirmBuyOrder(beneficiary, tokenId, buyPrice, buyAmount,
@@ -641,7 +641,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected void makeBuyOrderNoReward(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount,
+	protected void makeBuyOrderNoReward(PQKey beneficiary, String tokenId, long buyPrice, long buyAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
@@ -650,7 +650,7 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	protected Block makeAndConfirmBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount,
+	protected Block makeAndConfirmBuyOrder(PQKey beneficiary, String tokenId, long buyPrice, long buyAmount,
 			List<Block> addedBlocks) throws Exception {
 
 		Block block = makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount,
@@ -660,11 +660,11 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	private Block makeBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount, String basetoken,
+	private Block makeBuyOrder(PQKey beneficiary, String tokenId, long buyPrice, long buyAmount, String basetoken,
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		if (!beneficiary.toAddress(networkParameters).toString().equals(genesisKey.toAddress(networkParameters).toString())) {
 			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
 		}
@@ -679,7 +679,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeAndConfirmBuyOrder(ECKey beneficiary, String tokenId, long buyPrice, long buyAmount,
+	protected Block makeAndConfirmBuyOrder(PQKey beneficiary, String tokenId, long buyPrice, long buyAmount,
 			String basetoken, List<Block> addedBlocks) throws Exception {
 
 		Block block = makeBuyOrder(beneficiary, tokenId, buyPrice, buyAmount, basetoken, addedBlocks);
@@ -687,13 +687,13 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeCancelOp(Block order, ECKey legitimatingKey, List<Block> addedBlocks) throws Exception {
+	protected Block makeCancelOp(Block order, PQKey legitimatingKey, List<Block> addedBlocks) throws Exception {
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		return makeCancelOp(order, legitimatingKey, addedBlocks, predecessor);
 	}
 
-	protected Block makeCancelOp(Block order, ECKey legitimatingKey, List<Block> addedBlocks, Block predecessor)
+	protected Block makeCancelOp(Block order, PQKey legitimatingKey, List<Block> addedBlocks, Block predecessor)
 			throws Exception {
 		// Make an order op
 		Transaction tx = new Transaction(networkParameters);
@@ -702,7 +702,7 @@ public abstract class AbstractIntegrationTest {
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
-		ECKey.ECDSASignature party1Signature = legitimatingKey.sign(sighash1, null);
+		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
@@ -717,7 +717,7 @@ public abstract class AbstractIntegrationTest {
 		return block;
 	}
 
-	protected Block makeContractEventCancel(Block order, ECKey legitimatingKey, List<Block> addedBlocks,
+	protected Block makeContractEventCancel(Block order, PQKey legitimatingKey, List<Block> addedBlocks,
 			Block predecessor) throws Exception {
 		// Make an order op
 		Transaction tx = new Transaction(networkParameters);
@@ -726,7 +726,7 @@ public abstract class AbstractIntegrationTest {
 
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
-		ECKey.ECDSASignature party1Signature = legitimatingKey.sign(sighash1, null);
+		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
 		byte[] buf1 = party1Signature.encodeToDER();
 		tx.setDataSignature(buf1);
 
@@ -847,8 +847,8 @@ public abstract class AbstractIntegrationTest {
 		}
 	}
 
-	protected void assertHasAvailableToken(ECKey testKey, String tokenId_, Long amount) throws Exception {
-		// Asserts that the given ECKey possesses the given amount of tokens
+	protected void assertHasAvailableToken(PQKey testKey, String tokenId_, Long amount) throws Exception {
+		// Asserts that the given PQKey possesses the given amount of tokens
 		List<UTXO> balance = getBalance(false, testKey);
 		HashMap<String, Long> hashMap = new HashMap<>();
 		for (UTXO o : balance) {
@@ -983,7 +983,7 @@ public abstract class AbstractIntegrationTest {
 
 	protected Transaction createTestTransaction() throws Exception {
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		List<UTXO> outputs = getBalance(false, genesiskey);
 		UTXO output = getLargeUTXO(outputs);
@@ -1022,7 +1022,7 @@ public abstract class AbstractIntegrationTest {
 		return getBalance(withZero, wallet.walletKeys(null));
 	}
 
-	protected UTXO getBalance(String tokenid, boolean withZero, List<ECKey> keys) throws Exception {
+	protected UTXO getBalance(String tokenid, boolean withZero, List<PQKey> keys) throws Exception {
 		List<UTXO> ulist = getBalance(withZero, keys);
 
 		for (UTXO u : ulist) {
@@ -1035,11 +1035,11 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	// get balance for the walletKeys
-	protected List<UTXO> getBalance(boolean withZero, List<ECKey> keys) throws Exception {
+	protected List<UTXO> getBalance(boolean withZero, List<PQKey> keys) throws Exception {
 		List<UTXO> listUTXO = new ArrayList<UTXO>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : keys) {
+		for (PQKey ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -1060,11 +1060,11 @@ public abstract class AbstractIntegrationTest {
 		return listUTXO;
 	}
 
-	protected List<Coin> getBalanceAccount(boolean withZero, List<ECKey> keys) throws Exception {
+	protected List<Coin> getBalanceAccount(boolean withZero, List<PQKey> keys) throws Exception {
 		List<Coin> listCoin = new ArrayList<Coin>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : keys) {
+		for (PQKey ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -1099,32 +1099,32 @@ public abstract class AbstractIntegrationTest {
 		return listUTXO;
 	}
 
-	protected List<UTXO> getBalance(boolean withZero, ECKey ecKey) throws Exception {
-		List<ECKey> keys = new ArrayList<ECKey>();
+	protected List<UTXO> getBalance(boolean withZero, PQKey ecKey) throws Exception {
+		List<PQKey> keys = new ArrayList<PQKey>();
 		keys.add(ecKey);
 		return getBalance(withZero, keys);
 	}
 
-	protected Block testCreateToken(ECKey outKey, String tokennameName, List<Block> blocksAddedAll)
+	protected Block testCreateToken(PQKey outKey, String tokennameName, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
 		return testCreateToken(outKey, tokennameName,
 				UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(),
 				blocksAddedAll);
 	}
 
-	protected Block testCreateToken(ECKey outKey, String tokennameName) throws JsonProcessingException, Exception {
+	protected Block testCreateToken(PQKey outKey, String tokennameName) throws JsonProcessingException, Exception {
 		return testCreateToken(outKey, tokennameName,
 				UtilGeneseBlock.createGenesis(networkParameters).getHashAsString(), null);
 	}
 
-	protected Block testCreateToken(ECKey outKey, String tokennameName, String domainpre, List<Block> blocksAddedAll)
+	protected Block testCreateToken(PQKey outKey, String tokennameName, String domainpre, List<Block> blocksAddedAll)
 			throws JsonProcessingException, Exception {
 		return testCreateToken(outKey, tokennameName, domainpre, 77777L, blocksAddedAll);
 	}
 
-	protected Block testCreateToken(ECKey outKey, String tokennameName, String domainpre, Long amountgiven,
+	protected Block testCreateToken(PQKey outKey, String tokennameName, String domainpre, Long amountgiven,
 			List<Block> blocksAddedAll) throws JsonProcessingException, Exception {
-		// ECKey outKey = walletKeys.get(0);
+		// PQKey outKey = walletKeys.get(0);
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
@@ -1162,7 +1162,7 @@ public abstract class AbstractIntegrationTest {
 		return re;
 	}
 
-	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, ECKey ownerKey, KeyParameter aesKey) throws Exception {
+	public Block saveToken(TokenInfo tokenInfo, Coin basecoin, PQKey ownerKey, KeyParameter aesKey) throws Exception {
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, ownerKey, aesKey, null, null);
 		block = adjustSolve(block);
@@ -1181,13 +1181,13 @@ public abstract class AbstractIntegrationTest {
 		assertTrue(error == code);
 	}
 
-	protected void checkBalance(Coin coin, ECKey ecKey) throws Exception {
-		ArrayList<ECKey> a = new ArrayList<ECKey>();
+	protected void checkBalance(Coin coin, PQKey ecKey) throws Exception {
+		ArrayList<PQKey> a = new ArrayList<PQKey>();
 		a.add(ecKey);
 		checkBalance(coin, a);
 	}
 
-	protected void checkBalance(Coin coin, List<ECKey> a) throws Exception {
+	protected void checkBalance(Coin coin, List<PQKey> a) throws Exception {
 		List<UTXO> ulist = getBalance(false, a);
 		UTXO myutxo = null;
 		for (UTXO u : ulist) {
@@ -1201,13 +1201,13 @@ public abstract class AbstractIntegrationTest {
 		log.debug(myutxo.toString());
 	}
 
-	protected void checkBalanceSum(Coin coin, ECKey a) throws Exception {
-		List<ECKey> keys = new ArrayList<>();
+	protected void checkBalanceSum(Coin coin, PQKey a) throws Exception {
+		List<PQKey> keys = new ArrayList<>();
 		keys.add(a);
 		checkBalanceSum(coin, keys);
 	}
 
-	protected void checkBalanceSum(Coin coin, List<ECKey> a) throws Exception {
+	protected void checkBalanceSum(Coin coin, List<PQKey> a) throws Exception {
 		List<UTXO> ulist = getBalance(false, a);
 
 		Coin sum = new Coin(0, coin.getTokenid());
@@ -1225,7 +1225,7 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	// create a token with multi sign
-	protected void testCreateMultiSigToken(List<ECKey> keys, TokenInfo tokenInfo)
+	protected void testCreateMultiSigToken(List<PQKey> keys, TokenInfo tokenInfo)
 			throws JsonProcessingException, Exception {
 		// First issuance cannot be multisign but instead needs the signature of
 		// the token id
@@ -1259,10 +1259,10 @@ public abstract class AbstractIntegrationTest {
 
 		tokenInfo.setToken(tokens);
 
-		ECKey key1 = keys.get(1);
+		PQKey key1 = keys.get(1);
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key1.getPublicKeyAsHex()));
 
-		ECKey key2 = keys.get(2);
+		PQKey key2 = keys.get(2);
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key2.getPublicKeyAsHex()));
 
 		List<MultiSignAddress> multiSignAddresses = tokenInfo.getMultiSignAddresses();
@@ -1297,11 +1297,11 @@ public abstract class AbstractIntegrationTest {
 		// table for signs
 		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
 
-		List<ECKey> ecKeys = new ArrayList<ECKey>();
+		List<PQKey> ecKeys = new ArrayList<PQKey>();
 		ecKeys.add(key1);
 		ecKeys.add(key2);
 
-		for (ECKey ecKey : ecKeys) {
+		for (PQKey ecKey : ecKeys) {
 			HashMap<String, Object> requestParam0 = new HashMap<String, Object>();
 			requestParam0.put("address", ecKey.toAddress(networkParameters).toBase58());
 			byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
@@ -1328,7 +1328,7 @@ public abstract class AbstractIntegrationTest {
 				multiSignBies = multiSignByRequest.getMultiSignBies();
 			}
 			Sha256Hash sighash = transaction.getHash();
-			ECKey.ECDSASignature party1Signature = ecKey.sign(sighash);
+			SignatureBundle party1Signature = ecKey.sign(sighash);
 			byte[] buf1 = party1Signature.encodeToDER();
 
 			MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1347,7 +1347,7 @@ public abstract class AbstractIntegrationTest {
 		checkBalance(basecoin, key1);
 	}
 
-	private String createFirstMultisignToken(List<ECKey> keys, TokenInfo tokenInfo)
+	private String createFirstMultisignToken(List<PQKey> keys, TokenInfo tokenInfo)
 			throws Exception, JsonProcessingException, IOException, JsonParseException, JsonMappingException {
 		String tokenid = keys.get(1).getPublicKeyAsHex();
 
@@ -1368,10 +1368,10 @@ public abstract class AbstractIntegrationTest {
 				basecoin.getValue(), false, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		tokenInfo.setToken(tokens);
 
-		ECKey key1 = keys.get(1);
+		PQKey key1 = keys.get(1);
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key1.getPublicKeyAsHex()));
 
-		ECKey key2 = keys.get(2);
+		PQKey key2 = keys.get(2);
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokenid, "", key2.getPublicKeyAsHex()));
 
 		List<MultiSignAddress> multiSignAddresses = tokenInfo.getMultiSignAddresses();
@@ -1389,35 +1389,35 @@ public abstract class AbstractIntegrationTest {
 		return tokenid;
 	}
 
-	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey)
+	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey)
 			throws Exception {
 		return saveTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, null);
 	}
 
 	// for unit tests
-	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey,
+	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey,
 			List<Block> addedBlocks) throws Exception {
 
 		tokenInfo.getToken().setTokenname(UUIDUtil.randomUUID());
 		return saveTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, null, null, addedBlocks, true);
 	}
 
-	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey)
+	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey)
 			throws Exception {
 		return saveTokenUnitTestWithTokenname(tokenInfo, basecoin, outKey, aesKey, null);
 	}
 
-	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey,
+	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey,
 			List<Block> addedBlocks) throws Exception {
 		return saveTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, null, null, addedBlocks, true);
 	}
 
-	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey,
+	public Block saveTokenUnitTestWithTokenname(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey,
 			List<Block> addedBlocks, boolean feepay) throws Exception {
 		return saveTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, null, null, addedBlocks, feepay);
 	}
 
-	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey,
+	public Block saveTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey,
 			Block overrideHash1, Block overrideHash2, List<Block> addedBlocks, boolean feepay)
 			throws IOException, Exception {
 		if (feepay)
@@ -1434,19 +1434,19 @@ public abstract class AbstractIntegrationTest {
 		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
 
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), genesiskey, null);
 
 		return block;
 	}
 
-	public Block makeTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey)
+	public Block makeTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey)
 			throws JsonProcessingException, IOException, Exception {
 		return makeTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, null, null);
 	}
 
-	public Block makeTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, ECKey outKey, KeyParameter aesKey,
+	public Block makeTokenUnitTest(TokenInfo tokenInfo, Coin basecoin, PQKey outKey, KeyParameter aesKey,
 			Block overrideHash1, Block overrideHash2) throws JsonProcessingException, IOException, Exception {
 
 		final String tokenid = tokenInfo.getToken().getTokenid();
@@ -1493,7 +1493,7 @@ public abstract class AbstractIntegrationTest {
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 
-		ECKey.ECDSASignature party1Signature = outKey.sign(sighash, aesKey);
+		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
 		byte[] buf1 = party1Signature.encodeToDER();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
@@ -1503,9 +1503,9 @@ public abstract class AbstractIntegrationTest {
 		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
 		multiSignBies.add(multiSignBy0);
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey.ECDSASignature party2Signature = genesiskey.sign(sighash, aesKey);
+		SignatureBundle party2Signature = genesiskey.sign(sighash, aesKey);
 		byte[] buf2 = party2Signature.encodeToDER();
 		multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
@@ -1537,7 +1537,7 @@ public abstract class AbstractIntegrationTest {
 		return tokenIndexResponse;
 	}
 
-	public Block pullBlockDoMultiSign(final String tokenid, ECKey outKey, KeyParameter aesKey) throws Exception {
+	public Block pullBlockDoMultiSign(final String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
 
 		String address = outKey.toAddress(networkParameters).toBase58();
@@ -1565,7 +1565,7 @@ public abstract class AbstractIntegrationTest {
 			multiSignBies = multiSignByRequest.getMultiSignBies();
 		}
 		Sha256Hash sighash = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = outKey.sign(sighash, aesKey);
+		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1634,7 +1634,7 @@ public abstract class AbstractIntegrationTest {
 		return getBlockEvaluationsResponse.getEvaluations();
 	}
 
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
+	public Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
 			Wallet w) throws Exception {
 		w.importKey(key);
@@ -1648,12 +1648,12 @@ public abstract class AbstractIntegrationTest {
 
 	}
 
-	public Block createToken(ECKey key, String domainname, boolean increment, Token token,
+	public Block createToken(PQKey key, String domainname, boolean increment, Token token,
 			List<MultiSignAddress> addresses, Wallet w) throws Exception {
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
 	}
 
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
+	public Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
 			Wallet w, byte[] pubkeyTo, MemoInfo memoInfo) throws Exception {
 
@@ -1950,7 +1950,7 @@ public abstract class AbstractIntegrationTest {
 
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : wallet.walletKeys()) {
+		for (PQKey ecKey : wallet.walletKeys()) {
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 
@@ -1986,7 +1986,7 @@ public abstract class AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(new ECKey().toAddress(networkParameters).toString(),
+			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toString(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, 1)));
 		}
 
@@ -2065,8 +2065,8 @@ public abstract class AbstractIntegrationTest {
 		blockGraph.confirmDo(blockStore, cutoffHeight, blocksToAdd, true, maxConfirmedReward.getChainLength());
 	}
 
-	public List<ECKey> createUserkey() {
-		List<ECKey> userkeys = new ArrayList<ECKey>();
+	public List<PQKey> createUserkey() {
+		List<PQKey> userkeys = new ArrayList<PQKey>();
 		String[] s = new String[] { "0927cf94d82b0a0f1c8f06f127844034820aecd0adbaaf67c962d3eb6b0a6ea8",
 				"a2ba304ed68e2835ba3282e10380e31c8fe605fc232b88e497846654193ba38a",
 				"b96358b80bbf822fea87f2a5eea33dcffbf15e7f1c9691b3cd643cbb24ea6821",
@@ -2081,7 +2081,7 @@ public abstract class AbstractIntegrationTest {
 
 		};
 		for (String priv : s) {
-			ECKey key = ECKey.fromPrivate(Utils.HEX.decode(priv));
+			PQKey key = PQKey.createNew()Utils.HEX.decode(priv));
 			userkeys.add(key);
 		}
 		return userkeys;

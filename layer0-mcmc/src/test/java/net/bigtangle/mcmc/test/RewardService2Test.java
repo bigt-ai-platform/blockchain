@@ -16,7 +16,7 @@ import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.TokensumsMap;
@@ -39,7 +39,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 
 	// test payment, buy and sell
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		try {
 			payBigTo(genesisKey, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(5)), blocksAddedAll);
 		} catch (InsufficientMoneyException e) {
@@ -207,7 +207,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : wallet.walletKeys()) {
+		for (PQKey ecKey : wallet.walletKeys()) {
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 
@@ -238,7 +238,7 @@ public class RewardService2Test extends AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(new ECKey().toAddress(networkParameters).toString(),
+			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toString(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, j)));
 		}
 		mcmcService.calcNewBlockPrototype(store);	

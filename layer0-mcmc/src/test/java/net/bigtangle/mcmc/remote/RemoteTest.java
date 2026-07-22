@@ -28,7 +28,7 @@ import com.google.common.math.LongMath;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.OrderRecord;
@@ -84,11 +84,11 @@ public abstract class RemoteTest {
 	@BeforeEach
 	public void setUp() throws Exception { 
  
-		wallet = Wallet.fromKeys(networkParameters, ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
  
 	} 
 
-	protected Block payBigTo(ECKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
+	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
 
 		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
@@ -109,7 +109,7 @@ public abstract class RemoteTest {
 	}
 
 	
-	public Block createToken(ECKey key, String tokename, int decimals, String domainname, String description,
+	public Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
 			BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
 			Wallet w) throws Exception {
 		w.importKey(key);
@@ -123,7 +123,7 @@ public abstract class RemoteTest {
 
 	}
  
-	public Block createTokenWallet(ECKey key, String domainname, boolean increment, Token token,
+	public Block createTokenWallet(PQKey key, String domainname, boolean increment, Token token,
 			List<MultiSignAddress> addresses,Wallet w) throws Exception {
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
 	}
@@ -156,11 +156,11 @@ public abstract class RemoteTest {
 	}
 
 	// get balance for the walletKeys
-	protected List<UTXO> getBalance(boolean withZero, List<ECKey> keys) throws Exception {
+	protected List<UTXO> getBalance(boolean withZero, List<PQKey> keys) throws Exception {
 		List<UTXO> listUTXO = new ArrayList<UTXO>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : keys) {
+		for (PQKey ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -181,11 +181,11 @@ public abstract class RemoteTest {
 		return listUTXO;
 	}
 
-	protected List<Coin> getBalanceAccount(boolean withZero, List<ECKey> keys) throws Exception {
+	protected List<Coin> getBalanceAccount(boolean withZero, List<PQKey> keys) throws Exception {
 		List<Coin> listCoin = new ArrayList<Coin>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (ECKey ecKey : keys) {
+		for (PQKey ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -220,8 +220,8 @@ public abstract class RemoteTest {
 		return listUTXO;
 	}
 
-	protected List<UTXO> getBalance(boolean withZero, ECKey ecKey) throws Exception {
-		List<ECKey> keys = new ArrayList<ECKey>();
+	protected List<UTXO> getBalance(boolean withZero, PQKey ecKey) throws Exception {
+		List<PQKey> keys = new ArrayList<PQKey>();
 		keys.add(ecKey);
 		return getBalance(withZero, keys);
 	}

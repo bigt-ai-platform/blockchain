@@ -22,7 +22,7 @@ import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.Utils;
@@ -58,7 +58,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
     @Autowired(required = false)
     protected StakeService stakeService;
 
-    private List<ECKey> validatorKeys;
+    private List<PQKey> validatorKeys;
     private String genesisPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
     private List<Sha256Hash> blockHashes = new ArrayList<>();
 
@@ -68,7 +68,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(new ECKey());
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
     }
 
     @Test
@@ -79,8 +79,8 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         // -- Phase 1: Fund validators --
         log.info("--- Phase 1: Fund validators ---");
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                ECKey.fromPrivate(Utils.HEX.decode(genesisPriv)), contextRoot);
-        for (ECKey vk : validatorKeys) {
+                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
+        for (PQKey vk : validatorKeys) {
             HashMap<String, BigInteger> fund = new HashMap<>();
             fund.put(vk.toAddress(networkParameters).toString(), BigInteger.valueOf(10000000));
             Block b = wrapTransaction(genesisWallet.payToList(null, fund,
@@ -97,7 +97,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         // -- Phase 2: Register validators with 32 BIG stake --
         log.info("--- Phase 2: Register validators ---");
         for (int i = 0; i < VALIDATORS; i++) {
-            ECKey vk = validatorKeys.get(i);
+            PQKey vk = validatorKeys.get(i);
             Block proto = cacheBlockPrototypeService.getBlockPrototype(store);
             Block depositBlock = Block.createBlock(networkParameters,
                     store.get(proto.getPrevBlockHash()),
@@ -116,7 +116,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         }
         log.info("All {} validators registered", VALIDATORS);
 
-        for (ECKey vk : validatorKeys) {
+        for (PQKey vk : validatorKeys) {
             stakeService.activateValidator(vk.getPubKey(), 0, store);
         }
         log.info("Total active stake: {}", stakeService.getTotalActiveStake(store));
@@ -134,7 +134,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         for (int slot = 0; slot < SLOTS; slot++) {
             long epoch = slot / SLOTS_PER_EPOCH;
             int proposerIdx = slot % VALIDATORS;
-            ECKey proposer = validatorKeys.get(proposerIdx);
+            PQKey proposer = validatorKeys.get(proposerIdx);
 
             Block block = Block.createBlock(networkParameters,
                     prevBlock, prevBlock);
@@ -145,7 +145,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
 
             // All validators attest
             List<AttestationData> attestations = new ArrayList<>();
-            for (ECKey attester : validatorKeys) {
+            for (PQKey attester : validatorKeys) {
                 AttestationData att = new AttestationData();
                 att.setSlot(slot);
                 att.setEpoch(epoch);

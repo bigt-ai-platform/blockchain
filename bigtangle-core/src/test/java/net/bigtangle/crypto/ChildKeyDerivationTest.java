@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.Test;
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
@@ -155,10 +155,10 @@ public class ChildKeyDerivationTest {
 		try {
 			derivedKey2.sign(hash);
 			fail();
-		} catch (ECKey.KeyIsEncryptedException e) {
+		} catch (PQKey.KeyIsEncryptedException e) {
 			// Ignored.
 		}
-		ECKey.ECDSASignature signature = derivedKey2.sign(hash, aesKey);
+		SignatureBundle signature = derivedKey2.sign(hash, aesKey);
 		assertTrue(derivedKey2.verify(hash, signature));
 	}
 

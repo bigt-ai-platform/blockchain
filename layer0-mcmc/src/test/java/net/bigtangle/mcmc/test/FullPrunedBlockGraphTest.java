@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -71,7 +71,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	@Test
 	public void testConnectTokenUTXOs() throws Exception {
 
-		ECKey ecKey1 = new ECKey();
+		PQKey ecKey1 = PQKey.createNew();
 		byte[] pubKey = ecKey1.getPubKey();
 		// System.out.println(Utils.HEX.encode(pubKey));
 
@@ -109,10 +109,10 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 					1, amount, true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 			tokenInfo.setToken(tokens);
-			ECKey ecKey = new ECKey();
+			PQKey ecKey = PQKey.createNew();
 			tokenInfo.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey.getPublicKeyAsHex()));
-			ECKey ecKey2 = new ECKey();
+			PQKey ecKey2 = PQKey.createNew();
 			tokenInfo.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey2.getPublicKeyAsHex()));
 
@@ -120,7 +120,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 			// This (saveBlock) calls milestoneUpdate currently, that's why we
 			// need other blocks beforehand.
-			ECKey outKey3 = new ECKey();
+			PQKey outKey3 = PQKey.createNew();
 			wallet.importKey(ecKey);
 			wallet.importKey(ecKey2);
 			wallet.importKey(outKey3);
@@ -265,7 +265,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
-		ECKey outKey = new ECKey();
+		PQKey outKey = PQKey.createNew();
 		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 

@@ -25,7 +25,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
@@ -118,7 +118,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	}
 
 	public void createTokenSubtangle() throws Exception {
-		ECKey ecKey = new ECKey();
+		PQKey ecKey = PQKey.createNew();
 		byte[] pubKey = ecKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
@@ -146,7 +146,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		Transaction transaction = block.getTransactions().get(0);
 
 		Sha256Hash sighash = transaction.getHash();
-		ECKey.ECDSASignature party1Signature = ecKey.sign(sighash);
+		SignatureBundle party1Signature = ecKey.sign(sighash);
 		byte[] buf1 = party1Signature.encodeToDER();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
@@ -175,14 +175,14 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
-			ECKey outKey = new ECKey();
+			PQKey outKey = PQKey.createNew();
 			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
@@ -212,14 +212,14 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 		for (int i = 0; i < 3; i++) {
-			ECKey outKey = new ECKey();
+			PQKey outKey = PQKey.createNew();
 			giveMoneyResult.put(outKey.toAddress(networkParameters).toBase58(), Coin.COIN.getValue());
 		}
 		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
@@ -246,9 +246,9 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 	@Test
 	public void searchBlock() throws Exception {
-		List<ECKey> keys = wallet.walletKeys(null);
+		List<PQKey> keys = wallet.walletKeys(null);
 		List<String> address = new ArrayList<String>();
-		for (ECKey ecKey : keys) {
+		for (PQKey ecKey : keys) {
 			address.add(ecKey.toAddress(networkParameters).toBase58());
 		}
 		HashMap<String, Object> request = new HashMap<String, Object>();
@@ -281,11 +281,11 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 	}
 
 	// Pay BIG
-	public void payToken(ECKey outKey, Wallet wallet) throws Exception {
+	public void payToken(PQKey outKey, Wallet wallet) throws Exception {
 		payToken(100, outKey, NetworkParameters.BIGTANGLE_TOKENID, wallet);
 	}
 
-	public void payToken(int amount, ECKey outKey, byte[] tokenbuf, Wallet wallet) throws Exception {
+	public void payToken(int amount, PQKey outKey, byte[] tokenbuf, Wallet wallet) throws Exception {
 		// Ensure tips queue is populated
 		try {
 			mcmcService.calcNewBlockPrototype(store);

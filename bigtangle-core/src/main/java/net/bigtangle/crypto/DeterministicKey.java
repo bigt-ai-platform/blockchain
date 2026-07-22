@@ -46,12 +46,12 @@ import static net.bigtangle.core.Utils.HEX;
  * (key, chaincode). If you know its path in the tree and its chain code you can derive more keys from this. To obtain
  * one of these, you can call {@link HDKeyDerivation#createMasterPrivateKey(byte[])}.
  */
-public class DeterministicKey extends ECKey {
+public class DeterministicKey  {
 
     /** Sorts deterministic keys in the order of their child number. That's <i>usually</i> the order used to derive them. */
-    public static final Comparator<ECKey> CHILDNUM_ORDER = new Comparator<ECKey>() {
+    public static final Comparator<PQKey> CHILDNUM_ORDER = new Comparator<PQKey>() {
         @Override
-        public int compare(ECKey k1, ECKey k2) {
+        public int compare(PQKey k1, PQKey k2) {
             ChildNumber cn1 = ((DeterministicKey) k1).getChildNumber();
             ChildNumber cn2 = ((DeterministicKey) k2).getChildNumber();
             return cn1.compareTo(cn2);
@@ -94,7 +94,7 @@ public class DeterministicKey extends ECKey {
                             byte[] chainCode,
                             BigInteger priv,
                             @Nullable DeterministicKey parent) {
-        super(priv, compressPoint(ECKey.publicPointFromPrivate(priv)));
+        super(priv, compressPoint(PQKey.publicPointFromPrivate(priv)));
         checkArgument(chainCode.length == 32);
         this.parent = parent;
         this.childNumberPath = checkNotNull(childNumberPath);
@@ -162,7 +162,7 @@ public class DeterministicKey extends ECKey {
                             @Nullable DeterministicKey parent,
                             int depth,
                             int parentFingerprint) {
-        super(priv, compressPoint(ECKey.publicPointFromPrivate(priv)));
+        super(priv, compressPoint(PQKey.publicPointFromPrivate(priv)));
         checkArgument(chainCode.length == 32);
         this.parent = parent;
         this.childNumberPath = checkNotNull(childNumberPath);
@@ -558,7 +558,7 @@ public class DeterministicKey extends ECKey {
         buffer.get(data);
         checkArgument(!buffer.hasRemaining(), "Found unexpected data in key");
         if (pub) {
-            return new DeterministicKey(path, chainCode, new LazyECPoint(ECKey.CURVE.getCurve(), data), parent, depth, parentFingerprint);
+            return new DeterministicKey(path, chainCode, new LazyECPoint(PQKey.CURVE.getCurve(), data), parent, depth, parentFingerprint);
         } else {
             return new DeterministicKey(path, chainCode, new BigInteger(1, data), parent, depth, parentFingerprint);
         }
@@ -566,7 +566,7 @@ public class DeterministicKey extends ECKey {
 
     /**
      * The creation time of a deterministic key is equal to that of its parent, unless this key is the root of a tree
-     * in which case the time is stored alongside the key as per normal, see {@link net.bigtangle.core.ECKey#getCreationTimeSeconds()}.
+     * in which case the time is stored alongside the key as per normal, see {@link net.bigtangle.core.PQKey#getCreationTimeSeconds()}.
      */
     @Override
     public long getCreationTimeSeconds() {

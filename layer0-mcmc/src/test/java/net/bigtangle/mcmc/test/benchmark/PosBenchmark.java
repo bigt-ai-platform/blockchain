@@ -20,7 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
@@ -63,20 +63,20 @@ public class PosBenchmark extends AbstractIntegrationTest {
     @Test
     public void testPosChain() throws Exception {
         // Create validator keys and wallet keys for funding
-        List<ECKey> validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(new ECKey());
+        List<PQKey> validatorKeys = new ArrayList<>();
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
 
-        List<ECKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(new ECKey());
+        List<PQKey> walletKeys = new ArrayList<>();
+        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew());
 
         // Fund all wallets (validators + tx senders) via genesis
         Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                ECKey.fromPrivate(Utils.HEX.decode(genesisPriv)), contextRoot);
+                PQKey.createNew()Utils.HEX.decode(genesisPriv)), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
-        for (ECKey k : validatorKeys) {
+        for (PQKey k : validatorKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(500000));
         }
-        for (ECKey k : walletKeys) {
+        for (PQKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
         Block fb = wrapTransaction(genesisWallet.payToList(null, funding,
@@ -101,7 +101,7 @@ public class PosBenchmark extends AbstractIntegrationTest {
             }
         }
         List<FreeStandingTransactionOutput> walletCoins = new ArrayList<>();
-        for (ECKey k : walletKeys) {
+        for (PQKey k : walletKeys) {
             String addr = k.toAddress(networkParameters).toString();
             FreeStandingTransactionOutput c = addrToCoin.get(addr);
             if (c != null) walletCoins.add(c);
@@ -109,12 +109,12 @@ public class PosBenchmark extends AbstractIntegrationTest {
         log.info("Pre-fetched {} UTXOs", walletCoins.size());
 
         // Pre-create transactions (ECDSA in parallel before timing)
-        ECKey finalRecipient = new ECKey();
+        PQKey finalRecipient = PQKey.createNew();
         String finalAddr = finalRecipient.toAddress(networkParameters).toString();
 
         List<Transaction> allTxs = new ArrayList<>();
         for (int i = 0; i < TOTAL_TX; i++) {
-            ECKey wk = walletKeys.get(i);
+            PQKey wk = walletKeys.get(i);
             FreeStandingTransactionOutput coin = walletCoins.get(i);
             Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
             Transaction tx = w.payToListTransaction(null,
@@ -139,7 +139,7 @@ public class PosBenchmark extends AbstractIntegrationTest {
 
         long wallStart = System.nanoTime();
         for (int slot = 0; slot < TOTAL_SLOTS; slot++) {
-            ECKey validatorKey = validatorKeys.get(slot % VALIDATORS);
+            PQKey validatorKey = validatorKeys.get(slot % VALIDATORS);
 
             try {
                 // Slot leader fetches tip via HTTP
@@ -162,7 +162,7 @@ public class PosBenchmark extends AbstractIntegrationTest {
 
                 // Simulate attestations from other validators
                 long attStart = System.nanoTime();
-                for (ECKey attester : validatorKeys) {
+                for (PQKey attester : validatorKeys) {
                     if (attester.equals(validatorKey)) continue;
                     attester.sign(tip.getHash());
                 }

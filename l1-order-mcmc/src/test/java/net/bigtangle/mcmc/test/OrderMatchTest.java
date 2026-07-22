@@ -21,7 +21,7 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OrderOpenInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Side;
@@ -58,9 +58,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderTickerPrice() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -116,14 +116,14 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderWithCheck() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
-		List<ECKey> genesisKeykeys = new ArrayList<ECKey>();
+		PQKey testKey = PQKey.createNew();
+		List<PQKey> genesisKeykeys = new ArrayList<PQKey>();
 		genesisKeykeys.add(genesisKey);
 		getBalanceAccount(false, genesisKeykeys);
 
-		List<ECKey> testkeys = new ArrayList<ECKey>();
+		List<PQKey> testkeys = new ArrayList<PQKey>();
 		testkeys.add(testKey);
 		getBalanceAccount(false, testkeys);
 		List<Block> addedBlocks = new ArrayList<>();
@@ -151,9 +151,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void orderTickerSearchAPI() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -191,9 +191,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// TODO no data @Test
 	public void orderTickerSearchAVGAPI() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -250,9 +250,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buy() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -286,11 +286,11 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	@Test
 	public void buyBaseToken() throws Exception {
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 
 		long tokennumber = 888888 * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
@@ -343,16 +343,16 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		List<Block> addedBlocks = new ArrayList<>();
 		// base token
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 
 		long tokennumber = 888888 * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
 		// Make test token
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
 		// Make test token 2
-		ECKey testKey2 = new ECKey();
+		PQKey testKey2 = PQKey.createNew();
 		payBigToAmount(testKey, addedBlocks);
 		payBigToAmount(testKey2, addedBlocks);
 
@@ -388,11 +388,11 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	@Test
 	public void buyBaseTokenSmall() throws Exception {
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// base token
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 		int priceshift = 1000000;
 		long tokennumber = priceshift * 1000;
 		makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
@@ -424,10 +424,10 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	@Test
 	public void buyBaseTokenSmallRemainder() throws Exception {
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// base token
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 		String orderbaseToken = yuan.getPublicKeyAsHex();
 		int amount = 1000000;
 		long tokennumber = amount * 1000;
@@ -458,13 +458,13 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBaseTokenMixed() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// yuan token
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 		makeTestToken(yuan, addedBlocks);
 
 		// Make test token
@@ -514,9 +514,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void sell() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -550,9 +550,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void multiLevelBuy() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -589,9 +589,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void multiLevelSell() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -630,9 +630,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialBuy() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -665,9 +665,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialSell() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -702,9 +702,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialBidFill() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -739,9 +739,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void partialAskFill() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -778,7 +778,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void cancel() throws Exception {
 
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -805,10 +805,10 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void cancelTwoStep() throws Exception {
 
-		// ECKey genesisKey =
-		// ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		// PQKey genesisKey =
+		// PQKey.createNew()Utils.HEX.decode(testPriv),
 		// Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -842,9 +842,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void effectiveCancel() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -881,7 +881,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	@Test
 	public void testValidToTime() throws Exception {
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -943,9 +943,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testAllOrdersSpent() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		;
 		List<Block> addedBlocks = new ArrayList<>();
 
@@ -983,9 +983,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// we execute many times for order matchings, then do the reward to confirm all
 		// orders
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -1010,9 +1010,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testManyExecutions() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
@@ -1042,9 +1042,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void testMultiMatching1() throws Exception {
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
@@ -1078,11 +1078,11 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void checkDecimalFormat() throws Exception {
 
-		ECKey dollarKey = new ECKey();
+		PQKey dollarKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// base token yuan with decimal 2
-		ECKey yuan = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey yuan = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 		makeTestToken(yuan, BigInteger.valueOf(10000000), addedBlocks, 2);
 
 		// Make test token with decimal 2
@@ -1121,7 +1121,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void payToWalletECKey() throws Exception {
 
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -1129,7 +1129,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		BigInteger amountToken = BigInteger.valueOf(88);
 		// split token
-		ECKey toKey = new ECKey();
+		PQKey toKey = PQKey.createNew();
 		payTestTokenTo(toKey, testKey, amountToken);
 		payTestTokenTo(toKey, testKey, amountToken);
 		checkBalanceSum(new Coin(amountToken.multiply(BigInteger.valueOf(2)), testKey.getPubKey()), toKey);
@@ -1140,7 +1140,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// test buy order with multiple inputs
 	public void testOrderLargeThanLONGMAX() throws Exception {
 
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -1149,7 +1149,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		BigInteger amountToken = BigInteger.valueOf(88);
 		// split token
-		ECKey toKey = new ECKey();
+		PQKey toKey = PQKey.createNew();
 		payTestTokenTo(toKey, testKey, amountToken);
 		payTestTokenTo(toKey, testKey, amountToken);
 		checkBalanceSum(Coin.valueOf(2 * amountToken.longValue(), testKey.getPubKey()), toKey);
@@ -1169,14 +1169,14 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 	public void testBuySellWithDecimalDo(long price, long tradeAmount, int tokendecimal) throws Exception {
 
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 
 		makeTestToken(testKey, BigInteger.valueOf(tradeAmount * 1000), addedBlocks, tokendecimal);
 		String testTokenId = testKey.getPublicKeyAsHex();
-		ECKey toKey = new ECKey();
+		PQKey toKey = PQKey.createNew();
 		payTestTokenTo(toKey, testKey, BigInteger.valueOf(tradeAmount * 2));
 		checkBalanceSum(Coin.valueOf(tradeAmount * 2, testKey.getPubKey()), toKey);
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
@@ -1187,7 +1187,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		makeOrderExecutionAndReward(addedBlocks, null);
 
-		ECKey testKeyBuy = new ECKey();
+		PQKey testKeyBuy = PQKey.createNew();
 
 		BigInteger amount = BigInteger.valueOf(7700000000000l);
 
@@ -1211,7 +1211,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// test buy order with multiple inputs
 	public void testBuyMCMC() throws Exception {
 
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
@@ -1221,7 +1221,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		long tradeAmount = 100l;
 		long price = 1;
 
-		ECKey testKeyBuy = new ECKey();
+		PQKey testKeyBuy = PQKey.createNew();
 		BigInteger amount = BigInteger.valueOf(77);
 		// split BIG
 		payBigTo(testKeyBuy, amount.add(Coin.FEE_DEFAULT.getValue()), addedBlocks);
@@ -1245,7 +1245,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	// verifies a sell order becomes confirmed/open after the MCMC reward path,
 	// and a matching buy order executes and closes the order.
 	public void testOrderConfirmedViaReward() throws Exception {
-		ECKey testKey = new ECKey();
+		PQKey testKey = PQKey.createNew();
 		List<Block> addedBlocks = new ArrayList<>();
 
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -1267,7 +1267,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeOrderExecutionAndReward(addedBlocks, sell);
 		checkAllOpenOrders(1);
 
-		ECKey genesisKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesisKey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		payBigToAmount(genesisKey, addedBlocks);
 

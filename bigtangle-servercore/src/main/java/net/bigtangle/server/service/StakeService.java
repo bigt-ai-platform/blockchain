@@ -12,7 +12,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
@@ -45,7 +45,7 @@ public class StakeService {
     }
 
     public void processDeposit(UTXO utxo, byte[] withdrawalCredentials,
-            ECKey depositKey, BlockStoreInterface store) throws Exception {
+            PQKey depositKey, BlockStoreInterface store) throws Exception {
         if (utxo.getValue().getValue().compareTo(MIN_STAKE) < 0) {
             throw new IllegalArgumentException("Stake must be at least " + MIN_STAKE);
         }

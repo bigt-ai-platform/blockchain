@@ -21,7 +21,7 @@ package net.bigtangle.wallet;
 
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 
 import jakarta.annotation.Nullable;
 
@@ -32,7 +32,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * A DecryptingKeyBag filters a pre-existing key bag, decrypting keys as they are requested using the provided
- * AES key. If the keys are encrypted and no AES key provided, {@link net.bigtangle.core.ECKey.KeyIsEncryptedException}
+ * AES key. If the keys are encrypted and no AES key provided, {@link net.bigtangle.core.PQKey.KeyIsEncryptedException}
  * will be thrown.
  */
 public class DecryptingKeyBag implements KeyBag {
@@ -45,12 +45,12 @@ public class DecryptingKeyBag implements KeyBag {
     }
 
     @Nullable
-    public ECKey maybeDecrypt(ECKey key) {
+    public PQKey maybeDecrypt(PQKey key) {
         if (key == null)
             return null;
         else if (key.isEncrypted()) {
             if (aesKey == null)
-                throw new ECKey.KeyIsEncryptedException();
+                throw new PQKey.KeyIsEncryptedException();
             return key.decrypt(aesKey);
         } else {
             return key;
@@ -58,8 +58,8 @@ public class DecryptingKeyBag implements KeyBag {
     }
 
     private RedeemData maybeDecrypt(RedeemData redeemData) {
-        List<ECKey> decryptedKeys = new ArrayList<ECKey>();
-        for (ECKey key : redeemData.keys) {
+        List<PQKey> decryptedKeys = new ArrayList<PQKey>();
+        for (PQKey key : redeemData.keys) {
             decryptedKeys.add(maybeDecrypt(key));
         }
         return RedeemData.of(decryptedKeys, redeemData.redeemScript);
@@ -67,13 +67,13 @@ public class DecryptingKeyBag implements KeyBag {
 
     @Nullable
     @Override
-    public ECKey findKeyFromPubHash(byte[] pubkeyHash) {
+    public PQKey findKeyFromPubHash(byte[] pubkeyHash) {
         return maybeDecrypt(target.findKeyFromPubHash(pubkeyHash));
     }
 
     @Nullable
     @Override
-    public ECKey findKeyFromPubKey(byte[] pubkey) {
+    public PQKey findKeyFromPubKey(byte[] pubkey) {
         return maybeDecrypt(target.findKeyFromPubKey(pubkey));
     }
 

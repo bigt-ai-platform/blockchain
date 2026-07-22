@@ -21,7 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -35,15 +35,15 @@ import net.bigtangle.params.NetworkParameters;
 
 public class ScriptSerializationTest {
     private static final NetworkParameters PARAMS = MainNetParams.get();
-    private ECKey key1;
-    private ECKey key2;
-    private ECKey key3;
+    private PQKey key1;
+    private PQKey key2;
+    private PQKey key3;
 
     @BeforeEach
     public void setUp() throws Exception {
-        key1 = new ECKey();
-        key2 = new ECKey();
-        key3 = new ECKey();
+        key1 = PQKey.createNew();
+        key2 = PQKey.createNew();
+        key3 = PQKey.createNew();
     }
 
     @Test
@@ -90,7 +90,7 @@ public class ScriptSerializationTest {
     @Test
     public void testScriptSerializationWithMultiSig() throws IOException {
         // Create a multi-sig script
-        List<ECKey> keys = Arrays.asList(key1, key2, key3);
+        List<PQKey> keys = Arrays.asList(key1, key2, key3);
         Script script = ScriptBuilder.createMultiSigOutputScript(2, keys);
         
         // Serialize the script

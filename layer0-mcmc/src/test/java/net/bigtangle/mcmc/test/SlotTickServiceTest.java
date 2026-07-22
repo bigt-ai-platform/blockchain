@@ -7,7 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
@@ -32,7 +32,7 @@ public class SlotTickServiceTest extends AbstractIntegrationTest {
     @Autowired
     private StakeService stakeService;
 
-    private ECKey validatorKey;
+    private PQKey validatorKey;
 
     @Override
     @BeforeEach
@@ -40,7 +40,7 @@ public class SlotTickServiceTest extends AbstractIntegrationTest {
         super.setUp();
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
-        validatorKey = new ECKey();
+        validatorKey = PQKey.createNew();
     }
 
     @Test

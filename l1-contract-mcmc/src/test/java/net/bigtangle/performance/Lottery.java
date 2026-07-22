@@ -21,7 +21,7 @@ import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.UTXO;
@@ -48,7 +48,7 @@ public class Lottery {
     private List<UTXO> userUtxos;
     private BigInteger winnerAmount;
     private boolean macthed;
-    private ECKey accountKey;
+    private PQKey accountKey;
     List<String> userAddress;
     /*
      * start check balance and check to X amount and collect all user in lottery
@@ -60,7 +60,7 @@ public class Lottery {
      * consensus method will run and verify on each node
      */
     public void start() throws Exception {
-        // ECKey ecKey = ECKey.fromPublicOnly(Utils.HEX.decode(tokenid));
+        // PQKey ecKey = PQKey.fromPublicOnly(Utils.HEX.decode(tokenid));
         walletAdmin = Wallet.fromKeys(params, accountKey);
         walletAdmin.setServerURL(contextRoot);
         //TODO the same amount of UTXO for lottery 
@@ -181,11 +181,11 @@ public class Lottery {
     }
 
     // get balance for the walletKeys
-    protected List<UTXO> getBalance(List<ECKey> keys) throws Exception {
+    protected List<UTXO> getBalance(List<PQKey> keys) throws Exception {
         List<UTXO> listUTXO = new ArrayList<UTXO>();
         List<String> keyStrHex000 = new ArrayList<String>();
 
-        for (ECKey ecKey : keys) {
+        for (PQKey ecKey : keys) {
             // keyStrHex000.add(ecKey.toAddress(networkParameters).toString());
             keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
         }
@@ -205,8 +205,8 @@ public class Lottery {
         return listUTXO;
     }
 
-    protected List<UTXO> getBalance(ECKey ecKey) throws Exception {
-        List<ECKey> keys = new ArrayList<ECKey>();
+    protected List<UTXO> getBalance(PQKey ecKey) throws Exception {
+        List<PQKey> keys = new ArrayList<PQKey>();
         keys.add(ecKey);
         return getBalance(keys);
     }
@@ -276,11 +276,11 @@ public class Lottery {
         this.macthed = macthed;
     }
 
-    public ECKey getAccountKey() {
+    public PQKey getAccountKey() {
         return accountKey;
     }
 
-    public void setAccountKey(ECKey accountKey) {
+    public void setAccountKey(PQKey accountKey) {
         this.accountKey = accountKey;
     }
 

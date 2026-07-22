@@ -7,7 +7,7 @@ import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.params.TestParams;
 
@@ -18,7 +18,7 @@ public class ECKeyEncryptTest {
     @Test
     public void importECKeyDecrypt() {
         BigInteger privKey = new BigInteger("5e173f6ac3c669587538e7727cf19b782a4f2fda07c1eaa662c593e5e85e3051", 16);
-        ECKey ecKey = ECKey.fromPrivate(privKey);
+        PQKey ecKey = PQKey.createNew()privKey);
         try {
             byte[] cipher = ECIESCoder.encrypt(ecKey.getPubKeyPoint(), payload);
             byte[] decryptedPayload = ECIESCoder.decrypt(ecKey.getPrivKey(), cipher);
@@ -31,7 +31,7 @@ public class ECKeyEncryptTest {
 
     @Test
     public void newECKeyDecrypt() {
-        ECKey ecKey = new ECKey();
+        PQKey ecKey = PQKey.createNew();
         System.out.println("public= " +ecKey.getPublicKeyAsHex());
         System.out.println("public address= " +ecKey.toAddress(TestParams.get()));
         System.out.println("private= " +ecKey.getPrivateKeyAsHex());

@@ -29,7 +29,7 @@ public class CoinSerializationTest {
             
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
-            ECKey key = new ECKey();
+            PQKey key = PQKey.createNew();
             Address address = key.toAddress(MainNetParams.get());
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
@@ -62,7 +62,7 @@ public class CoinSerializationTest {
             
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
-            ECKey key = new ECKey();
+            PQKey key = PQKey.createNew();
             Address address = key.toAddress(MainNetParams.get());
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
@@ -93,7 +93,7 @@ public class CoinSerializationTest {
             
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
-            ECKey key = new ECKey();
+            PQKey key = PQKey.createNew();
             Address address = key.toAddress(MainNetParams.get());
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
@@ -120,7 +120,7 @@ public class CoinSerializationTest {
         
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
-            ECKey key = new ECKey();
+            PQKey key = PQKey.createNew();
             Address address = key.toAddress(MainNetParams.get());
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             
@@ -149,7 +149,7 @@ public class CoinSerializationTest {
         
         // Test serialization and deserialization through TransactionOutput
         Transaction transaction = new Transaction(MainNetParams.get());
-        ECKey key = new ECKey();
+        PQKey key = PQKey.createNew();
         Address address = key.toAddress(MainNetParams.get());
         TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
         
@@ -179,7 +179,7 @@ public class CoinSerializationTest {
         
         // Test serialization and deserialization
         Transaction transaction = new Transaction(MainNetParams.get());
-        ECKey key = new ECKey();
+        PQKey key = PQKey.createNew();
         Address address = key.toAddress(MainNetParams.get());
         TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin1, address);
         
@@ -210,7 +210,7 @@ public class CoinSerializationTest {
         for (Coin coin : specialCoins) {
             // Test serialization and deserialization through TransactionOutput
             Transaction transaction = new Transaction(MainNetParams.get());
-            ECKey key = new ECKey();
+            PQKey key = PQKey.createNew();
             Address address = key.toAddress(MainNetParams.get());
             TransactionOutput output = TransactionOutput.fromAddress(MainNetParams.get(), transaction, coin, address);
             

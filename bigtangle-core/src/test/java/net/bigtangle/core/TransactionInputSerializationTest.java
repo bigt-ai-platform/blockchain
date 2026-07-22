@@ -24,13 +24,13 @@ import net.bigtangle.script.ScriptBuilder;
 public class TransactionInputSerializationTest {
     private static final NetworkParameters PARAMS = MainNetParams.get();
     private Transaction transaction;
-    private ECKey key;
+    private PQKey key;
     private Address address;
 
     @BeforeEach
     public void setUp() throws Exception {
         transaction = new Transaction(PARAMS);
-        key = new ECKey();
+        key = PQKey.createNew();
         address = key.toAddress(PARAMS);
     }
 

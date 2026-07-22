@@ -19,7 +19,7 @@
  */
 package net.bigtangle.wallet;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.script.Script;
 
 import java.util.ArrayList;
@@ -38,16 +38,16 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 public class RedeemData {
     public final Script redeemScript;
-    public final List<ECKey> keys;
+    public final List<PQKey> keys;
 
-    private RedeemData(List<ECKey> keys, Script redeemScript) {
+    private RedeemData(List<PQKey> keys, Script redeemScript) {
         this.redeemScript = redeemScript;
-        List<ECKey> sortedKeys = new ArrayList<ECKey>(keys);
-        Collections.sort(sortedKeys, ECKey.PUBKEY_COMPARATOR);
+        List<PQKey> sortedKeys = new ArrayList<PQKey>(keys);
+        Collections.sort(sortedKeys, PQKey.PUBKEY_COMPARATOR);
         this.keys = sortedKeys;
     }
 
-    public static RedeemData of(List<ECKey> keys, Script redeemScript) {
+    public static RedeemData of(List<PQKey> keys, Script redeemScript) {
         return new RedeemData(keys, redeemScript);
     }
 
@@ -55,7 +55,7 @@ public class RedeemData {
      * Creates RedeemData for pay-to-address or pay-to-pubkey input. Provided key is a single private key needed
      * to spend such inputs and provided program should be a proper CHECKSIG program.
      */
-    public static RedeemData of(ECKey key, Script program) {
+    public static RedeemData of(PQKey key, Script program) {
         checkArgument(program.isSentToAddress() || program.isSentToRawPubKey());
         return key != null ? new RedeemData(Collections.singletonList(key), program) : null;
     }
@@ -63,8 +63,8 @@ public class RedeemData {
     /**
      * Returns the first key that has private bytes
      */
-    public ECKey getFullKey() {
-        for (ECKey key : keys)
+    public PQKey getFullKey() {
+        for (PQKey key : keys)
             if (key.hasPrivKey())
                 return key;
         return null;

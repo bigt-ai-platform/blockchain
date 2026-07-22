@@ -48,7 +48,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.PeekingIterator;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ChildNumber;
 import net.bigtangle.crypto.DeterministicHierarchy;
@@ -424,7 +424,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
 
         // Now copy the (pubkey only) leaf keys across to avoid rederiving them. The private key bytes are missing
         // anyway so there's nothing to encrypt.
-        for (ECKey eckey : chain.basicKeyChain.getKeys()) {
+        for (PQKey eckey : chain.basicKeyChain.getKeys()) {
             DeterministicKey key = (DeterministicKey) eckey;
             if (key.getPath().size() != getAccountPath().size() + 2) continue; // Not a leaf key.
             DeterministicKey parent = hierarchy.get(checkNotNull(key.getParent()).getPath(), false, false);
@@ -610,7 +610,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
     }
 
     @Override
-    public boolean hasKey(ECKey key) {
+    public boolean hasKey(PQKey key) {
         lock.lock();
         try {
             return basicKeyChain.hasKey(key);
@@ -778,7 +778,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
         chain.lookaheadSize = lookaheadSize;
         // Now copy the (pubkey only) leaf keys across to avoid rederiving them. The private key bytes are missing
         // anyway so there's nothing to decrypt.
-        for (ECKey eckey : basicKeyChain.getKeys()) {
+        for (PQKey eckey : basicKeyChain.getKeys()) {
             DeterministicKey key = (DeterministicKey) eckey;
             if (key.getPath().size() != getAccountPath().size() + 2) continue; // Not a leaf key.
             checkState(key.isEncrypted());
@@ -1008,12 +1008,12 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
     }
 
     // For internal usage only
-    /* package */ List<ECKey> getKeys(boolean includeLookahead) {
-        List<ECKey> keys = basicKeyChain.getKeys();
+    /* package */ List<PQKey> getKeys(boolean includeLookahead) {
+        List<PQKey> keys = basicKeyChain.getKeys();
         if (!includeLookahead) {
             int treeSize = internalParentKey.getPath().size();
-            List<ECKey> issuedKeys = new LinkedList<ECKey>();
-            for (ECKey key : keys) {
+            List<PQKey> issuedKeys = new LinkedList<PQKey>();
+            for (PQKey key : keys) {
                 DeterministicKey detkey = (DeterministicKey) key;
                 DeterministicKey parent = detkey.getParent();
                 if (parent == null) continue;
@@ -1030,9 +1030,9 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
     /**
      * Returns only the external keys that have been issued by this chain, lookahead not included.
      */
-    public List<ECKey> getIssuedReceiveKeys() {
-        final List<ECKey> keys = new ArrayList<ECKey>(getKeys(false));
-        for (Iterator<ECKey> i = keys.iterator(); i.hasNext();) {
+    public List<PQKey> getIssuedReceiveKeys() {
+        final List<PQKey> keys = new ArrayList<PQKey>(getKeys(false));
+        for (Iterator<PQKey> i = keys.iterator(); i.hasNext();) {
             DeterministicKey parent = ((DeterministicKey) i.next()).getParent();
             if (!externalParentKey.equals(parent))
                 i.remove();
@@ -1045,7 +1045,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
      */
     public List<DeterministicKey> getLeafKeys() {
         ImmutableList.Builder<DeterministicKey> keys = ImmutableList.builder();
-        for (ECKey key : getKeys(true)) {
+        for (PQKey key : getKeys(true)) {
             DeterministicKey dKey = (DeterministicKey) key;
             if (dKey.getPath().size() == getAccountPath().size() + 2) {
                 keys.add(dKey);
@@ -1112,7 +1112,7 @@ public class DeterministicKeyChain implements EncryptableKeyChain {
     }
 
     protected void formatAddresses(boolean includePrivateKeys, NetworkParameters params, StringBuilder builder2) {
-        for (ECKey key : getKeys(false))
+        for (PQKey key : getKeys(false))
             key.formatKeyWithAddress(includePrivateKeys, builder2, params);
     }
 

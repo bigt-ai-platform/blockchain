@@ -42,7 +42,7 @@ import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.core.DataClassName;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OrderExecutionResult;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.RewardInfo;
@@ -1258,7 +1258,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				byte[] pubKey = Utils.HEX.decode((String) multiSignBy.get("publickey"));
 				byte[] data = tx.getHash().getBytes();
 				byte[] signature = Utils.HEX.decode((String) multiSignBy.get("signature"));
-				boolean success = ECKey.verify(data, signature, pubKey);
+				boolean success = PQScriptUtils.verifyPQ(data, signature, pubKey);
 				if (!success) {
 					throw new BlockStoreException("multisign signature error");
 				}

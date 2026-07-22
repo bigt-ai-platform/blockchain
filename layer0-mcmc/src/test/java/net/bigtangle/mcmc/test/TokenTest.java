@@ -30,7 +30,7 @@ import net.bigtangle.apps.data.SignedData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.DataClassName;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.KeyValueList;
 import net.bigtangle.core.MemoInfo;
@@ -97,16 +97,16 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateDomainToken() throws Exception {
 
-		ECKey preKey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv));
 
 		{
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			String tokenid = key.getPublicKeyAsHex();
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			wallet.publishDomainName(key, tokenid, "com", aesKey, "");
 
-			List<ECKey> keys = new ArrayList<ECKey>();
+			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
@@ -119,13 +119,13 @@ public class TokenTest extends AbstractIntegrationTest {
 		}
 
 		{
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			final String tokenid = key.getPublicKeyAsHex();
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			wallet.publishDomainName(key, tokenid, "金", aesKey, "金");
 
-			List<ECKey> keys = new ArrayList<ECKey>();
+			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
@@ -139,13 +139,13 @@ public class TokenTest extends AbstractIntegrationTest {
 			assertTrue(getToken(tokenid).getTokenname().equals("金"));
 		}
 		{
-			ECKey keyShop = new ECKey();
+			PQKey keyShop = PQKey.createNew();
 			String tokenid = keyShop.getPublicKeyAsHex();
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			wallet.publishDomainName(keyShop, tokenid, "shop", aesKey, "");
 
-			List<ECKey> keys = new ArrayList<ECKey>();
+			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
@@ -158,12 +158,12 @@ public class TokenTest extends AbstractIntegrationTest {
 			makeRewardBlock(lastBlock);
 			assertTrue(getToken(tokenid).getTokenname().equals("shop"));
 
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			tokenid = key.getPublicKeyAsHex();
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			wallet.publishDomainName(key, tokenid, "myshopname.shop", aesKey, "");
-			keys = new ArrayList<ECKey>();
+			keys = new ArrayList<PQKey>();
 			keys.add(keyShop);
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
@@ -182,16 +182,16 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testWrongDomainname() throws Exception {
 
-		ECKey preKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 
 		{
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			final String tokenid = key.getPublicKeyAsHex();
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			wallet.publishDomainName(key, tokenid, "de/de", aesKey, "");
 
-			List<ECKey> keys = new ArrayList<ECKey>();
+			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
@@ -205,14 +205,14 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	public void testWrongSignnumber() throws Exception {
 
-		ECKey preKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 
 		{
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			final String tokenid = key.getPublicKeyAsHex();
 			wallet.publishDomainName(key, tokenid, "de/de", aesKey, "");
 
-			List<ECKey> keys = new ArrayList<ECKey>();
+			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
@@ -227,9 +227,9 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateTokenWithDomain() throws Exception {
 
-		ECKey shopkey=	createShopToken();
+		PQKey shopkey=	createShopToken();
 
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		  String tokenid = key.getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -242,7 +242,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		{
 
-			ECKey productkey = new ECKey();
+			PQKey productkey = PQKey.createNew();
 			wallet.importKey(productkey);
 			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
@@ -274,10 +274,10 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateIdentityTokenWithDomain() throws Exception {
 
-		ECKey key = prepareIdentity();
+		PQKey key = prepareIdentity();
 
-		ECKey issuer = new ECKey();
-		ECKey userkey = new ECKey();
+		PQKey issuer = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
 		TokenKeyValues kvs = getTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
 		// Ensure tips queue is updated before wallet operations
@@ -317,19 +317,19 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateCertificate() throws Exception {
 
-		ECKey domainkey = prepareIdentity();
+		PQKey domainkey = prepareIdentity();
 		String domainAddress = domainkey.toAddress(networkParameters).toString();
 		// issuer create the token for user public key and domain key must sign
 		// the token
-		ECKey issuer = new ECKey();
-		ECKey userkey = new ECKey();
+		PQKey issuer = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
 		SignedData signedata = signeddata(issuer);
 		TokenKeyValues kvs = signedata.toTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
-		List<ECKey> keys = wallet.walletKeys();
+		List<PQKey> keys = wallet.walletKeys();
 		List<String> addresses = keys.stream().map(key -> key.toAddress(networkParameters).toBase58())
 				.collect(Collectors.toList());
-		String tokenid = new ECKey().getPublicKeyAsHex();
+		String tokenid = PQKey.createNew().getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
@@ -385,16 +385,16 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testSigneddata() throws Exception {
 
-		ECKey domainkey = prepareIdentity();
+		PQKey domainkey = prepareIdentity();
 		String domainAddress = domainkey.toAddress(networkParameters).toString();
 		// issuer create the token for user public key and domain key must sign
 		// the token
-		ECKey issuer = new ECKey();
-		ECKey userkey = new ECKey();
+		PQKey issuer = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
 		SignedData signedata = signeddata(issuer);
 		TokenKeyValues kvs = signedata.toTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
-		String tokenid = new ECKey().getPublicKeyAsHex();
+		String tokenid = PQKey.createNew().getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
@@ -409,7 +409,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// sendEmpty(10);
 		makeRewardBlock(lastBlock);
 
-		List<ECKey> keys = new ArrayList<ECKey>();
+		List<PQKey> keys = new ArrayList<PQKey>();
 		keys.add(userkey);
 		List<SignedDataWithToken> data = WalletUtil.signedTokenList(keys, TokenType.certificate, contextRoot);
 		assertTrue(data.size() > 0);
@@ -424,11 +424,11 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testPrescription() throws Exception {
 
-		ECKey issuer = new ECKey();
-		ECKey userkey = new ECKey();
-		ECKey pharmacy = new ECKey();
+		PQKey issuer = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
+		PQKey pharmacy = PQKey.createNew();
 		payBigTo(userkey, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(3)), null);
-		ECKey key = prepareIdentity();
+		PQKey key = prepareIdentity();
 
 
 		SignedData signedata = signeddata(key);
@@ -437,7 +437,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), new ECKey().getPublicKeyAsHex(), wallet, userkey.getPubKey(),
+				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet, userkey.getPubKey(),
 				signedata.encryptToMemo(userkey));
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
@@ -520,7 +520,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
-	private SignedData prescription(ECKey userkey, Token token)
+	private SignedData prescription(PQKey userkey, Token token)
 			throws IOException, InvalidCipherTextException, SignatureException {
 		byte[] decryptedPayload = null;
 		for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
@@ -534,7 +534,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		return null;
 	}
 
-	public List<Prescription> prescriptionList(ECKey ecKey) throws Exception {
+	public List<Prescription> prescriptionList(PQKey ecKey) throws Exception {
 		List<Prescription> prescriptionlist = new ArrayList<Prescription>();
 		Map<String, String> param = new HashMap<String, String>();
 		param.put("toaddress", ecKey.toAddress(networkParameters).toString());
@@ -567,16 +567,16 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testTokenidNotInWallet() throws Exception {
 
-		ECKey key = prepareIdentity();
+		PQKey key = prepareIdentity();
 
-		ECKey issuer = new ECKey();
-		ECKey userkey = new ECKey();
+		PQKey issuer = PQKey.createNew();
+		PQKey userkey = PQKey.createNew();
 		TokenKeyValues kvs = certificateTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), new ECKey().getPublicKeyAsHex(), wallet, userkey.getPubKey(), null);
+				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet, userkey.getPubKey(), null);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -609,11 +609,11 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
-	private ECKey prepareIdentity()
+	private PQKey prepareIdentity()
 			throws Exception, JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
-		ECKey shopKey = createShopToken();
+		PQKey shopKey = createShopToken();
 
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		final String tokenid = key.getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -628,7 +628,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		return key;
 	}
 
-	private TokenKeyValues getTokenKeyValues(ECKey key, ECKey userkey)
+	private TokenKeyValues getTokenKeyValues(PQKey key, PQKey userkey)
 			throws InvalidCipherTextException, IOException, SignatureException {
 		SignedData signeddata = new SignedData();
 		IdentityCore identityCore = new IdentityCore();
@@ -648,7 +648,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		return signeddata.toTokenKeyValues(key, userkey);
 	}
 
-	private TokenKeyValues certificateTokenKeyValues(ECKey key, ECKey userkey)
+	private TokenKeyValues certificateTokenKeyValues(PQKey key, PQKey userkey)
 			throws InvalidCipherTextException, IOException, SignatureException {
 		SignedData signeddata = new SignedData();
 		KeyValueList kvs = new KeyValueList();
@@ -667,7 +667,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		return signeddata.toTokenKeyValues(key, userkey);
 	}
 
-	private SignedData signeddata(ECKey key) throws SignatureException {
+	private SignedData signeddata(PQKey key) throws SignatureException {
 		SignedData signedata = new SignedData();
 		Prescription p = new Prescription();
 		p.setPrescription("my first prescription");
@@ -704,12 +704,12 @@ public class TokenTest extends AbstractIntegrationTest {
 				.equals(Coin.valueOf(77777L, wallet.walletKeys().get(0).getPubKey())));
 	}
 
-	public List<ECKey> payKeys() throws Exception {
-		List<ECKey> userkeys = new ArrayList<ECKey>();
+	public List<PQKey> payKeys() throws Exception {
+		List<PQKey> userkeys = new ArrayList<PQKey>();
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 1; i <= 10; i++) {
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(i * 10000));
 			userkeys.add(key);
 		}
@@ -759,10 +759,10 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testGetTokennameConflict() throws Exception {
 
-		List<ECKey> keys = wallet.walletKeys();
+		List<PQKey> keys = wallet.walletKeys();
 
-		ECKey outKey = new ECKey();
-		ECKey outKey2 = new ECKey();
+		PQKey outKey = PQKey.createNew();
+		PQKey outKey2 = PQKey.createNew();
 		payBigTo(outKey2, Coin.FEE_DEFAULT.getValue(), null);
 
 		String tokenid = outKey.getPublicKeyAsHex();
@@ -815,7 +815,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
     @Test
     public void testGetTokenConflict() throws Exception {
-    	ECKey  testkey= wallet.walletKeys().get(0);
+    	PQKey  testkey= wallet.walletKeys().get(0);
     	payBigTo(testkey, Coin.FEE_DEFAULT.getValue(),    null);
         Block b1 = testCreateToken(testkey , "test");
         // same token id and index
@@ -846,15 +846,15 @@ public class TokenTest extends AbstractIntegrationTest {
 	public void walletCreateDomain() throws Exception {
 		 resetStore();
 
-		List<ECKey> keys = new ArrayList<ECKey>();
-		ECKey outKey3 = new ECKey();
-		ECKey outKey4 = new ECKey();
-		ECKey signKey = new ECKey();
+		List<PQKey> keys = new ArrayList<PQKey>();
+		PQKey outKey3 = PQKey.createNew();
+		PQKey outKey4 = PQKey.createNew();
+		PQKey signKey = PQKey.createNew();
 		keys.add(outKey3);
 		keys.add(outKey4);
 		keys.add(signKey);
 
-		final String tokenid = new ECKey().getPublicKeyAsHex();
+		final String tokenid = PQKey.createNew().getPublicKeyAsHex();
 		final String tokenname = "bigtangle.de";
 
 		// don't use the first key which is in the wallet
@@ -868,7 +868,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		this.wallet.multiSign(tokenid, outKey4, aesKey);
 
-		ECKey genesiskey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv),
+		PQKey genesiskey = PQKey.createNew()Utils.HEX.decode(testPriv),
 				Utils.HEX.decode(testPub));
 		this.wallet.multiSign(tokenid, genesiskey, null);
 	}
@@ -877,7 +877,7 @@ public class TokenTest extends AbstractIntegrationTest {
 	public void testCreateTokenMulti() throws Exception {
 
 		createShopToken();
-		ECKey key = new ECKey();
+		PQKey key = PQKey.createNew();
 		createProductToken(key);
 		TokenInfo currentToken = createProductToken(key);
 
@@ -906,17 +906,17 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
-	private ECKey createShopToken()
+	private PQKey createShopToken()
 			throws Exception, JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
 
-		ECKey shopKey = new ECKey();
+		PQKey shopKey = PQKey.createNew();
 		final String tokenid = shopKey.getPublicKeyAsHex();
 		String tokenname = "shop";
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.publishDomainName(shopKey, tokenid, tokenname, aesKey, "");
 
-		ECKey preKey = ECKey.fromPrivateAndPrecalculatedPublic(Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
+		PQKey preKey = PQKey.createNew()Utils.HEX.decode(testPriv), Utils.HEX.decode(testPub));
 		wallet.importKey(shopKey);
 		Block lastBlock = wallet.multiSign(tokenid, preKey, aesKey);
 
@@ -925,7 +925,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		return shopKey;
 	}
 
-	private TokenInfo createProductToken(ECKey key)
+	private TokenInfo createProductToken(PQKey key)
 			throws Exception, JsonProcessingException, InterruptedException, ExecutionException, BlockStoreException {
 
 		wallet.importKey(key);
@@ -934,7 +934,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		Block block = createToken(key, "product", 0, "shop", "test", BigInteger.ONE, true, null,
 				TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-		List<ECKey> keys = new ArrayList<ECKey>();
+		List<PQKey> keys = new ArrayList<PQKey>();
 		keys.add(wallet.walletKeys().get(0));
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);

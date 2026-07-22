@@ -21,7 +21,7 @@ import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.UTXO;
@@ -62,7 +62,7 @@ public class PoSTest extends AbstractIntegrationTest {
     @Autowired
     private StoreService storeService;
 
-    private ECKey validatorKey;
+    private PQKey validatorKey;
 
     @Override
     @BeforeEach
@@ -71,7 +71,7 @@ public class PoSTest extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        validatorKey = new ECKey();
+        validatorKey = PQKey.createNew();
     }
 
     // ========= Slot Tests =========
@@ -146,8 +146,8 @@ public class PoSTest extends AbstractIntegrationTest {
 
     @Test
     public void testActiveValidatorsQuery() throws Exception {
-        ECKey v1 = new ECKey();
-        ECKey v2 = new ECKey();
+        PQKey v1 = PQKey.createNew();
+        PQKey v2 = PQKey.createNew();
 
         store.saveStakeDeposit(new StakeRecord(v1.getPubKey(),
                 StakeService.MIN_STAKE, v1.getPubKeyHash()));
@@ -174,7 +174,7 @@ public class PoSTest extends AbstractIntegrationTest {
         long effective = stakeService.getEffectiveStake(validatorKey.getPubKey(), store);
         assertEquals(StakeService.MIN_STAKE.longValue(), effective);
 
-        long noStake = stakeService.getEffectiveStake(new ECKey().getPubKey(), store);
+        long noStake = stakeService.getEffectiveStake(PQKey.createNew().getPubKey(), store);
         assertEquals(0L, noStake);
     }
 

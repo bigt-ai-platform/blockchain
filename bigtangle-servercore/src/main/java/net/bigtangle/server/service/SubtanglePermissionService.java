@@ -5,7 +5,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
@@ -20,7 +20,7 @@ public class SubtanglePermissionService {
   
 
     public boolean savePubkey(String pubkey, String signHex, BlockStoreInterface store) throws BlockStoreException {
-        ECKey key = ECKey.fromPublicOnly(Utils.HEX.decode(pubkey));
+        PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(pubkey));
 
         byte[] signOutput = Utils.HEX.decode(signHex);
         boolean flag = key.verify(Sha256Hash.ZERO_HASH.getBytes(), signOutput);

@@ -22,7 +22,7 @@ import net.bigtangle.bridge.AnchorService;
 import net.bigtangle.bridge.LayerAnchor;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -58,14 +58,13 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
         long l1Height = 1;
 
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, l1Height, null, sig.encodeToDER(), null);
 
         anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
@@ -80,12 +79,11 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
@@ -107,12 +105,11 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
@@ -142,12 +139,11 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
@@ -174,12 +170,11 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
@@ -204,12 +199,11 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Sha256Hash l1Hash = genesis.getHash();
-        ECKey.ECDSASignature sig = signKey.sign(l1Hash);
+        SignatureBundle sig = signKey.sign(l1Hash);
         LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.encodeToDER(), null);
 
         anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
@@ -227,9 +221,9 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setActive(true);
         anchorConfiguration.setPubKeyHex(TEST_PUB);
 
-        ECKey wrongKey = new ECKey();
+        PQKey wrongKey = PQKey.createNew();
         Sha256Hash hash = Sha256Hash.ZERO_HASH;
-        ECKey.ECDSASignature sig = wrongKey.sign(hash);
+        SignatureBundle sig = wrongKey.sign(hash);
 
         LayerAnchor anchor = new LayerAnchor("L1", hash, 1, null, sig.encodeToDER(), null);
 
@@ -286,8 +280,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         List<Sha256Hash> leaves = new ArrayList<>();
         Sha256Hash targetHash = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
@@ -299,7 +292,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         int leafIdx = leaves.indexOf(targetHash);
         MerkleProof spvProof = MerkleProof.buildProof(leaves, leafIdx).proof;
 
-        ECKey.ECDSASignature sig = signKey.sign(targetHash);
+        SignatureBundle sig = signKey.sign(targetHash);
         LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1, confirmedRoot, sig.encodeToDER(), spvProof);
 
         anchorService.validateAndSaveAnchor(anchor, Sha256Hash.wrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), store);
@@ -315,8 +308,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(TEST_PUB);
         anchorConfiguration.setPriKeyHex(TEST_PRIV);
 
-        ECKey signKey = ECKey.fromPrivateAndPrecalculatedPublic(
-                Utils.HEX.decode(TEST_PRIV), Utils.HEX.decode(TEST_PUB));
+        PQKey signKey = PQKey.createNew());
 
         Sha256Hash targetHash = Sha256Hash.wrap("2222222222222222222222222222222222222222222222222222222222222222");
         Sha256Hash otherHash = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
@@ -328,7 +320,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
 
         MerkleProof wrongProof = MerkleProof.buildProof(leaves, leaves.indexOf(otherHash)).proof;
 
-        ECKey.ECDSASignature sig = signKey.sign(targetHash);
+        SignatureBundle sig = signKey.sign(targetHash);
         LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1,
                 MerkleProof.computeRoot(leaves), sig.encodeToDER(), wrongProof);
 

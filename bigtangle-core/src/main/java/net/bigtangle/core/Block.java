@@ -848,26 +848,26 @@ public class Block extends Message {
 		coinbase.addInput(TransactionInput.fromScriptBytes(params, coinbase, inputBuilder.build().getProgram()));
 		if (tokenInfo == null) {
 			coinbase.addOutput(new TransactionOutput(params, coinbase, value,
-					ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
+					ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(pubKeyTo)).getProgram()));
 		} else {
 
 			if (tokenInfo.getToken() == null || tokenInfo.getToken().getSignnumber() == 0) {
 				coinbase.addOutput(new TransactionOutput(params, coinbase, value,
-						ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
+						ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(pubKeyTo)).getProgram()));
 
 			} else {
 
-				List<ECKey> keys = new ArrayList<>();
+				List<PQKey> keys = new ArrayList<>();
 				for (MultiSignAddress multiSignAddress : tokenInfo.getMultiSignAddresses()) {
 					if (multiSignAddress.getTokenHolder() == 1) {
-						ECKey ecKey = ECKey.fromPublicOnly(Utils.HEX.decode(multiSignAddress.getPubKeyHex()));
+						PQKey ecKey = PQKey.fromPublicOnly(Utils.HEX.decode(multiSignAddress.getPubKeyHex()));
 						keys.add(ecKey);
 					}
 				}
 				// TODO m:n signs
 				if (keys.size() <= 1) {
 					coinbase.addOutput(new TransactionOutput(params, coinbase, value,
-							ScriptBuilder.createOutputScript(ECKey.fromPublicOnly(pubKeyTo)).getProgram()));
+							ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(pubKeyTo)).getProgram()));
 				} else {
 					int n = keys.size();
 					Script scriptPubKey = ScriptBuilder.createMultiSigOutputScript(n, keys);

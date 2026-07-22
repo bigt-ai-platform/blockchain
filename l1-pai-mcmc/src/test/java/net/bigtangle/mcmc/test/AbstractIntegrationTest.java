@@ -35,7 +35,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractExecutionResult;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
@@ -126,7 +126,7 @@ public abstract class AbstractIntegrationTest {
         store = storeService.getStore();
         resetStore();
         wallet = Wallet.fromKeys(networkParameters,
-                ECKey.fromPrivate(Utils.HEX.decode(testPriv)), contextRoot);
+                PQKey.createNew()Utils.HEX.decode(testPriv)), contextRoot);
         serverConfiguration.setServiceReady(true);
     }
 
@@ -200,10 +200,10 @@ public abstract class AbstractIntegrationTest {
         return block;
     }
 
-    protected List<UTXO> getBalance(boolean withZero, List<ECKey> keys) throws Exception {
+    protected List<UTXO> getBalance(boolean withZero, List<PQKey> keys) throws Exception {
         List<UTXO> listUTXO = new ArrayList<>();
         List<String> keyStrHex000 = new ArrayList<>();
-        for (ECKey ecKey : keys) {
+        for (PQKey ecKey : keys) {
             keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
         }
         byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
@@ -217,8 +217,8 @@ public abstract class AbstractIntegrationTest {
         return listUTXO;
     }
 
-    protected List<UTXO> getBalance(boolean withZero, ECKey ecKey) throws Exception {
-        List<ECKey> keys = new ArrayList<>();
+    protected List<UTXO> getBalance(boolean withZero, PQKey ecKey) throws Exception {
+        List<PQKey> keys = new ArrayList<>();
         keys.add(ecKey);
         return getBalance(withZero, keys);
     }
@@ -239,7 +239,7 @@ public abstract class AbstractIntegrationTest {
         return a;
     }
 
-    protected Block payBigTo(ECKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
+    protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
         HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
         giveMoneyResult.put(beneficiary.toAddress(networkParameters).toString(), amount);
         return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);

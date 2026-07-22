@@ -15,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
 import net.bigtangle.wallet.Wallet;
@@ -41,14 +41,14 @@ public class PaymentBenchmarkMain {
         // Create genesis wallet (has all the money on testnet)
         String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
         Wallet genesisWallet = Wallet.fromKeys(params,
-                ECKey.fromPrivate(Utils.HEX.decode(testPriv)), serverUrl);
+                PQKey.createNew()Utils.HEX.decode(testPriv)), serverUrl);
 
         // Create 10 client wallets and fund them
-        List<ECKey> clientKeys = new ArrayList<>();
+        List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) {
-            clientKeys.add(new ECKey());
+            clientKeys.add(PQKey.createNew());
         }
-        for (ECKey key : clientKeys) {
+        for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
             funding.put(key.toAddress(params).toString(), BigInteger.valueOf(100000));
             genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
@@ -56,9 +56,9 @@ public class PaymentBenchmarkMain {
         log.info("Funded {} client wallets", clientKeys.size());
 
         // Create recipient wallets
-        List<ECKey> recipients = new ArrayList<>();
+        List<PQKey> recipients = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) {
-            recipients.add(new ECKey());
+            recipients.add(PQKey.createNew());
         }
 
         // Run benchmark
@@ -73,7 +73,7 @@ public class PaymentBenchmarkMain {
 
         for (int c = 0; c < CLIENTS; c++) {
             int clientId = c;
-            ECKey fromKey = clientKeys.get(c);
+            PQKey fromKey = clientKeys.get(c);
             Wallet clientWallet = Wallet.fromKeys(params, fromKey, serverUrl);
 
             futures[c] = CompletableFuture.runAsync(() -> {

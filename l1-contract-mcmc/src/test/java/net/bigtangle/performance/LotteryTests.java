@@ -24,7 +24,7 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
@@ -48,7 +48,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	public int usernumber = Math.abs(new Random().nextInt()) % 88;
 	public BigInteger winnerAmount = new BigInteger(Math.abs(new Random().nextInt()) % 9999 + "");
 
-	public ECKey accountKey;
+	public PQKey accountKey;
 
 	protected static final Logger log = LoggerFactory.getLogger(LotteryTests.class);
 
@@ -63,11 +63,11 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public void lotteryDo() throws Exception {
-		wallet.importKey(ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)));
-		accountKey = new ECKey();
+		wallet.importKey(PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)));
+		accountKey = PQKey.createNew();
 		wallet.importKey(accountKey);
 		testTokens();
-		List<ECKey> ulist = createUserkey();
+		List<PQKey> ulist = createUserkey();
 		payUserKeys(ulist);
 		payBigUserKeys(ulist);
 		// createUserPay(accountKey, ulist);
@@ -148,16 +148,16 @@ public class LotteryTests extends AbstractIntegrationTest {
 		return sum;
 	}
 
-	public void createUserPay(ECKey accountKey, List<ECKey> ulist) throws Exception {
+	public void createUserPay(PQKey accountKey, List<PQKey> ulist) throws Exception {
 
-		List<List<ECKey>> parts = Wallet.chopped(ulist, 1000);
+		List<List<PQKey>> parts = Wallet.chopped(ulist, 1000);
 		List<Thread> threads = new ArrayList<Thread>();
-		for (List<ECKey> list : parts) {
+		for (List<PQKey> list : parts) {
 			Runnable myRunnable = new Runnable() {
 				@Override
 				public void run() {
 					List<Transaction> txs = new ArrayList<Transaction>();
-					for (ECKey key : list) {
+					for (PQKey key : list) {
 						try {
 							txs.add(buyTicketTransaction(key, accountKey));
 						} catch (Exception e) {
@@ -190,7 +190,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 	}
 
-	public Transaction buyTicketTransaction(ECKey key, ECKey accountKey) throws Exception {
+	public Transaction buyTicketTransaction(PQKey key, PQKey accountKey) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 
 		int satoshis = 1000;
@@ -199,12 +199,12 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 	}
 
-	public void createUserPayNoThread(ECKey accountKey, List<ECKey> ulist) throws Exception {
-		List<List<ECKey>> parts = Wallet.chopped(ulist, 1000);
-		for (List<ECKey> list : parts) {
+	public void createUserPayNoThread(PQKey accountKey, List<PQKey> ulist) throws Exception {
+		List<List<PQKey>> parts = Wallet.chopped(ulist, 1000);
+		for (List<PQKey> list : parts) {
 
 			List<Transaction> txs = new ArrayList<Transaction>();
-			for (ECKey key : list) {
+			for (PQKey key : list) {
 				try {
 					txs.add(buyTicketTransaction(key, accountKey));
 				} catch (Exception e) {
@@ -224,7 +224,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	/*
 	 * pay money to the key and use the key to buy lottery
 	 */
-	public void buyTicket(ECKey key, ECKey accountKey) throws Exception {
+	public void buyTicket(PQKey key, PQKey accountKey) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
 
 		try {
@@ -236,14 +236,14 @@ public class LotteryTests extends AbstractIntegrationTest {
 		}
 	}
 
-	public void payUserKeys(List<ECKey> userkeys) throws Exception {
+	public void payUserKeys(List<PQKey> userkeys) throws Exception {
 
 		Stopwatch watch = Stopwatch.createStarted();
-		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
+		List<List<PQKey>> parts = Wallet.chopped(userkeys, 1000);
 
-		for (List<ECKey> list : parts) {
+		for (List<PQKey> list : parts) {
 			HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
-			for (ECKey key : list) {
+			for (PQKey key : list) {
 				giveMoneyResult.put(key.toAddress(networkParameters).toString(), winnerAmount);
 			}
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
@@ -254,13 +254,13 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 	}
 
-	public void payBigUserKeys(List<ECKey> userkeys) throws Exception {
+	public void payBigUserKeys(List<PQKey> userkeys) throws Exception {
 
-		List<List<ECKey>> parts = Wallet.chopped(userkeys, 1000);
+		List<List<PQKey>> parts = Wallet.chopped(userkeys, 1000);
 
-		for (List<ECKey> list : parts) {
+		for (List<PQKey> list : parts) {
 			HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
-			for (ECKey key : list) {
+			for (PQKey key : list) {
 				giveMoneyResult.put(key.toAddress(networkParameters).toString(), BigInteger.valueOf(10000));
 			}
 			// log.debug("block " + (b == null ? "block is null" : b.toString()));
@@ -269,10 +269,10 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 	}
 
-	public List<ECKey> createUserkey() {
-		List<ECKey> userkeys = new ArrayList<ECKey>();
+	public List<PQKey> createUserkey() {
+		List<PQKey> userkeys = new ArrayList<PQKey>();
 		for (int i = 0; i < usernumber; i++) {
-			ECKey key = new ECKey();
+			PQKey key = PQKey.createNew();
 			userkeys.add(key);
 		}
 		return userkeys;
@@ -282,7 +282,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 		String domain = "";
 
-		ECKey fromPrivate = ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv));
+		PQKey fromPrivate = PQKey.createNew()Utils.HEX.decode(yuanTokenPriv));
 
 		testCreateMultiSigToken(fromPrivate, "人民币", 2, domain, "人民币 CNY",
 				winnerAmount.multiply(BigInteger.valueOf(usernumber * 10000l)));
@@ -290,21 +290,21 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public Address getAddress() {
-		return ECKey.fromPrivate(Utils.HEX.decode(yuanTokenPriv)).toAddress(networkParameters);
+		return PQKey.createNew()Utils.HEX.decode(yuanTokenPriv)).toAddress(networkParameters);
 	}
 
 	// create a token with multi sign
-	protected void testCreateMultiSigToken(ECKey key, String tokename, int decimals, String domainname,
+	protected void testCreateMultiSigToken(PQKey key, String tokename, int decimals, String domainname,
 			String description, BigInteger amount) throws JsonProcessingException, Exception {
 		try {
 			wallet.setServerURL(contextRoot);
 
-			// pay fee to ECKey key
+			// pay fee to PQKey key
 
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			ECKey signkey = ECKey.fromPrivate(Utils.HEX.decode(testPriv));
+			PQKey signkey = PQKey.createNew()Utils.HEX.decode(testPriv));
 
 			wallet.multiSign(key.getPublicKeyAsHex(), signkey, null);
 

@@ -23,7 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
-import net.bigtangle.core.ECKey;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
@@ -64,12 +64,12 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.calcNewBlockPrototype(store);
 
         // Create wallet keys — one per payment
-        List<ECKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(new ECKey());
+        List<PQKey> walletKeys = new ArrayList<>();
+        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(PQKey.createNew());
 
         // Fund all in ONE transaction
         HashMap<String, BigInteger> funding = new HashMap<>();
-        for (ECKey k : walletKeys) {
+        for (PQKey k : walletKeys) {
             funding.put(k.toAddress(networkParameters).toString(), BigInteger.valueOf(20000));
         }
         Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, funding,
@@ -83,7 +83,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        ECKey finalRecipient = new ECKey();
+        PQKey finalRecipient = PQKey.createNew();
         String finalAddr = finalRecipient.toAddress(networkParameters).toString();
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
@@ -101,7 +101,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
                     Wallet firstW = Wallet.fromKeys(networkParameters, walletKeys.get(startIdx), contextRoot);
                     List<Transaction> txs = new ArrayList<>();
                     for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
-                        ECKey wk = walletKeys.get(startIdx + i);
+                        PQKey wk = walletKeys.get(startIdx + i);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,
                                 new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(15000))),
