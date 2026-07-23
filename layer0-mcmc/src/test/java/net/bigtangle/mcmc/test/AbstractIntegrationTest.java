@@ -313,7 +313,7 @@ public abstract class AbstractIntegrationTest {
 		utxo.setValue(genesisOut.getValue());
 		utxo.setCoinbase(true);
 		utxo.setScript(genesisOut.getScriptPubKey());
-		utxo.setAddress(Address.fromHash160(networkParameters, genesisKey.getPubKeyHash()).toBase58());
+		utxo.setAddress(genesisKey.toAddress(networkParameters).toHex());
 		utxo.setBlockHash(genesis.getHash());
 		utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
 		utxo.setConfirmed(true);

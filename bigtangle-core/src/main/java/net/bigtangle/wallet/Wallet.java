@@ -1076,6 +1076,16 @@ public class Wallet extends WalletBase {
 				beneficiary = ecKey;
 				return beneficiary;
 			}
+			// Try hex-encoded PQAddress (matching PQKey.toAddress().toHex())
+			if (address.equals(ecKey.toAddress(params).toHex())) {
+				beneficiary = ecKey;
+				return beneficiary;
+			}
+			// Try base58-encoded hash160 (matching Address.fromHash160().toBase58())
+			if (address.equals(Address.fromHash160(params, ecKey.getPubKeyHash()).toBase58())) {
+				beneficiary = ecKey;
+				return beneficiary;
+			}
 		}
 		throw new RuntimeException("no key in wallet is found for this address " + address);
 	}
