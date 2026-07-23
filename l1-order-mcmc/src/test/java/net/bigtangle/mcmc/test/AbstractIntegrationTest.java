@@ -93,6 +93,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.UTXOProviderException;
@@ -531,8 +532,8 @@ public abstract class AbstractIntegrationTest {
 
 		// Sign
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-		TransactionSignature sig = new TransactionSignature(fromKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = fromKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Submit tx to mempool and create block from batch
@@ -698,7 +699,7 @@ public abstract class AbstractIntegrationTest {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		// Submit tx and fee to mempool and create block from batch
@@ -722,7 +723,7 @@ public abstract class AbstractIntegrationTest {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		// Submit tx and fee to mempool and create block from batch
@@ -990,9 +991,8 @@ public abstract class AbstractIntegrationTest {
 		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
-		TransactionSignature tsrecsig = new TransactionSignature(genesiskey.sign(sighash), Transaction.SigHash.ALL,
-				false);
-		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
+		SignatureBundle sig = genesiskey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 		return tx;
 	}
@@ -1323,7 +1323,7 @@ public abstract class AbstractIntegrationTest {
 			}
 			Sha256Hash sighash = transaction.getHash();
 			SignatureBundle party1Signature = ecKey.sign(sighash);
-			byte[] buf1 = party1Signature.encodeToDER();
+			byte[] buf1 = party1Signature.serialize();
 
 			MultiSignBy multiSignBy0 = new MultiSignBy();
 			multiSignBy0.setTokenid(tokenid);
@@ -1486,7 +1486,7 @@ public abstract class AbstractIntegrationTest {
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 
 		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
@@ -1497,7 +1497,7 @@ public abstract class AbstractIntegrationTest {
 
 		PQKey genesiskey = PQKey.createNew();
 		SignatureBundle party2Signature = genesiskey.sign(sighash, aesKey);
-		byte[] buf2 = party2Signature.encodeToDER();
+		byte[] buf2 = party2Signature.serialize();
 		multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
@@ -1557,7 +1557,7 @@ public abstract class AbstractIntegrationTest {
 		}
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 

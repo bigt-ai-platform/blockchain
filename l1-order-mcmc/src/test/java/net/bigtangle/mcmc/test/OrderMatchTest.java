@@ -55,6 +55,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Autowired
 	OrderTickerService tickerService;
 
+	private PQKey testKey = PQKey.createNew();
+
 	@Test
 	public void orderTickerPrice() throws Exception {
 
