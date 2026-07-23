@@ -53,6 +53,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         validator1 = PQKey.createNew();
+        validator2 = PQKey.createNew();
     }
 
     @Test

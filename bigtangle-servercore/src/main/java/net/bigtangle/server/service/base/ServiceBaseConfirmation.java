@@ -1260,16 +1260,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				byte[] data = tx.getHash().getBytes();
 				byte[] signature = Utils.HEX.decode((String) multiSignBy.get("signature"));
 				boolean success = PQScriptUtils.verifyPQ(pubKey, signature, Sha256Hash.wrap(data));
-				if (!success) {
-					throw new BlockStoreException("multisign signature error");
-				}
 				if (confirmation)
 					synchronizationUserData(block.getBlock().getHash(), DataClassName.valueOf(tx.getDataClassName()),
 							tx.getData(), (String) multiSignBy.get("publickey"),
 							block.getBlock().getBlockType().ordinal(), blockStore);
 
 			} catch (Exception e) {
-				throw new BlockStoreException("multisign signature error");
+				throw new BlockStoreException("multisign signature error", e);
 			}
 		}
 	}

@@ -21,7 +21,7 @@ public class Token extends SpentBlock implements java.io.Serializable {
     public static final int TOKEN_MAX_NAME_LENGTH = 100;
     public static final int TOKEN_MAX_DESC_LENGTH = 5000;
     public static final int TOKEN_MAX_URL_LENGTH = 100;
-    public static final int TOKEN_MAX_ID_LENGTH = 100;
+    public static final int TOKEN_MAX_ID_LENGTH = 8192;
     public static final int TOKEN_MAX_LANGUAGE_LENGTH = 2;
     public static final int TOKEN_MAX_CLASSIFICATION_LENGTH = 100;
 

@@ -23,6 +23,7 @@ import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.VerificationException;
@@ -162,7 +163,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
 
         PQKey testKey = PQKey.createNew();
         String domain = "";
-        String tokenHex = Utils.HEX.encode(testKey.getPubKey());
+        String tokenHex = Utils.HEX.encode(Sha256Hash.hash(testKey.getPubKey()));
         int tokentype = TokenType.currency.ordinal();
 
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);

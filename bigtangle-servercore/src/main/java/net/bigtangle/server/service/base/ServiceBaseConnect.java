@@ -246,7 +246,6 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 			try {
 				byte[] buf = tx.getData();
 				TokenInfo tokenInfo = new TokenInfo().parse(buf);
-
 				// Correctly insert tokens
 				tokenInfo.getToken().setConfirmed(false);
 				tokenInfo.getToken().setBlockHash(block.getHash());

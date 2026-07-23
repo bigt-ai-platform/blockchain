@@ -313,7 +313,7 @@ public abstract class AbstractIntegrationTest {
 		utxo.setValue(genesisOut.getValue());
 		utxo.setCoinbase(true);
 		utxo.setScript(genesisOut.getScriptPubKey());
-		utxo.setAddress(genesisKey.toAddress(networkParameters).toHex());
+		utxo.setAddress(Address.fromHash160(networkParameters, genesisKey.getPubKeyHash()).toBase58());
 		utxo.setBlockHash(genesis.getHash());
 		utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
 		utxo.setConfirmed(true);
@@ -1154,11 +1154,13 @@ public abstract class AbstractIntegrationTest {
 			List<Block> blocksAddedAll) throws JsonProcessingException, Exception {
 		// PQKey outKey = walletKeys.get(0);
 		byte[] pubKey = outKey.getPubKey();
+		// Use SHA-256 hash of pubkey as token ID to keep it within varchar(1024)
+		byte[] tokenIdBytes = Sha256Hash.hash(pubKey);
 		TokenInfo tokenInfo = new TokenInfo();
 
-		String tokenid = Utils.HEX.encode(pubKey);
+		String tokenid = Utils.HEX.encode(tokenIdBytes);
 
-		Coin basecoin = Coin.valueOf(amountgiven, pubKey);
+		Coin basecoin = Coin.valueOf(amountgiven, tokenIdBytes);
 		BigInteger amount = basecoin.getValue();
 
 		Token token = Token.buildSimpleTokenInfo(true, null, tokenid, tokennameName, "", 1, 0, amount, true, 0,
@@ -1348,7 +1350,7 @@ public abstract class AbstractIntegrationTest {
 			List<MultiSignBy> multiSignBies = null;
 			if (transaction.getDataSignature() == null) {
 				multiSignBies = new ArrayList<MultiSignBy>();
-			// } else {
+			} else {
 				MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 						MultiSignByRequest.class);
 				multiSignBies = multiSignByRequest.getMultiSignBies();
@@ -1576,7 +1578,7 @@ public abstract class AbstractIntegrationTest {
 		List<MultiSignBy> multiSignBies = null;
 		if (transaction.getDataSignature() == null) {
 			multiSignBies = new ArrayList<MultiSignBy>();
-		// } else {
+		} else {
 			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 					MultiSignByRequest.class);
 			multiSignBies = multiSignByRequest.getMultiSignBies();
@@ -1610,8 +1612,10 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block makeRewardBlock(Sha256Hash prevHash, Sha256Hash prevTrunk, Sha256Hash prevBranch) throws Exception {
-		Block block = rewardService.createMiningRewardBlock(prevHash, blockService.getBlockWrap(prevTrunk, store),
-				blockService.getBlockWrap(prevBranch, store), false, store);
+		BlockWrap trunkWrap = blockService.getBlockWrap(prevTrunk, store);
+		BlockWrap branchWrap = blockService.getBlockWrap(prevBranch, store);
+		if (trunkWrap == null || branchWrap == null) return null;
+		Block block = rewardService.createMiningRewardBlock(prevHash, trunkWrap, branchWrap, false, store);
 		if (block != null) {
 			blockSaveService.saveBlock(block, store);
 			blockGraph.updateChain(false);

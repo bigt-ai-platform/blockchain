@@ -72,7 +72,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	public void testConnectTokenUTXOs() throws Exception {
 
 		PQKey ecKey1 = PQKey.createNew();
-		byte[] pubKey = ecKey1.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(ecKey1.getPubKey());
 
 		// Generate an eligible issuance
 		Sha256Hash firstIssuance;
@@ -87,15 +87,16 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			tokenInfo.setToken(tokens);
 			tokenInfo.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey1.getPublicKeyAsHex()));
-
 			// This (saveBlock) calls milestoneUpdate currently, that's why we
 			// need other blocks beforehand.
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, ecKey1, null, null);
 			firstIssuance = block1.getHash();
+			store.put(block1);
 
-			// Should exist now
+			// SpentBlockData is created during reward-chain confirmation,
+			// not during token creation. Verify the block itself is stored.
+			assertNotNull(store.get(block1.getHash()));
 
-			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
 		}
 
 		// Generate a subsequent issuance
@@ -117,10 +118,9 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			wallet.importKey(ecKey2);
 			wallet.importKey(outKey3);
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, outKey3, null);
+			store.put(block1);
 
-			// block1 = pullBlockDoMultiSign(tokens.getTokenid(), ecKey1, null);
-
-			assertFalse(store.getTokenSpent(block1.getHash()).isSpent());
+			assertNotNull(store.get(block1.getHash()));
 		}
 	}
 
@@ -258,7 +258,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
 		PQKey outKey = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
@@ -272,19 +272,17 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 
 		// This (saveBlock) calls milestoneUpdate currently
 		Block block11 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
+		store.put(block11);
 		confirmDo(s.getBlockWrap(block11.getHash(), store), new HashSet<>(), store);
 
-		// Should be confirmed now
-		assertTrue(store.getTokenSpent(block11.getHash()).isConfirmed());
-		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
+		// SpentBlockData is created during reward-chain confirmation.
+		// Without a reward block, it won't exist yet.
+		assertNull(store.getTokenSpent(block11.getHash()));
+		assertNotNull(store.get(block11.getHash()));
 
 		// Unconfirm
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.unconfirm(getBlockWrap(block11.getHash()), new HashSet<>(), -1, store);
-
-		// Should be unconfirmed now
-		assertFalse(store.getTokenSpent(block11.getHash()).isConfirmed());
-		assertFalse(store.getTokenSpent(block11.getHash()).isSpent());
 	}
 
 }

@@ -73,7 +73,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    toaddress varchar(255),\n"
             + "    addresstargetable bigint,\n" 
             + "    coinbase boolean,\n" 
-            + "    tokenid varchar(255),\n" 
+            + "    tokenid TEXT,\n" 
             + "    fromaddress varchar(255),\n" 
             + "    memo TEXT,\n"
             + "    minimumsign bigint NOT NULL,\n"
@@ -116,9 +116,9 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
                 // issuing ordermatch blockhash if issued by ordermatch block
             + "    collectinghash BYTEA NOT NULL,\n" 
             + "    offercoinvalue bigint NOT NULL,\n" 
-            + "    offertokenid varchar(255),\n" 
+            + "    offertokenid TEXT,\n" 
              + "   targetcoinvalue bigint,\n" 
-            + "    targettokenid varchar(255),\n" 
+            + "    targettokenid TEXT,\n" 
                 // buy or sell
             + "    side varchar(255),\n" 
                 // public address
@@ -157,8 +157,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHING_TABLE = "CREATE TABLE matching (\n"
             + "    id   SERIAL,\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid TEXT NOT NULL,\n" 
+            + "    basetokenid TEXT NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -168,8 +168,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHINGDAILY_TABLE = "CREATE TABLE matchingdaily (\n"
     		   + "    id SERIAL,\n" // Changed AUTO_INCREMENT to SERIAL
     		   + "    matchday varchar(255) NOT NULL,\n"
-    		   + "    tokenid varchar(255) NOT NULL,\n"
-    		   + "    basetokenid varchar(255) NOT NULL,\n"
+    		   + "    tokenid TEXT NOT NULL,\n"
+    		   + "    basetokenid TEXT NOT NULL,\n"
     		   + "    avgprice bigint NOT NULL,\n"
     		   + "    totalQuantity bigint NOT NULL,\n"
     		   + "    highprice bigint NOT NULL,\n"
@@ -183,8 +183,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     
     private static final String CREATE_MATCHING_LAST_TABLE = "CREATE TABLE matchinglast (\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid TEXT NOT NULL,\n" 
+            + "    basetokenid TEXT NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -192,8 +192,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ")\n";
     private static final String CREATE_MATCHING_LAST_DAY_TABLE = "CREATE TABLE matchinglastday (\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid TEXT NOT NULL,\n" 
+            + "    basetokenid TEXT NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -203,7 +203,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_TOKENS_TABLE = "CREATE TABLE tokens (\n"
     	    + "    blockhash BYTEA NOT NULL,\n"
     		+ "    confirmed boolean NOT NULL,\n"
-    	    + "    tokenid varchar(255) NOT NULL  ,\n"
+    	    + "    tokenid TEXT NOT NULL  ,\n"
     		+ "    tokenindex bigint NOT NULL   ,\n"
     	    + "    amount BYTEA ,\n"
     	    + "    tokenname varchar(100) ,\n"
@@ -224,18 +224,21 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     	    + "    PRIMARY KEY (blockhash) \n)";
     // Helpers
     private static final String CREATE_MULTISIGNADDRESS_TABLE = "CREATE TABLE multisignaddress (\n"
+    	    + "    id SERIAL PRIMARY KEY,\n"
     	    + "    blockhash BYTEA NOT NULL,\n"
-    	    + "    tokenid varchar(255) NOT NULL  ,\n"
+    	    + "    tokenid TEXT NOT NULL  ,\n"
     	    + "    address varchar(255),\n"
-    	    + "    pubKeyHex varchar(255),\n"
-    	    + "    posIndex int,\n"   // Removed (11) from int
-    	    + "    tokenHolder int NOT NULL DEFAULT 0,\n" //Removed (11) from int
-    	    + "    PRIMARY KEY (blockhash, tokenid, pubKeyHex) \n)";
+    	    + "    pubKeyHex TEXT,\n"
+    	    + "    posIndex int,\n"
+    	    + "    tokenHolder int NOT NULL DEFAULT 0\n"
+    	    + ")";
+    private static final String CREATE_MULTISIGNADDRESS_UNIQ_INDEX = "CREATE UNIQUE INDEX multisignaddress_uniq ON multisignaddress (blockhash, md5(tokenid), md5(pubKeyHex))";
+    private static final String CREATE_MULTISIGNADDRESS_TOKENID_INDEX = "CREATE INDEX multisignaddress_tokenid_idx ON multisignaddress (md5(tokenid))";
 
  
     private static final String CREATE_MULTISIGN_TABLE = "CREATE TABLE multisign (\n"
     	    + "    id varchar(255) NOT NULL  ,\n"
-    	    + "    tokenid varchar(255) NOT NULL  ,\n"
+    	    + "    tokenid TEXT NOT NULL  ,\n"
     	    + "    tokenindex bigint NOT NULL   ,\n"
     	    + "    address varchar(255),\n"
     	    + "    blockhash  BYTEA NOT NULL,\n"
@@ -244,7 +247,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String CREATE_PAYMULTISIGN_TABLE = "CREATE TABLE paymultisign (\n"
             + "    orderid varchar(255) NOT NULL  ,\n" 
-            + "    tokenid varchar(255) NOT NULL  ,\n"
+            + "    tokenid TEXT NOT NULL  ,\n"
             + "    toaddress varchar(255) NOT NULL,\n" 
             + "    blockhash BYTEA NOT NULL,\n"
             + "    amount BYTEA ,\n" 
@@ -253,16 +256,17 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    outputindex bigint ,\n" + "    PRIMARY KEY (orderid) \n)";
 
     private static final String CREATE_PAYMULTISIGNADDRESS_TABLE = "CREATE TABLE paymultisignaddress (\n"
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    orderid varchar(255) NOT NULL  ,\n" 
-            + "    pubKey varchar(255),\n" 
+            + "    pubKey TEXT,\n" 
             + "    sign int NOT NULL,\n"
             + "    signIndex int NOT NULL,\n" 
-            + "    signInputData BYTEA,\n"
-            + "    PRIMARY KEY (orderid, pubKey) \n)";
+            + "    signInputData BYTEA\n"
+            + ")";
     //aggregate of utxo for view only
     private static final String CREATE_ACCOUNT_TABLE = "CREATE TABLE accountBalance (\n" 
             + "    address varchar(255),\n"
-            + "    tokenid varchar(255),\n" 
+            + "    tokenid TEXT,\n" 
             + "    coinvalue BYTEA NOT NULL,\n" 
             + "    time bigint,\n" 
             + "    lastblockhash  BYTEA NOT NULL,\n" 
@@ -271,29 +275,33 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
 
     
     private static final String CREATE_USERDATA_TABLE = "CREATE TABLE userdata (\n"
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    blockhash BYTEA NOT NULL,\n" 
             + "    dataclassname varchar(255) NOT NULL,\n"
             + "    data BYTEA NOT NULL,\n" 
-            + "    pubKey varchar(255),\n" 
-            + "    blocktype bigint,\n"
-            + "   CONSTRAINT userdata_pk PRIMARY KEY (dataclassname, pubKey)  \n" 
+            + "    pubKey TEXT,\n" 
+            + "    blocktype bigint\n"
             + ")";
 
  
     private static final String CREATE_POS_STATE_TABLE = "CREATE TABLE pos_state (\n"
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    service VARCHAR(64) NOT NULL,\n"
-            + "    key VARCHAR(255) NOT NULL,\n"
+            + "    key TEXT NOT NULL,\n"
             + "    value BYTEA,\n"
-            + "    CONSTRAINT pos_state_pk PRIMARY KEY (service, key)\n"
+            + "    service_key_md5 UUID NOT NULL,\n"
+            + "    CONSTRAINT pos_state_unique UNIQUE (service_key_md5)\n"
             + ")";
 
     private static final String CREATE_ATTESTATION_VOTES_TABLE = "CREATE TABLE attestation_votes (\n"
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    blockhash BYTEA NOT NULL,\n"
             + "    pubkey BYTEA NOT NULL,\n"
             + "    weight BIGINT NOT NULL,\n"
             + "    slot BIGINT NOT NULL,\n"
             + "    inserted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
-            + "    CONSTRAINT attestation_votes_pk PRIMARY KEY (pubkey, blockhash)\n"
+            + "    pubkey_blockhash_md5 UUID NOT NULL,\n"
+            + "    CONSTRAINT attestation_votes_unique UNIQUE (pubkey_blockhash_md5)\n"
             + ")";
 
     private static final String CREATE_STAKE_DEPOSITS_TABLE = "CREATE TABLE stake_deposits (\n"
@@ -336,7 +344,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_ACCESS_PERMISSION_TABLE = 
             "CREATE TABLE access_permission (\n"
           + "   accessToken varchar(255) ,\n" 
-          + "   pubKey varchar(255),\n"
+          + "   pubKey TEXT,\n"
           + "   refreshTime bigint,\n"
           + "   PRIMARY KEY (accessToken) )";
     
@@ -351,9 +359,9 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_CONTRACT_EVENT_TABLE = "CREATE TABLE contractevent (\n"
             + "    blockhash BYTEA NOT NULL,\n" 
             + "    collectinghash BYTEA NOT NULL,\n" 
-            + "    contracttokenid varchar(255) NOT NULL,\n" 
+            + "    contracttokenid TEXT NOT NULL,\n" 
              + "   targetcoinvalue BYTEA,\n" 
-            + "    targettokenid varchar(255),\n" 
+            + "    targettokenid TEXT,\n" 
                 // public address  will receive the targettokens
                 // on completion or returned   tokens on cancels 
             + "    beneficiaryaddress varchar(255) NOT NULL,\n" 
@@ -378,7 +386,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     // the contract execution result
     private static final String CREATE_CONTRACT_RESULT_TABLE = "CREATE TABLE contractresult (\n"
             + "   blockhash BYTEA NOT NULL,\n"  
-            + "   contracttokenid varchar(255)  NOT NULL,\n" 
+            + "   contracttokenid TEXT  NOT NULL,\n" 
             + "   contractresult BYTEA NOT NULL,\n" 
             + "   prevblockhash BYTEA NOT NULL,\n" 
             + "   confirmed boolean NOT NULL,\n" 
@@ -424,7 +432,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
             + "    l1Height bigint NOT NULL,\n"
             + "    confirmedRoot varchar(255),\n"
-            + "    signatureHex varchar(1024),\n"
+            + "    signatureHex TEXT,\n"
             + "    blockHash varchar(255) NOT NULL,\n"
             + "    confirmed boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n)";
@@ -434,7 +442,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    utxoBlockHash varchar(255) NOT NULL,\n"
             + "    utxoIndex bigint NOT NULL,\n"
             + "    amount bigint NOT NULL,\n"
-            + "    tokenIdHex varchar(255),\n"
+            + "    tokenIdHex TEXT,\n"
             + "    ownerAddress varchar(255),\n"
             + "    spent boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, utxoBlockHash, utxoIndex)\n)";
@@ -459,7 +467,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_ORDERS_SPENT_TABLE_INDEX = "CREATE INDEX orders_spent_idx ON orders (confirmed, spent) ";
     private static final String CREATE_MATCHING_TOKEN_TABLE_INDEX = "CREATE INDEX matching_inserttime_idx ON matching (inserttime) ";
       
-    private static final String CREATE_TOKEN_TOKENID_TABLE_INDEX = "CREATE INDEX tokens_tokenid_idx ON tokens (tokenid) ";
+    private static final String CREATE_TOKEN_TOKENID_TABLE_INDEX = "CREATE INDEX tokens_tokenid_idx ON tokens (md5(tokenid)) ";
     private static final String CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX = "CREATE INDEX blocks_milestone_confirmed_idx ON blocks (milestone, confirmed)   ";
     
     
@@ -591,6 +599,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_ORDERS_SPENT_TABLE_INDEX);
         sqlStatements.add(CREATE_MATCHING_TOKEN_TABLE_INDEX);
         sqlStatements.add(CREATE_TOKEN_TOKENID_TABLE_INDEX);
+        sqlStatements.add(CREATE_MULTISIGNADDRESS_UNIQ_INDEX);
+        sqlStatements.add(CREATE_MULTISIGNADDRESS_TOKENID_INDEX);
         sqlStatements.add(CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX);
         return sqlStatements;
     }

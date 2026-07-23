@@ -72,7 +72,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    toaddress varchar(255),\n"
             + "    addresstargetable bigint,\n" 
             + "    coinbase boolean,\n" 
-            + "    tokenid varchar(255),\n" 
+            + "    tokenid varchar(8192),\n" 
             + "    fromaddress varchar(255),\n" 
             + "    memo MEDIUMTEXT,\n"
             + "    minimumsign bigint NOT NULL,\n"
@@ -116,9 +116,9 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
                 // issuing ordermatch blockhash if issued by ordermatch block
             + "    collectinghash binary(32) NOT NULL,\n" 
             + "    offercoinvalue bigint NOT NULL,\n" 
-            + "    offertokenid varchar(255),\n" 
+            + "    offertokenid TEXT,\n" 
              + "   targetcoinvalue bigint,\n" 
-            + "    targettokenid varchar(255),\n" 
+            + "    targettokenid TEXT,\n" 
                 // buy or sell
             + "    side varchar(255),\n" 
                 // public address
@@ -157,8 +157,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHING_TABLE = "CREATE TABLE matching (\n"
             + "    id bigint NOT NULL AUTO_INCREMENT,\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid varchar(8192) NOT NULL,\n" 
+            + "    basetokenid varchar(8192) NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -168,8 +168,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHINGDAILY_TABLE = "CREATE TABLE matchingdaily (\n"
             + "    id bigint NOT NULL AUTO_INCREMENT,\n" 
             + "    matchday varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid varchar(8192) NOT NULL,\n" 
+            + "    basetokenid varchar(8192) NOT NULL,\n" 
             + "    avgprice bigint NOT NULL,\n"
             + "    totalQuantity bigint NOT NULL,\n" 
             + "    highprice bigint NOT NULL,\n"
@@ -183,8 +183,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     
     private static final String CREATE_MATCHING_LAST_TABLE = "CREATE TABLE matchinglast (\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid varchar(8192) NOT NULL,\n" 
+            + "    basetokenid varchar(8192) NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -192,8 +192,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + ") ENGINE=InnoDB\n";
     private static final String CREATE_MATCHING_LAST_DAY_TABLE = "CREATE TABLE matchinglastday (\n" 
             + "    txhash varchar(255) NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL,\n" 
-            + "    basetokenid varchar(255) NOT NULL,\n" 
+            + "    tokenid varchar(8192) NOT NULL,\n" 
+            + "    basetokenid varchar(8192) NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
@@ -203,7 +203,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_TOKENS_TABLE = "CREATE TABLE tokens (\n"
             + "    blockhash binary(32) NOT NULL,\n" 
     		+ "    confirmed boolean NOT NULL,\n"
-            + "    tokenid varchar(255) NOT NULL  ,\n" 
+            + "    tokenid varchar(8192) NOT NULL  ,\n" 
     		+ "    tokenindex bigint NOT NULL   ,\n"
             + "    amount mediumblob ,\n" 
             + "    tokenname varchar(100) ,\n" 
@@ -226,9 +226,9 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     // Helpers
     private static final String CREATE_MULTISIGNADDRESS_TABLE = "CREATE TABLE multisignaddress (\n"
             + "    blockhash binary(32) NOT NULL,\n" 
-            + "    tokenid varchar(255) NOT NULL  ,\n"
+            + "    tokenid varchar(8192) NOT NULL  ,\n"
             + "    address varchar(255),\n" 
-            + "    pubKeyHex varchar(255),\n" 
+            + "    pubKeyHex varchar(8192),\n" 
             + "    posIndex int(11),\n"
             + "    tokenHolder int(11) NOT NULL DEFAULT 0,\n"
             + "    PRIMARY KEY (blockhash, tokenid, pubKeyHex) \n) ENGINE=InnoDB";
@@ -237,7 +237,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String CREATE_MULTISIGN_TABLE = "CREATE TABLE multisign (\n"
             + "    id varchar(255) NOT NULL  ,\n" 
-            + "    tokenid varchar(255) NOT NULL  ,\n"
+            + "    tokenid varchar(8192) NOT NULL  ,\n"
             + "    tokenindex bigint NOT NULL   ,\n" 
             + "    address varchar(255),\n"
             + "    blockhash  mediumblob NOT NULL,\n" 
@@ -246,7 +246,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String CREATE_PAYMULTISIGN_TABLE = "CREATE TABLE paymultisign (\n"
             + "    orderid varchar(255) NOT NULL  ,\n" 
-            + "    tokenid varchar(255) NOT NULL  ,\n"
+            + "    tokenid varchar(8192) NOT NULL  ,\n"
             + "    toaddress varchar(255) NOT NULL,\n" 
             + "    blockhash mediumblob NOT NULL,\n"
             + "    amount mediumblob ,\n" 
@@ -256,7 +256,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String CREATE_PAYMULTISIGNADDRESS_TABLE = "CREATE TABLE paymultisignaddress (\n"
             + "    orderid varchar(255) NOT NULL  ,\n" 
-            + "    pubKey varchar(255),\n" 
+            + "    pubKey varchar(8192),\n" 
             + "    sign int(11) NOT NULL,\n"
             + "    signIndex int(11) NOT NULL,\n" 
             + "    signInputData mediumblob,\n"
@@ -264,7 +264,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     //aggregate of utxo for view only
     private static final String CREATE_ACCOUNT_TABLE = "CREATE TABLE accountBalance (\n" 
             + "    address varchar(255),\n"
-            + "    tokenid varchar(255),\n" 
+            + "    tokenid varchar(8192),\n" 
             + "    coinvalue mediumblob NOT NULL,\n" 
             + "    time bigint,\n" 
             + "    lastblockhash  mediumblob NOT NULL,\n" 
@@ -276,7 +276,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    blockhash binary(32) NOT NULL,\n" 
             + "    dataclassname varchar(255) NOT NULL,\n"
             + "    data mediumblob NOT NULL,\n" 
-            + "    pubKey varchar(255),\n" 
+            + "    pubKey varchar(8192),\n" 
             + "    blocktype bigint,\n"
             + "   CONSTRAINT userdata_pk PRIMARY KEY (dataclassname, pubKey) USING BTREE \n" 
             + ") ENGINE=InnoDB";
@@ -311,7 +311,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_ACCESS_PERMISSION_TABLE = 
             "CREATE TABLE access_permission (\n"
           + "   accessToken varchar(255) ,\n" 
-          + "   pubKey varchar(255),\n"
+          + "   pubKey TEXT,\n"
           + "   refreshTime bigint,\n"
           + "   PRIMARY KEY (accessToken) ) ENGINE=InnoDB";
     
@@ -326,9 +326,9 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_CONTRACT_EVENT_TABLE = "CREATE TABLE contractevent (\n"
             + "    blockhash binary(32) NOT NULL,\n" 
             + "    collectinghash binary(32) NOT NULL,\n" 
-            + "    contracttokenid varchar(255) NOT NULL,\n" 
+            + "    contracttokenid TEXT NOT NULL,\n" 
              + "   targetcoinvalue mediumblob,\n" 
-            + "    targettokenid varchar(255),\n" 
+            + "    targettokenid TEXT,\n" 
                 // public address  will receive the targettokens
                 // on completion or returned   tokens on cancels 
             + "    beneficiaryaddress varchar(255) NOT NULL,\n" 
@@ -353,7 +353,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     // the contract execution result
     private static final String CREATE_CONTRACT_RESULT_TABLE = "CREATE TABLE contractresult (\n"
             + "   blockhash binary(32) NOT NULL,\n"  
-            + "   contracttokenid varchar(255)  NOT NULL,\n" 
+            + "   contracttokenid TEXT  NOT NULL,\n" 
             + "   contractexecutionresult mediumblob NOT NULL,\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
             + "   confirmed boolean NOT NULL,\n" 
@@ -387,7 +387,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
             + "    l1Height bigint NOT NULL,\n"
             + "    confirmedRoot varchar(255),\n"
-            + "    signatureHex varchar(1024),\n"
+            + "    signatureHex TEXT,\n"
             + "    blockHash varchar(255) NOT NULL,\n"
             + "    confirmed tinyint(1) NOT NULL DEFAULT 0,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n) ENGINE=InnoDB";
@@ -397,7 +397,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    utxoBlockHash varchar(255) NOT NULL,\n"
             + "    utxoIndex bigint NOT NULL,\n"
             + "    amount bigint NOT NULL,\n"
-            + "    tokenIdHex varchar(255),\n"
+            + "    tokenIdHex TEXT,\n"
             + "    ownerAddress varchar(255),\n"
             + "    spent boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, utxoBlockHash, utxoIndex)\n) ENGINE=InnoDB";

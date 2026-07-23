@@ -539,7 +539,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with negative outputs
 		try {
 
-			PQKey testKey = PQKey.createNew();
+			PQKey testKey = wallet.walletKeys(null).get(0);
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -585,7 +585,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Create block with outputs
 		try {
 
-			PQKey testKey = PQKey.createNew();
+			PQKey testKey = wallet.walletKeys(null).get(0);
 			List<UTXO> outputs = getBalance(false, testKey);
 			TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters,
 					outputs.get(0));
@@ -643,7 +643,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				defaultBlockWrap(rollingBlock), defaultBlockWrap(rollingBlock), false, store);
 		Transaction tx = rewardBlock.getTransactions().get(0);
 
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -805,7 +805,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -839,7 +839,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -873,7 +873,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -909,7 +909,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -947,7 +947,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo0 = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -1156,7 +1156,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					@Override
 					public void preApply(TokenInfo tokenInfo5) {
 
-						tokenInfo5.getToken().setTokenid(Utils.HEX.encode(testKey.getPubKey()));
+						tokenInfo5.getToken().setTokenid(Utils.HEX.encode(Sha256Hash.hash(testKey.getPubKey())));
 					}
 
 					@Override
@@ -1499,7 +1499,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					@Override
 					public void preApply(TokenInfo tokenInfo5) {
 
-						tokenInfo5.getMultiSignAddresses().get(0).setTokenid(Utils.HEX.encode(testKey.getPubKey()));
+						tokenInfo5.getMultiSignAddresses().get(0).setTokenid(Utils.HEX.encode(Sha256Hash.hash(testKey.getPubKey())));
 					}
 
 					@Override
@@ -1535,7 +1535,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
 					multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 				else
-					multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
+					multiSignBy0.setTokenid(Utils.HEX.encode(Sha256Hash.hash(outKey.getPubKey())));
 				multiSignBy0.setTokenindex(0);
 				multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
 				multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
@@ -1549,7 +1549,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
 					multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 				else
-					multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
+					multiSignBy0.setTokenid(Utils.HEX.encode(Sha256Hash.hash(outKey.getPubKey())));
 				multiSignBy0.setTokenindex(0);
 				multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toHex());
 				multiSignBy0.setPublickey(Utils.HEX.encode(genesiskey.getPubKey()));
@@ -1582,7 +1582,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
 		PQKey outKey2 = PQKey.createNew();
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -1622,7 +1622,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
 			multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		else
-			multiSignBy0.setTokenid(Utils.HEX.encode(outKey.getPubKey()));
+			multiSignBy0.setTokenid(Utils.HEX.encode(Sha256Hash.hash(outKey.getPubKey())));
 		multiSignBy0.setTokenindex(0);
 		multiSignBy0.setAddress(genesiskey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(genesiskey.getPubKey()));
@@ -1872,7 +1872,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -1885,9 +1885,9 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate a subsequent issuance that does not work
 		PQKey pubKey2 = PQKey.createNew();
-		Coin coinbase2 = Coin.valueOf(666, pubKey2.getPubKey());
+		Coin coinbase2 = Coin.valueOf(666, Sha256Hash.hash(pubKey2.getPubKey()));
 
-		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey2.getPubKey()), "Test", "Test",
+		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(Sha256Hash.hash(pubKey2.getPubKey())), "Test", "Test",
 				1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 		TokenInfo tokenInfo2 = new TokenInfo();
 		tokenInfo2.setToken(tokens2);
@@ -1906,7 +1906,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
     public void testSolidityTokenWrongTokenindex() throws JsonProcessingException, Exception {
 
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 
 		// Generate an eligible issuance
 		TokenInfo tokenInfo = new TokenInfo();
@@ -1941,7 +1941,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
     public void testSolidityTokenPredecessorStopped() throws JsonProcessingException, Exception {
 
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 
 		// Generate an eligible issuance
 		TokenInfo tokenInfo = new TokenInfo();
@@ -1976,7 +1976,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
     public void testSolidityTokenPredecessorConflictingType() throws JsonProcessingException, Exception {
 
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 
 		// Generate an eligible issuance
 		TokenInfo tokenInfo = new TokenInfo();
@@ -2012,7 +2012,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
     public void testSolidityTokenPredecessorConflictingName() throws JsonProcessingException, Exception {
 
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 
 		// Generate an eligible issuance
 		TokenInfo tokenInfo = new TokenInfo();
@@ -2048,7 +2048,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
-		byte[] pubKey = outKey.getPubKey();
+		byte[] pubKey = Sha256Hash.hash(outKey.getPubKey());
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 

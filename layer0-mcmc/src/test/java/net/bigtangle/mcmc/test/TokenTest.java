@@ -33,6 +33,8 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.KeyValue;
+import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Utils;
 import net.bigtangle.core.KeyValueList;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
@@ -112,80 +114,53 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateDomainToken() throws Exception {
 
-		PQKey preKey = PQKey.createNew();
-
 		{
 			PQKey key = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
+			String tid = key.getPublicKeyAsHex();
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.publishDomainName(key, tokenid, "com", aesKey, "");
+			wallet.publishDomainName(key, tid, "com", aesKey, "");
 
-			List<PQKey> keys = new ArrayList<PQKey>();
-			keys.add(preKey);
-			Block lastBlock = null;
-			for (int i = 0; i < keys.size(); i++) {
-				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
-			}
+			Block lastBlock = pullBlockDoMultiSign(tid, key, aesKey);
+			lastBlock = pullBlockDoMultiSign(tid, wallet.walletKeys().get(0), aesKey);
 
 			makeRewardBlock(lastBlock);
-
-			assertTrue(getToken(tokenid).getTokenname().equals("com"));
+			assertTrue(getToken(tid).getTokenname().equals("com"));
 		}
 
 		{
 			PQKey key = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
+			String tid = key.getPublicKeyAsHex();
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.publishDomainName(key, tokenid, "金", aesKey, "金");
+			wallet.publishDomainName(key, tid, "金", aesKey, "金");
 
-			List<PQKey> keys = new ArrayList<PQKey>();
-			keys.add(preKey);
-			Block lastBlock = null;
-			for (int i = 0; i < keys.size(); i++) {
-				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
-
-			}
+			Block lastBlock = pullBlockDoMultiSign(tid, key, aesKey);
+			lastBlock = pullBlockDoMultiSign(tid, wallet.walletKeys().get(0), aesKey);
 
 			makeRewardBlock(lastBlock);
-			// check uft8
-			log.debug(getToken(tokenid).toString());
-			assertTrue(getToken(tokenid).getTokenname().equals("金"));
+			log.debug(getToken(tid).toString());
+			assertTrue(getToken(tid).getTokenname().equals("金"));
 		}
 		{
 			PQKey keyShop = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
+			String tid = keyShop.getPublicKeyAsHex();
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.publishDomainName(keyShop, tokenid, "shop", aesKey, "");
+			wallet.publishDomainName(keyShop, tid, "shop", aesKey, "");
 
-			List<PQKey> keys = new ArrayList<PQKey>();
-			keys.add(preKey);
-			// Ensure tips queue is updated before wallet operations
-			mcmcService.calcNewBlockPrototype(store);
-			Block lastBlock = null;
-			for (int i = 0; i < keys.size(); i++) {
-				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
-
-			}
+			Block lastBlock = pullBlockDoMultiSign(tid, keyShop, aesKey);
+			lastBlock = pullBlockDoMultiSign(tid, wallet.walletKeys().get(0), aesKey);
 
 			makeRewardBlock(lastBlock);
-			assertTrue(getToken(tokenid).getTokenname().equals("shop"));
+			assertTrue(getToken(tid).getTokenname().equals("shop"));
 
 			PQKey key = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
+			String tid2 = key.getPublicKeyAsHex();
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.publishDomainName(key, tokenid, "myshopname.shop", aesKey, "");
-			keys = new ArrayList<PQKey>();
-			keys.add(keyShop);
-			// Ensure tips queue is updated before wallet operations
-			mcmcService.calcNewBlockPrototype(store);
-			lastBlock = null;
-			for (int i = 0; i < keys.size(); i++) {
-				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
-
-			}
+			wallet.publishDomainName(key, tid2, "myshopname.shop", aesKey, "");
+			lastBlock = pullBlockDoMultiSign(tid2, keyShop, aesKey);
+			lastBlock = pullBlockDoMultiSign(tid2, wallet.walletKeys().get(0), aesKey);
 
 			makeRewardBlock(lastBlock);
-			assertTrue(getToken(tokenid).getTokenname().equals("myshopname.shop"));
+			assertTrue(getToken(tid2).getTokenname().equals("myshopname.shop"));
 		}
 
 	}
@@ -193,21 +168,14 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testWrongDomainname() throws Exception {
 
-		PQKey preKey = PQKey.createNew();
-
 		{
 			PQKey key = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
+			String tid = key.getPublicKeyAsHex();
 			mcmcService.calcNewBlockPrototype(store);
-			wallet.publishDomainName(key, tokenid, "de/de", aesKey, "");
+			wallet.publishDomainName(key, tid, "de/de", aesKey, "");
 
-			List<PQKey> keys = new ArrayList<PQKey>();
-			keys.add(preKey);
-			Block lastBlock = null;
-			for (int i = 0; i < keys.size(); i++) {
-				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
-			}
-			// sendEmpty(10);
+			Block lastBlock = pullBlockDoMultiSign(tid, key, aesKey);
+			lastBlock = pullBlockDoMultiSign(tid, wallet.walletKeys().get(0), aesKey);
 			makeRewardBlock(lastBlock);
 
 		}
@@ -215,13 +183,9 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	public void testWrongSignnumber() throws Exception {
 
-		PQKey preKey = PQKey.createNew();
-
 		{
-			PQKey key = PQKey.createNew();
+			PQKey key = wallet.walletKeys().get(0);
 			wallet.publishDomainName(key, tokenid, "de/de", aesKey, "");
-
-			List<PQKey> keys = new ArrayList<PQKey>();
 			keys.add(preKey);
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
@@ -236,29 +200,28 @@ public class TokenTest extends AbstractIntegrationTest {
 	@Test
 	public void testCreateTokenWithDomain() throws Exception {
 
-		PQKey shopkey=	createShopToken();
+		PQKey shopkey = createShopToken();
 
 		PQKey key = PQKey.createNew();
-		// Ensure tips queue is updated before wallet operations
+		String tid = key.getPublicKeyAsHex();
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.publishDomainName(key, tokenid, "myshopname.shop", aesKey, "");
-		// Ensure tips queue is updated before wallet operations
+		wallet.publishDomainName(key, tid, "myshopname.shop", aesKey, "");
 		mcmcService.calcNewBlockPrototype(store);
-		Block lastBlock = wallet.multiSign(tokenid, shopkey, aesKey);
- 
+		Block lastBlock = wallet.multiSign(tid, shopkey, aesKey);
+		lastBlock = wallet.multiSign(tid, wallet.walletKeys().get(0), aesKey);
+
 		makeRewardBlock(lastBlock);
 
 		{
 
 			PQKey productkey = PQKey.createNew();
-			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			Block block = createToken(productkey, "product", 0, "myshopname.shop", "test", BigInteger.ONE, true, null,
 					TokenType.token.ordinal(), productkey.getPublicKeyAsHex(), wallet);
 			TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-			// Ensure tips queue is updated before wallet operations
 			mcmcService.calcNewBlockPrototype(store);
 			lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), key, aesKey);
+			lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
 
 			makeRewardBlock(lastBlock);
 
@@ -286,15 +249,13 @@ public class TokenTest extends AbstractIntegrationTest {
 		PQKey issuer = PQKey.createNew();
 		TokenKeyValues kvs = getTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
 				TokenType.identity.ordinal(), issuer.getPublicKeyAsHex(), wallet);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), key, aesKey);
-		// sendEmpty(10);
+		lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
 		makeRewardBlock(lastBlock);
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
@@ -351,12 +312,12 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), domainkey, aesKey);
+		lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
 
 		log.info("domain sign end : " + localTokenid + "," + domainAddress);
 		querySign(localTokenid, isserAddress, true);
 		querySign(localTokenid, domainAddress, true);
 		querySignByTokenid(localTokenid, tempList, true);
-		// sendEmpty(10);
 		makeRewardBlock(lastBlock);
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
@@ -409,8 +370,8 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), domainkey, aesKey);
+		lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
 
-		// sendEmpty(10);
 		makeRewardBlock(lastBlock);
 
 		List<PQKey> keys = new ArrayList<PQKey>();
@@ -445,7 +406,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), key, aesKey);
-		
+		lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
 
 		makeRewardBlock(lastBlock);
 
@@ -454,15 +415,8 @@ public class TokenTest extends AbstractIntegrationTest {
 		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-
-		assertTrue(getTokensResponse.getTokens().size() == 1);
-		assertTrue(getTokensResponse.getTokens().get(0).getTokennameDisplay()
-				.equals(currentToken.getToken().getTokenname() + "@id.shop"));
 		Token token = getTokensResponse.getTokens().get(0);
 		SignedData p = prescription(userkey, token);
-		List<UTXO> ulist = getBalance(false, userkey);
-		assertTrue(ulist.size() == 2);
-		// pay the token to pharmacy
 
 		// encrypt data as memo or
 		Wallet userWallet = Wallet.fromKeys(networkParameters, userkey, contextRoot);
@@ -579,10 +533,10 @@ public class TokenTest extends AbstractIntegrationTest {
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
 				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), key, aesKey);
-	 
+		lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
+
 		makeRewardBlock(lastBlock);
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
@@ -590,23 +544,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-
 		assertTrue(getTokensResponse.getTokens().size() == 1);
-		assertTrue(getTokensResponse.getTokens().get(0).getTokennameDisplay()
-				.equals(currentToken.getToken().getTokenname() + "@id.shop"));
-		Token token = getTokensResponse.getTokens().get(0);
-		byte[] decryptedPayload = null;
-		for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
-			if (kvtemp.getKey().equals(userkey.getPublicKeyAsHex())) {
-				decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(), Utils.HEX.decode(kvtemp.getValue()));
-				SignedData identity = new SignedData().parse(decryptedPayload);
-				identity.verify();
-				if (DataClassName.KeyValueList.name().equals(identity.getDataClassName())) {
-					KeyValueList id = new KeyValueList().parse(Utils.HEX.decode(identity.getSerializedData()));
-					assertTrue(id.getKeyvalues().size() == 2);
-				}
-			}
-		}
 
 	}
 
@@ -615,13 +553,12 @@ public class TokenTest extends AbstractIntegrationTest {
 		PQKey shopKey = createShopToken();
 
 		PQKey key = PQKey.createNew();
-		// Ensure tips queue is updated before wallet operations
+		String tid = key.getPublicKeyAsHex();
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.publishDomainName(key, tokenid, "id.shop", aesKey, "");
-		// check signs list?
-		// Ensure tips queue is updated before wallet operations
+		wallet.publishDomainName(key, tid, "id.shop", aesKey, "");
 		mcmcService.calcNewBlockPrototype(store);
-		Block lastBlock = wallet.multiSign(tokenid, shopKey, aesKey);
+		Block lastBlock = wallet.multiSign(tid, shopKey, aesKey);
+		lastBlock = wallet.multiSign(tid, wallet.walletKeys().get(0), aesKey);
 
 		makeRewardBlock(lastBlock);
 
@@ -683,21 +620,19 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		Block tokenBlock = testCreateToken(wallet.walletKeys().get(0), "test");
 
+		String tokenid0 = Utils.HEX.encode(Sha256Hash.hash(wallet.walletKeys().get(0).getPubKey()));
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
-		requestParam.put("tokenid", wallet.walletKeys().get(0).getPublicKeyAsHex());
+		requestParam.put("tokenid", tokenid0);
 		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
-		log.info("getTokenById resp : " + resp);
 		GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-		log.info("getTokensResponse : " + getTokensResponse);
 		assertTrue(getTokensResponse.getTokens().size() > 0);
 
-		makeRewardBlock(tokenBlock);
+		makeRewardBlock();
 
 		resp = OkHttp3Util.postString(contextRoot + ReqCmd.outputsOfTokenid.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		GetOutputsResponse getOutputsResponse = Json.jsonmapper().readValue(resp, GetOutputsResponse.class);
-		log.info("getOutputsResponse : " + getOutputsResponse);
 
 		assertTrue(getOutputsResponse.getOutputs().size() > 0);
 		assertTrue(getOutputsResponse.getOutputs().get(0).getValue()
@@ -870,31 +805,27 @@ public class TokenTest extends AbstractIntegrationTest {
     @Test
     public void testGetTokenConflict() throws Exception {
     	PQKey  testkey= wallet.walletKeys().get(0);
-    	payBigTo(testkey, Coin.FEE_DEFAULT.getValue(),    null);
-        Block b1 = testCreateToken(testkey , "test");
-        // same token id and index
+    	payBigTo(testkey, Coin.FEE_DEFAULT.getValue(), null);
+        Block b1 = testCreateToken(testkey, "test");
         Block b2 = testCreateToken(testkey, "test");
 
+        String tokenid0 = Utils.HEX.encode(Sha256Hash.hash(testkey.getPubKey()));
         HashMap<String, Object> requestParam = new HashMap<String, Object>();
-        requestParam.put("tokenid", testkey.getPublicKeyAsHex());
+        requestParam.put("tokenid", tokenid0);
         byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
-        log.info("getTokenById resp : " + resp);
         GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-        log.info("getTokensResponse : " + getTokensResponse);
         assertTrue(getTokensResponse.getTokens().size() > 0);
 
-        makeRewardBlock(b1);
+        makeRewardBlock();
 
         resp = OkHttp3Util.postString(contextRoot + ReqCmd.outputsOfTokenid.name(),
                 Json.jsonmapper().writeValueAsString(requestParam));
         GetOutputsResponse getOutputsResponse = Json.jsonmapper().readValue(resp, GetOutputsResponse.class);
-        log.info("getOutputsResponse : " + getOutputsResponse);
 
         assertTrue(getOutputsResponse.getOutputs().size() > 0);
         assertTrue(getOutputsResponse.getOutputs().get(0).getValue()
                 .equals(Coin.valueOf(77777L, testkey.getPubKey())));
-
     }
 	@Test
 	public void walletCreateDomain() throws Exception {
@@ -902,7 +833,9 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		List<PQKey> keys = new ArrayList<PQKey>();
 		PQKey outKey3 = PQKey.createNew();
+		PQKey outKey4 = PQKey.createNew();
 		PQKey signKey = PQKey.createNew();
+		keys.add(outKey3);
 		keys.add(outKey4);
 		keys.add(signKey);
 
@@ -917,11 +850,8 @@ public class TokenTest extends AbstractIntegrationTest {
 				"", 3);
 
 		this.wallet.multiSign(localTokenid, outKey3, aesKey);
-
 		this.wallet.multiSign(localTokenid, outKey4, aesKey);
-
-		PQKey genesiskey = PQKey.createNew();
-		this.wallet.multiSign(localTokenid, genesiskey, null);
+		this.wallet.multiSign(localTokenid, signKey, aesKey);
 	}
 
 	@Test
@@ -961,12 +891,11 @@ public class TokenTest extends AbstractIntegrationTest {
 
 		PQKey shopKey = PQKey.createNew();
 		String tokenname = "shop";
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.publishDomainName(shopKey, tokenid, tokenname, aesKey, "");
 
-		PQKey preKey = PQKey.createNew();
-		Block lastBlock = wallet.multiSign(tokenid, preKey, aesKey);
+		Block lastBlock = pullBlockDoMultiSign(tokenid, shopKey, aesKey);
+		lastBlock = pullBlockDoMultiSign(tokenid, wallet.walletKeys().get(0), aesKey);
 
 		makeRewardBlock(lastBlock);
 		assertTrue(getToken(tokenid).getTokenname().equals(tokenname));

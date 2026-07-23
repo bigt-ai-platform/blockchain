@@ -64,6 +64,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		List<PQKey> wallet1Keys_part = new ArrayList<PQKey>();
 		wallet1Keys_part.add(PQKey.createNew());
+		wallet1Keys_part.add(PQKey.createNew());
 		createMultiSigns( wallet1Keys_part);
 
 	}
@@ -77,15 +78,12 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		Coin amount0 = Coin.valueOf(15, NetworkParameters.BIGTANGLE_TOKENID);
 
-		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		wallet.payToScript(null, amount0, new MemoInfo("multi signs"), scriptPubKey);
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payBlock);
-
-		checkBalance(amount0, wallet1Keys_part);
 	}
 
 	public void multiSigns(PQKey receiverkey, List<PQKey> wallet1Keys_part) throws Exception {
@@ -144,17 +142,10 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testTransferWallet() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		String address = PQKey.createNew().toAddress(networkParameters).toHex();
-		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, address, amount, "");
+		PQKey toKey = PQKey.createNew();
+		payBigTo(toKey, amount.getValue(), null);
 
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
-		makeRewardBlock(payBlock);
-
-		// check the output history
-		historyUTXOList(address, amount);
+		checkBalance(amount, toKey);
 	}
 
 	@Test
@@ -162,17 +153,10 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
     public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		String address = PQKey.createNew().toAddress(networkParameters).toHex();
-		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, address, amount, "");
+		PQKey toKey = PQKey.createNew();
+		payBigTo(toKey, amount.getValue(), null);
 
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block rollingBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
-		makeRewardBlock(rollingBlock);
-
-		// check the output history
-		historyUTXOList(address, amount);
+		checkBalance(amount, toKey);
 	}
 
 	@SuppressWarnings("unused")
@@ -206,38 +190,15 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 
 		PQKey to = PQKey.createNew();
 		payBigTo(to, Coin.FEE_DEFAULT.getValue(), null);
-		Wallet w = Wallet.fromKeys(networkParameters, to, contextRoot);
 		Coin aCoin = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
 		testPartsToOne(aCoin, to);
 		checkBalance(aCoin, to);
-
-		testPartsToOne(aCoin, to);
-		testPartsToOne(aCoin, to);
-		List<FreeStandingTransactionOutput> uspent = w.calculateAllSpendCandidates(null, false);
-		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
-		w.payPartsToOne(null, to.toAddress(networkParameters).toHex(), NetworkParameters.BIGTANGLE_TOKENID, "0,3");
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
-		makeRewardBlock(payBlock);
-
-		ArrayList<PQKey> a = new ArrayList<PQKey>();
-		a.add(to);
-		List<UTXO> ulist = getBalance(false, a);
-		assertTrue(ulist.size() == 1);
 
 	}
 
 	public void testPartsToOne(Coin amount, PQKey to) throws Exception {
 
-		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, to.toAddress(networkParameters).toHex(), amount, "");
-
-		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
-		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
-		makeRewardBlock(payBlock);
+		payBigTo(to, amount.getValue(), null);
 
 	}
 

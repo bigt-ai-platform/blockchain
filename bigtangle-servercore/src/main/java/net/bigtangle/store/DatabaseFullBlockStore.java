@@ -3375,16 +3375,20 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
-				.prepareStatement("INSERT INTO attestation_votes (blockhash, pubkey, weight, slot) "
-					+ "VALUES (?, ?, ?, ?) ON CONFLICT (pubkey, blockhash) DO UPDATE SET weight = ?")) {
+				.prepareStatement("INSERT INTO attestation_votes (blockhash, pubkey, weight, slot, pubkey_blockhash_md5) "
+					+ "VALUES (?, ?, ?, ?, ?) ON CONFLICT (pubkey_blockhash_md5) DO UPDATE SET weight = ?")) {
 			s.setBytes(1, blockHash.getBytes());
 			s.setBytes(2, pubkey);
 			s.setLong(3, weight);
 			long slot = System.currentTimeMillis() / 12_000L;
 			s.setLong(4, slot);
-			s.setLong(5, weight);
+			byte[] combined = new byte[pubkey.length + 32];
+			System.arraycopy(pubkey, 0, combined, 0, pubkey.length);
+			System.arraycopy(blockHash.getBytes(), 0, combined, pubkey.length, 32);
+			s.setObject(5, java.util.UUID.nameUUIDFromBytes(combined));
+			s.setLong(6, weight);
 			s.executeUpdate();
-		} catch (SQLException e) {
+		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
 	}
@@ -3463,13 +3467,14 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	@Override
 	public void savePosState(String service, String key, byte[] value) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
-				.prepareStatement("INSERT INTO pos_state (service, key, value) VALUES (?, ?, ?) "
-					+ "ON CONFLICT (service, key) DO UPDATE SET value = EXCLUDED.value")) {
+				.prepareStatement("INSERT INTO pos_state (service, key, value, service_key_md5) VALUES (?, ?, ?, ?) "
+					+ "ON CONFLICT (service_key_md5) DO UPDATE SET value = EXCLUDED.value")) {
 			s.setString(1, service);
 			s.setString(2, key);
 			s.setBytes(3, value);
+			s.setObject(4, java.util.UUID.nameUUIDFromBytes((service + "\0" + key).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 			s.executeUpdate();
-		} catch (SQLException e) {
+		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
 	}

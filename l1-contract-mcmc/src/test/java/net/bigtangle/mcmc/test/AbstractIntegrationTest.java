@@ -659,9 +659,6 @@ public abstract class AbstractIntegrationTest {
 			List<Block> addedBlocks) throws Exception {
 		Wallet w = Wallet.fromKeys(networkParameters, beneficiary, contextRoot);
 		w.setServerURL(contextRoot);
-		PQKey genesisKey = PQKey.createNew().toHex().equals(genesisKey.toAddress(networkParameters).toHex())) {
-			payBigTo(beneficiary, Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(2)), addedBlocks);
-		}
 		w.buyOrder(null, tokenId, buyPrice, buyAmount, null, null, basetoken, true);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block block = drainMempoolAndCreateBlock(predecessor, predecessor);
@@ -1310,7 +1307,7 @@ public abstract class AbstractIntegrationTest {
 			List<MultiSignBy> multiSignBies = null;
 			if (transaction.getDataSignature() == null) {
 				multiSignBies = new ArrayList<MultiSignBy>();
-			// } else {
+			} else {
 				MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 						MultiSignByRequest.class);
 				multiSignBies = multiSignByRequest.getMultiSignBies();
@@ -1422,7 +1419,7 @@ public abstract class AbstractIntegrationTest {
 		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
 
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew().getTokenid(), genesiskey, null);
+		PQKey genesiskey = PQKey.createNew();
 
 		return block;
 	}
@@ -1544,7 +1541,7 @@ public abstract class AbstractIntegrationTest {
 		List<MultiSignBy> multiSignBies = null;
 		if (transaction.getDataSignature() == null) {
 			multiSignBies = new ArrayList<MultiSignBy>();
-		// } else {
+		} else {
 			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
 					MultiSignByRequest.class);
 			multiSignBies = multiSignByRequest.getMultiSignBies();

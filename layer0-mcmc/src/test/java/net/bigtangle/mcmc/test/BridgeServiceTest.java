@@ -47,6 +47,8 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
 
     private static final String L1_CHAIN_ID = "ordermatch";
 
+    private PQKey testKey;
+
     @Override
     @BeforeEach
     public void setUp() throws Exception {
@@ -54,13 +56,14 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
+        testKey = PQKey.createNew();
+        String pubKeyHex = Utils.HEX.encode(testKey.getPublicKeyBytes());
+
         anchorConfiguration.setActive(true);
-        anchorConfiguration.setPubKeyHex(testPub);
-        anchorConfiguration.setPriKeyHex(testPriv);
+        anchorConfiguration.setPubKeyHex(pubKeyHex);
         anchorConfiguration.setL0Url("http://localhost:" + port + "/");
         bridgeConfiguration.setActive(true);
-        bridgeConfiguration.setVaultPubKeyHex(testPub);
-        bridgeConfiguration.setVaultPriKeyHex(testPriv);
+        bridgeConfiguration.setVaultPubKeyHex(pubKeyHex);
     }
 
     @Test
@@ -120,10 +123,11 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         Sha256Hash root = MerkleProof.computeRoot(blockHashes);
         MerkleProof proof = MerkleProof.buildProofFor(blockHashes, tipProto.getHash());
 
-        SignatureBundle signature = PQKey.createNew().sign(Sha256Hash.of("test".getBytes()));
+        Sha256Hash l1Hash = tipProto.getHash();
+        SignatureBundle signature = testKey.sign(l1Hash);
         byte[] sigBytes = signature.serialize();
 
-        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, tipProto.getHash(),
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, l1Hash,
                 1, root, sigBytes, proof);
         anchorService.validateAndSaveAnchor(anchor, tipProto.getHash(), store);
 

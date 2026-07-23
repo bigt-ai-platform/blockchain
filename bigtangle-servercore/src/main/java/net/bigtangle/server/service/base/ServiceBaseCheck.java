@@ -964,7 +964,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 		}
 
-		// Verify signatures
 		for (MultiSignBy multiSignBy : txSignatures.getMultiSignBies()) {
 			byte[] pubKey = Utils.HEX.decode(multiSignBy.getPublickey());
 			byte[] data = tx.getHash().getBytes();

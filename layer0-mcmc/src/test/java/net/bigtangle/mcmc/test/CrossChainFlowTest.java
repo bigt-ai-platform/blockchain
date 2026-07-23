@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.bridge.BridgeConfiguration;
 import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
@@ -37,8 +38,6 @@ import net.bigtangle.wallet.Wallet;
         properties = { "server.net=Test",
                        "spring.main.allow-bean-definition-overriding=true",
                        "bridge.active=true",
-                       "bridge.vaultPubKeyHex=02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975",
-                       "bridge.vaultPriKeyHex=ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f",
                        "anchor.active=true" })
 public class CrossChainFlowTest extends AbstractIntegrationTest {
 
@@ -50,7 +49,11 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
     @Autowired(required = false)
     protected BridgeService bridgeService;
 
+    @Autowired
+    protected BridgeConfiguration bridgeConfiguration;
+
     private PQKey bobKey;
+    private PQKey vaultKey;
     private List<Block> addedBlocks;
 
     @Override
@@ -59,6 +62,8 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         bobKey = PQKey.createNew();
+        vaultKey = PQKey.createNew();
+        bridgeConfiguration.setVaultPubKeyHex(Utils.HEX.encode(vaultKey.getPublicKeyBytes()));
     }
 
     @Test
@@ -80,11 +85,8 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
                 store.get(proto.getPrevBranchBlockHash()));
         pegBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
         Transaction pegTx = new Transaction(networkParameters);
-        pegTx.setToAddressInSubtangle(
-                net.bigtangle.core.Address.fromBase58(networkParameters, l1bobAddress).getHash160());
-        pegTx.addOutput(bigUtxo.getValue(),
-                PQKey.fromPublicOnly(Utils.HEX.decode(
-                        "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975")));
+        pegTx.setToAddressInSubtangle(bobKey.toAddress(networkParameters).hash());
+        pegTx.addOutput(bigUtxo.getValue(), vaultKey);
         pegBlock.addTransaction(pegTx);
         store.put(pegBlock);
         blockGraph.updateChain(false);
