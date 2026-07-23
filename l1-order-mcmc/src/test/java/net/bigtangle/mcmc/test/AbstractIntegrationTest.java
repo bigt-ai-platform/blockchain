@@ -1454,13 +1454,25 @@ public abstract class AbstractIntegrationTest {
 		if (feepay)
 			payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, overrideHash1, overrideHash2);
-		// Token creation on L1 uses direct block graph add for test setup,
-		// bypassing the production signToken endpoint which is gated to reject
-		// BLOCKTYPE_TOKEN_CREATION on non-L0 chains (see LAYERING-PLAN.md §5.5).
-		block = adjustSolve(block);
 		String tokenid = tokenInfo.getToken().getTokenid();
 
+		// L1's signToken endpoint rejects BLOCKTYPE_TOKEN_CREATION by design.
+		// Instead we use the direct block-graph path (which allows unsolid blocks)
+		// and manually index the token.
+		block = adjustSolve(block);
 		blockGraph.addBlock(block, true, store);
+
+		// Manually index the token so server-side queries (getTokenById) can find it
+		TokenInfo parsedToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
+		parsedToken.getToken().setConfirmed(false);
+		parsedToken.getToken().setBlockHash(block.getHash());
+		store.insertToken(block.getHash(), parsedToken.getToken());
+		for (MultiSignAddress addr : parsedToken.getMultiSignAddresses()) {
+			addr.setBlockhash(block.getHash());
+			addr.setTokenid(tokenid);
+			if (addr.getAddress() != null)
+				store.insertMultiSignAddress(addr);
+		}
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
