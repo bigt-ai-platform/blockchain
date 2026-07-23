@@ -432,21 +432,39 @@ public abstract class AbstractIntegrationTest {
 			throws Exception {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		makeRewardBlock(addedBlocks);
-		HashMap<String, BigInteger> giveMoneyTestToken = new HashMap<String, BigInteger>();
-
-		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toHex(), amount);
 		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
-		// Ensure tips queue is updated before wallet operations
-		mcmcService.calcNewBlockPrototype(store);
-		w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
+		byte[] tokenid = testKey.getPubKey();
+		List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : candidates) {
+			if (java.util.Arrays.equals(tokenid, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, tokenid);
+		Coin sendAmount = new Coin(amount, tokenid);
+		Transaction tx = new Transaction(networkParameters);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, beneficiary));
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			Coin change = total.subtract(sendAmount);
+			if (!change.isNegative()) {
+				if (change.isPositive()) {
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, testKey));
+				}
+				break;
+			}
+		}
+		w.signTransaction(tx, null);
+		w.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		if (b != null) {
 			addedBlocks.add(b);
 			rewardWithBlock(addedBlocks, b);
 		}
-		// Open sell order for test tokens
 	}
 
 	protected Block makeTestToken(PQKey testKey, List<Block> addedBlocks)
@@ -481,14 +499,11 @@ public abstract class AbstractIntegrationTest {
 	protected void payBigToAmount(PQKey beneficiary, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
 
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
-
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(500000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(400000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(300000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(200000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(100000000));
-		payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
+		payBigTo(beneficiary, BigInteger.valueOf(500000000), addedBlocks);
+		payBigTo(beneficiary, BigInteger.valueOf(400000000), addedBlocks);
+		payBigTo(beneficiary, BigInteger.valueOf(300000000), addedBlocks);
+		payBigTo(beneficiary, BigInteger.valueOf(200000000), addedBlocks);
+		payBigTo(beneficiary, BigInteger.valueOf(100000000), addedBlocks);
 
 	}
 
