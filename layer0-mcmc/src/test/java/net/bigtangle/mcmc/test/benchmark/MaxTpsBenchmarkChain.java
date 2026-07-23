@@ -77,7 +77,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         log.info("MCMC every:   {} blocks", mcmcInterval);
 
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew();
+        for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew());
 
         Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
@@ -119,7 +119,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         }
         log.info("Pre-fetched {} UTXOs", allCoins.size());
 
-        PQKey finalRecipient = PQKey.createNew().toString();
+        PQKey finalRecipient = PQKey.createNew();
 
         // Phase 1: Parallel submit all tx to mempool (like real usage)
         log.info("Submitting {} transactions via {} parallel clients...", totalTx, clients);
@@ -142,7 +142,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
                         FreeStandingTransactionOutput coin = allCoins.get(idx);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
+                                new HashMap<>(Map.of(finalRecipient.toAddress(networkParameters).toHex(), BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
                         if (tx != null) txs.add(tx);
 

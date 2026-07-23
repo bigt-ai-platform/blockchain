@@ -64,8 +64,9 @@ public class PosBenchmark extends AbstractIntegrationTest {
     public void testPosChain() throws Exception {
         // Create validator keys and wallet keys for funding
         List<PQKey> validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew() via genesis
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
+        List<PQKey> walletKeys = new ArrayList<>();
+        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew());
         Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : validatorKeys) {
@@ -104,7 +105,7 @@ public class PosBenchmark extends AbstractIntegrationTest {
         log.info("Pre-fetched {} UTXOs", walletCoins.size());
 
         // Pre-create transactions (ECDSA in parallel before timing)
-        PQKey finalRecipient = PQKey.createNew().toString();
+        PQKey finalRecipient = PQKey.createNew();
 
         List<Transaction> allTxs = new ArrayList<>();
         for (int i = 0; i < TOTAL_TX; i++) {
@@ -112,7 +113,7 @@ public class PosBenchmark extends AbstractIntegrationTest {
             FreeStandingTransactionOutput coin = walletCoins.get(i);
             Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
             Transaction tx = w.payToListTransaction(null,
-                    new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
+                    new HashMap<>(Map.of(finalRecipient.toAddress(networkParameters).toHex(), BigInteger.valueOf(15000))),
                     NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
             if (tx != null) allTxs.add(tx);
         }

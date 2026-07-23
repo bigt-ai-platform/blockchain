@@ -7,6 +7,7 @@ package net.bigtangle.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -17,13 +18,18 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import net.bigtangle.core.Coin;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQConstants;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
+import net.bigtangle.script.ScriptOpCodes;
 
 /**
  * Just check the Transaction.verify() method. Most methods that have
@@ -159,4 +165,35 @@ public class TransactionTest {
 	 * Ensure that hashForSignature() doesn't modify a transaction's data, which
 	 * could wreak multithreading havoc.
 	 */
+
+	@Test
+	public void testCalculateSignatureWithPQKey() throws Exception {
+		// Create a PQ key pair
+		PQKey key = PQKey.createNew();
+		// Create a minimal transaction
+		Transaction tx = new Transaction(PARAMS);
+		tx.setVersion(PQConstants.TX_PQ_VERSION);
+		// Add an input and output
+		tx.addInput(Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH, 0, new ScriptBuilder().data(new byte[]{0x05, 0x01}).op(ScriptOpCodes.OP_CHECKSIG).build());
+		tx.addOutput(Coin.COIN, key);
+
+		// Calculate signature - this should store PQ bundle on tx
+		Script outputScript = ScriptBuilder.createOutputScript(key);
+		TransactionSignature sig = tx.calculateSignature(0, key, outputScript, Transaction.SigHash.ALL, false);
+
+		// Verify pqSignatureBundle was stored
+		byte[] storedBundle = tx.getPqSignatureBundle();
+		assertNotNull(storedBundle, "calculateSignature must store PQ signature bundle");
+
+		// Verify it's a valid SignatureBundle
+		SignatureBundle bundle = SignatureBundle.deserialize(storedBundle);
+		assertNotNull(bundle);
+		assertTrue(bundle.entries().size() > 0);
+
+		// Create input script from the stored bundle and verify it spends the output
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(bundle);
+		// This should not throw
+		inputScript.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
+	}
+
 }

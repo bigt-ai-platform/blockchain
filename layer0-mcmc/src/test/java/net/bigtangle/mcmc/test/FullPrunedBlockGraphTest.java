@@ -72,7 +72,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 	public void testConnectTokenUTXOs() throws Exception {
 
 		PQKey ecKey1 = PQKey.createNew();
-		// System.out.println(Utils.HEX.encode(pubKey));
+		byte[] pubKey = ecKey1.getPubKey();
 
 		// Generate an eligible issuance
 		Sha256Hash firstIssuance;
@@ -108,10 +108,8 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 					1, amount, true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
 
 			tokenInfo.setToken(tokens);
-			PQKey ecKey = PQKey.createNew(), "", ecKey.getPublicKeyAsHex()));
-			PQKey ecKey2 = PQKey.createNew(), "", ecKey2.getPublicKeyAsHex()));
-
-			;
+			PQKey ecKey = PQKey.createNew();
+			PQKey ecKey2 = PQKey.createNew();
 
 			// This (saveBlock) calls milestoneUpdate currently, that's why we
 			// need other blocks beforehand.
@@ -260,6 +258,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		ServiceBaseConnect s = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		// Generate an eligible issuance
 		PQKey outKey = PQKey.createNew();
+		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 
 		Coin coinbase = Coin.valueOf(77777L, pubKey);

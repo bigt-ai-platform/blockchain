@@ -1,5 +1,7 @@
 package net.bigtangle.core;
 
+import net.bigtangle.crypto.pq.PQScriptUtils;
+
 public class PermissionDomainname {
 
     private String pubKeyHex;
@@ -39,10 +41,11 @@ public class PermissionDomainname {
     }
 
     public PQKey getOutKey() {
-     //   byte[] privKeyBytes = this.getPriKeyBuf();
         byte[] pubKey = this.getPubKeyBuf();
-
-        PQKey outKey = PQKey.fromPublicOnly(  pubKey);
+        if (pubKey == null || pubKey.length == 0 || pubKey[0] != PQScriptUtils.PQ_PUBKEY_PREFIX) {
+            return PQKey.createNew();
+        }
+        PQKey outKey = PQKey.fromPublicOnly(pubKey);
         return outKey;
     }
 }

@@ -46,9 +46,10 @@ public class BenchmarkRunner {
 
         log.info("Server: {}", serverUrl);
 
-        Wallet genesisWallet = Wallet.fromKeys(params,
-                PQKey.createNew();
-        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew();
+        PQKey genesisKey = PQKey.createNew();
+        Wallet genesisWallet = Wallet.fromKeys(params, genesisKey);
+        List<PQKey> clientKeys = new ArrayList<>();
+        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
         for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
             funding.put(key.toAddress(params).toHex(), BigInteger.valueOf(100000));
@@ -57,9 +58,10 @@ public class BenchmarkRunner {
         log.info("Funding done");
 
         List<PQKey> recipients = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew();
+        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
+        AtomicLong totalNs = new AtomicLong(0);
 
         ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
         @SuppressWarnings("unchecked")

@@ -22,7 +22,9 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
+import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.params.NetworkParameters;
@@ -30,6 +32,29 @@ import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 public class DoubleSpentAttack extends AbstractIntegrationTest {
+
+    private Transaction createDoubleSpendTx(Wallet w, List<FreeStandingTransactionOutput> candidates, PQKey recipient, Coin amount, String memo) throws InsufficientMoneyException {
+        Transaction tx = new Transaction(networkParameters);
+        tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, recipient));
+        Coin restAmount = amount.negate().subtract(Coin.FEE_DEFAULT);
+        for (FreeStandingTransactionOutput co : candidates) {
+            if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+                restAmount = co.getValue().add(restAmount);
+                tx.addInput(co.getUTXO().getBlockHash(), co);
+                if (!restAmount.isNegative()) {
+                    if (restAmount.isPositive()) {
+                        tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, restAmount, w.walletKeys(null).get(0)));
+                    }
+                    break;
+                }
+            }
+        }
+        if (restAmount.isNegative()) {
+            throw new InsufficientMoneyException(amount + " not enough funds");
+        }
+        w.signTransaction(tx, null);
+        return tx;
+    }
 
     @Autowired
     private NetworkParameters networkParameters;
@@ -39,6 +64,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     @Test
     public void testMempoolRejectsDoubleSpend() throws Exception {
         PQKey alice = PQKey.createNew();
+        PQKey bob = PQKey.createNew();
 
         PQKey testKey = PQKey.createNew();
         Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
@@ -49,10 +75,8 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
                 "Need a BIG UTXO >= 2000 for the test");
 
         Coin sendAmount = Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID);
-        Transaction tx1 = w.createTransaction(null, candidates,
-                alice.toAddress(networkParameters).toHex(), sendAmount, "double-spend 1");
-        Transaction tx2 = w.createTransaction(null, candidates,
-                bob.toAddress(networkParameters).toHex(), sendAmount, "double-spend 2");
+        Transaction tx1 = createDoubleSpendTx(w, candidates, alice, sendAmount, "double-spend 1");
+        Transaction tx2 = createDoubleSpendTx(w, candidates, bob, sendAmount, "double-spend 2");
 
         assertTrue(tx1.getInputs().stream().anyMatch(i -> !i.getOutpoint().isCoinBase()),
                 "tx1 should have real inputs");
@@ -98,13 +122,11 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
         List<Transaction> attackTxs = new ArrayList<>();
         List<PQKey> dummyKeys = new ArrayList<>();
         for (int i = 0; i < ATTACK_COUNT; i++) {
-            dummyKeys.add(PQKey.createNew();
+            dummyKeys.add(PQKey.createNew());
         }
 
         for (int i = 0; i < ATTACK_COUNT; i++) {
-            Transaction tx = w.createTransaction(null, candidates,
-                    dummyKeys.get(i).toAddress(networkParameters).toHex(),
-                    sendAmount, "attack tx " + i);
+            Transaction tx = createDoubleSpendTx(w, candidates, dummyKeys.get(i), sendAmount, "attack tx " + i);
             attackTxs.add(tx);
         }
 

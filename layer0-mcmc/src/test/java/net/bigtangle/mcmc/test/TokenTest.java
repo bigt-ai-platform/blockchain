@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 
@@ -39,14 +40,18 @@ import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.TokenType;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.ECIESCoder;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.GetOutputsResponse;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.response.MultiSignResponse;
 import net.bigtangle.response.SearchMultiSignResponse;
@@ -93,6 +98,16 @@ example
 ### display with tokenname +"@" + domainname +":"+ tokenid
  */
 public class TokenTest extends AbstractIntegrationTest {
+
+	private PQKey userkey = PQKey.createNew();
+	private String tokenid;
+	private PQKey outKey2 = PQKey.createNew();
+	private PQKey outKey4 = PQKey.createNew();
+
+	@BeforeEach
+	public void setUpTokenTest() throws Exception {
+		tokenid = wallet.walletKeys().get(0).getPublicKeyAsHex();
+	}
 
 	@Test
 	public void testCreateDomainToken() throws Exception {
@@ -319,28 +334,28 @@ public class TokenTest extends AbstractIntegrationTest {
 		List<PQKey> keys = wallet.walletKeys();
 		List<String> addresses = keys.stream().map(key -> key.toAddress(networkParameters).toHex())
 				.collect(Collectors.toList());
-		String tokenid = PQKey.createNew();
+		String localTokenid = PQKey.createNew().getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), tokenid, wallet, userkey.getPubKey(), signedata.encryptToMemo(userkey));
+				TokenType.identity.ordinal(), localTokenid, wallet, userkey.getPubKey(), signedata.encryptToMemo(userkey));
 		String isserAddress = issuer.toAddress(networkParameters).toHex();
-		log.info("domain sign before : " + tokenid + "," + isserAddress);
-		querySign(tokenid, isserAddress, true);
-		querySignByTokenid(tokenid, addresses, true);
+		log.info("domain sign before : " + localTokenid + "," + isserAddress);
+		querySign(localTokenid, isserAddress, true);
+		querySignByTokenid(localTokenid, addresses, true);
 		List<String> tempList = new ArrayList<String>();
 		tempList.add(domainAddress);
-		querySign(tokenid, domainAddress, false);
-		querySignByTokenid(tokenid, tempList, false);
+		querySign(localTokenid, domainAddress, false);
+		querySignByTokenid(localTokenid, tempList, false);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block lastBlock = wallet.multiSign(currentToken.getToken().getTokenid(), domainkey, aesKey);
 
-		log.info("domain sign end : " + tokenid + "," + domainAddress);
-		querySign(tokenid, isserAddress, true);
-		querySign(tokenid, domainAddress, true);
-		querySignByTokenid(tokenid, tempList, true);
+		log.info("domain sign end : " + localTokenid + "," + domainAddress);
+		querySign(localTokenid, isserAddress, true);
+		querySign(localTokenid, domainAddress, true);
+		querySignByTokenid(localTokenid, tempList, true);
 		// sendEmpty(10);
 		makeRewardBlock(lastBlock);
 
@@ -383,11 +398,11 @@ public class TokenTest extends AbstractIntegrationTest {
 		SignedData signedata = signeddata(issuer);
 		TokenKeyValues kvs = signedata.toTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
-		String tokenid = PQKey.createNew();
+		String localTokenid = PQKey.createNew().getPublicKeyAsHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.certificate.ordinal(), tokenid, wallet, userkey.getPubKey(),
+				TokenType.certificate.ordinal(), localTokenid, wallet, userkey.getPubKey(),
 				signedata.encryptToMemo(userkey));
 
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
@@ -425,7 +440,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), PQKey.createNew());
+				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -562,7 +577,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, userkey.getPublicKeyAsHex(), 0, "id.shop", "test", BigInteger.ONE, true, kvs,
-				TokenType.identity.ordinal(), PQKey.createNew();
+				TokenType.identity.ordinal(), PQKey.createNew().getPublicKeyAsHex(), wallet);
 		TokenInfo currentToken = new TokenInfo().parseChecked(block.getTransactions().get(0).getData());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
@@ -691,16 +706,46 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	public List<PQKey> payKeys() throws Exception {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 1; i <= 10; i++) {
-			PQKey key = PQKey.createNew().toString(), BigInteger.valueOf(i * 10000));
-			userkeys.add(key);
+			userkeys.add(PQKey.createNew());
 		}
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Coin totalSend = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		for (int i = 0; i < 10; i++) {
+			Coin amount = Coin.valueOf((i + 1) * 10000, NetworkParameters.BIGTANGLE_TOKENID);
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, userkeys.get(i)));
+			totalSend = totalSend.add(amount);
+		}
+		Coin sendWithFee = totalSend.add(Coin.FEE_DEFAULT);
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			if (total.getValue().compareTo(sendWithFee.getValue()) >= 0) {
+				Coin change = total.subtract(sendWithFee);
+				if (!change.isNegative() && !change.isZero()) {
+					PQKey changeKey = wallet.walletKeys(null).get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+			throw new InsufficientMoneyException(totalSend + " outputs size= " + tokenUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
@@ -724,14 +769,40 @@ public class TokenTest extends AbstractIntegrationTest {
 		log.info("getOutputsResponse : " + getOutputsResponse);
 		List<UTXO> outputs = getOutputsResponse.getOutputs();
 		Map<String, Token> tokennames = getOutputsResponse.getTokennames();
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
+		BigInteger sendValue = BigInteger.ZERO;
 		for (UTXO utxo : outputs) {
-			giveMoneyResult.put(utxo.getAddress(),
-					BigInteger.valueOf(utxo.getValue().getValue().longValue() * 3 / 1000));
+			sendValue = sendValue.add(utxo.getValue().getValue().multiply(BigInteger.valueOf(3)).divide(BigInteger.valueOf(1000)));
 		}
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.payToList(null, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID, "pay to user");
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Coin sendAmount = new Coin(sendValue, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, wallet.walletKeys().get(0)));
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			Coin change = total.subtract(sendAmount).subtract(Coin.FEE_DEFAULT);
+			if (!change.isNegative()) {
+				if (change.isPositive()) {
+					PQKey changeKey = wallet.walletKeys().get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(sendAmount.getValue()) < 0) {
+			throw new InsufficientMoneyException(sendAmount + " outputs size= " + tokenUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
@@ -835,22 +906,22 @@ public class TokenTest extends AbstractIntegrationTest {
 		keys.add(outKey4);
 		keys.add(signKey);
 
-		final String tokenid = PQKey.createNew();
+		final String localTokenid = PQKey.createNew().getPublicKeyAsHex();
 		final String tokenname = "bigtangle.de";
 
 		// don't use the first key which is in the wallet
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		this.wallet.publishDomainName(keys, signKey, tokenid, tokenname, Token.genesisToken(networkParameters), aesKey,
+		this.wallet.publishDomainName(keys, signKey, localTokenid, tokenname, Token.genesisToken(networkParameters), aesKey,
 				"", 3);
 
-		this.wallet.multiSign(tokenid, outKey3, aesKey);
+		this.wallet.multiSign(localTokenid, outKey3, aesKey);
 
-		this.wallet.multiSign(tokenid, outKey4, aesKey);
+		this.wallet.multiSign(localTokenid, outKey4, aesKey);
 
 		PQKey genesiskey = PQKey.createNew();
-		this.wallet.multiSign(tokenid, genesiskey, null);
+		this.wallet.multiSign(localTokenid, genesiskey, null);
 	}
 
 	@Test

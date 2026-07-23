@@ -70,7 +70,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
     @Test
     public void testMempoolTps() throws Exception {
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew();
+        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew());
 
         Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
         HashMap<String, BigInteger> funding = new HashMap<>();
@@ -113,7 +113,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         }
         log.info("Pre-fetched {} UTXOs", allCoins.size());
 
-        PQKey finalRecipient = PQKey.createNew().toString();
+        PQKey finalRecipient = PQKey.createNew();
 
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
@@ -139,7 +139,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
                         FreeStandingTransactionOutput coin = allCoins.get(idx);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
+                                new HashMap<>(Map.of(finalRecipient.toAddress(networkParameters).toHex(), BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
                         if (tx != null) txs.add(tx);
 

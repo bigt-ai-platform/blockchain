@@ -29,9 +29,12 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.Script.VerifyFlag;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.wallet.KeyBag;
 import net.bigtangle.wallet.RedeemData;
 
@@ -110,6 +113,19 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
             // a CHECKMULTISIG program for P2SH inputs
             byte[] script = redeemData.redeemScript.getProgram();
             try {
+                // Handle PQ signatures: detect from the output script's pubkey
+                byte[] pkFromScript = scriptPubKey.isSentToRawPubKey() ? scriptPubKey.getPubKey() : null;
+                if (pkFromScript != null && PQScriptUtils.isPQPubkey(pkFromScript)) {
+                    tx.calculateSignature(i, key, script, Transaction.SigHash.ALL, false);
+                    byte[] storedBundle = tx.getPqSignatureBundle();
+                    if (storedBundle == null) {
+                        log.warn("PQ signing failed - no pqSignatureBundle stored on tx");
+                        continue;
+                    }
+                    txIn.setScriptSig(ScriptBuilder.createInputScriptForPQ(
+                        SignatureBundle.deserialize(storedBundle)));
+                    continue;
+                }
                 TransactionSignature signature = tx.calculateSignature(i, key, script, Transaction.SigHash.ALL, false);
 
                 // at this point we have incomplete inputScript with OP_0 in place of one or more signatures. We already

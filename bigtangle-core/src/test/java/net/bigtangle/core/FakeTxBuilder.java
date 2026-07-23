@@ -259,7 +259,7 @@ public class FakeTxBuilder {
  
  
     public static Block makeSolvedTestBlock(Block prev, Transaction... transactions) throws BlockStoreException {
-       // Address to = PQKey.createNew(), prev, prev);
+        Block b = UtilsTest.createBlock(MainNetParams.get(), prev, prev);
         // Coinbase tx already exists.
         for (Transaction tx : transactions) {
             b.addTransaction(tx);

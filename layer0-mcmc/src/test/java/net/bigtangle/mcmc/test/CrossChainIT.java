@@ -34,8 +34,8 @@ public class CrossChainIT {
 
         // ---- PHASE 1: L0 payment ----
         log.info("=== PHASE 1: L0 BIG payment ===");
-        Wallet genesis = Wallet.fromKeys(params,
-                PQKey.createNew();
+        PQKey genesisKey = PQKey.createNew();
+        Wallet genesis = Wallet.fromKeys(params, genesisKey);
         HashMap<String, BigInteger> fundReq = new HashMap<>();
         fundReq.put(bobKey.toAddress(params).toHex(), BigInteger.valueOf(50000));
         genesis.payToList(null, fundReq, NetworkParameters.BIGTANGLE_TOKENID, "fund");

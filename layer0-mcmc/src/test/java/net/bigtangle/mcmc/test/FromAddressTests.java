@@ -22,8 +22,11 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.crypto.pq.PQAddress;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.TokenType;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.InsufficientMoneyException;
@@ -33,6 +36,7 @@ import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.response.OkResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 public class FromAddressTests extends AbstractIntegrationTest {
@@ -48,7 +52,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 	@Test
 	public void testUserpay() throws Exception {
 
-		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew().multiply(BigInteger.valueOf(1000)), null);
+		yuanWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), null);
 
 		List<Coin> list = getBalanceAccount(false, yuanWallet.walletKeys());
 		for (Coin coin : list) {
@@ -111,8 +115,34 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		log.debug("====ready buyTicket====");
 		// Ensure tips queue is populated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		w.pay(null, accountKey.toAddress(networkParameters).toHex(),
-				Coin.valueOf(100, Utils.HEX.decode(yuanTokenPub)), " buy ticket");
+		byte[] yuanTokenId = Utils.HEX.decode(yuanTokenPub);
+		Coin sendAmount = Coin.valueOf(100, yuanTokenId);
+		List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : candidates) {
+			if (java.util.Arrays.equals(yuanTokenId, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, yuanTokenId);
+		Transaction tx = new Transaction(networkParameters);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, accountKey));
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			Coin change = total.subtract(sendAmount);
+			if (!change.isNegative()) {
+				if (change.isPositive()) {
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, key));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(sendAmount.getValue()) < 0) {
+			throw new InsufficientMoneyException(sendAmount + " outputs size= " + tokenUtxos.size());
+		}
+		w.signTransaction(tx, null);
+		w.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block bs = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(bs);
@@ -148,17 +178,46 @@ public class FromAddressTests extends AbstractIntegrationTest {
 
 	public List<PQKey> payKeys() throws Exception {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
-		PQKey key = PQKey.createNew().toString(), BigInteger.valueOf(100));
+		PQKey key = PQKey.createNew();
 		userkeys.add(key);
-		PQKey key2 = PQKey.createNew().toString(), BigInteger.valueOf(100));
+		PQKey key2 = PQKey.createNew();
 		userkeys.add(key2);
 
-		String memo = "pay to user";
+		byte[] yuanTokenId = Utils.HEX.decode(yuanTokenPub);
 		// Ensure tips queue is populated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
+		List<FreeStandingTransactionOutput> coinList = yuanWallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(yuanTokenId, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, yuanTokenId);
+		Coin totalSend = Coin.valueOf(0, yuanTokenId);
+		Transaction tx = new Transaction(networkParameters);
+		Coin amount = Coin.valueOf(100, yuanTokenId);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, key));
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, key2));
+		totalSend = totalSend.add(amount).add(amount);
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			Coin change = total.subtract(totalSend);
+			if (!change.isNegative()) {
+				if (change.isPositive()) {
+					PQKey changeKey = yuanWallet.walletKeys(null).get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+			throw new InsufficientMoneyException(totalSend + " outputs size= " + tokenUtxos.size());
+		}
+		yuanWallet.signTransaction(tx, null);
+		yuanWallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		log.debug("block " + (b == null ? "block is null" : b.toString()));
@@ -222,7 +281,7 @@ public class FromAddressTests extends AbstractIntegrationTest {
 		makeRewardBlock();
 	}
 
-	public Address getAddress() {
+	public PQAddress getAddress() {
 		return PQKey.createNew().toAddress(networkParameters);
 	}
 

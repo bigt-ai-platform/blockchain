@@ -23,12 +23,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 /**
@@ -65,15 +69,42 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
 
         // Create wallet keys — one per payment
         List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(PQKey.createNew();
+        for (int i = 0; i < TOTAL_PAYMENTS; i++) walletKeys.add(PQKey.createNew());
 
         // Fund all in ONE transaction
-        HashMap<String, BigInteger> funding = new HashMap<>();
-        for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
+        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+        List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+        for (FreeStandingTransactionOutput co : candidates) {
+            if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+                tokenUtxos.add(co);
+            }
         }
-        Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund"));
+        Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+        Coin totalSend = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+        Transaction fundingTx = new Transaction(networkParameters);
+        for (PQKey k : walletKeys) {
+            Coin amount = Coin.valueOf(20000, NetworkParameters.BIGTANGLE_TOKENID);
+            fundingTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, fundingTx, amount, k));
+            totalSend = totalSend.add(amount);
+        }
+        Coin sendWithFee = totalSend.add(Coin.FEE_DEFAULT);
+        for (FreeStandingTransactionOutput co : tokenUtxos) {
+            fundingTx.addInput(co.getUTXO().getBlockHash(), co);
+            total = total.add(co.getValue());
+            if (total.getValue().compareTo(sendWithFee.getValue()) >= 0) {
+                Coin change = total.subtract(sendWithFee);
+                if (!change.isNegative() && !change.isZero()) {
+                    PQKey changeKey = wallet.walletKeys(null).get(0);
+                    fundingTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, fundingTx, change, changeKey));
+                }
+                break;
+            }
+        }
+        if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+            throw new InsufficientMoneyException(totalSend + " outputs size= " + tokenUtxos.size());
+        }
+        wallet.signTransaction(fundingTx, null);
+        Block fb = wrapTransaction(fundingTx);
         if (fb != null) {
             Block rb = makeRewardBlock(fb);
             blockGraph.updateChain(false);
@@ -83,7 +114,7 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
-        PQKey finalRecipient = PQKey.createNew().toString();
+        PQKey finalRecipient = PQKey.createNew();
         AtomicLong totalNs = new AtomicLong(0);
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
@@ -102,10 +133,30 @@ public class EmbeddedBenchmark extends AbstractIntegrationTest {
                     for (int i = 0; i < PAYMENTS_PER_CLIENT; i++) {
                         PQKey wk = walletKeys.get(startIdx + i);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
-                        Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(java.util.Map.of(finalAddr, BigInteger.valueOf(15000))),
-                                NetworkParameters.BIGTANGLE_TOKENID, "pay",
-                                w.calculateAllSpendCandidates(null, false));
+                        List<FreeStandingTransactionOutput> localCandidates = w.calculateAllSpendCandidates(null, false);
+                        List<FreeStandingTransactionOutput> filtered = new ArrayList<>();
+                        for (FreeStandingTransactionOutput co : localCandidates) {
+                            if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+                                filtered.add(co);
+                            }
+                        }
+                        Coin localTotalSend = Coin.valueOf(15000, NetworkParameters.BIGTANGLE_TOKENID);
+                        Transaction tx = new Transaction(networkParameters);
+                        tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, localTotalSend, finalRecipient));
+                        Coin restAmount = localTotalSend.negate().subtract(Coin.FEE_DEFAULT);
+                        PQKey beneficiary = null;
+                        for (FreeStandingTransactionOutput co : filtered) {
+                            beneficiary = wk;
+                            restAmount = co.getValue().add(restAmount);
+                            tx.addInput(co.getUTXO().getBlockHash(), co);
+                            if (!restAmount.isNegative()) {
+                                if (restAmount.isPositive()) {
+                                    tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, restAmount, beneficiary));
+                                }
+                                break;
+                            }
+                        }
+                        w.signTransaction(tx, null);
                         if (tx != null) txs.add(tx);
                     }
 

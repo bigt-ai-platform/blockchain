@@ -20,8 +20,11 @@ import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.TokensumsMap;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
@@ -234,15 +237,44 @@ public class RewardService2Test extends AbstractIntegrationTest {
 	}
 
 	public void payMoneyToWallet1(int j, List<Block> blocksAddedAll) throws Exception {
-
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
-
+		List<PQKey> recipients = new ArrayList<>();
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(PQKey.createNew().toString(),
-					BigInteger.valueOf(3333000000l / LongMath.pow(2, j)));
+			recipients.add(PQKey.createNew());
 		}
-		mcmcService.calcNewBlockPrototype(store);	
-		Block b = wrapTransaction(wallet.payMoneyToECKeyList(null, giveMoneyResult, "payMoneyToWallet1"));
+		mcmcService.calcNewBlockPrototype(store);
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Coin totalSend = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		for (int i = 0; i < 10; i++) {
+			Coin amount = Coin.valueOf(3333000000l / LongMath.pow(2, j), NetworkParameters.BIGTANGLE_TOKENID);
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, recipients.get(i)));
+			totalSend = totalSend.add(amount);
+		}
+		Coin sendWithFee = totalSend.add(Coin.FEE_DEFAULT);
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			if (total.getValue().compareTo(sendWithFee.getValue()) >= 0) {
+				Coin change = total.subtract(sendWithFee);
+				if (!change.isNegative() && !change.isZero()) {
+					PQKey changeKey = wallet.walletKeys(null).get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+			throw new InsufficientMoneyException(totalSend + " outputs size= " + tokenUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		Block b = wrapTransaction(tx);
 		blocksAddedAll.add(b);
 		makeRewardBlock(blocksAddedAll);
 	}

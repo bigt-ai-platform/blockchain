@@ -68,7 +68,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         validatorKeys = new ArrayList<>();
-        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew();
+        for (int i = 0; i < VALIDATORS; i++) validatorKeys.add(PQKey.createNew());
     }
 
     @Test
@@ -78,8 +78,9 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
 
         // -- Phase 1: Fund validators --
         log.info("--- Phase 1: Fund validators ---");
-        Wallet genesisWallet = Wallet.fromKeys(networkParameters,
-                PQKey.createNew() {
+        PQKey genesisKey = PQKey.createNew();
+        Wallet genesisWallet = Wallet.fromKeys(networkParameters, genesisKey);
+        for (PQKey vk : validatorKeys) {
             HashMap<String, BigInteger> fund = new HashMap<>();
             fund.put(vk.toAddress(networkParameters).toHex(), BigInteger.valueOf(10000000));
             Block b = wrapTransaction(genesisWallet.payToList(null, fund,
@@ -105,7 +106,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
             Transaction tx = new Transaction(networkParameters);
             tx.addOutput(new Coin(StakeService.MIN_STAKE.longValue(),
                     NetworkParameters.BIGTANGLE_TOKENID),
-                    vk.toAddress(networkParameters));
+                    vk);
             depositBlock.addTransaction(tx);
             store.put(depositBlock);
             // Register stake directly (simplified for benchmark)
@@ -150,7 +151,7 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
                 att.setEpoch(epoch);
                 att.setBeaconBlockHash(block.getHash());
                 att.setValidatorPubkey(attester.getPubKey());
-                att.setSignature(attester.sign(block.getHash()).encodeToDER());
+                att.setSignature(attester.sign(block.getHash()).serialize());
                 casperService.processVote(att, store);
                 attestations.add(att);
             }

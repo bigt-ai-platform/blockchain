@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 
-import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
@@ -31,7 +30,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
@@ -64,7 +63,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testMultiSigns() throws Exception {
 
 		List<PQKey> wallet1Keys_part = new ArrayList<PQKey>();
-		wallet1Keys_part.add(PQKey.createNew();
+		wallet1Keys_part.add(PQKey.createNew());
 		createMultiSigns( wallet1Keys_part);
 
 	}
@@ -116,11 +115,9 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		TransactionInput input2 = transaction0.getInput(0);
 
 		Sha256Hash sighash = transaction0.hashForSignature(0, multisigScript1, Transaction.SigHash.ALL, false);
-		TransactionSignature tsrecsig = new TransactionSignature(wallet1Keys_part.get(0).sign(sighash),
-				Transaction.SigHash.ALL, false);
-		TransactionSignature tsintsig = new TransactionSignature(wallet1Keys_part.get(1).sign(sighash),
-				Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createMultiSigInputScript(ImmutableList.of(tsrecsig, tsintsig));
+		SignatureBundle sig0 = wallet1Keys_part.get(0).sign(sighash);
+		SignatureBundle sig1 = wallet1Keys_part.get(1).sign(sighash);
+		Script inputScript = ScriptBuilder.createMultiSigInputScriptBytes(ImmutableList.of(sig0.serialize(), sig1.serialize()));
 		input2.setScriptSig(inputScript);
 
 		// Ensure tips queue is populated
@@ -147,17 +144,17 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 	public void testTransferWallet() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = PQKey.createNew();
+		String address = PQKey.createNew().toAddress(networkParameters).toHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, address.toString(), amount,  "" );
+		wallet.pay(null, address, amount, "");
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block payBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payBlock);
 
 		// check the output history
-		historyUTXOList(address.toHex(), amount);
+		historyUTXOList(address, amount);
 	}
 
 	@Test
@@ -165,17 +162,17 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
     public void testPossibleConflict() throws Exception {
 
 		Coin amount = Coin.valueOf(1, NetworkParameters.BIGTANGLE_TOKENID);
-		Address address = PQKey.createNew();
+		String address = PQKey.createNew().toAddress(networkParameters).toHex();
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		wallet.pay(null, address.toString(), amount,   "" );
+		wallet.pay(null, address, amount, "");
 
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block rollingBlock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(rollingBlock);
 
 		// check the output history
-		historyUTXOList(address.toHex(), amount);
+		historyUTXOList(address, amount);
 	}
 
 	@SuppressWarnings("unused")

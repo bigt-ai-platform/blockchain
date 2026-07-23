@@ -941,6 +941,10 @@ public class Transaction extends ChildMessage {
  			boolean anyoneCanPay) {
  		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
  		SignatureBundle sigBundle = key.sign(hash);
+ 		// Store PQ signature for later use by LocalTransactionSigner
+ 		if (version >= PQConstants.TX_PQ_VERSION) {
+ 			pqSignatureBundle = sigBundle.serialize();
+ 		}
  		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
  	}
  
@@ -948,6 +952,10 @@ public class Transaction extends ChildMessage {
  			boolean anyoneCanPay) {
  		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
  		SignatureBundle sigBundle = key.sign(hash);
+ 		// Store PQ signature for later use by LocalTransactionSigner
+ 		if (version >= PQConstants.TX_PQ_VERSION) {
+ 			pqSignatureBundle = sigBundle.serialize();
+ 		}
  		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
  	}
 

@@ -40,6 +40,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ScriptException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.CoinbaseDisallowedException;
@@ -399,7 +400,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				try {
 					// Build transaction
 					Transaction tx = new Transaction(networkParameters);
-					tx.addOutput(Coin.COIN.times(2), PQKey.createNew();
+					tx.addOutput(Coin.COIN.times(2), PQKey.createNew());
 
 					// The input does not really need to be a valid signature,
 					// as long
@@ -493,8 +494,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
-			TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-			Script inputScript = ScriptBuilder.createInputScript(sig);
+			SignatureBundle sig = testKey.sign(sighash);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 			input.setScriptSig(inputScript);
 			createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 					UtilGeneseBlock.createGenesis(networkParameters), tx2);
@@ -517,8 +518,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
-			TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-			Script inputScript = ScriptBuilder.createInputScript(sig);
+			SignatureBundle sig = testKey.sign(sighash);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 			input.setScriptSig(inputScript);
 			// tx2.getOutput(0).getValue().setValue(tx2.getOutput(0).getValue().getValue().add(BigInteger.valueOf(1)));
 			Block block1 = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
@@ -550,8 +551,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			TransactionInput input = tx2.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
-			TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-			Script inputScript = ScriptBuilder.createInputScript(sig);
+			SignatureBundle sig = testKey.sign(sighash);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 			input.setScriptSig(inputScript);
 			createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 					UtilGeneseBlock.createGenesis(networkParameters), tx2);
@@ -652,8 +653,8 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = testKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Should not go through
@@ -1451,7 +1452,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					public void preApply(TokenInfo tokenInfo5) {
 
 						tokenInfo5.getMultiSignAddresses().get(0)
-								.setPubKeyHex(Utils.HEX.encode(PQKey.createNew());
+								.setPubKeyHex(Utils.HEX.encode(PQKey.createNew().getPublicKeyBytes()));
 					}
 
 					@Override
@@ -1527,7 +1528,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 				Transaction transaction = block.getTransactions().get(0);
 				Sha256Hash sighash1 = transaction.getHash();
 				SignatureBundle party1Signature = outKey.sign(sighash1, null);
-				byte[] buf1 = party1Signature.encodeToDER();
+				byte[] buf1 = party1Signature.serialize();
 
 				List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 				MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1543,7 +1544,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 				PQKey genesiskey = PQKey.createNew();
 				SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
-				byte[] buf2 = party2Signature.encodeToDER();
+				byte[] buf2 = party2Signature.serialize();
 				multiSignBy0 = new MultiSignBy();
 				if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
 					multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
@@ -1581,6 +1582,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		// Generate an eligible issuance tokenInfo
 		PQKey outKey = wallet.walletKeys().get(0);
 		PQKey outKey2 = PQKey.createNew();
+		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		Coin coinbase = Coin.valueOf(77777L, pubKey);
 
@@ -1602,7 +1604,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		Sha256Hash sighash1 = transaction.getHash();
 		SignatureBundle party1Signature = outKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
@@ -1615,7 +1617,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 
 		PQKey genesiskey = PQKey.createNew();
 		SignatureBundle party2Signature = genesiskey.sign(sighash1, aesKey);
-		byte[] buf2 = party2Signature.encodeToDER();
+		byte[] buf2 = party2Signature.serialize();
 		multiSignBy0 = new MultiSignBy();
 		if (tokenInfo.getToken() != null && tokenInfo.getToken().getTokenid() != null)
 			multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
@@ -1882,14 +1884,15 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
 
 		// Generate a subsequent issuance that does not work
-		byte[] pubKey2 = PQKey.createNew();
-		Coin coinbase2 = Coin.valueOf(666, pubKey2);
+		PQKey pubKey2 = PQKey.createNew();
+		Coin coinbase2 = Coin.valueOf(666, pubKey2.getPubKey());
 
-		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey2), "Test", "Test",
+		Token tokens2 = Token.buildSimpleTokenInfo(false, block1.getHash(), Utils.HEX.encode(pubKey2.getPubKey()), "Test", "Test",
 				1, 1, coinbase2.getValue(), true, 0, UtilGeneseBlock.createGenesis(networkParameters).getHashAsString());
+		TokenInfo tokenInfo2 = new TokenInfo();
 		tokenInfo2.setToken(tokens2);
 		tokenInfo2.getMultiSignAddresses()
-				.add(new MultiSignAddress(tokens2.getTokenid(), "", PQKey.createNew());
+				.add(new MultiSignAddress(tokens2.getTokenid(), "", PQKey.createNew().getPublicKeyAsHex()));
 		try {
 
 			Block block = makeTokenUnitTest(tokenInfo2, coinbase2, outKey, null);
@@ -2065,11 +2068,11 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Transaction transaction = block.getTransactions().get(0);
 
 		// Add another output for other tokens
-		block.getTransactions().get(0).addOutput(Coin.COIN.times(2), outKey.toAddress(networkParameters));
+		block.getTransactions().get(0).addOutput(Coin.COIN.times(2), outKey);
 
 		Sha256Hash sighash1 = transaction.getHash();
 		SignatureBundle party1Signature = outKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();

@@ -26,6 +26,7 @@ import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
@@ -33,8 +34,10 @@ import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockEvaluationsResponse;
@@ -42,6 +45,7 @@ import net.bigtangle.response.MultiSignByRequest;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 public class DirectExchangeTest extends AbstractIntegrationTest {
@@ -121,12 +125,12 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		PQKey ecKey = PQKey.createNew();
 		TokenInfo tokenInfo = new TokenInfo();
 
-		Token tokens = Token.buildSubtangleTokenInfo(false, null, Utils.HEX.encode(pubKey), "subtangle", "", "");
+		Token tokens = Token.buildSubtangleTokenInfo(false, null, Utils.HEX.encode(ecKey.getPubKey()), "subtangle", "", "");
 		tokenInfo.setToken(tokens);
 
 		tokenInfo.getMultiSignAddresses().add(new MultiSignAddress(tokens.getTokenid(), "", ecKey.getPublicKeyAsHex()));
 
-		Coin basecoin = Coin.valueOf(0L, pubKey);
+		Coin basecoin = Coin.valueOf(0L, ecKey.getPubKey());
 
 		// Ensure tips queue is populated
 		try {
@@ -146,11 +150,11 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = ecKey.sign(sighash);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
-		multiSignBy0.setTokenid(Utils.HEX.encode(pubKey));
+		multiSignBy0.setTokenid(Utils.HEX.encode(ecKey.getPubKey()));
 		multiSignBy0.setTokenindex(0);
 		multiSignBy0.setAddress(ecKey.toAddress(networkParameters).toHex());
 		multiSignBy0.setPublickey(Utils.HEX.encode(ecKey.getPubKey()));
@@ -178,11 +182,42 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
+		List<PQKey> outKeys = new ArrayList<>();
 		for (int i = 0; i < 3; i++) {
-			PQKey outKey = PQKey.createNew().toHex(), Coin.COIN.getValue());
+			outKeys.add(PQKey.createNew());
 		}
-		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				bigUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Coin totalSend = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		for (int i = 0; i < 3; i++) {
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, Coin.COIN, outKeys.get(i)));
+			totalSend = totalSend.add(Coin.COIN);
+		}
+		Coin sendWithFee = totalSend.add(Coin.FEE_DEFAULT);
+		for (FreeStandingTransactionOutput co : bigUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			if (total.getValue().compareTo(sendWithFee.getValue()) >= 0) {
+				Coin change = total.subtract(sendWithFee);
+				if (!change.isNegative() && !change.isZero()) {
+					PQKey changeKey = wallet.walletKeys(null).get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+			throw new InsufficientMoneyException(totalSend + " outputs size= " + bigUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block payblock = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(payblock);
@@ -213,11 +248,42 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		List<UTXO> balance1 = getBalance(false, genesiskey);
 		log.info("balance1 : " + balance1);
 		// two utxo to spent
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
+		List<PQKey> outKeys = new ArrayList<>();
 		for (int i = 0; i < 3; i++) {
-			PQKey outKey = PQKey.createNew().toHex(), Coin.COIN.getValue());
+			outKeys.add(PQKey.createNew());
 		}
-		wallet.payMoneyToECKeyList(null, giveMoneyResult, "testGiveMoney");
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				bigUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Coin totalSend = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		for (int i = 0; i < 3; i++) {
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, Coin.COIN, outKeys.get(i)));
+			totalSend = totalSend.add(Coin.COIN);
+		}
+		Coin sendWithFee = totalSend.add(Coin.FEE_DEFAULT);
+		for (FreeStandingTransactionOutput co : bigUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			if (total.getValue().compareTo(sendWithFee.getValue()) >= 0) {
+				Coin change = total.subtract(sendWithFee);
+				if (!change.isNegative() && !change.isZero()) {
+					PQKey changeKey = wallet.walletKeys(null).get(0);
+					tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(totalSend.getValue()) < 0) {
+			throw new InsufficientMoneyException(totalSend + " outputs size= " + bigUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(b);
@@ -306,10 +372,35 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		// Coin baseCoin = utxo.getValue().subtract(Coin.parseCoin("10000",
 		// utxo.getValue().getTokenid()));
 		// log.debug(baseCoin);
-		Address destination = outKey.toAddress(networkParameters);
 
 		Coin coinbase = Coin.valueOf(amount, utxo.getValue().getTokenid());
-		wallet.pay(null, destination.toString(), coinbase, "");
+		List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : candidates) {
+			if (java.util.Arrays.equals(tokenbuf, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		Coin total = Coin.valueOf(0, tokenbuf);
+		Transaction payTx = new Transaction(networkParameters);
+		payTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, payTx, coinbase, outKey));
+		for (FreeStandingTransactionOutput co : tokenUtxos) {
+			payTx.addInput(co.getUTXO().getBlockHash(), co);
+			total = total.add(co.getValue());
+			Coin change = total.subtract(coinbase).subtract(Coin.FEE_DEFAULT);
+			if (!change.isNegative()) {
+				if (change.isPositive()) {
+					PQKey changeKey = wallet.walletKeys(null).get(0);
+					payTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, payTx, change, changeKey));
+				}
+				break;
+			}
+		}
+		if (total.getValue().compareTo(coinbase.getValue()) < 0) {
+			throw new InsufficientMoneyException(coinbase + " outputs size= " + tokenUtxos.size());
+		}
+		wallet.signTransaction(payTx, null);
+		wallet.submitTransaction(payTx);
 
 		log.info("req block, hex : " + Utils.HEX.encode(rollingBlock.bitcoinSerialize()));
 		makeRewardBlock();

@@ -84,8 +84,7 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
                 net.bigtangle.core.Address.fromBase58(networkParameters, l1bobAddress).getHash160());
         pegTx.addOutput(bigUtxo.getValue(),
                 PQKey.fromPublicOnly(Utils.HEX.decode(
-                        "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975"))
-                        .toAddress(networkParameters));
+                        "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975")));
         pegBlock.addTransaction(pegTx);
         store.put(pegBlock);
         blockGraph.updateChain(false);

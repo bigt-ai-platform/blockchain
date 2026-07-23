@@ -104,10 +104,11 @@ public class ScriptTest {
 	public void testMultiSig() throws Exception {
 		List<PQKey> keys = Lists.newArrayList(PQKey.createNew(), PQKey.createNew());
 		assertTrue(ScriptBuilder.createMultiSigOutputScript(2, keys).isSentToMultiSig());
-		Script script = ScriptBuilder.createMultiSigOutputScript(3, keys);
+		List<PQKey> keys2 = Lists.newArrayList(PQKey.createNew(), PQKey.createNew(), PQKey.createNew());
+		Script script = ScriptBuilder.createMultiSigOutputScript(3, keys2);
 		assertTrue(script.isSentToMultiSig());
 		List<PQKey> pubkeys = new ArrayList<PQKey>(3);
-		for (PQKey key : keys)
+		for (PQKey key : keys2)
 			pubkeys.add(PQKey.fromPublicOnly(key.getPubKey()));
 		assertEquals(script.getPubKeys(), pubkeys);
 		assertFalse(ScriptBuilder.createOutputScript(PQKey.createNew()).isSentToMultiSig());
@@ -210,7 +211,7 @@ public class ScriptTest {
 
 	@Test
 	public void testCLTVPaymentChannelOutput() {
-		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew());
+		Script script = ScriptBuilder.createCLTVPaymentChannelOutput(BigInteger.valueOf(20), PQKey.createNew(), PQKey.createNew());
 		assertTrue(script.isSentToCLTVPaymentChannel(), "script is locktime-verify");
 	}
 

@@ -41,7 +41,7 @@ public class RemoteTokenTests    {
 	@BeforeEach
 	public void setUp() throws Exception {
 		contextRoot = System.getProperty("server.url", "http://localhost:8089/");
-		wallet = Wallet.fromKeys(TestParams.get(), PQKey.createNew();
+		wallet = Wallet.fromKeys(TestParams.get(), PQKey.createNew());
 
 	}
 
@@ -72,7 +72,7 @@ public class RemoteTokenTests    {
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-			PQKey signkey = PQKey.createNew(), signkey, null);
+			PQKey signkey = PQKey.createNew();
 
 		} catch (Exception e) {
 			// TODO: handle exception

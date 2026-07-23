@@ -29,6 +29,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
@@ -49,13 +50,13 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
 
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = testKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Create blocks with conflict
@@ -93,12 +94,12 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = testKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
@@ -183,6 +184,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
+		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		TokenInfo tokenInfo = new TokenInfo();
@@ -261,6 +263,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	public void testConflictSameTokenidSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
+		byte[] pubKey = outKey.getPubKey();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		// Generate an eligible issuance
@@ -356,6 +359,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
 		PQKey outKey = PQKey.createNew();
+		byte[] pubKey = outKey.getPubKey();
 		TokenInfo tokenInfo = new TokenInfo();
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
@@ -418,13 +422,13 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction doublespendTX = new Transaction(networkParameters);
-		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew());
+		doublespendTX.addOutput(  TransactionOutput.fromCoinKey(networkParameters, doublespendTX, amount, PQKey.createNew()));
 		TransactionInput input = doublespendTX.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
 
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = testKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Create blocks with conflict

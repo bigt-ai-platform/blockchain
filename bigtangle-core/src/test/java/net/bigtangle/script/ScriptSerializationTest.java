@@ -33,6 +33,7 @@ public class ScriptSerializationTest {
     @BeforeEach
     public void setUp() throws Exception {
         key1 = PQKey.createNew();
+        key2 = PQKey.createNew();
         key3 = PQKey.createNew();
     }
 

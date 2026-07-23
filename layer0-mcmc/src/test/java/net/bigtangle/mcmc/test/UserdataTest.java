@@ -41,6 +41,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         contactInfo0.setUserSettingDatas(list);
         // Token list displayname + tokenid
 
+        Transaction transaction = new Transaction(networkParameters);
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo0.toByteArray());
 
@@ -93,6 +94,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         contactInfo0.setUserSettingDatas(list);
         // Token list displayname + tokenid
 
+        Transaction transaction = new Transaction(networkParameters);
         transaction.setDataClassName(DataClassName.UserSettingDataInfo.name());
         transaction.setData(contactInfo0.toByteArray());      
         
@@ -133,6 +135,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         list.add(contact);
         contactInfo0.setContactList(list);
 
+        Transaction transaction = new Transaction(networkParameters);
         transaction.setDataClassName(DataClassName.SERVERURL.name());
         transaction.setData(contactInfo0.toByteArray());
         // TODO encrypt and decrypt the contactInfo0

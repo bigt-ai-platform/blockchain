@@ -116,13 +116,8 @@ public class EpochRewardTest extends AbstractIntegrationTest {
     }
 
     private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
-        java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
-        fund.put(key.toAddress(networkParameters).toHex(),
-                amount.add(BigInteger.valueOf(100000)));
-		Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, fund,
-				NetworkParameters.BIGTANGLE_TOKENID, "fund"));
+        Block fb = payBigTo(key, amount.add(BigInteger.valueOf(100000)), null);
         if (fb != null) {
-            makeRewardBlock(fb);
             blockGraph.updateChain(false);
             mcmcService.update(store);
             mcmcService.calcNewBlockPrototype(store);

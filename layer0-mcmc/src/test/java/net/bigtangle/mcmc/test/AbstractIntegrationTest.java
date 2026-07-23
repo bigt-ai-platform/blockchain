@@ -20,6 +20,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -92,6 +93,8 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQConstants;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.exception.UTXOProviderException;
@@ -294,10 +297,29 @@ public abstract class AbstractIntegrationTest {
 		store = storeService.getStore();
 		resetStore();
 		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
+		// Add a spendable BIG UTXO for the wallet key so tests can pay
+		PQKey walletKey = wallet.walletKeys(null).get(0);
+		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+		Transaction coinbaseTx = genesis.getTransactions().get(0);
+		TransactionOutput genesisOut = coinbaseTx.getOutput(0);
+		// Create output script matching the wallet's key
+		Script walletScript = ScriptBuilder.createOutputScript(walletKey);
+		UTXO utxo = new UTXO();
+		utxo.setHash(coinbaseTx.getHash());
+		utxo.setIndex(0);
+		utxo.setValue(genesisOut.getValue());
+		utxo.setCoinbase(true);
+		utxo.setScript(walletScript);
+		utxo.setAddress(Utils.HEX.encode(walletKey.getPubKeyHash()));
+		utxo.setBlockHash(genesis.getHash());
+		utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+		utxo.setConfirmed(true);
+		utxo.setSpent(false);
+		List<UTXO> utxos = new ArrayList<>();
+		utxos.add(utxo);
+		store.addUnspentTransactionOutput(utxos);
 		serverConfiguration.setServiceReady(true);
 		mcmcService.update(store);
-		// mcmcService.calcNewBlockPrototype(store);
-
 	}
 
 	@AfterEach
@@ -340,11 +362,46 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
-
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
-
-		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				bigUtxos.add(co);
+			}
+		}
+		if (bigUtxos.isEmpty()) {
+			throw new InsufficientMoneyException(new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID) + " outputs size= 0");
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		tx.setVersion(PQConstants.TX_PQ_VERSION);
+		Coin sendAmount = new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID);
+		PQKey walletKey = wallet.walletKeys(null).get(0);
+		for (FreeStandingTransactionOutput co : bigUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			tx.getInputs().get(tx.getInputs().size()-1).getOutpoint().connectedOutput = co;
+			total = total.add(co.getValue());
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, beneficiary));
+			Coin change = total.subtract(sendAmount).subtract(Coin.FEE_DEFAULT);
+			if (!change.isNegative()) {
+				tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, walletKey));
+				break;
+			}
+		}
+		if (total.getValue().compareTo(sendAmount.getValue()) < 0) {
+			throw new InsufficientMoneyException(sendAmount + " outputs size= " + bigUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
+		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
+		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
+		if (b != null && addedBlocks != null) {
+			addedBlocks.add(b);
+		}
+		if (b != null) {
+			makeRewardBlock(b);
+		}
+		return b;
 	}
 
 	protected Block wrapTransaction(Transaction tx) {
@@ -392,13 +449,10 @@ public abstract class AbstractIntegrationTest {
 			throws Exception {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		makeRewardBlock(addedBlocks);
+		String addr = Address.fromHash160(networkParameters, beneficiary.getPubKeyHash()).toBase58();
 		HashMap<String, BigInteger> giveMoneyTestToken = new HashMap<String, BigInteger>();
-
-		giveMoneyTestToken.put(beneficiary.toAddress(networkParameters).toHex(), amount);
+		giveMoneyTestToken.put(addr, amount);
 		Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
-
-		// Ensure tips queue is updated before wallet operations
-		// mcmcService.calcNewBlockPrototype(store);
 		w.payToList(null, giveMoneyTestToken, testKey.getPubKey(), "");
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
@@ -406,7 +460,6 @@ public abstract class AbstractIntegrationTest {
 			addedBlocks.add(b);
 			rewardWithBlock(addedBlocks, b);
 		}
-		// Open sell order for test tokens
 	}
 
 	protected Block makeTestToken(PQKey testKey, List<Block> addedBlocks)
@@ -440,16 +493,7 @@ public abstract class AbstractIntegrationTest {
 
 	protected void payBigToAmount(PQKey beneficiary, List<Block> addedBlocks)
 			throws JsonProcessingException, Exception, BlockStoreException {
-
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
-
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(500000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(400000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(300000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(200000000));
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), BigInteger.valueOf(100000000));
-		payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
-
+		payBigTo(beneficiary, BigInteger.valueOf(500000000), addedBlocks);
 	}
 
 	protected Block resetAndMakeTestToken(PQKey testKey, BigInteger amount, List<Block> addedBlocks)
@@ -507,8 +551,8 @@ public abstract class AbstractIntegrationTest {
 
 		// Sign
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
-		TransactionSignature sig = new TransactionSignature(fromKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = fromKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Submit tx to mempool and create block from batch
@@ -696,7 +740,7 @@ public abstract class AbstractIntegrationTest {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		// Submit tx and fee to mempool and create block from batch
@@ -720,7 +764,7 @@ public abstract class AbstractIntegrationTest {
 		// Legitimate it by signing
 		Sha256Hash sighash1 = tx.getHash();
 		SignatureBundle party1Signature = legitimatingKey.sign(sighash1, null);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
 		// Submit tx and fee to mempool and create block from batch
@@ -973,9 +1017,8 @@ public abstract class AbstractIntegrationTest {
 		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
-		TransactionSignature tsrecsig = new TransactionSignature(genesiskey.sign(sighash), Transaction.SigHash.ALL,
-				false);
-		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
+		SignatureBundle sigBundle = genesiskey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sigBundle);
 		input.setScriptSig(inputScript);
 		return tx;
 	}
@@ -1304,7 +1347,7 @@ public abstract class AbstractIntegrationTest {
 			}
 			Sha256Hash sighash = transaction.getHash();
 			SignatureBundle party1Signature = ecKey.sign(sighash);
-			byte[] buf1 = party1Signature.encodeToDER();
+			byte[] buf1 = party1Signature.serialize();
 
 			MultiSignBy multiSignBy0 = new MultiSignBy();
 			multiSignBy0.setTokenid(tokenid);
@@ -1405,7 +1448,7 @@ public abstract class AbstractIntegrationTest {
 		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
 
 		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew().getTokenid(), genesiskey, null);
+		PQKey genesiskey = PQKey.createNew();
 
 		return block;
 	}
@@ -1461,7 +1504,7 @@ public abstract class AbstractIntegrationTest {
 		List<MultiSignBy> multiSignBies = new ArrayList<MultiSignBy>();
 
 		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
@@ -1472,7 +1515,7 @@ public abstract class AbstractIntegrationTest {
 
 		PQKey genesiskey = PQKey.createNew();
 		SignatureBundle party2Signature = genesiskey.sign(sighash, aesKey);
-		byte[] buf2 = party2Signature.encodeToDER();
+		byte[] buf2 = party2Signature.serialize();
 		multiSignBy0 = new MultiSignBy();
 		multiSignBy0.setTokenid(tokenInfo.getToken().getTokenid().trim());
 		multiSignBy0.setTokenindex(0);
@@ -1532,7 +1575,7 @@ public abstract class AbstractIntegrationTest {
 		}
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.encodeToDER();
+		byte[] buf1 = party1Signature.serialize();
 
 		MultiSignBy multiSignBy0 = new MultiSignBy();
 
@@ -1951,7 +1994,8 @@ public abstract class AbstractIntegrationTest {
 		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
 
 		for (int i = 0; i < 10; i++) {
-			giveMoneyResult.put(PQKey.createNew().toAddress(networkParameters).toHex(),
+			PQKey key = PQKey.createNew();
+			giveMoneyResult.put(Address.fromHash160(networkParameters, key.getPubKeyHash()).toBase58(),
 					BigInteger.valueOf(3333000000l / LongMath.pow(2, 1)));
 		}
 

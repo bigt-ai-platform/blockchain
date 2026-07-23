@@ -19,8 +19,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.UtilGeneseBlock;
+import net.bigtangle.crypto.pq.SignatureBundle;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -52,21 +57,33 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
     @Test
     public void testFeeAccumulationAndDistribution() throws Exception {
         PQKey testKey = PQKey.createNew();
-        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+        wallet.importKey(testKey);
 
         String chainId = networkParameters.getChainId();
         byte[] poolBefore = store.getPosState("fee", chainId);
         BigInteger poolBeforeVal = poolBefore == null ? BigInteger.ZERO : new BigInteger(poolBefore);
         log.info("Fee pool before ({}): {}", chainId, poolBeforeVal);
 
-        PQKey receiver = PQKey.createNew();
-        List<FreeStandingTransactionOutput> candidates =
-                w.calculateAllSpendCandidates(null, false);
-
-        Transaction tx = w.createTransaction(null, candidates,
-                receiver.toAddress(networkParameters).toHex(),
-                Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID),
-                "fee-pool-test");
+        // Create a transaction manually using genesis coinbase output
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Transaction coinbaseTx = genesis.getTransactions().get(0);
+        TransactionOutput genesisOut = coinbaseTx.getOutput(0);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setVersion(2);
+        tx.addInput(genesis.getHash(), genesisOut);
+        tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
+                Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID), testKey));
+        // Change output back to wallet key
+        Coin change = genesisOut.getValue().subtract(Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID))
+                .subtract(Coin.FEE_DEFAULT);
+        if (!change.isNegative()) {
+            tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, wallet.walletKeys(null).get(0)));
+        }
+        // Sign with wallet key
+        Sha256Hash sighash = tx.hashForSignature(0, genesisOut.getScriptBytes(), Transaction.SigHash.ALL, false);
+        PQKey walletKey = wallet.walletKeys(null).get(0);
+        SignatureBundle sig = walletKey.sign(sighash);
+        tx.getInputs().get(0).setScriptSig(ScriptBuilder.createInputScriptForPQ(sig));
 
         BigInteger txIn = BigInteger.ZERO;
         BigInteger txOut = BigInteger.ZERO;
@@ -149,18 +166,13 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
         log.info("=== TEST PASSED ===");
     }
 
-    private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
-        java.util.HashMap<String, BigInteger> fund = new java.util.HashMap<>();
-        fund.put(key.toAddress(networkParameters).toHex(),
-                amount.add(BigInteger.valueOf(100000)));
-        Block fb = wrapTransaction(wallet.payMoneyToECKeyList(null, fund,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund"));
-        if (fb != null) {
-            makeRewardBlock(fb);
-            blockGraph.updateChain(false);
-            mcmcService.update(store);
-            mcmcService.calcNewBlockPrototype(store);
-        }
+	private void fundAndStake(PQKey key, BigInteger amount) throws Exception {
+		Block fb = payBigTo(key, amount.add(BigInteger.valueOf(100000)), null);
+		if (fb != null) {
+			blockGraph.updateChain(false);
+			mcmcService.update(store);
+			mcmcService.calcNewBlockPrototype(store);
+		}
 
         Block proto = cacheBlockPrototypeService.getBlockPrototype(store);
         Block depositBlock = Block.createBlock(networkParameters,

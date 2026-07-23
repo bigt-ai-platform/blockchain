@@ -20,6 +20,7 @@ import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.bridge.LayerAnchor;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Utils;
@@ -119,7 +120,8 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         Sha256Hash root = MerkleProof.computeRoot(blockHashes);
         MerkleProof proof = MerkleProof.buildProofFor(blockHashes, tipProto.getHash());
 
-        PQKey signKey = PQKey.createNew()).encodeToDER();
+        SignatureBundle signature = PQKey.createNew().sign(Sha256Hash.of("test".getBytes()));
+        byte[] sigBytes = signature.serialize();
 
         LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, tipProto.getHash(),
                 1, root, sigBytes, proof);

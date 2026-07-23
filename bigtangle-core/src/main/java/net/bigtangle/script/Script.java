@@ -91,7 +91,7 @@ public class Script {
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 
     private static final Logger log = LoggerFactory.getLogger(Script.class);
-    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+    public static final long MAX_SCRIPT_ELEMENT_SIZE = 50000;  // bytes (increased for PQ keys)
     public static final int SIG_SIZE = 75;
     /** Max number of sigops allowed in a standard p2sh redeem script */
     public static final int MAX_P2SH_SIGOPS = 15;
@@ -1599,8 +1599,8 @@ public class Script {
         } catch (ProtocolException e) {
             throw new RuntimeException(e);   // Should not happen unless we were given a totally broken transaction.
         }
-        if (getProgram().length > 10000 || scriptPubKey.getProgram().length > 10000)
-            throw new ScriptException("Script larger than 10,000 bytes");
+        if (getProgram().length > 50000 || scriptPubKey.getProgram().length > 50000)
+            throw new ScriptException("Script larger than 50,000 bytes");
         
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
