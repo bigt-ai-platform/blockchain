@@ -198,6 +198,17 @@ public class TokenTest extends AbstractIntegrationTest {
 	}
 
 	@Test
+	public void testMakeTestToken() throws Exception {
+		PQKey key = PQKey.createNew();
+		List<Block> addedBlocks = new ArrayList<>();
+		payBigTo(key, Coin.FEE_DEFAULT.getValue(), addedBlocks);
+		makeRewardBlock();
+		Block tokenBlock = makeTestToken(key, addedBlocks);
+		String tokenid = key.getPublicKeyAsHex();
+		assertTrue(getToken(tokenid).getTokenid().equals(tokenid));
+	}
+
+	@Test
 	public void testCreateTokenWithDomain() throws Exception {
 
 		PQKey shopkey = createShopToken();

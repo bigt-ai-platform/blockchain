@@ -1458,14 +1458,20 @@ public abstract class AbstractIntegrationTest {
 		// bypassing the production signToken endpoint which is gated to reject
 		// BLOCKTYPE_TOKEN_CREATION on non-L0 chains (see LAYERING-PLAN.md §5.5).
 		block = adjustSolve(block);
+		String tokenid = tokenInfo.getToken().getTokenid();
+
 		blockGraph.addBlock(block, true, store);
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
-		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
+		if (permissionedAddressesResponse != null && permissionedAddressesResponse.getMultiSignAddresses() != null
+				&& !permissionedAddressesResponse.getMultiSignAddresses().isEmpty()) {
+			MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
+		}
 
-		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew();
+		pullBlockDoMultiSign(tokenid, outKey, aesKey);
+		// Sign with genesis domain key to satisfy checkDomainPermission
+		pullBlockDoMultiSign(tokenid, wallet.walletKeys().get(0), aesKey);
 
 		return block;
 	}

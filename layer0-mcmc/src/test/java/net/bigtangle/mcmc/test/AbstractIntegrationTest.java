@@ -1455,10 +1455,15 @@ public abstract class AbstractIntegrationTest {
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
-		MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
+		String tokenid = tokenInfo.getToken().getTokenid();
+		if (permissionedAddressesResponse != null && permissionedAddressesResponse.getMultiSignAddresses() != null
+				&& !permissionedAddressesResponse.getMultiSignAddresses().isEmpty()) {
+			MultiSignAddress multiSignAddress = permissionedAddressesResponse.getMultiSignAddresses().get(0);
+		}
 
-		pullBlockDoMultiSign(tokenInfo.getToken().getTokenid(), outKey, aesKey);
-		PQKey genesiskey = PQKey.createNew();
+		pullBlockDoMultiSign(tokenid, outKey, aesKey);
+		// Sign with genesis domain key to satisfy checkDomainPermission
+		pullBlockDoMultiSign(tokenid, wallet.walletKeys().get(0), aesKey);
 
 		return block;
 	}
