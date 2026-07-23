@@ -1457,16 +1457,13 @@ public abstract class AbstractIntegrationTest {
 		String tokenid = tokenInfo.getToken().getTokenid();
 
 		// L1's signToken endpoint rejects BLOCKTYPE_TOKEN_CREATION by design.
-		// Use direct block-graph path. Since addBlock skips connectUTXOs/connectToken
-		// for failed solidity states (allowUnsolid=true), we manually process them.
+		// Use direct block-graph path, then manually connect UTXOs.
 		block = adjustSolve(block);
-		boolean added = blockGraph.addBlock(block, true, store);
-
-		// Manually connect UTXOs and token so they are queryable
-		ServiceBaseConnect serviceConnect = new ServiceBaseConnect(serverConfiguration, networkParameters,
+		blockGraph.addBlock(block, true, store);
+		ServiceBaseConnect sc = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
-		serviceConnect.connectUTXOs(block, store);
-		serviceConnect.connectTypeSpecificUTXOs(block, store);
+		sc.connectUTXOs(block, store);
+		sc.connectTypeSpecificUTXOs(block, store);
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
