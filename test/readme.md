@@ -84,7 +84,51 @@ bash helper/testall.sh
 
 ## Remaining Work
 
-All remaining failures are pre-existing test infrastructure or test logic issues (not PQ-specific):
+All remaining failures (in `layer0-mcmc`) are pre-existing test logic issues (not PQ-specific):
 - `TokenTest` (9 tests): broken test logic — tests assert against pre-PQ-migration 1-signature flow; need 2-signature domain model with hierarchical domain chains ("shop" → "id.shop" → identity token)
 - `EpochRewardTest` (1 test): `NullPointerException` — `ScriptBuilder.createOutputScript` gets null key
 - `FromAddressTests.testUserpay` (disabled): depends on pre-existing token/wallet setup not in standard test environment
+
+## l1-order-mcmc Fix Plan
+
+**Status:** Compilation fixed (30+ errors → 0). Runtime: 31 tests all fail with Spring context initialization.
+
+**Root cause:** `OrderMatchL1MCMCStart` Spring configuration fails to initialize. Two phases:
+
+### Phase 1 — Spring Context (blocker)
+The Spring context for `OrderMatchL1MCMCStart` doesn't load. Likely causes:
+- Missing bean definition in `l1-order-server` after PQ migration
+- Missing dependency injection for PQ-related services
+- `service.schedule.initsync=false` or `service.schedule.mcmc=false` properties causing early exit
+
+**Diagnosis approach:**
+```bash
+mvn test -pl l1-order-mcmc -Dtest=FullPrunedBlockGraphTest -DDB_NAME=info_order \
+  -Dsurefire.forkCount=1 \
+  -DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED"
+```
+Check the Spring context startup failure in the test output. Common fixes:
+1. Add missing `@ComponentScan`/`@Bean` for PQ services
+2. Fix `application.properties` or test property overrides
+3. Add missing service implementations
+
+### Phase 2 — Test Logic (non-blocker)
+Once Spring context loads, tests will likely show similar PQ-migration issues:
+- `TransactionSignature`/`ECKey` patterns → `SignatureBundle`/`PQKey`
+- `fromKey.sign()` → ECDSA return (`BigInteger`) vs PQ return (`SignatureBundle`)
+- Missing `SignatureBundle` imports
+- Address format mismatches (`toHex()` vs `toBase58()`)
+- `checkBalance`/`getBalance` returning empty for new `PQKey.createNew()` keys
+
+### Phase 3 — Service Layer (if tests pass but logic fails)
+- Token creation under domain hierarchy (same as TokenTest 2-signature issue)
+- Order matching with PQ keys and addresses
+- UTXO spending with PQ signatures
+
+**Progress:**
+| Step | Date | Status |
+|------|------|--------|
+| Fix compilation (imports, vars, ECDSA→PQ signing) | Done | ✅ |
+| Spring context loads | Not started | ❌ |
+| First test passes | Not started | ❌ |
+| All 31 tests pass | Not started | ❌ |

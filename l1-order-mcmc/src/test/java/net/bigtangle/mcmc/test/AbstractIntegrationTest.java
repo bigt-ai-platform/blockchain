@@ -93,6 +93,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.InsufficientMoneyException;
@@ -299,8 +300,10 @@ public abstract class AbstractIntegrationTest {
 		// L1 chain does not mint BIG at genesis by design (genesisMintsBIG=false).
 		// In production BIG arrives via cross-chain bridge from L0.
 		// For tests we create genesis BIG UTXOs directly so wallet can pay fees.
-		fundGenesisBIG();
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
+		PQKey genesisKey = PQKey.createNew();
+		fundGenesisBIG(genesisKey);
+		wallet = Wallet.fromKeys(networkParameters, genesisKey, contextRoot);
+		serverConfiguration.setServiceReady(true);
 		mcmcService.update(store);
 		mcmcService.calcNewBlockPrototype(store);
 
@@ -311,11 +314,10 @@ public abstract class AbstractIntegrationTest {
 	 * unspent outputs into the store, simulating a cross-chain bridge transfer
 	 * from L0 to L1. Without this L1 has no BIG tokens to pay fees.
 	 */
-	private void fundGenesisBIG() throws Exception {
+	private void fundGenesisBIG(PQKey genesisKey) throws Exception {
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
 		Transaction coinbase = genesis.getTransactions().get(0);
-		Script script = ScriptBuilder.createOutputScript(
-			PQKey.fromPublicOnly(Utils.HEX.decode(testPub)));
+		Script script = ScriptBuilder.createOutputScript(genesisKey);
 		Coin value = new Coin(NetworkParameters.BigtangleCoinTotal, NetworkParameters.BIGTANGLE_TOKENID);
 		TransactionOutput out = new TransactionOutput(networkParameters, coinbase, value, script.getProgram());
 		UTXO utxo = new UTXO(coinbase.getHash(), 0, value, true,
@@ -381,34 +383,47 @@ public abstract class AbstractIntegrationTest {
     }
 
 	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
-
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
-
-		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
-	}
-
-	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
-		// Ensure tips queue is populated before wallet operations that need getTip
-		try {
-			mcmcService.calcNewBlockPrototype(store);
-		} catch (Exception e) {
-			// If update fails (e.g., not enough blocks), continue anyway
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				bigUtxos.add(co);
+			}
 		}
-
-		wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
+		if (bigUtxos.isEmpty()) {
+			throw new InsufficientMoneyException(new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID) + " outputs size= 0");
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		tx.setVersion(PQConstants.TX_PQ_VERSION);
+		Coin sendAmount = new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID);
+		PQKey walletKey = wallet.walletKeys(null).get(0);
+		for (FreeStandingTransactionOutput co : bigUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			tx.getInputs().get(tx.getInputs().size()-1).getOutpoint().connectedOutput = co;
+			total = total.add(co.getValue());
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, beneficiary));
+			Coin change = total.subtract(sendAmount).subtract(Coin.FEE_DEFAULT);
+			if (!change.isNegative()) {
+				tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, walletKey));
+				break;
+			}
+		}
+		if (total.getValue().compareTo(sendAmount.getValue()) < 0) {
+			throw new InsufficientMoneyException(sendAmount + " outputs size= " + bigUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
-		if (b == null || b.getTransactions().isEmpty()) {
-			return null;
-		}
-		if (addedBlocks != null) {
+		if (b != null && addedBlocks != null) {
 			addedBlocks.add(b);
 		}
-		Block re = makeRewardBlock(b);
-		if (addedBlocks != null) {
-			addedBlocks.add(re);
+		if (b != null) {
+			makeRewardBlock(b);
+		}
+		if (b == null || b.getTransactions().isEmpty()) {
+			return null;
 		}
 		return b;
 	}
