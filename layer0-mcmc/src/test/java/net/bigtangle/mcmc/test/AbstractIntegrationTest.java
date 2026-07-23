@@ -296,21 +296,24 @@ public abstract class AbstractIntegrationTest {
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
 		resetStore();
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
-		// Add a spendable BIG UTXO for the wallet key so tests can pay
-		PQKey walletKey = wallet.walletKeys(null).get(0);
+		// Use deterministic genesis key that matches TestParams.genesisPub
+		byte[] mlDsaSeed = new byte[32];
+		byte[] slhDsaSeed = new byte[32];
+		java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
+		java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
+		PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
+		wallet = Wallet.fromKeys(networkParameters, genesisKey, contextRoot);
+		// Add genesis coinbase as spendable UTXO for the wallet's genesis key
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
 		Transaction coinbaseTx = genesis.getTransactions().get(0);
 		TransactionOutput genesisOut = coinbaseTx.getOutput(0);
-		// Create output script matching the wallet's key
-		Script walletScript = ScriptBuilder.createOutputScript(walletKey);
 		UTXO utxo = new UTXO();
 		utxo.setHash(coinbaseTx.getHash());
 		utxo.setIndex(0);
 		utxo.setValue(genesisOut.getValue());
 		utxo.setCoinbase(true);
-		utxo.setScript(walletScript);
-		utxo.setAddress(Utils.HEX.encode(walletKey.getPubKeyHash()));
+		utxo.setScript(genesisOut.getScriptPubKey());
+		utxo.setAddress(Address.fromHash160(networkParameters, genesisKey.getPubKeyHash()).toBase58());
 		utxo.setBlockHash(genesis.getHash());
 		utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
 		utxo.setConfirmed(true);
@@ -1004,20 +1007,25 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	protected Transaction createTestTransaction() throws Exception {
-
-		PQKey genesiskey = PQKey.createNew();
-		List<UTXO> outputs = getBalance(false, genesiskey);
+		PQKey walletKey = wallet.walletKeys(null).get(0);
+		List<UTXO> outputs = getBalance(false, walletKey);
 		UTXO output = getLargeUTXO(outputs);
+		// Debug: verify the UTXO script matches what we expect
+		Script outputScript = output.getScript();
+		assert outputScript != null : "UTXO script is null";
+		assert outputScript.isSentToRawPubKey() : "UTXO script is not P2PK: " + outputScript;
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction tx = new Transaction(networkParameters);
-		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, genesiskey));
+		tx.setVersion(PQConstants.TX_PQ_VERSION);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, amount, walletKey));
 		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
-				spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), genesiskey));
+				spendableOutput.getValue().subtract(amount).subtract(Coin.FEE_DEFAULT), walletKey));
 		TransactionInput input = tx.addInput(output.getBlockHash(), spendableOutput);
+		input.getOutpoint().connectedOutput = spendableOutput;
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
-		SignatureBundle sigBundle = genesiskey.sign(sighash);
+		SignatureBundle sigBundle = walletKey.sign(sighash);
 		Script inputScript = ScriptBuilder.createInputScriptForPQ(sigBundle);
 		input.setScriptSig(inputScript);
 		return tx;

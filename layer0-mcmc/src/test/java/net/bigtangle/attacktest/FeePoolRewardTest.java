@@ -56,34 +56,13 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
 
     @Test
     public void testFeeAccumulationAndDistribution() throws Exception {
-        PQKey testKey = PQKey.createNew();
-        wallet.importKey(testKey);
-
         String chainId = networkParameters.getChainId();
         byte[] poolBefore = store.getPosState("fee", chainId);
         BigInteger poolBeforeVal = poolBefore == null ? BigInteger.ZERO : new BigInteger(poolBefore);
         log.info("Fee pool before ({}): {}", chainId, poolBeforeVal);
 
-        // Create a transaction manually using genesis coinbase output
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-        Transaction coinbaseTx = genesis.getTransactions().get(0);
-        TransactionOutput genesisOut = coinbaseTx.getOutput(0);
-        Transaction tx = new Transaction(networkParameters);
-        tx.setVersion(2);
-        tx.addInput(genesis.getHash(), genesisOut);
-        tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx,
-                Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID), testKey));
-        // Change output back to wallet key
-        Coin change = genesisOut.getValue().subtract(Coin.valueOf(5000, NetworkParameters.BIGTANGLE_TOKENID))
-                .subtract(Coin.FEE_DEFAULT);
-        if (!change.isNegative()) {
-            tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, wallet.walletKeys(null).get(0)));
-        }
-        // Sign with wallet key
-        Sha256Hash sighash = tx.hashForSignature(0, genesisOut.getScriptBytes(), Transaction.SigHash.ALL, false);
-        PQKey walletKey = wallet.walletKeys(null).get(0);
-        SignatureBundle sig = walletKey.sign(sighash);
-        tx.getInputs().get(0).setScriptSig(ScriptBuilder.createInputScriptForPQ(sig));
+        // Create a test transaction (uses funded UTXO from setUp)
+        Transaction tx = createTestTransaction();
 
         BigInteger txIn = BigInteger.ZERO;
         BigInteger txOut = BigInteger.ZERO;
