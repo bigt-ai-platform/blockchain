@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -32,6 +33,7 @@ import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.ordermatch.MatchLastdayResult;
 import net.bigtangle.params.NetworkParameters;
@@ -56,12 +58,18 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	OrderTickerService tickerService;
 
 	private PQKey testKey = PQKey.createNew();
+	private List<Block> addedBlocks = new ArrayList<>();
+	private String orderbaseToken = NetworkParameters.BIGTANGLE_TOKENID_STRING;
+
+	@BeforeEach
+	public void setUpOrderTest() {
+		addedBlocks.clear();
+	}
 
 	@Test
 	public void orderTickerPrice() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -124,7 +132,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		List<PQKey> testkeys = new ArrayList<PQKey>();
 		testkeys.add(testKey);
 		getBalanceAccount(false, testkeys);
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		log.debug("====start resetAndMakeTestTokenWithSpare");
@@ -150,7 +157,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderTickerSearchAPI() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -188,7 +194,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void orderTickerSearchAVGAPI() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -245,7 +250,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void buy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -332,7 +336,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	@Test
 	public void buyBase2Token() throws Exception {
 
-		List<Block> addedBlocks = new ArrayList<>();
 		// base token
 		PQKey yuan = PQKey.createNew();
 
@@ -447,7 +450,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void buyBaseTokenMixed() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		int priceshift = 1000000;
 		// yuan token
 		PQKey yuan = PQKey.createNew();
@@ -501,7 +503,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void sell() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -535,7 +536,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void multiLevelBuy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -572,7 +572,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void multiLevelSell() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -611,7 +610,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialBuy() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -645,7 +643,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		PQKey genesisKey = PQKey.createNew();
 		;
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -679,7 +676,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialBidFill() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -714,7 +710,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void partialAskFill() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -778,7 +773,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// PQKey genesisKey =
 		// PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
@@ -813,7 +807,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		PQKey genesisKey = PQKey.createNew();
 
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -882,8 +875,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		TransactionInput input = tx.addInput(outputs.get(0).getBlockHash(), spendableOutput);
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
-		TransactionSignature sig = new TransactionSignature(testKey.sign(sighash), Transaction.SigHash.ALL, false);
-		Script inputScript = ScriptBuilder.createInputScript(sig);
+		SignatureBundle sig = testKey.sign(sighash);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
 		input.setScriptSig(inputScript);
 
 		// Create block with order
@@ -911,7 +904,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		PQKey genesisKey = PQKey.createNew();
 		;
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -948,7 +940,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// we execute many times for order matchings, then do the reward to confirm all
 		// orders
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -973,7 +964,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testManyExecutions() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -1003,7 +993,6 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 	public void testMultiMatching1() throws Exception {
 
 		PQKey genesisKey = PQKey.createNew();
-		List<Block> addedBlocks = new ArrayList<>();
 		payBigToAmount(genesisKey, addedBlocks);
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
@@ -1136,6 +1125,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		payBigTo(testKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
+		BigInteger amount = Coin.FEE_DEFAULT.getValue().multiply(BigInteger.valueOf(tradeAmount));
 		Block block = wrapTransaction(Wallet.fromKeys(networkParameters, testKey, contextRoot).sellOrder(null, testTokenId, price,
 				tradeAmount, null, null, NetworkParameters.BIGTANGLE_TOKENID_STRING, true));
 
@@ -1171,12 +1161,10 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		long tradeAmount = 100l;
 		long price = 1;
+		Coin amount = Coin.FEE_DEFAULT.multiply(tradeAmount);
 
 		PQKey testKeyBuy = PQKey.createNew();
-		// split BIG
-		payBigTo(testKeyBuy, amount.add(Coin.FEE_DEFAULT.getValue()), addedBlocks);
-
-		payBigTo(testKeyBuy, amount, addedBlocks);
+		payBigTo(testKeyBuy, amount.getValue(), addedBlocks);
 
 		// Open buy order for test tokens
 		// Ensure tips queue is updated before wallet operations
