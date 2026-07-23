@@ -1456,14 +1456,7 @@ public abstract class AbstractIntegrationTest {
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, outKey, aesKey, overrideHash1, overrideHash2);
 		String tokenid = tokenInfo.getToken().getTokenid();
 
-		// L1's signToken endpoint rejects BLOCKTYPE_TOKEN_CREATION by design.
-		// Use direct block-graph path, then manually connect UTXOs.
-		block = adjustSolve(block);
-		blockGraph.addBlock(block, true, store);
-		ServiceBaseConnect sc = new ServiceBaseConnect(serverConfiguration, networkParameters,
-				cacheBlockService, jsonmapper);
-		sc.connectUTXOs(block, store);
-		sc.connectTypeSpecificUTXOs(block, store);
+		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());

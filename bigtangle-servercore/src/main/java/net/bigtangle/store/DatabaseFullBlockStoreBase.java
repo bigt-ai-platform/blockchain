@@ -407,7 +407,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String DELETE_MATCHING_EVENT_BY_HASH = "DELETE FROM matching WHERE txhash = ?";
 	// lastest MATCHING EVENTS
 	protected final String INSERT_MATCHING_EVENT_LAST_SQL = getInsert()
-			+ " INTO matchinglast (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)"
+			+ " INTO matchinglast (txhash, tokenid, basetokenid, price, executedQuantity, inserttime, token_basetoken_md5) VALUES (?, ?, ?, ?, ?, ?, ?)"
 			+ duplicateInsert();
 	protected final String DELETE_MATCHING_EVENT_LAST_BY_KEY = "DELETE FROM matchinglast WHERE tokenid = ? and basetokenid=?";
 

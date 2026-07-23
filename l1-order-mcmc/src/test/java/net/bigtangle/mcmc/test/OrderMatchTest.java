@@ -254,6 +254,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Make test token
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
+		payBigToAmount(genesisKey, addedBlocks);
 
 		// Get current existing token amount
 		HashMap<String, Long> origTokenAmounts = getCurrentTokenAmounts();

@@ -182,13 +182,15 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     		   + ")\n";
     
     private static final String CREATE_MATCHING_LAST_TABLE = "CREATE TABLE matchinglast (\n" 
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    txhash varchar(255) NOT NULL,\n"
             + "    tokenid TEXT NOT NULL,\n" 
             + "    basetokenid TEXT NOT NULL,\n" 
             + "    price bigint NOT NULL,\n"
             + "    executedQuantity bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
-            + "    PRIMARY KEY ( tokenid,basetokenid) \n" 
+            + "    token_basetoken_md5 UUID NOT NULL,\n"
+            + "    CONSTRAINT matchinglast_unique UNIQUE (token_basetoken_md5)\n"
             + ")\n";
     private static final String CREATE_MATCHING_LAST_DAY_TABLE = "CREATE TABLE matchinglastday (\n" 
             + "    txhash varchar(255) NOT NULL,\n"

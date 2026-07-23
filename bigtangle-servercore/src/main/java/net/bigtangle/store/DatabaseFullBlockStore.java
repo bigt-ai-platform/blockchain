@@ -2066,6 +2066,9 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				preparedStatement.setLong(4, match.getPrice());
 				preparedStatement.setLong(5, match.getExecutedQuantity());
 				preparedStatement.setLong(6, match.getInserttime());
+				String combined = match.getTokenid() + "\0" + match.getBasetokenid();
+				preparedStatement.setObject(7, java.util.UUID.nameUUIDFromBytes(
+						combined.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
