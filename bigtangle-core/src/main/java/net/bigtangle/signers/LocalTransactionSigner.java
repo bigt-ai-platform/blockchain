@@ -29,6 +29,7 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.crypto.DeterministicKey;
 import net.bigtangle.crypto.TransactionSignature;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.ScriptException;
@@ -116,7 +117,16 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
                 // Handle PQ signatures: detect from the output script's pubkey
                 byte[] pkFromScript = scriptPubKey.isSentToRawPubKey() ? scriptPubKey.getPubKey() : null;
                 if (pkFromScript != null && PQScriptUtils.isPQPubkey(pkFromScript)) {
+                    // Set version to TX_PQ_VERSION so calculateSignature stores the PQ bundle
+                    boolean versionRestored = false;
+                    if (tx.getVersion() < PQConstants.TX_PQ_VERSION) {
+                        tx.setVersion(PQConstants.TX_PQ_VERSION);
+                        versionRestored = true;
+                    }
                     tx.calculateSignature(i, key, script, Transaction.SigHash.ALL, false);
+                    if (versionRestored) {
+                        tx.setVersion(1);
+                    }
                     byte[] storedBundle = tx.getPqSignatureBundle();
                     if (storedBundle == null) {
                         log.warn("PQ signing failed - no pqSignatureBundle stored on tx");
