@@ -70,7 +70,9 @@ echo "=== Running Contract tests ==="
 mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
   -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract || { echo "Contract tests FAILED"; EXIT_CODE=1; }
 
-# l1-order-mcmc has pre-existing PQ migration issues (undeclared vars, missing overloads) — skipped
+echo "=== Running Order tests ==="
+mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+  -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order || { echo "Order tests FAILED"; EXIT_CODE=1; }
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== All L1 tests passed ==="
