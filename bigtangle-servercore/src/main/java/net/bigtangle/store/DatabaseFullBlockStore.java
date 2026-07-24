@@ -2905,7 +2905,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		PreparedStatement s = null;
 		try {
 			s = getConnection().prepareStatement(
-					"insert into accountBalance (address, tokenid,coinvalue,lastblockhash) values(?,?,?,?)");
+					"insert into accountBalance (address, tokenid,coinvalue,lastblockhash,address_tokenid_md5) values(?,?,?,?,?)");
 
 			for (String toaddress : toAddressMap.keySet()) {
 				for (String tokenid : toAddressMap.get(toaddress).keySet()) {
@@ -2913,6 +2913,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 					s.setString(2, tokenid);
 					s.setBytes(3, toAddressMap.get(toaddress).get(tokenid).getValue().toByteArray());
 					s.setBytes(4, Sha256Hash.ZERO_HASH.getBytes());
+					s.setObject(5, java.util.UUID.nameUUIDFromBytes(
+							(toaddress + "\0" + tokenid).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 					s.addBatch();
 
 				}
@@ -3281,8 +3283,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void saveStakeDeposit(StakeRecord stake) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("INSERT INTO stake_deposits "
-					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash) "
-					+ "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")) {
+					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash, pubkey_md5) "
+					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (pubkey_md5) DO NOTHING")) {
 			s.setBytes(1, stake.getPubkey());
 			s.setLong(2, stake.getAmount().longValue());
 			s.setBytes(3, stake.getWithdrawalCredentials());
@@ -3290,6 +3292,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			s.setBoolean(5, stake.isSlashed());
 			s.setLong(6, stake.getWithdrawableEpoch());
 			s.setBytes(7, stake.getBlockHash() != null ? stake.getBlockHash().getBytes() : null);
+			s.setObject(8, java.util.UUID.nameUUIDFromBytes(stake.getPubkey()));
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);

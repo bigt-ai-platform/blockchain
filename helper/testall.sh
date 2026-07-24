@@ -43,7 +43,7 @@ for i in $(seq 1 30); do
 done
 
 echo "=== Recreating databases ==="
-for db in info_l0 info_pai info_nft info_payment; do
+for db in info_l0 info_pai info_nft info_payment info_order; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
@@ -59,10 +59,10 @@ echo "=== Core tests passed ==="
 echo "=== Building all modules (serial) ==="
 # Build all server modules + core dependencies first (without tests)
 mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-nft-server,l1-payment-server 2>&1 | tail -1
+  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-nft-server,l1-payment-server,l1-order-server 2>&1 | tail -1
 # Also compile test classes to avoid stale test JARs referencing removed classes
 mvn test-compile -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc 2>&1 | tail -1
+  -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-order-server,l1-order-mcmc 2>&1 | tail -1
 echo "=== All modules built ==="
 
 echo "=== Running L0 tests ==="
@@ -76,10 +76,20 @@ for attempt in 1 2 3; do
     echo "PAI tests attempt $attempt failed, retrying..."
 done
 
+ORDER_OK=false
+for attempt in 1 2 3; do
+    mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order 2>&1 | tail -1 && { ORDER_OK=true; break; }
+    echo "Order tests attempt $attempt failed, retrying..."
+done
+
 EXIT_CODE=0
 wait $L0_PID      || { echo "Layer 0 tests FAILED";      EXIT_CODE=1; }
 if [ "$PAI_OK" != "true" ]; then
     echo "PAI tests FAILED after 3 attempts"
+    EXIT_CODE=1
+fi
+if [ "$ORDER_OK" != "true" ]; then
+    echo "Order tests FAILED after 3 attempts"
     EXIT_CODE=1
 fi
 

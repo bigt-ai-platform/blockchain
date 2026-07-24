@@ -122,7 +122,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
                 // buy or sell
             + "    side varchar(255),\n" 
                 // public address
-            + "    beneficiaryaddress varchar(255),\n" 
+            + "    beneficiaryaddress TEXT,\n" 
                 // the pubkey that will receive the targettokens
                 // on completion or returned   tokens on cancels 
             + "    beneficiarypubkey BYTEA,\n"
@@ -133,7 +133,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
                 // order is valid after this time
             + "    validFromTime bigint,\n"            
                // order base token
-            + "    orderbasetoken varchar(255),\n" 
+            + "    orderbasetoken TEXT,\n" 
             + "    tokendecimals int ,\n" 
              + "   price bigint,\n" 
             // true iff a order block of this order is confirmed
@@ -267,12 +267,14 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ")";
     //aggregate of utxo for view only
     private static final String CREATE_ACCOUNT_TABLE = "CREATE TABLE accountBalance (\n" 
+            + "    id SERIAL PRIMARY KEY,\n"
             + "    address varchar(255),\n"
             + "    tokenid TEXT,\n" 
             + "    coinvalue BYTEA NOT NULL,\n" 
             + "    time bigint,\n" 
             + "    lastblockhash  BYTEA NOT NULL,\n" 
-            + "    CONSTRAINT account_pk PRIMARY KEY (address, tokenid) \n" 
+            + "    address_tokenid_md5 UUID NOT NULL,\n"
+            + "    CONSTRAINT account_unique UNIQUE (address_tokenid_md5)\n"
             + "   ) \n";
 
     
@@ -307,6 +309,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ")";
 
     private static final String CREATE_STAKE_DEPOSITS_TABLE = "CREATE TABLE stake_deposits (\n"
+    		+ "    id SERIAL PRIMARY KEY,\n"
     		+ "    pubkey BYTEA NOT NULL,\n"
     		+ "    amount BIGINT NOT NULL,\n"
     		+ "    withdrawal_credentials BYTEA,\n"
@@ -314,7 +317,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     		+ "    slashed BOOLEAN DEFAULT FALSE,\n"
     		+ "    withdrawable_epoch BIGINT DEFAULT -1,\n"
     		+ "    blockhash BYTEA,\n"
-    		+ "    CONSTRAINT stake_deposits_pk PRIMARY KEY (pubkey)\n"
+    		+ "    pubkey_md5 UUID NOT NULL,\n"
+    		+ "    CONSTRAINT stake_deposits_unique UNIQUE (pubkey_md5)\n"
     		+ ")";
 
     private static final String CREATE_BATCHBLOCK_TABLE = "CREATE TABLE batchblock (\n"

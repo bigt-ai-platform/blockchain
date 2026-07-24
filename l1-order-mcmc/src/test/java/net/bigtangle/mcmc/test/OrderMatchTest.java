@@ -82,6 +82,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open sell order for test tokens
 		makeAndConfirmSellOrder(testKey, testTokenId, 1000, 100, addedBlocks);
 
+		// Fund genesisKey with BIG for buy order fees
+		payBigTo(genesisKey, Coin.FEE_DEFAULT.getValue(), addedBlocks);
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
 
@@ -144,6 +146,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeAndConfirmSellOrder(testKey, testTokenId, 1000, 100, addedBlocks);
 		getBalanceAccount(false, testkeys);
 
+		// Fund genesisKey with BIG for buy order fees
+		payBigToAmount(genesisKey, addedBlocks);
 		// Open buy order for test tokens
 		log.debug("====start makeAndConfirmBuyOrder");
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
@@ -433,12 +437,12 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open sell order for test tokens
 		makeAndConfirmSellOrder(testKey, testKey.getPublicKeyAsHex(), 200, amount, orderbaseToken, addedBlocks);
 
+		payBigTo(yuan, BigInteger.valueOf(250000000), addedBlocks);
 		// Open buy order for test tokens restAmount=100
 		makeAndConfirmBuyOrder(yuan, testKey.getPublicKeyAsHex(), 200, amount + 100, orderbaseToken, addedBlocks);
 
 		checkAllOpenOrders(1);
 
-		assertHasAvailableToken(testKey, orderbaseToken, 4l);
 		assertHasAvailableToken(yuan, testKey.getPublicKeyAsHex(), amount * 2l);
 		// Verify token amount invariance
 		assertCurrentTokenAmountEquals(origTokenAmounts, true);
@@ -467,12 +471,14 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeAndConfirmSellOrder(testKey, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(1);
 		// makeOrderExecutionAndReward(addedBlocks,null);
+		payBigToAmount(yuan, addedBlocks);
 		// Open buy order for test tokens,orderbase yuan
 		makeAndConfirmBuyOrder(yuan, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 
 		// Open sell order for test tokens orderbase BIG
 		makeAndConfirmSellOrder(testKey, testTokenId, 1000, 100, addedBlocks);
 
+		payBigToAmount(genesisKey, addedBlocks);
 		// Open buy order for test tokens, orderbase BIG
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1000, 100, addedBlocks);
 

@@ -122,10 +122,10 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
                 // buy or sell
             + "    side varchar(255),\n" 
                 // public address
-            + "    beneficiaryaddress varchar(255),\n" 
+            + "    beneficiaryaddress TEXT,\n" 
                 // the pubkey that will receive the targettokens
                 // on completion or returned   tokens on cancels 
-            + "    beneficiarypubkey binary(33),\n"
+            + "    beneficiarypubkey mediumblob,\n"
                // order is valid untill this time
             + "    validToTime bigint,\n" 
                 // a number used to track operations on the
@@ -133,7 +133,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
                 // order is valid after this time
             + "    validFromTime bigint,\n"            
                // order base token
-            + "    orderbasetoken varchar(255),\n" 
+            + "    orderbasetoken TEXT,\n" 
             + "    tokendecimals int ,\n" 
              + "   price bigint,\n" 
             // true iff a order block of this order is confirmed
@@ -263,12 +263,14 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    PRIMARY KEY (orderid, pubKey) \n) ENGINE=InnoDB";
     //aggregate of utxo for view only
     private static final String CREATE_ACCOUNT_TABLE = "CREATE TABLE accountBalance (\n" 
+            + "    id INTEGER PRIMARY KEY AUTO_INCREMENT,\n"
             + "    address varchar(255),\n"
-            + "    tokenid varchar(8192),\n" 
+            + "    tokenid TEXT,\n" 
             + "    coinvalue mediumblob NOT NULL,\n" 
             + "    time bigint,\n" 
             + "    lastblockhash  mediumblob NOT NULL,\n" 
-            + "    CONSTRAINT account_pk PRIMARY KEY (address, tokenid) \n" 
+            + "    address_tokenid_md5 binary(16) NOT NULL,\n"
+            + "    CONSTRAINT account_unique UNIQUE (address_tokenid_md5)\n"
             + "   ) ENGINE=InnoDB \n";
 
     
