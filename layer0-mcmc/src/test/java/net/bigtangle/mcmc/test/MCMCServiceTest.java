@@ -63,7 +63,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 		// Generate two conflicting blocks
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -100,7 +100,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXOSimple() throws Exception {
 
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -296,7 +296,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testUpdateConflictingTransactionalMilestoneCandidates() throws Exception {
 
-		PQKey genesiskey = PQKey.createNew();
+		PQKey genesiskey = wallet.walletKeys(null).get(0);
 		// use UTXO to create double spending, this can not be created with
 		// wallet
 		List<UTXO> outputs = getBalance(false, genesiskey);

@@ -45,7 +45,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Generate two conflicting blocks
 
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -89,7 +89,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 	@Test
 	public void testConflictTransactionalUTXO() throws Exception {
 
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
@@ -417,7 +417,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		// Generate two conflicting blocks
 
-		PQKey testKey = PQKey.createNew();
+		PQKey testKey = wallet.walletKeys(null).get(0);
 		List<UTXO> outputs = getBalance(false, testKey);
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
