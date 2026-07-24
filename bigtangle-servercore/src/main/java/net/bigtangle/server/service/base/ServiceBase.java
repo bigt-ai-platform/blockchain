@@ -154,13 +154,6 @@ public abstract class ServiceBase {
 				: blockTypeHandlerRegistry.get(type);
 	}
 
-	public boolean enableFee(Block block) {
-		if (block.getBlockType() == BlockType.BLOCKTYPE_CROSSTANGLE) return false;
-		return (block.getLastMiningRewardBlock() > 1424626
-				&& networkParameters.getId().equals(NetworkParameters.ID_MAINNET))
-				|| networkParameters.getId().equals(NetworkParameters.ID_UNITTESTNET);
-	}
-
 	/**
 	 * get domainname token multi sign address
 	 *

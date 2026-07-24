@@ -174,6 +174,52 @@ class PQSignatureProviderTest {
         assertFalse(valid);
     }
 
+    @Test
+    void slhdsaSignPerformance() {
+        byte[] slhSeed = new byte[32];
+        new SecureRandom().nextBytes(slhSeed);
+        PQSignatureProvider.KeyPair kp = provider.generateKeyPair(
+                PQConstants.ALG_SLH_DSA_SHA2_256S, slhSeed);
+
+        byte[] message = new byte[64];
+        new SecureRandom().nextBytes(message);
+
+        long start = System.currentTimeMillis();
+        byte[] signature = provider.sign(PQConstants.ALG_SLH_DSA_SHA2_256S,
+                kp.privateKey(), message);
+        long elapsed = System.currentTimeMillis() - start;
+
+        assertNotNull(signature);
+        assertTrue(signature.length > 0);
+        assertTrue(elapsed < 30_000,
+                "SLH-DSA signing took " + elapsed + "ms, expected < 30s");
+
+        boolean valid = provider.verify(PQConstants.ALG_SLH_DSA_SHA2_256S,
+                kp.publicKey(), message, signature);
+        assertTrue(valid);
+    }
+
+    @Test
+    void slhdsaSignBatchPerformance() {
+        byte[] slhSeed = new byte[32];
+        new SecureRandom().nextBytes(slhSeed);
+        PQSignatureProvider.KeyPair kp = provider.generateKeyPair(
+                PQConstants.ALG_SLH_DSA_SHA2_256S, slhSeed);
+
+        byte[] message = new byte[64];
+        new SecureRandom().nextBytes(message);
+
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            byte[] signature = provider.sign(PQConstants.ALG_SLH_DSA_SHA2_256S,
+                    kp.privateKey(), message);
+            assertNotNull(signature);
+        }
+        long elapsed = System.currentTimeMillis() - start;
+        assertTrue(elapsed < 120_000,
+                "5 SLH-DSA signatures took " + elapsed + "ms, expected < 120s");
+    }
+
     /* ── Provider metadata ────────────────────────────────────────────── */
 
     @Test

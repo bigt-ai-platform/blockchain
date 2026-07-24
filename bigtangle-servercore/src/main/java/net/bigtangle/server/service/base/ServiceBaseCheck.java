@@ -145,13 +145,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						return SolidityState.from(in.getOutpoint(), true);
 					}
 					utxoCache.put(cacheKey, prevOut);
-					if (enableFee(block)) {
-						if (checkUnique(allInputTx, in.getOutpoint())) {
-							throw new InvalidTransactionException(
-									"input outputpoint is not unique " + in.getOutpoint().toString());
-						}
-						allInputTx.add(in.getOutpoint());
+					if (checkUnique(allInputTx, in.getOutpoint())) {
+						throw new InvalidTransactionException(
+								"input outputpoint is not unique " + in.getOutpoint().toString());
 					}
+					allInputTx.add(in.getOutpoint());
 				}
 				if (checkBurnedFromAddress(tx, block.getLastMiningRewardBlock())) {
 					throw new InvalidTransactionException("Burned Address");
@@ -240,7 +238,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					listScriptVerificationResults.add(future);
 				}
 			}
-			if (!checkFee && enableFee(block))
+			if (!checkFee)
 				throw new VerificationException.NoFeeException(Coin.FEE_DEFAULT.toString());
 
 			for (Future<VerificationException> future : listScriptVerificationResults) {
@@ -487,7 +485,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		// Check that the tx inputs only burn must be the offerValue
-		if (burnedCoins.isBIG() && enableFee(block)) {
+		if (burnedCoins.isBIG()) {
 			// fee
 			if (!burnedCoins.subtract(Coin.FEE_DEFAULT)
 					.equals(new Coin(orderInfo.getOfferValue(), Utils.HEX.decode(orderInfo.getOfferTokenid())))) {
