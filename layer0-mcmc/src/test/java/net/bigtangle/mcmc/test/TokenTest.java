@@ -342,7 +342,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		byte[] decryptedPayload = null;
 		for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
 			if (kvtemp.getKey().equals(userkey.getPublicKeyAsHex())) {
-				decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(), Utils.HEX.decode(kvtemp.getValue()));
+				decryptedPayload = Utils.HEX.decode(kvtemp.getValue());
 				SignedData identity = new SignedData().parse(decryptedPayload);
 				IdentityData id = new IdentityData().parse(Utils.HEX.decode(identity.getSerializedData()));
 				assertTrue(id.getIdentificationnumber().equals("120123456789012345"));
@@ -404,7 +404,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		byte[] decryptedPayload = null;
 		for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
 			if (kvtemp.getKey().equals(userkey.getPublicKeyAsHex())) {
-				decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(), Utils.HEX.decode(kvtemp.getValue()));
+				decryptedPayload = Utils.HEX.decode(kvtemp.getValue());
 				SignedData sdata = new SignedData().parse(decryptedPayload);
 				sdata.verify();
 				if (DataClassName.KeyValueList.name().equals(sdata.getDataClassName())) {
@@ -488,16 +488,17 @@ public class TokenTest extends AbstractIntegrationTest {
 		GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
 		Token token = getTokensResponse.getTokens().get(0);
 		SignedData p = prescription(userkey, token);
-
 		// encrypt data as memo or
-		Wallet userWallet = Wallet.fromKeys(networkParameters, userkey, contextRoot);
-
 		MemoInfo memoInfo = p.encryptToMemo(pharmacy);
 
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
-		userWallet.pay(null, pharmacy.toAddress(networkParameters).toHex(),Coin.SATOSHI,
-				memoInfo);
+		payBigTo(pharmacy, BigInteger.valueOf(Coin.FEE_DEFAULT.getValue().longValue()), addedBlocks);
+		Wallet userWallet = Wallet.fromKeys(networkParameters, userkey, contextRoot);
+		Transaction payTx = userWallet.pay(null, userkey.toAddress(networkParameters).toHex(),
+				Coin.SATOSHI, memoInfo).get(0);
+		Block b2 = wrapTransaction(payTx);
+		addedBlocks.add(b2);
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		// sendEmpty(10);
@@ -552,7 +553,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		byte[] decryptedPayload = null;
 		for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
 			if (kvtemp.getKey().equals(userkey.getPublicKeyAsHex())) {
-				decryptedPayload = ECIESCoder.decrypt(userkey.getPrivKey(), Utils.HEX.decode(kvtemp.getValue()));
+				decryptedPayload = Utils.HEX.decode(kvtemp.getValue());
 				SignedData sdata = new SignedData().parse(decryptedPayload);
 				sdata.verify();
 				return sdata;

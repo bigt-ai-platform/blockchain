@@ -131,10 +131,9 @@ public class WalletUtil {
         }
         for (KeyValue kvtemp : token.getTokenKeyValues().getKeyvalues()) {
             PQKey signerKey = getSignedKey(userkeys, kvtemp.getKey());
-            if (signerKey != null) {
+                if (signerKey != null) {
 
-                    byte[] decryptedPayload = ECIESCoder.decrypt(signerKey.getPrivKey(),
-                            Utils.HEX.decode(kvtemp.getValue()));
+                    byte[] decryptedPayload = Utils.HEX.decode(kvtemp.getValue());
                     signedTokenList.add(new SignedDataWithToken(new SignedData().parse(decryptedPayload), token));
                     // sdata.verify();
                     break;
