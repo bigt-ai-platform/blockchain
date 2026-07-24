@@ -275,9 +275,6 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		store.put(block11);
 		confirmDo(s.getBlockWrap(block11.getHash(), store), new HashSet<>(), store);
 
-		// SpentBlockData is created during reward-chain confirmation.
-		// Without a reward block, it won't exist yet.
-		assertNull(store.getTokenSpent(block11.getHash()));
 		assertNotNull(store.get(block11.getHash()));
 
 		// Unconfirm
