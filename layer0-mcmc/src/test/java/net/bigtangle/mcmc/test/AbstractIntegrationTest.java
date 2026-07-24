@@ -1564,7 +1564,7 @@ public abstract class AbstractIntegrationTest {
 	public Block pullBlockDoMultiSign(final String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
 
-		String address = outKey.toAddress(networkParameters).toHex();
+		String address = outKey.toAddress(networkParameters).toBase58();
 		requestParam.put("address", address);
 		requestParam.put("tokenid", tokenid);
 
