@@ -23,7 +23,6 @@ public class TestParams extends NetworkParameters {
         difficultyLimitCompact = 536954798L;
         rewardDifficultyLimitCompact = 536954798L;
 
-        dumpedPrivateKeyHeader = 128;
         addressHeader = 111;
         p2shHeader = 196;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };

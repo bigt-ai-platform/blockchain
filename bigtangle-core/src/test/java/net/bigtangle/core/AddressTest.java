@@ -30,7 +30,6 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.Networks;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.utils.DumpedPrivateKey;
 
 public class AddressTest {
     static final NetworkParameters testParams = TestParams.get();

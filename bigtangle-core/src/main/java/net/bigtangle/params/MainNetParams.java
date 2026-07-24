@@ -35,7 +35,6 @@ public class MainNetParams extends NetworkParameters {
         difficultyLimitCompact = 508814037L;
         rewardDifficultyLimitCompact = 503371455L;
 
-        dumpedPrivateKeyHeader = 128;
         addressHeader = 0;
         p2shHeader = 5;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };

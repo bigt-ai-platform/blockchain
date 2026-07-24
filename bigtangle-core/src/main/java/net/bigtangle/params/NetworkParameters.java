@@ -68,7 +68,6 @@ public abstract class NetworkParameters {
 	protected long rewardDifficultyLimitCompact;
 	protected int addressHeader;
 	protected int p2shHeader;
-	protected int dumpedPrivateKeyHeader;
 	protected int[] acceptableAddressCodes;
 	protected int bip32HeaderPub;
 	protected int bip32HeaderPriv;
@@ -268,14 +267,6 @@ public abstract class NetworkParameters {
 	/** The header bytes that identify the start of a packet on this network. */
 	public long getPacketMagic() {
 		return packetMagic;
-	}
-
-	/**
-	 * First byte of a base58 encoded dumped private key. See
-	 * {@link net.bigtangle.utils.DumpedPrivateKey}.
-	 */
-	public int getDumpedPrivateKeyHeader() {
-		return dumpedPrivateKeyHeader;
 	}
 
 	/** Difficulty limit compact encoding — genesis hash constant, do not change. */

@@ -7,40 +7,21 @@ package net.bigtangle.core;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.math.BigInteger;
-import java.util.Date;
-import java.util.concurrent.TimeUnit;
+import net.bigtangle.exception.VerificationException;
+import net.bigtangle.params.NetworkParameters;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Stopwatch;
-
-import net.bigtangle.exception.VerificationException;
-import net.bigtangle.params.MainNetParams;
-import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.params.TestParams;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.util.Date;
 
 public class UtilsTest {
 
 	private static final Logger log = LoggerFactory.getLogger(UtilsTest.class);
-
-	@Test
-	public void testSolve() throws Exception {
-		for (int i = 0; i < 20; i++) {
-			Block block =UtilsTest.createBlock(TestParams.get(),
-					UtilGeneseBlock.createGenesis( TestParams.get()) ,
-					UtilGeneseBlock.createGenesis( TestParams.get()));
-
-			// save block
-			Stopwatch watch = Stopwatch.createStarted();
-			log.info(" Solve time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
-		}
-	}
 
 	@Test
 	public void testReverseBytes() {
@@ -85,43 +66,43 @@ public class UtilsTest {
 
 	}
 
-    public static Block createBlock(NetworkParameters params, Block prevBlock, Block branchBlock) {
-        return createNextBlock(prevBlock,branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS);
-    }
+	public static Block createBlock(NetworkParameters params, Block prevBlock, Block branchBlock) {
+		return createNextBlock(prevBlock, branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS);
+	}
 
-    /**
-     * Returns a solved, valid empty block that builds on top of this one and
-     * the specified other Block.
-     */
-    public static Block createNextBlock(Block prevBlock, Block branchBlock, final long version) {
-        Block b =   Block.setBlock2(prevBlock.getParams(), version);
+	/**
+	 * Returns a solved, valid empty block that builds on top of this one and
+	 * the specified other Block.
+	 */
+	public static Block createNextBlock(Block prevBlock, Block branchBlock, final long version) {
+		Block b = Block.setBlock2(prevBlock.getParams(), version);
 
-        b.setPrevBlockHash(prevBlock.getHash());
-        b.setPrevBranchBlockHash(branchBlock.getHash());
+		b.setPrevBlockHash(prevBlock.getHash());
+		b.setPrevBranchBlockHash(branchBlock.getHash());
 
-        // Set difficulty according to previous consensus
-        // only BLOCKTYPE_BEACON and BLOCKTYPE_INITIAL should overwrite this
-        b.setLastMiningRewardBlock(Math.max(prevBlock.getLastMiningRewardBlock(), branchBlock.getLastMiningRewardBlock()));
+		// Set difficulty according to previous consensus
+		// only BLOCKTYPE_BEACON and BLOCKTYPE_INITIAL should overwrite this
+		b.setLastMiningRewardBlock(
+				Math.max(prevBlock.getLastMiningRewardBlock(), branchBlock.getLastMiningRewardBlock()));
 
-        b.setHeight(Math.max(prevBlock.getHeight(), branchBlock.getHeight()) + 1);
+		b.setHeight(Math.max(prevBlock.getHeight(), branchBlock.getHeight()) + 1);
 
-        // Don't let timestamp go backwards
-        long currTime = System.currentTimeMillis() / 1000;
-        long minTime = Math.max(currTime, branchBlock.getTimeSeconds());
-        if (currTime >= minTime)
-            b.setTime(currTime + 1);
-        else
-            b.setTime(minTime);
-        try {
-            b.verifyHeader();
-        } catch (VerificationException e) {
-            throw new RuntimeException(e); // Cannot happen.
-        }
-        if (b.getVersion() != version) {
-            throw new RuntimeException();
-        }
-        return b;
-    }
+		// Don't let timestamp go backwards
+		long currTime = System.currentTimeMillis() / 1000;
+		long minTime = Math.max(currTime, branchBlock.getTimeSeconds());
+		if (currTime >= minTime)
+			b.setTime(currTime + 1);
+		else
+			b.setTime(minTime);
+		try {
+			b.verifyHeader();
+		} catch (VerificationException e) {
+			throw new RuntimeException(e); // Cannot happen.
+		}
+		if (b.getVersion() != version) {
+			throw new RuntimeException();
+		}
+		return b;
+	}
 
-	
 }
