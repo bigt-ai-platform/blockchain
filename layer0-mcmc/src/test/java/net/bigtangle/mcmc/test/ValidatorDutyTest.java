@@ -45,28 +45,26 @@ public class ValidatorDutyTest extends AbstractIntegrationTest {
         validatorKey = PQKey.createNew();
     }
 
-    @Test
-    public void testValidatorKeySetAndGet() {
-        PQKey original = validatorDutyService.getValidatorKey();
-        PQKey testKey = PQKey.createNew();
-        assertNotNull(validatorDutyService.getValidatorKey());
-        assertEquals(Utils.HEX.encode(testKey.getPubKey()),
-                Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));
-        validatorDutyService.setValidatorKey(original);
-    }
+	@Test
+	public void testValidatorKeySetAndGet() {
+		PQKey testKey = PQKey.createNew();
+		validatorDutyService.setValidatorKey(testKey);
+		assertNotNull(validatorDutyService.getValidatorKey());
+		assertEquals(Utils.HEX.encode(testKey.getPubKey()),
+				Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));
+	}
 
-    @Test
-    public void testPerformDutyWithoutKey() throws Exception {
-        validatorDutyService.performDuty();
-    }
+	@Test
+	public void testPerformDutyWithoutKey() throws Exception {
+		validatorDutyService.performDuty();
+	}
 
-    @Test
-    public void testValidatorKeyInitFromConfig() {
-        PQKey configured = validatorDutyService.getValidatorKey();
-        PQKey testKey = PQKey.createNew();
-        assertNotNull(validatorDutyService.getValidatorKey());
-        assertEquals(Utils.HEX.encode(testKey.getPubKey()),
-                Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));
-        validatorDutyService.setValidatorKey(configured);
-    }
+	@Test
+	public void testValidatorKeyInitFromConfig() {
+		PQKey testKey = PQKey.createNew();
+		validatorDutyService.setValidatorKey(testKey);
+		assertNotNull(validatorDutyService.getValidatorKey());
+		assertEquals(Utils.HEX.encode(testKey.getPubKey()),
+				Utils.HEX.encode(validatorDutyService.getValidatorKey().getPubKey()));
+	}
 }

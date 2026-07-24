@@ -186,7 +186,7 @@ public class TokenTest extends AbstractIntegrationTest {
 		{
 			PQKey key = wallet.walletKeys().get(0);
 			wallet.publishDomainName(key, tokenid, "de/de", aesKey, "");
-			keys.add(preKey);
+			List<PQKey> keys = wallet.walletKeys();
 			Block lastBlock = null;
 			for (int i = 0; i < keys.size(); i++) {
 				lastBlock = wallet.multiSign(tokenid, keys.get(i), aesKey);
