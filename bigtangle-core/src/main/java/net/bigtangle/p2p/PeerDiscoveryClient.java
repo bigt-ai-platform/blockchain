@@ -54,7 +54,7 @@ public class PeerDiscoveryClient {
             log.debug("Discovery error: {}", e.getMessage());
         }
 
-        var all = new ArrayList<>(discovered.values());
+        List<NodeRecord> all = new ArrayList<>(discovered.values());
         if (all.size() > maxNodes) all = new ArrayList<>(all.subList(0, maxNodes));
         return all;
     }
@@ -65,7 +65,7 @@ public class PeerDiscoveryClient {
 
     private void iterativeFindNode(NodeId target, int maxNodes) throws IOException {
         Set<String> queried = new HashSet<>();
-        var closest = new ArrayList<>(discovered.values());
+        List<NodeRecord> closest = new ArrayList<>(discovered.values());
         boolean foundCloser = true;
 
         while (foundCloser && discovered.size() < maxNodes) {

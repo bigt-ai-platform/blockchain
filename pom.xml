@@ -10,7 +10,7 @@
 	<url>http://www.bigtangle.org</url>
 	<inceptionYear>2010</inceptionYear>
 	<packaging>pom</packaging>
-	<version>0.5.0</version>
+	<version>0.6.0</version>
 	<properties>
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
