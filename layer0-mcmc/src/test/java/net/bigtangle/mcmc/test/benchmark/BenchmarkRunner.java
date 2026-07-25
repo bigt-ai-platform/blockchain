@@ -47,7 +47,7 @@ public class BenchmarkRunner {
         log.info("Server: {}", serverUrl);
 
         PQKey genesisKey = PQKey.createNew();
-        Wallet genesisWallet = Wallet.fromKeys(params, genesisKey);
+        Wallet genesisWallet = Wallet.fromKeys(params, genesisKey, serverUrl);
         List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
         for (PQKey key : clientKeys) {
