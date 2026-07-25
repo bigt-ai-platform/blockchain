@@ -16,12 +16,14 @@ import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.utils.Json;
+import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.Wallet;
 
 /**
  * 10-client payment benchmark.
- * Performance measurement only — assumes wallets are pre-funded.
  *
  * Start server:
  *   mvn spring-boot:run -pl layer0-server \
@@ -50,6 +52,25 @@ public class BenchmarkRunner {
         for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
         List<PQKey> recipients = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
+
+        // Pre-fund wallets via the server's fundAddresses API
+        // Each client gets PAYMENTS_PER_CLIENT UTXOs to avoid double-spend conflicts
+        String apiUrl = serverUrl.endsWith("/") ? serverUrl : serverUrl + "/";
+        HashMap<String, Object> fundReq = new HashMap<>();
+        List<HashMap<String, Object>> entries = new ArrayList<>();
+        for (PQKey key : clientKeys) {
+            for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
+                HashMap<String, Object> entry = new HashMap<>();
+                entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
+                entry.put("address", Address.fromHash160(params, key.getPubKeyHash()).toBase58());
+                entry.put("value", 1001L);
+                entries.add(entry);
+            }
+        }
+        fundReq.put("addresses", entries);
+        OkHttp3Util.post(apiUrl + "fundAddresses",
+                Json.jsonmapper().writeValueAsString(fundReq).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        log.info("Funding done");
 
         List<Wallet> wallets = new ArrayList<>();
         for (PQKey key : clientKeys) {

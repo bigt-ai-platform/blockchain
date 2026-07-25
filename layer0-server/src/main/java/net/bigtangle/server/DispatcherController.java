@@ -41,6 +41,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.crypto.pq.KeyBundle;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -815,7 +816,7 @@ public class DispatcherController implements DisposableBean {
 					utxo.setIndex(i);
 					utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
 					utxo.setAddress(addrStr);
-					utxo.setScript(ScriptBuilder.createOutputScript(key));
+					utxo.setScript(ScriptBuilder.createOutputScript(key.getKeyBundle()));
 					utxo.setCoinbase(true);
 					utxo.setBlockHash(genesisHash);
 					utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
