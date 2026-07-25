@@ -41,7 +41,7 @@ public class TestParams extends NetworkParameters {
     }
 
     public String[] serverSeeds() {
-        return new String[] {};
+        return new String[] { "test.bigt.ai:8089" };
 
     }
 

@@ -60,7 +60,7 @@ public class MainNetParams extends NetworkParameters {
     }
 
     public String[] serverSeeds() {
-        return new String[] { "https://81.169.156.203:8089/" };
+        return new String[] { "eu.bigt.ai:8089", "asia.bigt.ai:8089", "us.bigt.ai:8089", "92.5.34.128:8089" };
 
     }
 
