@@ -54,7 +54,7 @@ public class MainNetParams extends NetworkParameters {
       
         spendableCoinbaseDepth = 100;
 
-        dnsSeeds = new String[] {};
+        dnsSeeds = new String[] { "enrtree://0000000000000000000000000000000000000000000000000000000000000000@seeds.bigtangle.org" };
        
 
     }
