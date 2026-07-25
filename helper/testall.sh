@@ -3,6 +3,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Optional: pass a specific test class to run (e.g. FundAddressesIT)
+SPECIFIC_TEST="${1:-}"
+if [ -n "$SPECIFIC_TEST" ]; then
+    TEST_ARG="-Dtest=${SPECIFIC_TEST}"
+    echo "=== Running only ${SPECIFIC_TEST} ==="
+else
+    TEST_ARG=""
+fi
+
 # Use Java 25 if available (local install from Temurin)
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
     export JAVA_HOME=/home/jcui/.local/java-25
@@ -64,6 +73,33 @@ mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
 mvn test-compile -q -f "$ROOT/pom.xml" -am \
   -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-order-server,l1-order-mcmc 2>&1 | tail -1
 echo "=== All modules built ==="
+
+if [ -n "$SPECIFIC_TEST" ]; then
+    echo "=== Running ${SPECIFIC_TEST} ==="
+    MODULE=""
+    for dir in layer0-mcmc l1-pai-mcmc l1-nft-mcmc l1-payment-mcmc l1-order-mcmc l1-contract-mcmc; do
+        if find "$ROOT/$dir/src/test" -name "${SPECIFIC_TEST}.java" >/dev/null 2>&1; then
+            MODULE="$dir"
+            break
+        fi
+    done
+    if [ -z "$MODULE" ]; then
+        echo "ERROR: Could not find ${SPECIFIC_TEST} in any test module"
+        exit 1
+    fi
+    # Map module to DB name
+    case "$MODULE" in
+        layer0-mcmc)      DB=info_l0 ;;
+        l1-pai-mcmc)      DB=info_pai ;;
+        l1-nft-mcmc)      DB=info_nft ;;
+        l1-payment-mcmc)  DB=info_payment ;;
+        l1-order-mcmc)    DB=info_order ;;
+        l1-contract-mcmc) DB=info_l0 ;;
+        *)                DB=info_l0 ;;
+    esac
+    mvn test -pl "$MODULE" -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" $TEST_ARG $DB_ARGS -DDB_NAME="$DB"
+    exit $?
+fi
 
 echo "=== Running L0 tests ==="
 mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &

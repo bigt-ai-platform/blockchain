@@ -40,6 +40,9 @@ kafka:
   topicOutName: ${TOPIC_OUT_NAME:bigtangle}
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
 
+peer:
+  udpPort: 0
+
 management:
   metrics:
     export:

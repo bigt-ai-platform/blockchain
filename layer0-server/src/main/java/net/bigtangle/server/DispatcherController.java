@@ -807,15 +807,20 @@ public class DispatcherController implements DisposableBean {
 					BigInteger value = entry.containsKey("value")
 							? BigInteger.valueOf(((Number) entry.get("value")).longValue())
 							: NetworkParameters.BigtangleCoinTotal.divide(BigInteger.valueOf(entries.size()));
-					String pubkeyHex = (String) entry.get("pubkey");
-					byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
-					PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
+						String pubkeyHex = (String) entry.get("pubkey");
 					UTXO utxo = new UTXO();
 					utxo.setHash(genesisHash);
 					utxo.setIndex(i);
 					utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
 					utxo.setAddress(addrStr);
-					utxo.setScript(ScriptBuilder.createOutputScript(key));
+					if (pubkeyHex != null) {
+						byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
+						PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
+						utxo.setScript(ScriptBuilder.createOutputScript(key));
+					} else {
+						utxo.setScript(ScriptBuilder
+								.createOutputScript(Address.fromBase58(networkParameters, addrStr)));
+					}
 					utxo.setCoinbase(true);
 					utxo.setBlockHash(genesisHash);
 					utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
