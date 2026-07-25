@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.wallet.Wallet;
 
@@ -42,17 +42,22 @@ public class BenchmarkRunner {
     public static void main(String[] args) throws Exception {
         String serverUrl = args.length > 0 ? args[0] : "http://localhost:8088/";
         NetworkParameters params = new net.bigtangle.layer0.params.Layer0TestParams();
-        String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
 
         log.info("Server: {}", serverUrl);
 
-        PQKey genesisKey = PQKey.createNew();
+        // Use deterministic genesis key that matches the server's genesis block
+        byte[] mlDsaSeed = new byte[32];
+        byte[] slhDsaSeed = new byte[32];
+        java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
+        java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
+        PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
         Wallet genesisWallet = Wallet.fromKeys(params, genesisKey, serverUrl);
+
         List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
         for (PQKey key : clientKeys) {
             HashMap<String, BigInteger> funding = new HashMap<>();
-            funding.put(key.toAddress(params).toHex(), BigInteger.valueOf(100000));
+            funding.put(Address.fromHash160(params, key.getPubKeyHash()).toBase58(), BigInteger.valueOf(100000));
             genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
         }
         log.info("Funding done");
@@ -78,7 +83,7 @@ public class BenchmarkRunner {
                     try {
                         long start = System.nanoTime();
                         HashMap<String, BigInteger> pmt = new HashMap<>();
-                        pmt.put(toKey.toAddress(params).toHex(), BigInteger.valueOf(1));
+                        pmt.put(Address.fromHash160(params, toKey.getPubKeyHash()).toBase58(), BigInteger.valueOf(1));
                         w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
                         totalNs.addAndGet(System.nanoTime() - start);
                         ok.incrementAndGet();
