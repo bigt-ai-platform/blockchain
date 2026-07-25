@@ -39,10 +39,10 @@ public class TestParams extends NetworkParameters {
 
  
     }
-
     public String[] serverSeeds() {
-        return new String[] { "test.bigt.ai:8089" };
-
+        return new String[] {
+                "92.5.34.128:80"
+        };
     }
 
     private static TestParams instance;
