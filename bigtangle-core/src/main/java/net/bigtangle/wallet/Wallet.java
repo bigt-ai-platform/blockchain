@@ -301,19 +301,8 @@ public class Wallet extends WalletBase {
 	}
 
 	private Block adjustSolveAndSign(Block block) throws IOException {
-		// save block
-		try {
-			OkHttp3Util.post(getServerURL() + ReqCmd.signToken.name(), block.bitcoinSerialize());
-			return block;
-		} catch (ConnectException e) {
-			serverConnectException();
-			throw e;
-		}
-
-	}
-
-	private void serverConnectException() {
-		this.params.serverSeeds();
+		OkHttp3Util.post(getServerURL() + ReqCmd.signToken.name(), block.bitcoinSerialize());
+		return block;
 	}
 
 	// pay the BIGTANGLE_TOKENID from the list HashMap<String, Long>

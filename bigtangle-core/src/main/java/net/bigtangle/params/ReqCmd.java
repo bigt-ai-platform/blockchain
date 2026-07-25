@@ -35,7 +35,6 @@ public enum ReqCmd {
 	addAccessGrant, deleteAccessGrant,
     // check point value
     getCheckPoint,
-    serverinfolist,
     getAnchors,
     // PoS
     submitAttestation, getAttestations, processWithdrawal, submitSlashingProof,

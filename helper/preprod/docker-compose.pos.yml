@@ -1,0 +1,237 @@
+networks:
+  pos-preprod-net:
+    driver: bridge
+
+# Static reference for up to 4 nodes (quick smoke-test).
+# For N > 4 use: ./run.sh up --nodes 16
+# The script auto-generates a full compose file at runtime.
+
+x-common-db: &common-db
+  image: postgres:16
+  networks: [pos-preprod-net]
+  environment: &db-env
+    POSTGRES_USER: root
+    POSTGRES_PASSWORD: test1234
+    POSTGRES_DB: layer0
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U root -d layer0"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+x-common-server: &common-server
+  image: bigtangle:preprod
+  networks: [pos-preprod-net]
+  environment: &server-base-env
+    SERVER_NET: Preprod
+    DBTYPE: postgresql
+    DB_PORT: 5432
+    DB_USERNAME: root
+    DB_PASSWORD: test1234
+    SERVICE_MINING: "false"
+    SERVICE_MCMC: "true"
+    SERVICE_MCMC_RATE: 1000
+    SERVICE_SYNC: "true"
+    SERVICE_INITSYNC: "true"
+    SYNCBLOCKS: 1000
+    CREATETABLE: "true"
+    POS_ENABLED: "true"
+    POS_SLOT_INTERVAL_MS: 12000
+    POS_SLOTS_PER_EPOCH: 32
+
+x-common-mcmc: &common-mcmc
+  image: bigtangle:preprod
+  networks: [pos-preprod-net]
+  environment: &mcmc-base-env
+    APP_MODULE: layer0-mcmc
+    SERVER_NET: Preprod
+    DBTYPE: postgresql
+    DB_PORT: 5432
+    DB_USERNAME: root
+    DB_PASSWORD: test1234
+    SERVICE_MINING: "true"
+    SERVICE_MINING_RATE: 50000
+    SERVICE_MCMC: "true"
+    SERVICE_MCMC_RATE: 1000
+    SERVICE_SYNC: "true"
+    SERVICE_INITSYNC: "true"
+    SYNCBLOCKS: 1000
+    CREATETABLE: "false"
+    POS_ENABLED: "true"
+    POS_SLOT_INTERVAL_MS: 12000
+    POS_SLOTS_PER_EPOCH: 32
+
+services:
+
+  # ─── Node 0 (Bootstrap) ────────────────────────────────────────────
+
+  postgres-l0-0:
+    <<: *common-db
+    container_name: pos-pg-0
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata-0:/var/lib/postgresql/data
+    profiles: ["node-0"]
+
+  l0-server-0:
+    <<: *common-server
+    container_name: pos-svr-0
+    ports: ["8081:8081"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8081
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres-l0-0
+      DB_NAME: layer0
+    depends_on:
+      postgres-l0-0: { condition: service_healthy }
+    profiles: ["node-0"]
+
+  l0-mcmc-0:
+    <<: *common-mcmc
+    container_name: pos-mcmc-0
+    ports: ["8085:8085"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8085
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      REQUESTER: http://pos-svr-0:8081
+      DB_HOSTNAME: postgres-l0-0
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "${POS_VALIDATOR_KEY_0}"
+    depends_on:
+      postgres-l0-0: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+    profiles: ["node-0"]
+
+  # ─── Node 1 ────────────────────────────────────────────────────────
+
+  postgres-l0-1:
+    <<: *common-db
+    container_name: pos-pg-1
+    environment:
+      <<: *db-env
+    profiles: ["node-1"]
+
+  l0-server-1:
+    <<: *common-server
+    container_name: pos-svr-1
+    ports: ["8082:8082"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8082
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres-l0-1
+      DB_NAME: layer0
+      REQUESTER: http://pos-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-1: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+    profiles: ["node-1"]
+
+  l0-mcmc-1:
+    <<: *common-mcmc
+    container_name: pos-mcmc-1
+    ports: ["8086:8086"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8086
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      REQUESTER: http://pos-svr-0:8081
+      DB_HOSTNAME: postgres-l0-1
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "${POS_VALIDATOR_KEY_1}"
+    depends_on:
+      postgres-l0-1: { condition: service_healthy }
+      l0-server-1: { condition: service_started }
+    profiles: ["node-1"]
+
+  # ─── Node 2 ────────────────────────────────────────────────────────
+
+  postgres-l0-2:
+    <<: *common-db
+    container_name: pos-pg-2
+    environment:
+      <<: *db-env
+    profiles: ["node-2"]
+
+  l0-server-2:
+    <<: *common-server
+    container_name: pos-svr-2
+    ports: ["8083:8083"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8083
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres-l0-2
+      DB_NAME: layer0
+      REQUESTER: http://pos-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-2: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+    profiles: ["node-2"]
+
+  l0-mcmc-2:
+    <<: *common-mcmc
+    container_name: pos-mcmc-2
+    ports: ["8087:8087"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8087
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      REQUESTER: http://pos-svr-0:8081
+      DB_HOSTNAME: postgres-l0-2
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "${POS_VALIDATOR_KEY_2}"
+    depends_on:
+      postgres-l0-2: { condition: service_healthy }
+      l0-server-2: { condition: service_started }
+    profiles: ["node-2"]
+
+  # ─── Node 3 ────────────────────────────────────────────────────────
+
+  postgres-l0-3:
+    <<: *common-db
+    container_name: pos-pg-3
+    environment:
+      <<: *db-env
+    profiles: ["node-3"]
+
+  l0-server-3:
+    <<: *common-server
+    container_name: pos-svr-3
+    ports: ["8084:8084"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8084
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      DB_HOSTNAME: postgres-l0-3
+      DB_NAME: layer0
+      REQUESTER: http://pos-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-3: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+    profiles: ["node-3"]
+
+  l0-mcmc-3:
+    <<: *common-mcmc
+    container_name: pos-mcmc-3
+    ports: ["8088:8088"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8088
+      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
+      REQUESTER: http://pos-svr-0:8081
+      DB_HOSTNAME: postgres-l0-3
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "${POS_VALIDATOR_KEY_3}"
+    depends_on:
+      postgres-l0-3: { condition: service_healthy }
+      l0-server-3: { condition: service_started }
+    profiles: ["node-3"]
+
+volumes:
+  pgdata-0:
