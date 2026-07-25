@@ -21,6 +21,9 @@ import javax.net.ssl.X509TrustManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.util.zip.GZIPInputStream;
+
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 
@@ -96,6 +99,13 @@ public class OkHttp3Util {
             }
 
             byte[] resp = response.body().bytes();
+            // Handle gzip-compressed responses from the legacy server
+            if (resp.length > 2 && resp[0] == (byte) 0x1F && resp[1] == (byte) 0x8B) {
+                try (java.util.zip.GZIPInputStream gzip = new java.util.zip.GZIPInputStream(
+                        new java.io.ByteArrayInputStream(resp))) {
+                    resp = gzip.readAllBytes();
+                }
+            }
             // logger.debug(resp);
             checkResponse(resp, url);
             return resp;

@@ -21,6 +21,7 @@ import net.bigtangle.wallet.Wallet;
 
 /**
  * 10-client payment benchmark.
+ * Performance measurement only — assumes wallets are pre-funded.
  *
  * Start server:
  *   mvn spring-boot:run -pl layer0-server \
@@ -45,25 +46,16 @@ public class BenchmarkRunner {
 
         log.info("Server: {}", serverUrl);
 
-        // Use deterministic genesis key that matches the server's genesis block
-        byte[] mlDsaSeed = new byte[32];
-        byte[] slhDsaSeed = new byte[32];
-        java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
-        java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
-        PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
-        Wallet genesisWallet = Wallet.fromKeys(params, genesisKey, serverUrl);
-
         List<PQKey> clientKeys = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
-        for (PQKey key : clientKeys) {
-            HashMap<String, BigInteger> funding = new HashMap<>();
-            funding.put(Address.fromHash160(params, key.getPubKeyHash()).toBase58(), BigInteger.valueOf(100000));
-            genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
-        }
-        log.info("Funding done");
-
         List<PQKey> recipients = new ArrayList<>();
         for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
+
+        List<Wallet> wallets = new ArrayList<>();
+        for (PQKey key : clientKeys) {
+            wallets.add(Wallet.fromKeys(params, key, serverUrl));
+        }
+
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
         AtomicLong totalNs = new AtomicLong(0);
@@ -75,8 +67,7 @@ public class BenchmarkRunner {
         long wallStart = System.nanoTime();
         for (int c = 0; c < CLIENTS; c++) {
             int clientId = c;
-            PQKey fromKey = clientKeys.get(c);
-            Wallet w = Wallet.fromKeys(params, fromKey, serverUrl);
+            Wallet w = wallets.get(c);
             PQKey toKey = recipients.get(c);
             futures[c] = CompletableFuture.runAsync(() -> {
                 for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
@@ -86,7 +77,8 @@ public class BenchmarkRunner {
                         pmt.put(Address.fromHash160(params, toKey.getPubKeyHash()).toBase58(), BigInteger.valueOf(1));
                         w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
                         totalNs.addAndGet(System.nanoTime() - start);
-                        ok.incrementAndGet();
+                        int done = ok.incrementAndGet();
+                        if (done % 200 == 0) log.info("Progress: {} / {} payments", done, CLIENTS * PAYMENTS_PER_CLIENT);
                     } catch (Exception e) {
                         fail.incrementAndGet();
                     }

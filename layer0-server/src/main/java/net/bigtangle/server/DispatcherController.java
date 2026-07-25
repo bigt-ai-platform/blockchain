@@ -8,6 +8,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -58,6 +59,8 @@ import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.response.GetStringResponse;
 import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.response.OkResponse;
+import net.bigtangle.core.UtilGeneseBlock;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.core.Address;
@@ -788,6 +791,40 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse,
 						net.bigtangle.response.GetStringResponse.create(
 								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
+			}
+				break;
+			case fundAddresses: {
+				@SuppressWarnings("unchecked")
+				Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
+				@SuppressWarnings("unchecked")
+				List<Map<String, Object>> entries = (List<Map<String, Object>>) req.get("addresses");
+				Block genesis = UtilGeneseBlock.createGenesis(this.networkParameters);
+				Sha256Hash genesisHash = genesis.getHash();
+				List<UTXO> utxos = new ArrayList<>();
+				for (int i = 0; i < entries.size(); i++) {
+					Map<String, Object> entry = entries.get(i);
+					String addrStr = (String) entry.get("address");
+					BigInteger value = entry.containsKey("value")
+							? BigInteger.valueOf(((Number) entry.get("value")).longValue())
+							: NetworkParameters.BigtangleCoinTotal.divide(BigInteger.valueOf(entries.size()));
+					String pubkeyHex = (String) entry.get("pubkey");
+					byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
+					PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
+					UTXO utxo = new UTXO();
+					utxo.setHash(genesisHash);
+					utxo.setIndex(i);
+					utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
+					utxo.setAddress(addrStr);
+					utxo.setScript(ScriptBuilder.createOutputScript(key));
+					utxo.setCoinbase(true);
+					utxo.setBlockHash(genesisHash);
+					utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+					utxo.setConfirmed(true);
+					utxo.setSpent(false);
+					utxos.add(utxo);
+				}
+				store.addUnspentTransactionOutput(utxos);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			default:
