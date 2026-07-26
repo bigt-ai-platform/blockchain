@@ -44,38 +44,7 @@ fi
 
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
-mvn clean install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc
-
-# ── Create temporary Dockerfiles for modules that don't have one ───────────
-create_dockerfile() {
-    local module="$1"
-    local dockerfile="$module/Dockerfile"
-    if [ -f "$dockerfile" ]; then
-        log "Dockerfile exists for $module"
-        return
-    fi
-    info "Creating Dockerfile for $module"
-    mkdir -p "$module"
-    # Find the executable JAR (prefer -exec classifier, fall back to plain jar)
-    local jar
-    jar=$(ls "$ROOT/$module/target/"*-exec.jar 2>/dev/null | head -1)
-    if [ -z "$jar" ]; then
-        jar=$(ls "$ROOT/$module/target/"*.jar 2>/dev/null | grep -v "sources\|javadoc\|original" | head -1)
-    fi
-    if [ -z "$jar" ]; then
-        fail "No executable JAR found in $ROOT/$module/target/"
-    fi
-    local jar_name
-    jar_name=$(basename "$jar")
-    cat > "$dockerfile" << EOF
-FROM eclipse-temurin:${JAVA_VERSION}-jre-alpine
-WORKDIR /app
-COPY target/$jar_name app.jar
-EXPOSE 8080
-ENTRYPOINT ["java", "--add-exports", "java.base/sun.nio.ch=ALL-UNNAMED", "--add-exports", "java.base/java.lang=ALL-UNNAMED", "-jar", "app.jar"]
-EOF
-}
+info "Maven build is handled inside Docker multi-stage builds (no host Maven needed)"
 
 # ── Build Docker images ────────────────────────────────────────────────────
 header "Building Docker images"
@@ -90,7 +59,7 @@ for module in "${!MODULES[@]}"; do
     docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
         -f "$ROOT/$dockerfile" \
         --build-arg JAVA_VERSION="$JAVA_VERSION" \
-        "$ROOT/$module"
+        "$ROOT"
 
     log "Built $IMAGE:$TAG"
 done

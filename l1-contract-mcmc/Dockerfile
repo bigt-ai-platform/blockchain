@@ -18,12 +18,12 @@ COPY l1-payment-server/pom.xml l1-payment-server/pom.xml
 COPY layer0-mcmc/pom.xml layer0-mcmc/pom.xml
 COPY layer0-server/pom.xml layer0-server/pom.xml
 
-RUN mkdir -p /build/$(dirname l1-payment-mcmc/target) && mvn dependency:go-offline -q -pl l1-payment-mcmc -am 2>/dev/null || true
+RUN mkdir -p /build/$(dirname l1-contract-mcmc/target) && mvn dependency:go-offline -q -pl l1-contract-mcmc -am 2>/dev/null || true
 COPY . .
-RUN mvn package -Dmaven.test.skip=true -q -pl l1-payment-mcmc -am
+RUN mvn package -Dmaven.test.skip=true -q -pl l1-contract-mcmc -am
 
 FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
-COPY --from=build /build/l1-payment-mcmc/target/*-exec.jar app.jar
+COPY --from=build /build/l1-contract-mcmc/target/*-exec.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "--add-exports", "java.base/sun.nio.ch=ALL-UNNAMED", "--add-exports", "java.base/java.lang=ALL-UNNAMED", "-jar", "app.jar"]
