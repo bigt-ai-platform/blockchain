@@ -44,13 +44,13 @@ fi
 
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
-info "Maven build is handled inside Docker multi-stage builds (no host Maven needed)"
+mvn package -Dmaven.test.skip=true -q -f "$ROOT/pom.xml" -am \
+  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc
 
 # ── Build Docker images ────────────────────────────────────────────────────
 header "Building Docker images"
 for module in "${!MODULES[@]}"; do
     dockerfile="${MODULES[$module]}"
-    create_dockerfile "$module"
 
     IMAGE="$REGISTRY/$OWNER/$module"
     TAG="$VERSION"
@@ -58,8 +58,7 @@ for module in "${!MODULES[@]}"; do
     info "Building $IMAGE:$TAG"
     docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
         -f "$ROOT/$dockerfile" \
-        --build-arg JAVA_VERSION="$JAVA_VERSION" \
-        "$ROOT"
+        "$ROOT/$module"
 
     log "Built $IMAGE:$TAG"
 done
