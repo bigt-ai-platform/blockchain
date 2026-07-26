@@ -26,7 +26,7 @@ MODULES["l1-order-server"]="l1-order-server/Dockerfile"
 MODULES["l1-nft-server"]="l1-nft-server/Dockerfile"
 MODULES["l1-payment-server"]="l1-payment-server/Dockerfile"
 MODULES["l1-contract-server"]="l1-contract-server/Dockerfile"
-MODULES["bigtangle-bridge"]="bigtangle-bridge/Dockerfile"
+
 
 # ── Login ──────────────────────────────────────────────────────────────────
 header "Login to $REGISTRY"
