@@ -1,84 +1,81 @@
-/*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
- *******************************************************************************/
 package net.bigtangle.kafka;
 
-import java.io.IOException;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 
-public class KafkaMessageProducer {
-
-    private String kafkaserver;
-    private String topic;
-    private boolean binaryMessageKey = true;
+@Component
+public class KafkaMessageProducer implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaMessageProducer.class);
 
-    public KafkaMessageProducer(String kafkaserver, String topic, boolean binaryMessageKey) {
-        super();
-        this.kafkaserver = kafkaserver;
-        this.topic = topic;
-        this.binaryMessageKey = binaryMessageKey;
+    @Autowired
+    private KafkaConfiguration kafkaConfiguration;
+
+    private KafkaProducer<String, byte[]> producer;
+    private boolean enabled;
+
+    @PostConstruct
+    public void init() {
+        String bs = kafkaConfiguration.getBootstrapServers();
+        if (bs == null || bs.isEmpty()) {
+            enabled = false;
+            return;
+        }
+        enabled = true;
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bs);
+        props.setProperty(ProducerConfig.ACKS_CONFIG, "all");
+        props.setProperty(ProducerConfig.RETRIES_CONFIG, "3");
+        props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "5");
+        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "65536");
+        props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
+        props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producer = new KafkaProducer<>(props);
+        log.info("Kafka producer initialized, servers={}", bs);
     }
 
-    public KafkaMessageProducer(KafkaConfiguration kafkaConfiguration) {
-        super();
-        this.kafkaserver = kafkaConfiguration.getBootstrapServers();
-        this.topic = kafkaConfiguration.getTopicOutName();
-
+    public boolean sendBlock(String blockHash, byte[] data) {
+        return send(kafkaConfiguration.getBlockTopic(), blockHash, data);
     }
 
-    public boolean sendMessage(byte[] data, String serveraddress)
-            throws InterruptedException, ExecutionException, IOException {
-        if ("".equalsIgnoreCase(kafkaserver)) {
+    public boolean sendTransaction(String txHash, byte[] data) {
+        return send(kafkaConfiguration.getTransactionTopic(), txHash, data);
+    }
+
+    private boolean send(String topic, String key, byte[] data) {
+        if (!enabled) return false;
+        try {
+            ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, data);
+            Future<RecordMetadata> future = producer.send(record);
+            RecordMetadata meta = future.get();
+            log.trace("Sent to topic={} partition={} offset={}", meta.topic(), meta.partition(), meta.offset());
+            return true;
+        } catch (Exception e) {
+            log.warn("Kafka send failed topic={} key={}", topic, key, e);
             return false;
         }
-        // messages can be ordered per a certain property,
-        // set a consistent message key and use multiple partitions
-        final String key = serveraddress;// UUID.randomUUID().toString();
-        try (KafkaProducer<String, byte[]> messageProducer = new KafkaProducer<String, byte[]>(producerConfig())) {
-            ProducerRecord<String, byte[]> producerRecord = null;
-            byte[] bytes = data;
-         //   log.debug(" compress  " + bytes.length);
-            producerRecord = new ProducerRecord<String, byte[]>(topic, key, bytes);
-            final Future<RecordMetadata> result = messageProducer.send(producerRecord);
-            RecordMetadata mdata = result.get();
-            log.trace(" sendMessage " + key);
-            return mdata != null;
+    }
+
+    @Override
+    public void destroy() {
+        if (producer != null) {
+            producer.close();
+            log.info("Kafka producer closed");
         }
-
     }
-
-    public Properties producerConfig() {
-        Properties producerConfig = new Properties();
-        producerConfig.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaserver);
-        producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-        producerConfig.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                binaryMessageKey ? ByteArraySerializer.class.getName() : StringSerializer.class.getName());
-        producerConfig.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-        producerConfig.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
-        // producerConfig.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-        // KafkaAvroSerializer.class.getName());
-        // producerConfig.setProperty(AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG,
-        // configuration.getSchemaRegistryUrl());
-        return producerConfig;
-    }
-
-    /*
-    
-     */
 }

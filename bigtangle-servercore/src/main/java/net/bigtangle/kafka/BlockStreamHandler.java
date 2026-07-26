@@ -1,10 +1,5 @@
-/*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
- *******************************************************************************/
 package net.bigtangle.kafka;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,19 +14,13 @@ public class BlockStreamHandler extends AbstractStreamHandler {
     BlockService blockService;
 
     @Override
-    public void run(StreamsBuilder streamBuilder) {
-
-        dorun(streamBuilder);
-
+    protected String topic() {
+        return kafkaConfiguration.getBlockTopic();
     }
 
-    public void dorun(StreamsBuilder streamBuilder) {
-        
-            final KStream<byte[], byte[]> input = streamBuilder.stream(kafkaConfiguration.getTopicOutName());
-
-            input.map((key, bytes) -> KeyValue.pair(key,
-                    blockService.addConnectedFromKafka(key, bytes )));
-        
+    @Override
+    protected void process(KStream<String, byte[]> stream) {
+        stream.foreach((key, bytes) ->
+            blockService.addConnectedFromKafka(key.getBytes(), bytes));
     }
-
 }

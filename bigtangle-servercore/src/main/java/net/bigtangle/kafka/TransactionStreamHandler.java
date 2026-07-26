@@ -1,6 +1,5 @@
 package net.bigtangle.kafka;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.slf4j.Logger;
@@ -24,22 +23,20 @@ public class TransactionStreamHandler extends AbstractStreamHandler {
     NetworkParameters networkParameters;
 
     @Override
-    public void run(StreamsBuilder streamBuilder) {
-        dorun(streamBuilder);
+    protected String topic() {
+        return kafkaConfiguration.getTransactionTopic();
     }
 
-    public void dorun(StreamsBuilder streamBuilder) {
-        final KStream<byte[], byte[]> input = streamBuilder.stream(kafkaConfiguration.getTopicOutName());
-        input.map((key, bytes) -> {
+    @Override
+    protected void process(KStream<String, byte[]> stream) {
+        stream.foreach((key, bytes) -> {
             try {
-                byte[] decompressed = bytes;
-                Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(decompressed);
+                Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bytes);
                 mempoolService.submitTransaction(tx);
                 log.debug("Transaction from kafka added to mempool");
             } catch (Exception e) {
                 log.debug("Failed to process kafka transaction", e);
             }
-            return KeyValue.pair(key, bytes);
         });
     }
 }

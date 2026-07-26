@@ -1,87 +1,54 @@
-/*******************************************************************************
- *  Copyright   2018  Inasset GmbH. 
- *  
- *******************************************************************************/
 package net.bigtangle.kafka;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConfigurationProperties(prefix="kafka")
+@ConfigurationProperties(prefix = "kafka")
 public class KafkaConfiguration {
-    private String topicOutName;
-    private String bootstrapServers;   
+
+    private String bootstrapServers;
     private String consumerIdSuffix;
-    private long commitInterval;
-    
- 
-
-
-    public String getTopicOutName() {
-        return topicOutName;
-    }
-
-
-
-
-    public void setTopicOutName(String topicOutName) {
-        this.topicOutName = topicOutName;
-    }
-
-
-
+    private String blockTopic = "bigtangle-blocks";
+    private String transactionTopic = "bigtangle-transactions";
 
     public String getBootstrapServers() {
         return bootstrapServers;
     }
 
-
-
-
     public void setBootstrapServers(String bootstrapServers) {
         this.bootstrapServers = bootstrapServers;
     }
-
-
-
 
     public String getConsumerIdSuffix() {
         return consumerIdSuffix;
     }
 
-
-
-
     public void setConsumerIdSuffix(String consumerIdSuffix) {
         this.consumerIdSuffix = consumerIdSuffix;
     }
 
-
-
-
-    public long getCommitInterval() {
-        return commitInterval;
+    public String getBlockTopic() {
+        return blockTopic;
     }
 
-
-
-
-    public void setCommitInterval(long commitInterval) {
-        this.commitInterval = commitInterval;
+    public void setBlockTopic(String blockTopic) {
+        this.blockTopic = blockTopic;
     }
 
+    public String getTransactionTopic() {
+        return transactionTopic;
+    }
 
-
+    public void setTransactionTopic(String transactionTopic) {
+        this.transactionTopic = transactionTopic;
+    }
 
     @Override
     public String toString() {
-        return "KafkaConfiguration [topicOutName=" + topicOutName 
-                + ", bootstrapServers=" + bootstrapServers + ", consumerIdSuffix=" + consumerIdSuffix
-                + ", commitInterval=" + commitInterval + "]";
+        return "KafkaConfiguration [bootstrapServers=" + bootstrapServers
+                + ", consumerIdSuffix=" + consumerIdSuffix
+                + ", blockTopic=" + blockTopic
+                + ", transactionTopic=" + transactionTopic + "]";
     }
-
- 
-
-  
 }

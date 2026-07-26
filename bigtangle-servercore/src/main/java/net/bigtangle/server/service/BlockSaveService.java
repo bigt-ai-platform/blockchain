@@ -1,11 +1,9 @@
 package net.bigtangle.server.service;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -50,6 +48,8 @@ public class BlockSaveService {
 	BlockStoreService blockgraph;
 	@Autowired
 	protected KafkaConfiguration kafkaConfiguration;
+	@Autowired(required = false)
+	protected KafkaMessageProducer kafkaMessageProducer;
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 	@Autowired
@@ -125,26 +125,31 @@ public class BlockSaveService {
 	}
 
 	public void broadcastBlock(Block block) {
-		broadcastBytes(block.bitcoinSerialize());
+		broadcastBytes(block.bitcoinSerialize(), true);
 	}
 
 	public void broadcastTransaction(Transaction tx) {
 		try {
-			broadcastBytes(tx.bitcoinSerialize());
+			broadcastBytes(tx.bitcoinSerialize(), false);
 		} catch (Exception e) {
 			logger.warn("broadcastTransaction error", e);
 		}
 	}
 
-	private void broadcastBytes(byte[] data) {
-		try {
-			if ("".equalsIgnoreCase(kafkaConfiguration.getBootstrapServers()))
-				return;
-			KafkaMessageProducer kafkaMessageProducer = new KafkaMessageProducer(kafkaConfiguration);
-			kafkaMessageProducer.sendMessage(data, "mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG");
-		} catch (InterruptedException | ExecutionException | IOException e) {
-			logger.warn("broadcastBytes error", e);
+	private void broadcastBytes(byte[] data, boolean isBlock) {
+		if (kafkaMessageProducer == null) return;
+		if (isBlock) {
+			Sha256Hash hash = Sha256Hash.of(data);
+			kafkaMessageProducer.sendBlock(hash.toString(), data);
+		} else {
+			try {
+				Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(data);
+				kafkaMessageProducer.sendTransaction(tx.getHash().toString(), data);
+			} catch (Exception e) {
+				logger.warn("broadcastTransaction serialization error", e);
+			}
 		}
+	}
 	}
 
 	public void batchBlocks() throws BlockStoreException, Exception {
