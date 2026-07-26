@@ -45,7 +45,8 @@ public class KafkaTopicsHealthIndicator implements HealthIndicator {
     @Override
     public Health health() {
         Set<String> topicsRequired = new HashSet<String>();
-        topicsRequired.add ( kafkaProperties.getTopicOutName());
+        topicsRequired.add(kafkaProperties.getBlockTopic());
+        topicsRequired.add(kafkaProperties.getTransactionTopic());
         Set<String> topicsFound = check();
         Set<String> topicsMissing = Sets.difference(topicsRequired, topicsFound);
 
@@ -58,7 +59,8 @@ public class KafkaTopicsHealthIndicator implements HealthIndicator {
 
     private Set<String> check() {
         Set<String> topicsRequired = new HashSet<String>();
-        topicsRequired.add ( kafkaProperties.getTopicOutName());
+        topicsRequired.add(kafkaProperties.getBlockTopic());
+        topicsRequired.add(kafkaProperties.getTransactionTopic());
 
         Set<String> topicsFound = new HashSet<>();
         adminClient.describeTopics(topicsRequired).values().forEach((name, future) -> {

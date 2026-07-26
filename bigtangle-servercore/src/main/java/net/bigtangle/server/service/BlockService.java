@@ -137,7 +137,6 @@ public class BlockService {
 	 * Block byte[] bytes
 	 */
 	public Optional<Block> addConnectedFromKafka(byte[] key, byte[] bytes) {
-
 		try {
 			logger.debug("addConnectedFromKafka from sendkey:{}", Arrays.toString(key));
 			return addConnected(bytes, true);
@@ -147,7 +146,15 @@ public class BlockService {
 			logger.debug("addConnectedFromKafka with sendkey:{}", Arrays.toString(key), e);
 			return Optional.empty();
 		}
+	}
 
+	public Optional<Block> addConnectedFromGossip(Block block) {
+		try {
+			return addConnected(block.bitcoinSerialize(), true);
+		} catch (Exception e) {
+			logger.debug("addConnectedFromGossip error: {}", e.getMessage());
+			return Optional.empty();
+		}
 	}
 
 	/*

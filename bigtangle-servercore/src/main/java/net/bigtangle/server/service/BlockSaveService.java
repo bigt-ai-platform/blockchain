@@ -50,6 +50,8 @@ public class BlockSaveService {
 	protected KafkaConfiguration kafkaConfiguration;
 	@Autowired(required = false)
 	protected KafkaMessageProducer kafkaMessageProducer;
+	@Autowired(required = false)
+	protected GossipProtocol gossipProtocol;
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
 	@Autowired
@@ -137,19 +139,36 @@ public class BlockSaveService {
 	}
 
 	private void broadcastBytes(byte[] data, boolean isBlock) {
-		if (kafkaMessageProducer == null) return;
 		if (isBlock) {
 			Sha256Hash hash = Sha256Hash.of(data);
-			kafkaMessageProducer.sendBlock(hash.toString(), data);
+			if (kafkaMessageProducer != null)
+				kafkaMessageProducer.sendBlock(hash.toString(), data);
 		} else {
 			try {
 				Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(data);
-				kafkaMessageProducer.sendTransaction(tx.getHash().toString(), data);
+				if (kafkaMessageProducer != null)
+					kafkaMessageProducer.sendTransaction(tx.getHash().toString(), data);
 			} catch (Exception e) {
 				logger.warn("broadcastTransaction serialization error", e);
 			}
 		}
-	}
+		if (gossipProtocol != null) {
+			if (isBlock) {
+				try {
+					Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+					gossipProtocol.broadcastBlock(block);
+				} catch (Exception e) {
+					logger.warn("gossip block error", e);
+				}
+			} else {
+				try {
+					Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(data);
+					gossipProtocol.broadcastTransaction(tx);
+				} catch (Exception e) {
+					logger.warn("gossip tx error", e);
+				}
+			}
+		}
 	}
 
 	public void batchBlocks() throws BlockStoreException, Exception {
