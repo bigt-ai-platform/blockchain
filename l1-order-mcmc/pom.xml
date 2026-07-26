@@ -41,7 +41,7 @@
 		<dependency>
 			<groupId>org.jgrapht</groupId>
 			<artifactId>jgrapht-core</artifactId>
-			<version>1.5.1</version>
+			<version>1.5.2</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -50,7 +50,7 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>3.2.1</version>
+				<version>${org.springframework.boot.version}</version>
 				<executions>
 					<execution>
 						<goals><goal>repackage</goal></goals>

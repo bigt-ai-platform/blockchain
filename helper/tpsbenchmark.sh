@@ -19,7 +19,7 @@ fi
 COMPOSE_FILE="$ROOT/helper/fulltest/docker-compose.l0-test.yml"
 trap "docker compose -f '$COMPOSE_FILE' down -v 2>/dev/null" EXIT INT TERM
 
-header "TPS Benchmark :: MaxTpsBenchmark (200 clients × 250 tx = 50k total)"
+header "TPS Benchmark :: MaxTpsBenchmark (20 clients × 250 tx = 5k total)"
 
 # ── 1. Start PostgreSQL ────────────────────────────────────────────────
 info "Starting Docker PostgreSQL (single node)..."
@@ -44,6 +44,8 @@ log "Build complete"
 header "Running MaxTpsBenchmark..."
 mvn test -pl layer0-mcmc \
     -Dtest=net.bigtangle.mcmc.test.benchmark.MaxTpsBenchmark#testMempoolTps \
+    -DforkCount=1 \
+    -DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED" \
     -DDB_HOSTNAME=localhost \
     -DDB_PORT=5432 \
     -DDB_USERNAME=root \

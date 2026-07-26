@@ -71,13 +71,13 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<version>42.6.1</version> <!-- Or the latest version -->
+			<version>42.7.5</version>
 		</dependency>
 
 		<dependency>
 			<groupId>it.unimi.dsi</groupId>
 			<artifactId>fastutil</artifactId>
-			<version>8.1.0</version>
+			<version>8.5.15</version>
 		</dependency>
 
 		<dependency>
@@ -91,13 +91,13 @@
 		<dependency>
 			<groupId>com.hazelcast</groupId>
 			<artifactId>hazelcast-all</artifactId>
-			<version>4.0.2</version>
+			<version>4.2.8</version>
 		</dependency>
 
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
-			<version>3.14.0</version>
+			<version>3.17.0</version>
 		</dependency>
 
 		<dependency>
@@ -115,7 +115,7 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>3.2.1</version>
+				<version>${org.springframework.boot.version}</version>
 				<executions>
 					<execution>
 						<goals>

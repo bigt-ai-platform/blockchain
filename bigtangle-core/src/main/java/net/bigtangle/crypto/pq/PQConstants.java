@@ -25,6 +25,9 @@ public final class PQConstants {
     /** Dual ML-DSA-87 + SLH-DSA-SHA2-256s (category 5). */
     public static final int SUITE_CAT5_DUAL_1 = 1;
 
+    /** ML-DSA-87 only (category 5, lattice-based). */
+    public static final int SUITE_ML_DSA_ONLY = 2;
+
     /* ── Key sizes (bytes) ─────────────────────────────────────────────── */
 
     /** ML-DSA-87 public key size. */

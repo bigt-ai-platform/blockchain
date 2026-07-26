@@ -68,7 +68,7 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>3.2.1</version>
+				<version>${org.springframework.boot.version}</version>
 				<executions>
 					<execution>
 						<goals>
@@ -95,12 +95,11 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<forkCount>0</forkCount>
 					<redirectTestOutputToFile>true</redirectTestOutputToFile>
 					<excludes>
 						<exclude>**/net/bigtangle/mcmc/remote/**</exclude>
 					</excludes>
-					<argLine>-Dspring.main.allow-bean-definition-overriding=true</argLine>
+					<argLine>-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true</argLine>
 				</configuration>
 			</plugin>
 

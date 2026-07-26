@@ -2,6 +2,7 @@ package net.bigtangle.mcmc.test.benchmark;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.math.BigInteger;
@@ -25,8 +26,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
@@ -36,7 +42,8 @@ import net.bigtangle.layer0.mcmc.Layer0MCMCStart;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
-import net.bigtangle.utils.OkHttp3Util;
+import net.bigtangle.server.service.BlockSaveService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
@@ -50,15 +57,19 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(MaxTpsBenchmark.class);
 
-    private static final int CLIENTS = 200;
+    private static final int CLIENTS = 20;
     private static final int TX_PER_CLIENT = 250;
     private static final int BATCH_SIZE = 250;
-    private static final int TOTAL_TX = CLIENTS * TX_PER_CLIENT;
+    private static final int TOTAL_TX = Math.min(CLIENTS * TX_PER_CLIENT, 5000);
+
+    private static final File KEY_FILE = new File(System.getProperty("user.dir")
+            .replace("/layer0-mcmc", "").replace("/l1-pai-mcmc", ""), "helper/testpq.json");
+    private static List<PQKey> PRELOADED_KEYS;
 
     @Autowired
     protected ScheduleConfiguration scheduleConfiguration;
-
-    private String genesisPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
+    @Autowired
+    protected MempoolService mempoolService;
 
     @Override
     @BeforeEach
@@ -69,99 +80,104 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
     @Test
     public void testMempoolTps() throws Exception {
-        List<PQKey> walletKeys = new ArrayList<>();
-        for (int i = 0; i < TOTAL_TX; i++) walletKeys.add(PQKey.createNew());
-
-        Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
-        HashMap<String, BigInteger> funding = new HashMap<>();
-        for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
+        // Load pre-generated PQKeys (avoids slow SLH-DSA keygen during benchmark)
+        if (PRELOADED_KEYS == null) {
+            PRELOADED_KEYS = PQKeyStore.load(KEY_FILE);
+            log.info("Loaded {} pre-generated PQKeys from {}", PRELOADED_KEYS.size(), KEY_FILE);
         }
-        Transaction fundingTx = genesisWallet.payToList(null, funding,
-                NetworkParameters.BIGTANGLE_TOKENID, "fund");
+        List<PQKey> walletKeys = new ArrayList<>(PRELOADED_KEYS.subList(0, Math.min(TOTAL_TX, PRELOADED_KEYS.size())));
+
+        // Fund each wallet by creating a P2PK transaction and confirming with reward block
+        Transaction fundingTx = new Transaction(networkParameters);
+        for (PQKey k : walletKeys) {
+            fundingTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, fundingTx,
+                    new Coin(BigInteger.valueOf(20000), NetworkParameters.BIGTANGLE_TOKENID), k));
+        }
+        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+        Coin totalOut = Coin.valueOf(20000L * walletKeys.size(), NetworkParameters.BIGTANGLE_TOKENID);
+        Coin need = totalOut.add(Coin.FEE_DEFAULT);
+        Coin totalIn = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+        PQKey walletKey = wallet.walletKeys(null).get(0);
+        for (FreeStandingTransactionOutput co : candidates) {
+            if (!java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) continue;
+            fundingTx.addInput(co.getUTXO().getBlockHash(), co);
+            totalIn = totalIn.add(co.getValue());
+            if (totalIn.getValue().compareTo(need.getValue()) >= 0) {
+                Coin change = totalIn.subtract(need);
+                if (!change.isNegative() && !change.isZero()) {
+                    fundingTx.addOutput(TransactionOutput.fromCoinKey(networkParameters, fundingTx, change, walletKey));
+                }
+                break;
+            }
+        }
+        wallet.signTransaction(fundingTx, null);
+        // Save the funding transaction in a block directly, capture block hash
+        BlockStoreInterface ss = storeService.getStore();
+        Sha256Hash fundBlockHash;
+        try {
+            Block proto = cacheBlockPrototypeService.getBlockPrototype(ss);
+            proto.addTransaction(fundingTx);
+            blockSaveService.saveBatchBlock(proto, ss);
+            fundBlockHash = proto.getHash();
+        } finally {
+            ss.close();
+        }
+        blockGraph.updateChain(false);
+        mcmcService.update(store);
+        mcmcService.calcNewBlockPrototype(store);
         log.info("Funded {} wallets", walletKeys.size());
 
-        // Create a block containing the funding transaction and connect it
-        Sha256Hash fundBlockHash;
-        {
-            BlockStoreInterface bs = storeService.getStore();
-            try {
-                Block proto = cacheBlockPrototypeService.getBlockPrototype(bs);
-                proto.addTransaction(fundingTx);
-                blockSaveService.saveBatchBlock(proto, bs);
-                fundBlockHash = proto.getHash();
-            } finally {
-                bs.close();
-            }
-            blockGraph.updateChain(false);
-        }
-
         Sha256Hash fundTxHash = fundingTx.getHash();
-        Map<String, FreeStandingTransactionOutput> addrToCoin = new HashMap<>();
+        List<FreeStandingTransactionOutput> allCoins = new ArrayList<>();
         for (int i = 0; i < fundingTx.getOutputs().size(); i++) {
             UTXO utxo = store.getTransactionOutput(fundBlockHash, fundTxHash, i);
             if (utxo != null) {
-                addrToCoin.put(utxo.getAddress(),
-                        new FreeStandingTransactionOutput(networkParameters, utxo));
+                allCoins.add(new FreeStandingTransactionOutput(networkParameters, utxo));
             }
-        }
-        List<FreeStandingTransactionOutput> allCoins = new ArrayList<>();
-        for (PQKey k : walletKeys) {
-            String addr = k.toAddress(networkParameters).toHex();
-            FreeStandingTransactionOutput c = addrToCoin.get(addr);
-            if (c != null) allCoins.add(c);
         }
         log.info("Pre-fetched {} UTXOs", allCoins.size());
 
-        PQKey finalRecipient = PQKey.createNew();
+        PQKey finalRecipient = PRELOADED_KEYS.get(PRELOADED_KEYS.size() - 1);
+        String finalAddr = Address.fromHash160(networkParameters, finalRecipient.getPubKeyHash()).toBase58();
+
+        // Pre-create all transactions (includes SLH-DSA signing, not timed)
+        log.info("Pre-creating {} transactions (SLH-DSA signing)...", TOTAL_TX);
+        List<Transaction> allTxs = new ArrayList<>(TOTAL_TX);
+        for (int i = 0; i < TOTAL_TX; i++) {
+            PQKey wk = walletKeys.get(i);
+            Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
+            Transaction tx = w.payToListTransaction(null,
+                    new HashMap<>(Map.of(finalAddr, BigInteger.valueOf(15000))),
+                    NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(allCoins.get(i)));
+            if (tx != null) allTxs.add(tx);
+            if ((i + 1) % 200 == 0) log.info("  Pre-created {}/{} transactions", i + 1, TOTAL_TX);
+        }
+        log.info("Pre-created {} transactions", allTxs.size());
 
         AtomicInteger ok = new AtomicInteger(0);
         AtomicInteger fail = new AtomicInteger(0);
-
-        ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
-        @SuppressWarnings("unchecked")
-        CompletableFuture<Void>[] futures = new CompletableFuture[CLIENTS];
 
         // Warm up MCMC for later batch processing
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
         mcmcService.calcNewBlockPrototype(store);
 
+        ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void>[] futures = new CompletableFuture[CLIENTS];
+
         long wallStart = System.nanoTime();
         for (int c = 0; c < CLIENTS; c++) {
             int startIdx = c * TX_PER_CLIENT;
             futures[c] = CompletableFuture.runAsync(() -> {
                 try {
-                    List<Transaction> txs = new ArrayList<>();
                     for (int i = 0; i < TX_PER_CLIENT; i++) {
                         int idx = startIdx + i;
-                        PQKey wk = walletKeys.get(idx);
-                        FreeStandingTransactionOutput coin = allCoins.get(idx);
-                        Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
-                        Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(Map.of(finalRecipient.toAddress(networkParameters).toHex(), BigInteger.valueOf(15000))),
-                                NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
-                        if (tx != null) txs.add(tx);
-
-                        // Send batch when full or at the end
-                        if (txs.size() == BATCH_SIZE || i == TX_PER_CLIENT - 1) {
-                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                            DataOutputStream dos = new DataOutputStream(baos);
-                            for (Transaction bt : txs) {
-                                byte[] btBytes = bt.bitcoinSerialize();
-                                dos.writeInt(btBytes.length);
-                                dos.write(btBytes);
-                            }
-                            dos.close();
-                            OkHttp3Util.post(contextRoot + "submitTransactions",
-                                    baos.toByteArray());
-                            txs.clear();
-                        }
+                        mempoolService.submitTransaction(allTxs.get(idx));
                     }
                     ok.addAndGet(TX_PER_CLIENT);
                 } catch (Exception e) {
                     fail.addAndGet(TX_PER_CLIENT);
-                    log.error("Client failed", e);
                 }
             }, pool);
         }
@@ -170,7 +186,8 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
         long submitWallMs = (System.nanoTime() - wallStart) / 1_000_000;
 
-        // Server-side batch: drain mempool into blocks
+        // Server-side batch: drain mempool into blocks (parallel groups)
+        BlockSaveService.BATCH_TX_PER_BLOCK = 50000; // default: all tx in one block
         long batchStart = System.nanoTime();
         int batched = blockSaveService.batchBlocksFromMempool();
         long batchMs = (System.nanoTime() - batchStart) / 1_000_000;

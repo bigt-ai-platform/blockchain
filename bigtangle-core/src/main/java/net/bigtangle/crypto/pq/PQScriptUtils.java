@@ -111,7 +111,7 @@ public final class PQScriptUtils {
             // Apply TX-level domain separator for replay protection (quantum.md §6)
             byte[] txHash = domainSeparatedHash(baseSighash.getBytes(), PQConstants.TX_DOMAIN);
 
-            // ML-DSA-87
+            // ML-DSA-87 (always required)
             byte[] mlMsg = domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
             KeyBundle.Entry mlKey = keyBundle.getEntry(PQConstants.ALG_ML_DSA_87);
             SignatureBundle.Entry mlSig = sigBundle.getEntry(PQConstants.ALG_ML_DSA_87);
@@ -119,13 +119,16 @@ public final class PQScriptUtils {
             if (!p.verify(PQConstants.ALG_ML_DSA_87, mlKey.publicKey(), mlMsg, mlSig.signature()))
                 return false;
 
-            // SLH-DSA-SHA2-256s
-            byte[] slhMsg = domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
+            // SLH-DSA-SHA2-256s (required if the key bundle has an SLH-DSA entry;
+            // absent for ML-DSA-only keys)
             KeyBundle.Entry slhKey = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
             SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
-            if (slhKey == null || slhSig == null) return false;
-            if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
-                return false;
+            if (slhKey != null) {
+                if (slhSig == null) return false;
+                byte[] slhMsg = domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
+                if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
+                    return false;
+            }
 
             return true;
         } catch (Exception e) {

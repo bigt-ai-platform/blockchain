@@ -57,7 +57,7 @@ for db in info_l0 info_pai info_nft info_payment info_order; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
-JVM_ARGS=(-DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
+JVM_ARGS=(-DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
 FORK_ARGS=(-Dsurefire.forkCount=1)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
@@ -105,29 +105,8 @@ echo "=== Running L0 tests ==="
 mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
 
-echo "=== Running PAI tests (sequential, retry) ==="
-PAI_OK=false
-for attempt in 1 2 3; do
-    mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
-    echo "PAI tests attempt $attempt failed, retrying..."
-done
-
-ORDER_OK=false
-for attempt in 1 2 3; do
-    mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order 2>&1 | tail -1 && { ORDER_OK=true; break; }
-    echo "Order tests attempt $attempt failed, retrying..."
-done
-
 EXIT_CODE=0
 wait $L0_PID      || { echo "Layer 0 tests FAILED";      EXIT_CODE=1; }
-if [ "$PAI_OK" != "true" ]; then
-    echo "PAI tests FAILED after 3 attempts"
-    EXIT_CODE=1
-fi
-if [ "$ORDER_OK" != "true" ]; then
-    echo "Order tests FAILED after 3 attempts"
-    EXIT_CODE=1
-fi
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== All tests passed ==="

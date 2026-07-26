@@ -69,6 +69,12 @@ public class PQKey implements EncryptableItem {
         return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
     }
 
+    public static PQKey createNewMLDSA() {
+        byte[] seed = new byte[32];
+        secureRandom.nextBytes(seed);
+        return fromMLDSA(seed);
+    }
+
     public static PQKey fromSeeds(byte[] mlDsaSeed, byte[] slhDsaSeed) {
         PQSignatureProvider.KeyPair mlKp = prov.generateKeyPair(PQConstants.ALG_ML_DSA_87, mlDsaSeed);
         PQSignatureProvider.KeyPair slhKp = prov.generateKeyPair(PQConstants.ALG_SLH_DSA_SHA2_256S, slhDsaSeed);
@@ -77,6 +83,14 @@ public class PQKey implements EncryptableItem {
         entries.add(new KeyBundle.Entry(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKp.publicKey()));
         KeyBundle bundle = new KeyBundle(entries);
         return new PQKey(mlKp.privateKey(), slhKp.privateKey(), bundle);
+    }
+
+    public static PQKey fromMLDSA(byte[] mlDsaSeed) {
+        PQSignatureProvider.KeyPair mlKp = prov.generateKeyPair(PQConstants.ALG_ML_DSA_87, mlDsaSeed);
+        List<KeyBundle.Entry> entries = new ArrayList<>();
+        entries.add(new KeyBundle.Entry(PQConstants.ALG_ML_DSA_87, mlKp.publicKey()));
+        KeyBundle bundle = new KeyBundle(entries);
+        return new PQKey(mlKp.privateKey(), null, bundle);
     }
 
     public static PQKey fromPrivateKeyBundle(byte[] mlDsaPriv, byte[] slhDsaPriv, KeyBundle pubKeyBundle) {
@@ -101,7 +115,7 @@ public class PQKey implements EncryptableItem {
     }
 
     public boolean hasPrivateKey() {
-        return mlDsaPrivateKey != null && slhDsaPrivateKey != null;
+        return mlDsaPrivateKey != null;
     }
 
     public KeyBundle getKeyBundle() { return keyBundle; }
@@ -121,22 +135,26 @@ public class PQKey implements EncryptableItem {
     public byte[] getSLHDSAPrivateKey() { return slhDsaPrivateKey; }
 
     public SignatureBundle sign(Sha256Hash input) {
-        if (mlDsaPrivateKey == null || slhDsaPrivateKey == null)
+        if (mlDsaPrivateKey == null)
             throw new MissingPrivateKeyException();
         byte[] txHash = PQScriptUtils.domainSeparatedHash(input.getBytes(), PQConstants.TX_DOMAIN);
         byte[] mlMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.MLDSA_SIG_DOMAIN);
-        byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
         byte[] mlSig = prov.sign(PQConstants.ALG_ML_DSA_87, mlDsaPrivateKey, mlMsg);
-        byte[] slhSig = prov.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhDsaPrivateKey, slhMsg);
         List<SignatureBundle.Entry> entries = new ArrayList<>();
         entries.add(new SignatureBundle.Entry(PQConstants.ALG_ML_DSA_87, mlSig));
-        entries.add(new SignatureBundle.Entry(PQConstants.ALG_SLH_DSA_SHA2_256S, slhSig));
+        if (slhDsaPrivateKey != null) {
+            byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
+            byte[] slhSig = prov.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhDsaPrivateKey, slhMsg);
+            entries.add(new SignatureBundle.Entry(PQConstants.ALG_SLH_DSA_SHA2_256S, slhSig));
+        }
         return new SignatureBundle(entries);
     }
 
     public PQAddress toAddress(int network) {
         if (address == null) {
-            address = PQAddress.fromKeyBundle(network, PQConstants.SUITE_CAT5_DUAL_1, keyBundle);
+            int suite = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S) != null
+                    ? PQConstants.SUITE_CAT5_DUAL_1 : PQConstants.SUITE_ML_DSA_ONLY;
+            address = PQAddress.fromKeyBundle(network, suite, keyBundle);
         }
         return address;
     }

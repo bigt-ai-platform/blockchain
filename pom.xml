@@ -17,10 +17,10 @@
 		<maven.compiler.parameters>true</maven.compiler.parameters>
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<org.slf4j-version>2.0.6</org.slf4j-version>
+		<org.slf4j-version>2.0.16</org.slf4j-version>
 		<mysql-version>8.0.33</mysql-version>
 		<jackson.version>2.18.3</jackson.version>
-		<org.springframework.boot.version>3.4.4</org.springframework.boot.version>
+		<org.springframework.boot.version>3.4.5</org.springframework.boot.version>
 		<kafka.version>1.1.0</kafka.version>
 		<junit.jupiter.version>5.11.4</junit.jupiter.version>
 		<junit.platform.version>1.11.4</junit.platform.version>
@@ -105,7 +105,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
-				<version>2.2</version>
+				<version>3.4.2</version>
 			</plugin>
 			<plugin>
 				<groupId>
@@ -134,10 +134,6 @@
 						</exclude>
 					</excludes>
 					<properties>
-						<property>
-							<name>junit</name>
-							<value>true</value>
-						</property>
 					</properties>
 					<argLine>--add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED</argLine>
 					<forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
@@ -146,7 +142,7 @@
 			<plugin>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<version>
-					2.22.2</version>
+					3.5.3</version>
 			</plugin>
 
 		</plugins>

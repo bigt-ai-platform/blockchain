@@ -1,15 +1,19 @@
 /.project
+**/.project
 /build/
 **/target/
 /bin/ 
 /.settings/
+**/.settings/
 bigtangle-docker/.settings/
+**/.classpath
 logs/ 
 /.idea/
 *.class
 
 
 
+helper/testpq.json
 /node_modules/
 /bigtangle-typescript/dist/
 /bigtangle-subtangle/.settings/org.eclipse.core.resources.prefs
