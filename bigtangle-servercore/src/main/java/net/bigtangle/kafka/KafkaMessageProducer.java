@@ -1,5 +1,7 @@
 package net.bigtangle.kafka;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Future;
 
@@ -16,14 +18,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
+import net.bigtangle.p2p.DnsDiscoveryResolver;
+import net.bigtangle.p2p.NodeRecord;
+import net.bigtangle.params.NetworkParameters;
 
 @Component
 public class KafkaMessageProducer implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaMessageProducer.class);
 
+    private static final int DEFAULT_KAFKA_PORT = 9092;
+
     @Autowired
     private KafkaConfiguration kafkaConfiguration;
+
+    @Autowired
+    private NetworkParameters networkParameters;
 
     private KafkaProducer<String, byte[]> producer;
     private boolean enabled;
@@ -32,6 +42,10 @@ public class KafkaMessageProducer implements DisposableBean {
     public void init() {
         String bs = kafkaConfiguration.getBootstrapServers();
         if (bs == null || bs.isEmpty()) {
+            bs = discoverBootstrapServers();
+        }
+        if (bs == null || bs.isEmpty()) {
+            log.info("Kafka disabled: no bootstrap servers configured or discovered");
             enabled = false;
             return;
         }
@@ -47,6 +61,31 @@ public class KafkaMessageProducer implements DisposableBean {
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producer = new KafkaProducer<>(props);
         log.info("Kafka producer initialized, servers={}", bs);
+    }
+
+    private String discoverBootstrapServers() {
+        String[] seeds = networkParameters.getDnsSeeds();
+        if (seeds == null || seeds.length == 0) {
+            log.info("No DNS seeds configured for Kafka discovery");
+            return null;
+        }
+        List<String> servers = new ArrayList<>();
+        for (String seed : seeds) {
+            try {
+                List<NodeRecord> records = DnsDiscoveryResolver.resolve(seed);
+                for (NodeRecord r : records) {
+                    String addr = r.getHost() + ":" + DEFAULT_KAFKA_PORT;
+                    if (!servers.contains(addr)) {
+                        servers.add(addr);
+                    }
+                }
+                log.info("DNS seed {} resolved to {} Kafka candidates", seed, records.size());
+            } catch (Exception e) {
+                log.warn("Failed to resolve DNS seed {} for Kafka discovery: {}", seed, e.getMessage());
+            }
+        }
+        if (servers.isEmpty()) return null;
+        return String.join(",", servers);
     }
 
     public boolean sendBlock(String blockHash, byte[] data) {

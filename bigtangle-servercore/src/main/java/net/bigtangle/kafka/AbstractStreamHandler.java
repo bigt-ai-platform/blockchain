@@ -2,6 +2,8 @@ package net.bigtangle.kafka;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -14,11 +16,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import jakarta.annotation.PreDestroy;
+import net.bigtangle.p2p.DnsDiscoveryResolver;
 
 public abstract class AbstractStreamHandler {
 
     @Autowired
     protected KafkaConfiguration kafkaConfiguration;
+
+    @Autowired
+    protected net.bigtangle.params.NetworkParameters networkParameters;
 
     protected KafkaStreams streams;
     private static final Logger log = LoggerFactory.getLogger(AbstractStreamHandler.class);
@@ -29,6 +35,9 @@ public abstract class AbstractStreamHandler {
 
     public void runStream() {
         String bs = kafkaConfiguration.getBootstrapServers();
+        if (bs == null || bs.isEmpty()) {
+            bs = discoverBootstrapServers();
+        }
         if (bs == null || bs.isEmpty()) return;
         log.info("Starting Kafka stream handler: {} topic={}", getClass().getSimpleName(), topic());
         Properties props = new Properties();
@@ -59,6 +68,24 @@ public abstract class AbstractStreamHandler {
         });
         streams.start();
         log.info("Kafka stream handler started: {}", getClass().getSimpleName());
+    }
+
+    private String discoverBootstrapServers() {
+        String[] seeds = networkParameters.getDnsSeeds();
+        if (seeds == null || seeds.length == 0) return null;
+        List<String> servers = new ArrayList<>();
+        for (String seed : seeds) {
+            try {
+                List<net.bigtangle.p2p.NodeRecord> records = DnsDiscoveryResolver.resolve(seed);
+                for (net.bigtangle.p2p.NodeRecord r : records) {
+                    String addr = r.getHost() + ":9092";
+                    if (!servers.contains(addr)) servers.add(addr);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to resolve DNS seed for Kafka: {}", e.getMessage());
+            }
+        }
+        return servers.isEmpty() ? null : String.join(",", servers);
     }
 
     @PreDestroy
