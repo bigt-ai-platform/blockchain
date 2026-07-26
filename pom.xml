@@ -9,6 +9,13 @@
 	<description>The parent project for bigtangle </description>
 	<url>http://www.bigtangle.org</url>
 	<inceptionYear>2010</inceptionYear>
+	<licenses>
+		<license>
+			<name>GNU Affero General Public License v3</name>
+			<url>https://www.gnu.org/licenses/agpl-3.0.html</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
 	<packaging>pom</packaging>
 	<version>0.6.0</version>
 	<properties>
