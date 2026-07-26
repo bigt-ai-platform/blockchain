@@ -89,7 +89,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	private static final String DROP_ORDERCANCEL_TABLE = "DROP TABLE IF EXISTS ordercancel";
 	private static final String DROP_STAKE_DEPOSITS_TABLE = "DROP TABLE IF EXISTS stake_deposits";
-	private static final String DROP_BATCHBLOCK_TABLE = "DROP TABLE IF EXISTS batchblock";
+	private static final String 		DROP_BATCHBLOCK_TABLE = "DROP TABLE IF EXISTS batchblock";
 	private static final String DROP_SUBTANGLE_PERMISSION_TABLE = "DROP TABLE IF EXISTS subtangle_permission";
 	private static final String DROP_ORDERS_TABLE = "DROP TABLE IF EXISTS orders";
 

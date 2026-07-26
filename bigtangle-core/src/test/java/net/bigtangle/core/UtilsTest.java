@@ -60,12 +60,6 @@ public class UtilsTest {
 		assertEquals("2014-11-16T10:54:33Z", Utils.dateTimeFormat(new Date(1416135273781L)));
 	}
 
-	@Test
-	public void gzip() throws IOException {
-		byte[] b = "Hallo".getBytes("UTF-8");
-
-	}
-
 	public static Block createBlock(NetworkParameters params, Block prevBlock, Block branchBlock) {
 		return createNextBlock(prevBlock, branchBlock, NetworkParameters.BLOCK_VERSION_GENESIS);
 	}

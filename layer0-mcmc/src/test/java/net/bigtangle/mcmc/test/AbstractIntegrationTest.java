@@ -296,10 +296,12 @@ public abstract class AbstractIntegrationTest {
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
 		resetStore();
-		// Use deterministic ML-DSA-only genesis key
+		// Use deterministic genesis key that matches TestParams.genesisPub
 		byte[] mlDsaSeed = new byte[32];
+		byte[] slhDsaSeed = new byte[32];
 		java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
-		PQKey genesisKey = PQKey.fromMLDSA(mlDsaSeed);
+		java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
+		PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
 		wallet = Wallet.fromKeys(networkParameters, genesisKey, contextRoot);
 		// Add genesis coinbase as spendable UTXO for the wallet's genesis key
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);

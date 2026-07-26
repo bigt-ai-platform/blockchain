@@ -301,8 +301,10 @@ public abstract class AbstractIntegrationTest {
 		// In production BIG arrives via cross-chain bridge from L0.
 		// For tests we create genesis BIG UTXOs directly so wallet can pay fees.
 		byte[] mlDsaSeed = new byte[32];
+		byte[] slhDsaSeed = new byte[32];
 		java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
-		PQKey genesisKey = PQKey.fromMLDSA(mlDsaSeed);
+		java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
+		PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
 		fundGenesisBIG(genesisKey);
 		wallet = Wallet.fromKeys(networkParameters, genesisKey, contextRoot);
 		serverConfiguration.setServiceReady(true);

@@ -160,7 +160,7 @@ public class DispatcherController implements DisposableBean {
 			AbstractResponse resp = ErrorResponse.create(100);
 			StringWriter sw = new StringWriter();
 			resp.setMessage(sw.toString());
-			gzipBinary(httpServletResponse, resp, reqCmd);
+			writeJsonResponse(httpServletResponse, resp, reqCmd);
 		} catch (java.util.concurrent.ExecutionException e) {
 			logger.error("ERROR ExecutionException reqCmd={} cause={}", reqCmd, e.getCause() != null ? e.getCause().getClass().getName() + ": " + e.getCause().getMessage() : "null");
 			logger.error("process ExecutionException for reqCmd={}", reqCmd, e.getCause());
@@ -719,7 +719,7 @@ public class DispatcherController implements DisposableBean {
 	}
 
 
-	public void gzipBinary(HttpServletResponse httpServletResponse, AbstractResponse response, String reqCmd)
+	public void writeJsonResponse(HttpServletResponse httpServletResponse, AbstractResponse response, String reqCmd)
 			throws Exception {
 		byte[] data = Json.jsonmapper().writeValueAsBytes(response);
 		httpServletResponse.setContentLength(data.length);
@@ -741,7 +741,7 @@ public class DispatcherController implements DisposableBean {
 			String reqCmd) throws Exception {
 		long duration = watch.elapsed(TimeUnit.MILLISECONDS);
 		response.setDuration(duration);
-		gzipBinary(httpServletResponse, response, reqCmd);
+		writeJsonResponse(httpServletResponse, response, reqCmd);
 	}
 
 	// server may accept only block from his server
