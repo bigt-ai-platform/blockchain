@@ -26,6 +26,11 @@ MODULES["l1-order-server"]="l1-order-server/Dockerfile"
 MODULES["l1-nft-server"]="l1-nft-server/Dockerfile"
 MODULES["l1-payment-server"]="l1-payment-server/Dockerfile"
 MODULES["l1-contract-server"]="l1-contract-server/Dockerfile"
+MODULES["layer0-mcmc"]="layer0-mcmc/Dockerfile"
+MODULES["l1-pai-mcmc"]="l1-pai-mcmc/Dockerfile"
+MODULES["l1-order-mcmc"]="l1-order-mcmc/Dockerfile"
+MODULES["l1-contract-mcmc"]="l1-contract-mcmc/Dockerfile"
+MODULES["l1-payment-mcmc"]="l1-payment-mcmc/Dockerfile"
 
 
 # ── Login ──────────────────────────────────────────────────────────────────
@@ -40,7 +45,7 @@ fi
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
 mvn clean install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,l1-pai-server,l1-order-server,l1-nft-server,l1-payment-server,l1-contract-server,bigtangle-bridge
+  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc
 
 # ── Create temporary Dockerfiles for modules that don't have one ───────────
 create_dockerfile() {
@@ -52,9 +57,12 @@ create_dockerfile() {
     fi
     info "Creating Dockerfile for $module"
     mkdir -p "$module"
-    # Find the executable JAR (spring-boot-maven-plugin with classifier exec)
+    # Find the executable JAR (prefer -exec classifier, fall back to plain jar)
     local jar
     jar=$(ls "$ROOT/$module/target/"*-exec.jar 2>/dev/null | head -1)
+    if [ -z "$jar" ]; then
+        jar=$(ls "$ROOT/$module/target/"*.jar 2>/dev/null | grep -v "sources\|javadoc\|original" | head -1)
+    fi
     if [ -z "$jar" ]; then
         fail "No executable JAR found in $ROOT/$module/target/"
     fi
