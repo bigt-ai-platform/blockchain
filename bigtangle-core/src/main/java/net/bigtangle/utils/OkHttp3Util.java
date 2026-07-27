@@ -87,7 +87,7 @@ public class OkHttp3Util {
     public static byte[] post(String url, byte[] b) throws IOException {
         logger.debug("start:  " + url);
         OkHttpClient client = getOkHttpClient();
-        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream; charset=utf-8"), b);
+        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream"), b);
         Request request = new Request.Builder().url(url).post(body).build();
         Response response = client.newCall(request).execute();
         try {
@@ -215,7 +215,7 @@ public class OkHttp3Util {
     public static byte[] post(String url, byte[] b, String header) throws IOException {
         logger.debug("start:  " + url);
         OkHttpClient client = getOkHttpClient();
-        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream; charset=utf-8"), b);
+        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream"), b);
         Request request = new Request.Builder().url(url).post(body).addHeader("accessToken", header).build();
 
         Response response = client.newCall(request).execute();
