@@ -214,8 +214,9 @@ public abstract class Message {
         // because we can preallocate the ByteArrayOutputStream buffer and avoid resizing.
         byte[] buf = stream.toByteArray();
         length = buf.length;
-       //  System.out.println("UnsafeByteArrayOutputStream.toByteArray: cursor=${   "+ this.cursor  +
-       //   " } offset =${"+ this.offset +"}, buf.length=${ " + buf.length +"}");
+        payload = buf;
+        offset = 0;
+        recached = true;
         return buf;
     }
 
