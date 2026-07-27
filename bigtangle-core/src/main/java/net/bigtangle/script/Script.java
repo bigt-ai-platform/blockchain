@@ -250,12 +250,6 @@ public class Script {
                chunks.get(4).equalsOpCode(OP_CHECKSIG);
     }
 
-    public boolean isSentToKey() {
-        return chunks.size() == 2 &&
-               chunks.get(0).data != null &&
-               chunks.get(1).equalsOpCode(OP_CHECKSIG);
-    }
-
     /**
      * An alias for isPayToScriptHash.
      */
