@@ -20,8 +20,13 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
+import net.bigtangle.core.TransactionInput;
+import net.bigtangle.crypto.pq.SignatureBundle;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.exception.ProtocolException;
+import net.bigtangle.script.Script;
 import net.bigtangle.params.MainNetParams;
+import net.bigtangle.script.ScriptBuilder;
 
 public class BitcoinSerializerTest {
 	private static final byte[] ADDRESS_MESSAGE_BYTES = HEX.decode("f9beb4d96164647200000000000000001f000000"
@@ -216,4 +221,36 @@ public class BitcoinSerializerTest {
 		});
 	}
 	*/
+
+	@Test
+	public void testTransactionSerializationRoundtripWithPqSignature() throws Exception {
+		net.bigtangle.params.NetworkParameters params = net.bigtangle.params.MainNetParams.get();
+		PQKey key = PQKey.createNew();
+		Sha256Hash hash = Sha256Hash.of("test data".getBytes());
+		SignatureBundle sigBundle = key.sign(hash);
+
+		Transaction tx = new Transaction(params);
+		tx.setVersion(net.bigtangle.crypto.pq.PQConstants.TX_PQ_VERSION);
+
+		Script scriptSig = net.bigtangle.script.ScriptBuilder.createInputScriptForPQ(sigBundle, key);
+		TransactionInput input = TransactionInput.fromScriptBytes(params, tx, scriptSig.getProgram());
+		tx.addInput(input);
+		tx.setPqSignatureBundle(sigBundle.serialize());
+
+		byte[] serialized = tx.bitcoinSerialize();
+		assertTrue(serialized.length > 1000, "serialized tx should contain large PQ sig");
+		assertTrue(tx.getPqSignatureBundle() != null, "pqSignatureBundle should be set before serialize");
+		assertTrue(tx.getPqSignatureBundle().length > 1000, "pqSignatureBundle should be large");
+
+		Transaction deserialized = params.getDefaultSerializer().makeTransaction(serialized);
+		assertEquals(tx.getVersion(), deserialized.getVersion(), "version must survive round-trip");
+		assertTrue(deserialized.getVersion() >= PQConstants.TX_PQ_VERSION, "version must be >= PQ_VERSION");
+		TransactionInput deserInput = deserialized.getInput(0);
+		assertNotNull(deserInput);
+		assertArrayEquals(scriptSig.getProgram(), deserInput.getScriptBytes(),
+				"scriptSig bytes must survive round-trip");
+		assertNotNull(deserialized.getPqSignatureBundle());
+		assertArrayEquals(tx.getPqSignatureBundle(), deserialized.getPqSignatureBundle(),
+				"pqSignatureBundle must survive round-trip");
+	}
 }
