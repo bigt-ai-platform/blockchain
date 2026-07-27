@@ -61,6 +61,7 @@ public class BenchmarkRunner {
         for (PQKey key : clientKeys) {
             for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
                 HashMap<String, Object> entry = new HashMap<>();
+                entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
                 entry.put("address", Address.fromHash160(params, key.getPubKeyHash()).toBase58());
                 entry.put("value", 1001L);
                 entries.add(entry);
@@ -73,14 +74,7 @@ public class BenchmarkRunner {
 
         List<Wallet> wallets = new ArrayList<>();
         for (PQKey key : clientKeys) {
-            Wallet w = Wallet.fromKeys(params, key, serverUrl);
-            try {
-                int nUtxos = w.calculateAllSpendCandidates(null, false).size();
-                log.info("Client {}: {} spendable UTXOs", wallets.size(), nUtxos);
-            } catch (Exception e) {
-                log.error("Client {}: UTXO check failed", wallets.size(), e);
-            }
-            wallets.add(w);
+            wallets.add(Wallet.fromKeys(params, key, serverUrl));
         }
 
         AtomicInteger ok = new AtomicInteger(0);
@@ -108,7 +102,6 @@ public class BenchmarkRunner {
                         if (done % 200 == 0) log.info("Progress: {} / {} payments", done, CLIENTS * PAYMENTS_PER_CLIENT);
                     } catch (Exception e) {
                         fail.incrementAndGet();
-                        if (fail.get() <= 3) log.warn("Payment failed: {}", e.getMessage());
                     }
                 }
             }, pool);
