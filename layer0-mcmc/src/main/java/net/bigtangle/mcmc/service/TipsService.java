@@ -24,8 +24,10 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -210,6 +212,10 @@ public class TipsService {
 	private Pair<BlockWrap, BlockWrap> getValidatedBlockPair(HashSet<BlockWrap> currentApprovedUnconfirmedBlocks,
 			BlockWrap left, BlockWrap right, BlockStoreInterface store, Stopwatch watch, ServiceBaseConnect serviceBase,
 			long cutoffHeight, long maxHeight) throws BlockStoreException {
+		// Cache BlockWrap objects across the entire walk to avoid
+		// re-deserializing blocks visited by both paths or revisited
+		// in sequential steps.
+		Map<Sha256Hash, BlockWrap> blockWrapCache = new ConcurrentHashMap<>();
 		// Perform initial steps in parallel using the shared executor.
 		// Final copies needed for lambda capture (left/right reassigned later).
 		BlockWrap leftCapture = left;
@@ -219,9 +225,9 @@ public class TipsService {
 		BlockWrap nextRight;
 		try {
 			java.util.concurrent.Future<BlockWrap> leftFuture = executor.submit(() ->
-				performValidatedStep(leftCapture, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store));
+				performValidatedStep(leftCapture, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache));
 			java.util.concurrent.Future<BlockWrap> rightFuture = executor.submit(() ->
-				performValidatedStep(rightCapture, rightCopy, cutoffHeight, maxHeight, store));
+				performValidatedStep(rightCapture, rightCopy, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache));
 			nextLeft = leftFuture.get(30, java.util.concurrent.TimeUnit.SECONDS);
 			nextRight = rightFuture.get(30, java.util.concurrent.TimeUnit.SECONDS);
 			currentApprovedUnconfirmedBlocks.addAll(rightCopy);
@@ -241,9 +247,9 @@ public class TipsService {
 					serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
 
 					// Perform next steps
-					nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
+					nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 					nextRight = validateOrPerformValidatedStep(right, currentApprovedUnconfirmedBlocks, nextRight,
-							cutoffHeight, maxHeight, store);
+							cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 				} else {
 					// Go right
 					right = nextRight;
@@ -252,9 +258,9 @@ public class TipsService {
 
 					// Perform next steps
 					nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight,
-							store);
+							store, serviceBase, blockWrapCache);
 					nextLeft = validateOrPerformValidatedStep(left, currentApprovedUnconfirmedBlocks, nextLeft,
-							cutoffHeight, maxHeight, store);
+							cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 				}
 			} catch (Exception e) {
 				throw new BlockStoreException(e);
@@ -265,12 +271,12 @@ public class TipsService {
 		while (nextLeft != left) {
 			left = nextLeft;
 			serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
-			nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
+			nextLeft = performValidatedStep(left, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 		}
 		while (nextRight != right) {
 			right = nextRight;
 			serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store);
-			nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store);
+			nextRight = performValidatedStep(right, currentApprovedUnconfirmedBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 		}
 
 		watch.stop();
@@ -282,36 +288,37 @@ public class TipsService {
 	// Does not redo finding next step if next step was still valid
 	private BlockWrap validateOrPerformValidatedStep(BlockWrap fromBlock,
 			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockWrap potentialNextBlock, long cutoffHeight,
-			long maxHeight, BlockStoreInterface store) throws BlockStoreException {
-		if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks, cutoffHeight,
+			long maxHeight, BlockStoreInterface store, ServiceBaseConnect serviceBase,
+			Map<Sha256Hash, BlockWrap> blockWrapCache) throws BlockStoreException {
+		if (serviceBase.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks, cutoffHeight,
 						maxHeight, store))
 			return potentialNextBlock;
 		else
-			return performValidatedStep(fromBlock, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight, store);
+			return performValidatedStep(fromBlock, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 	}
 
-	// Finds a potential approver block to include given the currently approved
-	// blocks
 	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonMilestoneBlocks,
-			long cutoffHeight, long maxHeight, BlockStoreInterface store) throws BlockStoreException {
+			long cutoffHeight, long maxHeight, BlockStoreInterface store, ServiceBaseConnect serviceBase,
+			Map<Sha256Hash, BlockWrap> blockWrapCache) throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
-//		if( fromBlock.getBlock().getHeight()==9)
-//		{
-//		 log.debug(fromBlock.toString());
-//		}
 		for (Sha256Hash req : cacheBlockService.getApproverBlockHashes(fromBlock.getBlockHash(), store)) {
-			candidates.add(new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-					.getBlockWrap(req, store));
+			BlockWrap wrap = blockWrapCache.get(req);
+			if (wrap == null) {
+				wrap = serviceBase.getBlockWrap(req, store);
+				if (wrap != null) {
+					blockWrapCache.put(req, wrap);
+				}
+			}
+			if (wrap != null) {
+				candidates.add(wrap);
+			}
 		}
 
 		BlockWrap result;
 		do {
-			// Find results until one is valid/eligible
 			result = performTransition(fromBlock, candidates, store);
 			candidates.remove(result);
-		} while (!new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight,
+		} while (!serviceBase.isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight,
 						store));
 		return result;
 	}

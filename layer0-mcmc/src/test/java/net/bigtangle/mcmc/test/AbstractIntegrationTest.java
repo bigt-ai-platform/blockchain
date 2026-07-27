@@ -32,7 +32,10 @@ import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -151,6 +154,19 @@ public abstract class AbstractIntegrationTest {
 	private static final String CONTEXT_ROOT_TEMPLATE = "http://localhost:%s/";
 	protected static final Logger log = LoggerFactory.getLogger(AbstractIntegrationTest.class);
 	public String contextRoot;
+
+	private final Map<String, LongAdder> opTiming = new ConcurrentHashMap<>();
+
+	protected <T> T timed(String op, Callable<T> c) throws Exception {
+		LongAdder acc = opTiming.computeIfAbsent(op, k -> new LongAdder());
+		long start = System.nanoTime();
+		try { return c.call(); } finally { acc.add(System.nanoTime() - start); }
+	}
+	protected void timed(String op, Runnable r) {
+		LongAdder acc = opTiming.computeIfAbsent(op, k -> new LongAdder());
+		long start = System.nanoTime();
+		try { r.run(); } finally { acc.add(System.nanoTime() - start); }
+	}
 
 	/*
 	 * default wallet which has key testpriv and yuanTokenPriv
@@ -292,6 +308,7 @@ public abstract class AbstractIntegrationTest {
 
 	@BeforeEach
 	public void setUp() throws Exception {
+		long setupStart = System.nanoTime();
 		Utils.unsetMockClock();
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
@@ -323,11 +340,19 @@ public abstract class AbstractIntegrationTest {
 		store.addUnspentTransactionOutput(utxos);
 		serverConfiguration.setServiceReady(true);
 		mcmcService.update(store);
+		opTiming.computeIfAbsent("setUp", k -> new LongAdder()).add(System.nanoTime() - setupStart);
 	}
 
 	@AfterEach
 	public void close() throws Exception {
 		store.close();
+		if (!opTiming.isEmpty()) {
+			System.out.println("=== " + getClass().getSimpleName() + " op timing ===");
+			opTiming.entrySet().stream()
+				.sorted((a, b) -> Long.compare(b.getValue().sum(), a.getValue().sum()))
+				.forEach(e -> System.out.printf("  %-35s %dms%n", e.getKey(), e.getValue().sum() / 1_000_000));
+			opTiming.clear();
+		}
 	}
 
 	/**
@@ -1562,48 +1587,50 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block pullBlockDoMultiSign(final String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		return timed("pullBlockDoMultiSign", () -> {
+			HashMap<String, Object> requestParam = new HashMap<String, Object>();
 
-		String address = outKey.toAddress(networkParameters).toBase58();
-		requestParam.put("address", address);
-		requestParam.put("tokenid", tokenid);
+			String address = outKey.toAddress(networkParameters).toBase58();
+			requestParam.put("address", address);
+			requestParam.put("tokenid", tokenid);
 
-		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
+			byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
+					Json.jsonmapper().writeValueAsString(requestParam));
 
-		MultiSignResponse multiSignResponse = Json.jsonmapper().readValue(resp, MultiSignResponse.class);
-		if (multiSignResponse.getMultiSigns().isEmpty())
-			return null;
-		MultiSign multiSign = multiSignResponse.getMultiSigns().get(0);
+			MultiSignResponse multiSignResponse = Json.jsonmapper().readValue(resp, MultiSignResponse.class);
+			if (multiSignResponse.getMultiSigns().isEmpty())
+				return null;
+			MultiSign multiSign = multiSignResponse.getMultiSigns().get(0);
 
-		byte[] payloadBytes = Utils.HEX.decode((String) multiSign.getBlockhashHex());
-		Block block0 = networkParameters.getDefaultSerializer().makeBlock(payloadBytes);
-		Transaction transaction = block0.getTransactions().get(0);
+			byte[] payloadBytes = Utils.HEX.decode((String) multiSign.getBlockhashHex());
+			Block block0 = networkParameters.getDefaultSerializer().makeBlock(payloadBytes);
+			Transaction transaction = block0.getTransactions().get(0);
 
-		List<MultiSignBy> multiSignBies = null;
-		if (transaction.getDataSignature() == null) {
-			multiSignBies = new ArrayList<MultiSignBy>();
-		} else {
-			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
-					MultiSignByRequest.class);
-			multiSignBies = multiSignByRequest.getMultiSignBies();
-		}
-		Sha256Hash sighash = transaction.getHash();
-		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.serialize();
+			List<MultiSignBy> multiSignBies = null;
+			if (transaction.getDataSignature() == null) {
+				multiSignBies = new ArrayList<MultiSignBy>();
+			} else {
+				MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
+						MultiSignByRequest.class);
+				multiSignBies = multiSignByRequest.getMultiSignBies();
+			}
+			Sha256Hash sighash = transaction.getHash();
+			SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
+			byte[] buf1 = party1Signature.serialize();
 
-		MultiSignBy multiSignBy0 = new MultiSignBy();
+			MultiSignBy multiSignBy0 = new MultiSignBy();
 
-		multiSignBy0.setTokenid(multiSign.getTokenid());
-		multiSignBy0.setTokenindex(multiSign.getTokenindex());
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
-		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
-		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
-		multiSignBies.add(multiSignBy0);
-		MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
-		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
-		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize());
-		return block0;
+			multiSignBy0.setTokenid(multiSign.getTokenid());
+			multiSignBy0.setTokenindex(multiSign.getTokenindex());
+			multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
+			multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
+			multiSignBy0.setSignature(Utils.HEX.encode(buf1));
+			multiSignBies.add(multiSignBy0);
+			MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
+			transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
+			OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize());
+			return block0;
+		});
 	}
 
 	public PermissionedAddressesResponse getPrevTokenMultiSignAddressList(Token token) throws Exception {
@@ -1617,15 +1644,17 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	public Block makeRewardBlock(Sha256Hash prevHash, Sha256Hash prevTrunk, Sha256Hash prevBranch) throws Exception {
-		BlockWrap trunkWrap = blockService.getBlockWrap(prevTrunk, store);
-		BlockWrap branchWrap = blockService.getBlockWrap(prevBranch, store);
-		if (trunkWrap == null || branchWrap == null) return null;
-		Block block = rewardService.createMiningRewardBlock(prevHash, trunkWrap, branchWrap, false, store);
-		if (block != null) {
-			blockSaveService.saveBlock(block, store);
-			blockGraph.updateChain(false);
-		}
-		return block;
+		return timed("makeRewardBlock", () -> {
+			BlockWrap trunkWrap = blockService.getBlockWrap(prevTrunk, store);
+			BlockWrap branchWrap = blockService.getBlockWrap(prevBranch, store);
+			if (trunkWrap == null || branchWrap == null) return null;
+			Block block = rewardService.createMiningRewardBlock(prevHash, trunkWrap, branchWrap, false, store);
+			if (block != null) {
+				blockSaveService.saveBlock(block, store);
+				blockGraph.updateChain(false);
+			}
+			return block;
+		});
 	}
 
 	public void send() throws JsonProcessingException, Exception {
