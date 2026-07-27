@@ -416,12 +416,17 @@ public class BlockStoreService {
 	 */
 	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
+		long t0 = System.nanoTime();
 		store.put(block);
+		long t1 = System.nanoTime();
 		if (!net.bigtangle.store.DatabaseFullBlockStoreBase.isCacheSkipped()) {
 			cacheBlockService.cachePutBlock(block, store);
 		}
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyBlock(block, solidityState, false, store);
+		long t2 = System.nanoTime();
+		log.debug("connect: put={}ms solidify={}ms total={}ms",
+				(t1 - t0) / 1_000_000, (t2 - t1) / 1_000_000, (t2 - t0) / 1_000_000);
 	}
 
 	// TODO update other output data can be deadlock, as non chain block

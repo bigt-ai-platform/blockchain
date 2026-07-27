@@ -220,8 +220,10 @@ public class BlockSaveService {
 		return totalBatched;
 	}
 
+	private static final int MAX_BATCH_BLOCK_TX = 250;
+
 	private int batchTransactionGroup(List<Transaction> txns) throws Exception {
-		if (txns.size() <= BATCH_TX_PER_BLOCK) {
+		if (txns.size() <= Math.min(BATCH_TX_PER_BLOCK, MAX_BATCH_BLOCK_TX)) {
 			BlockStoreInterface store = storeService.getStore();
 			try {
 				Block block = cacheBlockPrototypeService.getBlockPrototype(store);
