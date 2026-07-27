@@ -416,7 +416,6 @@ public class BlockStoreService {
 	 */
 	private void connect(final Block block, SolidityState solidityState, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
-	 
 		store.put(block);
 		if (!net.bigtangle.store.DatabaseFullBlockStoreBase.isCacheSkipped()) {
 			cacheBlockService.cachePutBlock(block, store);
