@@ -495,7 +495,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
 			SignatureBundle sig = testKey.sign(sighash);
-			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 			input.setScriptSig(inputScript);
 			createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 					UtilGeneseBlock.createGenesis(networkParameters), tx2);
@@ -519,7 +519,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
 			SignatureBundle sig = testKey.sign(sighash);
-			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 			input.setScriptSig(inputScript);
 			// tx2.getOutput(0).getValue().setValue(tx2.getOutput(0).getValue().getValue().add(BigInteger.valueOf(1)));
 			Block block1 = UtilsTest.createBlock(networkParameters, UtilGeneseBlock.createGenesis(networkParameters),
@@ -552,7 +552,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 			Sha256Hash sighash = tx2.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 					false);
 			SignatureBundle sig = testKey.sign(sighash);
-			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+			Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 			input.setScriptSig(inputScript);
 			createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
 					UtilGeneseBlock.createGenesis(networkParameters), tx2);
@@ -654,7 +654,7 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
 		SignatureBundle sig = testKey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 		input.setScriptSig(inputScript);
 
 		// Should not go through

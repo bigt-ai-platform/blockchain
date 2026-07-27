@@ -555,7 +555,7 @@ public abstract class AbstractIntegrationTest {
 		// Sign
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 		SignatureBundle sig = fromKey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, fromKey);
 		input.setScriptSig(inputScript);
 
 		// Submit tx to mempool and create block from batch
@@ -1013,7 +1013,7 @@ public abstract class AbstractIntegrationTest {
 		// Debug: verify the UTXO script matches what we expect
 		Script outputScript = output.getScript();
 		assert outputScript != null : "UTXO script is null";
-		assert outputScript.isSentToRawPubKey() : "UTXO script is not P2PK: " + outputScript;
+		assert outputScript.isSentToAddress() : "UTXO script is not P2PKH: " + outputScript;
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, output);
 		Coin amount = Coin.valueOf(2, NetworkParameters.BIGTANGLE_TOKENID);
 		Transaction tx = new Transaction(networkParameters);
@@ -1026,7 +1026,7 @@ public abstract class AbstractIntegrationTest {
 		Sha256Hash sighash = tx.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL, false);
 
 		SignatureBundle sigBundle = walletKey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sigBundle);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sigBundle, walletKey);
 		input.setScriptSig(inputScript);
 		return tx;
 	}

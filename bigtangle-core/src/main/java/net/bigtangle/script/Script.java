@@ -66,10 +66,8 @@ public class Script {
 
     /** Enumeration to encapsulate the type of this script. */
     public enum ScriptType {
-        // Do NOT change the ordering of the following definitions because their ordinals are stored in databases.
         NO_TYPE,
         P2PKH,
-        PUB_KEY,
         P2SH
     }
 
@@ -237,11 +235,6 @@ public class Script {
      * of operation being susceptible to man-in-the-middle attacks. It is still used in coinbase outputs and can be
      * useful more exotic types of transaction, but today most payments are to addresses.
      */
-    public boolean isSentToRawPubKey() {
-        return chunks.size() == 2 && chunks.get(1).equalsOpCode(OP_CHECKSIG) &&
-               !chunks.get(0).isOpCode() && chunks.get(0).data.length > 1;
-    }
-
     /**
      * Returns true if this script is of the form DUP HASH160 <pubkey hash> EQUALVERIFY CHECKSIG, ie, payment to an
      * address like 1VayNert3x1KzbpzMGt2qdqrAThiRovi8. This form was originally intended for the case where you wish
@@ -372,8 +365,6 @@ public class Script {
             return   Address.fromHash160(params, getPubKeyHash());
         else if (isPayToScriptHash())
             return Address.fromP2SHScript(params, this);
-        else if (forcePayToPubKey && isSentToRawPubKey())
-            return Address.fromHash160(params, Utils.sha256hash160(getPubKey()));
         else
             throw new ScriptException("Cannot cast this script to a pay-to-address type");
     }
@@ -457,8 +448,6 @@ public class Script {
         if (isSentToAddress()) {
             checkArgument(key != null, "Key required to create pay-to-address input script");
             return ScriptBuilder.createInputScript(null, key);
-        } else if (isSentToRawPubKey()) {
-            return ScriptBuilder.createInputScript(null);
         } else if (isPayToScriptHash()) {
             checkArgument(redeemScript != null, "Redeem script required to create P2SH input script");
             return ScriptBuilder.createP2SHMultiSigInputScript(null, redeemScript);
@@ -643,8 +632,7 @@ public class Script {
             // for N of M CHECKMULTISIG script we will need N signatures to spend
             ScriptChunk nChunk = chunks.get(0);
             return Script.decodeFromOpN(nChunk.opcode);
-        } else if (isSentToAddress() || isSentToRawPubKey()) {
-            // pay-to-address and pay-to-pubkey require single sig
+        } else if (isSentToAddress()) {
             return 1;
         } else if (isPayToScriptHash()) {
             throw new IllegalStateException("For P2SH number of signatures depends on redeem script");
@@ -665,9 +653,6 @@ public class Script {
         } else if (isSentToMultiSig()) {
             // scriptSig: OP_0 <sig> [sig] [sig...]
             return getNumberOfSignaturesRequiredToSpend() * SIG_SIZE + 1;
-        } else if (isSentToRawPubKey()) {
-            // scriptSig: <sig>
-            return SIG_SIZE;
         } else if (isSentToAddress()) {
             // scriptSig: <sig> <pubkey>
             int uncompressedPubKeySize = 65;
@@ -1722,8 +1707,6 @@ public class Script {
         ScriptType type = ScriptType.NO_TYPE;
         if (isSentToAddress()) {
             type = ScriptType.P2PKH;
-        } else if (isSentToRawPubKey()) {
-            type = ScriptType.PUB_KEY;
         } else if (isPayToScriptHash()) {
             type = ScriptType.P2SH;
         }

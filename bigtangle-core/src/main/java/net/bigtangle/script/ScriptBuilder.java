@@ -242,25 +242,40 @@ public class ScriptBuilder {
         }
     }
 
-    /** Creates a scriptPubKey that encodes payment to the given raw public key. */
+    /** Creates a P2PKH scriptPubKey that encodes payment to the given key. */
     public static Script createOutputScript(PQKey key) {
-        return new ScriptBuilder().data(key.getPubKey()).op(OP_CHECKSIG).build();
+        return new ScriptBuilder()
+                .op(OP_DUP).op(OP_HASH160)
+                .data(key.getPubKeyHash())
+                .op(OP_EQUALVERIFY).op(OP_CHECKSIG).build();
     }
 
     /**
-     * Creates a pay-to-PQ-key output script.
+     * Creates a P2PKH output script for a PQ key bundle.
      * The pubkey is prefixed with 0x05 so {@code OP_CHECKSIG} dispatches
      * to ML-DSA + SLH-DSA dual verification.
      */
     public static Script createOutputScript(KeyBundle keyBundle) {
-        return new ScriptBuilder().data(PQScriptUtils.prefixedPubkey(keyBundle)).op(OP_CHECKSIG).build();
+        byte[] pubkey = PQScriptUtils.prefixedPubkey(keyBundle);
+        return new ScriptBuilder()
+                .op(OP_DUP).op(OP_HASH160)
+                .data(Utils.sha256hash160(pubkey))
+                .op(OP_EQUALVERIFY).op(OP_CHECKSIG).build();
     }
 
     /**
-     * Creates a scriptSig that redeems a pay-to-PQ-key output.
+     * Creates a scriptSig that redeems a pay-to-PQ-key output (P2PK).
      */
     public static Script createInputScriptForPQ(SignatureBundle sigBundle) {
         return new ScriptBuilder().data(sigBundle.serialize()).build();
+    }
+
+    /**
+     * Creates a scriptSig that redeems a P2PKH output backed by a PQ key.
+     * Includes the pubkey in the scriptSig: {@code <sigBundle> <pubkey>}.
+     */
+    public static Script createInputScriptForPQ(SignatureBundle sigBundle, PQKey pubKey) {
+        return new ScriptBuilder().data(sigBundle.serialize()).data(pubKey.getPubKey()).build();
     }
 
     /**

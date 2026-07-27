@@ -191,7 +191,8 @@ public class TransactionTest {
 		assertTrue(bundle.entries().size() > 0);
 
 		// Create input script from the stored bundle and verify it spends the output
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(bundle);
+		// Include pubkey for P2PKH verification
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(bundle, key);
 		// This should not throw
 		inputScript.correctlySpends(tx, 0, outputScript, Script.ALL_VERIFY_FLAGS);
 	}

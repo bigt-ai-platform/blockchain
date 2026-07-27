@@ -71,7 +71,7 @@ public class RedeemData {
      * to spend such inputs and provided program should be a proper CHECKSIG program.
      */
     public static RedeemData of(PQKey key, Script program) {
-        checkArgument(program.isSentToAddress() || program.isSentToRawPubKey());
+        checkArgument(program.isSentToAddress());
         return key != null ? new RedeemData(Collections.singletonList(key), program) : null;
     }
 

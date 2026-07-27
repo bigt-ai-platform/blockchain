@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
@@ -27,24 +28,24 @@ public class FundAddressesIT extends AbstractIntegrationTest {
         // Fund via API
         HashMap<String, Object> fundReq = new HashMap<>();
         List<HashMap<String, Object>> entries = new ArrayList<>();
-        HashMap<String, Object> entry = new HashMap<>();
-        entry.put("address", aliceAddr);
-        entry.put("value", 100000L);
-        entries.add(entry);
-        fundReq.put("addresses", entries);
-        byte[] resp = OkHttp3Util.post(contextRoot + "fundAddresses",
-                Json.jsonmapper().writeValueAsString(fundReq).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        System.out.println("fundAddresses response: " + new String(resp));
+		HashMap<String, Object> entry = new HashMap<>();
+		entry.put("address", aliceAddr);
+		entry.put("value", 100000L);
+		entries.add(entry);
+		fundReq.put("addresses", entries);
+		byte[] resp = OkHttp3Util.post(contextRoot + "fundAddresses",
+				Json.jsonmapper().writeValueAsString(fundReq).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		System.out.println("fundAddresses response: " + new String(resp));
 
-        // Verify UTXOs exist
-        List<UTXO> utxos = wallet.calculateAllSpendCandidatesUTXO(null, false);
-        System.out.println("UTXOs after fund: " + utxos.size());
+		// Verify UTXOs exist
+		List<UTXO> utxos = wallet.calculateAllSpendCandidatesUTXO(null, false);
+		System.out.println("UTXOs after fund: " + utxos.size());
 
-        // Create a second key and spend to it
-        PQKey bobKey = PQKey.createNew();
-        HashMap<String, BigInteger> payment = new HashMap<>();
-        payment.put(Address.fromHash160(networkParameters, bobKey.getPubKeyHash()).toBase58(), BigInteger.valueOf(1000));
-        wallet.payToList(null, payment, NetworkParameters.BIGTANGLE_TOKENID, "fund");
+		// Create a second key and spend to it
+		PQKey bobKey = PQKey.createNew();
+		HashMap<String, BigInteger> payment = new HashMap<>();
+		payment.put(Address.fromHash160(networkParameters, bobKey.getPubKeyHash()).toBase58(), BigInteger.valueOf(1000));
+		wallet.payToList(null, payment, NetworkParameters.BIGTANGLE_TOKENID, "fund");
 
         // Verify bob received UTXOs
         List<byte[]> pubKeyHashs = new ArrayList<>();

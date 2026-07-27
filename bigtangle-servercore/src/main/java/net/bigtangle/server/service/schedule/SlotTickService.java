@@ -40,7 +40,7 @@ public class SlotTickService {
     @Async
     @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
     public void tick() {
-        if (!serverConfiguration.checkService()) {
+        if (!scheduleConfiguration.isMilestone_active() || !serverConfiguration.checkService()) {
             return;
         }
 

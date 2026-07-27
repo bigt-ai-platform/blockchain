@@ -59,8 +59,8 @@ public class ScriptSerializationTest {
     }
 
     @Test
-    public void testScriptSerializationWithPayToPubKey() throws IOException {
-        // Create a pay-to-pubkey script
+    public void testScriptSerializationWithPayToPubKeyHash() throws IOException {
+        // Create a P2PKH script from a key
         Script script = ScriptBuilder.createOutputScript(key1);
         
         // Serialize the script
@@ -74,8 +74,8 @@ public class ScriptSerializationTest {
         // Verify the deserialized script is equivalent
         assertEquals(script.toString(), deserializedScript.toString());
         assertArrayEquals(script.getProgram(), deserializedScript.getProgram());
-        assertTrue(deserializedScript.isSentToRawPubKey());
-        assertArrayEquals(key1.getPubKey(), deserializedScript.getPubKey());
+        assertTrue(deserializedScript.isSentToAddress());
+        assertArrayEquals(key1.getPubKeyHash(), deserializedScript.getPubKeyHash());
     }
 
     @Test

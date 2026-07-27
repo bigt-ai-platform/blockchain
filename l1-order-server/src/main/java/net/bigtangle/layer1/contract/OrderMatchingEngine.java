@@ -190,7 +190,8 @@ public class OrderMatchingEngine implements OrderExecutor {
 				BigInteger proceedsValue = tokenProceeds.getValue();
 
 				if (proceedsValue.signum() != 0)
-					tx.addOutput(new Coin(proceedsValue, tokenId), PQKey.fromPublicOnly(beneficiaryPubKey));
+					tx.addOutput(new Coin(proceedsValue, tokenId),
+							PQKey.fromPublicOnly(beneficiaryPubKey));
 			}
 		}
 

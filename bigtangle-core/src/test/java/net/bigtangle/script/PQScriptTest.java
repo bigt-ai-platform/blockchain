@@ -43,12 +43,15 @@ class PQScriptTest {
     }
 
     @Test
-    void pqOutputScriptContainsPrefix() {
-        Script output = ScriptBuilder.createOutputScript(keyBundle);
-        byte[] prog = output.getProgram();
+    void pqInputScriptContainsPrefix() {
+        // P2PKH output does not contain the pubkey; the prefix appears in the input script
+        PQKey key = PQKey.fromPublicOnly(keyBundle);
+        Script input = ScriptBuilder.createInputScriptForPQ(
+                new SignatureBundle(List.of(new SignatureBundle.Entry(PQConstants.ALG_ML_DSA_87, new byte[1]))), key);
+        byte[] prog = input.getProgram();
         boolean found = false;
         for (byte b : prog) found |= (b == PQScriptUtils.PQ_PUBKEY_PREFIX);
-        assertTrue(found);
+        assertTrue(found, "PQ pubkey prefix 0x05 should appear in P2PKH input script");
     }
 
     @Test

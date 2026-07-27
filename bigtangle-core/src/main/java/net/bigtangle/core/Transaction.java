@@ -831,10 +831,10 @@ public class Transaction extends ChildMessage {
 		addInput(input);
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, sigHash, anyoneCanPay);
 		TransactionSignature txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
-		if (scriptPubKey.isSentToRawPubKey() || scriptPubKey.isSentToMultiSig())
-			input.setScriptSig(ScriptBuilder.createInputScript(txSig));
-		else if (scriptPubKey.isSentToAddress())
+		if (scriptPubKey.isSentToAddress())
 			input.setScriptSig(ScriptBuilder.createInputScript(txSig, sigKey));
+		else if (scriptPubKey.isSentToMultiSig())
+			input.setScriptSig(ScriptBuilder.createInputScript(txSig));
 		else
 			throw new ScriptException("Don't know how to sign for this kind of scriptPubKey: " + scriptPubKey);
 		return input;
@@ -847,10 +847,10 @@ public class Transaction extends ChildMessage {
 			// TODO only sign if valid signature can be created
 			if (input.getScriptBytes().length != 0)
 				continue;
-			if (scriptPubKey.isSentToRawPubKey())
-				input.setScriptSig(ScriptBuilder.createInputScript(txSig));
-			else if (scriptPubKey.isSentToAddress())
+			if (scriptPubKey.isSentToAddress())
 				input.setScriptSig(ScriptBuilder.createInputScript(txSig, sigKey));
+			else if (scriptPubKey.isSentToMultiSig())
+				input.setScriptSig(ScriptBuilder.createInputScript(txSig));
 			else
 				throw new ScriptException("Don't know how to sign for this kind of scriptPubKey: " + scriptPubKey);
 		}

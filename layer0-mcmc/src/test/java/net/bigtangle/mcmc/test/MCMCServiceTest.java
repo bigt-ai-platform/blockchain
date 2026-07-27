@@ -74,7 +74,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				Transaction.SigHash.ALL, false);
 
 		SignatureBundle sig = testKey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 		input.setScriptSig(inputScript);
 
 		// Create blocks with conflict
@@ -110,7 +110,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		Sha256Hash sighash = doublespendTX.hashForSignature(0, spendableOutput.getScriptBytes(),
 				Transaction.SigHash.ALL, false);
 		SignatureBundle sig = testKey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, testKey);
 		input.setScriptSig(inputScript);
 
 		Block b1 = createAndAddNextBlockWithTransaction(UtilGeneseBlock.createGenesis(networkParameters),
@@ -309,7 +309,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				Transaction.SigHash.ALL, false);
 
 		SignatureBundle sig = genesiskey.sign(sighash);
-		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig);
+		Script inputScript = ScriptBuilder.createInputScriptForPQ(sig, genesiskey);
 		input.setScriptSig(inputScript);
 
 		// Create blocks with a conflict

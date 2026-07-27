@@ -819,15 +819,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 	}
 
-	/** Convert a blocktype DB value (String name or legacy int ordinal) to int ordinal. */
+	/** Convert a blocktype DB string value to ordinal. */
 	protected static int blockTypeFromDB(ResultSet rs) throws SQLException {
 		String bt = rs.getString("blocktype");
 		if (bt == null) return 0;
-		try {
-			return net.bigtangle.core.BlockType.valueOf(bt).ordinal();
-		} catch (IllegalArgumentException e) {
-			return Integer.parseInt(bt);
-		}
+		return net.bigtangle.core.BlockType.valueOf(bt).ordinal();
 	}
 
 	/** Thread-local flag to skip cache operations (put/evict) during batch.
@@ -1170,7 +1166,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 					s.setBytes(3, out.getValue().getValue().toByteArray());
 					s.setBytes(4, out.getScript().getProgram());
 					s.setString(5, out.getAddress());
-					s.setLong(6, out.getScript().getScriptType().ordinal());
+					s.setNull(6, java.sql.Types.BIGINT);
 					s.setBoolean(7, out.isCoinbase());
 					s.setBytes(8, out.getBlockHash() != null ? out.getBlockHash().getBytes() : null);
 					s.setString(9, Utils.HEX.encode(out.getValue().getTokenid()));
@@ -1219,7 +1215,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				copyHexBytes(sb, out.getValue().getValue().toByteArray()); sb.append('\t');
 				copyHexBytes(sb, out.getScript().getProgram()); sb.append('\t');
 				copyTextString(sb, out.getAddress()); sb.append('\t');
-				sb.append(out.getScript().getScriptType().ordinal()); sb.append('\t');
+				sb.append("\\N"); sb.append('\t');  // addresstargetable — unused
 				sb.append(out.isCoinbase() ? 't' : 'f'); sb.append('\t');
 				if (out.getBlockHash() != null) {
 					copyHexBytes(sb, out.getBlockHash().getBytes());

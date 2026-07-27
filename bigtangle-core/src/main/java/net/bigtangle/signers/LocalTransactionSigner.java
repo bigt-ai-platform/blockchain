@@ -114,9 +114,9 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
             // a CHECKMULTISIG program for P2SH inputs
             byte[] script = redeemData.redeemScript.getProgram();
             try {
-                // Handle PQ signatures: detect from the output script's pubkey
-                byte[] pkFromScript = scriptPubKey.isSentToRawPubKey() ? scriptPubKey.getPubKey() : null;
-                if (pkFromScript != null && PQScriptUtils.isPQPubkey(pkFromScript)) {
+                // Handle PQ signatures: detect PQ key from keybag
+                // All outputs are P2PKH, so always include pubkey in input script
+                if (key != null && PQScriptUtils.isPQPubkey(key.getPubKey())) {
                     if (tx.getVersion() < PQConstants.TX_PQ_VERSION) {
                         tx.setVersion(PQConstants.TX_PQ_VERSION);
                     }
@@ -127,7 +127,7 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
                         continue;
                     }
                     txIn.setScriptSig(ScriptBuilder.createInputScriptForPQ(
-                        SignatureBundle.deserialize(storedBundle)));
+                        SignatureBundle.deserialize(storedBundle), key));
                     continue;
                 }
                 TransactionSignature signature = tx.calculateSignature(i, key, script, Transaction.SigHash.ALL, false);

@@ -174,11 +174,8 @@ public class TransactionOutPoint extends ChildMessage {
 		checkNotNull(connectedOutput, "Input is not connected so cannot retrieve key");
 		Script connectedScript = connectedOutput.getScriptPubKey();
 		if (connectedScript.isSentToAddress()) {
-			byte[] addressBytes = connectedScript.getPubKeyHash();
-			return keyBag.findKeyFromPubHash(addressBytes);
-		} else if (connectedScript.isSentToRawPubKey()) {
-			byte[] pubkeyBytes = connectedScript.getPubKey();
-			return keyBag.findKeyFromPubKey(pubkeyBytes);
+			byte[] hash = connectedScript.getPubKeyHash();
+			return keyBag.findKeyFromPubHash(hash);
 		} else if (connectedScript.isSentToMultiSig()) {
 			return getConnectedKey(keyBag, connectedScript.getPubKeys());
 		} else {
@@ -212,11 +209,8 @@ public class TransactionOutPoint extends ChildMessage {
 
 	 
 		if (connectedScript.isSentToAddress()) {
-			byte[] addressBytes = connectedScript.getPubKeyHash();
-			return RedeemData.of(keyBag.findKeyFromPubHash(addressBytes), connectedScript);
-		} else if (connectedScript.isSentToRawPubKey()) {
-			byte[] pubkeyBytes = connectedScript.getPubKey();
-			return RedeemData.of(keyBag.findKeyFromPubKey(pubkeyBytes), connectedScript);
+			byte[] hash = connectedScript.getPubKeyHash();
+			return RedeemData.of(keyBag.findKeyFromPubHash(hash), connectedScript);
 		} else if (connectedScript.isPayToScriptHash()) {
 			byte[] scriptHash = connectedScript.getPubKeyHash();
 			return keyBag.findRedeemDataFromScriptHash(scriptHash);

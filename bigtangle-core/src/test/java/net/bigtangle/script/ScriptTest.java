@@ -135,11 +135,9 @@ public class ScriptTest {
 	}
 
 	@Test
-	public void testIp() throws Exception {
-		byte[] bytes = HEX.decode(
-				"41043e96222332ea7848323c08116dddafbfa917b8e37f0bdf63841628267148588a09a43540942d58d49717ad3fabfe14978cf4f0a8b84d2435dad16e9aa4d7f935ac");
-		Script s = new Script(bytes);
-		assertTrue(s.isSentToRawPubKey());
+	public void testP2PKH() throws Exception {
+		Script s = ScriptBuilder.createOutputScript(PQKey.createNew());
+		assertTrue(s.isSentToAddress());
 	}
 
 	@Test
@@ -230,11 +228,11 @@ public class ScriptTest {
 	}
 
 	@Test
-	public void getToAddressNoPubKey() throws Exception {
-		assertThrows(ScriptException.class, () -> {
-			ScriptBuilder.createOutputScript(PQKey.createNew()).getToAddress(PARAMS, false);
-		});
-
+	public void getToAddressFromP2PKH() throws Exception {
+		PQKey key = PQKey.createNew();
+		Script s = ScriptBuilder.createOutputScript(key);
+		Address expected = Address.fromHash160(PARAMS, key.getPubKeyHash());
+		assertEquals(expected, s.getToAddress(PARAMS, false));
 	}
 
 	/** Test encoding of zero, which should result in an opcode */

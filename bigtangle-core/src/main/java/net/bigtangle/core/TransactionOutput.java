@@ -364,10 +364,6 @@ public class TransactionOutput extends ChildMessage {
     public boolean isMine(TransactionBag transactionBag) {
         try {
             Script script = getScriptPubKey();
-            if (script.isSentToRawPubKey()) {
-                byte[] pubkey = script.getPubKey();
-                return transactionBag.isPubKeyMine(pubkey);
-            }
             if (script.isPayToScriptHash()) {
                 return transactionBag.isPayToScriptHashMine(script.getPubKeyHash());
             } else {
@@ -394,8 +390,6 @@ public class TransactionOutput extends ChildMessage {
             buf.append(value.toString());
             if (script.isSentToAddress() || script.isPayToScriptHash())
                 buf.append(" to ").append(script.getToAddress(params));
-            else if (script.isSentToRawPubKey())
-                buf.append(" to pubkey ").append(Utils.HEX.encode(script.getPubKey()));
             else if (script.isSentToMultiSig())
                 buf.append(" to multisig");
             else

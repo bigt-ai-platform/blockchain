@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockMCMC;
@@ -863,7 +864,8 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		Transaction tx = new Transaction(networkParameters);
 		OrderOpenInfo info = new OrderOpenInfo((long) 1000 * sellAmount, NetworkParameters.BIGTANGLE_TOKENID_STRING,
 				testKey.getPubKey(), System.currentTimeMillis() - 10000, null, Side.SELL,
-				testKey.toAddress(networkParameters).toHex(), NetworkParameters.BIGTANGLE_TOKENID_STRING, 1l,
+				Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58(),
+				NetworkParameters.BIGTANGLE_TOKENID_STRING, 1l,
 				sellAmount, testTokenId);
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
@@ -873,7 +875,7 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		List<UTXO> outputs = getBalance(false, testKey).stream()
 				.filter(out -> Utils.HEX.encode(out.getValue().getTokenid()).equals(testTokenId))
 				.filter(out -> out.getValue().getValue().compareTo(amount.getValue()) > 0)
-				.filter(out -> out.getScript().isSentToRawPubKey()).collect(Collectors.toList());
+				.collect(Collectors.toList());
 		TransactionOutput spendableOutput = new FreeStandingTransactionOutput(this.networkParameters, outputs.get(0));
 		// BURN: tx.addOutput(new TransactionOutput(networkParameters, tx,
 		// amount, testKey));
