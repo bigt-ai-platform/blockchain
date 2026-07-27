@@ -13,7 +13,8 @@ header() { echo -e "\n${CYAN}═════════════════
 # ── Config ────────────────────────────────────────────────────────────────
 REGISTRY="${REGISTRY:-ghcr.io}"
 OWNER="${OWNER:-bigt-ai-platform}"
-# Docker tag uses git commit hash; override with TAG env var for releases
+PUSH=false
+LOCAL_TAG="bigtangle:test"
 VERSION="${TAG:-$(git log -1 --format=%h)}"
 JAVA_VERSION="${JAVA_VERSION:-25}"
 MVN_VERSION="0.6.0"
@@ -32,56 +33,79 @@ MODULES["l1-order-mcmc"]="l1-order-mcmc/Dockerfile"
 MODULES["l1-contract-mcmc"]="l1-contract-mcmc/Dockerfile"
 MODULES["l1-payment-mcmc"]="l1-payment-mcmc/Dockerfile"
 
+usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "  -p, --push       Push images to registry (default: local build only)"
+    echo "  -m, --module M   Build only specific module (default: all)"
+    echo "  -h, --help       Show this help"
+    echo ""
+    echo "Environment: REGISTRY, OWNER, TAG, GITHUB_TOKEN"
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--push)  PUSH=true; shift ;;
+        -m|--module) MODULE="$2"; shift 2 ;;
+        -h|--help)  usage ;;
+        *)          echo "Unknown option: $1"; usage ;;
+    esac
+done
 
 # ── Login ──────────────────────────────────────────────────────────────────
-header "Login to $REGISTRY"
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u "${GITHUB_ACTOR:-$OWNER}" --password-stdin
-    log "Logged in via GITHUB_TOKEN"
-else
-    docker login "$REGISTRY"
+if [ "$PUSH" = true ]; then
+    header "Login to $REGISTRY"
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        echo "$GITHUB_TOKEN" | docker login "$REGISTRY" -u "${GITHUB_ACTOR:-$OWNER}" --password-stdin
+        log "Logged in via GITHUB_TOKEN"
+    else
+        docker login "$REGISTRY"
+    fi
 fi
 
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
-mvn package -Dmaven.test.skip=true -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc
+MAVEN_PLUGINS="-pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc"
+if [ -n "${MODULE:-}" ]; then
+    MAVEN_PLUGINS="-pl $MODULE"
+fi
+mvn package -Dmaven.test.skip=true -q -f "$ROOT/pom.xml" -am $MAVEN_PLUGINS
+log "Maven build complete"
 
 # ── Build Docker images ────────────────────────────────────────────────────
 header "Building Docker images"
 for module in "${!MODULES[@]}"; do
     dockerfile="${MODULES[$module]}"
+    [ -n "${MODULE:-}" ] && [ "$module" != "$MODULE" ] && continue
 
     IMAGE="$REGISTRY/$OWNER/$module"
     TAG="$VERSION"
 
     info "Building $IMAGE:$TAG"
-    docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
+    docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" -t "$LOCAL_TAG" \
         -f "$ROOT/$dockerfile" \
         "$ROOT/$module"
 
-    log "Built $IMAGE:$TAG"
+    log "Built $module"
 done
 
 # ── Push images ────────────────────────────────────────────────────────────
-header "Pushing to $REGISTRY"
-for module in "${!MODULES[@]}"; do
-    IMAGE="$REGISTRY/$OWNER/$module"
-    TAG="$VERSION"
+if [ "$PUSH" = true ]; then
+    header "Pushing to $REGISTRY"
+    for module in "${!MODULES[@]}"; do
+        dockerfile="${MODULES[$module]}"
+        [ -n "${MODULE:-}" ] && [ "$module" != "$MODULE" ] && continue
 
-    info "Pushing $IMAGE:$TAG"
-    docker push "$IMAGE:$TAG"
-    docker push "$IMAGE:latest"
-    log "Pushed $IMAGE:$TAG"
-done
+        IMAGE="$REGISTRY/$OWNER/$module"
+        TAG="$VERSION"
 
-header "Deploy complete"
-echo ""
-echo "  Registry: $REGISTRY/$OWNER"
-echo "  Version:  $VERSION"
-echo ""
-for module in "${!MODULES[@]}"; do
-    printf "  %-25s %s/%s:%s\n" "$module" "$REGISTRY" "$OWNER" "$VERSION"
-done
-echo ""
-log "All images built and pushed successfully"
+        info "Pushing $IMAGE:$TAG"
+        docker push "$IMAGE:$TAG"
+        docker push "$IMAGE:latest"
+        log "Pushed $module"
+    done
+    log "All images built and pushed successfully"
+else
+    log "Local build only (use -p to push). Local tag: $LOCAL_TAG"
+fi

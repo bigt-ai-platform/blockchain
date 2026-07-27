@@ -128,7 +128,10 @@ public class ValidatorDutyService {
 
             casperService.processVote(att, store);
 
-            String contextRoot = "http://localhost:" + serverConfiguration.getPort() + "/";
+            String requester = serverConfiguration.getRequester();
+            String contextRoot = requester != null && !requester.isEmpty() ? requester
+                    : "http://localhost:" + serverConfiguration.getPort() + "/";
+            if (!contextRoot.endsWith("/")) contextRoot += "/";
             OkHttp3Util.post(contextRoot + ReqCmd.submitAttestation.name(),
                     Json.jsonmapper().writeValueAsBytes(att));
         } finally {

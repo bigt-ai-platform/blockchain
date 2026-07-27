@@ -178,6 +178,13 @@ public class TransactionOutPoint extends ChildMessage {
 			return keyBag.findKeyFromPubHash(hash);
 		} else if (connectedScript.isSentToMultiSig()) {
 			return getConnectedKey(keyBag, connectedScript.getPubKeys());
+		} else if (connectedScript.isSentToKey()) {
+			byte[] pubkey = connectedScript.getPubKey();
+			if (pubkey != null) {
+				PQKey key = keyBag.findKeyFromPubKey(pubkey);
+				if (key != null) return key;
+			}
+			throw new ScriptException("Could not find matching key for P2PK output: " + connectedScript);
 		} else {
 			throw new ScriptException("Could not understand form of connected output script: " + connectedScript);
 		}
@@ -217,6 +224,13 @@ public class TransactionOutPoint extends ChildMessage {
 		} else if (connectedScript.isSentToMultiSig()) {
 
 			return RedeemData.of(getConnectedKey(keyBag, connectedScript.getPubKeys()), connectedScript);
+		} else if (connectedScript.isSentToKey()) {
+			byte[] pubkey = connectedScript.getPubKey();
+			if (pubkey != null) {
+				PQKey key = keyBag.findKeyFromPubKey(pubkey);
+				if (key != null) return RedeemData.of(key, connectedScript);
+			}
+			throw new ScriptException("Could not find matching key for P2PK output: " + connectedScript);
 		} else {
 			throw new ScriptException("Could not understand form of connected output script: " + connectedScript);
 		}
