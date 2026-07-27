@@ -102,12 +102,19 @@ public class BlockSaveService {
 				}
 			}
 			for (TransactionInput in : tx.getInputs()) {
-				net.bigtangle.core.UTXO utxo = store.getTransactionOutput(
-						in.getOutpoint().getBlockHash(),
-						in.getOutpoint().getTxHash(),
-						in.getOutpoint().getIndex());
-				if (utxo != null && utxo.getValue().isBIG()) {
-					txIn = txIn.add(utxo.getValue().getValue());
+				net.bigtangle.core.Coin inValue = null;
+				TransactionOutput connected = in.getOutpoint().getConnectedOutput();
+				if (connected != null) {
+					inValue = connected.getValue();
+				} else {
+					net.bigtangle.core.UTXO utxo = store.getTransactionOutput(
+							in.getOutpoint().getBlockHash(),
+							in.getOutpoint().getTxHash(),
+							in.getOutpoint().getIndex());
+					if (utxo != null) inValue = utxo.getValue();
+				}
+				if (inValue != null && inValue.isBIG()) {
+					txIn = txIn.add(inValue.getValue());
 				}
 			}
 			java.math.BigInteger surplus = txIn.subtract(txOut);
