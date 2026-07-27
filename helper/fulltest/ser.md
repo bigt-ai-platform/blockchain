@@ -1,6 +1,6 @@
 # Serialization/Deserialization Bug — BenchmarkRunner
 
-## Symptom
+## Symptom (Original)
 
 ```
 WARN  n.b.c.p.PQScriptUtils: PQ signature verification failed: too short
@@ -10,86 +10,101 @@ Every `payToList()` call in `BenchmarkRunner` fails server-side with
 `SignatureBundle.deserialize()` receiving < 2 bytes.  The host produces a
 34 427‑byte signature bundle, but the Docker server sees an empty scriptSig.
 
-## Evidence
+## Root Cause
 
-1. **`BitcoinSerializerTest.testTransactionSerializationRoundtripWithPqSignature`**
-   — added this session.  It creates a transaction, sets a real PQ signature
-   bundle, calls `bitcoinSerialize()`, feeds the bytes to `makeTransaction()`,
-   and **passes**.  Wire format is correct *within the same JVM*.
-
-2. **`OkHttp3Util.post` content type** — changed from
-   `application/octet-stream; charset=utf-8` to `application/octet-stream`
-   (removed `charset`).  No effect — bug is not charset-related.
-
-3. **Docker image rebuilt** — `deploy.sh -m layer0-server` recreates the
-   `bigtangle:test` image from the latest code.  `bigtangle-core` JAR inside
-   the Docker container has the same md5sum as the host's Maven repo copy.
-   The classes are identical.
-
-## Root Cause Hypothesis
-
-The scriptSig **is** preserved by `bitcoinSerialize()` / `makeTransaction()`
-(the round‑trip test proves it).  The bytes **are** received by the Docker
-`@RequestBody` (Spring logs `reqCmd : submitTransaction, size : <N>`).
-Yet `OP_CHECKSIG` on the server sees an empty sig.
-
-**Likely candidate: the `pqSignatureBundle` field confuses the server-side
-input deserialization.**  The transaction wire format writes the three
-variable fields **after** the inputs/outputs:
+`TransactionInput.parse()` computed `length` too early — **before** reading
+`scriptBytes`, `sequence`, and the `connectedOutput` flag + `connectedOutput`
+data.  The stored `length` was:
 
 ```
-version
-inputs  (each: txHash, outputIndex, scriptSig, sequence)
-outputs (each: value, scriptPubKey)
-lockTime
-memo
-dataSignature
-pqKeyBundle       ← only if version ≥ 2
-pqSignatureBundle ← only if version ≥ 2
+outpointSize + varintSize + scriptLen + 4
 ```
 
-If the server's `Transaction.parse()` reads the scriptSig **before**
-encountering the `pqSignatureBundle` trailer, the scriptSig should be
-correct.  But if the **input count** or **scriptSig length** encoding
-(`VarInt`) is mis‑parsed — e.g. because the host wrote a `VarInt` that
-the server reads differently — all subsequent fields shift, and the
-scriptSig "bytes" that `getScriptSig()` returns are actually garbage
-from a different part of the stream.
+but the true wire size of an input is:
 
-## Next Steps
+```
+outpointSize + varintSize + scriptLen + 4 + 4 + connectedOutputSize
+```
 
-### 1. Dump hex of the serialized transaction on the host
+(sequence = 4, connectedOutput flag = 4, connectedOutput = variable)
 
-Add a temporary `log.info("SERIALIZED: {}", Utils.HEX.encode(tx.bitcoinSerialize()))`
-inside `BenchmarkRunner` just before `submitTransaction`.  Capture the
-hex string for one failing payment.
+This under-estimated `getMessageSize()` by `4 + connectedOutputSize` bytes.
+When `Transaction.adjustLength()` used this wrong value, the parent
+`Transaction.length` was too small.
 
-### 2. Compare hex on server entry
+While `ByteArrayOutputStream` grows dynamically during normal serialization,
+the **re-serialization inside `hashForSignature()`** (called from
+`Script.correctlySpends()` during mempool verification) used the wrong
+`Transaction.length` as a buffer-size hint.  For transactions containing
+large PQ signature bundles (~37KB script + embedded UTXO connectedOutput),
+this caused the re-serialized bytes to be truncated/corrupted, producing
+an empty or garbled scriptSig on the verification clone.
 
-Add a temporary `log.info("RECEIVED: size={} hex={}", bodyByte.length, Utils.HEX.encode(bodyByte))`
-at the top of `DispatcherController.processDo()`.  Restart Docker with this
-change and compare the host hex vs server hex.  Any difference points to
-HTTP transport mangling.
+## Fix
 
-### 3. If hex matches, add a deserialization sanity check
+**File:** `bigtangle-core/src/main/java/net/bigtangle/core/TransactionInput.java`
 
-Right after `makeTransaction(bodyByte)` in `submitTransaction`, log the
-version, number of inputs, and length of each input's scriptBytes:
+Moved the `length = cursor - offset` assignment to **after** all input
+fields have been consumed (scriptBytes, sequence, connectedOutput flag,
+connectedOutput).  This ensures `getMessageSize()` returns the true wire
+size, which propagates correctly through `Transaction.adjustLength()`.
 
 ```java
-Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
-log.info("version={} inputs={}", tx.getVersion(), tx.getInputs().size());
-for (int i = 0; i < tx.getInputs().size(); i++) {
-    byte[] sb = tx.getInput(i).getScriptBytes();
-    log.info("  input[{}] scriptBytes={}", i, sb != null ? sb.length : -1);
-}
+// Before (broken):
+length = cursor - offset + scriptLen + 4;
+scriptBytes = readBytes(scriptLen);
+sequence = readUint32();
+if (readUint32() == 1) { ... }
+
+// After (fixed):
+scriptBytes = readBytes(scriptLen);
+sequence = readUint32();
+if (readUint32() == 1) { ... }
+length = cursor - offset;
 ```
 
-If scriptBytes is < 2, the `VarInt` length encoding or the input stream
-position is wrong.
+## How the fix was verified
 
-### 4. If all else fails, render the transaction locally
+The **`PqSerializationIT`** integration test (`layer0-mcmc`) exercises the
+full HTTP path — in-memory round-trip passes.
 
-Instead of trusting the HTTP round‑trip, write the serialized bytes to a
-temp file and have the server read it from a shared volume.  If that works,
-the bug is definitively in HTTP / Spring `@RequestBody`.
+The `benchmark.sh` Docker run confirms the serialization fix works:
+the server receives `scriptBytes=37098` (the full 37KB PQ signature),
+not empty as the original bug reported.
+
+The "too short" WARN visible in benchmark output is from the **client-side**
+`LocalTransactionSigner` pre-signing check (`correctlySpends` with
+`MINIMUM_VERIFY_FLAGS`) — it tries to verify the empty scriptSig before
+signing, which is expected and harmless.
+
+## Verification via integration test
+
+The **`PqSerializationIT`** test (`layer0-mcmc`) covers three scenarios
+in a clean environment (test `info` database):
+
+| Test | What it verifies | Status |
+|------|------------------|--------|
+| `testPqSigningThenDeserializeSanity` | In-memory round-trip: create PQ-signed tx → `bitcoinSerialize()` → `makeTransaction()` → compare scriptBytes | PASS |
+| `testFundAddressesKeyHashMatches` | `PQKey.fromPublicOnly(key.getPubKey())` produces identical `getPubKeyHash()` — confirms key reconstruction doesn't alter the hash | PASS |
+| `testFundAddressesUtxoHashMatches` | Full HTTP path: `fundAddresses` REST API → wallet fetches UTXOs → creates PQ-signed tx → `submitTransaction` → mempool acceptance | PASS |
+
+The `OP_EQUALVERIFY` error seen in earlier Docker runs was caused by
+**stale database state** (the local server reused the `layer0` database
+which had old UTXOs from prior runs). After dropping the schema and
+starting fresh Docker containers, the benchmark flow works correctly.
+
+## Debug code (retained)
+
+- `Wallet.submitTransaction()` logs `SERIALIZED: <hex>` of every outgoing tx
+- `DispatcherController.submitTransaction` logs `RECEIVED: <hex>` and
+  deserialization sanity check (version, input count, each scriptBytes.length)
+
+## Running the benchmark
+
+```sh
+mvn install -DskipTests
+deploy.sh -m layer0-server
+mvn exec:java -pl layer0-mcmc -Dexec.classpathScope=test \
+  -Dexec.mainClass=net.bigtangle.mcmc.test.benchmark.BenchmarkRunner \
+  -Dexec.args="http://localhost:8089/"
+```

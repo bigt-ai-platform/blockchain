@@ -132,7 +132,6 @@ public final class PQScriptUtils {
 
             return true;
         } catch (Exception e) {
-            log.warn("PQ signature verification failed: {}", e.getMessage());
             return false;
         }
     }

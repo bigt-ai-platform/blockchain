@@ -159,13 +159,15 @@ public class TransactionInput extends ChildMessage {
 		outpoint = TransactionOutPoint.fromTransactionOutPoint5(params, payload, cursor, this, serializer);
 		cursor += outpoint.getMessageSize();
 		int scriptLen = (int) readVarInt();
-		length = cursor - offset + scriptLen + 4;
 		scriptBytes = readBytes(scriptLen);
 		sequence = readUint32();
 		if (readUint32() == 1) {
 			outpoint.connectedOutput = TransactionOutput.fromTransactionOutput(params, (Transaction) this.parent,
 					payload, cursor, serializer);
 			cursor += outpoint.connectedOutput.getMessageSize();
+			length = cursor - offset;
+		} else {
+			length = cursor - offset;
 		}
 	}
 
