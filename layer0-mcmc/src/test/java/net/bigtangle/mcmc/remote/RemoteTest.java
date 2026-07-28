@@ -73,7 +73,7 @@ public abstract class RemoteTest {
 	public static String yuanTokenPub = pqKeyHex((byte) 0x03, (byte) 0x04);
  
  
-	NetworkParameters networkParameters = TestParams.get();
+	public NetworkParameters networkParameters = TestParams.get();
 
 	@BeforeEach
 	public void setUp() throws Exception {

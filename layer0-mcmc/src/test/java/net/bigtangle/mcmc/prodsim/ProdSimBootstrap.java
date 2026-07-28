@@ -1,19 +1,25 @@
 package net.bigtangle.mcmc.prodsim;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
 public class ProdSimBootstrap {
@@ -46,19 +52,12 @@ public class ProdSimBootstrap {
                     Arrays.copyOfRange(seed, 0, 32),
                     Arrays.copyOfRange(seed, 32, 64));
 
-            String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
-
-            // Fund the validator using legacy address format
-            net.bigtangle.core.Address legacyAddr = net.bigtangle.core.Address.fromHash160(
-                    params, Utils.sha256hash160(validatorKey.getPubKey()));
-            wallet.pay(null, legacyAddr.toBase58(),
-                    new Coin(FUND_PER_VALIDATOR, NetworkParameters.BIGTANGLE_TOKENID),
-                    "fund validator " + i);
-            System.out.println("Funded validator " + i + " at " + legacyAddr.toBase58());
+            payBIGTo(wallet, params, validatorKey, FUND_PER_VALIDATOR);
+            System.out.println("Funded validator " + i);
             Thread.sleep(12000);
         }
 
-        System.out.println("All validators funded. Now staking...");
+        System.out.println("All validators funded. Staking...");
 
         for (int i = 0; i < VALIDATOR_KEY_HEX.length; i++) {
             byte[] seed = Utils.HEX.decode(VALIDATOR_KEY_HEX[i]);
@@ -72,11 +71,11 @@ public class ProdSimBootstrap {
             stakeReq.put("pubkey", pubkeyHex);
             stakeReq.put("amount", STAKE_AMOUNT.toString());
             try {
-                byte[] resp = OkHttp3Util.postString(serverUrl + ReqCmd.stakeDeposit.name(),
+                OkHttp3Util.postString(serverUrl + ReqCmd.stakeDeposit.name(),
                         Json.jsonmapper().writeValueAsString(stakeReq));
                 System.out.println("  Staked validator " + i);
             } catch (Exception e) {
-                System.out.println("  stakeDeposit failed for validator " + i + ": " + e.getMessage());
+                System.out.println("  stakeDeposit failed: " + e.getMessage());
             }
             Thread.sleep(1000);
         }
@@ -99,7 +98,7 @@ public class ProdSimBootstrap {
                         Json.jsonmapper().writeValueAsString(activateReq));
                 System.out.println("  Activated validator " + i);
             } catch (Exception e) {
-                System.out.println("  activateValidator failed for validator " + i + ": " + e.getMessage());
+                System.out.println("  activateValidator failed: " + e.getMessage());
             }
             Thread.sleep(500);
         }
@@ -115,10 +114,48 @@ public class ProdSimBootstrap {
                 System.out.println("  Validator pubkey: " + v.get("pubkey"));
             }
         }
-        if (validators == null || validators.size() < VALIDATOR_KEY_HEX.length) {
-            System.out.println("WARNING: Not all validators activated.");
-        } else {
+        if (validators != null && validators.size() >= VALIDATOR_KEY_HEX.length) {
             System.out.println("Bootstrap complete. All validators active.");
+        } else {
+            System.out.println("WARNING: Expected " + VALIDATOR_KEY_HEX.length + " validators.");
         }
+    }
+
+    private static void payBIGTo(Wallet wallet, NetworkParameters params,
+            PQKey beneficiary, BigInteger amount) throws Exception {
+        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+        List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+        for (FreeStandingTransactionOutput co : candidates) {
+            if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+                bigUtxos.add(co);
+            }
+        }
+        if (bigUtxos.isEmpty()) {
+            throw new RuntimeException("No BIG UTXOs available");
+        }
+
+        BigInteger total = BigInteger.ZERO;
+        Transaction tx = new Transaction(params);
+        tx.setVersion(PQConstants.TX_PQ_VERSION);
+        Coin sendAmount = new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID);
+        PQKey walletKey = wallet.walletKeys(null).get(0);
+
+        for (FreeStandingTransactionOutput co : bigUtxos) {
+            tx.addInput(co.getUTXO().getBlockHash(), co);
+            tx.getInputs().get(tx.getInputs().size() - 1).getOutpoint().connectedOutput = co;
+            total = total.add(co.getValue().getValue());
+            tx.addOutput(TransactionOutput.fromCoinKey(params, tx, sendAmount, beneficiary));
+            Coin change = new Coin(total, NetworkParameters.BIGTANGLE_TOKENID)
+                    .subtract(sendAmount).subtract(Coin.FEE_DEFAULT);
+            if (!change.isNegative()) {
+                tx.addOutput(TransactionOutput.fromCoinKey(params, tx, change, walletKey));
+                break;
+            }
+        }
+        if (total.compareTo(amount) < 0) {
+            throw new RuntimeException("Insufficient BIG balance");
+        }
+        wallet.signTransaction(tx, null);
+        wallet.submitTransaction(tx);
     }
 }

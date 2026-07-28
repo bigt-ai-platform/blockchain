@@ -13,7 +13,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.Script;
+import net.bigtangle.script.Script;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
