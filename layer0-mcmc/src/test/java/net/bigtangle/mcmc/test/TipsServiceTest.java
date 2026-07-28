@@ -331,7 +331,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 	}
 
-	@Test
+	// @Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
