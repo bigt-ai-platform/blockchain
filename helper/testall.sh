@@ -108,17 +108,17 @@ FORK3="${FORK3},UserdataTest,UtilsTest,ValidatorDutyTest"
 
 timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
   -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK1" \
-  $DB_ARGS -DDB_NAME=info_l0 2>&1 | awk '{print "[Fork1] " $0}' &
+  $DB_ARGS -DDB_NAME=info_l0 &
 F1_PID=$!
 
 timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
   -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK2" \
-  $DB_ARGS -DDB_NAME=info_l0b 2>&1 | awk '{print "[Fork2] " $0}' &
+  $DB_ARGS -DDB_NAME=info_l0b &
 F2_PID=$!
 
 timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
   -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK3" \
-  $DB_ARGS -DDB_NAME=info_l0c 2>&1 | awk '{print "[Fork3] " $0}' &
+  $DB_ARGS -DDB_NAME=info_l0c &
 F3_PID=$!
 
 # Wait for all forks
