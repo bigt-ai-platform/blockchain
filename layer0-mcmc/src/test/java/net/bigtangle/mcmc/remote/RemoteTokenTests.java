@@ -8,8 +8,8 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
-import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetTokensResponse;
+import net.bigtangle.params.ReqCmd;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
@@ -53,10 +53,7 @@ public class RemoteTokenTests extends RemoteTest {
 
     @Test
     public void testGenesisTokenExists() throws Exception {
-        HashMap<String, Object> req = new HashMap<>();
-        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchTokens.name(),
-                Json.jsonmapper().writeValueAsString(req));
-        GetTokensResponse tokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+        GetTokensResponse tokensResponse = wallet.searchTokens(null);
         assertNotNull(tokensResponse, "searchTokens should return a response");
         assertNotNull(tokensResponse.getTokens(), "tokens list should not be null");
         boolean foundBIG = false;
@@ -71,10 +68,7 @@ public class RemoteTokenTests extends RemoteTest {
 
     @Test
     public void testGetTokenByHash() throws Exception {
-        HashMap<String, Object> req = new HashMap<>();
-        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchTokens.name(),
-                Json.jsonmapper().writeValueAsString(req));
-        GetTokensResponse tokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+        GetTokensResponse tokensResponse = wallet.searchTokens(null);
         assertNotNull(tokensResponse);
         assertNotNull(tokensResponse.getTokens());
         assertTrue(!tokensResponse.getTokens().isEmpty(), "At least one token must exist");

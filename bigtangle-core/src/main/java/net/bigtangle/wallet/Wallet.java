@@ -629,6 +629,14 @@ public class Wallet extends WalletBase {
 		return token.getTokens().get(0);
 	}
 
+	public GetTokensResponse searchTokens(String name) throws IOException {
+		HashMap<String, Object> requestParam = new HashMap<>();
+		requestParam.put("name", name);
+		byte[] resp = OkHttp3Util.postString(getServerURL() + ReqCmd.searchTokens.name(),
+				Json.jsonmapper().writeValueAsString(requestParam));
+		return Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+	}
+
 	/*
 	 * It must use BigInteger to calculation to avoid overflow. Order can handle
 	 * only Long
