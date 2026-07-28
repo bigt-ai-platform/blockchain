@@ -75,13 +75,10 @@ echo "=== Running core tests (no DB needed) ==="
 timeout "$TEST_TIMEOUT" mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}"
 echo "=== Core tests passed ==="
 
-echo "=== Building all modules (serial) ==="
-# Build all server modules + core dependencies first (without tests)
-timeout "$TEST_TIMEOUT" mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-server,layer0-mcmc,l1-pai-server,l1-nft-server,l1-payment-server,l1-order-server 2>&1 | tail -1
-# Also compile test classes to avoid stale test JARs referencing removed classes
-timeout "$TEST_TIMEOUT" mvn test-compile -q -f "$ROOT/pom.xml" -am \
-  -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-order-server,l1-order-mcmc 2>&1 | tail -1
+echo "=== Building all modules (parallel) ==="
+# Build + compile test classes in a single Maven step
+timeout "$TEST_TIMEOUT" mvn install test-compile -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
+  -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-nft-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-order-server,l1-order-mcmc 2>&1 | tail -3
 echo "=== All modules built ==="
 
 if [ -n "$SPECIFIC_TEST" ]; then
