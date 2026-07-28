@@ -27,7 +27,6 @@ import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
@@ -38,9 +37,6 @@ import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.Wallet;
 
 public class RemoteFromAddressTests extends RemoteTest {
-
-	public static String yuanTokenPub = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a";
-	public static String yuanTokenPriv = "8db6bd17fa4a827619e165bfd4b0f551705ef2d549a799e7f07115e5c3abad55";
 
 	private PQKey accountKey;
 	Wallet yuanWallet;

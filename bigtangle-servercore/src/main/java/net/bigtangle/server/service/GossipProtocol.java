@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -32,7 +33,8 @@ public class GossipProtocol implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(GossipProtocol.class);
 
-    private static final int GOSSIP_PORT = 9093;
+    @Value("${gossip.port:9093}")
+    private int gossipPort;
     private static final int MAGIC = 0x42474C31;
     private static final int MSG_BLOCK = 1;
     private static final int MSG_TRANSACTION = 2;
@@ -59,11 +61,11 @@ public class GossipProtocol implements DisposableBean {
         running = true;
         listenerPool.submit(this::listenLoop);
         connectPool.submit(this::discoveryLoop);
-        log.info("GossipProtocol started on port {}", GOSSIP_PORT);
+        log.info("GossipProtocol started on port {}", gossipPort);
     }
 
     private void listenLoop() {
-        try (ServerSocket server = new ServerSocket(GOSSIP_PORT)) {
+        try (ServerSocket server = new ServerSocket(gossipPort)) {
             while (running) {
                 Socket sock = server.accept();
                 String addr = sock.getInetAddress().getHostAddress();
@@ -138,12 +140,12 @@ public class GossipProtocol implements DisposableBean {
 
     private void connectTo(String host) {
         try {
-            Socket sock = new Socket(host, GOSSIP_PORT);
+            Socket sock = new Socket(host, gossipPort);
             peers.put(host, sock);
             listenerPool.submit(() -> handleConnection(sock));
             log.info("Connected to gossip peer: {}", host);
         } catch (Exception e) {
-            log.debug("Failed to connect to {}:{} - {}", host, GOSSIP_PORT, e.getMessage());
+            log.debug("Failed to connect to {}:{} - {}", host, gossipPort, e.getMessage());
         }
     }
 

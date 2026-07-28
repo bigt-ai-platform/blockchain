@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,17 +20,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.google.common.math.LongMath;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
+import net.bigtangle.core.MultiSign;
+import net.bigtangle.core.TokenInfo;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.MultiSignAddress;
+import net.bigtangle.core.MultiSignBy;
+import net.bigtangle.response.MultiSignByRequest;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -38,25 +41,24 @@ import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionOutPoint;
+import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
-import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
-import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.crypto.pq.PQConstants;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.response.GetBalancesResponse;
+import net.bigtangle.response.MultiSignResponse;
 import net.bigtangle.response.OrderdataResponse;
-import net.bigtangle.response.PermissionedAddressesResponse;
-import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
-import net.bigtangle.utils.MonetaryFormat;
 import net.bigtangle.utils.OkHttp3Util;
-import net.bigtangle.utils.UUIDUtil;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
+import okhttp3.OkHttpClient;
 
   
 public abstract class RemoteTest {
@@ -65,46 +67,71 @@ public abstract class RemoteTest {
 	protected static final Logger log = LoggerFactory.getLogger(RemoteTest.class);
 	public String contextRoot = System.getProperty("server.url", "http://localhost:8089/");
 
-	/*
-	 * default wallet which has key testpriv and yuanTokenPriv
-	 */
 	public Wallet wallet;
 
 	protected final KeyParameter aesKey = null;
- 
 
-	public static String testPub = "02721b5eb0282e4bc86aab3380e2bba31d935cba386741c15447973432c61bc975";
-	public static String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
-	public static String yuanTokenPub = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a";
-	public static String yuanTokenPriv = "8db6bd17fa4a827619e165bfd4b0f551705ef2d549a799e7f07115e5c3abad55";
- 
- 
-	NetworkParameters networkParameters= TestParams.get() ;
-	
-	@BeforeEach
-	public void setUp() throws Exception { 
- 
-		wallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
- 
-	} 
-
-	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<String, BigInteger>();
-
-		giveMoneyResult.put(beneficiary.toAddress(networkParameters).toHex(), amount);
-
-		return payList(addedBlocks, giveMoneyResult, NetworkParameters.BIGTANGLE_TOKENID);
+	private static String pqKeyHex(byte mlDsaFill, byte slhDsaFill) {
+		byte[] mlDsaSeed = new byte[32];
+		byte[] slhDsaSeed = new byte[32];
+		Arrays.fill(mlDsaSeed, mlDsaFill);
+		Arrays.fill(slhDsaSeed, slhDsaFill);
+		return PQKey.fromSeeds(mlDsaSeed, slhDsaSeed).getPublicKeyAsHex();
 	}
 
-	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
-			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
-		Transaction tx = wallet.payMoneyToECKeyList(null, giveMoneyResult, tokenid, "payList");
-		Block b = tx == null ? null : Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
-		if (b != null) b.addTransaction(tx);
-		if (addedBlocks != null && b != null) {
+	public static String genesisPub = pqKeyHex((byte) 0x01, (byte) 0x02);
+	public static String yuanTokenPub = pqKeyHex((byte) 0x03, (byte) 0x04);
+ 
+ 
+	NetworkParameters networkParameters = TestParams.get();
+
+	@BeforeEach
+	public void setUp() throws Exception {
+		byte[] mlDsaSeed = new byte[32];
+		byte[] slhDsaSeed = new byte[32];
+		Arrays.fill(mlDsaSeed, (byte) 0x01);
+		Arrays.fill(slhDsaSeed, (byte) 0x02);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.fromSeeds(mlDsaSeed, slhDsaSeed), contextRoot);
+	}
+
+	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {
+		List<FreeStandingTransactionOutput> coinList = wallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
+				bigUtxos.add(co);
+			}
+		}
+		if (bigUtxos.isEmpty()) {
+			throw new InsufficientMoneyException(
+					new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID) + " outputs size= 0");
+		}
+		Coin total = Coin.valueOf(0, NetworkParameters.BIGTANGLE_TOKENID);
+		Transaction tx = new Transaction(networkParameters);
+		tx.setVersion(PQConstants.TX_PQ_VERSION);
+		Coin sendAmount = new Coin(amount, NetworkParameters.BIGTANGLE_TOKENID);
+		PQKey walletKey = wallet.walletKeys(null).get(0);
+		for (FreeStandingTransactionOutput co : bigUtxos) {
+			tx.addInput(co.getUTXO().getBlockHash(), co);
+			tx.getInputs().get(tx.getInputs().size() - 1).getOutpoint().connectedOutput = co;
+			total = total.add(co.getValue());
+			tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, beneficiary));
+			Coin change = total.subtract(sendAmount).subtract(Coin.FEE_DEFAULT);
+			if (!change.isNegative()) {
+				tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, walletKey));
+				break;
+			}
+		}
+		if (total.getValue().compareTo(sendAmount.getValue()) < 0) {
+			throw new InsufficientMoneyException(sendAmount + " outputs size= " + bigUtxos.size());
+		}
+		wallet.signTransaction(tx, null);
+		wallet.submitTransaction(tx);
+		Block b = Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);
+		b.addTransaction(tx);
+		if (addedBlocks != null) {
 			addedBlocks.add(b);
 		}
-	 
 		return b;
 	}
 
@@ -119,13 +146,74 @@ public abstract class RemoteTest {
 		token.setTokentype(tokentype);
 		List<MultiSignAddress> addresses = new ArrayList<MultiSignAddress>();
 		addresses.add(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
-		return createTokenWallet(key, domainname, increment, token, addresses, w);
-
-	}
- 
-	public Block createTokenWallet(PQKey key, String domainname, boolean increment, Token token,
-			List<MultiSignAddress> addresses,Wallet w) throws Exception {
+		// Use the wallet's createToken which internally calls saveToken → signToken
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
+	}
+
+	public Block createTokenWallet(PQKey key, String domainname, boolean increment, Token token,
+			List<MultiSignAddress> addresses, Wallet w) throws Exception {
+		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
+	}
+
+	protected Block fetchTip() throws Exception {
+		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
+				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
+		return networkParameters.getDefaultSerializer().makeBlock(data);
+	}
+
+	public Block pullBlockDoMultiSign(String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
+		HashMap<String, Object> requestParam = new HashMap<String, Object>();
+		String address = outKey.toAddress(networkParameters).toBase58();
+		requestParam.put("address", address);
+		requestParam.put("tokenid", tokenid);
+
+		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
+				Json.jsonmapper().writeValueAsString(requestParam));
+
+		MultiSignResponse multiSignResponse = Json.jsonmapper().readValue(resp, MultiSignResponse.class);
+		if (multiSignResponse.getMultiSigns().isEmpty())
+			return null;
+		MultiSign multiSign = multiSignResponse.getMultiSigns().get(0);
+
+		byte[] payloadBytes = Utils.HEX.decode((String) multiSign.getBlockhashHex());
+		Block block0 = networkParameters.getDefaultSerializer().makeBlock(payloadBytes);
+		Transaction transaction = block0.getTransactions().get(0);
+
+		List<MultiSignBy> multiSignBies = null;
+		if (transaction.getDataSignature() == null) {
+			multiSignBies = new ArrayList<MultiSignBy>();
+		} else {
+			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
+					MultiSignByRequest.class);
+			multiSignBies = multiSignByRequest.getMultiSignBies();
+		}
+		Sha256Hash sighash = transaction.getHash();
+		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
+		byte[] buf1 = party1Signature.serialize();
+
+		MultiSignBy multiSignBy0 = new MultiSignBy();
+		multiSignBy0.setTokenid(multiSign.getTokenid());
+		multiSignBy0.setTokenindex(multiSign.getTokenindex());
+		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
+		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
+		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
+		multiSignBies.add(multiSignBy0);
+		MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
+		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
+		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize());
+		return block0;
+	}
+
+	/**
+	 * Wait for the server to process pending transactions from the mempool.
+	 * The server runs micro-batch every 100ms, so a short wait should suffice.
+	 */
+	protected void makeRewardBlock() throws Exception {
+		Thread.sleep(2000);
+	}
+
+	protected void makeRewardBlock(Block predecessor) throws Exception {
+		Thread.sleep(2000);
 	}
 
 	public void balance(Tokensums a) throws Exception {
@@ -155,21 +243,18 @@ public abstract class RemoteTest {
 		return getBalance(withZero, wallet.walletKeys(null));
 	}
 
-	// get balance for the walletKeys
 	protected List<UTXO> getBalance(boolean withZero, List<PQKey> keys) throws Exception {
 		List<UTXO> listUTXO = new ArrayList<UTXO>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
-			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
+		for (PQKey key : keys) {
+			keyStrHex000.add(Utils.HEX.encode(key.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
 				Json.jsonmapper().writeValueAsString(keyStrHex000).getBytes());
 
 		GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
 
-		// byte[] response = mvcResult.getResponse().getContentAsString();
 		for (UTXO utxo : getBalancesResponse.getOutputs()) {
 			if (withZero) {
 				listUTXO.add(utxo);
@@ -185,16 +270,14 @@ public abstract class RemoteTest {
 		List<Coin> listCoin = new ArrayList<Coin>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (PQKey ecKey : keys) {
-			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
-			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
+		for (PQKey key : keys) {
+			keyStrHex000.add(Utils.HEX.encode(key.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getAccountBalances.name(),
 				Json.jsonmapper().writeValueAsString(keyStrHex000).getBytes());
 
 		GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
 
-		// byte[] response = mvcResult.getResponse().getContentAsString();
 		listCoin.addAll(getBalancesResponse.getBalance());
 		for (Coin coin : listCoin) {
 			log.debug("coin:" + coin.toString());
@@ -202,7 +285,6 @@ public abstract class RemoteTest {
 		return listCoin;
 	}
 
-	// get balance for the walletKeys
 	protected List<UTXO> getBalance(String address) throws Exception {
 		List<UTXO> listUTXO = new ArrayList<UTXO>();
 		List<String> keyStrHex000 = new ArrayList<String>();
@@ -220,9 +302,9 @@ public abstract class RemoteTest {
 		return listUTXO;
 	}
 
-	protected List<UTXO> getBalance(boolean withZero, PQKey ecKey) throws Exception {
+	protected List<UTXO> getBalance(boolean withZero, PQKey key) throws Exception {
 		List<PQKey> keys = new ArrayList<PQKey>();
-		keys.add(ecKey);
+		keys.add(key);
 		return getBalance(withZero, keys);
 	}
 

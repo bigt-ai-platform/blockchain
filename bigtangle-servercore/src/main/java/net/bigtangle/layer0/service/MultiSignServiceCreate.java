@@ -127,7 +127,7 @@ public class MultiSignServiceCreate {
             serviceBase.checkTokenUnique(block, store);
             if (serviceBase.checkFullTokenSolidity(block, 0, true, store) == SolidityState.getSuccessState()) {
                 this.saveMultiSign(block, store);
-                blockSaveService.saveBlock(checkBlockPrototype(block, store), store);
+                blockSaveService.saveBlockPermissive(checkBlockPrototype(block, store), store);
                 deleteMultiSign(block, store);
             } else {
                 this.saveMultiSign(block, store);

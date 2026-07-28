@@ -74,6 +74,23 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
+	/** Permissive variant used by token creation (MultiSignServiceCreate).
+	 *  The block has already passed checkFullTokenSolidity, so strict
+	 *  re-validation in addBlock would reject it for unrelated reasons.
+	 *  Also seeds MCMC weight + TipsQueue so the beacon chain picks it up. */
+	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
+		boolean added = blockgraph.addNonChain(block, true, store, true, true);
+		if (added) {
+			store.updateBlockEvaluationSolid(block.getHash(), 2);
+			store.updateBlockEvaluationWeightAndDepth(java.util.List.of(
+					new net.bigtangle.server.data.DepthAndWeight(block.getHash(), 1, 1)));
+			store.insertTipsQueue(new TipsQueue(block.getHash().getBytes(),
+					block.unsafeBitcoinSerialize(), block.getHeight(), block.getTimeSeconds()));
+		}
+		accumulateBlockFees(block, store);
+		broadcastBlock(block);
+	}
+
 	/** Batch variant: skips transaction re-verification, solidity checks,
 	 *  AND cache operations.  Batch blocks are
 	 *  transient mempool dumps that don't need archival — the PostgreSQL

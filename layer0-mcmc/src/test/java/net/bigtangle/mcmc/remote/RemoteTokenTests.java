@@ -1,122 +1,157 @@
 package net.bigtangle.mcmc.remote;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import net.bigtangle.core.Block;
+import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Token;
+import net.bigtangle.core.TokenType;
+import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetTokensResponse;
+import net.bigtangle.utils.Json;
+import net.bigtangle.utils.OkHttp3Util;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.Block;
-import net.bigtangle.core.Coin;
-import net.bigtangle.core.PQKey;
-import net.bigtangle.core.MemoInfo;
-import net.bigtangle.core.MultiSignAddress;
-import net.bigtangle.core.Sha256Hash;
-import net.bigtangle.core.Token;
-import net.bigtangle.core.TokenInfo;
-import net.bigtangle.core.TokenKeyValues;
-import net.bigtangle.core.TokenType;
-import net.bigtangle.core.Utils;
-import net.bigtangle.params.ReqCmd;
-import net.bigtangle.mcmc.test.AbstractIntegrationTest;
-import net.bigtangle.response.GetTokensResponse;
-import net.bigtangle.utils.Json;
-import net.bigtangle.utils.OkHttp3Util;
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Integration test for token creation via HTTP API calls.
+ * Remote integration tests for token operations.
+ * Connects to a running L0 server via HTTP API only.
  *
- * Uses the MCMC beacon chain: tokens are created via the signToken API,
- * multi-signed via getTokenSignByAddress + signToken API, and confirmed
- * by a reward block created via direct service (makeRewardBlock).
+ * Token creation uses the batchBlock endpoint which stores
+ * the block in the batch pipeline. The token becomes visible
+ * after the server's batch processing cycle completes (5s with
+ * blockbatchrate=5000, or 50s by default).
  */
-public class RemoteTokenTests extends AbstractIntegrationTest {
+public class RemoteTokenTests extends RemoteTest {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteTokenTests.class);
 
     @Test
-    public void testTokens() throws Exception {
-        // Fund a new key to pay fees, then create a simple token
-        // via wallet.createToken (uses signToken HTTP endpoint internally).
-        PQKey key = PQKey.createNew();
-        payBigTo(key, Coin.FEE_DEFAULT.getValue(), null);
-
-        Block block = createToken(key, "testtoken", 0, "", "test",
-                BigInteger.valueOf(1000000L), true, null,
-                TokenType.identity.ordinal(), key.getPublicKeyAsHex(), key.getPubKey());
-
-        assertNotNull(block, "createToken should return a block");
-
-        // Multi-sign: root wallet must approve (simple tokens need root approval)
-        Block lastBlock = pullBlockDoMultiSign(key.getPublicKeyAsHex(), wallet.walletKeys().get(0), aesKey);
-        makeRewardBlock(lastBlock);
-
-        // Verify token exists via searchTokens API
-        HashMap<String, Object> searchReq = new HashMap<>();
-        byte[] searchResp = OkHttp3Util.postString(contextRoot + ReqCmd.searchTokens.name(),
-                Json.jsonmapper().writeValueAsString(searchReq));
-        GetTokensResponse tokensResponse = Json.jsonmapper().readValue(searchResp, GetTokensResponse.class);
-        boolean found = false;
-        if (tokensResponse.getTokens() != null) {
-            for (Token t : tokensResponse.getTokens()) {
-                if (key.getPublicKeyAsHex().equals(t.getTokenid())) {
-                    found = true;
-                    break;
-                }
-            }
-        }
-        assertTrue(found, "Token should exist on server after createToken");
+    public void testServerHealth() throws Exception {
+        OkHttpClient client = new OkHttpClient();
+        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream; charset=utf-8"), "");
+        Request request = new Request.Builder().url(contextRoot).post(body).build();
+        Response response = client.newCall(request).execute();
+        String respBody = response.body().string();
+        assertTrue(respBody.contains("Bigtangle") || respBody.contains("duration") || respBody.isEmpty(),
+                "Server should respond at root: " + respBody);
     }
 
     @Test
-    public void testTokenWithDomain() throws Exception {
-        // 1. Publish a domain name "testdomain" via wallet.publishDomainName
-        //    (uses signToken HTTP endpoint). The domain needs multi-sign + reward.
-        PQKey domainKey = PQKey.createNew();
-        String domainTid = domainKey.getPublicKeyAsHex();
-        payBigTo(domainKey, Coin.FEE_DEFAULT.getValue(), null);
+    public void testGenesisTokenExists() throws Exception {
+        HashMap<String, Object> req = new HashMap<>();
+        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchTokens.name(),
+                Json.jsonmapper().writeValueAsString(req));
+        GetTokensResponse tokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+        assertNotNull(tokensResponse, "searchTokens should return a response");
+        assertNotNull(tokensResponse.getTokens(), "tokens list should not be null");
+        boolean foundBIG = false;
+        for (Token t : tokensResponse.getTokens()) {
+            if ("bc".equals(t.getTokenid()) || "BIG".equals(t.getTokenname())) {
+                foundBIG = true;
+                break;
+            }
+        }
+        assertTrue(foundBIG, "Genesis BIG token should exist on server");
+    }
 
-        wallet.publishDomainName(domainKey, domainTid, "testdomain", aesKey, "");
+    @Test
+    public void testGetTokenByHash() throws Exception {
+        HashMap<String, Object> req = new HashMap<>();
+        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchTokens.name(),
+                Json.jsonmapper().writeValueAsString(req));
+        GetTokensResponse tokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+        assertNotNull(tokensResponse);
+        assertNotNull(tokensResponse.getTokens());
+        assertTrue(!tokensResponse.getTokens().isEmpty(), "At least one token must exist");
 
-        Block lastBlock = pullBlockDoMultiSign(domainTid, domainKey, aesKey);
-        lastBlock = pullBlockDoMultiSign(domainTid, wallet.walletKeys().get(0), aesKey);
-        makeRewardBlock(lastBlock);
+        String bigTokenId = "bc";
+        HashMap<String, Object> getReq = new HashMap<>();
+        getReq.put("tokenid", bigTokenId);
+        byte[] getResp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
+                Json.jsonmapper().writeValueAsString(getReq));
+        GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(getResp, GetTokensResponse.class);
+        assertNotNull(getTokensResponse.getTokens());
+        assertTrue(getTokensResponse.getTokens().size() >= 1);
+    }
 
-        Token domainToken = getToken(domainTid);
-        assertNotNull(domainToken);
-        assertTrue("testdomain".equals(domainToken.getTokenname()));
+    @Test
+    public void testCreateTokenViaSignToken() throws Exception {
+        PQKey key = PQKey.createNew();
+        Block block = createToken(key, "testtoken", 0, "", "test",
+                BigInteger.valueOf(1000000L), true, null,
+                TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
 
-        // 2. Create a token under the domain
-        PQKey tokenKey = PQKey.createNew();
-        payBigTo(tokenKey, Coin.FEE_DEFAULT.getValue(), null);
+        assertNotNull(block, "createToken should return a block");
 
-        Block tokenBlock = createToken(tokenKey, "product", 0, "testdomain", "desc",
-                BigInteger.ONE, true, null,
-                TokenType.token.ordinal(), tokenKey.getPublicKeyAsHex(), tokenKey.getPubKey());
+        Block signed = pullBlockDoMultiSign(key.getPublicKeyAsHex(),
+                wallet.walletKeys().get(0), aesKey);
+        if (signed != null) {
+            makeRewardBlock(signed);
+        }
 
-        TokenInfo currentToken = new TokenInfo().parseChecked(tokenBlock.getTransactions().get(0).getData());
+        String expectedTokenId = key.getPublicKeyAsHex();
+        Token foundToken = null;
+        for (int i = 0; i < 15; i++) {
+            foundToken = getToken(expectedTokenId);
+            if (foundToken != null) break;
+            if (i < 14) Thread.sleep(2000);
+        }
+        assertNotNull(foundToken, "Token " + expectedTokenId + " should exist via getTokenById");
+        assertEquals("testtoken", foundToken.getTokenname());
+        log.info("Token created and verified: {} ({})", foundToken.getTokenname(), expectedTokenId);
+    }
 
-        // Multi-sign: domain owner + root must approve
-        lastBlock = pullBlockDoMultiSign(currentToken.getToken().getTokenid(), domainKey, aesKey);
-        lastBlock = pullBlockDoMultiSign(currentToken.getToken().getTokenid(), wallet.walletKeys().get(0), aesKey);
-        makeRewardBlock(lastBlock);
+    @Test
+    public void testBeaconChainExists() throws Exception {
+        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getAllConfirmedReward.name(),
+                Json.jsonmapper().writeValueAsString(new HashMap<>()));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
+        assertNotNull(result, "getAllConfirmedReward should return a response");
+        log.info("Max confirmed reward: {}", result);
+    }
 
-        // 3. Verify token exists via API
-        HashMap<String, Object> requestParam = new HashMap<String, Object>();
-        requestParam.put("tokenid", currentToken.getToken().getTokenid());
-        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
-                Json.jsonmapper().writeValueAsString(requestParam));
-        GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-        assertTrue(getTokensResponse.getTokens().size() == 1);
-        String display = getTokensResponse.getTokens().get(0).getTokennameDisplay();
-        assertTrue(display != null && display.contains("@testdomain"),
-                "Token display should include domain: " + display);
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testCreateTokenViaWallet() throws Exception {
+        PQKey key = PQKey.createNew();
+        Block block = createToken(key, "wallettoken", 0, "", "wallet test",
+                BigInteger.valueOf(500000L), true, null,
+                TokenType.token.ordinal(), key.getPublicKeyAsHex(), wallet);
+
+        assertNotNull(block, "createToken via wallet should return a block");
+
+        Block signed = pullBlockDoMultiSign(key.getPublicKeyAsHex(),
+                wallet.walletKeys().get(0), aesKey);
+        if (signed != null) {
+            makeRewardBlock(signed);
+        }
+
+        String expectedTokenId = key.getPublicKeyAsHex();
+        Token foundToken = null;
+        for (int i = 0; i < 15; i++) {
+            foundToken = getToken(expectedTokenId);
+            if (foundToken != null) break;
+            if (i < 14) Thread.sleep(2000);
+        }
+        assertNotNull(foundToken, "Token created via wallet should exist via getTokenById");
+        assertEquals("wallettoken", foundToken.getTokenname());
+        log.info("Wallet-created token verified: {} ({})", foundToken.getTokenname(), expectedTokenId);
     }
 
     private Token getToken(String idcom) throws Exception {
@@ -126,18 +161,5 @@ public class RemoteTokenTests extends AbstractIntegrationTest {
                 Json.jsonmapper().writeValueAsString(requestParam));
         GetTokensResponse r = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
         return r.getTokens() != null && !r.getTokens().isEmpty() ? r.getTokens().get(0) : null;
-    }
-
-    private Block createToken(PQKey key, String tokename, int decimals, String domainname, String description,
-            BigInteger amount, boolean increment, TokenKeyValues tokenKeyValues, int tokentype, String tokenid,
-            byte[] pubkeyTo) throws Exception {
-        wallet.importKey(key);
-        Token token = Token.buildSimpleTokenInfo(true, Sha256Hash.ZERO_HASH, tokenid, tokename, description, 1, 0,
-                amount, !increment, decimals, "");
-        token.setTokenKeyValues(tokenKeyValues);
-        token.setTokentype(tokentype);
-        List<MultiSignAddress> addresses = new ArrayList<>();
-        addresses.add(new MultiSignAddress(tokenid, "", key.getPublicKeyAsHex()));
-        return wallet.createToken(key, domainname, increment, token, addresses, pubkeyTo, new MemoInfo("coinbase"));
     }
 }

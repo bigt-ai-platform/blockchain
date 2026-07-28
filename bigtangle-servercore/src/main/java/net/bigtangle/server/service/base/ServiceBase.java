@@ -236,7 +236,8 @@ public abstract class ServiceBase {
 		case BLOCKTYPE_TOKEN_CREATION:
 			TokenInfo currentToken = new TokenInfo().parseChecked(transactions.get(0).getData());
 			allrequireds.add(Sha256Hash.wrap(currentToken.getToken().getDomainNameBlockHash()));
-			if (currentToken.getToken().getPrevblockhash() != null)
+			if (currentToken.getToken().getPrevblockhash() != null
+			        && !Sha256Hash.ZERO_HASH.equals(currentToken.getToken().getPrevblockhash()))
 				allrequireds.add(currentToken.getToken().getPrevblockhash());
 			break;
 		default:
