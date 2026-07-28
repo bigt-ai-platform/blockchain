@@ -817,7 +817,8 @@ public class DispatcherController implements DisposableBean {
 					byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
 					PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
 					utxo.setScript(ScriptBuilder.createOutputScript(key));
-					utxo.setAddress(key.toAddress(networkParameters).toBase58());
+					byte[] pubKeyHash = Utils.sha256hash160(pubkeyBytes);
+					utxo.setAddress(Address.fromHash160(networkParameters, pubKeyHash).toBase58());
 				} else {
 					utxo.setScript(ScriptBuilder
 							.createOutputScript(Address.fromBase58(networkParameters, addrStr)));
