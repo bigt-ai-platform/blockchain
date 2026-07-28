@@ -18,7 +18,6 @@ import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
-import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
@@ -28,12 +27,8 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
-import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.mcmc.test.FromAddressTests;
-import net.bigtangle.utils.Json;
-import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.Wallet;
 
 public class RemoteFromAddressTests extends RemoteTest {
@@ -158,24 +153,6 @@ public class RemoteFromAddressTests extends RemoteTest {
 			log.warn("", e);
 		}
 
-	}
-
-	// get balance for the walletKeys
-	protected List<UTXO> getBalance(String address) throws Exception {
-		List<UTXO> listUTXO = new ArrayList<UTXO>();
-		List<String> keyStrHex000 = new ArrayList<String>();
-
-		keyStrHex000.add(Utils.HEX.encode(Address.fromBase58(networkParameters, address).getHash160()));
-		byte[] response = OkHttp3Util.post(contextRoot + ReqCmd.getBalances.name(),
-				Json.jsonmapper().writeValueAsString(keyStrHex000).getBytes());
-
-		GetBalancesResponse getBalancesResponse = Json.jsonmapper().readValue(response, GetBalancesResponse.class);
-
-		for (UTXO utxo : getBalancesResponse.getOutputs()) {
-			listUTXO.add(utxo);
-		}
-
-		return listUTXO;
 	}
 
 }

@@ -79,14 +79,8 @@ public class RemoteTokenTests extends RemoteTest {
         assertNotNull(tokensResponse.getTokens());
         assertTrue(!tokensResponse.getTokens().isEmpty(), "At least one token must exist");
 
-        String bigTokenId = "bc";
-        HashMap<String, Object> getReq = new HashMap<>();
-        getReq.put("tokenid", bigTokenId);
-        byte[] getResp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
-                Json.jsonmapper().writeValueAsString(getReq));
-        GetTokensResponse getTokensResponse = Json.jsonmapper().readValue(getResp, GetTokensResponse.class);
-        assertNotNull(getTokensResponse.getTokens());
-        assertTrue(getTokensResponse.getTokens().size() >= 1);
+        Token bigToken = wallet.checkTokenId("bc");
+        assertNotNull(bigToken);
     }
 
     @Test
@@ -155,11 +149,10 @@ public class RemoteTokenTests extends RemoteTest {
     }
 
     private Token getToken(String idcom) throws Exception {
-        HashMap<String, Object> requestParam = new HashMap<>();
-        requestParam.put("tokenid", idcom);
-        byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenById.name(),
-                Json.jsonmapper().writeValueAsString(requestParam));
-        GetTokensResponse r = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
-        return r.getTokens() != null && !r.getTokens().isEmpty() ? r.getTokens().get(0) : null;
+        try {
+            return wallet.checkTokenId(idcom);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
