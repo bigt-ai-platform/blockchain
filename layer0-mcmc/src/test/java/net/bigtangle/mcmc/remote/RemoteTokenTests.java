@@ -98,7 +98,7 @@ public class RemoteTokenTests extends RemoteTest {
 
         assertNotNull(block, "createToken should return a block");
 
-        Block signed = pullBlockDoMultiSign(key.getPublicKeyAsHex(),
+        Block signed = wallet.multiSign(key.getPublicKeyAsHex(),
                 wallet.walletKeys().get(0), aesKey);
         if (signed != null) {
             makeRewardBlock(signed);
@@ -136,7 +136,7 @@ public class RemoteTokenTests extends RemoteTest {
 
         assertNotNull(block, "createToken via wallet should return a block");
 
-        Block signed = pullBlockDoMultiSign(key.getPublicKeyAsHex(),
+        Block signed = wallet.multiSign(key.getPublicKeyAsHex(),
                 wallet.walletKeys().get(0), aesKey);
         if (signed != null) {
             makeRewardBlock(signed);

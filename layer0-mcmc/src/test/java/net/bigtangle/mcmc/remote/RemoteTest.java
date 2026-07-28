@@ -24,16 +24,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
-import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
-import net.bigtangle.core.MultiSign;
-import net.bigtangle.core.TokenInfo;
-import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.MultiSignAddress;
-import net.bigtangle.core.MultiSignBy;
-import net.bigtangle.response.MultiSignByRequest;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Token;
@@ -41,24 +35,20 @@ import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.Tokensums;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.PQConstants;
-import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.InsufficientMoneyException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.response.GetBalancesResponse;
-import net.bigtangle.response.MultiSignResponse;
 import net.bigtangle.response.OrderdataResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
-import okhttp3.OkHttpClient;
 
   
 public abstract class RemoteTest {
@@ -159,49 +149,6 @@ public abstract class RemoteTest {
 		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
 				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
 		return networkParameters.getDefaultSerializer().makeBlock(data);
-	}
-
-	public Block pullBlockDoMultiSign(String tokenid, PQKey outKey, KeyParameter aesKey) throws Exception {
-		HashMap<String, Object> requestParam = new HashMap<String, Object>();
-		String address = outKey.toAddress(networkParameters).toBase58();
-		requestParam.put("address", address);
-		requestParam.put("tokenid", tokenid);
-
-		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.getTokenSignByAddress.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-
-		MultiSignResponse multiSignResponse = Json.jsonmapper().readValue(resp, MultiSignResponse.class);
-		if (multiSignResponse.getMultiSigns().isEmpty())
-			return null;
-		MultiSign multiSign = multiSignResponse.getMultiSigns().get(0);
-
-		byte[] payloadBytes = Utils.HEX.decode((String) multiSign.getBlockhashHex());
-		Block block0 = networkParameters.getDefaultSerializer().makeBlock(payloadBytes);
-		Transaction transaction = block0.getTransactions().get(0);
-
-		List<MultiSignBy> multiSignBies = null;
-		if (transaction.getDataSignature() == null) {
-			multiSignBies = new ArrayList<MultiSignBy>();
-		} else {
-			MultiSignByRequest multiSignByRequest = Json.jsonmapper().readValue(transaction.getDataSignature(),
-					MultiSignByRequest.class);
-			multiSignBies = multiSignByRequest.getMultiSignBies();
-		}
-		Sha256Hash sighash = transaction.getHash();
-		SignatureBundle party1Signature = outKey.sign(sighash, aesKey);
-		byte[] buf1 = party1Signature.serialize();
-
-		MultiSignBy multiSignBy0 = new MultiSignBy();
-		multiSignBy0.setTokenid(multiSign.getTokenid());
-		multiSignBy0.setTokenindex(multiSign.getTokenindex());
-		multiSignBy0.setAddress(outKey.toAddress(networkParameters).toHex());
-		multiSignBy0.setPublickey(Utils.HEX.encode(outKey.getPubKey()));
-		multiSignBy0.setSignature(Utils.HEX.encode(buf1));
-		multiSignBies.add(multiSignBy0);
-		MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
-		transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
-		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize());
-		return block0;
 	}
 
 	/**
