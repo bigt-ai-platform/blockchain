@@ -94,31 +94,32 @@ if [ -n "$SPECIFIC_TEST" ]; then
 fi
 
 echo "=== Running L0 tests in 3 parallel forks ==="
+echo "  Fork 1: ValidatorService*,PoSTest -> info_l0"
+echo "  Fork 2: TokenTest,FullPruned*,RewardService*,FeePool* -> info_l0b"
+echo "  Fork 3: remaining ~15 classes -> info_l0c"
 
-# Fork 1: slowest tests -> info_l0
 FORK1="ValidatorServiceTest,ValidatorService2Test,PoSTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK1" \
-  $DB_ARGS -DDB_NAME=info_l0 &
-echo "  Fork 1: $FORK1 -> info_l0 [PID $!]"
-
-# Fork 2: medium tests -> info_l0b
 FORK2="TokenTest,FullPrunedBlockGraphTest,RewardServiceTest,RewardService2Test,FeePoolRewardTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK2" \
-  $DB_ARGS -DDB_NAME=info_l0b &
-echo "  Fork 2: $FORK2 -> info_l0b [PID $!]"
-
-# Fork 3: fast tests -> info_l0c
 FORK3="AnchorRoundTripTest,BridgeServiceTest,CrossChainFlowTest,DirectExchangeTest"
 FORK3="${FORK3},EpochRewardTest,GenesisBlockTipsTest,GossipServiceTest"
 FORK3="${FORK3},Layer0BlockTypeScopingTest,MCMCServiceTest,PaymentServiceTest"
 FORK3="${FORK3},PqSerializationIT,SlotTickServiceTest,TipsServiceTest"
 FORK3="${FORK3},UserdataTest,UtilsTest,ValidatorDutyTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
+
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
+  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK1" \
+  $DB_ARGS -DDB_NAME=info_l0 2>&1 | awk '{print "[Fork1] " $0}' &
+F1_PID=$!
+
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
+  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK2" \
+  $DB_ARGS -DDB_NAME=info_l0b 2>&1 | awk '{print "[Fork2] " $0}' &
+F2_PID=$!
+
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
   -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK3" \
-  $DB_ARGS -DDB_NAME=info_l0c &
-echo "  Fork 3: remaining -> info_l0c [PID $!]"
+  $DB_ARGS -DDB_NAME=info_l0c 2>&1 | awk '{print "[Fork3] " $0}' &
+F3_PID=$!
 
 # Wait for all forks
 EXIT_CODE=0
