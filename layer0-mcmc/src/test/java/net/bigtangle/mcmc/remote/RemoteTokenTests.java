@@ -4,14 +4,30 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenType;
-import net.bigtangle.response.GetTokensResponse;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.GetTokensResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -19,23 +35,6 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.Map;
-
-/**
- * Remote integration tests for token operations.
- * Connects to a running L0 server via HTTP API only.
- *
- * Token creation uses the batchBlock endpoint which stores
- * the block in the batch pipeline. The token becomes visible
- * after the server's batch processing cycle completes (5s with
- * blockbatchrate=5000, or 50s by default).
- */
 public class RemoteTokenTests extends RemoteTest {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteTokenTests.class);
@@ -140,6 +139,80 @@ public class RemoteTokenTests extends RemoteTest {
         assertNotNull(foundToken, "Token created via wallet should exist via getTokenById");
         assertEquals("wallettoken", foundToken.getTokenname());
         log.info("Wallet-created token verified: {} ({})", foundToken.getTokenname(), expectedTokenId);
+    }
+
+    @Test
+    public void testCreateAndPayToken() throws Exception {
+        PQKey issuer = PQKey.createNew();
+        String tokenName = "paytoken";
+        BigInteger supply = BigInteger.valueOf(10000000L);
+
+        Block block = createToken(issuer, tokenName, 0, "", "token for payment test",
+                supply, true, null,
+                TokenType.token.ordinal(), issuer.getPublicKeyAsHex(), wallet);
+        assertNotNull(block, "createToken should return a block");
+
+        Block signed = wallet.multiSign(issuer.getPublicKeyAsHex(),
+                wallet.walletKeys().get(0), aesKey);
+        if (signed != null) {
+            makeRewardBlock(signed);
+        }
+
+        String tokenId = issuer.getPublicKeyAsHex();
+        Token foundToken = null;
+        for (int i = 0; i < 15; i++) {
+            foundToken = getToken(tokenId);
+            if (foundToken != null) break;
+            Thread.sleep(2000);
+        }
+        assertNotNull(foundToken, "Token should exist after creation");
+        log.info("Token {} created, id={}", tokenName, tokenId);
+
+        Thread.sleep(5000);
+
+        wallet.importKey(issuer);
+        byte[] tokenidBuf = Utils.HEX.decode(tokenId);
+        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+        List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+        for (FreeStandingTransactionOutput co : candidates) {
+            if (java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf())) {
+                tokenUtxos.add(co);
+            }
+        }
+        assertTrue(!tokenUtxos.isEmpty(), "Issuer should have token UTXOs");
+        log.info("Issuer has {} token UTXOs", tokenUtxos.size());
+
+        PQKey recipient = PQKey.createNew();
+        BigInteger total = BigInteger.ZERO;
+        Transaction tx = new Transaction(networkParameters);
+        tx.setVersion(PQConstants.TX_PQ_VERSION);
+        Coin sendAmount = new Coin(BigInteger.valueOf(1000L), tokenidBuf);
+
+        for (FreeStandingTransactionOutput co : tokenUtxos) {
+            tx.addInput(co.getUTXO().getBlockHash(), co);
+            tx.getInputs().get(tx.getInputs().size() - 1).getOutpoint().connectedOutput = co;
+            total = total.add(co.getValue().getValue());
+            tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, sendAmount, recipient));
+            Coin change = new Coin(total, tokenidBuf).subtract(sendAmount);
+            if (!change.isNegative()) {
+                tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, issuer));
+                break;
+            }
+        }
+        if (total.compareTo(BigInteger.valueOf(1000L)) < 0) {
+            throw new RuntimeException("Insufficient token balance");
+        }
+        wallet.signTransaction(tx, null);
+        wallet.submitTransaction(tx);
+        makeRewardBlock();
+        log.info("Paid 1000 {} tokens to recipient", tokenName);
+
+        List<FreeStandingTransactionOutput> after = wallet.calculateAllSpendCandidates(null, false);
+        long tokenUtxoCount = after.stream()
+                .filter(co -> java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf()))
+                .count();
+        log.info("Wallet token UTXOs after payment: {}", tokenUtxoCount);
+        assertTrue(tokenUtxoCount > 0, "Wallet should still have token UTXOs after payment");
     }
 
     private Token getToken(String idcom) throws Exception {
