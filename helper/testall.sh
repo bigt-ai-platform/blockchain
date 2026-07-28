@@ -69,7 +69,7 @@ timeout "$TEST_TIMEOUT" mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM
 echo "=== Core tests passed ==="
 
 echo "=== Building all modules ==="
-timeout "$TEST_TIMEOUT" mvn install test-compile -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
+timeout "$TEST_TIMEOUT" mvn clean install test-compile -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
   -pl layer0-mcmc,l1-pai-mcmc,l1-pai-server,l1-order-mcmc,l1-order-server,l1-contract-mcmc,l1-contract-server,l1-nft-mcmc,l1-nft-server,l1-payment-mcmc,l1-payment-server 2>&1 | tail -3
 echo "=== Build done ==="
 

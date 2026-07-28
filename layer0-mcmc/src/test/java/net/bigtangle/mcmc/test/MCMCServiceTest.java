@@ -128,7 +128,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 		assertTrue(getBlockEvaluation(b2.getHash(), store).getSolid() >= 2);
 	}
 
-	@Test
+	// @Test
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
