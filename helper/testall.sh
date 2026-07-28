@@ -60,14 +60,20 @@ for db in info info_l0 info_l0b info_l0c info_pai info_nft info_payment info_ord
 done
 echo "Databases ready"
 
-# Reduce heap per fork when running 3 in parallel
-PARALLEL_JVM_ARGS=(-DargLine="-Xmx1g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true -DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234")
-SINGLE_JVM_ARGS=(-DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true -DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234")
 FORK_ARGS=(-Dsurefire.forkCount=1 -DforkedProcessTimeoutInSeconds=7200)
-DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
+
+# DB properties must be in argLine (not Maven -D) to reach surefire forks
+BASE_ARG="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED"
+BASE_ARG="${BASE_ARG} -Dspring.main.allow-bean-definition-overriding=true"
+BASE_ARG="${BASE_ARG} -DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
+
+# Parallel forks use 1G heap, single runs use 2G
+PARALLEL_ARG="-Xmx1g${BASE_ARG#-Xmx2g}"
+SINGLE_ARG="$BASE_ARG"
 
 echo "=== Running core tests (no DB needed) ==="
-timeout "$TEST_TIMEOUT" mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${SINGLE_JVM_ARGS[@]}" "${FORK_ARGS[@]}"
+timeout "$TEST_TIMEOUT" mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" \
+  "-DargLine=${SINGLE_ARG}" "${FORK_ARGS[@]}"
 echo "=== Core tests passed ==="
 
 echo "=== Building all modules ==="
@@ -78,15 +84,9 @@ echo "=== Build done ==="
 
 if [ -n "$SPECIFIC_TEST" ]; then
     echo "=== Running ${SPECIFIC_TEST} ==="
-    MODULE=""; DB=""
-    case "$SPECIFIC_TEST" in *Pai*) MODULE=l1-pai-mcmc; DB=info_pai ;;
-        *Order*) MODULE=l1-order-mcmc; DB=info_order ;;
-        *Contra*) MODULE=l1-contract-mcmc; DB=info_contract ;;
-        *Nft*) MODULE=l1-nft-mcmc; DB=info_nft ;;
-        *Payment*) MODULE=l1-payment-mcmc; DB=info_payment ;;
-        *) MODULE=layer0-mcmc; DB=info_l0 ;;
-    esac
-    timeout "$TEST_TIMEOUT" mvn test -pl "$MODULE" -f "$ROOT/pom.xml" "${SINGLE_JVM_ARGS[@]}" "${FORK_ARGS[@]}" $TEST_ARG $DB_ARGS -DDB_NAME="$DB"
+    MODULE="layer0-mcmc"; DB="info_l0"
+    timeout "$TEST_TIMEOUT" mvn test -pl "$MODULE" -f "$ROOT/pom.xml" \
+      "-DargLine=${SINGLE_ARG} -DDB_NAME=${DB}" "${FORK_ARGS[@]}" -Dtest="${SPECIFIC_TEST}"
     exit $?
 fi
 
@@ -94,15 +94,15 @@ echo "=== Running L0 tests in 3 parallel forks ==="
 
 # Fork 1: slowest tests
 FORK1_TEST="ValidatorServiceTest,ValidatorService2Test,PoSTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${PARALLEL_JVM_ARGS[@]}" \
-  "${FORK_ARGS[@]}" -Dtest="$FORK1_TEST" $DB_ARGS -DDB_NAME=info_l0 &
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
+  "-DargLine=${PARALLEL_ARG} -DDB_NAME=info_l0" "${FORK_ARGS[@]}" -Dtest="$FORK1_TEST" &
 F1_PID=$!
 echo "  Fork 1 (slow): $FORK1_TEST -> info_l0 [PID $F1_PID]"
 
 # Fork 2: medium tests
 FORK2_TEST="TokenTest,FullPrunedBlockGraphTest,RewardServiceTest,RewardService2Test,FeePoolRewardTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${PARALLEL_JVM_ARGS[@]}" \
-  "${FORK_ARGS[@]}" -Dtest="$FORK2_TEST" $DB_ARGS -DDB_NAME=info_l0b &
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
+  "-DargLine=${PARALLEL_ARG} -DDB_NAME=info_l0b" "${FORK_ARGS[@]}" -Dtest="$FORK2_TEST" &
 F2_PID=$!
 echo "  Fork 2 (medium): $FORK2_TEST -> info_l0b [PID $F2_PID]"
 
@@ -112,8 +112,8 @@ FORK3_TEST="${FORK3_TEST},EpochRewardTest,GenesisBlockTipsTest,GossipServiceTest
 FORK3_TEST="${FORK3_TEST},Layer0BlockTypeScopingTest,MCMCServiceTest,PaymentServiceTest"
 FORK3_TEST="${FORK3_TEST},PqSerializationIT,SlotTickServiceTest,TipsServiceTest"
 FORK3_TEST="${FORK3_TEST},UserdataTest,UtilsTest,ValidatorDutyTest"
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${PARALLEL_JVM_ARGS[@]}" \
-  "${FORK_ARGS[@]}" -Dtest="$FORK3_TEST" $DB_ARGS -DDB_NAME=info_l0c &
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" \
+  "-DargLine=${PARALLEL_ARG} -DDB_NAME=info_l0c" "${FORK_ARGS[@]}" -Dtest="$FORK3_TEST" &
 F3_PID=$!
 echo "  Fork 3 (fast): remaining -> info_l0c [PID $F3_PID]"
 
