@@ -1315,6 +1315,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
+		case BLOCKTYPE_STAKE:
+			break;
 		default:
 			throw new RuntimeException("No Implementation");
 		}

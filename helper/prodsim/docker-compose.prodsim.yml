@@ -1,0 +1,222 @@
+networks:
+  prodsim-net:
+    driver: bridge
+
+x-common-db: &common-db
+  image: postgres:16
+  networks: [prodsim-net]
+  environment: &db-env
+    POSTGRES_USER: root
+    POSTGRES_PASSWORD: test1234
+    POSTGRES_DB: layer0
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U root -d layer0"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+x-common-server: &common-server
+  image: bigtangle:test
+  networks: [prodsim-net]
+  environment: &server-base-env
+    SERVER_NET: Test
+    DBTYPE: postgresql
+    DB_PORT: 5432
+    DB_USERNAME: root
+    DB_PASSWORD: test1234
+    SERVICE_MINING: "false"
+    SERVICE_MCMC: "true"
+    SERVICE_SYNC: "true"
+    SERVICE_INITSYNC: "true"
+    SYNCBLOCKS: 1000
+    CREATETABLE: "true"
+    POS_ENABLED: "true"
+    POS_SLOT_INTERVAL_MS: 2000
+    POS_SLOTS_PER_EPOCH: 8
+    SERVICE_BLOCKBATCH: "true"
+    SERVICE_BLOCKBATCH_RATE: 5000
+    SERVICE_SCHEDULE_MICROBATCH: "true"
+
+x-common-mcmc: &common-mcmc
+  image: bigtangle:test
+  networks: [prodsim-net]
+  environment: &mcmc-base-env
+    APP_MODULE: layer0-mcmc
+    SERVER_NET: Test
+    DBTYPE: postgresql
+    DB_PORT: 5432
+    DB_USERNAME: root
+    DB_PASSWORD: test1234
+    SERVICE_MINING: "false"
+    SERVICE_MCMC: "true"
+    SERVICE_SYNC: "true"
+    SERVICE_INITSYNC: "true"
+    SYNCBLOCKS: 1000
+    CREATETABLE: "false"
+    POS_ENABLED: "true"
+    POS_SLOT_INTERVAL_MS: 2000
+    POS_SLOTS_PER_EPOCH: 8
+    SERVICE_BLOCKBATCH: "true"
+    SERVICE_BLOCKBATCH_RATE: 5000
+    SERVICE_SCHEDULE_MICROBATCH: "true"
+
+services:
+
+  # ─── Node 0 (Bootstrap) ────────────────────────────────────────────
+
+  postgres-l0-0:
+    <<: *common-db
+    container_name: prodsim-pg-0
+    ports: ["5432:5432"]
+
+  l0-server-0:
+    <<: *common-server
+    container_name: prodsim-svr-0
+    ports: ["8081:8081"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8081
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      DB_HOSTNAME: postgres-l0-0
+      DB_NAME: layer0
+    depends_on:
+      postgres-l0-0: { condition: service_healthy }
+
+  l0-mcmc-0:
+    <<: *common-mcmc
+    container_name: prodsim-mcmc-0
+    ports: ["8085:8085"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8085
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      REQUESTER: http://prodsim-svr-0:8081
+      DB_HOSTNAME: postgres-l0-0
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "821d95e8b04cd2b6edcf663881734915501e92d5d377308b522a5a6725243870404fee8dc9d8bdc015386e353d5206be982bb67c4bb4f7f5fb1afb0ac7dea38b"
+    depends_on:
+      postgres-l0-0: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+
+  # ─── Node 1 ────────────────────────────────────────────────────────
+
+  postgres-l0-1:
+    <<: *common-db
+    container_name: prodsim-pg-1
+    ports: ["5433:5432"]
+    environment:
+      <<: *db-env
+
+  l0-server-1:
+    <<: *common-server
+    container_name: prodsim-svr-1
+    ports: ["8082:8082"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8082
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      DB_HOSTNAME: postgres-l0-1
+      DB_NAME: layer0
+      REQUESTER: http://prodsim-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-1: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+
+  l0-mcmc-1:
+    <<: *common-mcmc
+    container_name: prodsim-mcmc-1
+    ports: ["8086:8086"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8086
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      REQUESTER: http://prodsim-svr-1:8082
+      DB_HOSTNAME: postgres-l0-1
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "e2df872ffa069716425675cc2732e41a6bce2831c274ab9799fee43282252aac09f204dcb3e9066baf405995ee7c8701cc91facafdc22346523057981d8d3cd2"
+    depends_on:
+      postgres-l0-1: { condition: service_healthy }
+      l0-server-1: { condition: service_started }
+
+  # ─── Node 2 ────────────────────────────────────────────────────────
+
+  postgres-l0-2:
+    <<: *common-db
+    container_name: prodsim-pg-2
+    ports: ["5434:5432"]
+    environment:
+      <<: *db-env
+
+  l0-server-2:
+    <<: *common-server
+    container_name: prodsim-svr-2
+    ports: ["8083:8083"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8083
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      DB_HOSTNAME: postgres-l0-2
+      DB_NAME: layer0
+      REQUESTER: http://prodsim-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-2: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+
+  l0-mcmc-2:
+    <<: *common-mcmc
+    container_name: prodsim-mcmc-2
+    ports: ["8087:8087"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8087
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      REQUESTER: http://prodsim-svr-2:8083
+      DB_HOSTNAME: postgres-l0-2
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "6fe520f3d3f3a2e4b2442198d9a5535bd4a0f67a51055e7c77735bb06264acb565dd64217603f279cc60507afd7a06520deed1a450d3694d676f942c927cbc75"
+    depends_on:
+      postgres-l0-2: { condition: service_healthy }
+      l0-server-2: { condition: service_started }
+
+  # ─── Node 3 ────────────────────────────────────────────────────────
+
+  postgres-l0-3:
+    <<: *common-db
+    container_name: prodsim-pg-3
+    ports: ["5435:5432"]
+    environment:
+      <<: *db-env
+
+  l0-server-3:
+    <<: *common-server
+    container_name: prodsim-svr-3
+    ports: ["8084:8084"]
+    environment:
+      <<: *server-base-env
+      SERVER_PORT: 8084
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      DB_HOSTNAME: postgres-l0-3
+      DB_NAME: layer0
+      REQUESTER: http://prodsim-svr-0:8081
+      CREATETABLE: "false"
+    depends_on:
+      postgres-l0-3: { condition: service_healthy }
+      l0-server-0: { condition: service_started }
+
+  l0-mcmc-3:
+    <<: *common-mcmc
+    container_name: prodsim-mcmc-3
+    ports: ["8088:8088"]
+    environment:
+      <<: *mcmc-base-env
+      SERVER_PORT: 8088
+      SERVER_MINERADDRESS: mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4
+      REQUESTER: http://prodsim-svr-3:8084
+      DB_HOSTNAME: postgres-l0-3
+      DB_NAME: layer0
+      POS_VALIDATOR_KEY: "9ae978305852ab8b2406ab56d4cdc50fb7c9c8e62b17d97515c18c69eb0e4722d773d36ad1fa9b1c38a132c389fd4d4dcdf8eb40422da76322a90e34d200103e"
+    depends_on:
+      postgres-l0-3: { condition: service_healthy }
+      l0-server-3: { condition: service_started }

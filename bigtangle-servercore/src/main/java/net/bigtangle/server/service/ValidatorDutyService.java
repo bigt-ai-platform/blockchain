@@ -60,9 +60,9 @@ public class ValidatorDutyService {
     public void init() {
         if (configuredValidatorKey != null && !configuredValidatorKey.isEmpty()) {
             try {
-                this.validatorKey = PQKey.createNew();
+                this.validatorKey = PQKey.fromPrivateKeyHex(configuredValidatorKey);
             } catch (Exception e) {
-                log.warn("Invalid pos.validatorKey config: {}", e.getMessage());
+                log.warn("Invalid pos.validatorKey config (expected 128 hex chars): {}", e.getMessage());
             }
         }
     }

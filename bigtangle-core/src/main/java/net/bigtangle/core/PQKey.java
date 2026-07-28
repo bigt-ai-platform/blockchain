@@ -27,6 +27,7 @@ import net.bigtangle.crypto.pq.PQKeyDerivation;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.PQSignatureProvider;
 import net.bigtangle.crypto.pq.SignatureBundle;
+import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 
 public class PQKey implements EncryptableItem {
@@ -66,6 +67,13 @@ public class PQKey implements EncryptableItem {
     public static PQKey createNew() {
         byte[] seed = new byte[64];
         secureRandom.nextBytes(seed);
+        return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
+    }
+
+    public static PQKey fromPrivateKeyHex(String hex) {
+        byte[] seed = Utils.HEX.decode(hex);
+        if (seed.length != 64)
+            throw new IllegalArgumentException("Expected 128 hex chars (64 bytes), got " + hex.length());
         return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
     }
 

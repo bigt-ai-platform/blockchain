@@ -13,6 +13,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Script;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
@@ -54,6 +55,11 @@ public class StakeService {
         b.setBlockType(BlockType.BLOCKTYPE_STAKE);
 
         Transaction tx = new Transaction(networkParameters);
+        Script script = utxo.getScript();
+        if (script == null) {
+            script = new Script(new byte[0]);
+        }
+        tx.addInput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex(), script);
         tx.addOutput(utxo.getValue(), depositKey);
         b.addTransaction(tx);
 
