@@ -68,7 +68,7 @@ for db in info_l0 info_pai info_nft info_payment info_order; do
 done
 
 JVM_ARGS=(-DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true")
-FORK_ARGS=(-Dsurefire.forkCount=1)
+FORK_ARGS=(-Dsurefire.forkCount=1 -DforkedProcessTimeoutInSeconds=7200)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
 echo "=== Running core tests (no DB needed) ==="
