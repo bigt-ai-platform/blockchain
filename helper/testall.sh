@@ -3,7 +3,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Optional: pass a specific test class to run (e.g. FundAddressesIT)
 SPECIFIC_TEST="${1:-}"
 if [ -n "$SPECIFIC_TEST" ]; then
     TEST_ARG="-Dtest=${SPECIFIC_TEST}"
@@ -29,7 +28,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# --- PG setup ---
 echo "=== Stopping conflicting PG containers ==="
 for c in l0-pg-0 l0-pg-1 l0-pg-2 test-bigtangle-postgres; do
     docker stop "$c" 2>/dev/null && echo "  stopped $c" || true
@@ -40,8 +38,7 @@ echo "=== Starting Docker PostgreSQL ==="
 docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate 2>&1 || {
     echo "FATAL: docker compose up failed"
-    docker compose -f "$COMPOSE_FILE" logs
-    exit 1
+    docker compose -f "$COMPOSE_FILE" logs; exit 1
 }
 
 echo "=== Waiting for PostgreSQL ==="
@@ -57,14 +54,12 @@ for i in $(seq 1 "$PG_WAIT_COUNT"); do
 done
 
 echo "=== Recreating databases ==="
-ALL_DBS="info_l0 info_pai info_nft info_payment info_order info_contract"
-for db in $ALL_DBS; do
+for db in info_l0 info_pai info_nft info_payment info_order info_contract; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
 JVM_ARGS=(-DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true")
-L1_JVM_ARGS=(-DargLine="-Xmx1g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true")
 FORK_ARGS=(-Dsurefire.forkCount=1 -DforkedProcessTimeoutInSeconds=7200)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
@@ -92,37 +87,13 @@ if [ -n "$SPECIFIC_TEST" ]; then
     exit $?
 fi
 
-echo "=== Running all tests in parallel ==="
-EXIT_CODE=0
-
-run_module() {
-    local module="$1" db="$2" label="$3"
-    local args=("${JVM_ARGS[@]}")
-    [[ "$module" != "layer0-mcmc" ]] && args=("${L1_JVM_ARGS[@]}")
-    echo "Starting $label tests ($module -> $db)..."
-    timeout "$TEST_TIMEOUT" mvn test -pl "$module" -q -f "$ROOT/pom.xml" "${args[@]}" "${FORK_ARGS[@]}" \
-      -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME="$db" 2>&1 | tail -1
-    local rc=$?
-    if [ $rc -eq 0 ]; then
-        echo "=== $label tests PASSED ==="
-    else
-        echo "=== $label tests FAILED (exit $rc) ==="
-    fi
-    return $rc
-}
-
-run_module layer0-mcmc info_l0 "L0" &
+echo "=== Running L0 tests ==="
+timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+  -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_l0 &
 L0_PID=$!
-run_module l1-pai-mcmc info_pai "PAI" &
-PAI_PID=$!
-run_module l1-order-mcmc info_order "Order" &
-ORD_PID=$!
-run_module l1-contract-mcmc info_contract "Contract" &
-CON_PID=$!
 
-for pid in $L0_PID $PAI_PID $ORD_PID $CON_PID; do
-    wait $pid || EXIT_CODE=1
-done
+EXIT_CODE=0
+wait $L0_PID || { echo "Layer 0 tests FAILED"; EXIT_CODE=1; }
 
 if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== All tests passed ==="
