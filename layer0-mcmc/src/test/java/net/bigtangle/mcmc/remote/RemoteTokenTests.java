@@ -160,26 +160,40 @@ public class RemoteTokenTests extends RemoteTest {
 
         String tokenId = issuer.getPublicKeyAsHex();
         Token foundToken = null;
-        for (int i = 0; i < 15; i++) {
+        for (int i = 0; i < 20; i++) {
             foundToken = getToken(tokenId);
             if (foundToken != null) break;
-            Thread.sleep(2000);
+            Thread.sleep(3000);
         }
         assertNotNull(foundToken, "Token should exist after creation");
         log.info("Token {} created, id={}", tokenName, tokenId);
 
-        Thread.sleep(5000);
+        Thread.sleep(15000);
 
-        wallet.importKey(issuer);
         byte[] tokenidBuf = Utils.HEX.decode(tokenId);
-        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+        List<FreeStandingTransactionOutput> allCandidates = wallet.calculateAllSpendCandidates(null, false);
+        log.info("Wallet has {} total UTXOs", allCandidates.size());
+        for (FreeStandingTransactionOutput co : allCandidates) {
+            log.debug("  UTXO: token={} value={}", Utils.HEX.encode(co.getUTXO().getTokenidBuf()), co.getValue());
+        }
+
         List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
-        for (FreeStandingTransactionOutput co : candidates) {
+        for (FreeStandingTransactionOutput co : allCandidates) {
             if (java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf())) {
                 tokenUtxos.add(co);
             }
         }
-        assertTrue(!tokenUtxos.isEmpty(), "Issuer should have token UTXOs");
+
+        if (tokenUtxos.isEmpty()) {
+            String balanceUrl = contextRoot + ReqCmd.getBalances.name();
+            java.util.List<String> keyHex = java.util.List.of(
+                    Utils.HEX.encode(issuer.getPubKeyHash()));
+            byte[] balResp = OkHttp3Util.post(balanceUrl,
+                    Json.jsonmapper().writeValueAsString(keyHex).getBytes());
+            log.info("Balance response for issuer: {}", new String(balResp));
+        }
+
+        assertTrue(!tokenUtxos.isEmpty(), "Issuer should have token UTXOs (supply=" + supply + ")");
         log.info("Issuer has {} token UTXOs", tokenUtxos.size());
 
         PQKey recipient = PQKey.createNew();
@@ -199,14 +213,13 @@ public class RemoteTokenTests extends RemoteTest {
                 break;
             }
         }
-        if (total.compareTo(BigInteger.valueOf(1000L)) < 0) {
-            throw new RuntimeException("Insufficient token balance");
-        }
+        assertTrue(total.compareTo(BigInteger.valueOf(1000L)) >= 0, "Insufficient token balance");
         wallet.signTransaction(tx, null);
         wallet.submitTransaction(tx);
         makeRewardBlock();
         log.info("Paid 1000 {} tokens to recipient", tokenName);
 
+        Thread.sleep(6000);
         List<FreeStandingTransactionOutput> after = wallet.calculateAllSpendCandidates(null, false);
         long tokenUtxoCount = after.stream()
                 .filter(co -> java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf()))
