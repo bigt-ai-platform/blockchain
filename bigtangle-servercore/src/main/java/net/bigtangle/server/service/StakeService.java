@@ -60,14 +60,15 @@ public class StakeService {
             script = new Script(new byte[0]);
         }
         tx.addInput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex(), script);
-        tx.addOutput(utxo.getValue(), depositKey);
+        Coin stakeOutput = utxo.getValue().subtract(Coin.FEE_DEFAULT);
+        tx.addOutput(stakeOutput, depositKey);
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
 
         StakeRecord stake = new StakeRecord();
         stake.setPubkey(depositKey.getPubKey());
-        stake.setAmount(utxo.getValue().getValue());
+        stake.setAmount(stakeOutput.getValue());
         stake.setWithdrawalCredentials(withdrawalCredentials);
         stake.setBlockHash(b.getHash());
         store.saveStakeDeposit(stake);
