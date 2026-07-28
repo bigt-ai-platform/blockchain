@@ -54,10 +54,11 @@ for i in $(seq 1 "$PG_WAIT_COUNT"); do
 done
 
 echo "=== Recreating databases ==="
-for db in info_l0 info_pai info_nft info_payment info_order info_contract; do
+for db in info info_l0 info_pai info_nft info_payment info_order info_contract; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
+echo "Databases created: info, info_l0, info_pai, info_nft, info_payment, info_order, info_contract"
 
 JVM_ARGS=(-DargLine="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true")
 FORK_ARGS=(-Dsurefire.forkCount=1 -DforkedProcessTimeoutInSeconds=7200)
