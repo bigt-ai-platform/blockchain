@@ -74,16 +74,15 @@ DB_ARGS="-DDB_HOSTNAME=$DB_HOST -DDB_PORT=$DB_PORT -DDB_USERNAME=$DB_USER -DDB_P
 ARG_PARALLEL="-Xmx1g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true"
 ARG_SINGLE="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true"
 
-echo "=== Running core tests (no DB needed) ==="
-timeout "$TEST_TIMEOUT" mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" \
+echo "=== Core tests (bigtangle-core) ==="
+timeout 120 mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" \
   -DargLine="$ARG_SINGLE" "${FORK_ARGS[@]}"
-echo "=== Core tests passed ==="
+echo "  PASS"
 
-echo "=== Building all modules ==="
-timeout "$TEST_TIMEOUT" mvn clean -q -f "$ROOT/pom.xml" -pl layer0-mcmc
-timeout "$TEST_TIMEOUT" mvn install test-compile -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
-  -pl layer0-mcmc 2>&1 | tail -3
-echo "=== Build done ==="
+echo "=== Building layer0-mcmc ==="
+timeout 120 mvn install -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
+  -pl layer0-mcmc 2>&1
+echo "  Build done"
 
 if [ -n "$SPECIFIC_TEST" ]; then
     echo "=== Running ${SPECIFIC_TEST} ==="
