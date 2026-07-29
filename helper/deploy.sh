@@ -83,7 +83,8 @@ for module in "${!MODULES[@]}"; do
     TAG="$VERSION"
 
     info "Building $IMAGE:$TAG"
-    docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" -t "$LOCAL_TAG" \
+    docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" \
+        -t "bigtangle:${module}" \
         -f "$ROOT/$dockerfile" \
         "$ROOT/$module"
 
