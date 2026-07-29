@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +43,8 @@ import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
 @Service
 public class OutputService {
+
+	private static final Logger logger = LoggerFactory.getLogger(OutputService.class);
 
 	@Autowired
 	private NetworkParameters networkParameters;
@@ -120,7 +124,13 @@ public class OutputService {
 		List<UTXO> list = new ArrayList<>();
 		for (byte[] key : pubKeyHashs) {
 			Address address =   Address.fromHash160(networkParameters, key);
-			list.addAll(getOpenTransactionOutputs(address.toString(), store));
+			String addrStr = address.toString();
+			List<UTXO> found = getOpenTransactionOutputs(addrStr, store);
+			if (found.isEmpty()) {
+				logger.warn("getStoredOutputs: no outputs for address={} pkh={}", addrStr,
+						net.bigtangle.core.Utils.HEX.encode(key));
+			}
+			list.addAll(found);
 		}
 
 		return list;

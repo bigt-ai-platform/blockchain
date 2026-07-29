@@ -91,13 +91,46 @@ public class BlockSaveService {
 			store.insertTipsQueue(new TipsQueue(block.getHash().getBytes(),
 					block.unsafeBitcoinSerialize(), block.getHeight(), block.getTimeSeconds()));
 		}
-		// Ensure UTXOs and type-specific data (tokens, orders) are connected
-		// even when addNonChain skips them due to MissingCalculation state.
+		// Connect type-specific data (tokens, orders) that addNonChain skips
+		// due to MissingCalculation state.
 		net.bigtangle.server.service.base.ServiceBaseConnect serviceBaseConnect =
 				new net.bigtangle.server.service.base.ServiceBaseConnect(
 						serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-		serviceBaseConnect.connectUTXOs(block, store);
 		serviceBaseConnect.connectTypeSpecificUTXOs(block, store);
+		// Insert UTXOs manually with address derived via Address.fromHash160,
+		// matching the wallet's query path (getOpenTransactionOutputs).
+		java.util.List<net.bigtangle.core.UTXO> allUtxos = new java.util.ArrayList<>();
+		for (net.bigtangle.core.Transaction tx : block.getTransactions()) {
+			for (net.bigtangle.core.TransactionOutput out : tx.getOutputs()) {
+				if (out.getValue().isZero()) continue;
+				net.bigtangle.script.Script outScript = null;
+				try { outScript = new net.bigtangle.script.Script(out.getScriptBytes()); } catch (Exception e) {}
+				String address = "";
+				if (outScript != null) {
+					if (outScript.isSentToAddress()) {
+						try {
+							address = net.bigtangle.core.Address.fromHash160(
+									networkParameters, outScript.getPubKeyHash()).toString();
+						} catch (Exception e) {}
+					} else if (outScript.isPayToScriptHash()) {
+						try {
+							address = net.bigtangle.core.Address.fromP2SHScript(
+									networkParameters, outScript).toString();
+						} catch (Exception e) {}
+					}
+				}
+				if (address.isEmpty()) continue;
+				net.bigtangle.core.UTXO utxo = new net.bigtangle.core.UTXO(tx.getHash(), out.getIndex(),
+						out.getValue(), tx.isCoinBase(), outScript, address, block.getHash(),
+						"", tx.getMemo(),
+						net.bigtangle.core.Utils.HEX.encode(out.getValue().getTokenid()),
+						false, false, false, 1, 0, block.getTimeSeconds(), null);
+				allUtxos.add(utxo);
+			}
+		}
+		if (!allUtxos.isEmpty()) {
+			store.addUnspentTransactionOutput(allUtxos);
+		}
 		// Mark all outputs as confirmed immediately. Normal blocks go through
 		// the BEACON confirmation path (confirmBlockTransactionWithType -> 
 		// updateAllTransactionOutputsConfirmed), but permissive blocks bypass
