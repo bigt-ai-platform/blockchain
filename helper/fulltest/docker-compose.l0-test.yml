@@ -49,7 +49,7 @@ services:
       retries: 10
 
   l0-server-0:
-    image: bigtangle:layer0-server
+    image: ghcr.io/bigt-ai-platform/layer0-server
     container_name: l0-svr-0
     networks: [l0-test-net]
     ports:
@@ -76,7 +76,7 @@ services:
       postgres-l0-0: { condition: service_healthy }
 
   l0-server-1:
-    image: bigtangle:layer0-server
+    image: ghcr.io/bigt-ai-platform/layer0-server
     container_name: l0-svr-1
     networks: [l0-test-net]
     ports:
@@ -104,7 +104,7 @@ services:
       postgres-l0-1: { condition: service_healthy }
 
   l0-server-2:
-    image: bigtangle:layer0-server
+    image: ghcr.io/bigt-ai-platform/layer0-server
     container_name: l0-svr-2
     networks: [l0-test-net]
     ports:
@@ -132,7 +132,7 @@ services:
       postgres-l0-2: { condition: service_healthy }
 
   l0-mcmc-0:
-    image: bigtangle:layer0-mcmc
+    image: ghcr.io/bigt-ai-platform/layer0-mcmc
     container_name: l0-mcmc-0
     networks: [l0-test-net]
     ports:
@@ -163,7 +163,7 @@ services:
       postgres-l0-0: { condition: service_healthy }
 
   l0-mcmc-1:
-    image: bigtangle:layer0-mcmc
+    image: ghcr.io/bigt-ai-platform/layer0-mcmc
     container_name: l0-mcmc-1
     networks: [l0-test-net]
     ports:
@@ -194,7 +194,7 @@ services:
       postgres-l0-1: { condition: service_healthy }
 
   l0-mcmc-2:
-    image: bigtangle:layer0-mcmc
+    image: ghcr.io/bigt-ai-platform/layer0-mcmc
     container_name: l0-mcmc-2
     networks: [l0-test-net]
     ports:
