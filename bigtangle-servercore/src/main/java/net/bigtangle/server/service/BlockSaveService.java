@@ -83,47 +83,7 @@ public class BlockSaveService {
 	 *  re-validation in addBlock would reject it for unrelated reasons.
 	 *  Also seeds MCMC weight + TipsQueue so the beacon chain picks it up. */
 	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
-		boolean added = blockgraph.addNonChain(block, true, store, true, true);
-		if (added) {
-			store.updateBlockEvaluationSolid(block.getHash(), 2);
-			store.updateBlockEvaluationWeightAndDepth(java.util.List.of(
-					new net.bigtangle.server.data.DepthAndWeight(block.getHash(), 1, 1)));
-			store.insertTipsQueue(new TipsQueue(block.getHash().getBytes(),
-					block.unsafeBitcoinSerialize(), block.getHeight(), block.getTimeSeconds()));
-		}
-		// Connect type-specific data (tokens, orders) — addNonChain may skip
-		// these due to MissingCalculation state.
-		net.bigtangle.server.service.base.ServiceBaseConnect serviceBaseConnect =
-				new net.bigtangle.server.service.base.ServiceBaseConnect(
-						serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-		serviceBaseConnect.connectTypeSpecificUTXOs(block, store);
-		// Insert UTXOs directly with confirmed=true, bypassing the two-step
-		// connectUTXOs(confirmed=false) → updateAllTransactionOutputsConfirmed(true)
-		// path which has a persistent getOpenTransactionOutputs visibility issue.
-		java.util.List<net.bigtangle.core.UTXO> utxos = new java.util.ArrayList<>();
-		for (net.bigtangle.core.Transaction tx : block.getTransactions()) {
-			for (net.bigtangle.core.TransactionOutput out : tx.getOutputs()) {
-				if (out.getValue().isZero()) continue;
-				net.bigtangle.script.Script script = null;
-				try { script = new net.bigtangle.script.Script(out.getScriptBytes()); } catch (Exception e) {}
-				String address = "";
-				if (script != null && script.isSentToAddress()) {
-					try {
-						address = net.bigtangle.core.Address.fromHash160(
-								networkParameters, script.getPubKeyHash()).toString();
-					} catch (Exception e) {}
-				}
-				if (address.isEmpty()) continue;
-				utxos.add(new net.bigtangle.core.UTXO(tx.getHash(), out.getIndex(),
-						out.getValue(), tx.isCoinBase(), script, address, block.getHash(),
-						"", tx.getMemo(),
-						net.bigtangle.core.Utils.HEX.encode(out.getValue().getTokenid()),
-						false, true, false, 1, 0, block.getTimeSeconds(), null));
-			}
-		}
-		if (!utxos.isEmpty()) {
-			store.addUnspentTransactionOutput(utxos);
-		}
+		blockgraph.addNonChain(block, true, store, true, true);
 		accumulateBlockFees(block, store);
 		broadcastBlock(block);
 	}

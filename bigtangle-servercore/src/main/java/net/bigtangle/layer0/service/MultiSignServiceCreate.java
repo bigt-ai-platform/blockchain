@@ -124,7 +124,6 @@ public class MultiSignServiceCreate {
         try {
             ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
                     jsonmapper);
-            serviceBase.checkTokenUnique(block, store);
             if (serviceBase.checkFullTokenSolidity(block, 0, true, store) == SolidityState.getSuccessState()) {
                 this.saveMultiSign(block, store);
                 blockSaveService.saveBlockPermissive(checkBlockPrototype(block, store), store);
