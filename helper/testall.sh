@@ -49,13 +49,18 @@ for i in $(seq 1 30); do
 done
 
 echo "=== Recreating databases ==="
-for db in info_l0; do
-    docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
-    docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
+FORK_COUNT=2
+for i in $(seq 0 $((FORK_COUNT - 1))); do
+    DB_NAME="info_l0_fork${i}"
+    docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
+    docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || true
 done
 
-JVM_ARGS=(-DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
-FORK_ARGS=(-Dsurefire.forkCount=1)
+# DB_NAME is set in argLine per-fork via ${surefire.forkNumber}
+# Fork 0 → info_l0_fork0, Fork 1 → info_l0_fork1
+ARG_LINE="-Xmx1g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -DDB_NAME=info_l0_fork\${surefire.forkNumber}"
+JVM_ARGS=(-DargLine="${ARG_LINE}")
+FORK_ARGS=(-Dsurefire.forkCount=${FORK_COUNT} -DforkedProcessTimeoutInSeconds=7200)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
 echo "=== Running core tests (no DB needed) ==="
@@ -67,5 +72,8 @@ mvn install -DskipTests -q -f "$ROOT/pom.xml" -am -pl layer0-server,layer0-mcmc 
 mvn test-compile -q -f "$ROOT/pom.xml" -am -pl layer0-mcmc 2>&1 | tail -1
 echo "=== Build done ==="
 
-echo "=== Running Layer 0 tests ==="
-mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0
+echo "=== Running Layer 0 tests (${FORK_COUNT} parallel forks) ==="
+# Each fork gets its own database via surefire.forkNumber (0-indexed)
+# Fork 0 uses info_l0_fork0, Fork 1 uses info_l0_fork1, etc.
+mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+  -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS
