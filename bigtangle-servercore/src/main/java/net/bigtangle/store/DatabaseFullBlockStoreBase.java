@@ -430,6 +430,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ duplicateInsert();
 	protected final String DELETE_TIPSQUEUE_SQL = "DELETE FROM tipsqueue WHERE hash = ?";
 	protected final String SELECT_TIPSQUEUE_SQL = "SELECT hash, block, height, inserttime FROM tipsqueue ORDER BY height DESC, inserttime ASC LIMIT 1";
+	protected final String SELECT_ALL_TIPSQUEUE_SQL = "SELECT hash, block, height, inserttime FROM tipsqueue ORDER BY height DESC, inserttime ASC";
 	protected final String INSERT_SUBTANGLE_PERMISSION_SQL = "INSERT INTO  subtangle_permission (pubkey, userdataPubkey , status) VALUES (?, ?, ?)"
 			+ duplicateInsert();
 

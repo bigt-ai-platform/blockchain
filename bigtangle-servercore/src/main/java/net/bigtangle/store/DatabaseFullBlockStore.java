@@ -1060,6 +1060,24 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public List<TipsQueue> getAllTipsQueue() throws BlockStoreException {
+		List<TipsQueue> result = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ALL_TIPSQUEUE_SQL);
+			 ResultSet rs = preparedStatement.executeQuery()) {
+			while (rs.next()) {
+				byte[] hash = rs.getBytes(1);
+				byte[] block = rs.getBytes(2);
+				long height = rs.getLong(3);
+				long inserttime = rs.getLong(4);
+				result.add(new TipsQueue(hash, block, height, inserttime));
+			}
+			return result;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public void insertSubtanglePermission(String pubkey, String userdatapubkey, String status)
 			throws BlockStoreException {
 

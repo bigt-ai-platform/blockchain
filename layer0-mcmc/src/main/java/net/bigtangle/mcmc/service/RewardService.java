@@ -228,20 +228,22 @@ public class RewardService {
 		// Enforce timestamp equal to previous max for reward blocktypes
 		block.setTime(currentTime);
 
-		// Add the prototype block from TipsQueue to collectedBlocks so it gets
-		// properly confirmed (connectUTXOs, updateAllTransactionOutputsConfirmed).
-		// dagBlockHashesFrom only walks backward (predecessors), so child/sibling
-		// blocks like newly created tokens are never reached otherwise.
+		// Add all non-BEACON blocks from TipsQueue to collectedBlocks so they get
+		// properly confirmed. dagBlockHashesFrom only walks backward (predecessors),
+		// so child/sibling blocks (e.g. newly created tokens) are never reached.
 		try {
-			Block prototype = cacheBlockPrototypeService.getBlockPrototype(store);
-			if (prototype != null && prototype.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
-				Sha256Hash protoHash = prototype.getHash();
-				if (!currRewardInfo.getBlocks().contains(protoHash)) {
-					currRewardInfo.getBlocks().add(protoHash);
+			List<net.bigtangle.server.data.TipsQueue> allTips = store.getAllTipsQueue();
+			for (net.bigtangle.server.data.TipsQueue tq : allTips) {
+				Block tipBlock = networkParameters.getDefaultSerializer().makeBlock(tq.getBlock());
+				if (tipBlock.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+					Sha256Hash tipHash = tipBlock.getHash();
+					if (!currRewardInfo.getBlocks().contains(tipHash)) {
+						currRewardInfo.getBlocks().add(tipHash);
+					}
 				}
 			}
 		} catch (Exception e) {
-			log.debug("Could not add prototype to collectedBlocks: {}", e.getMessage());
+			log.debug("Could not add TipsQueue blocks to collectedBlocks: {}", e.getMessage());
 		}
 
 		block.addTransaction(tx);

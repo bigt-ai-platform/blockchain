@@ -384,6 +384,7 @@ public interface BlockStoreInterface {
 	void deleteTipsQueue(Sha256Hash hash) throws BlockStoreException;
 
 	TipsQueue getTipsQueue() throws BlockStoreException;
+	List<TipsQueue> getAllTipsQueue() throws BlockStoreException;
 
 	List<UTXO> getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime)
 			throws BlockStoreException;
