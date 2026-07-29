@@ -6,13 +6,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SPECIFIC_TEST="${1:-}"
 if [ -n "$SPECIFIC_TEST" ]; then
     TEST_ARG="-Dtest=${SPECIFIC_TEST}"
-    echo "=== Running only ${SPECIFIC_TEST} ==="
+    echo "=== Running only ${SPECIFIC_TEST} in layer0-mcmc ==="
 else
     TEST_ARG=""
 fi
-
-TEST_TIMEOUT="${TEST_TIMEOUT:-1800}"
-PG_WAIT_COUNT="${PG_WAIT_COUNT:-60}"
 
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
     export JAVA_HOME=/home/jcui/.local/java-25
@@ -23,116 +20,52 @@ PG_PORT=5432
 COMPOSE_FILE="$ROOT/helper/docker-compose-base.yml"
 
 cleanup() {
-    echo "=== Cleanup ==="
+    echo "=== Shutting down Docker PostgreSQL ==="
     docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+    echo "=== Cleanup done ==="
 }
 trap cleanup EXIT INT TERM
 
-echo "=== Stopping conflicting PG containers ==="
-for c in l0-pg-0 l0-pg-1 l0-pg-2 test-bigtangle-postgres; do
-    docker stop "$c" 2>/dev/null && echo "  stopped $c" || true
-    docker rm "$c" 2>/dev/null && echo "  removed $c" || true
-done
-
 echo "=== Starting Docker PostgreSQL ==="
 docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
-docker compose -f "$COMPOSE_FILE" up -d --force-recreate 2>&1 || {
-    echo "FATAL: docker compose up failed"
-    docker compose -f "$COMPOSE_FILE" logs; exit 1
+docker compose -f "$COMPOSE_FILE" up -d || {
+    echo "WARNING: docker compose up failed, trying docker start"
+    docker start test-bigtangle-postgres 2>/dev/null || true
 }
 
-echo "=== Waiting for PostgreSQL ==="
-for i in $(seq 1 "$PG_WAIT_COUNT"); do
-    if docker exec test-bigtangle-postgres pg_isready -U root -d info >/dev/null 2>&1; then
-        echo "PostgreSQL ready"; break
+echo "=== Waiting for PostgreSQL to be healthy ==="
+for i in $(seq 1 30); do
+    if curl -sf http://localhost:$PG_PORT/ >/dev/null 2>&1 || \
+       docker exec test-bigtangle-postgres pg_isready -U root -d info >/dev/null 2>&1; then
+        echo "PostgreSQL ready"
+        break
     fi
-    if [ "$i" -eq "$PG_WAIT_COUNT" ]; then
-        echo "PostgreSQL not ready after $((PG_WAIT_COUNT * 3))s"
-        docker compose -f "$COMPOSE_FILE" logs; exit 1
+    if [ "$i" -eq 30 ]; then
+        echo "PostgreSQL not ready after 90s"
+        docker compose -f "$COMPOSE_FILE" logs
+        exit 1
     fi
     sleep 3
 done
 
 echo "=== Recreating databases ==="
-for db in info info_l0 info_l0b info_l0c info_pai info_nft info_payment info_order info_contract; do
+for db in info_l0; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "DROP DATABASE IF EXISTS $db;" 2>/dev/null || true
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
-echo "Databases ready"
 
-# Common surefire settings
-FORK_ARGS=(-Dsurefire.forkCount=1 -DforkedProcessTimeoutInSeconds=7200)
+JVM_ARGS=(-DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
+FORK_ARGS=(-Dsurefire.forkCount=1)
+DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
-# DB connection properties (passed as Maven -D, surefire forwards to forked JVM)
-DB_HOST="localhost"
-DB_PORT="$PG_PORT"
-DB_USER="root"
-DB_PASS="test1234"
-DB_ARGS="-DDB_HOSTNAME=$DB_HOST -DDB_PORT=$DB_PORT -DDB_USERNAME=$DB_USER -DDB_PASSWORD=$DB_PASS"
+echo "=== Running core tests (no DB needed) ==="
+mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}"
+echo "=== Core tests passed ==="
 
-# JVM heap settings: parallel forks use 1G, single runs use 2G
-ARG_PARALLEL="-Xmx1g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true"
-ARG_SINGLE="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true"
+echo "=== Building layer0 modules ==="
+mvn install -DskipTests -q -f "$ROOT/pom.xml" -am -pl layer0-server,layer0-mcmc 2>&1 | tail -1
+mvn test-compile -q -f "$ROOT/pom.xml" -am -pl layer0-mcmc 2>&1 | tail -1
+echo "=== Build done ==="
 
-echo "=== Core tests (bigtangle-core) ==="
-timeout 120 mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_SINGLE" "${FORK_ARGS[@]}"
-echo "  PASS"
-
-echo "=== Building layer0-mcmc ==="
-timeout 120 mvn install -DskipTests -q -f "$ROOT/pom.xml" -T 2C -am \
-  -pl layer0-mcmc 2>&1
-echo "  Build done"
-
-if [ -n "$SPECIFIC_TEST" ]; then
-    echo "=== Running ${SPECIFIC_TEST} ==="
-    timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
-      -DargLine="$ARG_SINGLE" "${FORK_ARGS[@]}" -Dtest="${SPECIFIC_TEST}" \
-      $DB_ARGS -DDB_NAME=info_l0
-    exit $?
-fi
-
-# Pre-compile test classes once (avoids 3 forks compiling in parallel)
-echo "=== Pre-compiling test classes ==="
-mvn test-compile -q -pl layer0-mcmc -f "$ROOT/pom.xml"
-echo "  Done"
-
-echo "=== Running L0 tests in 3 parallel forks ==="
-echo "  Fork 1: ValidatorService*,PoSTest,CrossChainFlow -> info_l0"
-echo "  Fork 2: TokenTest,FullPruned*,RewardService*,FeePool*,MCMCService -> info_l0b"
-echo "  Fork 3: remaining ~15 classes -> info_l0c"
-
-FORK1="ValidatorServiceTest,ValidatorService2Test,PoSTest,CrossChainFlowTest"
-FORK2="TokenTest,FullPrunedBlockGraphTest,RewardServiceTest,RewardService2Test,FeePoolRewardTest,MCMCServiceTest,PaymentServiceTest"
-FORK3="AnchorRoundTripTest,BridgeServiceTest,DirectExchangeTest"
-FORK3="${FORK3},GenesisBlockTipsTest,GossipServiceTest,Layer0BlockTypeScopingTest"
-FORK3="${FORK3},PqSerializationIT,SlotTickServiceTest,TipsServiceTest"
-FORK3="${FORK3},UserdataTest,ValidatorDutyTest"
-
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK1" \
-  $DB_ARGS -DDB_NAME=info_l0 &
-F1_PID=$!
-
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK2" \
-  $DB_ARGS -DDB_NAME=info_l0b &
-F2_PID=$!
-
-timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
-  -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK3" \
-  $DB_ARGS -DDB_NAME=info_l0c &
-F3_PID=$!
-
-# Wait for all forks
-EXIT_CODE=0
-for pid in $(jobs -p); do
-    wait $pid || EXIT_CODE=1
-done
-
-if [ "$EXIT_CODE" -eq 0 ]; then
-    echo "=== All tests passed ==="
-else
-    echo "=== Some tests FAILED ==="
-fi
-exit $EXIT_CODE
+echo "=== Running Layer 0 tests ==="
+mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0
