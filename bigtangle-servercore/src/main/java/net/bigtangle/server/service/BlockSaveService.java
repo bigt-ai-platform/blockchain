@@ -99,10 +99,7 @@ public class BlockSaveService {
 						serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 		serviceBaseConnect.connectTypeSpecificUTXOs(block, store);
 		serviceBaseConnect.connectUTXOs(block, store);
-		// Mark all outputs as confirmed immediately. Normal blocks go through
-		// the BEACON confirmation path (confirmBlockTransactionWithType -> 
-		// updateAllTransactionOutputsConfirmed), but permissive blocks bypass
-		// DAG linking so the BEACON never references them.
+		store.commitDatabaseBatchWrite();
 		store.updateAllTransactionOutputsConfirmed(block.getHash(), true);
 		accumulateBlockFees(block, store);
 		broadcastBlock(block);
