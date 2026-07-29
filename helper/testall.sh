@@ -54,7 +54,8 @@ for db in info_l0; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
-JVM_ARGS=(-DargLine="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED")
+ARG_LINE="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED"
+JVM_ARGS=(-DargLine="${ARG_LINE}")
 FORK_ARGS=(-Dsurefire.forkCount=1)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
@@ -68,7 +69,4 @@ mvn test-compile -q -f "$ROOT/pom.xml" -am -pl layer0-mcmc 2>&1 | tail -1
 echo "=== Build done ==="
 
 echo "=== Running Layer 0 tests ==="
-# remote tests are excluded in pom.xml; add explicit exclude for safety
-mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
-  -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0 \
-  -Dsurefire.excludes="**/net/bigtangle/mcmc/remote/**"
+mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0
