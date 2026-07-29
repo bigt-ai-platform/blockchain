@@ -1433,9 +1433,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setString(1, address);
 			s.setString(2, address);
 			ResultSet results = s.executeQuery();
+			int cnt = 0;
 			while (results.next()) {
+				cnt++;
 				outputs.add(
 						setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"), results));
+			}
+			if (cnt == 0) {
+				log.warn("getOpenTransactionOutputs: 0 rows for address={}", address);
 			}
 			return outputs;
 		} catch (SQLException ex) {
