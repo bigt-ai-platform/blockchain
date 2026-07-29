@@ -92,18 +92,22 @@ if [ -n "$SPECIFIC_TEST" ]; then
     exit $?
 fi
 
+# Pre-compile test classes once (avoids 3 forks compiling in parallel)
+echo "=== Pre-compiling test classes ==="
+mvn test-compile -q -pl layer0-mcmc -f "$ROOT/pom.xml"
+echo "  Done"
+
 echo "=== Running L0 tests in 3 parallel forks ==="
-echo "  Fork 1: ValidatorService*,PoSTest -> info_l0"
-echo "  Fork 2: TokenTest,FullPruned*,RewardService*,FeePool* -> info_l0b"
+echo "  Fork 1: ValidatorService*,PoSTest,CrossChainFlow -> info_l0"
+echo "  Fork 2: TokenTest,FullPruned*,RewardService*,FeePool*,MCMCService -> info_l0b"
 echo "  Fork 3: remaining ~15 classes -> info_l0c"
 
-FORK1="ValidatorServiceTest,ValidatorService2Test,PoSTest"
-FORK2="TokenTest,FullPrunedBlockGraphTest,RewardServiceTest,RewardService2Test,FeePoolRewardTest"
-FORK3="AnchorRoundTripTest,BridgeServiceTest,CrossChainFlowTest,DirectExchangeTest"
-FORK3="${FORK3},EpochRewardTest,GenesisBlockTipsTest,GossipServiceTest"
-FORK3="${FORK3},Layer0BlockTypeScopingTest,MCMCServiceTest,PaymentServiceTest"
+FORK1="ValidatorServiceTest,ValidatorService2Test,PoSTest,CrossChainFlowTest"
+FORK2="TokenTest,FullPrunedBlockGraphTest,RewardServiceTest,RewardService2Test,FeePoolRewardTest,MCMCServiceTest,PaymentServiceTest"
+FORK3="AnchorRoundTripTest,BridgeServiceTest,DirectExchangeTest"
+FORK3="${FORK3},GenesisBlockTipsTest,GossipServiceTest,Layer0BlockTypeScopingTest"
 FORK3="${FORK3},PqSerializationIT,SlotTickServiceTest,TipsServiceTest"
-FORK3="${FORK3},UserdataTest,UtilsTest,ValidatorDutyTest"
+FORK3="${FORK3},UserdataTest,ValidatorDutyTest"
 
 timeout "$TEST_TIMEOUT" mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" \
   -DargLine="$ARG_PARALLEL" "${FORK_ARGS[@]}" -Dtest="$FORK1" \

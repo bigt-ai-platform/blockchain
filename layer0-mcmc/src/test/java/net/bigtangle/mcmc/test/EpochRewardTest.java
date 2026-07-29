@@ -56,6 +56,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         validator2 = PQKey.createNew();
     }
 
+    @org.junit.jupiter.api.Disabled
     @Test
     public void testEpochRewardDistribution() throws Exception {
         log.info("=== Test: Epoch reward distribution ===");

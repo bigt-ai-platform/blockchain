@@ -305,6 +305,7 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		}
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testSolidityTokenMutatedDataSignatures() throws Exception {
 

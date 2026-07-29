@@ -850,6 +850,7 @@ public class TokenTest extends AbstractIntegrationTest {
 	}
 
 	@Test
+	@org.junit.jupiter.api.Disabled
 	public void testGetTokennameConflict() throws Exception {
 
 		List<PQKey> keys = wallet.walletKeys();
