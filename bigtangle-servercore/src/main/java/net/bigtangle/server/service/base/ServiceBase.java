@@ -528,8 +528,10 @@ public abstract class ServiceBase {
 		switch (solidityState.getState()) {
 		case MissingCalculation:
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
-			// Reward blocks follow different logic: If this is new, run
-			// consensus logic
+			// Connect type-specific data (orders, tokens) even when
+			// calculation metadata is missing. The block content is valid —
+			// only difficulty/PoW data is absent.
+			connectTypeSpecificUTXOs(block, blockStore);
 			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 				solidifyReward(block, blockStore);
 				return;
