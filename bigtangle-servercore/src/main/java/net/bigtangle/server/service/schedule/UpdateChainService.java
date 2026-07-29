@@ -29,7 +29,7 @@ public class UpdateChainService {
     private ScheduleConfiguration scheduleConfiguration;
 
     @Async
-    @Scheduled(fixedDelayString = "10000")
+    @Scheduled(fixedDelayString = "${service.schedule.upchainrate:10000}")
     public void updateChain() {
         if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
             try {
