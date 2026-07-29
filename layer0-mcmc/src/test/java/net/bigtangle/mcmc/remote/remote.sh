@@ -6,8 +6,10 @@ cd "$ROOT"
 
 # --- Config ---
 L0_PORT=8089
+L1_PORT=8086
 MCMC_PORT=8091
 SERVER_URL="http://127.0.0.1:$L0_PORT/"
+L1_URL="http://127.0.0.1:$L1_PORT/"
 PG_PORT=5432
 DB_NAME=info
 COMPOSE_FILE="$ROOT/helper/docker-compose-base.yml"
@@ -24,6 +26,7 @@ fi
 LOG_DIR=/tmp
 L0_LOG="$LOG_DIR/l0-server.log"
 MCMC_LOG="$LOG_DIR/l0-mcmc.log"
+L1_LOG="$LOG_DIR/l1-order-server.log"
 
 cleanup() {
     echo ""
@@ -75,7 +78,7 @@ echo ""
 echo "=== Step 3: Build modules ==="
 # Clean install so spring-boot:run picks up fresh JARs
 mvn clean install -DskipTests -q \
-    -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge,layer0-server,layer0-mcmc -am
+    -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge,layer0-server,layer0-mcmc,l1-order-server -am
 
 # --- Step 4: Start L0 HTTP server ---
 echo ""
@@ -83,7 +86,7 @@ echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 # Server peer + gossip ports
 SERVER_PEER_ARGS="-Dpeer.udpPort=30307 -Dpeer.tcpPort=30308 -Dgossip.port=9095"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS -Dbridge.active=true -Danchor.active=true" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -127,11 +130,35 @@ echo "=== Step 6: Start L0 MCMC (port $MCMC_PORT) ==="
 MCMC_PEER_ARGS="-Dpeer.udpPort=30309 -Dpeer.tcpPort=30310 -Dgossip.port=9097"
 MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
 nohup mvn spring-boot:run -pl layer0-mcmc \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
     -Dspring-boot.run.arguments="$MCMC_ARGS" \
     > "$MCMC_LOG" 2>&1 &
 MCMC_PID=$!
 echo "MCMC PID: $MCMC_PID"
+
+echo "=== Step: Start L1 Order Server (port $L1_PORT) ==="
+L1_PEER_ARGS="-Dpeer.udpPort=30311 -Dpeer.tcpPort=30312 -Dgossip.port=9099"
+L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
+nohup mvn spring-boot:run -pl l1-order-server \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
+    -Dspring-boot.run.arguments="$L1_ARGS" \
+    > "$L1_LOG" 2>&1 &
+L1_PID=$!
+echo "L1 PID: $L1_PID"
+
+echo "Waiting for L1 Order Server..."
+for i in $(seq 1 30); do
+    sleep 2
+    if ss -tlnp 2>/dev/null | grep -q ":$L1_PORT "; then
+        echo "L1 Order Server ready after ${i}s (port $L1_PORT open)"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "L1 Order Server failed to start"
+        tail -30 "$L1_LOG"
+        exit 1
+    fi
+done
 
 # Recompile test classes with latest server changes
 mvn test-compile -q -pl layer0-mcmc
@@ -166,6 +193,7 @@ TEST_CLASS="${1:-net.bigtangle.mcmc.remote.RemoteTokenTests}"
 mvn test -pl layer0-mcmc \
     -Dtest="$TEST_CLASS" \
     -Dserver.url="$SERVER_URL" \
+    -Dl1.url="$L1_URL" \
     $DB_ARGS \
     -Dsurefire.failIfNoSpecifiedTests=false
 

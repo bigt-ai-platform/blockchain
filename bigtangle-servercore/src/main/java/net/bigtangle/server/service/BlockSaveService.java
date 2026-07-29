@@ -62,6 +62,10 @@ public class BlockSaveService {
 	protected FeeService feeService;
 	@Autowired
 	protected ScheduleConfiguration scheduleConfiguration;
+	@Autowired
+	protected net.bigtangle.server.service.CacheBlockService cacheBlockService;
+	@Autowired
+	protected com.fasterxml.jackson.databind.ObjectMapper jsonmapper;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
@@ -87,6 +91,18 @@ public class BlockSaveService {
 			store.insertTipsQueue(new TipsQueue(block.getHash().getBytes(),
 					block.unsafeBitcoinSerialize(), block.getHeight(), block.getTimeSeconds()));
 		}
+		// Ensure UTXOs and type-specific data (tokens, orders) are connected
+		// even when addNonChain skips them due to MissingCalculation state.
+		net.bigtangle.server.service.base.ServiceBaseConnect serviceBaseConnect =
+				new net.bigtangle.server.service.base.ServiceBaseConnect(
+						serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		serviceBaseConnect.connectUTXOs(block, store);
+		serviceBaseConnect.connectTypeSpecificUTXOs(block, store);
+		// Mark all outputs as confirmed immediately. Normal blocks go through
+		// the BEACON confirmation path (confirmBlockTransactionWithType -> 
+		// updateAllTransactionOutputsConfirmed), but permissive blocks bypass
+		// DAG linking so the BEACON never references them.
+		store.updateAllTransactionOutputsConfirmed(block.getHash(), true);
 		accumulateBlockFees(block, store);
 		broadcastBlock(block);
 	}

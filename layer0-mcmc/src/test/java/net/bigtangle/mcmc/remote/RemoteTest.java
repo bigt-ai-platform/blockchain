@@ -56,6 +56,7 @@ public abstract class RemoteTest {
 
 	protected static final Logger log = LoggerFactory.getLogger(RemoteTest.class);
 	public String contextRoot = System.getProperty("server.url", "http://localhost:8089/");
+	public String l1Url = System.getProperty("l1.url", "http://localhost:8086/");
 
 	public Wallet wallet;
 

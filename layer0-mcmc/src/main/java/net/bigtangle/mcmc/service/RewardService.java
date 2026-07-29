@@ -16,6 +16,7 @@ import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -89,6 +90,9 @@ public class RewardService {
 	private BlockSaveService blockSaveService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
+
+	@Value("${service.schedule.rewardonlywithreferenced:true}")
+	private boolean onlyWithreferenced;
 
 	private final Logger log = LoggerFactory.getLogger(this.getClass());
 
@@ -175,7 +179,7 @@ public class RewardService {
 	public Block createReward(Sha256Hash prevRewardHash, BlockWrap prevTrunk, BlockWrap prevBranch, Long timeOverride,
 			BlockStoreInterface store) throws Exception {
 
-		Block block = createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, timeOverride, true, store);
+		Block block = createMiningRewardBlock(prevRewardHash, prevTrunk, prevBranch, timeOverride, onlyWithreferenced, store);
 
 		if (block != null) {
 			// check, if the reward block is too old to avoid conflict.
