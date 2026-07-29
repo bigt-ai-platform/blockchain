@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import net.bigtangle.core.Address;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
@@ -39,8 +40,8 @@ import net.bigtangle.wallet.Wallet;
 public class BenchmarkRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkRunner.class);
-    private static final int CLIENTS = 10;
-    private static final int PAYMENTS_PER_CLIENT = 200;
+    private static final int CLIENTS = 30;
+    private static final int PAYMENTS_PER_CLIENT = 10;
 
     public static void main(String[] args) throws Exception {
         String serverUrl = args.length > 0 ? args[0] : "http://localhost:8088/";
@@ -54,18 +55,17 @@ public class BenchmarkRunner {
         for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
 
         // Pre-fund wallets via the server's fundAddresses API
-        // Each client gets PAYMENTS_PER_CLIENT UTXOs to avoid double-spend conflicts
+        // Each client gets one large UTXO to avoid per-payment UTXO contention
         String apiUrl = serverUrl.endsWith("/") ? serverUrl : serverUrl + "/";
         HashMap<String, Object> fundReq = new HashMap<>();
         List<HashMap<String, Object>> entries = new ArrayList<>();
+        long utxoValue = PAYMENTS_PER_CLIENT + Coin.FEE_DEFAULT.getValue().longValue() * 2;
         for (PQKey key : clientKeys) {
-            for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
-                HashMap<String, Object> entry = new HashMap<>();
-                entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
-                entry.put("address", Address.fromHash160(params, key.getPubKeyHash()).toBase58());
-                entry.put("value", 1001L);
-                entries.add(entry);
-            }
+            HashMap<String, Object> entry = new HashMap<>();
+            entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
+            entry.put("address", Address.fromHash160(params, key.getPubKeyHash()).toBase58());
+            entry.put("value", utxoValue);
+            entries.add(entry);
         }
         fundReq.put("addresses", entries);
         OkHttp3Util.post(apiUrl + "fundAddresses",
@@ -91,18 +91,19 @@ public class BenchmarkRunner {
             Wallet w = wallets.get(c);
             PQKey toKey = recipients.get(c);
             futures[c] = CompletableFuture.runAsync(() -> {
-                for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
-                    try {
-                        long start = System.nanoTime();
-                        HashMap<String, BigInteger> pmt = new HashMap<>();
-                        pmt.put(Address.fromHash160(params, toKey.getPubKeyHash()).toBase58(), BigInteger.valueOf(1));
-                        w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
-                        totalNs.addAndGet(System.nanoTime() - start);
-                        int done = ok.incrementAndGet();
-                        if (done % 200 == 0) log.info("Progress: {} / {} payments", done, CLIENTS * PAYMENTS_PER_CLIENT);
-                    } catch (Exception e) {
-                        fail.incrementAndGet();
+                try {
+                    long start = System.nanoTime();
+                    // Batch all payments into one transaction (one tx, multiple recipients)
+                    HashMap<String, BigInteger> pmt = new HashMap<>();
+                    for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
+                        pmt.put(Address.fromHash160(params, recipients.get((clientId + p) % CLIENTS).getPubKeyHash()).toBase58(),
+                                BigInteger.valueOf(1));
                     }
+                    w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
+                    totalNs.addAndGet(System.nanoTime() - start);
+                    int done = ok.addAndGet(PAYMENTS_PER_CLIENT);
+                } catch (Exception e) {
+                    fail.addAndGet(PAYMENTS_PER_CLIENT);
                 }
             }, pool);
         }
@@ -118,7 +119,7 @@ public class BenchmarkRunner {
         log.info("Server:       {}", serverUrl);
         log.info("Clients:     {}", CLIENTS);
         log.info("Payments/client: {}", PAYMENTS_PER_CLIENT);
-        log.info("Total:       {} (OK {}, fail {})", ok.get() + fail.get(), ok.get(), fail.get());
+        log.info("Total:       {} payments (OK {}, fail {})", CLIENTS * PAYMENTS_PER_CLIENT, ok.get(), fail.get());
         log.info("Wall time:   {} ms", wallMs);
         log.info("Avg latency: {} ms", (long) avg);
         log.info("Throughput:  {} tx/s", (long) tps);
