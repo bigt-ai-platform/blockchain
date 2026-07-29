@@ -170,7 +170,7 @@ saveBlockPermissive
 ### Run tests
 ```sh
 # Unit tests
-bash helper/testall0.sh
+bash helper/testall.sh
 
 # Remote integration tests
 bash layer0-mcmc/src/test/java/net/bigtangle/mcmc/remote/remote.sh
