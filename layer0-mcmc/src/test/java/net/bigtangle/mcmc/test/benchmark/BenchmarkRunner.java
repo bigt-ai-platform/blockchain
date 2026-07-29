@@ -41,7 +41,7 @@ public class BenchmarkRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BenchmarkRunner.class);
     private static final int CLIENTS = 30;
-    private static final int PAYMENTS_PER_CLIENT = 500;
+    private static final int PAYMENTS_PER_CLIENT = 2000;
 
     public static void main(String[] args) throws Exception {
         String serverUrl = args.length > 0 ? args[0] : "http://localhost:8088/";
