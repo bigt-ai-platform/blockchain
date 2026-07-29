@@ -20,13 +20,13 @@ beacon confirms all recent transaction activity and makes it irreversible.
 
 ## Why Bigtangle
 
-| Problem | How Bigtangle Solves It |
-|---------|------------------------|
-| **Slow transactions** — Ethereum Layer 1 does ~30 tx/s, Bitcoin ~7 tx/s | DAG parallelism: thousands of transactions per second in parallel |
-| **Single-leader risk** — if a designated leader fails, the chain stalls | Transaction processing has no single-leader bottleneck because DAG blocks can be created in parallel by many nodes. Beacon blocks are proposed by one validator per slot to provide finality. |
-| **Slow finality** — Ethereum takes ~6 minutes for irreversible settlement | Casper FFG finality in ~12.8 minutes (2 epochs); beacon blocks confirmed in ~24 seconds |
-| **No horizontal scaling** — Most chains run on a single ledger | Many L1 application chains, each with its own validators and consensus |
-| **Quantum vulnerability** — ECDSA signatures can be broken by quantum computers | Dual post-quantum signatures using two NIST-approved algorithms |
+| Problem                                                                         | How Bigtangle Solves It                                                                                                                                                                       |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Slow transactions** — Ethereum Layer 1 does ~30 tx/s, Bitcoin ~7 tx/s         | DAG parallelism: thousands of transactions per second in parallel                                                                                                                             |
+| **Single-leader risk** — if a designated leader fails, the chain stalls         | Transaction processing has no single-leader bottleneck because DAG blocks can be created in parallel by many nodes. Beacon blocks are proposed by one validator per slot to provide finality. |
+| **Slow finality** — Ethereum takes ~6 minutes for irreversible settlement       | Casper FFG finality in ~12.8 minutes (2 epochs); beacon blocks confirmed in ~24 seconds                                                                                                       |
+| **No horizontal scaling** — Most chains run on a single ledger                  | Many L1 application chains, each with its own validators and consensus                                                                                                                        |
+| **Quantum vulnerability** — ECDSA signatures can be broken by quantum computers | Dual post-quantum signatures using two NIST-approved algorithms                                                                                                                               |
 
 ---
 
@@ -188,6 +188,7 @@ validators, database, and consensus:
 ```
 
 Each L1 chain:
+
 - Has its own validators and consensus.
 - Receives BIG tokens only via bridge from L0 (no native minting).
 - Is fully isolated — a failure on one L1 does not affect others.
@@ -210,14 +211,14 @@ coordination overhead.
 
 ### Available chain types
 
-| Chain | Purpose |
-|-------|---------|
-| L0 settlement | BIG minting, token creation, global anchors |
-| L1 order match | Decentralized order book matching |
-| L1 smart contract | General-purpose contract execution |
-| L1 AI provider | AI provider staking and reputation |
-| L1 NFT | Non-fungible token creation and transfer |
-| L1 payment | Transfer-only (minimal attack surface) |
+| Chain             | Purpose                                     |
+| ----------------- | ------------------------------------------- |
+| L0 settlement     | BIG minting, token creation, global anchors |
+| L1 order match    | Decentralized order book matching           |
+| L1 smart contract | General-purpose contract execution          |
+| L1 AI provider    | AI provider staking and reputation          |
+| L1 NFT            | Non-fungible token creation and transfer    |
+| L1 payment        | Transfer-only (minimal attack surface)      |
 
 ---
 
@@ -226,10 +227,10 @@ coordination overhead.
 Bigtangle uses two post-quantum signature algorithms on every transaction
 input. Both are NIST-approved final standards:
 
-| Algorithm | Standard | Security Level |
-|-----------|----------|---------------|
-| ML-DSA-87 (Dilithium) | FIPS 204 | Category 5 |
-| SLH-DSA-SHA2-256s (SPHINCS+) | FIPS 205 | Category 5 |
+| Algorithm                    | Standard | Security Level |
+| ---------------------------- | -------- | -------------- |
+| ML-DSA-87 (Dilithium)        | FIPS 204 | Category 5     |
+| SLH-DSA-SHA2-256s (SPHINCS+) | FIPS 205 | Category 5     |
 
 The two algorithms rely on mathematically independent assumptions (lattice
 cryptography and hash functions). Breaking one does not break the other. An
@@ -245,15 +246,15 @@ funds.
 
 ## Comparison
 
-| Metric | Bigtangle | Solana | Ethereum L1 | Visa |
-|--------|-----------|--------|-------------|------|
-| Ledger | DAG + beacon chain | Single chain | Single chain | Centralized |
-| Consensus | MCMC + Casper FFG | PoH + Tower BFT | Gasper | Authority |
-| Slot time | 12s | 400ms | 12s | — |
-| Finality | ~12.8 min* | ~12.8s | ~6.4 min | Instant |
-| Peak tx/s | ~4,873 | ~50,000* | ~30 | 24,000 |
-| Observed tx/s | ~4,873 | ~2,000–3,000 | ~15–30 | ~1,700 |
-| Parallel execution | DAG-native | Sealevel (analysis) | Sequential EVM | Sharded DB |
+| Metric             | Bigtangle          | Solana              | Ethereum L1    | Visa        |
+| ------------------ | ------------------ | ------------------- | -------------- | ----------- |
+| Ledger             | DAG + beacon chain | Single chain        | Single chain   | Centralized |
+| Consensus          | MCMC + Casper FFG  | PoH + Tower BFT     | Gasper         | Authority   |
+| Slot time          | 12s                | 400ms               | 12s            | —           |
+| Finality           | ~12.8 min\*        | ~12.8s              | ~6.4 min       | Instant     |
+| Peak tx/s          | ~4,873             | ~50,000\*           | ~30            | 24,000      |
+| Observed tx/s      | ~4,873             | ~2,000–3,000        | ~15–30         | ~1,700      |
+| Parallel execution | DAG-native         | Sealevel (analysis) | Sequential EVM | Sharded DB  |
 
 \*Vendor-reported laboratory peak; observed mainnet throughput is
 significantly lower.
@@ -289,71 +290,3 @@ confirmation, modular scalability, fixed token supply, and post-quantum
 security within a unified architecture.
 
 ---
-
-## Appendix: Developer Guide
-
-### Node configuration
-
-| Module | Port | Default DB | Role |
-|--------|------|------------|------|
-| `layer0-server` | 8081 | `info_l0` | L0 full node |
-| `layer0-mcmc` | 8082 | — | L0 consensus |
-| `l1-order-server` | 8083 | `info_order` | L1 order match |
-| `l1-payment-server` | 8091 | `info_payment` | L1 payment |
-| `l1-pai-server` | 8087 | `info_pai` | L1 AI provider |
-| `l1-nft-server` | 8089 | `info_nft` | L1 NFT |
-
-### Environment variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CHAIN_ID` | (varies) | L1 chain identifier |
-| `FEE_DEFAULT` | 1000 | Minimum transaction fee (BIG) |
-| `POS_SLOT_INTERVAL_MS` | 12000 | Slot duration in ms |
-| `POS_SLOTS_PER_EPOCH` | 32 | Slots per epoch |
-
-### Block type scoping per chain
-
-| Chain | Block types accepted |
-|-------|---------------------|
-| L0 | All types |
-| L1 order match | INITIAL, TRANSFER, BEACON, ORDER_OPEN, ORDER_CANCEL |
-| L1 contract | INITIAL, TRANSFER, BEACON, CONTRACT_EVENT, CONTRACTEVENT_CANCEL |
-| L1 PAI | INITIAL, TRANSFER, BEACON, CONTRACT_EVENT, CONTRACTEVENT_CANCEL |
-| L1 NFT | All types (reuses L0 params) |
-| L1 payment | INITIAL, TRANSFER, BEACON only |
-
-### Reward calculation
-
-At each epoch boundary, accumulated fees are distributed:
-
-```
-For each active validator:
-  reward = validator.stake × pool / total_active_stake
-```
-
-### Fee accumulation per block
-
-```
-For each transaction in block:
-  surplus = sum_of_BIG_inputs − sum_of_BIG_outputs
-  if surplus > 0:
-    add surplus to accumulated_fee_pool
-```
-
-### Post-quantum key derivation
-
-A 24-word BIP39 seed phrase (256-bit entropy) deterministically generates
-both post-quantum key pairs via HKDF-SHA256. The first 32 bytes seed
-ML-DSA-87, the second 32 bytes seed SLH-DSA-SHA2-256s.
-
-### Block size budget (post-quantum signatures)
-
-| Component | Size |
-|-----------|------|
-| ML-DSA-87 signature | 4.6 KB |
-| SLH-DSA-256s signature | 16 KB |
-| Per input total | ~23 KB |
-| 100 tx/block | ~3 MB (feasible) |
-| 500 tx/block | ~12 MB (feasible) |
-| 2,000 tx/block | ~48 MB (needs 100 MB limit) |
