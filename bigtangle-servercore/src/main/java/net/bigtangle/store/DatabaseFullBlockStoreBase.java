@@ -1432,7 +1432,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setString(1, address);
 			s.setString(2, address);
 			ResultSet results = s.executeQuery();
+			int count = 0;
 			while (results.next()) {
+				count++;
 				outputs.add(
 						setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"), results));
 			}

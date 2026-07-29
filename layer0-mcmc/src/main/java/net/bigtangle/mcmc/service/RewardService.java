@@ -228,6 +228,22 @@ public class RewardService {
 		// Enforce timestamp equal to previous max for reward blocktypes
 		block.setTime(currentTime);
 
+		// Add the prototype block from TipsQueue to collectedBlocks so it gets
+		// properly confirmed (connectUTXOs, updateAllTransactionOutputsConfirmed).
+		// dagBlockHashesFrom only walks backward (predecessors), so child/sibling
+		// blocks like newly created tokens are never reached otherwise.
+		try {
+			Block prototype = cacheBlockPrototypeService.getBlockPrototype(store);
+			if (prototype != null && prototype.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+				Sha256Hash protoHash = prototype.getHash();
+				if (!currRewardInfo.getBlocks().contains(protoHash)) {
+					currRewardInfo.getBlocks().add(protoHash);
+				}
+			}
+		} catch (Exception e) {
+			log.debug("Could not add prototype to collectedBlocks: {}", e.getMessage());
+		}
+
 		block.addTransaction(tx);
 		if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
 			log.debug("   no referenced blocks skip createReward  time {} ms.",
