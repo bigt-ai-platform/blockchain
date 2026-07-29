@@ -84,6 +84,13 @@ public class BlockSaveService {
 	 *  Also seeds MCMC weight + TipsQueue so the beacon chain picks it up. */
 	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.addNonChain(block, true, store, true, true);
+		// Bootstrap solid=MCMC uses, and set weight/depth so MCMC picks it up.
+		// addNonChain → solidifyBlock sets solid=1 for MissingCalculation
+		// state (inherited from prototype predecessors), but MCMC's
+		// getSolidBlockTopologyInInterval filters on solid=2.
+		store.updateBlockEvaluationSolid(block.getHash(), 2);
+		store.updateBlockEvaluationWeightAndDepth(java.util.List.of(
+				new net.bigtangle.server.data.DepthAndWeight(block.getHash(), 1, 1)));
 		accumulateBlockFees(block, store);
 		broadcastBlock(block);
 	}

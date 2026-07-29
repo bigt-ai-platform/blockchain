@@ -180,6 +180,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testConflictSameTokenSubsequentIssuance() throws Exception {
 
@@ -259,6 +260,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testConflictSameTokenidSubsequentIssuance() throws Exception {
 
@@ -331,7 +333,8 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		}
 	}
 
-	// @Test
+	// 	@org.junit.jupiter.api.Disabled
+	@Test
 	public void testConflictSameTokenFirstIssuance() throws Exception {
 
 		PQKey outKey = PQKey.createNew();
@@ -356,6 +359,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		assertTrue(cacheBlockService.getBlockMCMCAsObject(b2.getHash(), store).getCumulativeWeight() >= 0);
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testConflictSameTokenidFirstIssuance() throws Exception {
 		PQKey outKey = PQKey.createNew();

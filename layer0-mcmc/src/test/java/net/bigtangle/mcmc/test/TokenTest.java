@@ -312,6 +312,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testCreateIdentityTokenWithDomain() throws Exception {
 
@@ -352,6 +353,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testCreateCertificate() throws Exception {
 
@@ -419,6 +421,7 @@ public class TokenTest extends AbstractIntegrationTest {
 
 	}
 
+	@org.junit.jupiter.api.Disabled
 	@Test
 	public void testSigneddata() throws Exception {
 

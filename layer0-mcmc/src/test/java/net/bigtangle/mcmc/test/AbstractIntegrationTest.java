@@ -1329,13 +1329,6 @@ public abstract class AbstractIntegrationTest {
 			}
 		}
 
-		// Ensure tips queue is populated before getting tip
-		try {
-			mcmcService.update(store);
-		} catch (Exception e) {
-			// If update fails, continue anyway
-		}
-
 		mcmcService.update(store);
 		Block tipP = cacheBlockPrototypeService.getBlockPrototype(store);
 		Block block = Block.createBlock(networkParameters,
@@ -1514,13 +1507,6 @@ public abstract class AbstractIntegrationTest {
 				final String pubKeyHex = multiSignAddress.getPubKeyHex();
 				multiSignAddresses.add(new MultiSignAddress(tokenid, "", pubKeyHex, 0));
 			}
-		}
-
-		// Ensure tips queue is populated before getting tip
-		try {
-			mcmcService.update(store);
-		} catch (Exception e) {
-			// If update fails, continue anyway
 		}
 
 		mcmcService.update(store);

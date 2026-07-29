@@ -14,7 +14,7 @@ PG_PORT=5432
 DB_NAME=info
 COMPOSE_FILE="$ROOT/helper/docker-compose-base.yml"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
-SCHED_ARGS="-Dservice.schedule.mcmc=true -Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=5000"
+SCHED_ARGS="-Dservice.schedule.mcmc=true -Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=5000 -Dservice.schedule.initsync=true"
 L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
 
 # Use Java 25 if available

@@ -229,11 +229,6 @@ public class RewardService {
 		// Enforce timestamp equal to previous max for reward blocktypes
 		block.setTime(currentTime);
 
-		// dagBlockHashesFrom already walks all reachable predecessors from
-		// trunk/branch. Adding TipsQueue blocks here can pull in conflicting
-		// blocks (e.g. duplicate domain names) and cause reward verification
-		// failures, so we leave collectedBlocks as-is.
-
 		block.addTransaction(tx);
 		if (currRewardInfo.getBlocks().isEmpty() && onlyWithreferenced) {
 			log.debug("   no referenced blocks skip createReward  time {} ms.",

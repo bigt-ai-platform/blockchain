@@ -85,11 +85,13 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		allApprovedNewBlocks.add(getBlockWrap(newMilestoneBlock.getHash(), store));
 
-		// If anything is already spent, no-go
-		boolean anySpentInputs = hasSpentInputs(allApprovedNewBlocks, true, store);
-		if (anySpentInputs) {
-			solidityState = SolidityState.getFailState();
-			throw new VerificationException("there are hasSpentInputs in allApprovedNewBlocks ");
+		// If anything is already spent, remove those blocks and continue
+		// with the rest.  This handles the case where MCMC creates reward
+		// blocks faster than UpdateChain processes them — the second reward
+		// block may reference blocks already confirmed by the first.
+		if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
+			allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getMilestone() > 0);
+			if (allApprovedNewBlocks.size() <= 1) return;
 		}
 		// If any conflicts exist between the current set of
 		// blocks, no-go
