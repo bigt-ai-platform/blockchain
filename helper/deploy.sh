@@ -15,7 +15,7 @@ REGISTRY="${REGISTRY:-ghcr.io}"
 OWNER="${OWNER:-bigt-ai-platform}"
 PUSH=false
 LOCAL_TAG="bigtangle:test"
-VERSION="${TAG:-$(git log -1 --format=%h)}"
+VERSION="${TAG:-latest}"
 JAVA_VERSION="${JAVA_VERSION:-25}"
 MVN_VERSION="0.6.0"
 
