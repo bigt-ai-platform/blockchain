@@ -189,6 +189,47 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 
 	}
 
+	// Beacon-chain reorg: a longer conflicting reward chain must win. This
+	// exercises BlockStoreService.connectRewardBlock → ServiceVerifyReward
+	// .handleNewBestChain, which un-confirms the old milestone blocks
+	// (resetMilestoneSolid + unconfirmBlocks) and confirms the new chain.
+	@Test
+	public void testBeaconChainReorgUnconfirmsLoser() throws Exception {
+		// Chain A: two beacon blocks from genesis (length 2).
+		List<Block> chainA = new ArrayList<Block>();
+		Block a1 = createReward(chainA); // length 2: a1 + a2
+		assertTrue(getBlockEvaluation(a1.getHash(), store).isConfirmed());
+		Block a2 = chainA.get(chainA.size() - 1);
+		assertTrue(getBlockEvaluation(a2.getHash(), store).isConfirmed());
+		assertEquals(2, getBlockEvaluation(a2.getHash(), store).getMilestone());
+
+		// Chain B: a longer conflicting chain from genesis (length 3), built
+		// in a fresh store exactly like testReorgMiningRewardShuffle.
+		resetStore();
+		List<Block> chainB = new ArrayList<Block>();
+		Block b3 = createReward2(chainB); // length 3
+		assertEquals(3, getBlockEvaluation(b3.getHash(), store).getMilestone());
+
+		// Replay both chains into a fresh store; the longer chain B wins.
+		resetStore();
+		for (int i = 0; i < 5; i++) {
+			for (Block b : chainB)
+				add(b, true, true, store);
+			syncBlockService.connectingOrphans(store);
+			for (Block b : chainA)
+				add(b, true, true, store);
+			syncBlockService.connectingOrphans(store);
+		}
+
+		// Longer chain B confirmed; loser chain A un-confirmed (rolled back).
+		assertTrue(getBlockEvaluation(b3.getHash(), store).isConfirmed(),
+				"longer chain B head should be confirmed");
+		assertFalse(getBlockEvaluation(a1.getHash(), store).isConfirmed(),
+				"loser chain A reward 1 should be un-confirmed after reorg");
+		assertEquals(b3.getHash(), cacheBlockService.getMaxConfirmedReward(store).getBlockHash(),
+				"max confirmed reward must switch to chain B head");
+	}
+
 	// test cutoff chains, reward should not take blocks behind the cutoff chain
 	/*
 	 * the last block of the chain should not have referenced block behind the the
