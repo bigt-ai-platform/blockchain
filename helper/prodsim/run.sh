@@ -122,16 +122,29 @@ mvn test -pl layer0-mcmc -q \
   -Dprodsim.epochs="$EPOCHS" \
   -Dsurefire.failIfNoSpecifiedTests=false
 
-EXIT_CODE=$?
+VERIFY_EXIT=$?
+
+# ─── Attack-safety checks ─────────────────────────────────────────
+info "Running attack-safety checks..."
+ATTACK_CLASS="net.bigtangle.mcmc.prodsim.ProdSimAttackVerification"
+mvn test -pl layer0-mcmc -q \
+  -Dtest="$ATTACK_CLASS" \
+  -Dserver.url="http://localhost:8081/" \
+  -Dsurefire.failIfNoSpecifiedTests=false
+
+ATTACK_EXIT=$?
+
+EXIT_CODE=$((VERIFY_EXIT + ATTACK_EXIT))
 
 echo ""
 if [ $EXIT_CODE -eq 0 ]; then
   echo -e "${GREEN}=============================================${NC}"
   echo -e "${GREEN}  PRODSIM: SUCCESS ($EPOCHS epochs)${NC}"
+  echo -e "${GREEN}  (happy-path + attack-safety checks)${NC}"
   echo -e "${GREEN}=============================================${NC}"
 else
   echo -e "${RED}=============================================${NC}"
-  echo -e "${RED}  PRODSIM: FAILED${NC}"
+  echo -e "${RED}  PRODSIM: FAILED (verify=$VERIFY_EXIT attack=$ATTACK_EXIT)${NC}"
   echo -e "${RED}=============================================${NC}"
   for name in prodsim-svr-0 prodsim-mcmc-0; do
     echo "--- $name logs (last 20) ---"

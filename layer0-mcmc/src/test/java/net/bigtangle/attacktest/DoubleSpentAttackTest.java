@@ -32,7 +32,19 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
 import net.bigtangle.wallet.Wallet;
 
-public class DoubleSpentAttack extends AbstractIntegrationTest {
+public class DoubleSpentAttackTest extends AbstractIntegrationTest {
+
+
+    /**
+     * Builds a funded wallet for attack testing. Uses an ML-DSA-only key so the
+     * 1000-tx attack tests sign fast (~5ms) instead of paying SLH-DSA (~1.7s)
+     * per tx. The test targets mempool double-spend logic, not the crypto.
+     */
+    private Wallet fundedAttackWallet() throws Exception {
+        PQKey attackKey = PQKey.createNew();
+        payBigTo(attackKey, BigInteger.valueOf(1_000_000_000L), null);
+        return Wallet.fromKeys(networkParameters, attackKey, contextRoot);
+    }
 
     private Transaction createDoubleSpendTx(Wallet w, List<FreeStandingTransactionOutput> candidates, PQKey recipient, Coin amount, String memo) throws InsufficientMoneyException {
         Transaction tx = new Transaction(networkParameters);
@@ -60,15 +72,14 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     @Autowired
     private NetworkParameters networkParameters;
 
-    private static final Logger log = LoggerFactory.getLogger(DoubleSpentAttack.class);
+    private static final Logger log = LoggerFactory.getLogger(DoubleSpentAttackTest.class);
 
     @Test
     public void testMempoolRejectsDoubleSpend() throws Exception {
         PQKey alice = PQKey.createNew();
         PQKey bob = PQKey.createNew();
 
-        PQKey testKey = PQKey.createNew();
-        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+        Wallet w = fundedAttackWallet();
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
         assertTrue(candidates.stream().anyMatch(c -> c.getValue().isBIG()
@@ -110,8 +121,7 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandDoubleSpendAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        PQKey testKey = PQKey.createNew();
-        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
+        Wallet w = fundedAttackWallet();
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
         assertTrue(candidates.stream().anyMatch(c -> c.getValue().isBIG()
@@ -161,12 +171,11 @@ public class DoubleSpentAttack extends AbstractIntegrationTest {
     public void testThousandTokenCreationAttack() throws Exception {
         int ATTACK_COUNT = 1000;
 
-        PQKey testKey = PQKey.createNew();
+        Wallet w = fundedAttackWallet();
+        PQKey testKey = w.walletKeys(null).get(0);
         String domain = "";
         String tokenHex = Utils.HEX.encode(Sha256Hash.hash(testKey.getPubKey()));
         int tokentype = TokenType.currency.ordinal();
-
-        Wallet w = Wallet.fromKeys(networkParameters, testKey, contextRoot);
 
         List<Block> tokenBlocks = new ArrayList<>();
         for (int i = 0; i < ATTACK_COUNT; i++) {
