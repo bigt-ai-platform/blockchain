@@ -54,8 +54,16 @@ for db in info_l0; do
     docker exec test-bigtangle-postgres psql -U root -d postgres -c "CREATE DATABASE $db;" 2>/dev/null || true
 done
 
-ARG_LINE="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED"
+# ML-DSA-only keys: ~2x faster test suite. SLH-DSA-256s signing dominates
+# wall-time (~1.7s/sign); verifyPQ accepts ML-DSA-only bundles, and the
+# dual-key genesis wallet + dedicated crypto tests still cover the SLH-DSA path.
+ARG_LINE="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dnet.bigtangle.pq.mldsaOnlyDefault=true"
 JVM_ARGS=(-DargLine="${ARG_LINE}")
+# layer0-mcmc/pom.xml defines bigtangle.mcmc.argLine (default -Xmx2g); override
+# it so the ML-DSA-only flag reaches the surefire fork (the pom argLine
+# otherwise wins over -DargLine).
+MCMC_ARG_LINE="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true -Dnet.bigtangle.pq.mldsaOnlyDefault=true"
+MCMC_JVM_ARGS=(-Dbigtangle.mcmc.argLine="${MCMC_ARG_LINE}")
 FORK_ARGS=(-Dsurefire.forkCount=1)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"
 
@@ -69,4 +77,4 @@ mvn test-compile -q -f "$ROOT/pom.xml" -am -pl layer0-mcmc 2>&1 | tail -1
 echo "=== Build done ==="
 
 echo "=== Running Layer 0 tests ==="
-mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0
+mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${MCMC_JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0

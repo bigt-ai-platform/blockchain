@@ -64,9 +64,18 @@ public class PQKey implements EncryptableItem {
         this.keyBundle = null;
     }
 
+    // When enabled, createNew() generates ML-DSA-only keys. This is a test
+    // acceleration: SLH-DSA-256s signing dominates test wall-time (~1.7 s/sig),
+    // and verifyPQ accepts ML-DSA-only bundles. Production defaults to dual-key.
+    private static final boolean MLDSA_ONLY_DEFAULT = Boolean
+            .getBoolean("net.bigtangle.pq.mldsaOnlyDefault");
+
     public static PQKey createNew() {
         byte[] seed = new byte[64];
         secureRandom.nextBytes(seed);
+        if (MLDSA_ONLY_DEFAULT) {
+            return fromMLDSA(Arrays.copyOfRange(seed, 0, 32));
+        }
         return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
     }
 

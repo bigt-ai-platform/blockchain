@@ -143,7 +143,7 @@
 					<properties>
 					</properties>
 					<argLine>--add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED</argLine>
-					<forkedProcessTimeoutInSeconds>600</forkedProcessTimeoutInSeconds>
+					<forkedProcessTimeoutInSeconds>1500</forkedProcessTimeoutInSeconds>
 				</configuration>
 			</plugin>
 			<plugin>

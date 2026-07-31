@@ -45,6 +45,10 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
             mldsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
     private final Cache<ByteArrayWrapper, SLHDSAPrivateKeyParameters>
             slhdsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
+    // ML-DSA and SLH-DSA are deterministic: the same (private key, message)
+    // always yields the same signature, so results can be safely memoized.
+    private final Cache<SignKey, byte[]> mldsaSigCache = CacheBuilder.newBuilder().maximumSize(2048).build();
+    private final Cache<SignKey, byte[]> slhdsaSigCache = CacheBuilder.newBuilder().maximumSize(1024).build();
 
     @Override
     public int[] supportedAlgorithms() {
@@ -105,6 +109,9 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
     }
 
     private byte[] signMLDSA(byte[] privateKey, byte[] message) {
+        SignKey cacheKey = new SignKey(privateKey, message);
+        byte[] cached = mldsaSigCache.getIfPresent(cacheKey);
+        if (cached != null) return cached;
         MLDSAParameters params = MLDSAParameters.ml_dsa_87;
         ByteArrayWrapper key = new ByteArrayWrapper(privateKey);
         MLDSAPrivateKeyParameters priv = mldsaPrivCache.getIfPresent(key);
@@ -116,7 +123,9 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
         signer.init(true, priv);
         signer.update(message, 0, message.length);
         try {
-            return signer.generateSignature();
+            byte[] sig = signer.generateSignature();
+            mldsaSigCache.put(cacheKey, sig);
+            return sig;
         } catch (Exception e) {
             throw new RuntimeException("ML-DSA sign failed: " + e.getMessage(), e);
         }
@@ -156,6 +165,9 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
     }
 
     private byte[] signSLHDSA(byte[] privateKey, byte[] message) {
+        SignKey cacheKey = new SignKey(privateKey, message);
+        byte[] cached = slhdsaSigCache.getIfPresent(cacheKey);
+        if (cached != null) return cached;
         SLHDSAParameters params = SLHDSAParameters.sha2_256s;
         ByteArrayWrapper key = new ByteArrayWrapper(privateKey);
         SLHDSAPrivateKeyParameters priv = slhdsaPrivCache.getIfPresent(key);
@@ -165,7 +177,9 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
         }
         SLHDSASigner signer = new SLHDSASigner();
         signer.init(true, priv);
-        return signer.generateSignature(message);
+        byte[] sig = signer.generateSignature(message);
+        slhdsaSigCache.put(cacheKey, sig);
+        return sig;
     }
 
     private boolean verifySLHDSA(byte[] publicKey, byte[] message, byte[] signature) {
@@ -202,6 +216,24 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
     }
 
     /* ── Internal key cache ───────────────────────────────────────────── */
+
+    private static final class SignKey {
+        final byte[] privateKey;
+        final byte[] message;
+        SignKey(byte[] privateKey, byte[] message) {
+            this.privateKey = privateKey;
+            this.message = message;
+        }
+        @Override public boolean equals(Object o) {
+            if (!(o instanceof SignKey)) return false;
+            SignKey other = (SignKey) o;
+            return java.util.Arrays.equals(privateKey, other.privateKey)
+                    && java.util.Arrays.equals(message, other.message);
+        }
+        @Override public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(privateKey) + java.util.Arrays.hashCode(message);
+        }
+    }
 
     private static final class ByteArrayWrapper {
         final byte[] data;

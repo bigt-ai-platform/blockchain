@@ -175,3 +175,114 @@ bash helper/testall.sh
 # Remote integration tests
 bash layer0-mcmc/src/test/java/net/bigtangle/mcmc/remote/remote.sh
 ```
+
+## Post-Quantum Dual Signature Design
+
+BigTangle uses **two independent NIST post-quantum signature schemes** on the same data. This is defense in depth: the schemes rest on completely different mathematics, so they do not share the same failure mode.
+
+| | ML-DSA-87 (FIPS 204) | SLH-DSA-SHA2-256s (FIPS 205) |
+|---|---|---|
+| Math | Lattice (Module-LWE) | Hash-based (SPHINCS+ stateless Merkle) |
+| Signature size | ~4.6 KB | ~30 KB |
+| Sign speed | ~5 ms | ~1,700 ms (340x slower) |
+| Verify speed | ~1 ms | ~2 ms (both fast) |
+| Security assumption | Hardness of lattice problems | Security of SHA-2 (most conservative) |
+| Risk | Could be broken by future quantum lattice attack | No known structural risk |
+
+### Why dual ("AND", not "OR")
+
+A transaction is authentic only if **both** signatures verify. Breaking the lattice scheme *alone* is not enough, because the hash-based signature still authenticates the data. This protects the chain against a cryptanalytic break of either family of mathematics.
+
+### Key concepts in code
+
+- **Key bundle** (`KeyBundle`) — a versioned, algorithm-sorted list of public keys. A *dual* key has two entries (`ALG_ML_DSA_87` + `ALG_SLH_DSA_SHA2_256S`); an ML-DSA-only key has one.
+- **Signature bundle** (`SignatureBundle`) — a versioned list of signatures, one per algorithm.
+- **Dual key creation**: `PQKey.fromSeeds(mlDsaSeed, slhDsaSeed)` generates both keypairs.
+- **Dual signing**: `PQKey.sign()` signs the same message twice (once per scheme).
+- **Dual verification**: `PQScriptUtils.verifyPQ` (transactions/UTXOs) and `verifyProposerSignature` (block proposers) require both entries to verify (AND logic).
+
+### When SLH-DSA is required
+
+- `verifyPQ` — **SLH-DSA required only if the key bundle has an SLH-DSA entry**. ML-DSA-only keys are fully valid and produce ML-DSA-only signatures that pass.
+- `verifyProposerSignature` — **always requires both** ML-DSA and SLH-DSA (block proposer/consensus path). This is the truly SLH-DSA-mandated path.
+
+### Where dual keys are used in production
+
+- **Block proposers/validators** — `ValidatorDutyService` loads its proposer key from a 128-hex dual seed (`PQKey.fromPrivateKeyHex`).
+- **Genesis / domain-permission root** — `TestParams.genesisPub` and `permissionDomainname` are locked to a dual key; the genesis coinbase script is built from it.
+- Everything else (wallets, payees, token owners) uses ML-DSA-only keys.
+
+### The dual suite identity
+
+`PQConstants.SUITE_CAT5_DUAL_1 = 1` (dual ML-DSA-87 + SLH-DSA-SHA2-256s, category 5).
+`PQConstants.SUITE_ML_DSA_ONLY = 2` (ML-DSA-87 only, category 5).
+
+A dual key's address uses `SUITE_CAT5_DUAL_1`; an ML-DSA-only key's address uses `SUITE_ML_DSA_ONLY` (`PQKey.toAddress`).
+
+## Governance: `pqSuites` (ML-DSA now, SLH-DSA later)
+
+`NetworkParameters` declares a **governance suite list** intended to activate/sunset algorithms at runtime:
+
+```java
+/** Supported post-quantum algorithm suite IDs (e.g. SUITE_CAT5_DUAL_1 = 1).
+ *  Empty list means PQ is disabled.  Governance activates suites by
+ *  adding entries.  A suite is sunset by removing it. */
+protected List<Integer> pqSuites = new ArrayList<>();
+public boolean isPqSuiteActive(int suiteId) { return pqSuites.contains(suiteId); }
+```
+
+**Currently this is dead scaffolding** — nothing populates it and no verification consults it. `verifyPQ` / `verifyProposerSignature` hard-code the SLH-DSA requirement based on the key bundle's contents.
+
+### Intended path: "ML-DSA now, dual later"
+
+1. **Wire verification to governance**: gate the SLH-DSA requirement on `isPqSuiteActive(SUITE_CAT5_DUAL_1)`. When `SUITE_ML_DSA_ONLY` is active and `SUITE_CAT5_DUAL_1` is not, proposer/domain signatures need ML-DSA only.
+2. **Start the chain ML-DSA-only**: define genesis with an ML-DSA-only `genesisPub` and `permissionDomainname`, and activate `SUITE_ML_DSA_ONLY`.
+3. **Later, governance flips to dual**: `addPqSuite(SUITE_CAT5_DUAL_1)`; new blocks/domain ops must carry SLH-DSA. Old ML-DSA-only UTXOs stay valid (verification is per-key-bundle), and new dual keys coexist.
+
+### Trade-offs / constraints
+
+- **Security**: shipping without the SLH-DSA backstop on the domain root means single-fault until governance activates dual. Going single→dual is strictly an upgrade (no downgrade risk).
+- **Genesis immutability**: genesis + `permissionDomainname` are fixed at chain launch. This only applies to a **new chain** (or the test net), not an existing one.
+- **Cross-platform vectors**: `PQCrossPlatformCompareTest`, `PQACVPVectorsTest`, and genesis-hash tests reference the dual genesis vectors and must be updated consistently.
+- **Proposer path**: `verifyProposerSignature` becomes suite-gated, so a dual-seed proposer key (`fromPrivateKeyHex`) must align with the active suite.
+
+This is a **consensus/security decision**, not a test optimization — it changes what the chain's root-of-trust signs with.
+
+## Test-suite performance work
+
+`testall.sh` runs `bigtangle-core` tests (no DB) then `layer0-mcmc` integration tests (PostgreSQL, single surefire fork). Original runtime was ~11:17 with a surefire fork timeout failure (600 s).
+
+### Bottleneck
+
+CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing** (`SLHDSASigner.generateSignature`, ~1.7 s/sign). Every token/domain/fee operation in the tests signs with a dual key.
+
+### Changes applied
+
+1. **`PQKey.createNew()` ML-DSA-only opt-in** (`-Dnet.bigtangle.pq.mldsaOnlyDefault=true`) — when enabled, `createNew()` returns ML-DSA-only keys. `verifyPQ` accepts ML-DSA-only bundles, so this is safe; production defaults to dual-key. Dual-key SLH-DSA coverage is preserved via the genesis wallet and the dedicated crypto tests.
+2. **Signature memoization in `BcPQSignatureProvider`** — ML-DSA and SLH-DSA are deterministic (same key+message ⇒ same signature), so results are cached by `(privateKey, message)`. Bounded Guava caches.
+3. **`layer0-mcmc/pom.xml` property-driven argLine** — the surefire `<argLine>` was hard-coded to `-Xmx2g`, which *overrode* `testall.sh`'s `-DargLine`. It is now `${bigtangle.mcmc.argLine}` with an identical default, so the ML-DSA-only flag reaches the fork (this also fixed the root cause of earlier parallel-fork failures).
+4. **`testall.sh`** — passes `-Dnet.bigtangle.pq.mldsaOnlyDefault=true` and sets `-Dbigtangle.mcmc.argLine` for the fork.
+5. **`pom.xml` fork timeout** — `forkedProcessTimeoutInSeconds` raised 600 → 1500 s (the suite legitimately needs ~6-11 min under PQ crypto).
+6. **`ValidatorService2Test`** — 12 token-owner keys switched from `wallet.walletKeys().get(0)` (dual genesis) to `PQKey.createNew()` (ML-DSA-only).
+
+### Results
+
+| | Before | After |
+|---|---|---|
+| Full suite | ~11:17, BUILD FAILURE (fork timeout) | ~5:50-6:13, BUILD SUCCESS |
+| TokenTest | ~136 s | ~56-67 s |
+| ValidatorService2Test | ~71 s | ~30-41 s |
+
+All 168 layer0 tests + core crypto tests pass. Dual-key SLH-DSA coverage is retained through the genesis wallet and `PQSignatureProviderTest` / `PQACVPVectorsTest` / `PQCrossPlatformCompatTest`.
+
+### What cannot be fixed in tests
+
+The remaining SLH-DSA (~93% of TokenTest CPU) is tied to the **dual genesis/domain-root key**:
+
+- `wallet.feeTransaction` / `wallet.saveToken` — wallet spendable UTXOs are genesis-coinbase-locked (dual).
+- `payBigTo` — the genesis key signs the funding tx, and change outputs stay dual-locked.
+- `pullBlockDoMultiSign(wallet.walletKeys().get(0))` — domain-permission multisig, protocol-required with the dual genesis key.
+
+An attempt to fund an ML-DSA-only spend key in `setUp` made no improvement (change outputs still route back to the genesis key, and the extra funding tx added its own dual sign) and was reverted.
+
+The only lever that removes this cost at the source is the **`pqSuites` governance change** (make the genesis/domain root ML-DSA-only, flip to dual later) — a protocol/consensus decision, not a test-harness change. It has not been applied.
