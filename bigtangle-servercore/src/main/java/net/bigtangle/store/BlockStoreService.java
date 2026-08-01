@@ -48,6 +48,7 @@ import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceVerifyReward;
@@ -77,6 +78,8 @@ public class BlockStoreService {
 
 	@Autowired
 	private StoreService storeService;
+	@Autowired
+	protected MempoolService mempoolService;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
 	@Autowired
@@ -385,7 +388,7 @@ public class BlockStoreService {
 		}
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
-				cacheBlockService, jsonmapper);
+				cacheBlockService, jsonmapper, mempoolService);
 		if (serviceVerifyReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
 			serviceVerifyReward.verifyRewardChainConfirmReferenced(block, store);

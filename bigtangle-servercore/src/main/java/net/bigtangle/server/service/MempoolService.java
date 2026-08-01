@@ -74,6 +74,34 @@ public class MempoolService {
         totalSubmitted.incrementAndGet();
     }
 
+    /**
+     * Submits an order transaction (buy/sell/cancel) into the typed mempool
+     * queue for its order type (ORDER_OPEN / ORDER_CANCEL). Orders are
+     * transactions only — no block is created here; block assembly drains the
+     * typed queues via {@link #drainAllByType()}.
+     *
+     * @throws VerificationException if the transaction is not an order
+     */
+    public void submitOrder(Transaction tx) {
+        BlockType blockType = getTransactionType(tx);
+        if (blockType != BlockType.BLOCKTYPE_ORDER_OPEN && blockType != BlockType.BLOCKTYPE_ORDER_CANCEL) {
+            throw new VerificationException("Not an order transaction: " + tx.getDataClassName());
+        }
+        submitTransaction(tx);
+    }
+
+    /** Snapshot of the transactions currently pending for a block type. */
+    public List<Transaction> getPendingByType(BlockType blockType) {
+        ConcurrentLinkedQueue<Transaction> queue = pendingTxnsByType.get(blockType);
+        return queue == null ? Collections.emptyList() : new ArrayList<>(queue);
+    }
+
+    /** Number of transactions currently pending for a block type. */
+    public int countByType(BlockType blockType) {
+        ConcurrentLinkedQueue<Transaction> queue = pendingTxnsByType.get(blockType);
+        return queue == null ? 0 : queue.size();
+    }
+
     private void checkAndAdd(Transaction tx) {
         List<TransactionInput> inputs = tx.getInputs();
         if (inputs == null || inputs.isEmpty()) {

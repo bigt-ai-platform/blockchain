@@ -1192,13 +1192,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * special data. Confirmation of order and contract event are controlled by its
 	 * execution via referenced only.
 	 */
-	private void confirmBlockTransactionWithType(BlockWrap block, long chainlength, boolean confirmation,
-			BlockStoreInterface blockStore) throws BlockStoreException {
+ 	private void confirmBlockTransactionWithType(BlockWrap block, long chainlength, boolean confirmation,
+ 			BlockStoreInterface blockStore) throws BlockStoreException {
 
-		blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
+ 		blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
 		if (confirmation) {
-			confirmBlockTransactionSpentBatch(block.getBlock(), blockStore);
-		} else {
+			markConfirmedStatus(block.getBlock(), chainlength, blockStore);
+		}
+ 		if (confirmation) {
+ 			confirmBlockTransactionSpentBatch(block.getBlock(), blockStore);
+ 		} else {
 			for (final Transaction tx : block.getBlock().getTransactions()) {
 				confirmTransactionSpent(block.getBlock(), false, tx, blockStore);
 			}

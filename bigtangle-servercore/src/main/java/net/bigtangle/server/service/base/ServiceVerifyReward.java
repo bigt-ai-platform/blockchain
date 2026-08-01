@@ -29,7 +29,10 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.data.OrderMatchingResult;
 import net.bigtangle.server.data.SolidityState;
+import net.bigtangle.server.data.TransactionStatus;
+import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.MempoolService;
 import net.bigtangle.store.BlockStoreInterface;
 
 /*
@@ -37,10 +40,17 @@ import net.bigtangle.store.BlockStoreInterface;
  */
 public class ServiceVerifyReward extends ServiceBaseConnect {
 
+	private final MempoolService mempoolService;
+
 	public ServiceVerifyReward(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
-		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		this(serverConfiguration, networkParameters, cacheBlockService, jsonmapper, null);
+	}
 
+	public ServiceVerifyReward(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
+			CacheBlockService cacheBlockService, ObjectMapper jsonmapper, MempoolService mempoolService) {
+		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+		this.mempoolService = mempoolService;
 	}
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceVerifyReward.class);
@@ -238,6 +248,36 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
 		}
 		unconfirmBlocksSorted(store, blocksToRemoveBlocks, new HashSet<>());
+		// Dropped by reorg: mark transactions as DROPPED and put them back into
+		// the mempool so they retry on the winner chain. Status writes use the
+		// same store/connection as the reorg to avoid cross-connection lock
+		// contention with the in-flight batch write.
+		for (BlockWrap bw : blocksToRemoveBlocks) {
+			try {
+				TransactionStatusRecord.markBlock(store, bw.getBlock(), TransactionStatus.DROPPED, null,
+						networkParameters);
+			} catch (Exception e) {
+				logger.debug("Failed to record DROPPED status for block {}: {}", bw.getBlockHash(), e.getMessage());
+			}
+			reMempool(bw.getBlock(), store);
+		}
+	}
+
+	private void reMempool(Block block, BlockStoreInterface store) {
+		if (mempoolService == null || block.getTransactions() == null) {
+			return;
+		}
+		for (Transaction tx : block.getTransactions()) {
+			if (tx.isCoinBase() || tx.getInputs() == null || tx.getInputs().isEmpty()) {
+				continue;
+			}
+			try {
+				mempoolService.submitTransaction(tx);
+				TransactionStatusRecord.mark(store, tx, TransactionStatus.MEMPOOL, null, null, networkParameters);
+			} catch (Exception e) {
+				logger.debug("re-mempool failed for tx {}: {}", tx.getHash(), e.getMessage());
+			}
+		}
 	}
 
 	private Block getChainHead(BlockStoreInterface store) throws BlockStoreException {

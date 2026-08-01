@@ -326,6 +326,16 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     		+ "    inserttime TIMESTAMP NOT NULL,\n"
     		+ "   CONSTRAINT batchblock_pk PRIMARY KEY (hash)  \n"
     		+ ")";
+    private static final String CREATE_TRANSACTIONSTATUS_TABLE = "CREATE TABLE transactionstatus (\n"
+            + "    txhash BYTEA NOT NULL,\n"
+            + "    status varchar(20) NOT NULL,\n"
+            + "    blockhash BYTEA,\n"
+            + "    chainlength bigint,\n"
+            + "    address varchar(64),\n"
+            + "    createdtime bigint NOT NULL,\n"
+            + "    updatedtime bigint NOT NULL,\n"
+            + "    CONSTRAINT transactionstatus_pk PRIMARY KEY (txhash)\n"
+            + ")";
     private static final String CREATE_SUBTANGLE_PERMISSION_TABLE = "CREATE TABLE subtangle_permission (\n"
             + "    pubkey varchar(255) NOT NULL,\n" 
             + "    userdataPubkey varchar(255) NOT NULL,\n"
@@ -516,6 +526,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_ATTESTATION_VOTES_TABLE);
         sqlStatements.add(CREATE_POS_STATE_TABLE);
         sqlStatements.add(CREATE_BATCHBLOCK_TABLE);
+        sqlStatements.add(CREATE_TRANSACTIONSTATUS_TABLE);
         sqlStatements.add(CREATE_SUBTANGLE_PERMISSION_TABLE);
         sqlStatements.add(CREATE_ORDERS_TABLE);
         sqlStatements.add(CREATE_MYSERVERBLOCKS_TABLE);

@@ -105,7 +105,19 @@ public class BlockSaveService {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
 		accumulateBlockFees(block, store);
+		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
 		broadcastBlock(block);
+	}
+
+	/** Best-effort status write for every user transaction in a block. */
+	private void markStatus(Block block, net.bigtangle.server.data.TransactionStatus status,
+			BlockStoreInterface store) {
+		try {
+			net.bigtangle.server.data.TransactionStatusRecord.markBlock(store, block, status, null,
+					networkParameters);
+		} catch (Exception e) {
+			logger.debug("Failed to record {} status for block {}: {}", status, block.getHash(), e.getMessage());
+		}
 	}
 
 	private void accumulateBlockFees(Block block, BlockStoreInterface store) throws Exception {
@@ -218,6 +230,7 @@ public class BlockSaveService {
 				return;
 			}
 			saveBlock(block, store);
+			markStatus(block, net.bigtangle.server.data.TransactionStatus.IN_BLOCK, store);
 			for (BatchBlock batchBlock : batchBlocks) {
 				store.deleteBatchBlock(batchBlock.getHash());
 			}

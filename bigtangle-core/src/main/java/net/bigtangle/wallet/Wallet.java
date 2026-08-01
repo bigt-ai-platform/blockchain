@@ -746,7 +746,7 @@ public class Wallet extends WalletBase {
 		tx.setDataClassName("OrderOpen");
 		signTransaction(tx, aesKey);
 
-		submitTransaction(tx);
+		submitOrder(tx);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(orderBaseToken)) {
 			submitTransaction(feeTransaction(aesKey, candidates));
 		}
@@ -842,7 +842,7 @@ public class Wallet extends WalletBase {
 
 		signTransaction(tx, aesKey);
 
-		submitTransaction(tx);
+		submitOrder(tx);
 		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(t.getTokenid())) {
 			submitTransaction(feeTransaction(aesKey, candidates));
 		}
@@ -873,7 +873,7 @@ public class Wallet extends WalletBase {
 		byte[] buf1 = party1Signature.serialize();
 		tx.setDataSignature(buf1);
 
-		submitTransaction(tx);
+		submitOrder(tx);
 		if (getFee())
 			submitTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
 		return tx;
@@ -963,6 +963,22 @@ public class Wallet extends WalletBase {
 			this.serverPool.removeServer(getServerURL());
 			throw e;
 		}
+	}
+
+	/**
+	 * Submits a buy/sell/cancel order strictly as a transaction into the typed
+	 * mempool. No block is created or confirmed here — block assembly happens
+	 * later from the mempool, grouped by transaction type (OrderOpen /
+	 * OrderCancelInfo). Mirrors payment submission ({@link #submitTransaction}).
+	 *
+	 * @throws IllegalArgumentException if the transaction is not an order
+	 */
+	public void submitOrder(Transaction tx) throws IOException {
+		String dataClassName = tx.getDataClassName();
+		if (!"OrderOpen".equals(dataClassName) && !"OrderCancelInfo".equals(dataClassName)) {
+			throw new IllegalArgumentException("Not an order transaction: " + dataClassName);
+		}
+		submitTransaction(tx);
 	}
 
 

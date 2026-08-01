@@ -574,6 +574,16 @@ public abstract class ServiceBase {
 			cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 
+	/** Best-effort: record CONFIRMED status (chain history) at a reward chainlength. */
+	protected void markConfirmedStatus(Block block, long chainlength, BlockStoreInterface blockStore) {
+		try {
+			net.bigtangle.server.data.TransactionStatusRecord.markBlock(blockStore, block,
+					net.bigtangle.server.data.TransactionStatus.CONFIRMED, chainlength, networkParameters);
+		} catch (Exception e) {
+			// status tracking is best-effort
+		}
+	}
+
 	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
 		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight).thenComparing(Block::getHash);
 		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);

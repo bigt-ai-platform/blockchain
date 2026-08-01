@@ -261,6 +261,18 @@ public interface BlockStoreInterface {
 
 	Sha256Hash getRewardSpender(Sha256Hash hash) throws BlockStoreException;
 
+	/* Transaction status tracking */
+	void upsertTransactionStatus(net.bigtangle.server.data.TransactionStatusRecord record) throws BlockStoreException;
+
+	net.bigtangle.server.data.TransactionStatusRecord getTransactionStatus(Sha256Hash txhash)
+			throws BlockStoreException;
+
+	List<net.bigtangle.server.data.TransactionStatusRecord> getTransactionStatusesByStatus(
+			net.bigtangle.server.data.TransactionStatus status) throws BlockStoreException;
+
+	List<net.bigtangle.server.data.TransactionStatusRecord> getTransactionStatusesByAddress(String address)
+			throws BlockStoreException;
+
 	Sha256Hash getRewardPrevBlockHash(Sha256Hash hash) throws BlockStoreException;
 
 	/* Token TXOs */

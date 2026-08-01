@@ -510,6 +510,110 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void upsertTransactionStatus(net.bigtangle.server.data.TransactionStatusRecord record)
+			throws BlockStoreException {
+		if (record == null || record.getTxHash() == null) {
+			return;
+		}
+		try (PreparedStatement update = getConnection().prepareStatement(UPDATE_TRANSACTIONSTATUS_SQL)) {
+			update.setString(1, record.getStatus().name());
+			update.setBytes(2, record.getBlockHash() == null ? null : record.getBlockHash().getBytes());
+			if (record.getChainlength() != null) {
+				update.setLong(3, record.getChainlength());
+			} else {
+				update.setNull(3, java.sql.Types.BIGINT);
+			}
+			update.setString(4, record.getAddress());
+			update.setLong(5, record.getUpdatedTime());
+			update.setBytes(6, record.getTxHash().getBytes());
+			if (update.executeUpdate() == 0) {
+				try (PreparedStatement insert = getConnection().prepareStatement(INSERT_TRANSACTIONSTATUS_SQL)) {
+					insert.setBytes(1, record.getTxHash().getBytes());
+					insert.setString(2, record.getStatus().name());
+					insert.setBytes(3, record.getBlockHash() == null ? null : record.getBlockHash().getBytes());
+					if (record.getChainlength() != null) {
+						insert.setLong(4, record.getChainlength());
+					} else {
+						insert.setNull(4, java.sql.Types.BIGINT);
+					}
+					insert.setString(5, record.getAddress());
+					insert.setLong(6, record.getCreatedTime());
+					insert.setLong(7, record.getUpdatedTime());
+					insert.executeUpdate();
+				}
+			}
+		} catch (SQLException e) {
+			if (!getDuplicateKeyErrorCode().equals(e.getSQLState())) {
+				throw new BlockStoreException(e);
+			}
+		}
+	}
+
+	@Override
+	public net.bigtangle.server.data.TransactionStatusRecord getTransactionStatus(Sha256Hash txhash)
+			throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_TRANSACTIONSTATUS_SQL)) {
+			preparedStatement.setBytes(1, txhash.getBytes());
+			ResultSet resultSet = preparedStatement.executeQuery();
+			if (resultSet.next()) {
+				return setTransactionStatus(resultSet);
+			}
+			return null;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<net.bigtangle.server.data.TransactionStatusRecord> getTransactionStatusesByStatus(
+			net.bigtangle.server.data.TransactionStatus status) throws BlockStoreException {
+		List<net.bigtangle.server.data.TransactionStatusRecord> list = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_TRANSACTIONSTATUS_BY_STATUS_SQL)) {
+			preparedStatement.setString(1, status.name());
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				list.add(setTransactionStatus(resultSet));
+			}
+			return list;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<net.bigtangle.server.data.TransactionStatusRecord> getTransactionStatusesByAddress(String address)
+			throws BlockStoreException {
+		List<net.bigtangle.server.data.TransactionStatusRecord> list = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_TRANSACTIONSTATUS_BY_ADDRESS_SQL)) {
+			preparedStatement.setString(1, address);
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				list.add(setTransactionStatus(resultSet));
+			}
+			return list;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	private net.bigtangle.server.data.TransactionStatusRecord setTransactionStatus(ResultSet resultSet)
+			throws SQLException {
+		net.bigtangle.server.data.TransactionStatusRecord record = new net.bigtangle.server.data.TransactionStatusRecord();
+		record.setTxHash(Sha256Hash.wrap(resultSet.getBytes("txhash")));
+		record.setStatus(net.bigtangle.server.data.TransactionStatus.valueOf(resultSet.getString("status")));
+		byte[] blockHashBytes = resultSet.getBytes("blockhash");
+		record.setBlockHash(blockHashBytes == null ? null : Sha256Hash.wrap(blockHashBytes));
+		long chainlength = resultSet.getLong("chainlength");
+		record.setChainlength(resultSet.wasNull() ? null : chainlength);
+		record.setAddress(resultSet.getString("address"));
+		record.setCreatedTime(resultSet.getLong("createdtime"));
+		record.setUpdatedTime(resultSet.getLong("updatedtime"));
+		return record;
+	}
+
+	@Override
 	public TXReward getRewardConfirmedAtHeight(long chainlength) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection()

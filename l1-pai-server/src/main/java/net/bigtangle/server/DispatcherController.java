@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -48,9 +49,12 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.server.data.TransactionStatus;
+import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.response.ErrorResponse;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.response.GetStringResponse;
+import net.bigtangle.response.GetTransactionStatusResponse;
 import net.bigtangle.response.OkResponse;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.AccessGrantService;
@@ -183,6 +187,7 @@ public class DispatcherController implements DisposableBean {
             case submitTransaction: {
                 Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
                 mempoolService.submitTransaction(tx);
+                recordMempoolStatus(tx, store);
                 blockSaveService.broadcastTransaction(tx);
                 this.outPrintJSONString(httpServletResponse, new OkResponse(), watch, reqCmd);
             }
@@ -197,6 +202,7 @@ public class DispatcherController implements DisposableBean {
                     dis.readFully(txBytes);
                     Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(txBytes);
                     mempoolService.submitTransaction(tx);
+                recordMempoolStatus(tx, store);
                 blockSaveService.broadcastTransaction(tx);
                     count++;
                 }
@@ -244,6 +250,54 @@ public class DispatcherController implements DisposableBean {
                 this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
             }
                 break;
+            case getTransactionStatus: {
+                String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+                Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+                String txHashHex = (String) request.get("txHash");
+                if (txHashHex == null || txHashHex.isEmpty()) {
+                    this.outPrintJSONString(httpServletResponse,
+                            GetStringResponse.create("txHash is required"), watch, reqCmd);
+                    break;
+                }
+                net.bigtangle.server.data.TransactionStatusRecord record = store
+                        .getTransactionStatus(Sha256Hash.wrap(txHashHex));
+                AbstractResponse response;
+                if (record == null) {
+                    response = GetTransactionStatusResponse.createEmpty(txHashHex);
+                } else {
+                    response = GetTransactionStatusResponse.create(record.getTxHash().toString(),
+                            record.getStatus().name(),
+                            record.getBlockHash() == null ? null : record.getBlockHash().toString(),
+                            record.getChainlength(), record.getAddress(), record.getCreatedTime(),
+                            record.getUpdatedTime());
+                }
+                this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+            }
+                break;
+
+            case getTransactionsStatusByAddress: {
+                String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+                Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+                String address = (String) request.get("address");
+                if (address == null || address.isEmpty()) {
+                    this.outPrintJSONString(httpServletResponse,
+                            GetStringResponse.create("address is required"), watch, reqCmd);
+                    break;
+                }
+                List<net.bigtangle.server.data.TransactionStatusRecord> records = store
+                        .getTransactionStatusesByAddress(address);
+                List<GetTransactionStatusResponse> items = new ArrayList<>();
+                for (net.bigtangle.server.data.TransactionStatusRecord r : records) {
+                    items.add(GetTransactionStatusResponse.create(r.getTxHash().toString(), r.getStatus().name(),
+                            r.getBlockHash() == null ? null : r.getBlockHash().toString(), r.getChainlength(),
+                            r.getAddress(), r.getCreatedTime(), r.getUpdatedTime()));
+                }
+                this.outPrintJSONString(httpServletResponse,
+                        GetTransactionStatusResponse.GetTransactionsStatusResponse.create(items), watch, reqCmd);
+            }
+                break;
+
+
             case getAccountBalances: {
                 if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
                     logger.debug("getAccountBalances denied {} {}", remoteAddr(httprequest), reqCmd);
@@ -677,4 +731,13 @@ public class DispatcherController implements DisposableBean {
         }
         return remoteAddr;
     }
+
+	/** Best-effort: record MEMPOOL status for a user-submitted transaction. */
+	private void recordMempoolStatus(Transaction tx, BlockStoreInterface store) {
+		try {
+			TransactionStatusRecord.mark(store, tx, TransactionStatus.MEMPOOL, null, null, networkParameters);
+		} catch (Exception e) {
+			// status tracking is best-effort
+		}
+	}
 }

@@ -90,6 +90,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private static final String DROP_ORDERCANCEL_TABLE = "DROP TABLE IF EXISTS ordercancel";
 	private static final String DROP_STAKE_DEPOSITS_TABLE = "DROP TABLE IF EXISTS stake_deposits";
 	private static final String 		DROP_BATCHBLOCK_TABLE = "DROP TABLE IF EXISTS batchblock";
+	private static final String DROP_TRANSACTIONSTATUS_TABLE = "DROP TABLE IF EXISTS transactionstatus";
 	private static final String DROP_SUBTANGLE_PERMISSION_TABLE = "DROP TABLE IF EXISTS subtangle_permission";
 	private static final String DROP_ORDERS_TABLE = "DROP TABLE IF EXISTS orders";
 
@@ -397,6 +398,19 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_TX_REWARD_CONFIRMED_SQL = "UPDATE txreward SET confirmed = ? WHERE blockhash = ?";
 	protected final String UPDATE_TX_REWARD_SPENT_SQL = "UPDATE txreward SET spent = ?, spenderblockhash = ? WHERE blockhash = ?";
 
+	/* TRANSACTION STATUS */
+	protected final String INSERT_TRANSACTIONSTATUS_SQL = getInsert()
+			+ " INTO transactionstatus (txhash, status, blockhash, chainlength, address, createdtime, updatedtime)"
+			+ " VALUES (?, ?, ?, ?, ?, ?, ?)";
+	protected final String UPDATE_TRANSACTIONSTATUS_SQL = getUpdate()
+			+ " transactionstatus SET status = ?, blockhash = ?, chainlength = ?, address = ?, updatedtime = ? WHERE txhash = ?";
+	protected final String SELECT_TRANSACTIONSTATUS_SQL = "SELECT txhash, status, blockhash, chainlength, address, createdtime, updatedtime"
+			+ " FROM transactionstatus WHERE txhash = ?";
+	protected final String SELECT_TRANSACTIONSTATUS_BY_STATUS_SQL = "SELECT txhash, status, blockhash, chainlength, address, createdtime, updatedtime"
+			+ " FROM transactionstatus WHERE status = ?";
+	protected final String SELECT_TRANSACTIONSTATUS_BY_ADDRESS_SQL = "SELECT txhash, status, blockhash, chainlength, address, createdtime, updatedtime"
+			+ " FROM transactionstatus WHERE address = ?";
+
 	/* MATCHING EVENTS */
 	protected final String INSERT_MATCHING_EVENT_SQL = getInsert()
 			+ " INTO matching (txhash, tokenid, basetokenid, price, executedQuantity, inserttime) VALUES (?, ?, ?, ?, ?, ?)"
@@ -581,6 +595,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add("DROP TABLE IF EXISTS attestation_votes");
 		sqlStatements.add(DROP_STAKE_DEPOSITS_TABLE);
 		sqlStatements.add(DROP_BATCHBLOCK_TABLE);
+		sqlStatements.add(DROP_TRANSACTIONSTATUS_TABLE);
 		sqlStatements.add(DROP_SUBTANGLE_PERMISSION_TABLE);
 		sqlStatements.add(DROP_ORDERS_TABLE);
 		sqlStatements.add(DROP_MYSERVERBLOCKS_TABLE);

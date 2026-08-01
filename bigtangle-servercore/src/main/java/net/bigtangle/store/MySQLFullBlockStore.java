@@ -290,6 +290,17 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "   CONSTRAINT batchblock_pk PRIMARY KEY (hash)  \n"
             + ") ENGINE=InnoDB";
 
+    private static final String CREATE_TRANSACTIONSTATUS_TABLE = "CREATE TABLE transactionstatus (\n"
+            + "    txhash binary(32) NOT NULL,\n"
+            + "    status varchar(20) NOT NULL,\n"
+            + "    blockhash binary(32),\n"
+            + "    chainlength bigint,\n"
+            + "    address varchar(64),\n"
+            + "    createdtime bigint NOT NULL,\n"
+            + "    updatedtime bigint NOT NULL,\n"
+            + "    CONSTRAINT transactionstatus_pk PRIMARY KEY (txhash)\n"
+            + ") ENGINE=InnoDB";
+
     private static final String CREATE_SUBTANGLE_PERMISSION_TABLE = "CREATE TABLE subtangle_permission (\n"
             + "    pubkey varchar(255) NOT NULL,\n" 
             + "    userdataPubkey varchar(255) NOT NULL,\n"
@@ -459,6 +470,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PAYMULTISIGNADDRESS_TABLE);
         sqlStatements.add(CREATE_ORDER_CANCEL_TABLE);
         sqlStatements.add(CREATE_BATCHBLOCK_TABLE);
+        sqlStatements.add(CREATE_TRANSACTIONSTATUS_TABLE);
         sqlStatements.add(CREATE_SUBTANGLE_PERMISSION_TABLE);
         sqlStatements.add(CREATE_ORDERS_TABLE);
         sqlStatements.add(CREATE_MYSERVERBLOCKS_TABLE);
