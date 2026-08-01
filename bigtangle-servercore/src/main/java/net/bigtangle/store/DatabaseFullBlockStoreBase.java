@@ -376,20 +376,19 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	/* REWARD */
 	protected final String INSERT_TX_REWARD_SQL = getInsert()
-			+ "  INTO txreward (blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength) VALUES (?, ?, ?, ?, ?, ?, ?)"
+			+ "  INTO txreward (blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength) VALUES (?, ?, ?, ?, ?, ?)"
 			+ duplicateInsert();
-	protected final String SELECT_TX_REWARD_MAX_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward"
+	protected final String SELECT_TX_REWARD_MAX_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength FROM txreward"
 			+ " WHERE confirmed = true  order by chainlength desc limit 1";
-	protected final String SELECT_TX_REWARD_CONFIRMED_AT_HEIGHT_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward"
+	protected final String SELECT_TX_REWARD_CONFIRMED_AT_HEIGHT_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength FROM txreward"
 			+ " WHERE confirmed = true AND chainlength=?";
 	protected final String SELECT_TX_REWARD_ALL_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, "
-			+ "spent, spenderblockhash, prevblockhash, difficulty, chainlength FROM txreward "
+			+ "spent, spenderblockhash, prevblockhash, chainlength FROM txreward "
 			+ "WHERE confirmed = true order by chainlength ";
 
 	protected final String SELECT_TX_REWARD_CONFIRMED_SQL = "SELECT confirmed " + "FROM txreward WHERE blockhash = ?";
 	protected final String SELECT_TX_REWARD_CHAINLENGTH_SQL = "SELECT chainlength "
 			+ "FROM txreward WHERE blockhash = ?";
-	protected final String SELECT_TX_REWARD_DIFFICULTY_SQL = "SELECT difficulty " + "FROM txreward WHERE blockhash = ?";
 	protected final String SELECT_TX_REWARD_SPENT_SQL = "SELECT spent " + "FROM txreward WHERE blockhash = ?";
 	protected final String SELECT_TX_REWARD_SPENDER_SQL = "SELECT spenderblockhash "
 			+ "FROM txreward WHERE blockhash = ?";
@@ -733,8 +732,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			// Just fill the tables with some valid data
 			// Reward output table
-			insertReward(genesisBlock.getHash(), Sha256Hash.ZERO_HASH,
-					params.getRewardDifficultyLimitCompact(), 0);
+			insertReward(genesisBlock.getHash(), Sha256Hash.ZERO_HASH, 0);
 			updateRewardConfirmed(genesisBlock.getHash(), true);
 
 			// create bigtangle Token output table

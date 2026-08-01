@@ -78,19 +78,13 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 
 	public static class RewardBuilderResult {
 		Transaction tx;
-		long difficulty;
 
-		public RewardBuilderResult(Transaction tx, long difficulty) {
+		public RewardBuilderResult(Transaction tx) {
 			this.tx = tx;
-			this.difficulty = difficulty;
 		}
 
 		public Transaction getTx() {
 			return tx;
-		}
-
-		public long getDifficulty() {
-			return difficulty;
 		}
 	}
 

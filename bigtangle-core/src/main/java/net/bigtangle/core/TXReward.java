@@ -16,7 +16,6 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 
 	private Sha256Hash prevBlockHash;
 
-	private long difficulty;
 	private long chainLength;
 
 	// this is for json
@@ -25,14 +24,13 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 	}
 
 	public TXReward(Sha256Hash hash, boolean confirmed, boolean spent, Sha256Hash prevBlockHash,
-			Sha256Hash spenderblockhash, long difficulty, long chainLength) {
+			Sha256Hash spenderblockhash, long chainLength) {
 		super();
 		this.setBlockHash(hash);
 		this.setConfirmed(confirmed);
 		this.setSpent(spent);
 		this.prevBlockHash = prevBlockHash;
 		this.setSpenderBlockHash(spenderblockhash);
-		this.difficulty = difficulty;
 		this.chainLength = chainLength;
 	}
 
@@ -42,7 +40,6 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 			DataOutputStream dos = new DataOutputStream(baos);
 			dos.write(super.toByteArray());
 			Utils.writeNBytes(dos, prevBlockHash.getBytes());
-			dos.writeLong(difficulty);
 			dos.writeLong(chainLength);
 
 			dos.close();
@@ -58,7 +55,6 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 
 		prevBlockHash = Sha256Hash.wrap(Utils.readNBytes(dis));
 
-		difficulty = dis.readLong();
 		chainLength = dis.readLong();
 
 		return this;
@@ -73,14 +69,6 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 		return this;
 	}
   
-
-	public long getDifficulty() {
-		return difficulty;
-	}
-
-	public void setDifficulty(long difficulty) {
-		this.difficulty = difficulty;
-	}
 
 	public long getChainLength() {
 		return chainLength;
@@ -100,15 +88,14 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 
 	@Override
 	public String toString() {
-		return "TXReward [prevBlockHash=" + prevBlockHash + ", \n difficulty=" + difficulty + ", \n chainLength="
-				+ chainLength + "]";
+		return "TXReward [prevBlockHash=" + prevBlockHash + ", \n chainLength=" + chainLength + "]";
 	}
 
 	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = super.hashCode();
-		result = prime * result + Objects.hash(chainLength, difficulty, prevBlockHash);
+		result = prime * result + Objects.hash(chainLength, prevBlockHash);
 		return result;
 	}
 
@@ -121,7 +108,7 @@ public class TXReward extends SpentBlock implements java.io.Serializable {
 		if (getClass() != obj.getClass())
 			return false;
 		TXReward other = (TXReward) obj;
-		return chainLength == other.chainLength && difficulty == other.difficulty
+		return chainLength == other.chainLength
 				&& Objects.equals(prevBlockHash, other.prevBlockHash);
 	}
 

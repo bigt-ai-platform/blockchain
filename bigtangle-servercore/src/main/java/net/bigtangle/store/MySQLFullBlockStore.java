@@ -105,7 +105,6 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash binary(32),\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
-            + "   difficulty bigint NOT NULL,\n" 
             + "   chainlength bigint NOT NULL,\n" 
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
 

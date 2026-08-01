@@ -105,7 +105,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash BYTEA,\n" 
             + "   prevblockhash BYTEA NOT NULL,\n" 
-            + "   difficulty bigint NOT NULL,\n" 
             + "   chainlength bigint NOT NULL,\n" 
             + "   PRIMARY KEY (blockhash) )";
 

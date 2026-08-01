@@ -506,9 +506,8 @@ public abstract class ServiceBase {
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
 		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
 		long currChainLength = blockStore.getRewardChainLength(prevRewardHash) + 1;
-		long difficulty = rewardInfo.getDifficultyTargetReward();
 
-		blockStore.insertReward(block.getHash(), prevRewardHash, difficulty, currChainLength);
+		blockStore.insertReward(block.getHash(), prevRewardHash, currChainLength);
 
 	}
 

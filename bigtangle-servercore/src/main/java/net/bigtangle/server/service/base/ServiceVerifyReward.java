@@ -60,9 +60,6 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// Solidify referenced blocks
 		solidifyBlocks(currRewardInfo, store);
 
-		// Ensure the new difficulty and tx is set correctly
-		checkGeneratedReward(newChainlengthBlock, referrencedBlocks, store);
-
 		// Sanity check: No reward blocks are approved
 		checkContainsNoRewardBlocks(newChainlengthBlock, store);
 
@@ -111,22 +108,6 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	}
 
-	private void checkGeneratedReward(Block newChainlengthBlock, Set<Sha256Hash> referrencedBlocks,
-			BlockStoreInterface store) throws BlockStoreException {
-
-		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
-
-		RewardBuilderResult result = getRewardBuilderResult(newChainlengthBlock.getPrevBlockHash(),
-				newChainlengthBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
-				newChainlengthBlock.getTimeSeconds(), false,
-				referrencedBlocks, store);
-		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
-			throw new VerificationException("Incorrect difficulty target");
-		}
-
-		// Mining reward verification removed — epoch-based via EpochRewardService
-	}
-
 	/*
 	 * check blocks are in not in chainlength
 	 */
@@ -168,18 +149,6 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 	 * Computes RewardBuilderResult here for new reward blocks.
 	 * 
 	 */
-	public RewardBuilderResult getRewardBuilderResult(Sha256Hash prevTrunk, Sha256Hash prevBranch,
-			Sha256Hash prevRewardHash, long currentTime, boolean ordermatchexecutionChain, Set<Sha256Hash> referenced,
-			BlockStoreInterface store) throws BlockStoreException {
-
-		BlockWrap prevTrunkBlock = getBlockWrap(prevTrunk, store);
-		BlockWrap prevBranchBlock = getBlockWrap(prevBranch, store);
-
-		return calcRewardInfo(ordermatchexecutionChain, prevTrunkBlock, prevBranchBlock, prevRewardHash, currentTime,
-				referenced, store);
-
-	}
-
 	public RewardBuilderResult calcRewardInfo(boolean contractExecute, BlockWrap prevTrunk, BlockWrap prevBranch,
 			Sha256Hash prevRewardHash, long currentTime, Set<Sha256Hash> referenced, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -188,13 +157,11 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		long prevChainLength = store.getRewardChainLength(prevRewardHash);
 		// Build transaction for block
 		Transaction tx = new Transaction(networkParameters);
-		long difficultyReward = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
-				jsonmapper).calculateNextChainDifficulty(prevRewardHash, prevChainLength + 1, currentTime, store);
 		// Build the type-specific tx data
-		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, difficultyReward, referenced, prevChainLength + 1);
+		RewardInfo rewardInfo = new RewardInfo(prevRewardHash, referenced, prevChainLength + 1);
 		tx.setData(rewardInfo.toByteArray());
 		tx.setMemo(new MemoInfo("Reward"));
-		return new RewardBuilderResult(tx, difficultyReward);
+		return new RewardBuilderResult(tx);
 	}
 
 	/**

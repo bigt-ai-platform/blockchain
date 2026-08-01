@@ -10,7 +10,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -20,17 +19,15 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
     private long chainlength;
     private Sha256Hash prevRewardHash;
     private Set<Sha256Hash> blocks;
-    private long difficultyTargetReward;
     private Sha256Hash ordermatchingResult;
     private Sha256Hash contractResult;
     
     public RewardInfo() {
     }
 
-    public RewardInfo(Sha256Hash prevRewardHash,long difficultyTargetReward, Set<Sha256Hash> blocks, long chainlength) {
+    public RewardInfo(Sha256Hash prevRewardHash, Set<Sha256Hash> blocks, long chainlength) {
         super();
         this.prevRewardHash = prevRewardHash;
-        this.difficultyTargetReward=difficultyTargetReward;
         this.blocks = blocks;
         this.chainlength = chainlength;
     }
@@ -63,18 +60,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
         this.chainlength = chainlength;
     }
 
-    public long getDifficultyTargetReward() {
-        return difficultyTargetReward;
-    }
-
-    public BigInteger getDifficultyTargetAsInteger() {
-        return Utils.decodeCompactBits(difficultyTargetReward);
-    }
-
-    public void setDifficultyTargetReward(long difficultyTargetReward) {
-        this.difficultyTargetReward = difficultyTargetReward;
-    }
-
     public Sha256Hash getOrdermatchingResult() {
         return ordermatchingResult;
     }
@@ -101,7 +86,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             dos.writeInt(blocks.size());
             for (Sha256Hash bHash : blocks)
                 dos.write(bHash.getBytes());
-            dos.writeLong(difficultyTargetReward);
             dos.writeBoolean(ordermatchingResult != null);
             if (ordermatchingResult != null)
                 dos.write(ordermatchingResult.getBytes());
@@ -138,7 +122,6 @@ public class RewardInfo extends DataClass implements java.io.Serializable {
             dis.readFully(hbuf);
             r.blocks.add(Sha256Hash.wrap(hbuf));
         }
-        r.difficultyTargetReward = dis.readLong();
         boolean hasOrderMatching = dis.readBoolean();
         if (hasOrderMatching) {
             hbuf = new byte[32];

@@ -252,9 +252,7 @@ public interface BlockStoreInterface {
 
 	long getRewardChainLength(Sha256Hash hash) throws BlockStoreException;
 
-	long getRewardDifficulty(Sha256Hash hash) throws BlockStoreException;
-
-	void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long difficulty, long chainLength)
+	void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long chainLength)
 			throws BlockStoreException;
 
 	void updateRewardConfirmed(Sha256Hash hash, boolean b) throws BlockStoreException;

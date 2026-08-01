@@ -431,20 +431,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public long getRewardDifficulty(Sha256Hash blockHash) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_TX_REWARD_DIFFICULTY_SQL)) {
-			preparedStatement.setBytes(1, blockHash.getBytes());
-			ResultSet resultSet = preparedStatement.executeQuery();
-			resultSet.next();
-			return resultSet.getLong(1);
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
-		}
-
-	}
-
-	@Override
 	public long getRewardChainLength(Sha256Hash blockHash) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_TX_REWARD_CHAINLENGTH_SQL)) {
@@ -477,7 +463,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long difficulty, long chainLength)
+	public void insertReward(Sha256Hash hash, Sha256Hash prevBlockHash, long chainLength)
 			throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(INSERT_TX_REWARD_SQL)) {
@@ -486,8 +472,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement.setBoolean(3, false);
 			preparedStatement.setBytes(4, null);
 			preparedStatement.setBytes(5, prevBlockHash.getBytes());
-			preparedStatement.setLong(6, difficulty);
-			preparedStatement.setLong(7, chainLength);
+			preparedStatement.setLong(6, chainLength);
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
 			if (!(getDuplicateKeyErrorCode().equals(e.getSQLState())))
@@ -581,8 +566,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	private TXReward setReward(ResultSet resultSet) throws SQLException {
 		return new TXReward(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
-				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getLong("difficulty"),
-				resultSet.getLong("chainlength"));
+				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getLong("chainlength"));
 	}
 
 	@Override
