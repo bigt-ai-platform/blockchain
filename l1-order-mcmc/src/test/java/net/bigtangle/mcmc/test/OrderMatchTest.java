@@ -167,6 +167,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeTestTokenWithSpare(testKey, addedBlocks);
 		String testTokenId = testKey.getPublicKeyAsHex();
 
+		// Fund genesisKey with BIG for buy order fees
+		payBigToAmount(genesisKey, addedBlocks);
+
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(genesisKey, testTokenId, 1001, 22, addedBlocks);
 		makeAndConfirmSellOrder(testKey, testTokenId, 1001, 100, addedBlocks);
@@ -307,6 +310,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeAndConfirmSellOrder(testKey, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(1);
 
+		// Fund yuan with BIG for buy order fees
+		payBigToAmount(yuan, addedBlocks);
+
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(yuan, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(0);
@@ -363,6 +369,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		makeAndConfirmSellOrder(testKey, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(1);
 
+		// Fund yuan with BIG for buy order fees
+		payBigToAmount(yuan, addedBlocks);
+
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(yuan, testTokenId, priceshift, 2, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(0);
@@ -405,6 +414,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 		// Open sell order for test tokens
 		makeAndConfirmSellOrder(testKey, testTokenId, priceshift, 200, yuan.getPublicKeyAsHex(), addedBlocks);
 		checkAllOpenOrders(1);
+
+		// Fund yuan with BIG for buy order fees
+		payBigToAmount(yuan, addedBlocks);
 
 		// Open buy order for test tokens
 		makeAndConfirmBuyOrder(yuan, testTokenId, priceshift, 200, yuan.getPublicKeyAsHex(), addedBlocks);
@@ -1062,6 +1074,9 @@ public class OrderMatchTest extends AbstractIntegrationTest {
 
 		// targeValue=20 (0.2 yuan)
 		checkAllOpenOrders(1);
+
+		// Fund yuan with BIG for buy order fees
+		payBigToAmount(yuan, addedBlocks);
 
 		// Open buy order for dollar, target value=2 dollar Block Transaction=
 		// 20 in Yuan
