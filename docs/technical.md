@@ -219,8 +219,52 @@ saveBlockPermissive
             ├─ per old reward block
             │    ├─ resetChainlengthSolid(N) → conflicts back to solid=0
             │    └─ unconfirmBlocks(N interval) → confirmed=false, chainlength=-1
-            └─ reconnect winner chain via verifyRewardChainConfirmReferenced
+             └─ reconnect winner chain via verifyRewardChainConfirmReferenced
 ```
+
+## Transaction Status Tracking
+
+Every user transaction is tracked through its lifecycle in the `transactionstatus`
+table (`TransactionStatus` / `TransactionStatusRecord`), keyed by transaction hash
+(latest state wins):
+
+| Status | Meaning |
+|---|---|
+| `MEMPOOL` | Submitted and pending in `MempoolService`, not yet in a block |
+| `BATCHED` | Drained from the mempool into a transient batch block |
+| `IN_BLOCK` | Merged into a block of the DAG |
+| `CONFIRMED` | Confirmed by a beacon/reward block — chain history, records `chainlength` N |
+| `DROPPED` | Block conflicted with the chain or was unconfirmed by a reorg |
+
+Recorded best-effort (never throws, so tracking cannot break consensus):
+- `MEMPOOL` — `DispatcherController` `submitTransaction`/`submitTransactions` (wallet submits a tx via HTTP).
+- `BATCHED` — `BlockSaveService.saveBatchBlock`.
+- `IN_BLOCK` — `BlockSaveService.batchBlocks`.
+- `CONFIRMED` — `ServiceBaseConfirmation.confirmBlockTransactionWithType` at chainlength N.
+- `DROPPED` — `ServiceVerifyReward.unconfirmBlocks` on reorg (see below).
+
+### Dropped blocks return to the mempool
+
+On a reorg (`ServiceVerifyReward.handleNewBestChain`), blocks that lose the race are
+unconfirmed (`confirmed=false`, `chainlength=-1`). `unconfirmBlocks` then:
+1. marks every transaction of those blocks `DROPPED`, and
+2. re-submits each transaction back into `MempoolService` (re-validation + re-typing
+   via `getTransactionType`) with `MEMPOOL` status, so it retries on the winner chain.
+
+Status writes during a reorg reuse the reorg's own store connection to avoid
+cross-connection lock contention with the in-flight batch write.
+
+### Query API
+
+- `getTransactionStatus` — `{ "txHash": "<hex>" }` → status, block hash, chainlength,
+  address, timestamps (or `UNKNOWN` if never seen).
+- `getTransactionsStatusByAddress` — `{ "address": "<base58>" }` → the user's
+  transactions with their latest status. The address is derived from the first
+  spendable output when the status is recorded.
+
+Example lifecycle for a payment/order: `MEMPOOL` → `BATCHED` → `IN_BLOCK` →
+`CONFIRMED` (chainlength N); after a reorg that drops its block:
+`DROPPED` → `MEMPOOL` → … → `CONFIRMED` on the winner chain.
 
 ## Test Dependencies
 
