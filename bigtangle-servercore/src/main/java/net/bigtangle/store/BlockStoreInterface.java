@@ -192,11 +192,11 @@ public interface BlockStoreInterface {
 
 	void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
 
-	void updateBlockEvaluationMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
+	void updateBlockEvaluationChainlength(Sha256Hash blockhash, long chainlength) throws BlockStoreException;
 
 	void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException;
 
-	void resetMilestoneSolid(long milestone) throws BlockStoreException;
+	void resetChainlengthSolid(long chainlength) throws BlockStoreException;
 
 	void deleteMCMC(long chainlenght) throws BlockStoreException;
 
@@ -417,11 +417,11 @@ public interface BlockStoreInterface {
 
 	Token getTokensByDomainname(String domainname) throws BlockStoreException;
 
-	List<Sha256Hash> blocksNotMilestoneFromHeigth(long heigth) throws BlockStoreException;
+	List<Sha256Hash> blocksNotChainlengthFromHeigth(long heigth) throws BlockStoreException;
 
 	TXReward getRewardConfirmedAtHeight(long chainlength) throws BlockStoreException;
 
-	List<Sha256Hash> getBlocksInMilestoneInterval(long minMilestone, long maxMilestone) throws BlockStoreException;
+	List<Sha256Hash> getBlocksInChainlengthInterval(long minChainlength, long maxChainlength) throws BlockStoreException;
 
 	List<Sha256Hash> getBlocksByPrevHash(Sha256Hash prev) throws BlockStoreException;
 
@@ -516,21 +516,21 @@ public interface BlockStoreInterface {
 	void updateContractEventCancelSpent(Set<Sha256Hash> cancels, Sha256Hash blockhash, Boolean spent)
 			throws BlockStoreException;
 
-	Orderresult getMaxMilestoneOrderresult() throws BlockStoreException;
+	Orderresult getMaxRewardChainlengthOrderresult() throws BlockStoreException;
 
 	Orderresult getMaxConfirmedOrderresult() throws BlockStoreException;
 
-	List<Orderresult> getLowerConfirmedOrderresult(long milestone) throws BlockStoreException;
+	List<Orderresult> getLowerConfirmedOrderresult(long chainlength) throws BlockStoreException;
 
-	void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
+	void updateContractresultChainlength(Sha256Hash blockhash, long chainlength) throws BlockStoreException;
 
-	void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException;
+	void updateOrderresultChainlength(Sha256Hash blockhash, long chainlength) throws BlockStoreException;
 
-	Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException;
+	Contractresult getMaxRewardChainlengthContractresult(String contracttokenid) throws BlockStoreException;
 
 	Contractresult getMaxConfirmedContractresult(String contracttokenid) throws BlockStoreException;
 
-	List<Contractresult> getLowerConfirmedContractresult(String contracttokenid, long milestone)
+	List<Contractresult> getLowerConfirmedContractresult(String contracttokenid, long chainlength)
 			throws BlockStoreException;
 
 	List<ContractEventRecord> getContractEventRecordOpen(String tokenid) throws BlockStoreException;

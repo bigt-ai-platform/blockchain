@@ -102,8 +102,8 @@ public class TipsService {
 
 	/**
 	 * Performs MCMC without walker restrictions. Note: We cannot disallow blocks
-	 * conflicting with the milestone, since reorgs must be allowed to happen. We
-	 * cannot check if given blocks are eligible without the milestone since that is
+	 * conflicting with the chainlength, since reorgs must be allowed to happen. We
+	 * cannot check if given blocks are eligible without the chainlength since that is
 	 * not efficiently computable. Hence allows unsolid blocks.
 	 * 
 	 * @param count The number of rating tips.
@@ -159,7 +159,7 @@ public class TipsService {
  
  
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
+			HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
 		BlockWrap left = entryPoints.get(0);
@@ -169,16 +169,16 @@ public class TipsService {
 		// retry loop — it wastes time on redundant walks.
 		if (left.getBlockHash().equals(right.getBlockHash())) {
 			return getValidatedBlockPair(maxConfirmedReward,
-					currentApprovedNonMilestoneBlocks, left, right, store);
+					currentApprovedNonChainlengthBlocks, left, right, store);
 		}
 		Pair<BlockWrap, BlockWrap> candidate = getValidatedBlockPair(maxConfirmedReward,
-				currentApprovedNonMilestoneBlocks, left, right, store);
+				currentApprovedNonChainlengthBlocks, left, right, store);
 		if (!candidate.getLeft().equals(candidate.getRight())) {
 			return candidate;
 		}
 		for (int i = 0; i < 5; i++) {
 			Pair<BlockWrap, BlockWrap> paar = getValidatedBlockPair(maxConfirmedReward,
-					currentApprovedNonMilestoneBlocks, left, right, store);
+					currentApprovedNonChainlengthBlocks, left, right, store);
 			if (!paar.getLeft().equals(paar.getRight())) {
 				return paar;
 			}
@@ -200,10 +200,10 @@ public class TipsService {
 		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store);
 
 		// Necessary: Initial test if the prototype's
-		// currentApprovedNonMilestoneBlocks are actually valid
+		// currentApprovedNonChainlengthBlocks are actually valid
 
 		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
-			throw new InfeasiblePrototypeException("The given prototype is invalid under the current milestone");
+			throw new InfeasiblePrototypeException("The given prototype is invalid under the current chainlength");
 
 		return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
 				cutoffHeight, maxHeight);
@@ -287,17 +287,17 @@ public class TipsService {
 
 	// Does not redo finding next step if next step was still valid
 	private BlockWrap validateOrPerformValidatedStep(BlockWrap fromBlock,
-			HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockWrap potentialNextBlock, long cutoffHeight,
+			HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, BlockWrap potentialNextBlock, long cutoffHeight,
 			long maxHeight, BlockStoreInterface store, ServiceBaseConnect serviceBase,
 			Map<Sha256Hash, BlockWrap> blockWrapCache) throws BlockStoreException {
-		if (serviceBase.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks, cutoffHeight,
+		if (serviceBase.isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonChainlengthBlocks, cutoffHeight,
 						maxHeight, store))
 			return potentialNextBlock;
 		else
-			return performValidatedStep(fromBlock, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
+			return performValidatedStep(fromBlock, currentApprovedNonChainlengthBlocks, cutoffHeight, maxHeight, store, serviceBase, blockWrapCache);
 	}
 
-	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonMilestoneBlocks,
+	private BlockWrap performValidatedStep(BlockWrap fromBlock, HashSet<BlockWrap> currentApprovedNonChainlengthBlocks,
 			long cutoffHeight, long maxHeight, BlockStoreInterface store, ServiceBaseConnect serviceBase,
 			Map<Sha256Hash, BlockWrap> blockWrapCache) throws BlockStoreException {
 		List<BlockWrap> candidates = new ArrayList<>();
@@ -318,7 +318,7 @@ public class TipsService {
 		do {
 			result = performTransition(fromBlock, candidates, store);
 			candidates.remove(result);
-		} while (!serviceBase.isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight,
+		} while (!serviceBase.isEligibleForApprovalSelection(result, currentApprovedNonChainlengthBlocks, cutoffHeight, maxHeight,
 						store));
 		return result;
 	}

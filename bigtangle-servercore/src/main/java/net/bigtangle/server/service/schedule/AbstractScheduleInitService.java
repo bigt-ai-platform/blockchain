@@ -33,7 +33,7 @@ public abstract class AbstractScheduleInitService {
             getLogger().debug("AbstractScheduleInitService starting: " + scheduleConfiguration.toString());
 
             
-            if (scheduleConfiguration.isMilestone_active()) {
+            if (scheduleConfiguration.isChainlength_active()) {
                 try {
                     getLogger().debug("syncBlockService startInit");
                     syncBlockService.startInit();

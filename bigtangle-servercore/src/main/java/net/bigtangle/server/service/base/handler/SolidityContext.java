@@ -23,7 +23,7 @@ public final class SolidityContext {
 	private final long height;
 	private final boolean throwExceptions;
 	private final boolean confirmation;
-	private final long milestoneNumber;
+	private final long chainlength;
 	private final Sha256Hash blockHash;
 	private final ServiceBase base;
 
@@ -33,7 +33,7 @@ public final class SolidityContext {
 		this.height = b.height;
 		this.throwExceptions = b.throwExceptions;
 		this.confirmation = b.confirmation;
-		this.milestoneNumber = b.milestoneNumber;
+		this.chainlength = b.chainlength;
 		this.blockHash = b.blockHash;
 		this.base = b.base;
 	}
@@ -58,8 +58,8 @@ public final class SolidityContext {
 		return confirmation;
 	}
 
-	public long milestoneNumber() {
-		return milestoneNumber;
+	public long chainlength() {
+		return chainlength;
 	}
 
 	public Sha256Hash blockHash() {
@@ -80,7 +80,7 @@ public final class SolidityContext {
 		private long height;
 		private boolean throwExceptions;
 		private boolean confirmation = true;
-		private long milestoneNumber;
+		private long chainlength;
 		private Sha256Hash blockHash;
 		private ServiceBase base;
 
@@ -89,7 +89,7 @@ public final class SolidityContext {
 		public Builder height(long v) { this.height = v; return this; }
 		public Builder throwExceptions(boolean v) { this.throwExceptions = v; return this; }
 		public Builder confirmation(boolean v) { this.confirmation = v; return this; }
-		public Builder milestoneNumber(long v) { this.milestoneNumber = v; return this; }
+		public Builder chainlength(long v) { this.chainlength = v; return this; }
 		public Builder blockHash(Sha256Hash v) { this.blockHash = v; return this; }
 		public Builder base(ServiceBase v) { this.base = v; return this; }
 

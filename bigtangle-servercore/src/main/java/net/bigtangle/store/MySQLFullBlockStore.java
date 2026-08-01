@@ -40,9 +40,9 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    prevblockhash  binary(32) NOT NULL,\n"
             + "    prevbranchblockhash  binary(32) NOT NULL,\n" 
             + "    blocktype VARCHAR(50) NOT NULL,\n" 
-            //reward block chain length is here milestone
-            + "    milestone bigint NOT NULL,\n"
-            + "    milestonelastupdate bigint NOT NULL,\n"  
+            //reward block chain length is here
+            + "    chainlength bigint NOT NULL,\n"
+            + "    chainlengthlastupdate bigint NOT NULL,\n"  
             + "    confirmed boolean NOT NULL,\n"
       
             //solid is result of validation of the block, 
@@ -359,7 +359,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "   contractexecutionresult mediumblob NOT NULL,\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
             + "   confirmed boolean NOT NULL,\n" 
-            + "   milestone bigint NOT NULL,\n"
+            + "   rewardchainlength bigint NOT NULL,\n"
             + "   inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
    
@@ -368,8 +368,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "   blockhash binary(32) NOT NULL,\n"  
             + "   orderexecutionresult mediumblob NOT NULL,\n" 
             + "   prevblockhash binary(32) NOT NULL,\n" 
-            + "   confirmed boolean NOT NULL,\n" 
-            + "    milestone bigint NOT NULL,\n"
+            + "   confirmed boolean NOT NULL,\n"
+            + "    rewardchainlength bigint NOT NULL,\n"
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
     private static final String CREATE_CHAINBLOCKQUEUE_TABLE = "CREATE TABLE chainblockqueue (\n" 
@@ -413,7 +413,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_PREVTRUNK_HASH_INDEX = "CREATE INDEX blocks_prevblockhash_idx ON blocks (prevblockhash) USING HASH";
     
     private static final String CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX orders_collectinghash_idx ON orders (collectinghash) USING btree";
-    private static final String CREATE_BLOCKS_MILESTONE_INDEX = "CREATE INDEX blocks_milestone_idx ON blocks (milestone)  USING btree ";
+    private static final String CREATE_BLOCKS_CHAINLENGTH_INDEX = "CREATE INDEX blocks_chainlength_idx ON blocks (chainlength)  USING btree ";
     private static final String CREATE_BLOCKS_HEIGHT_INDEX = "CREATE INDEX blocks_height_idx ON blocks (height)  USING btree ";
     private static final String CREATE_BLOCKS_SOLID_HEIGHT_INDEX = "CREATE INDEX blocks_solid_height_idx ON blocks (solid, height)  USING btree ";
     private static final String CREATE_TXREARD_CHAINLENGTH_INDEX = "CREATE INDEX txreard_chainlength_idx ON txreward (chainlength, confirmed)  ";
@@ -424,7 +424,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHING_TOKEN_TABLE_INDEX = "CREATE INDEX matching_inserttime_idx ON matching (inserttime) ";
       
     private static final String CREATE_TOKEN_TOKENID_TABLE_INDEX = "CREATE INDEX tokens_tokenid_idx ON tokens (tokenid) ";
-    private static final String CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX = "CREATE INDEX blocks_milestone_confirmed_idx ON blocks (milestone, confirmed)   ";
+    private static final String CREATE_BLOCKS_CHAINLENGTH_CONFIRMED_INDEX = "CREATE INDEX blocks_chainlength_confirmed_idx ON blocks (chainlength, confirmed)   ";
     
     
   
@@ -532,7 +532,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PREVTRUNK_HASH_INDEX);
 
         sqlStatements.add(CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX);
-        sqlStatements.add(CREATE_BLOCKS_MILESTONE_INDEX);
+        sqlStatements.add(CREATE_BLOCKS_CHAINLENGTH_INDEX);
         sqlStatements.add(CREATE_TXREARD_CHAINLENGTH_INDEX);
 
         return sqlStatements;
@@ -546,7 +546,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_ORDERS_SPENT_TABLE_INDEX);
         sqlStatements.add(CREATE_MATCHING_TOKEN_TABLE_INDEX);
         sqlStatements.add(CREATE_TOKEN_TOKENID_TABLE_INDEX);
-        sqlStatements.add(CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX);
+        sqlStatements.add(CREATE_BLOCKS_CHAINLENGTH_CONFIRMED_INDEX);
         return sqlStatements;
     }
 

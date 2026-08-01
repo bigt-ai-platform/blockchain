@@ -163,7 +163,7 @@ public class MCMCService {
     }
 
     private void deleteMCMC(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
-        store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
+        store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
     }
 
     private void updateWeightAndDepth(long cutoffHeight, long maxHeight, BlockStoreInterface store)

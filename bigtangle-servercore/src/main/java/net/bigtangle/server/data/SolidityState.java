@@ -9,7 +9,7 @@ import net.bigtangle.core.TransactionOutPoint;
  * MissingPredecessor BlockEvaluation.solid= 0
  * Success BlockEvaluation.solid= 2 
  * Invalid  BlockEvaluation.solid= -1
- * Conflict with milestone block  BlockEvaluation.solid= -milestone
+ * Conflict with chainlength block  BlockEvaluation.solid= -chainlength
  * 
  */
 public class SolidityState {

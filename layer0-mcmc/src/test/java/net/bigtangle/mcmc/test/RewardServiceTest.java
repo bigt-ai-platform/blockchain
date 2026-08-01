@@ -58,7 +58,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		blocksAddedAll.add(rewardBlock1);
 
 		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
-		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getMilestone() == 1);
+		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getChainlength() == 1);
 
 		// Generate more mining reward blocks
 		blocksAddedAll.add(  makeRewardBlock(rewardBlock1));
@@ -77,9 +77,9 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		  rewardBlock3= makeRewardBlock(rewardBlock3.getHash());
 		blocksAddedAll.add(rewardBlock3);
 		assertTrue(getBlockEvaluation(rewardBlock2.getHash(), store).isConfirmed());
-		assertTrue(getBlockEvaluation(rewardBlock2.getHash(), store).getMilestone() == 1);
+		assertTrue(getBlockEvaluation(rewardBlock2.getHash(), store).getChainlength() == 1);
 		assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).isConfirmed());
-		assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).getMilestone() == 3);
+		assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).getChainlength() == 3);
 		return rewardBlock3;
 	}
 
@@ -151,9 +151,9 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			syncBlockService.connectingOrphans(store);
 
 			assertFalse(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
-	//TODO		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getMilestone() == -1);
+	//TODO		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getChainlength() == -1);
 
-			assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).getMilestone() == 3);
+			assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).getChainlength() == 3);
 			assertTrue(getBlockEvaluation(rewardBlock3.getHash(), store).isConfirmed());
 
 			// mcmc can not change the status of chain
@@ -173,7 +173,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		Block rewardBlock1 = createReward(blocksAddedAll);
 		blockGraph.updateChain();
 		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).isConfirmed());
-		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getMilestone() == 1);
+		assertTrue(getBlockEvaluation(rewardBlock1.getHash(), store).getChainlength() == 1);
 
 		// Block rollingBlock1 = addFixedBlocks(5, Utils.createGenesis(networkParameters),
 		// blocksAddedAll);
@@ -191,8 +191,8 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 
 	// Beacon-chain reorg: a longer conflicting reward chain must win. This
 	// exercises BlockStoreService.connectRewardBlock → ServiceVerifyReward
-	// .handleNewBestChain, which un-confirms the old milestone blocks
-	// (resetMilestoneSolid + unconfirmBlocks) and confirms the new chain.
+	// .handleNewBestChain, which un-confirms the old chainlength blocks
+	// (resetChainlengthSolid + unconfirmBlocks) and confirms the new chain.
 	@Test
 	public void testBeaconChainReorgUnconfirmsLoser() throws Exception {
 		// Chain A: two beacon blocks from genesis (length 2).
@@ -201,14 +201,14 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		assertTrue(getBlockEvaluation(a1.getHash(), store).isConfirmed());
 		Block a2 = chainA.get(chainA.size() - 1);
 		assertTrue(getBlockEvaluation(a2.getHash(), store).isConfirmed());
-		assertEquals(2, getBlockEvaluation(a2.getHash(), store).getMilestone());
+		assertEquals(2, getBlockEvaluation(a2.getHash(), store).getChainlength());
 
 		// Chain B: a longer conflicting chain from genesis (length 3), built
 		// in a fresh store exactly like testReorgMiningRewardShuffle.
 		resetStore();
 		List<Block> chainB = new ArrayList<Block>();
 		Block b3 = createReward2(chainB); // length 3
-		assertEquals(3, getBlockEvaluation(b3.getHash(), store).getMilestone());
+		assertEquals(3, getBlockEvaluation(b3.getHash(), store).getChainlength());
 
 		// Replay both chains into a fresh store; the longer chain B wins.
 		resetStore();

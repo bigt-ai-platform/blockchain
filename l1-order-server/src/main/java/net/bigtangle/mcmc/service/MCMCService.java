@@ -177,7 +177,7 @@ public class MCMCService {
 		 store.insertTipsQueue(t);
 	}
 	private void deleteMCMC(TXReward maxConfirmedReward, BlockStoreInterface store) throws BlockStoreException {
-		store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
+		store.deleteMCMC(maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 	}
 
 	/**
@@ -326,7 +326,7 @@ public class MCMCService {
 
 			// Update your rating if solid
 			if (currentBlock.getBlockEvaluation().getSolid() == 2)
-			// && currentBlock.getBlockEvaluation().getMilestone() < 0 )
+			// && currentBlock.getBlockEvaluation().getChainlength() < 0 )
 			{
 				ratings.add(new Rating(currentBlock.getBlockHash(), approvers.get(currentBlock.getBlockHash()).size()));
 			}

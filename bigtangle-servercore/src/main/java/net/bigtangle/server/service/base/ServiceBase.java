@@ -326,13 +326,13 @@ public abstract class ServiceBase {
 
 	public List<Sha256Hash> getEntryPointCandidates(long currChainLength, BlockStoreInterface store)
 			throws BlockStoreException {
-		long minChainLength = Math.max(0, currChainLength - NetworkParameters.MILESTONE_CUTOFF);
-		return getBlocksInMilestoneInterval(minChainLength, currChainLength, store);
+		long minChainLength = Math.max(0, currChainLength - NetworkParameters.CHAINLENGTH_CUTOFF);
+		return getBlocksInChainlengthInterval(minChainLength, currChainLength, store);
 	}
 
-	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength,
+	public List<Sha256Hash> getBlocksInChainlengthInterval(long minChainLength, long currChainLength,
 			BlockStoreInterface store) throws BlockStoreException {
-		return store.getBlocksInMilestoneInterval(minChainLength, currChainLength);
+		return store.getBlocksInChainlengthInterval(minChainLength, currChainLength);
 
 	}
 
@@ -365,7 +365,7 @@ public abstract class ServiceBase {
 	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, BlockStoreInterface store) throws BlockStoreException {
 
 		Sha256Hash currPrevRewardHash = prevRewardHash;
-		for (int i = 0; i < NetworkParameters.MILESTONE_CUTOFF; i++) {
+		for (int i = 0; i < NetworkParameters.CHAINLENGTH_CUTOFF; i++) {
 			Block currRewardBlock;
 			currRewardBlock = getBlock(currPrevRewardHash, store);
 			RewardInfo currRewardInfo = new RewardInfo()
@@ -523,7 +523,7 @@ public abstract class ServiceBase {
 		}
 	}
 
-	public void solidifyBlock(Block block, SolidityState solidityState, boolean setMilestoneSuccess,
+	public void solidifyBlock(Block block, SolidityState solidityState, boolean setChainlengthSuccess,
 			BlockStoreInterface blockStore) throws BlockStoreException {
 		switch (solidityState.getState()) {
 		case MissingCalculation:
@@ -552,8 +552,8 @@ public abstract class ServiceBase {
 			connectTypeSpecificUTXOs(block, blockStore);
 			calculateBlockOrderMatchingResult(block, blockStore);
 
-			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON && !setMilestoneSuccess) {
-				// If we don't want to set the milestone success, initialize as
+			if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON && !setChainlengthSuccess) {
+				// If we don't want to set the chainlength success, initialize as
 				// missing calc
 				blockStore.updateBlockEvaluationSolid(block.getHash(), 1);
 			} else {
@@ -623,7 +623,7 @@ public abstract class ServiceBase {
 		// TXReward maxConfirmedReward = store.getMaxConfirmedReward();
 		if (maxConfirmedReward == null)
 			return 0;
-		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.MILESTONE_CUTOFF);
+		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
 		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
 	}

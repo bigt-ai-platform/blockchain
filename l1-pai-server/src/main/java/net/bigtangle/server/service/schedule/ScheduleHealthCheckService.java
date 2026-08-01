@@ -22,7 +22,7 @@ public class ScheduleHealthCheckService {
 
     @Scheduled(fixedRate = 2000)
     public void checkService() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             heathCheckService.startSingleProcess();
         }
     }

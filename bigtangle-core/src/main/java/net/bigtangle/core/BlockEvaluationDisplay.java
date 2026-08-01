@@ -45,14 +45,14 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
         this.blockType = blockType;
     }
 
-    public static BlockEvaluationDisplay build(Sha256Hash blockhash, long height, long milestone,
-            long milestoneLastUpdateTime, long insertTime, int blocktype, long solid, boolean confirmed,
+    public static BlockEvaluationDisplay build(Sha256Hash blockhash, long height, long chainlength,
+            long chainlengthLastUpdateTime, long insertTime, int blocktype, long solid, boolean confirmed,
             long latestchainnumber) {
         BlockEvaluationDisplay blockEvaluation = new BlockEvaluationDisplay();
         blockEvaluation.setBlockHash(blockhash);
         blockEvaluation.setHeight(height);
-        blockEvaluation.setMilestone(milestone);
-        blockEvaluation.setMilestoneLastUpdateTime(milestoneLastUpdateTime);
+        blockEvaluation.setChainlength(chainlength);
+        blockEvaluation.setChainlengthLastUpdateTime(chainlengthLastUpdateTime);
         blockEvaluation.setInsertTime(insertTime);
         blockEvaluation.setBlockTypeInt(blocktype);
         blockEvaluation.setSolid(solid);
@@ -68,8 +68,8 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
   
     // use ProbabilityBlock.attackerSuccessProbability(0.3, z))
     public void setNormalizeRating() {
-        if (getMilestone() > 0) {
-            long diff = latestchainnumber - getMilestone()+1;
+        if (getChainlength() > 0) {
+            long diff = latestchainnumber - getChainlength()+1;
             if (diff > 100)
                 diff = 100;
             double attact = ProbabilityBlock.attackerSuccessProbability(0.3, diff);

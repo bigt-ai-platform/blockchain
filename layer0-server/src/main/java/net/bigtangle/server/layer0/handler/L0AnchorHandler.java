@@ -32,7 +32,7 @@ public class L0AnchorHandler implements BlockTypeHandler {
     @Override
     public void confirm(SolidityContext ctx) throws BlockStoreException {
         ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-        ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
+        ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
         try {
             if (ctx.confirmation()) {
                 anchorService.processReceivedAnchor(ctx.block(), ctx.store());

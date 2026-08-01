@@ -87,7 +87,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			tokenInfo.setToken(tokens);
 			tokenInfo.getMultiSignAddresses()
 					.add(new MultiSignAddress(tokens.getTokenid(), "", ecKey1.getPublicKeyAsHex()));
-			// This (saveBlock) calls milestoneUpdate currently, that's why we
+			// This (saveBlock) calls chainlengthUpdate currently, that's why we
 			// need other blocks beforehand.
 			Block block1 = saveTokenUnitTestWithTokenname(tokenInfo, coinbase, ecKey1, null, null);
 			firstIssuance = block1.getHash();
@@ -112,7 +112,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 			PQKey ecKey = PQKey.createNew();
 			PQKey ecKey2 = PQKey.createNew();
 
-			// This (saveBlock) calls milestoneUpdate currently, that's why we
+			// This (saveBlock) calls chainlengthUpdate currently, that's why we
 			// need other blocks beforehand.
 			PQKey outKey3 = PQKey.createNew();
 			wallet.importKey(ecKey2);
@@ -270,7 +270,7 @@ public class FullPrunedBlockGraphTest extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 
-		// This (saveBlock) calls milestoneUpdate currently
+		// This (saveBlock) calls chainlengthUpdate currently
 		Block block11 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null, null);
 		store.put(block11);
 		confirmDo(s.getBlockWrap(block11.getHash(), store), new HashSet<>(), store);

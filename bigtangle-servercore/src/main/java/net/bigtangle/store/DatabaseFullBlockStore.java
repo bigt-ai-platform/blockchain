@@ -1668,7 +1668,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Orderresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("orderresult"),
-				resultSet.getLong("milestone"), resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
+				resultSet.getLong("rewardchainlength"), resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
 
@@ -1676,7 +1676,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("rewardchainlength"),
 				resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
@@ -1775,7 +1775,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			preparedStatement = getConnection()
 					.prepareStatement("  select distinct( blocks.hash) from  blocks  , outputs "
 							+ " where spenderblockhash = blocks.hash    "
-							+ "  and blocks.milestone < ? and blocks.milestone > 0  " + " and ( blocks.blocktype = '"
+							+ "  and blocks.chainlength < ? and blocks.chainlength > 0  " + " and ( blocks.blocktype = '"
 							+ BlockType.BLOCKTYPE_TRANSFER.name() + "' or blocks.blocktype = '"
 							+ BlockType.BLOCKTYPE_ORDER_OPEN.name() + "' or blocks.blocktype = '"
 							+ BlockType.BLOCKTYPE_BEACON.name() + "'  ) limit 1000 ");
@@ -1805,7 +1805,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 		try (PreparedStatement deleteStatement = getConnection()
 				.prepareStatement(" delete FROM outputs WHERE  spent=true AND "
-						+ "spenderblockhash in (select hash from blocks where milestone < ? and milestone > 0  limit 1000 ) ")) {
+						+ "spenderblockhash in (select hash from blocks where chainlength < ? and chainlength > 0  limit 1000 ) ")) {
 			deleteStatement.setLong(1, maxRewardblock);
 			deleteStatement.executeUpdate();
 		} catch (SQLException e) {
@@ -2210,11 +2210,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public List<Sha256Hash> blocksNotMilestoneFromHeigth(long cutoffHeight) throws BlockStoreException {
+	public List<Sha256Hash> blocksNotChainlengthFromHeigth(long cutoffHeight) throws BlockStoreException {
 		List<Sha256Hash> storedBlockHashes = new ArrayList<>();
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL)) {
+				.prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL)) {
 			preparedStatement.setLong(1, cutoffHeight);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
@@ -2458,7 +2458,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public List<Block> findRetryBlocks(long minHeigth) throws BlockStoreException {
 
 		String sql = "SELECT hash,  "
-				+ " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed , block"
+				+ " height, chainlength, chainlengthlastupdate,  inserttime,  blocktype, solid, confirmed , block"
 				+ "  FROM   blocks ";
 		sql += " where solid >=0 and confirmed=false and height >= " + minHeigth;
 		sql += " ORDER BY insertTime desc ";
@@ -3008,10 +3008,10 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Contractresult getMaxMilestoneContractresult(String contracttokenid) throws BlockStoreException {
+	public Contractresult getMaxRewardChainlengthContractresult(String contracttokenid) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL)) {
+				.prepareStatement(SELECT_CONTRACTRESULT_MAX_CHAINLENGTH_SQL)) {
 			preparedStatement.setString(1, contracttokenid);
 			ResultSet resultSet = preparedStatement.executeQuery();
 			while (resultSet.next()) {
@@ -3065,10 +3065,10 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public Orderresult getMaxMilestoneOrderresult() throws BlockStoreException {
+	public Orderresult getMaxRewardChainlengthOrderresult() throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_ORDER_RESULT_MAX_MILESTONE_SQL)) {
+				.prepareStatement(SELECT_ORDER_RESULT_MAX_CHAINLENGTH_SQL)) {
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
 				return setOrderresult(resultSet);

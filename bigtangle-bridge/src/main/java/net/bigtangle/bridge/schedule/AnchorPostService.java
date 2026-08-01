@@ -48,7 +48,7 @@ public class AnchorPostService {
 
     @Scheduled(fixedDelayString = "${anchor.postIntervalMs:30000}")
     public void postAnchor() {
-        if (!anchorConfiguration.isActive() || !scheduleConfiguration.isMilestone_active()
+        if (!anchorConfiguration.isActive() || !scheduleConfiguration.isChainlength_active()
                 || !serverConfiguration.checkService()) {
             return;
         }
@@ -61,8 +61,8 @@ public class AnchorPostService {
 
             AnchorRecord latestAnchor = store.getLatestAnchorByChainId(networkParameters.getChainId());
             if (latestAnchor != null) {
-                long milestoneDiff = latestRewardHeight - latestAnchor.getL1Height();
-                if (milestoneDiff < anchorConfiguration.getPostInterval()) {
+                long rewardHeightDiff = latestRewardHeight - latestAnchor.getL1Height();
+                if (rewardHeightDiff < anchorConfiguration.getPostInterval()) {
                     return;
                 }
             }

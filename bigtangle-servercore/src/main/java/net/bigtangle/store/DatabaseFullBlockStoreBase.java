@@ -116,13 +116,13 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ duplicateInsert();
 
 	protected final String SELECT_BLOCKS_TEMPLATE = "  blocks.hash, block,  "
-			+ "  height, milestone, milestonelastupdate,  inserttime,   solid, confirmed";
+			+ "  height, chainlength, chainlengthlastupdate,  inserttime,   solid, confirmed";
 
 	protected final String SELECT_BLOCKS_SQL = " select " + SELECT_BLOCKS_TEMPLATE + " FROM blocks WHERE hash = ?";
 
-	protected final String SELECT_BLOCKS_MILESTONE_SQL = "SELECT block, height FROM blocks WHERE height "
-			+ " >= (select min(height) from blocks where  milestone >= ? and  milestone <=?)"
-			+ " and height <= (select max(height) from blocks where  milestone >= ? and  milestone <=?) "
+	protected final String SELECT_BLOCKS_CHAINLENGTH_SQL = "SELECT block, height FROM blocks WHERE height "
+			+ " >= (select min(height) from blocks where  chainlength >= ? and  chainlength <=?)"
+			+ " and height <= (select max(height) from blocks where  chainlength >= ? and  chainlength <=?) "
 			+ " order by height asc ";
 
 	protected final String SELECT_MCMC_TEMPLATE = "  hash, rating, depth, cumulativeweight ";
@@ -136,7 +136,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String INSERT_BLOCKS_SQL = getInsert() + "  INTO blocks(hash,  height, block,  prevblockhash,"
 			+ "prevbranchblockhash,blocktype,  "
-			+ "milestone, milestonelastupdate,  inserttime,  solid, confirmed  )"
+			+ "chainlength, chainlengthlastupdate,  inserttime,  solid, confirmed  )"
 			+ " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ? ,  ?, ? )" + duplicateInsert();
 
 	protected final String INSERT_OUTPUTS_SQL = getInsert()
@@ -177,25 +177,25 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_CHECK_TABLES_EXIST_SQL = "SELECT * FROM settings WHERE 1 = 2";
 
 	protected final String SELECT_BLOCKS_MCMC_CONFIRM = "SELECT" + SELECT_BLOCKS_TEMPLATE
-			+ " FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 AND confirmed = false AND height > ?"
+			+ " FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false AND height > ?"
 			+ " AND height <= ? AND mcmc.rating >= " + NetworkParameters.CONFIRMATION_UPPER_THRESHOLD;
 
 	protected final String SELECT_BLOCKS_TO_UNCONFIRM_SQL = "SELECT" + SELECT_BLOCKS_TEMPLATE
-			+ "  FROM blocks , mcmc WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 AND confirmed = true AND mcmc.rating < "
+			+ "  FROM blocks , mcmc WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = true AND mcmc.rating < "
 			+ NetworkParameters.CONFIRMATION_LOWER_THRESHOLD;
 
-	protected final String SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL = "SELECT hash "
-			+ "  FROM blocks WHERE milestone >= ? AND milestone <= ?";
+	protected final String SELECT_BLOCKS_IN_CHAINLENGTH_INTERVAL_SQL = "SELECT hash "
+			+ "  FROM blocks WHERE chainlength >= ? AND chainlength <= ?";
 
 	protected final String SELECT_SOLID_BLOCKS_IN_INTERVAL_SQL = "SELECT   " + SELECT_BLOCKS_TEMPLATE
 			+ " FROM blocks WHERE   height > ? AND height <= ? AND solid = 2 ";
 
 	protected final String SELECT_SOLID_BLOCK_TOPOLOGY_INTERVAL_SQL = "SELECT hash, prevblockhash, prevbranchblockhash, "
-			+ " height, milestone, milestonelastupdate, inserttime, solid, confirmed "
+			+ " height, chainlength, chainlengthlastupdate, inserttime, solid, confirmed "
 			+ " FROM blocks WHERE height > ? AND height <= ? AND solid = 2 ";
 
-	protected final String SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL = "SELECT hash "
-			+ "FROM blocks WHERE milestone = -1 AND height >= ? AND solid > -1 order by height desc ";
+	protected final String SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
+			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
@@ -243,41 +243,41 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String INSERT_CONTRACT_RESULT_SQL = getInsert()
 			+ "  INTO contractresult (blockhash,  contracttokenid, confirmed, spent, spenderblockhash, "
-			+ " contractresult, prevblockhash, inserttime, milestone,chainlength) "
+			+ " contractresult, prevblockhash, inserttime, rewardchainlength,chainlength) "
 			+ " VALUES (?, ?, ?, ?, ?, ?,?,?,?,?)" + duplicateInsert();
 	protected final String SELECT_CONTRACTRESULT = "SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-			+ " contractresult, prevblockhash, inserttime, milestone, chainlength" + " FROM contractresult ";
+			+ " contractresult, prevblockhash, inserttime, rewardchainlength, chainlength" + " FROM contractresult ";
 	protected final String SELECT_CONTRACTRESULT_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE blockhash=?   ";
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
-	protected final String SELECT_CONTRACTRESULT_MAX_MILESTONE_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and milestone >0 order by chainlength desc limit 1 ";
+	protected final String SELECT_CONTRACTRESULT_MAX_CHAINLENGTH_SQL = SELECT_CONTRACTRESULT
+			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and rewardchainlength >0 order by chainlength desc limit 1 ";
 	protected final String SELECT_CONTRACTRESULT_MAX_CONFIRMED_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE confirmed = true and contracttokenid=?   order by chainlength desc limit 1   ";
 	protected final String SELECT_CONTRACTRESULT_LOWER_CONFIRMED_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE milestone < 0 and  confirmed = true and contracttokenid=? and chainlength <=?   ";
+			+ " WHERE rewardchainlength < 0 and  confirmed = true and contracttokenid=? and chainlength <=?   ";
 
-	protected final String UPDATE_CONTRACTRESULT_MILESTONE_SQL = getUpdate()
-			+ " contractresult SET milestone = ?   WHERE blockhash = ?";
+	protected final String UPDATE_CONTRACTRESULT_CHAINLENGTH_SQL = getUpdate()
+			+ " contractresult SET rewardchainlength = ?   WHERE blockhash = ?";
 
 	protected final String UPDATE_ORDERRESULT_CONFIRMED_SQL = getUpdate() + " orderresult SET confirmed = ? "
 			+ " WHERE blockhash = ?";
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
 			+ "  INTO orderresult (blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime,  milestone,chainlength) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)"
+			+ " orderresult, prevblockhash, inserttime,  rewardchainlength,chainlength) " + " VALUES (?, ?, ?, ?, ?, ?,?,?,?)"
 			+ duplicateInsert();
 	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
-			+ " orderresult, prevblockhash, inserttime ,  milestone, chainlength" + " FROM orderresult ";
+			+ " orderresult, prevblockhash, inserttime ,  rewardchainlength, chainlength" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_MAX_CONFIRMED_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = true   order by chainlength desc limit 1  ";
 	protected final String SELECT_ORDERRESULT_LOWER_CONFIRMED_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true and milestone < 0  and  chainlength  <=?  ";
+			+ " WHERE confirmed = true and rewardchainlength < 0  and  chainlength  <=?  ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
-	protected final String SELECT_ORDER_RESULT_MAX_MILESTONE_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true and milestone >0 and spent=false order by chainlength desc limit 1";
-	protected final String UPDATE_ORDERRESULT_MILESTONE_SQL = getUpdate()
-			+ " orderresult SET milestone = ?   WHERE blockhash = ?";
+	protected final String SELECT_ORDER_RESULT_MAX_CHAINLENGTH_SQL = SELECT_ORDERRESULT
+			+ " WHERE confirmed = true and chainlength >0 and spent=false order by chainlength desc limit 1";
+	protected final String UPDATE_ORDERRESULT_CHAINLENGTH_SQL = getUpdate()
+			+ " orderresult SET rewardchainlength = ?   WHERE blockhash = ?";
 
 	protected final String INSERT_TOKENS_SQL = getInsert()
 			+ " INTO tokens (blockhash, confirmed, tokenid, tokenindex, amount, "
@@ -345,10 +345,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " into mcmc ( cumulativeweight  , depth   , hash, rating  ) VALUES (?,?,?, ?)  " + duplicateInsert();
 
 	protected final String SELECT_MCMC_CHAINLENGHT_SQL = "  select mcmc.hash "
-			+ " from blocks, mcmc where mcmc.hash=blocks.hash and milestone < ?  and milestone > 0  ";
+			+ " from blocks, mcmc where mcmc.hash=blocks.hash and chainlength < ?  and chainlength > 0  ";
 
-	protected final String UPDATE_BLOCKEVALUATION_MILESTONE_SQL = getUpdate()
-			+ " blocks SET milestone = ?, milestonelastupdate= ?  WHERE hash = ?";
+	protected final String UPDATE_BLOCKEVALUATION_CHAINLENGTH_SQL = getUpdate()
+			+ " blocks SET chainlength = ?, chainlengthlastupdate= ?  WHERE hash = ?";
 
 	protected final String UPDATE_BLOCKEVALUATION_CONFIRMED_SQL = getUpdate()
 			+ " blocks SET confirmed = ? WHERE hash = ?";
@@ -356,7 +356,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_BLOCKEVALUATION_RATING_SQL = getUpdate() + " mcmc SET rating = ? WHERE hash = ?";
 
 	protected final String UPDATE_BLOCKEVALUATION_SOLID_SQL = getUpdate() + " blocks SET solid = ? WHERE hash = ?";
-	protected final String RESETMILISTONE_SOLID_SQL = getUpdate() + " blocks SET solid = 0 WHERE milestone = ?";
+	protected final String RESET_CHAINLENGTH_SOLID_SQL = getUpdate() + " blocks SET solid = 0 WHERE chainlength = ?";
 
 	protected final String SELECT_MULTISIGNADDRESS_SQL = "SELECT blockhash, tokenid, address, pubKeyHex, posIndex, tokenHolder FROM multisignaddress WHERE tokenid = ? AND blockhash = ?";
 	protected final String INSERT_MULTISIGNADDRESS_SQL = "INSERT INTO multisignaddress (tokenid, address, pubKeyHex, posIndex,blockhash,tokenHolder) VALUES (?, ?, ?, ?,?,?)"
@@ -755,7 +755,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private void saveNewStore(Block b) throws BlockStoreException {
 		put(b);
 
-		updateBlockEvaluationMilestone(b.getHash(), 0);
+		updateBlockEvaluationChainlength(b.getHash(), 0);
 
 		updateBlockEvaluationSolid(b.getHash(), 2);
 		updateBlockEvaluationConfirmed(b.getHash(), true);
@@ -806,8 +806,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			s.setString(6, block.getBlockType().name());
 
 			int j = 1;
-			s.setLong(j + 6, blockEvaluation.getMilestone());
-			s.setLong(j + 7, blockEvaluation.getMilestoneLastUpdateTime());
+			s.setLong(j + 6, blockEvaluation.getChainlength());
+			s.setLong(j + 7, blockEvaluation.getChainlengthLastUpdateTime());
 			s.setLong(j + 8, blockEvaluation.getInsertTime());
 			s.setLong(j + 9, blockEvaluation.getSolid());
 			s.setBoolean(j + 10, blockEvaluation.isConfirmed());
@@ -902,7 +902,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		List<byte[]> re = new ArrayList<>();
 
 		// log.info("find block hexStr : " + hash.toString());
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_MILESTONE_SQL)) {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_CHAINLENGTH_SQL)) {
 			s.setLong(1, start);
 			s.setLong(2, end);
 			s.setLong(3, start);
@@ -923,7 +923,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public List<byte[]> blocksFromNonChainHeigth(long heigth) {
 		List<byte[]> re = new ArrayList<>();
 
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_MILESTONE_SQL)) {
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL)) {
 			s.setLong(1, heigth);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
@@ -1645,7 +1645,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = BlockEvaluation.build(
 						Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
-						resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+						resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 						resultSet.getLong("inserttime"), resultSet.getLong("solid"),
 						resultSet.getBoolean("confirmed"));
 
@@ -1672,12 +1672,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public List<Sha256Hash> getBlocksInMilestoneInterval(long minChainLength, long currChainLength)
+	public List<Sha256Hash> getBlocksInChainlengthInterval(long minChainLength, long currChainLength)
 			throws BlockStoreException {
 		List<Sha256Hash> resultQueue = new ArrayList<>();
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(SELECT_BLOCKS_IN_MILESTONE_INTERVAL_SQL)) {
+				.prepareStatement(SELECT_BLOCKS_IN_CHAINLENGTH_INTERVAL_SQL)) {
 			preparedStatement.setLong(1, minChainLength);
 			preparedStatement.setLong(2, currChainLength);
 			ResultSet resultSet = preparedStatement.executeQuery();
@@ -1714,7 +1714,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	private BlockEvaluation setBlockEvaluation(ResultSet resultSet) throws SQLException {
 		return BlockEvaluation.build(Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
-				resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+				resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 				resultSet.getLong("inserttime"), resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
 	}
 
@@ -1775,10 +1775,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public void updateBlockEvaluationMilestone(Sha256Hash blockhash, long b) throws BlockStoreException {
+	public void updateBlockEvaluationChainlength(Sha256Hash blockhash, long b) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(UPDATE_BLOCKEVALUATION_MILESTONE_SQL)) {
+				.prepareStatement(UPDATE_BLOCKEVALUATION_CHAINLENGTH_SQL)) {
 			preparedStatement.setLong(1, b);
 			preparedStatement.setLong(2, System.currentTimeMillis());
 			preparedStatement.setBytes(3, blockhash.getBytes());
@@ -1835,9 +1835,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public void resetMilestoneSolid(long milestone) throws BlockStoreException {
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(RESETMILISTONE_SOLID_SQL)) {
-			preparedStatement.setLong(1, milestone);
+	public void resetChainlengthSolid(long chainlength) throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(RESET_CHAINLENGTH_SOLID_SQL)) {
+			preparedStatement.setLong(1, chainlength);
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -2329,7 +2329,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		StringBuilder stringBuffer = new StringBuilder();
 		if (!"0".equalsIgnoreCase(lastestAmount) && !"".equalsIgnoreCase(lastestAmount)) {
 			sql += "SELECT hash,  "
-					+ " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
+					+ " height, chainlength, chainlengthlastupdate,  inserttime,  blocktype, solid, confirmed "
 					+ "  FROM  blocks ";
 			sql += " where height >= " + height;
 			sql += " ORDER BY insertTime desc ";
@@ -2340,7 +2340,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			sql += " LIMIT " + a;
 		} else {
 			sql += "SELECT blocks.hash, "
-					+ " blocks.height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, blocks.confirmed"
+					+ " blocks.height, chainlength, chainlengthlastupdate,  inserttime,  blocktype, solid, blocks.confirmed"
 					+ " FROM outputs JOIN blocks " + "ON outputs.blockhash = blocks.hash  ";
 			sql += " where height >= " + height;
 			sql += " and  outputs.toaddress in ";
@@ -2358,7 +2358,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			while (resultSet.next()) {
 				BlockEvaluationDisplay blockEvaluation = BlockEvaluationDisplay.build(
 						Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
-						resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+						resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 						resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
 				blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
@@ -2375,14 +2375,14 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public BlockEvaluation getBlockEvaluationsByhashs(Sha256Hash hash) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(
-				"SELECT hash,  " + " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
+				"SELECT hash,  " + " height, chainlength, chainlengthlastupdate,  inserttime,  blocktype, solid, confirmed "
 						+ "  FROM  blocks WHERE hash = ? ")) {
 
 			preparedStatement.setBytes(1, hash.getBytes());
 			ResultSet resultSet = preparedStatement.executeQuery();
 			if (resultSet.next()) {
-				return BlockEvaluation.build(hash, resultSet.getLong("height"), resultSet.getLong("milestone"),
-						resultSet.getLong("milestonelastupdate"), resultSet.getLong("inserttime"),
+				return BlockEvaluation.build(hash, resultSet.getLong("height"), resultSet.getLong("chainlength"),
+						resultSet.getLong("chainlengthlastupdate"), resultSet.getLong("inserttime"),
 						resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
 
 			}
@@ -2404,7 +2404,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 		String sql = "";
 
-		sql += "SELECT hash,  " + " height, milestone, milestonelastupdate,  inserttime,  blocktype, solid, confirmed "
+		sql += "SELECT hash,  " + " height, chainlength, chainlengthlastupdate,  inserttime,  blocktype, solid, confirmed "
 				+ "  FROM  blocks WHERE hash = ? ";
 
 		TXReward maxConfirmedReward = getMaxConfirmedReward();
@@ -2416,7 +2416,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				while (resultSet.next()) {
 					BlockEvaluationDisplay blockEvaluation = BlockEvaluationDisplay.build(
 							Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
-							resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+							resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 							resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
 					blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
@@ -2440,10 +2440,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public void updateOrderresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException {
+	public void updateOrderresultChainlength(Sha256Hash blockhash, long rewardchainlength) throws BlockStoreException {
 
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(UPDATE_ORDERRESULT_MILESTONE_SQL)) {
-			preparedStatement.setLong(1, milestone);
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(UPDATE_ORDERRESULT_CHAINLENGTH_SQL)) {
+			preparedStatement.setLong(1, rewardchainlength);
 			preparedStatement.setBytes(2, blockhash.getBytes());
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
@@ -2453,11 +2453,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public void updateContractresultMilestone(Sha256Hash blockhash, long milestone) throws BlockStoreException {
+	public void updateContractresultChainlength(Sha256Hash blockhash, long rewardchainlength) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(UPDATE_CONTRACTRESULT_MILESTONE_SQL)) {
-			preparedStatement.setLong(1, milestone);
+				.prepareStatement(UPDATE_CONTRACTRESULT_CHAINLENGTH_SQL)) {
+			preparedStatement.setLong(1, rewardchainlength);
 			preparedStatement.setBytes(2, blockhash.getBytes());
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {

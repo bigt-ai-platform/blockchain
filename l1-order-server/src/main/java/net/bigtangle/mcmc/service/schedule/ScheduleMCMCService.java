@@ -7,7 +7,7 @@ package net.bigtangle.mcmc.service.schedule;
 /**
  * Service responsible for scheduled execution of MCMC (Markov Chain Monte Carlo) processes.
  * Runs at a configurable fixed delay (default: 500ms) for continuous validation and consensus operations.
- * Requires milestone activation and service availability to execute.
+ * Requires chainlength activation and service availability to execute.
  */
 
 import org.slf4j.Logger;
@@ -55,14 +55,14 @@ public class ScheduleMCMCService {
      * The delay is configurable through application properties (service.schedule.mcmcrate)
      * with a default of 500ms if not specified.
      * Only executes if:
-     * 1. Milestone activation is enabled
+     * 1. Chainlength activation is enabled
      * 2. Server service is available
      */
 
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.mcmcrate:500}")
     public void updatemcmcService() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
             //    logger.debug(" Start SchedulemcmcService: ");
                 mcmcService.startSingleProcess();

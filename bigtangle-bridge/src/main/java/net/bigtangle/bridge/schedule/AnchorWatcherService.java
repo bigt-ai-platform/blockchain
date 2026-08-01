@@ -70,7 +70,7 @@ public class AnchorWatcherService {
 
     @Scheduled(fixedDelayString = "${anchor.watchIntervalMs:60000}")
     public void watchAnchors() {
-        if (!anchorConfiguration.isActive() || !scheduleConfiguration.isMilestone_active()
+        if (!anchorConfiguration.isActive() || !scheduleConfiguration.isChainlength_active()
                 || !serverConfiguration.checkService()) {
             return;
         }

@@ -45,15 +45,15 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceVerifyReward.class);
 
-	public void verifyRewardChainConfirmReferenced(Block newMilestoneBlock, BlockStoreInterface store)
+	public void verifyRewardChainConfirmReferenced(Block newChainlengthBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
-		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
+		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
 		long cutoffHeight = getRewardCutoffHeight(currRewardInfo.getPrevRewardHash(), store);
 
 		// Check all referenced blocks have their requirements
-		SolidityState solidityState = checkReferencedBlockRequirements(newMilestoneBlock, cutoffHeight, store);
+		SolidityState solidityState = checkReferencedBlockRequirements(newChainlengthBlock, cutoffHeight, store);
 		if (solidityState.notSuccessState())
 			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState);
 
@@ -61,20 +61,20 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		solidifyBlocks(currRewardInfo, store);
 
 		// Ensure the new difficulty and tx is set correctly
-		checkGeneratedReward(newMilestoneBlock, referrencedBlocks, store);
+		checkGeneratedReward(newChainlengthBlock, referrencedBlocks, store);
 
 		// Sanity check: No reward blocks are approved
-		checkContainsNoRewardBlocks(newMilestoneBlock, store);
+		checkContainsNoRewardBlocks(newChainlengthBlock, store);
 
 		// Check: At this point, predecessors must be solid
 		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.checkSolidity(newMilestoneBlock, false, store, false);
+				.checkSolidity(newChainlengthBlock, false, store, false);
 
 		if (solidityState.notSuccessState())
 			throw new VerificationException(
-					" .checkSolidity is failed: " + solidityState + "\n with block = " + newMilestoneBlock);
+					" .checkSolidity is failed: " + solidityState + "\n with block = " + newChainlengthBlock);
 
-		long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
+		long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
 
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
@@ -83,14 +83,14 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			allApprovedNewBlocks.add(blockWrap);
 		}
 
-		allApprovedNewBlocks.add(getBlockWrap(newMilestoneBlock.getHash(), store));
+		allApprovedNewBlocks.add(getBlockWrap(newChainlengthBlock.getHash(), store));
 
 		// If anything is already spent, remove those blocks and continue
 		// with the rest.  This handles the case where MCMC creates reward
 		// blocks faster than UpdateChain processes them — the second reward
 		// block may reference blocks already confirmed by the first.
 		if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
-			allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getMilestone() > 0);
+			allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getChainlength() > 0);
 			if (allApprovedNewBlocks.size() <= 1) return;
 		}
 		// If any conflicts exist between the current set of
@@ -105,20 +105,20 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		// Otherwise, all predecessors exist and were at least
 		// solid > 0, so we should be able to confirm everything
-		solidifyBlock(newMilestoneBlock, solidityState, true, store);
+		solidifyBlock(newChainlengthBlock, solidityState, true, store);
 
-		confirmBlocksSorted(store, milestoneNumber, allApprovedNewBlocks, new HashSet<>());
+		confirmBlocksSorted(store, chainlength, allApprovedNewBlocks, new HashSet<>());
 
 	}
 
-	private void checkGeneratedReward(Block newMilestoneBlock, Set<Sha256Hash> referrencedBlocks,
+	private void checkGeneratedReward(Block newChainlengthBlock, Set<Sha256Hash> referrencedBlocks,
 			BlockStoreInterface store) throws BlockStoreException {
 
-		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
+		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
 
-		RewardBuilderResult result = getRewardBuilderResult(newMilestoneBlock.getPrevBlockHash(),
-				newMilestoneBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
-				newMilestoneBlock.getTimeSeconds(), false,
+		RewardBuilderResult result = getRewardBuilderResult(newChainlengthBlock.getPrevBlockHash(),
+				newChainlengthBlock.getPrevBranchBlockHash(), currRewardInfo.getPrevRewardHash(),
+				newChainlengthBlock.getTimeSeconds(), false,
 				referrencedBlocks, store);
 		if (currRewardInfo.getDifficultyTargetReward() != result.getDifficulty()) {
 			throw new VerificationException("Incorrect difficulty target");
@@ -128,12 +128,12 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 	}
 
 	/*
-	 * check blocks are in not in milestone
+	 * check blocks are in not in chainlength
 	 */
-	private SolidityState checkReferencedBlockRequirements(Block newMilestoneBlock, long cutoffHeight,
+	private SolidityState checkReferencedBlockRequirements(Block newChainlengthBlock, long cutoffHeight,
 			BlockStoreInterface store) throws BlockStoreException {
 
-		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
+		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
 
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			BlockWrap block = getBlockWrap(hash, store);
@@ -153,10 +153,10 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		return SolidityState.getSuccessState();
 	}
 
-	private void checkContainsNoRewardBlocks(Block newMilestoneBlock, BlockStoreInterface store)
+	private void checkContainsNoRewardBlocks(Block newChainlengthBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 
-		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newMilestoneBlock.getTransactions().get(0).getData());
+		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
 			BlockWrap block = getBlockWrap(hash, store);
 			if (block.getBlock().getBlockType() == BlockType.BLOCKTYPE_BEACON)
@@ -235,14 +235,14 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		for (Block oldBlock : oldBlocks) {
 			// Sanity check:
 			if (!oldBlock.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash())) {
-				// Unset the milestone (Chain length) of this one
-				long milestoneNumber = getRewardInfo(oldBlock).getChainlength();
-				List<Sha256Hash> blocksInMilestoneInterval = getBlocksInMilestoneInterval(milestoneNumber,
-						milestoneNumber, store);
-				// all conflicts to this milestone will reset to initial
-				store.resetMilestoneSolid(milestoneNumber);
-				// Unconfirm anything in milestone
-				unconfirmBlocks(store, blocksInMilestoneInterval);
+				// Unset the chainlength (Chain length) of this one
+				long chainlength = getRewardInfo(oldBlock).getChainlength();
+				List<Sha256Hash> blocksInChainlengthInterval = getBlocksInChainlengthInterval(chainlength,
+						chainlength, store);
+				// all conflicts to this chainlength will reset to initial
+				store.resetChainlengthSolid(chainlength);
+				// Unconfirm anything in chainlength
+				unconfirmBlocks(store, blocksInChainlengthInterval);
 			}
 			// store.commitDatabaseBatchWrite();
 			// store.beginDatabaseBatchWrite();
@@ -264,10 +264,10 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// setChainHead(storedNewHead);
 	}
 
-	private void unconfirmBlocks(BlockStoreInterface store, List<Sha256Hash> blocksInMilestoneInterval)
+	private void unconfirmBlocks(BlockStoreInterface store, List<Sha256Hash> blocksInChainlengthInterval)
 			throws BlockStoreException {
 		HashSet<BlockWrap> blocksToRemoveBlocks = new HashSet<>();
-		for (Sha256Hash b : blocksInMilestoneInterval) {
+		for (Sha256Hash b : blocksInChainlengthInterval) {
 			blocksToRemoveBlocks.add(getBlockWrap(b, store));
 		}
 		unconfirmBlocksSorted(store, blocksToRemoveBlocks, new HashSet<>());

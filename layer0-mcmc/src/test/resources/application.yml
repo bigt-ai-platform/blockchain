@@ -22,10 +22,6 @@ db:
   password: ${DB_PASSWORD:test1234}
 
 service:
-  milestoneschedule:
-    rate: ${SERVICE_MILESTONE_RATE:15000}
-    active: ${SERVICE_MILESTONE_ACTIVE:false}
-    initsync: ${SERVICE_INITSYNC:true}
   schedule:
     mcmc: ${SERVICE_MCMC:false}
     mcmcrate: ${SERVICE_MCMC_RATE:1000}

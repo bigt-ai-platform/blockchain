@@ -31,7 +31,7 @@ public class UpdateChainService {
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.upchainrate:10000}")
     public void updateChain() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
                 blockGraph.updateChain();
             } catch (Exception e) {

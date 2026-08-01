@@ -32,7 +32,7 @@ public class ScheduleSyncBlockService {
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.syncrate:50000}")
     public void syncService() throws BlockStoreException {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()
         		&& !scheduleConfiguration.isInitSync() ) {
             syncBlockService.startSingleProcess();
         }

@@ -20,21 +20,21 @@ public class BlockEvaluation implements Serializable {
 	private long height;
 
 	// chain length of reward block as consensus
-	private long milestone;
+	private long chainlength;
 
-	// Timestamp for entry into milestone as true, reset if flip to false
-	private long milestoneLastUpdateTime;
+	// Timestamp for entry into chainlength as true, reset if flip to false
+	private long chainlengthLastUpdateTime;
 
 	// Timestamp for entry into evaluations/reception time
 	private long insertTime;
 
-	// -milestone: conflict with milestone
+	// -chainlength: conflict with chainlength
 	// 0: initial.
 	// -1: unsolid 1: solid for calculation
 	// 2: solid
 	private long solid;
 
-	// If true, this block is confirmed by mcmc and milestone
+	// If true, this block is confirmed by mcmc and chainlength
 	private boolean confirmed;
 
 	public BlockEvaluation() {
@@ -45,8 +45,8 @@ public class BlockEvaluation implements Serializable {
 		setBlockHash(other.blockHash);
 
 		setHeight(other.height);
-		setMilestone(other.milestone);
-		setMilestoneLastUpdateTime(other.milestoneLastUpdateTime);
+		setChainlength(other.chainlength);
+		setChainlengthLastUpdateTime(other.chainlengthLastUpdateTime);
 		setInsertTime(other.insertTime);
 		setSolid(other.solid);
 		setConfirmed(other.confirmed);
@@ -57,14 +57,14 @@ public class BlockEvaluation implements Serializable {
 		return BlockEvaluation.build(block.getHash(), 0, -1, currentTimeMillis, currentTimeMillis, 0, false);
 	}
 
-	public static BlockEvaluation build(Sha256Hash blockhash, long height, long milestone, long milestoneLastUpdateTime,
+	public static BlockEvaluation build(Sha256Hash blockhash, long height, long chainlength, long chainlengthLastUpdateTime,
 			long insertTime, long solid, boolean confirmed) {
 		BlockEvaluation blockEvaluation = new BlockEvaluation();
 		blockEvaluation.setBlockHash(blockhash);
 
 		blockEvaluation.setHeight(height);
-		blockEvaluation.setMilestone(milestone);
-		blockEvaluation.setMilestoneLastUpdateTime(milestoneLastUpdateTime);
+		blockEvaluation.setChainlength(chainlength);
+		blockEvaluation.setChainlengthLastUpdateTime(chainlengthLastUpdateTime);
 		blockEvaluation.setInsertTime(insertTime);
 		blockEvaluation.setSolid(solid);
 		blockEvaluation.setConfirmed(confirmed);
@@ -88,20 +88,20 @@ public class BlockEvaluation implements Serializable {
 		this.height = height;
 	}
 
-	public long getMilestone() {
-		return milestone;
+	public long getChainlength() {
+		return chainlength;
 	}
 
-	public void setMilestone(long milestone) {
-		this.milestone = milestone;
+	public void setChainlength(long chainlength) {
+		this.chainlength = chainlength;
 	}
 
-	public long getMilestoneLastUpdateTime() {
-		return milestoneLastUpdateTime;
+	public long getChainlengthLastUpdateTime() {
+		return chainlengthLastUpdateTime;
 	}
 
-	public void setMilestoneLastUpdateTime(long milestoneLastUpdateTime) {
-		this.milestoneLastUpdateTime = milestoneLastUpdateTime;
+	public void setChainlengthLastUpdateTime(long chainlengthLastUpdateTime) {
+		this.chainlengthLastUpdateTime = chainlengthLastUpdateTime;
 	}
 
 	public long getInsertTime() {
@@ -130,8 +130,8 @@ public class BlockEvaluation implements Serializable {
 
 	@Override
 	public String toString() {
-		return "BlockEvaluation [blockHash=" + blockHash + ", height=" + height + ", milestone=" + milestone
-				+ " \n , milestoneLastUpdateTime=" + milestoneLastUpdateTime + ", insertTime=" + insertTime + ", solid="
+		return "BlockEvaluation [blockHash=" + blockHash + ", height=" + height + ", chainlength=" + chainlength
+				+ " \n , chainlengthLastUpdateTime=" + chainlengthLastUpdateTime + ", insertTime=" + insertTime + ", solid="
 				+ solid + "\n, confirmed=" + confirmed + "]";
 	}
 

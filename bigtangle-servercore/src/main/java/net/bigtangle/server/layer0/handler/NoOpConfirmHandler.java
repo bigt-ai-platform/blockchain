@@ -16,6 +16,6 @@ public class NoOpConfirmHandler implements BlockTypeHandler {
 	@Override
 	public void confirm(SolidityContext ctx) throws BlockStoreException {
 		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
+		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
 	}
 }

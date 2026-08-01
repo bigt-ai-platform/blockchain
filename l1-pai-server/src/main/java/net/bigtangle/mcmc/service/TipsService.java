@@ -136,19 +136,19 @@ public class TipsService {
     }
 
     public Pair<BlockWrap, BlockWrap> getValidatedBlockPair(TXReward maxConfirmedReward,
-            HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockStoreInterface store)
+            HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, BlockStoreInterface store)
             throws BlockStoreException {
         List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
         BlockWrap left = entryPoints.get(0);
         BlockWrap right = entryPoints.get(1);
         Pair<BlockWrap, BlockWrap> candidate = getValidatedBlockPair(maxConfirmedReward,
-                currentApprovedNonMilestoneBlocks, left, right, store);
+                currentApprovedNonChainlengthBlocks, left, right, store);
         if (!candidate.getLeft().equals(candidate.getRight())) {
             return candidate;
         }
         for (int i = 0; i < 5; i++) {
             Pair<BlockWrap, BlockWrap> paar = getValidatedBlockPair(maxConfirmedReward,
-                    currentApprovedNonMilestoneBlocks, left, right, store);
+                    currentApprovedNonChainlengthBlocks, left, right, store);
             if (!paar.getLeft().equals(paar.getRight())) {
                 return paar;
             }
@@ -167,7 +167,7 @@ public class TipsService {
         serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, left, cutoffHeight, store);
         serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedUnconfirmedBlocks, right, cutoffHeight, store);
         if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
-            throw new InfeasiblePrototypeException("The given prototype is invalid under the current milestone");
+            throw new InfeasiblePrototypeException("The given prototype is invalid under the current chainlength");
         return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
                 cutoffHeight, maxHeight);
     }
@@ -228,18 +228,18 @@ public class TipsService {
     }
 
     private BlockWrap validateOrPerformValidatedStep(BlockWrap fromBlock,
-            HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, BlockWrap potentialNextBlock,
+            HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, BlockWrap potentialNextBlock,
             long cutoffHeight, long maxHeight, BlockStoreInterface store) throws BlockStoreException {
         if (new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-                .isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonMilestoneBlocks,
+                .isEligibleForApprovalSelection(potentialNextBlock, currentApprovedNonChainlengthBlocks,
                         cutoffHeight, maxHeight, store))
             return potentialNextBlock;
         else
-            return performValidatedStep(fromBlock, currentApprovedNonMilestoneBlocks, cutoffHeight, maxHeight, store);
+            return performValidatedStep(fromBlock, currentApprovedNonChainlengthBlocks, cutoffHeight, maxHeight, store);
     }
 
     private BlockWrap performValidatedStep(BlockWrap fromBlock,
-            HashSet<BlockWrap> currentApprovedNonMilestoneBlocks, long cutoffHeight, long maxHeight,
+            HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, long cutoffHeight, long maxHeight,
             BlockStoreInterface store) throws BlockStoreException {
         List<BlockWrap> candidates = new ArrayList<>();
         for (Sha256Hash req : store.getApproverBlockHashes(fromBlock.getBlockHash())) {
@@ -251,7 +251,7 @@ public class TipsService {
             result = performTransition(fromBlock, candidates, store);
             candidates.remove(result);
         } while (!new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-                .isEligibleForApprovalSelection(result, currentApprovedNonMilestoneBlocks,
+                .isEligibleForApprovalSelection(result, currentApprovedNonChainlengthBlocks,
                         cutoffHeight, maxHeight, store));
         return result;
     }

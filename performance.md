@@ -94,7 +94,7 @@ Blocks stored raw (no compression) in the `blocks` table. Previously, every bloc
 `BlockStoreInterface.getTransactionOutputs()` batches 50k individual `SELECT ... WHERE blockhash=? AND hash=? AND outputindex=?` queries into a single `WHERE outputindex IN (...)` query. Used by `findBlockWithSpentOrUnconfirmedInputs` during MCMC eligibility checks.
 
 ### ThreadLocal conflict cache
-`ServiceBaseConfirmation.conflictCache` caches `hasConflictDependencyMilestone` results per MCMC cycle, preventing re-checking the same UTXOs across multiple `isEligibleForApprovalSelection` calls.
+`ServiceBaseConfirmation.conflictCache` caches `hasConflictDependencyChainlength` results per MCMC cycle, preventing re-checking the same UTXOs across multiple `isEligibleForApprovalSelection` calls.
 
 ### Composite index for MCMC topology query
 `blocks_solid_height_idx ON blocks (solid, height)` — the `getSolidBlockTopologyInInterval` query filters by `height > ? AND height <= ? AND solid = 2`. The composite index replaces a full scan on height alone, cutting Prototype time by 88% on 100-block chains.

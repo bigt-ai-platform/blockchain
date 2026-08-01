@@ -1,14 +1,14 @@
-select * from blocks  where milestone <0 order by height desc ;
+select * from blocks  where chainlength <0 order by height desc ;
 select * from mcmc;
 select * from contractevent   ;
 select * FROM contractevent a, outputs b WHERE  a.confirmed=false AND a.blockhash=b.blockhash
 select * FROM contractevent a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true
-select * from contractresult order by milestone desc ;
+select * from contractresult order by rewardchainlength desc ;
 select * from contractresult order by inserttime desc ;
-select * from contractresult where milestone <0 and confirmed= true ;
+select * from contractresult where rewardchainlength <0 and confirmed= true ;
 select * FROM contractevent a, blocks b WHERE a.confirmed=1 AND a.spent=0 and a.blockhash=b.hash
 select * FROM contractevent a, blocks b WHERE a.blockhash=b.hash
-select * FROM   blocks b WHERE b.milestone >0 
+select * FROM   blocks b WHERE b.chainlength >0 
 select * FROM contractevent a   WHERE a.spent=0 and confirmed=true
 select * FROM contractevent a   WHERE   a.spent=1 and confirmed=false
 select * FROM contractevent a, outputs b WHERE a.blockhash=b.blockhash and   a.spent=true and b.spent=false
@@ -21,23 +21,23 @@ or  a.collectinghash=0x000000000000000000000000000000000000000000000000000000000
 select * FROM contractevent order by  spenderblockhash, collectinghash
 select * FROM contractevent order by   collectinghash, blockhash
 select * FROM contractresult b, mcmc m WHERE  m.hash=b.blockhash
-select * FROM blocks b, mcmc m WHERE  m.hash=b.hash and b.milestone <0
-select * FROM contractresult a, blocks b, mcmc m WHERE  m.hash=b.hash and b.milestone  and a.blockhash=b.hash
+select * FROM blocks b, mcmc m WHERE  m.hash=b.hash and b.chainlength <0
+select * FROM contractresult a, blocks b, mcmc m WHERE  m.hash=b.hash and b.chainlength  and a.blockhash=b.hash
 
 select * from orders  where spent=false and confirmed=true order by blockhash;
 select * from orderresult order by inserttime desc ;
-select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and milestone>0 ;
+select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and orderresult.rewardchainlength>0 ;
 select * from orders a, blocks b where a.blockhash=b.hash  ;
 select * FROM orders a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true
 select * FROM orders a, orderresult b WHERE a.collectinghash=b.blockhash and   b.confirmed!=a.confirmed
 
 select * from outputs  where confirmed =true and spent=false and tokenid !="bc" and toaddress="154AxPN4kEUYNY5Ubt8yCssoR7Zgppw8y4";
 select count( *) from blocks   ;
-select count( *) from blocks  WHERE milestone>9;
+select count( *) from blocks  WHERE chainlength>9;
 select count( *) from unsolidblocks   where inserttime < 1515432033 ;
 select   *  from unsolidblocks order by inserttime asc   ;
 select * from txreward order by chainlength desc;
-SELECT block, height, blocktype FROM blocks WHERE milestone>11670 ;
+SELECT block, height, blocktype FROM blocks WHERE chainlength>11670 ;
 select * from blocks where height < 750 ;
 
 
@@ -52,7 +52,7 @@ select * from orders where spent=0 and confirmed=1  ;
 
 select * from mcmc  ;
 select * from orderresult  ;
-select *  FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND milestone = -1 
+select *  FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 
 AND confirmed = false   AND mcmc.rating >= 5;
 
 select *  FROM info.blocks where  hash=0x0017a6120fecbf4eb1731def0dd0660c9dc350fed488f104aa3a4dbef27ea9a3;
@@ -60,21 +60,21 @@ select * from outputs where blockhash = 0x0009a0d2309039774e93ab211205a865737ab7
 select * from outputs where hash = 0x0aef356676f4ba274b40c52020e04c9b9e9e4fba1b1da51962278a13ec4d8897;
 
 select * from blocks where blocktype=2 order by height desc limit 500
-select * from blocks where milestone=339 and blocktype=3
-select * from blocks order by milestone;
-select * from blocks where milestone <0 ;
-select * from blocks where milestone > 0 ;
+select * from blocks where chainlength=339 and blocktype=3
+select * from blocks order by chainlength;
+select * from blocks where chainlength <0 ;
+select * from blocks where chainlength > 0 ;
 select max(height) FROM blocks
 select count(*) FROM blocks, mcmc  WHERE 
-blocks.hash = mcmc.hash and solid=2 AND milestone = -1 AND confirmed = false
+blocks.hash = mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false
 
 select  *  FROM blocks, mcmc  WHERE 
-blocks.hash = mcmc.hash and solid=2 AND milestone = -1 AND confirmed = false
+blocks.hash = mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false
 
-select  * FROM blocks WHERE milestone = -1   AND solid = 2
+select  * FROM blocks WHERE chainlength = -1   AND solid = 2
  SELECT blockhash, txreward.confirmed, txreward.spent, txreward.spenderblockhash, txreward.prevblockhash, 
  txreward.difficulty, txreward.chainlength FROM txreward order by  txreward.chainlength desc
-JOIN blocks on blocks.hash=txreward.blockhash WHERE milestone=339
+JOIN blocks on blocks.hash=txreward.blockhash WHERE chainlength=339
 
 delete from txreward where chainlength=197088
 select count( *) from txreward
@@ -97,16 +97,16 @@ select * from blocks join outputs on blocks.hash=outputs.blockhash where blocks.
 select * from blocks where hash=0x00000075491105d21a1654d8f4566dd819c111b100818c07b66a3ae8a8b4de76 ;
 select * from blocks where blocktype=12 ;
 select * from blocks where confirmed=1 ;
-select * from blocks where  milestone=36
+select * from blocks where  chainlength=36
 select * from blocks join outputs on blocks.hash=outputs.blockhash where blocks.blocktype=12 and tokenid = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a";
 
 select count(*) from outputs  where spent=1 and confirmed=1 ;
 select * from outputs  where spent=0 and confirmed=1 ;
 select * from orders  where spent=0 and confirmed=1 ;
-select * from orderresult  order by milestone desc ;  
+select * from orderresult  order by rewardchainlength desc ;  
 
 select * from ordercancel
-update blocks set milestone=0    where height=0
+update blocks set chainlength=0    where height=0
 select count(*) from outputs where confirmed=1 and spent=0 and tokenid = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a" ;
 select * from orders where confirmed=1 and spent=0 and offertokenid = "02a717921ede2c066a4da05b9cdce203f1002b7e2abeee7546194498ef2fa9b13a" ;
 select * from outputs where blockhash = 0x000011bdbd7f6ad529d8e1d5ef30ea8afd82913ef7f7099e3f1aa2ebc50b1da3;
@@ -115,7 +115,7 @@ select * from outputs where blockhash = 0x000011bdbd7f6ad529d8e1d5ef30ea8afd8291
 select * from txreward join orders on txreward.blockhash=orders.collectinghash order by toheight desc  ;
 select count( *)  from txreward 
 
-select * from blocks where blocktype> 9 and milestone =  37 ;
+select * from blocks where blocktype> 9 and chainlength =  37 ;
 OUTPUTS
 select * from outputs where tokenid !='bc' and coinbase=true;
 select * from tokens   ;
@@ -126,7 +126,7 @@ select * FROM ordercancel WHERE confirmed = true and spent=false
 select * from contractresult;
 
 
-select max(milestone) FROM orders, blocks WHERE  blockhash=0x000005964AF7DB191AEB73BEDD6FA739324D338F31D21A7F5FA03F2130C392BC and collectinghash=hash;
+select max(blocks.chainlength) FROM orders, blocks WHERE  blockhash=0x000005964AF7DB191AEB73BEDD6FA739324D338F31D21A7F5FA03F2130C392BC and collectinghash=hash;
 
 select * from multisign
 select count(*) from orders where collectinghash= 0x0000000000000000000000000000000000000000000000000000000000000000   
@@ -145,11 +145,11 @@ select  *  from chainblockqueue where orphan = true
  
 select * from tips   ;
 select count(*) from tips   ;
-SELECT blocks.hash, rating, depth, cumulativeweight,   height, milestone, milestonelastupdate, 
+SELECT blocks.hash, rating, depth, cumulativeweight,   height, chainlength, chainlengthlastupdate, 
 inserttime,  block, solid, confirmed FROM blocks 
-             INNER JOIN tips ON tips.hash=blocks.hash where milestone <0
+             INNER JOIN tips ON tips.hash=blocks.hash where chainlength <0
              
-  SELECT blocks.hash, rating, depth, cumulativeweight,   height, milestone, milestonelastupdate, 
+  SELECT blocks.hash, rating, depth, cumulativeweight,   height, chainlength, chainlengthlastupdate, 
 inserttime,  block, solid, confirmed  FROM blocks order by inserttime desc limit 50
 
 select * from account   ;
@@ -176,7 +176,7 @@ SELECT * FROM blocks
 
 SELECT blockhash FROM blocks INNER JOIN orders 
 ON orders.blockhash=blocks.hash 
-WHERE blocks.height <= 99999999 AND blocks.milestone = 1 AND orders.spent = 0;
+WHERE blocks.height <= 99999999 AND blocks.chainlength = 1 AND orders.spent = 0;
 
 
  SELECT blockhash, height

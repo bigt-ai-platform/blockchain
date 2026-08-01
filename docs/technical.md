@@ -25,27 +25,27 @@ if (output.isSpent() || !output.isConfirmed())
 blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
 ```
 
-## Milestone = Reward Chain Length
+## Chainlength = Reward Chain Length
 
-Reward blocks form a chain where each points to the previous via `prevRewardHash`. The `milestone` field equals the reward chain length. Block N in the reward chain has milestone N.
+Reward blocks form a chain where each points to the previous via `prevRewardHash`. The `chainlength` field equals the reward chain length. Block N in the reward chain has chainlength N.
 
 ### Implications
 
-1. **hasSpentInputs with checkMilestone=true**: If a block was already confirmed by milestone N, it cannot be referenced by milestone N+1. The verification removes already-confirmed blocks rather than throwing.
+1. **hasSpentInputs with checkChainlength=true**: If a block was already confirmed by chainlength N, it cannot be referenced by chainlength N+1. The verification removes already-confirmed blocks rather than throwing.
 
 2. **MCMC creates reward blocks faster than UpdateChain processes them**. The queue builds up; each reward block references only unprocessed blocks. Already-confirmed blocks are skipped.
 
 ### Code
 
 ```java
-// Reward block creation — milestone = chain length
+// Reward block creation — chainlength = chain length
 // ServiceVerifyReward.verifyRewardChainConfirmReferenced
-long milestoneNumber = store.getRewardChainLength(newMilestoneBlock.getHash());
+long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
 
 // Conflict check — skip already-confirmed blocks
 // ServiceVerifyReward.verifyRewardChainConfirmReferenced
 if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
-    allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getMilestone() > 0);
+    allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getChainlength() > 0);
     if (allApprovedNewBlocks.size() <= 1) return; // nothing new to confirm
 }
 ```
@@ -96,7 +96,7 @@ Scheduled service in `bigtangle-servercore` that runs every 10 seconds (when `in
 ```java
 @Scheduled(fixedDelayString = "10000")
 public void updateChain() {
-    if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+    if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
         blockGraph.updateChain();
     }
 }
@@ -152,7 +152,7 @@ saveBlockPermissive
        ├─ processChainConnected
        ├─ verifyRewardChainConfirmReferenced
        │    ├─ hasSpentInputs → skip confirmed
-       │    └─ removeIf(milestone > 0)
+       │    └─ removeIf(chainlength > 0)
        │
        └─ confirmBlocksSorted
             └─ updateAllTransactionOutputsConfirmed(true)

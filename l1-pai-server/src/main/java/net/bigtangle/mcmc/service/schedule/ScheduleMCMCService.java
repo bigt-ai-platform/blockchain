@@ -28,7 +28,7 @@ public class ScheduleMCMCService {
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.mcmcrate:500}")
     public void updatemcmcService() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
                 mcmcService.startSingleProcess();
             } catch (Exception e) {

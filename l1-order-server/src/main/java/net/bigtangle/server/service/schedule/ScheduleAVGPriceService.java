@@ -7,7 +7,7 @@ package net.bigtangle.server.service.schedule;
 /**
  * Service responsible for scheduled calculation and updating of average prices.
  * Executes daily at 1:00 AM to calculate and update price metrics.
- * Requires milestone activation and service availability to run.
+ * Requires chainlength activation and service availability to run.
  */
 
 import org.slf4j.Logger;
@@ -54,14 +54,14 @@ public class ScheduleAVGPriceService {
      * Asynchronously executes the daily average price calculation process.
      * Scheduled to run every day at 1:00 AM.
      * Only executes if:
-     * 1. Milestone activation is enabled
+     * 1. Chainlength activation is enabled
      * 2. Server service is available
      */
 
     @Async
     @Scheduled(cron = "0 0 1 * * ?")
     public void updatemcmcService() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
                 // logger.debug(" Start SchedulemcmcService: ");
                 aVGPriceService.startSingleProcessCalAdd();

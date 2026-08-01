@@ -41,9 +41,9 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    prevblockhash  BYTEA NOT NULL,\n"
             + "    prevbranchblockhash  BYTEA NOT NULL,\n" 
             + "    blocktype VARCHAR(50) NOT NULL,\n" 
-            //reward block chain length is here milestone
-            + "    milestone bigint NOT NULL,\n"
-            + "    milestonelastupdate bigint NOT NULL,\n"  
+            //reward block chain length is here
+            + "    chainlength bigint NOT NULL,\n"
+            + "    chainlengthlastupdate bigint NOT NULL,\n"  
             + "    confirmed boolean NOT NULL,\n"
       
             //solid is result of validation of the block, 
@@ -398,11 +398,11 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "   confirmed boolean NOT NULL,\n" 
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash BYTEA,\n" 
-            + "    milestone bigint NOT NULL,\n"
+            + "    rewardchainlength bigint NOT NULL,\n"
             + "   chainlength bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) )";
-   
+
     //  the order execution result
     private static final String CREATE_ORDER_RESULT_TABLE = "CREATE TABLE orderresult (\n"
             + "   blockhash BYTEA NOT NULL,\n"  
@@ -411,7 +411,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "   confirmed boolean NOT NULL,\n" 
             + "   spent boolean NOT NULL,\n"
             + "   spenderblockhash BYTEA,\n" 
-            + "    milestone bigint NOT NULL,\n"
+            + "    rewardchainlength bigint NOT NULL,\n"
             + "   chainlength bigint NOT NULL,\n" 
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) )";
@@ -463,7 +463,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_PREVTRUNK_HASH_INDEX = "CREATE INDEX blocks_prevblockhash_idx ON blocks (prevblockhash) ";
     
     private static final String CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX orders_collectinghash_idx ON orders (collectinghash) ";
-    private static final String CREATE_BLOCKS_MILESTONE_INDEX = "CREATE INDEX blocks_milestone_idx ON blocks (milestone)   ";
+    private static final String CREATE_BLOCKS_CHAINLENGTH_INDEX = "CREATE INDEX blocks_chainlength_idx ON blocks (chainlength)   ";
     private static final String CREATE_BLOCKS_HEIGHT_INDEX = "CREATE INDEX blocks_height_idx ON blocks (height)   ";
     private static final String CREATE_BLOCKS_SOLID_HEIGHT_INDEX = "CREATE INDEX blocks_solid_height_idx ON blocks (solid, height)   ";
     private static final String CREATE_TXREARD_CHAINLENGTH_INDEX = "CREATE INDEX txreard_chainlength_idx ON txreward (chainlength, confirmed)  ";
@@ -474,7 +474,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_MATCHING_TOKEN_TABLE_INDEX = "CREATE INDEX matching_inserttime_idx ON matching (inserttime) ";
       
     private static final String CREATE_TOKEN_TOKENID_TABLE_INDEX = "CREATE INDEX tokens_tokenid_idx ON tokens (md5(tokenid)) ";
-    private static final String CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX = "CREATE INDEX blocks_milestone_confirmed_idx ON blocks (milestone, confirmed)   ";
+    private static final String CREATE_BLOCKS_CHAINLENGTH_CONFIRMED_INDEX = "CREATE INDEX blocks_chainlength_confirmed_idx ON blocks (chainlength, confirmed)   ";
     
     
   
@@ -591,7 +591,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PREVTRUNK_HASH_INDEX);
 
         sqlStatements.add(CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX);
-        sqlStatements.add(CREATE_BLOCKS_MILESTONE_INDEX);
+        sqlStatements.add(CREATE_BLOCKS_CHAINLENGTH_INDEX);
         sqlStatements.add(CREATE_TXREARD_CHAINLENGTH_INDEX);
 
         return sqlStatements;
@@ -607,7 +607,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_TOKEN_TOKENID_TABLE_INDEX);
         sqlStatements.add(CREATE_MULTISIGNADDRESS_UNIQ_INDEX);
         sqlStatements.add(CREATE_MULTISIGNADDRESS_TOKENID_INDEX);
-        sqlStatements.add(CREATE_BLOCKS_MILESTONE_CONFIRMED_INDEX);
+        sqlStatements.add(CREATE_BLOCKS_CHAINLENGTH_CONFIRMED_INDEX);
         return sqlStatements;
     }
 

@@ -197,12 +197,12 @@ public abstract class NetworkParameters {
 	// PoS epoch configuration
 	public static final long SLOTS_PER_EPOCH = 32L;
 
-	// Max blocks per reward milestone
+	// Max blocks per reward chainlength
 	public static final int TARGET_MAX_BLOCKS_IN_REWARD = 5000;
 	public static final int MAX_REWARD_BLOCK_SIZE = MAX_DEFAULT_BLOCK_SIZE + TARGET_MAX_BLOCKS_IN_REWARD * 200;
 
 	// MCMC horizon: look back up to this many confirmed reward blocks
-	public static final int MILESTONE_CUTOFF = 40;
+	public static final int CHAINLENGTH_CUTOFF = 40;
 	// MCMC forward horizon: look ahead up to this many blocks above confirmed reward
 	public static final int FORWARD_BLOCK_HORIZON = TARGET_MAX_BLOCKS_IN_REWARD / 4;
 

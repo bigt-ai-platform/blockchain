@@ -31,6 +31,6 @@ public class RewardHandler implements BlockTypeHandler {
 			base.confirmReward(w, ctx.confirmation(), ctx.store());
 		}
 		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
+		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
 	}
 }

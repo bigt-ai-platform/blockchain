@@ -57,7 +57,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 				.getValidatedBlockPair(  store); 
 		rewardService.createReward(UtilGeneseBlock.createGenesis(networkParameters).getHash(), validatedRewardBlockPair.getLeft(),
 				validatedRewardBlockPair.getRight(), store);
-		assertTrue(getBlockEvaluation(rollingBlock1.getHash(), store).getMilestone() == 1);
+		assertTrue(getBlockEvaluation(rollingBlock1.getHash(), store).getChainlength() == 1);
 	}
 
 	@Test
@@ -294,7 +294,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testUpdateConflictingTransactionalMilestoneCandidates() throws Exception {
+	public void testUpdateConflictingTransactionalChainlengthCandidates() throws Exception {
 
 		PQKey genesiskey = wallet.walletKeys(null).get(0);
 		// use UTXO to create double spending, this can not be created with
@@ -331,7 +331,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testUpdateConflictingTokenMilestoneCandidates() throws Exception {
+	public void testUpdateConflictingTokenChainlengthCandidates() throws Exception {
 
 		// Generate an eligible issuance
 		PQKey outKey = PQKey.createNew();
@@ -376,7 +376,7 @@ public class MCMCServiceTest extends AbstractIntegrationTest {
 	}
 
 	@Test
-	public void testUpdateConflictingConsensusMilestoneCandidates() throws Exception {
+	public void testUpdateConflictingConsensusChainlengthCandidates() throws Exception {
 
 		// Generate blocks until passing second reward interval
 		Block rollingBlock = UtilGeneseBlock.createGenesis(networkParameters);

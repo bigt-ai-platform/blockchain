@@ -27,7 +27,7 @@ public class OrderOpenHandler implements BlockTypeHandler {
 	public void confirm(SolidityContext ctx) throws BlockStoreException {
 		ServiceBaseConfirmation base = (ServiceBaseConfirmation) ctx.base();
 		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
+		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
 		ctx.store().updateOrderBlockhash(ctx.blockHash(),
 				net.bigtangle.core.Sha256Hash.ZERO_HASH, ctx.confirmation(), false, null);
 	}

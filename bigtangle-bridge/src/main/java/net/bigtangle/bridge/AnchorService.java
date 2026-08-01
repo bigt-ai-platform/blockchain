@@ -105,7 +105,7 @@ public class AnchorService {
     /**
      * Called after an anchor's CROSSTANGLE block is confirmed or unconfirmed on L0.
      * Marks the anchor record as confirmed (or unconfirmed on rollback) and
-     * credits the anchor reward to the L1 milestone node on initial confirmation.
+     * credits the anchor reward to the L1 chainlength node on initial confirmation.
      *
      * @param confirmed true if confirming, false if rolling back (reorg)
      */
@@ -131,8 +131,8 @@ public class AnchorService {
     }
 
     /**
-     * Credits the anchor reward from the L0 fee pool to the L1 milestone node.
-     * The milestone node's address is derived from the configured public key.
+     * Credits the anchor reward from the L0 fee pool to the L1 chainlength node.
+     * The chainlength node's address is derived from the configured public key.
      * Creates a simple BLOCKTYPE_TRANSFER and saves it locally on L0.
      */
     private void creditAnchorReward(AnchorRecord anchor, BlockStoreInterface store) throws Exception {
@@ -141,26 +141,26 @@ public class AnchorService {
             return;
         }
         String feePoolPriKeyHex = anchorConfiguration.getFeePoolPriKeyHex();
-        String milestonePubKeyHex = anchorConfiguration.getPubKeyHex();
+        String rewardPubKeyHex = anchorConfiguration.getPubKeyHex();
         if (feePoolPriKeyHex == null || feePoolPriKeyHex.isEmpty()
-                || milestonePubKeyHex == null || milestonePubKeyHex.isEmpty()) {
+                || rewardPubKeyHex == null || rewardPubKeyHex.isEmpty()) {
             logger.debug("Anchor reward not configured, skipping");
             return;
         }
 
         PQKey feePoolKey = PQKey.createNew();
-        PQKey milestoneKey = PQKey.fromPublicOnly(Utils.HEX.decode(milestonePubKeyHex));
+        PQKey rewardKey = PQKey.fromPublicOnly(Utils.HEX.decode(rewardPubKeyHex));
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
 
         Transaction tx = new Transaction(networkParameters);
         Coin rewardCoin = Coin.valueOf(rewardAmount, NetworkParameters.BIGTANGLE_TOKENID);
-        tx.addOutput(rewardCoin, Address.fromHash160(networkParameters, Utils.sha256hash160(milestoneKey.getPubKey())));
+        tx.addOutput(rewardCoin, Address.fromHash160(networkParameters, Utils.sha256hash160(rewardKey.getPubKey())));
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
-        logger.info("Anchor reward of {} credited to milestone node for chain {}",
+        logger.info("Anchor reward of {} credited to chainlength node for chain {}",
                 rewardAmount, anchor.getChainId());
     }
 

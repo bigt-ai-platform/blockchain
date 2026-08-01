@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 public class ScheduleConfiguration {
 
     @Value("${service.schedule.mcmc:false}")
-    boolean milestone_active;
+    boolean chainlength_active;
     @Value("${service.schedule.mcmcrate:500}")
     Long mcmcrate;
 
@@ -35,12 +35,12 @@ public class ScheduleConfiguration {
     @Value("${pos.slotsPerEpoch:32}")
     long posSlotsPerEpoch;
 
-    public boolean isMilestone_active() {
-        return milestone_active;
+    public boolean isChainlength_active() {
+        return chainlength_active;
     }
 
-    public void setMilestone_active(boolean milestone_active) {
-        this.milestone_active = milestone_active;
+    public void setChainlength_active(boolean chainlength_active) {
+        this.chainlength_active = chainlength_active;
     }
 
     public boolean isBlockBatchService_active() {
@@ -100,7 +100,7 @@ public class ScheduleConfiguration {
 
 	@Override
 	public String toString() {
-		return "ScheduleConfiguration [milestone_active=" + milestone_active + ", mcmcrate=" + mcmcrate
+		return "ScheduleConfiguration [chainlength_active=" + chainlength_active + ", mcmcrate=" + mcmcrate
 				+ ", blockBatchService_active=" + blockBatchService_active + ", blockbatchrate=" + blockbatchrate
 				+ ", syncrate=" + syncrate + ", initSync=" + initSync
 				+ ", microBatch_active=" + microBatch_active + "]";

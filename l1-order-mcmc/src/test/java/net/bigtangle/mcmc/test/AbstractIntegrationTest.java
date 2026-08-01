@@ -1795,7 +1795,7 @@ public abstract class AbstractIntegrationTest {
 			boolean spent = true;
 			for (ContractEventRecord c : entry.getValue()) {
 				Contractresult contractresult = store.getContractresult(c.getCollectinghash());
-				if (contractresult.getMilestone() < 0 && bw.getBlockEvaluation().getMilestone() < 0) {
+				if (contractresult.getChainlength() < 0 && bw.getBlockEvaluation().getChainlength() < 0) {
 					spent = false;
 					log.debug(" \n ContractEventRecord :  " + c.toString());
 					log.debug("   execution result:  " + contractresult.toString());
@@ -2061,7 +2061,7 @@ public abstract class AbstractIntegrationTest {
 			// if (re.getBlockEvaluation().isConfirmed())
 			blocksToUnconfirm.add(getBlockWrap(hash));
 
-			// serviceBase.removeMilestoneConflicts(blocksToUnconfirm, blockStore);
+			// serviceBase.removeChainlengthConflicts(blocksToUnconfirm, blockStore);
 
 			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
 			blockStore.commitDatabaseBatchWrite();
@@ -2226,13 +2226,13 @@ public abstract class AbstractIntegrationTest {
 		BlockWrap block = store.getBlockWrap(hash);
 		if (block == null)
 			return "";
-		if (block.getBlockEvaluation().getMilestone() < 0) {
+		if (block.getBlockEvaluation().getChainlength() < 0) {
 
 			log.debug("");
 		}
 		BlockMCMC mcmc = cacheBlockService.getBlockMCMCAsObject(block.getBlockHash(), store);
 		return block.getBlock().getHeight() + "/D" + mcmc.getDepth() + "/M"
-				+ block.getBlockEvaluation().getMilestone() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
+				+ block.getBlockEvaluation().getChainlength() + "/T" + block.getBlock().getBlockType().ordinal() + "/"
 				+ block.getBlockEvaluation().isConfirmed() + "/" + block.getBlockHash().toString().substring(3, 7);
 	}
 
@@ -2263,7 +2263,7 @@ public abstract class AbstractIntegrationTest {
 		List<Contractresult> re = new ArrayList<>();
 		try (PreparedStatement preparedStatement = dataSource.getConnection()
 				.prepareStatement("SELECT  blockhash,  contracttokenid, confirmed, spent, spenderblockhash,  "
-						+ " contractresult, prevblockhash, inserttime, milestone,chainlength "
+						+ " contractresult, prevblockhash, inserttime, rewardchainlength,chainlength "
 						+ " FROM contractresult ")) {
 
 			ResultSet resultSet = preparedStatement.executeQuery();
@@ -2282,7 +2282,7 @@ public abstract class AbstractIntegrationTest {
 		return new Contractresult(Sha256Hash.wrap(resultSet.getBytes("blockhash")), resultSet.getBoolean("confirmed"),
 				resultSet.getBoolean("spent"), Sha256Hash.wrap(resultSet.getBytes("prevblockhash")),
 				Sha256Hash.wrap(resultSet.getBytes("spenderblockhash")), resultSet.getBytes("contractresult"),
-				resultSet.getString("contracttokenid"), resultSet.getLong("milestone"),
+				resultSet.getString("contracttokenid"), resultSet.getLong("rewardchainlength"),
 				resultSet.getLong("chainlength"), resultSet.getLong("inserttime"));
 
 	}
@@ -2329,25 +2329,25 @@ public abstract class AbstractIntegrationTest {
 	 * @param prototype Existing solid block that is considered when walking
 	 * @return
 	 * @throws VerificationException if the given prototype is not compatible with
-	 *                               the current milestone
+	 *                               the current chainlength
 	 */
 	public Pair<BlockWrap, BlockWrap> getValidatedBlockPairCompatibleWithExisting(Block prototype,
 			BlockStoreInterface store) throws BlockStoreException {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
-		long prevMilestoneNumber = store.getRewardChainLength(maxConfirmedReward.getPrevBlockHash());
+		long prevChainlength = store.getRewardChainLength(maxConfirmedReward.getPrevBlockHash());
 		long cutoffHeight = serviceBase.getCurrentCutoffHeight(maxConfirmedReward, store);
-		HashSet<BlockWrap> currentApprovedNonMilestoneBlocks = new HashSet<>();
+		HashSet<BlockWrap> currentApprovedNonChainlengthBlocks = new HashSet<>();
 		BlockWrap blockWrap = serviceBase.getBlockWrap(prototype.getHash(), store);
-		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, store);
-		serviceBase.dagBlockHashesFrom(currentApprovedNonMilestoneBlocks, blockWrap, cutoffHeight, prevMilestoneNumber,
+		serviceBase.addRequiredUnconfirmedBlocksTo(currentApprovedNonChainlengthBlocks, blockWrap, cutoffHeight, store);
+		serviceBase.dagBlockHashesFrom(currentApprovedNonChainlengthBlocks, blockWrap, cutoffHeight, prevChainlength,
 				null, false, false, store);
 		// Check if the prototype block was filtered out due to conflicts
-		if (!currentApprovedNonMilestoneBlocks.contains(blockWrap)) {
+		if (!currentApprovedNonChainlengthBlocks.contains(blockWrap)) {
 			throw new VerificationException("Prototype block conflicts with confirmed blocks");
 		}
-		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonMilestoneBlocks, store);
+		return tipsService.getValidatedBlockPair(maxConfirmedReward, currentApprovedNonChainlengthBlocks, store);
 	}
 
 	public UTXO getUTXO(TransactionOutPoint out, BlockStoreInterface store) throws BlockStoreException {
@@ -2398,7 +2398,7 @@ public abstract class AbstractIntegrationTest {
 
 	private BlockEvaluation setBlockEvaluation(ResultSet resultSet) throws SQLException {
 		return BlockEvaluation.build(Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("height"),
-				resultSet.getLong("milestone"), resultSet.getLong("milestonelastupdate"),
+				resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 				resultSet.getLong("inserttime"), resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
 	}
 }

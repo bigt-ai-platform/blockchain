@@ -168,7 +168,7 @@ public class BlockStoreService {
 				// PoS mode — updateUnConfirmedDo (which scans and updates
 				// every unconfirmed block) is skipped because block
 				// confirmation is handled by Casper finality, not by
-				// reward milestones.  processChainConnected still runs
+				// reward chainlengths.  processChainConnected still runs
 				// to connect blocks into the DAG for the MCMC bridge.
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
@@ -503,15 +503,15 @@ public class BlockStoreService {
 		confirmDo(blockStore, cutoffHeight, maxHeight, maxConfirmedReward.getChainLength());
 	}
 
-	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight, long prevMilestoneNumber)
+	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight, long prevChainlength)
 			throws BlockStoreException {
 
 		confirmDo(blockStore, cutoffHeight, blockStore.getBlocksToConfirm(cutoffHeight, maxHeight), true,
-				prevMilestoneNumber);
+				prevChainlength);
 	}
 
 	public void confirmDo(BlockStoreInterface blockStore, long cutoffHeight, Set<BlockWrap> blocksToAdd,
-			boolean resolveConflict, long prevMilestoneNumber) throws BlockStoreException {
+			boolean resolveConflict, long prevChainlength) throws BlockStoreException {
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
@@ -519,7 +519,7 @@ public class BlockStoreService {
 			Set<BlockWrap> blocks = new HashSet<>();
 			// use the add to filter and check
 			for (BlockWrap b : blocksToAdd) {
-				serviceBase.dagBlockHashesFrom(blocks, b, cutoffHeight, prevMilestoneNumber, null, true, false,
+				serviceBase.dagBlockHashesFrom(blocks, b, cutoffHeight, prevChainlength, null, true, false,
 						blockStore);
 			}
 			// Execute must be chained for confirm
@@ -539,14 +539,14 @@ public class BlockStoreService {
 
 	public void unconfirmDo(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
-		updateMilestoneConflicts(blockStore, cutoffHeight, maxHeight);
+		updateChainlengthConflicts(blockStore, cutoffHeight, maxHeight);
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
 			blockStore.beginDatabaseBatchWrite();
 
-			// Unconfirm anything not confirmed by milestone
-			List<Sha256Hash> wipeBlocks = blockStore.blocksNotMilestoneFromHeigth(cutoffHeight);
+			// Unconfirm anything not confirmed by chainlength
+			List<Sha256Hash> wipeBlocks = blockStore.blocksNotChainlengthFromHeigth(cutoffHeight);
 
 			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
 
@@ -585,18 +585,18 @@ public class BlockStoreService {
 			throws BlockStoreException {
 	}
 
-	public void updateMilestoneConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
+	public void updateChainlengthConflicts(BlockStoreInterface blockStore, long cutoffHeight, long maxHeight)
 			throws BlockStoreException {
 
 		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
 		try {
 			blockStore.beginDatabaseBatchWrite();
-			// First remove any blocks that should no longer be in the milestone
+			// First remove any blocks that should no longer be in the chainlength
 			// HashSet<BlockEvaluation> blocksToRemove = blockStore.getBlocksToUnconfirm();
 
-			// Unconfirm anything not confirmed by milestone
-			List<Sha256Hash> wipeBlocks = blockStore.blocksNotMilestoneFromHeigth(cutoffHeight);
+			// Unconfirm anything not confirmed by chainlength
+			List<Sha256Hash> wipeBlocks = blockStore.blocksNotChainlengthFromHeigth(cutoffHeight);
 
 			HashSet<BlockWrap> blocksToUnconfirm = new HashSet<>();
 
@@ -605,7 +605,7 @@ public class BlockStoreService {
 				updateChainHeadExecutionObsolete(re.getBlock(), serviceBase, blockStore);
 				blocksToUnconfirm.add(re);
 			}
-			serviceBase.updateMilestoneConflicts(blocksToUnconfirm, blockStore);
+			serviceBase.updateChainlengthConflicts(blocksToUnconfirm, blockStore);
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();

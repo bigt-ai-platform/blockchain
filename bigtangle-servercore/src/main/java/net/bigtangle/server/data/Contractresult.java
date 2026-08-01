@@ -14,7 +14,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 
 	private byte[] contractExecutionResult;
 	private String contracttokenid;
-	private long milestone;
+	private long rewardchainlength;
 	private long chainlength;
 
 	// this is for json
@@ -23,7 +23,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 	}
 
 	public Contractresult(Sha256Hash hash, boolean confirmed, boolean spent, Sha256Hash prevBlockHash,
-			Sha256Hash spenderblockhash, byte[] contractExecutionResult, String contracttokenid, long milestone,
+			Sha256Hash spenderblockhash, byte[] contractExecutionResult, String contracttokenid, long rewardchainlength,
 			long chainlength, long inserttime) {
 		super();
 		this.setBlockHash(hash);
@@ -35,7 +35,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 		this.contractExecutionResult = contractExecutionResult;
 
 		this.contracttokenid = contracttokenid;
-		this.milestone = milestone;
+		this.rewardchainlength = rewardchainlength;
 		this.chainlength = chainlength;
 	}
 
@@ -67,12 +67,12 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 		this.contracttokenid = contracttokenid;
 	}
 
-	public long getMilestone() {
-		return milestone;
+	public long getRewardchainlength() {
+		return rewardchainlength;
 	}
 
-	public void setMilestone(long milestone) {
-		this.milestone = milestone;
+	public void setRewardchainlength(long rewardchainlength) {
+		this.rewardchainlength = rewardchainlength;
 	}
 
 	public long getChainlength() {
@@ -86,7 +86,7 @@ public class Contractresult extends SpentBlock implements java.io.Serializable {
 	@Override
 	public String toString() {
 		return super.toString() + " [prevblockhash=" + prevblockhash + ", contracttokenid=" + contracttokenid
-				+ ", milestone=" + milestone + ", chainlength=" + chainlength + "]";
+				+ ", rewardchainlength=" + rewardchainlength + ", chainlength=" + chainlength + "]";
 	}
 
 }

@@ -41,7 +41,7 @@ public class TokenCreationHandler implements BlockTypeHandler {
 			base.confirmToken(w, ctx.confirmation(), ctx.store());
 		}
 		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationMilestone(ctx.blockHash(), ctx.milestoneNumber());
+		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
 	}
 
 	@Override

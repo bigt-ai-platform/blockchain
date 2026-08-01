@@ -47,7 +47,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
-        scheduleConfiguration.setMilestone_active(true);
+        scheduleConfiguration.setChainlength_active(true);
     }
 
     private void configureAnchorWithKey(PQKey key) {

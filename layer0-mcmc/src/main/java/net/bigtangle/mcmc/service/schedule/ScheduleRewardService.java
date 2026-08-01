@@ -30,7 +30,7 @@ public class ScheduleRewardService {
     @Async
     @Scheduled(fixedDelayString = "${service.schedule.rewardrate:5000}")
     public void updateRewardService() {
-        if (scheduleConfiguration.isMilestone_active() && serverConfiguration.checkService()) {
+        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
                 rewardService.startSingleProcess();
             } catch (Exception e) {

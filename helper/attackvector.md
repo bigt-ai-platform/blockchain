@@ -83,7 +83,7 @@ MCMC pipeline.
 **Mitigation:**
 - Already handled downstream by `ServiceBaseConfirmation` conflict detection
   and `resolveConflicts()`. The DAG-based consensus resolves double-spends
-  at milestone depth, not at mempool. No action needed.
+  at chainlength depth, not at mempool. No action needed.
 
 ### 8. Batch Blocks Skip Re-Verification
 

@@ -68,7 +68,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		blockGraph.addBlock(b1, true, store);
 		blockGraph.addBlock(b2, true, store);
 
-		// After confirming one of them into the milestone, only that one block
+		// After confirming one of them into the chainlength, only that one block
 		// is now available
 		// blockGraph.confirm(b1.getHash(), new HashSet<>(), (long) -1,store);
 		for (int i = 0; i < 5; i++) {
@@ -162,7 +162,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		assertTrue(hit1);
 		assertTrue(hit2);
 
-		// After confirming one of them into the milestone, only that one block
+		// After confirming one of them into the chainlength, only that one block
 		// is now available
 		makeRewardBlock(b1);
 
@@ -242,7 +242,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		assertTrue(hit1);
 		assertTrue(hit2);
 
-		// After confirming one of them into the milestone, only that one block
+		// After confirming one of them into the chainlength, only that one block
 		// is now available
 		makeRewardBlock(b1);
 
@@ -319,7 +319,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 		assertTrue(hit1);
 		assertTrue(hit2);
 
-		// After confirming one of them into the milestone, only that one block
+		// After confirming one of them into the chainlength, only that one block
 		// is now available
 		makeRewardBlock(b1);
 		// checkConflict(b1, b2); // TODO: pre-existing failure in conflict detection
@@ -441,7 +441,7 @@ public class TipsServiceTest extends AbstractIntegrationTest {
 
 		blockGraph.addBlock(b1, true, store);
 
-		// After confirming one of them into the milestone, only that one block
+		// After confirming one of them into the chainlength, only that one block
 		// is now available
 		// blockGraph.confirm(b1.getHash(), new HashSet<>(), (long) -1,store);
 		for (int i = 0; i < 5; i++) {
