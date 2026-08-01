@@ -25,6 +25,20 @@ if (output.isSpent() || !output.isConfirmed())
 blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
 ```
 
+### Confirm side effects
+
+`confirmBlocksSorted` (called by `verifyRewardChainConfirmReferenced`) does more than flip UTXO `confirmed` flags. Per block it also:
+- `updateBlockEvaluationConfirmed(hash, true)` — marks the block row confirmed
+- `updateBlockEvaluationChainlength(hash, N)` — records the reward chainlength N that confirmed it
+- L1 order/contract results update their `rewardchainlength` column (`updateOrderresultChainlength` / `updateContractresultChainlength`)
+
+### Unconfirm (reorg)
+
+Rolling back a loser chain (`handleNewBestChain`, see *Best chain* below) reverses all of the above:
+- `updateAllTransactionOutputsConfirmed(hash, false)` + `confirmTransactionSpent(false)` — outputs return to `confirmed=false` and spent flags revert
+- the chainlength marker is set to `chainlength=-1` (unconfirm passes `-1`; re-confirmation sets the new chainlength)
+- blocks that `updateChainlengthConflicts` had marked as `solid=-chainlength` are reset toward `solid=0` via `resetChainlengthSolid`
+
 ## Chainlength = Reward Chain Length
 
 Reward blocks form a chain where each points to the previous via `prevRewardHash`. The `chainlength` field equals the reward chain length. Block N in the reward chain has chainlength N.
@@ -49,6 +63,27 @@ if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
     if (allApprovedNewBlocks.size() <= 1) return; // nothing new to confirm
 }
 ```
+
+## Solid state machine
+
+`BlockEvaluation.solid` encodes the persistence state of a block (`SolidityState.java`):
+
+| solid | State | Meaning |
+|---|---|---|
+| 0 | MissingPredecessor | a referenced block/UTXO is not yet stored |
+| 1 | MissingCalculation | block content valid; difficulty/PoW metadata missing |
+| 2 | Success | fully solid |
+| -1 | Invalid | rejected |
+| -N | Conflict | conflicts with the block confirmed by chainlength N (`solid=-chainlength`) |
+
+Set in `ServiceBase.solidifyBlock`:
+- `MissingPredecessor` → `solid=0`
+- `MissingCalculation` → `solid=1` (type-specific data is still connected)
+- `Success` → `solid=2`; a BEACON block with `setChainlengthSuccess=false` is instead initialized as `solid=1` (missing-calc) so a later pass can promote it
+- `Invalid` → `solid=-1`
+- conflict: `updateChainlengthConflicts` sets `solid=-chainlength` for a block that spends something a confirmed chainlength block already spent
+
+Only `solid=2` blocks are visible to MCMC (`getSolidBlockTopologyInInterval` filters `solid=2`) and eligible for tip selection/confirmation. Blocks with `solid<0` (conflict) stay out of the DAG approval process until the conflicting chainlength is reverted.
 
 ## saveBlockPermissive
 
@@ -119,13 +154,31 @@ The `ScheduleInitService.syncService()` runs at startup with `@Scheduled(initial
 - Reward blocks queue up but are never processed
 - UTXOs are never confirmed
 
+## Best chain and reorganization
+
+The beacon/reward chain is produced by a **proof-of-stake** validator set. `SlotTickService` ticks every slot and calls `ValidatorDutyService.performDuty()`, which selects the block proposer by stake (`SlotService.selectProposer` over `getActiveStakeDeposits`), proposes the beacon block, and attests. There is no proof of work on the reward chain.
+
+Fork choice is by reward-chain **length**, not accumulated work. `handleNewBestChain` (`ServiceVerifyReward`) runs when a reward block connects to a fork whose `RewardInfo.chainlength` (reward-chain height) exceeds the max-confirmed-reward head — `BlockStoreService.connectRewardBlock` checks `chainlength > head.chainlength` (`BlockStoreService.java:394`); the old PoW `moreWorkThan` check remains only as a commented-out TODO. The reorganization:
+
+1. **`findSplit`** — locate the block where the old and new reward chains diverge.
+2. **Roll back the loser chain**: for each old best-chain reward block (ascending height):
+   - `resetChainlengthSolid(chainlength)` — blocks confirmed at that chainlength return to `solid=0`
+   - `unconfirmBlocks` — unconfirm every block in that chainlength interval (`confirmed=false`, `chainlength=-1`)
+3. **Re-connect the winner chain**: walk its blocks in ascending order, re-running `verifyRewardChainConfirmReferenced` for each (re-confirm, re-set chainlength).
+4. **Commit** the DB batch once the winner chain length exceeds the old head's (`getChainlength() > old head`), so progress is durable even if a later block fails.
+
+Because the `solid=-chainlength` conflict markers of the old chain are cleared on revert, reorganizations are fully reversible.
+
 ## Block Lifecycle
 
 ```
 saveBlockPermissive
   │
-  ├─ addNonChain → solidifyBlock → solid=1 (MissingCalculation)
-  │                                  or solid=2 (Success)
+  ├─ addNonChain → solidifyBlock → solid=0 (MissingPredecessor)
+  │                                  solid=1 (MissingCalculation)
+  │                                  solid=2 (Success)
+  │                                  solid=-1 (Invalid)
+  │                                  solid=-chainlength (conflict)
   │
   ├─ store.updateBlockEvaluationSolid(block.getHash(), 2)
   ├─ store.updateBlockEvaluationWeightAndDepth(...)
@@ -155,7 +208,18 @@ saveBlockPermissive
        │    └─ removeIf(chainlength > 0)
        │
        └─ confirmBlocksSorted
-            └─ updateAllTransactionOutputsConfirmed(true)
+            ├─ updateAllTransactionOutputsConfirmed(true)
+            ├─ updateBlockEvaluationConfirmed(hash,true) + updateBlockEvaluationChainlength(hash,N)
+            └─ L1: updateOrderresultChainlength / updateContractresultChainlength
+
+  Longer reward chain (higher chainlength) arrives → reorg
+       │
+       └─ handleNewBestChain
+            ├─ findSplit
+            ├─ per old reward block
+            │    ├─ resetChainlengthSolid(N) → conflicts back to solid=0
+            │    └─ unconfirmBlocks(N interval) → confirmed=false, chainlength=-1
+            └─ reconnect winner chain via verifyRewardChainConfirmReferenced
 ```
 
 ## Test Dependencies
