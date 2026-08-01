@@ -50,8 +50,11 @@ public class SlotTickService {
 
             var store = storeService.getStore();
             try {
-                slotService.proposeBeaconBlock(slot, store);
-
+                // Beacon block proposal is PoS-driven: only the node whose
+                // validator key is selected for this slot proposes (see
+                // ValidatorDutyService.performDuty). Proposing unconditionally
+                // from every node produces forked beacon chains that corrupt
+                // the incremental order-matching state.
                 if (epoch != lastProcessedEpoch) {
                     slotService.processEpoch(epoch, store);
                     lastProcessedEpoch = epoch;

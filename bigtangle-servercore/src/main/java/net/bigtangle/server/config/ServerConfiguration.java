@@ -62,6 +62,13 @@ public class ServerConfiguration {
      */
     private String net;
 
+    /**
+     * Chain identifier for this node. Defaults to the network-specific chain
+     * (e.g. "L0", "ordermatch"). Can be overridden so an L1 node operates on
+     * the shared Layer-0 chain (used by the remote integration tests).
+     */
+    private String chain;
+
     /** Base URL for this server's API endpoints */
     private String serverurl;
     
@@ -269,6 +276,22 @@ public class ServerConfiguration {
      */
     public void setNet(String net) {
         this.net = net;
+    }
+
+    /**
+     * Gets the chain identifier for this node.
+     * @return the configured chain id (may be null to use the network default)
+     */
+    public String getChain() {
+        return chain;
+    }
+
+    /**
+     * Sets the chain identifier for this node.
+     * @param chain the chain id to use, or null for the network default
+     */
+    public void setChain(String chain) {
+        this.chain = chain;
     }
 
     /**

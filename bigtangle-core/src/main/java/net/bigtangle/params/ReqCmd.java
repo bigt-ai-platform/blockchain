@@ -6,7 +6,7 @@ package net.bigtangle.params;
 
 public enum ReqCmd {
 	// Block
-	submitTransaction, submitTransactions, getBlockByHash, findBlockEvaluation, searchBlockByBlockHashs, batchBlock, blockEvaluationFromHashs,
+	submitTransaction, submitTransactions, getBlockByHash, findBlockEvaluation, searchBlockByBlockHashs, batchBlock,
 	// Bridge
 	processPegIn, processPegOut,
 
@@ -14,13 +14,13 @@ public enum ReqCmd {
 	// Chain
 	getChainNumber, getAllConfirmedReward, blocksFromChainLength,blocksFromNonChainHeight,
 	// Token
-	searchTokens, getTokenById, getTokenIndex, getTokenSignByAddress, searchExchangeTokens, searchTokenDomain,searchWebTokens,searchContractTokens,
+	searchTokens, getTokenById, getTokenIndex, getTokenSignByAddress, searchExchangeTokens, searchWebTokens,
 
 	getTokenSignByTokenid, signToken, getTokenSigns, getTokenPermissionedAddresses, getDomainNameBlockHash,
 	// Block Order
 	getOrders, getOrdersTicker,
 	// Outputs
-	getOutputByKey, getOutputs, getOutputsHistory, outputsOfTokenid, getBalances,outputsByBlockhash,getAccountBalances, getTransactionStatus, getTransactionsStatusByAddress,
+	getOutputByKey, getOutputs, getOutputsHistory, outputsOfTokenid, getBalances,getAccountBalances, getTransactionStatus, getTransactionsStatusByAddress,
 
 	// payment
 	launchPayMultiSign, payMultiSign,
@@ -34,11 +34,10 @@ public enum ReqCmd {
 	// permissioned
 	addAccessGrant, deleteAccessGrant,
     // check point value
-    getCheckPoint,
     getAnchors,
     // PoS
     submitAttestation, getAttestations, processWithdrawal, submitSlashingProof,
     stakeDeposit, activateValidator, getValidators, getBaseFee, setValidatorKey, getValidatorKey,
     // NFT
-    createNft, saveUserdata, uploadFile, fundAddresses;
+    createNft, saveUserdata, fundAddresses;
 }

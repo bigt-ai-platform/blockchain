@@ -15,6 +15,9 @@ public class ScheduleConfiguration {
     @Value("${service.schedule.mcmcrate:500}")
     Long mcmcrate;
 
+    @Value("${service.schedule.reward:true}")
+    boolean reward_active;
+
     @Value("${service.schedule.blockbatch:false}")
     boolean blockBatchService_active;
 
@@ -37,6 +40,10 @@ public class ScheduleConfiguration {
 
     public boolean isChainlength_active() {
         return chainlength_active;
+    }
+
+    public boolean isReward_active() {
+        return reward_active;
     }
 
     public void setChainlength_active(boolean chainlength_active) {

@@ -129,20 +129,27 @@ echo "=== Step 6: Start L0 MCMC (port $MCMC_PORT) ==="
 # Use different ports from server to avoid conflicts on same machine
 MCMC_PEER_ARGS="-Dpeer.udpPort=30309 -Dpeer.tcpPort=30310 -Dgossip.port=9097"
 MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
+# PoS validator configuration (if the env file is present)
+POS_ARGS=""
+if [ -f "$ROOT/validator.env" ]; then
+    set -a; . "$ROOT/validator.env"; set +a
+    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY"
+    echo "PoS enabled: reward disabled, validator key configured (${#POS_VALIDATOR_KEY} hex)"
+fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
-    -Dspring-boot.run.arguments="$MCMC_ARGS" \
-    > "$MCMC_LOG" 2>&1 &
+  -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dservice.schedule.rewardonlywithreferenced=false $POS_ARGS" \
+  -Dspring-boot.run.arguments="$MCMC_ARGS" \
+  > "$MCMC_LOG" 2>&1 &
 MCMC_PID=$!
 echo "MCMC PID: $MCMC_PID"
 
 echo "=== Step: Start L1 Order Server (port $L1_PORT) ==="
 L1_PEER_ARGS="-Dpeer.udpPort=30311 -Dpeer.tcpPort=30312 -Dgossip.port=9099"
-L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
+L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.chain=L0"
 nohup mvn spring-boot:run -pl l1-order-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
-    -Dspring-boot.run.arguments="$L1_ARGS" \
-    > "$L1_LOG" 2>&1 &
+  -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
+  -Dspring-boot.run.arguments="$L1_ARGS" \
+  > "$L1_LOG" 2>&1 &
 L1_PID=$!
 echo "L1 PID: $L1_PID"
 
@@ -182,6 +189,42 @@ docker exec "$PG_CONTAINER" psql -U root -d $DB_NAME -c "
 sleep 3
 
 echo "TipsQueue has $(docker exec "$PG_CONTAINER" psql -U root -d $DB_NAME -t -A -c "SELECT count(*) FROM tipsqueue;"), proceeding to tests"
+
+# --- Step 7b: Register the PoS validator ---
+if [ -f "$ROOT/validator.env" ] && [ -n "${VALIDATOR_PUBKEY:-}" ]; then
+    echo ""
+    echo "=== Step 7b: Register PoS validator ==="
+    FUND_AMOUNT=1000000000000
+    curl -sf -X POST "http://127.0.0.1:$L0_PORT/fundAddresses" \
+        -H 'Content-Type: application/json' \
+        -d "{\"addresses\":[{\"address\":\"validator\",\"value\":$FUND_AMOUNT,\"pubkey\":\"$VALIDATOR_PUBKEY\"}]}" \
+        >/dev/null 2>&1 && echo "validator funded" || echo "validator funding failed"
+
+    sleep 2
+    curl -sf -X POST "http://127.0.0.1:$L0_PORT/stakeDeposit" \
+        -H 'Content-Type: application/json' \
+        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"amount\":\"32000000\"}" \
+        >/dev/null 2>&1 && echo "stake deposited" || echo "stake deposit failed"
+
+    sleep 2
+    curl -sf -X POST "http://127.0.0.1:$L0_PORT/activateValidator" \
+        -H 'Content-Type: application/json' \
+        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"epoch\":0}" \
+        >/dev/null 2>&1 && echo "validator activated" || echo "validator activation failed"
+
+    # Wait for the mcmc's PoS beacon to be produced and confirmed
+    echo "Waiting for PoS beacon production..."
+    for i in $(seq 1 30); do
+        sleep 3
+        HEIGHT=$(docker exec "$PG_CONTAINER" psql -U root -d $DB_NAME -t -A -c \
+            "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
+        if [ -n "$HEIGHT" ] && [ "$HEIGHT" -gt 0 ]; then
+            echo "PoS beacon produced, height=$HEIGHT"
+            break
+        fi
+    done
+    sleep 5
+fi
 
 # --- Step 8: Run remote tests ---
 echo ""

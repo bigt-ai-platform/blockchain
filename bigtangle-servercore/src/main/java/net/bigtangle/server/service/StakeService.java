@@ -13,10 +13,14 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.TXReward;
+import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
@@ -37,6 +41,9 @@ public class StakeService {
     private CacheBlockPrototypeService cacheBlockPrototypeService;
 
     @Autowired
+    private CacheBlockService cacheBlockService;
+
+    @Autowired
     private BlockSaveService blockSaveService;
 
     public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
@@ -51,7 +58,12 @@ public class StakeService {
             throw new IllegalArgumentException("Stake must be at least " + MIN_STAKE);
         }
 
-        Block b = cacheBlockPrototypeService.getBlockPrototype(store);
+        // Build the STAKE block on a known-valid block (the max confirmed
+        // reward) rather than the MCMC prototype, whose predecessor tips may
+        // not be persisted yet (NoBlockException on saveBlock).
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        Block head = store.get(maxConfirmedReward.getBlockHash());
+        Block b = Block.createBlock(networkParameters, head, head);
         b.setBlockType(BlockType.BLOCKTYPE_STAKE);
 
         Transaction tx = new Transaction(networkParameters);
@@ -59,9 +71,15 @@ public class StakeService {
         if (script == null) {
             script = new Script(new byte[0]);
         }
-        tx.addInput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex(), script);
+        TransactionInput input = tx.addInput(utxo.getBlockHash(), utxo.getTxHash(), utxo.getIndex(), script);
         Coin stakeOutput = utxo.getValue().subtract(Coin.FEE_DEFAULT);
         tx.addOutput(stakeOutput, depositKey);
+
+        // Sign the stake input with the depositor key (P2PKH: sig + pubkey).
+        Sha256Hash sighash = tx.hashForSignature(0, script.getProgram(), Transaction.SigHash.ALL, false);
+        SignatureBundle sig = depositKey.sign(sighash);
+        input.setScriptSig(ScriptBuilder.createInputScriptForPQ(sig, depositKey));
+
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
