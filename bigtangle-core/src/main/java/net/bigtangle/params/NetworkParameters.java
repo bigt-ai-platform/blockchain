@@ -99,20 +99,37 @@ public abstract class NetworkParameters {
 	 */
 	protected String chainId = "L0";
 
-	/** Supported post-quantum algorithm suite IDs (e.g. SUITE_CAT5_DUAL_1 = 1).
-	 *  Empty list means PQ is disabled.  Governance activates suites by
-	 *  adding entries.  A suite is sunset by removing it. */
-	protected List<Integer> pqSuites = new java.util.ArrayList<>();
+	/** Post-quantum suite governance: suiteId -> activation chain height
+	 *  (0 = active from genesis).  A suite without an entry is never active.
+	 *  Governance activates a suite by recording its activation height and
+	 *  sunsets it by removing the entry. */
+	protected final java.util.Map<Integer, Long> pqSuiteActivation = new java.util.HashMap<>();
 
-	/** @return immutable copy of the active PQ suite IDs. */
+	/** @return immutable copy of the configured PQ suite IDs (those with an activation height). */
 	public List<Integer> getPqSuites() {
-		return java.util.Collections.unmodifiableList(new java.util.ArrayList<>(pqSuites));
+		return java.util.Collections.unmodifiableList(new java.util.ArrayList<>(pqSuiteActivation.keySet()));
 	}
 
-	public void addPqSuite(int suiteId) { pqSuites.add(suiteId); }
-	public void removePqSuite(int suiteId) { pqSuites.remove(Integer.valueOf(suiteId)); }
-	public boolean isPqEnabled() { return !pqSuites.isEmpty(); }
-	public boolean isPqSuiteActive(int suiteId) { return pqSuites.contains(suiteId); }
+	/** Activate a suite from genesis (height 0). */
+	public void addPqSuite(int suiteId) { pqSuiteActivation.put(suiteId, 0L); }
+	/** Remove a suite from the governance table (sunsets it). */
+	public void removePqSuite(int suiteId) { pqSuiteActivation.remove(Integer.valueOf(suiteId)); }
+	/** Activation height of a suite, or -1 if it is never activated. */
+	public long getPqSuiteActivationHeight(int suiteId) {
+		return pqSuiteActivation.getOrDefault(suiteId, -1L);
+	}
+	/** Record the chain height at which a suite becomes active. */
+	public void setPqSuiteActivationHeight(int suiteId, long height) {
+		pqSuiteActivation.put(suiteId, height);
+	}
+	public boolean isPqEnabled() { return !pqSuiteActivation.isEmpty(); }
+	/** True if the suite is configured to activate at some height. */
+	public boolean isPqSuiteActive(int suiteId) { return pqSuiteActivation.containsKey(suiteId); }
+	/** True if the suite is active at or before the given chain height. */
+	public boolean isPqSuiteActive(int suiteId, long height) {
+		Long h = pqSuiteActivation.get(suiteId);
+		return h != null && height >= h.longValue();
+	}
 
 	/**
 	 * The set of {@link BlockType}s that a node running these parameters will

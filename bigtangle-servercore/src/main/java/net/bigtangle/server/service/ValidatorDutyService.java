@@ -62,7 +62,7 @@ public class ValidatorDutyService {
             try {
                 this.validatorKey = PQKey.fromPrivateKeyHex(configuredValidatorKey);
             } catch (Exception e) {
-                log.warn("Invalid pos.validatorKey config (expected 128 hex chars): {}", e.getMessage());
+                log.warn("Invalid pos.validatorKey config (expected 64-hex ML-DSA-only or 128-hex dual seed): {}", e.getMessage());
             }
         }
     }

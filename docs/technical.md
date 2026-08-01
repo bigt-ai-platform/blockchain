@@ -284,9 +284,9 @@ bash helper/testall.sh
 bash layer0-mcmc/src/test/java/net/bigtangle/mcmc/remote/remote.sh
 ```
 
-## Post-Quantum Dual Signature Design
+## Post-Quantum Signature Design
 
-BigTangle uses **two independent NIST post-quantum signature schemes** on the same data. This is defense in depth: the schemes rest on completely different mathematics, so they do not share the same failure mode.
+BigTangle signs with **ML-DSA-87 (FIPS 204)** from genesis. The **SLH-DSA-SHA2-256s (FIPS 205)** backstop is available as a second, mathematically independent scheme and can be activated at a governance-chosen chain height (*dual* mode, see *Governance* below). The two schemes rest on completely different mathematics, so they do not share the same failure mode.
 
 | | ML-DSA-87 (FIPS 204) | SLH-DSA-SHA2-256s (FIPS 205) |
 |---|---|---|
@@ -297,62 +297,71 @@ BigTangle uses **two independent NIST post-quantum signature schemes** on the sa
 | Security assumption | Hardness of lattice problems | Security of SHA-2 (most conservative) |
 | Risk | Could be broken by future quantum lattice attack | No known structural risk |
 
-### Why dual ("AND", not "OR")
+### Why dual ("AND", not "OR") — optional backstop
 
-A transaction is authentic only if **both** signatures verify. Breaking the lattice scheme *alone* is not enough, because the hash-based signature still authenticates the data. This protects the chain against a cryptanalytic break of either family of mathematics.
+While the dual suite is active, a transaction is authentic only if **both** signatures verify. Breaking the lattice scheme *alone* is not enough, because the hash-based signature still authenticates the data. This protects the chain against a cryptanalytic break of either family of mathematics. Until activation, the chain relies on ML-DSA-87 alone (single-fault) in exchange for a ~7x smaller signature and fast signing.
 
 ### Key concepts in code
 
 - **Key bundle** (`KeyBundle`) — a versioned, algorithm-sorted list of public keys. A *dual* key has two entries (`ALG_ML_DSA_87` + `ALG_SLH_DSA_SHA2_256S`); an ML-DSA-only key has one.
 - **Signature bundle** (`SignatureBundle`) — a versioned list of signatures, one per algorithm.
-- **Dual key creation**: `PQKey.fromSeeds(mlDsaSeed, slhDsaSeed)` generates both keypairs.
-- **Dual signing**: `PQKey.sign()` signs the same message twice (once per scheme).
-- **Dual verification**: `PQScriptUtils.verifyPQ` (transactions/UTXOs) and `verifyProposerSignature` (block proposers) require both entries to verify (AND logic).
+- **Key creation**: `PQKey.createNew()` produces an **ML-DSA-only** key (the default); `PQKey.fromSeeds(mlDsaSeed, slhDsaSeed)` (or a 128-hex `fromPrivateKeyHex`) produces a **dual** key.
+- **Signing**: `PQKey.sign(input)` signs with every algorithm the key holds; `PQKey.sign(input, includeSlhDsa)` lets the proposer path emit ML-DSA-only while the dual suite is inactive.
+- **Verification**: `PQScriptUtils.verifyPQ` (transactions/UTXOs) requires ML-DSA always and SLH-DSA only when the key bundle carries an SLH-DSA entry (per-key-bundle); `verifyProposerSignature(key, sig, hash, requireSlhDsa)` requires SLH-DSA for proposers only while the dual suite is active at the block height.
 
 ### When SLH-DSA is required
 
 - `verifyPQ` — **SLH-DSA required only if the key bundle has an SLH-DSA entry**. ML-DSA-only keys are fully valid and produce ML-DSA-only signatures that pass.
-- `verifyProposerSignature` — **always requires both** ML-DSA and SLH-DSA (block proposer/consensus path). This is the truly SLH-DSA-mandated path.
+- `verifyProposerSignature` — **ML-DSA always; SLH-DSA required only when the dual suite is active at the block height** (`requireSlhDsa`). Below activation, ML-DSA-only proposer keys are accepted; at/after it, an ML-DSA-only proposer key is rejected (no downgrade).
 
-### Where dual keys are used in production
+### Where keys are used in production
 
-- **Block proposers/validators** — `ValidatorDutyService` loads its proposer key from a 128-hex dual seed (`PQKey.fromPrivateKeyHex`).
-- **Genesis / domain-permission root** — `TestParams.genesisPub` and `permissionDomainname` are locked to a dual key; the genesis coinbase script is built from it.
-- Everything else (wallets, payees, token owners) uses ML-DSA-only keys.
+- **Block proposers/validators** — `ValidatorDutyService` loads its proposer key from a 64-hex ML-DSA-only or 128-hex dual seed (`PQKey.fromPrivateKeyHex`).
+- **Genesis / domain-permission root** — `TestParams.genesisPub` and `permissionDomainname` are locked to an **ML-DSA-87 only** key; the genesis coinbase script is built from it.
+- Everything else (wallets, payees, token owners) uses ML-DSA-only keys (`PQKey.createNew()`).
 
-### The dual suite identity
+### The suite identity
 
 `PQConstants.SUITE_CAT5_DUAL_1 = 1` (dual ML-DSA-87 + SLH-DSA-SHA2-256s, category 5).
 `PQConstants.SUITE_ML_DSA_ONLY = 2` (ML-DSA-87 only, category 5).
 
 A dual key's address uses `SUITE_CAT5_DUAL_1`; an ML-DSA-only key's address uses `SUITE_ML_DSA_ONLY` (`PQKey.toAddress`).
 
-## Governance: `pqSuites` (ML-DSA now, SLH-DSA later)
+## Governance: suite activation by chain height (ML-DSA now, dual later)
 
-`NetworkParameters` declares a **governance suite list** intended to activate/sunset algorithms at runtime:
+`NetworkParameters` holds a **governance activation map** from suite id to the
+chain height at which it becomes active (0 = from genesis; absent = never):
 
 ```java
-/** Supported post-quantum algorithm suite IDs (e.g. SUITE_CAT5_DUAL_1 = 1).
- *  Empty list means PQ is disabled.  Governance activates suites by
- *  adding entries.  A suite is sunset by removing it. */
-protected List<Integer> pqSuites = new ArrayList<>();
-public boolean isPqSuiteActive(int suiteId) { return pqSuites.contains(suiteId); }
+/** suiteId -> activation chain height (0 = genesis). Absent = never active. */
+protected final Map<Integer, Long> pqSuiteActivation = new HashMap<>();
+public long getPqSuiteActivationHeight(int suiteId);
+public void setPqSuiteActivationHeight(int suiteId, long height);
+public boolean isPqSuiteActive(int suiteId, long height); // inclusive boundary
 ```
 
-**Currently this is dead scaffolding** — nothing populates it and no verification consults it. `verifyPQ` / `verifyProposerSignature` hard-code the SLH-DSA requirement based on the key bundle's contents.
+- `SUITE_ML_DSA_ONLY → 0` (active from genesis) on `TestParams` and `MainNetParams`.
+- `SUITE_CAT5_DUAL_1` — **absent by default** (never), so the chain runs ML-DSA-87
+  only. The dual suite is armed at a chosen chain length via
+  `-Dnet.bigtangle.pq.dualActivationHeight=H`, which sets its activation height.
+- `Block.verifyProposer()` computes `requireSlhDsa = params.isPqSuiteActive(SUITE_CAT5_DUAL_1, block.height)`
+  and passes it to `PQScriptUtils.verifyProposerSignature(..., requireSlhDsa)`.
 
-### Intended path: "ML-DSA now, dual later"
+### The switch (after chain length `H`)
 
-1. **Wire verification to governance**: gate the SLH-DSA requirement on `isPqSuiteActive(SUITE_CAT5_DUAL_1)`. When `SUITE_ML_DSA_ONLY` is active and `SUITE_CAT5_DUAL_1` is not, proposer/domain signatures need ML-DSA only.
-2. **Start the chain ML-DSA-only**: define genesis with an ML-DSA-only `genesisPub` and `permissionDomainname`, and activate `SUITE_ML_DSA_ONLY`.
-3. **Later, governance flips to dual**: `addPqSuite(SUITE_CAT5_DUAL_1)`; new blocks/domain ops must carry SLH-DSA. Old ML-DSA-only UTXOs stay valid (verification is per-key-bundle), and new dual keys coexist.
+The switch is **one-way and additive**: ML-DSA stays mandatory forever; SLH-DSA is
+added. At `height >= H`, dual-key proposers must emit both signatures and
+ML-DSA-only proposer keys are rejected. Old ML-DSA-only UTXOs stay valid forever
+because transaction verification is per-key-bundle (`verifyPQ`), so no downgrade
+path exists. `PQKey.sign(hash, includeSlhDsa)` lets the proposer path emit
+ML-DSA-only while the dual suite is inactive, and both once it is active.
 
 ### Trade-offs / constraints
 
-- **Security**: shipping without the SLH-DSA backstop on the domain root means single-fault until governance activates dual. Going single→dual is strictly an upgrade (no downgrade risk).
+- **Security**: shipping without the SLH-DSA backstop on the domain root means single-fault until the dual suite activates. Going single→dual is strictly an upgrade (no downgrade risk).
 - **Genesis immutability**: genesis + `permissionDomainname` are fixed at chain launch. This only applies to a **new chain** (or the test net), not an existing one.
-- **Cross-platform vectors**: `PQCrossPlatformCompareTest`, `PQACVPVectorsTest`, and genesis-hash tests reference the dual genesis vectors and must be updated consistently.
-- **Proposer path**: `verifyProposerSignature` becomes suite-gated, so a dual-seed proposer key (`fromPrivateKeyHex`) must align with the active suite.
+- **Cross-platform vectors**: `PQCrossPlatformCompareTest`, `PQACVPVectorsTest`, and genesis-hash tests must stay consistent with the (ML-DSA-only) genesis vectors.
+- **Proposer path**: `verifyProposerSignature` is suite-gated, so a dual-seed proposer key (`fromPrivateKeyHex`) must align with the active suite — validators should provision 64-byte (dual-capable) seeds from day one even though only ML-DSA is signed until `H`.
 
 This is a **consensus/security decision**, not a test optimization — it changes what the chain's root-of-trust signs with.
 
@@ -360,16 +369,16 @@ This is a **consensus/security decision**, not a test optimization — it change
 
 `testall.sh` runs `bigtangle-core` tests (no DB) then `layer0-mcmc` integration tests (PostgreSQL, single surefire fork). Original runtime was ~11:17 with a surefire fork timeout failure (600 s).
 
-### Bottleneck
+### Bottleneck (historical)
 
-CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing** (`SLHDSASigner.generateSignature`, ~1.7 s/sign). Every token/domain/fee operation in the tests signs with a dual key.
+CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing** (`SLHDSASigner.generateSignature`, ~1.7 s/sign). Every token/domain/fee operation in the tests signed with a dual key (dual genesis/domain root).
 
 ### Changes applied
 
-1. **`PQKey.createNew()` ML-DSA-only opt-in** (`-Dnet.bigtangle.pq.mldsaOnlyDefault=true`) — when enabled, `createNew()` returns ML-DSA-only keys. `verifyPQ` accepts ML-DSA-only bundles, so this is safe; production defaults to dual-key. Dual-key SLH-DSA coverage is preserved via the genesis wallet and the dedicated crypto tests.
+1. **`PQKey.createNew()` is ML-DSA-only by default** — since the chain's root-of-trust (genesis/domain) is now ML-DSA-87 only, `createNew()` always returns an ML-DSA-only key. Dual keys are created explicitly via `fromSeeds` / a 128-hex `fromPrivateKeyHex` and only sign SLH-DSA once the dual suite is active at the block height. The former `-Dnet.bigtangle.pq.mldsaOnlyDefault` test flag is obsolete. Dual-key SLH-DSA coverage is preserved by the dedicated crypto tests and `SuiteActivationTest`.
 2. **Signature memoization in `BcPQSignatureProvider`** — ML-DSA and SLH-DSA are deterministic (same key+message ⇒ same signature), so results are cached by `(privateKey, message)`. Bounded Guava caches.
-3. **`layer0-mcmc/pom.xml` property-driven argLine** — the surefire `<argLine>` was hard-coded to `-Xmx2g`, which *overrode* `testall.sh`'s `-DargLine`. It is now `${bigtangle.mcmc.argLine}` with an identical default, so the ML-DSA-only flag reaches the fork (this also fixed the root cause of earlier parallel-fork failures).
-4. **`testall.sh`** — passes `-Dnet.bigtangle.pq.mldsaOnlyDefault=true` and sets `-Dbigtangle.mcmc.argLine` for the fork.
+3. **`layer0-mcmc/pom.xml` property-driven argLine** — the surefire `<argLine>` was hard-coded to `-Xmx2g`, which *overrode* `testall.sh`'s `-DargLine`. It is now `${bigtangle.mcmc.argLine}` with an identical default, so the JVM flags reach the fork (this also fixed the root cause of earlier parallel-fork failures).
+4. **`testall.sh`** — sets `-Dbigtangle.mcmc.argLine` for the fork (the obsolete `-Dnet.bigtangle.pq.mldsaOnlyDefault` flag was removed; `DUAL_H=<height>` optionally runs the suite in post-activation mode).
 5. **`pom.xml` fork timeout** — `forkedProcessTimeoutInSeconds` raised 600 → 1500 s (the suite legitimately needs ~6-11 min under PQ crypto).
 6. **`ValidatorService2Test`** — 12 token-owner keys switched from `wallet.walletKeys().get(0)` (dual genesis) to `PQKey.createNew()` (ML-DSA-only).
 
@@ -381,16 +390,16 @@ CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing**
 | TokenTest | ~136 s | ~56-67 s |
 | ValidatorService2Test | ~71 s | ~30-41 s |
 
-All 168 layer0 tests + core crypto tests pass. Dual-key SLH-DSA coverage is retained through the genesis wallet and `PQSignatureProviderTest` / `PQACVPVectorsTest` / `PQCrossPlatformCompatTest`.
+All layer0 tests + core crypto tests pass. Dual-key SLH-DSA coverage is retained through `PQSignatureProviderTest` / `PQACVPVectorsTest` / `PQCrossPlatformCompatTest` and the height-gated proposer cases in `SuiteActivationTest`.
 
-### What cannot be fixed in tests
+### Resolution of the remaining SLH-DSA cost
 
-The remaining SLH-DSA (~93% of TokenTest CPU) is tied to the **dual genesis/domain-root key**:
+The remaining SLH-DSA (~93% of TokenTest CPU) was tied to the **dual genesis/domain-root key**:
 
-- `wallet.feeTransaction` / `wallet.saveToken` — wallet spendable UTXOs are genesis-coinbase-locked (dual).
-- `payBigTo` — the genesis key signs the funding tx, and change outputs stay dual-locked.
-- `pullBlockDoMultiSign(wallet.walletKeys().get(0))` — domain-permission multisig, protocol-required with the dual genesis key.
+- `wallet.feeTransaction` / `wallet.saveToken` — wallet spendable UTXOs are genesis-coinbase-locked (was dual).
+- `payBigTo` — the genesis key signs the funding tx, and change outputs stay genesis-locked.
+- `pullBlockDoMultiSign(wallet.walletKeys().get(0))` — domain-permission multisig with the genesis key.
 
-An attempt to fund an ML-DSA-only spend key in `setUp` made no improvement (change outputs still route back to the genesis key, and the extra funding tx added its own dual sign) and was reverted.
+An intermediate attempt to fund an ML-DSA-only spend key in `setUp` made no improvement (change outputs still routed back to the genesis key) and was reverted.
 
-The only lever that removes this cost at the source is the **`pqSuites` governance change** (make the genesis/domain root ML-DSA-only, flip to dual later) — a protocol/consensus decision, not a test-harness change. It has not been applied.
+The cost was removed at the source by the **suite-activation governance change** (see *Governance* above): the genesis/domain root is now ML-DSA-87 only, so all genesis-coinbase spends and domain multisig operations sign with the fast lattice scheme. The SLH-DSA backstop remains available and is re-armed at a chosen chain height `H` via `-Dnet.bigtangle.pq.dualActivationHeight=H`.

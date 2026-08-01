@@ -43,12 +43,10 @@ public class ProdSimVerification extends RemoteTest {
     @BeforeEach
     public void setUp() throws Exception {
         byte[] mlDsaSeed = new byte[32];
-        byte[] slhDsaSeed = new byte[32];
         java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
-        java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
         wallet = net.bigtangle.wallet.Wallet.fromKeys(
                 networkParameters,
-                net.bigtangle.core.PQKey.fromSeeds(mlDsaSeed, slhDsaSeed),
+                net.bigtangle.core.PQKey.fromMLDSA(mlDsaSeed),
                 contextRoot);
     }
 

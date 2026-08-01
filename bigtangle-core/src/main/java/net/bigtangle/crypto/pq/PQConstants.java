@@ -83,4 +83,31 @@ public final class PQConstants {
 
     /** Transaction version required for PQ fields (uint32 on wire). */
     public static final int TX_PQ_VERSION = 2;
+
+    /* ── Suite governance / activation ─────────────────────────────────── */
+
+    /** Sentinel: a suite with this activation height is never activated. */
+    public static final long NEVER_ACTIVATE = -1L;
+
+    /** Default activation height for the dual suite: not set (never). */
+    public static final long DUAL_SUITE_DEFAULT_ACTIVATION_HEIGHT = NEVER_ACTIVATE;
+
+    /** System property overriding the dual-suite activation height. */
+    public static final String DUAL_ACTIVATION_PROPERTY = "net.bigtangle.pq.dualActivationHeight";
+
+    /**
+     * Resolve the dual-suite activation height from the system property
+     * {@value #DUAL_ACTIVATION_PROPERTY}.  Returns
+     * {@value #DUAL_SUITE_DEFAULT_ACTIVATION_HEIGHT} (never) when unset or invalid.
+     */
+    public static long dualActivationHeightFromProperty() {
+        String v = System.getProperty(DUAL_ACTIVATION_PROPERTY);
+        if (v == null || v.trim().isEmpty()) return DUAL_SUITE_DEFAULT_ACTIVATION_HEIGHT;
+        try {
+            long h = Long.parseLong(v.trim());
+            return h < 0 ? DUAL_SUITE_DEFAULT_ACTIVATION_HEIGHT : h;
+        } catch (NumberFormatException e) {
+            return DUAL_SUITE_DEFAULT_ACTIVATION_HEIGHT;
+        }
+    }
 }

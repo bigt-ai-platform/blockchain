@@ -23,6 +23,8 @@ package net.bigtangle.params;
 
 import com.google.common.collect.ImmutableList;
 
+import net.bigtangle.crypto.pq.PQConstants;
+
 /**
  * Parameters for the main production network on which people trade goods and
  * services.
@@ -45,6 +47,15 @@ public class MainNetParams extends NetworkParameters {
         genesisPub = "03d6053241c5abca6621c238922e7473977320ef310be0a8538cc2df7ee5a0187c";
 
         permissionDomainname = ImmutableList.of("0222c35110844bf00afd9b7f08788d79ef6edc0dce19be6182b44e07501e637a58");
+
+        // PQ governance: ML-DSA-87 from genesis; dual suite after the
+        // configured chain length (default: never). Mainnet genesis is legacy
+        // EC; the suite table only gates the post-quantum proposer path.
+        setPqSuiteActivationHeight(PQConstants.SUITE_ML_DSA_ONLY, 0);
+        long dualActivation = PQConstants.dualActivationHeightFromProperty();
+        if (dualActivation >= 0) {
+            setPqSuiteActivationHeight(PQConstants.SUITE_CAT5_DUAL_1, dualActivation);
+        }
      
        
         id = ID_MAINNET;

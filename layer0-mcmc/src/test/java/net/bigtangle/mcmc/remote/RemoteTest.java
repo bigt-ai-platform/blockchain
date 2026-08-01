@@ -62,16 +62,15 @@ public abstract class RemoteTest {
 
 	protected final KeyParameter aesKey = null;
 
-	private static String pqKeyHex(byte mlDsaFill, byte slhDsaFill) {
+	private static String pqKeyHex(byte mlDsaFill) {
 		byte[] mlDsaSeed = new byte[32];
-		byte[] slhDsaSeed = new byte[32];
 		Arrays.fill(mlDsaSeed, mlDsaFill);
-		Arrays.fill(slhDsaSeed, slhDsaFill);
-		return PQKey.fromSeeds(mlDsaSeed, slhDsaSeed).getPublicKeyAsHex();
+		return PQKey.fromMLDSA(mlDsaSeed).getPublicKeyAsHex();
 	}
 
-	public static String genesisPub = pqKeyHex((byte) 0x01, (byte) 0x02);
-	public static String yuanTokenPub = pqKeyHex((byte) 0x03, (byte) 0x04);
+	// Matches TestParams.genesisPub (ML-DSA-87 only, 0x01 ML seed)
+	public static String genesisPub = pqKeyHex((byte) 0x01);
+	public static String yuanTokenPub = pqKeyHex((byte) 0x03);
  
  
 	public NetworkParameters networkParameters = TestParams.get();
@@ -79,10 +78,8 @@ public abstract class RemoteTest {
 	@BeforeEach
 	public void setUp() throws Exception {
 		byte[] mlDsaSeed = new byte[32];
-		byte[] slhDsaSeed = new byte[32];
 		Arrays.fill(mlDsaSeed, (byte) 0x01);
-		Arrays.fill(slhDsaSeed, (byte) 0x02);
-		wallet = Wallet.fromKeys(networkParameters, PQKey.fromSeeds(mlDsaSeed, slhDsaSeed), contextRoot);
+		wallet = Wallet.fromKeys(networkParameters, PQKey.fromMLDSA(mlDsaSeed), contextRoot);
 	}
 
 	protected Block payBigTo(PQKey beneficiary, BigInteger amount, List<Block> addedBlocks) throws Exception {

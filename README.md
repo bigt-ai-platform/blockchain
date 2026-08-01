@@ -62,7 +62,7 @@ mvn -pl l1-payment-server spring-boot:run -DCHAIN_ID=PAYMENT-US
 - **MCMC + PoS consensus**: Probabilistic DAG tips + deterministic Casper finality
 - **Multi-layer**: Isolated L1 chains with bridge peg-in/peg-out
 - **Configurable L1 chain ID**: Run many instances via `CHAIN_ID` env var
-- **Post-quantum crypto**: ML-DSA-87 + SLH-DSA-SHA2-256s dual signatures
+- **Post-quantum crypto**: ML-DSA-87 (FIPS 204) signatures, with an optional height-gated SLH-DSA-SHA2-256s backstop
 - **Fee pool**: Per-chain fee accumulation distributed to validators at epoch boundaries
 - **Attack resilience**: Mempool double-spend + signature verification at ingress
 

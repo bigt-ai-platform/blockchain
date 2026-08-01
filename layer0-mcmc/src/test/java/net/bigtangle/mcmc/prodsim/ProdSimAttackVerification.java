@@ -55,11 +55,9 @@ public class ProdSimAttackVerification extends RemoteTest {
     @BeforeEach
     public void setUp() throws Exception {
         byte[] mlDsaSeed = new byte[32];
-        byte[] slhDsaSeed = new byte[32];
         java.util.Arrays.fill(mlDsaSeed, (byte) 0x01);
-        java.util.Arrays.fill(slhDsaSeed, (byte) 0x02);
         wallet = Wallet.fromKeys(networkParameters,
-                PQKey.fromSeeds(mlDsaSeed, slhDsaSeed), contextRoot);
+                PQKey.fromMLDSA(mlDsaSeed), contextRoot);
     }
 
     /** All nodes must expose a spendable BIG UTXO for the double-spend test. */

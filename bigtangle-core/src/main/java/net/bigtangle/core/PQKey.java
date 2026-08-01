@@ -64,26 +64,22 @@ public class PQKey implements EncryptableItem {
         this.keyBundle = null;
     }
 
-    // When enabled, createNew() generates ML-DSA-only keys. This is a test
-    // acceleration: SLH-DSA-256s signing dominates test wall-time (~1.7 s/sig),
-    // and verifyPQ accepts ML-DSA-only bundles. Production defaults to dual-key.
-    private static final boolean MLDSA_ONLY_DEFAULT = Boolean
-            .getBoolean("net.bigtangle.pq.mldsaOnlyDefault");
-
+    // Default: ML-DSA-87 only (FIPS 204).  Dual (SLH-DSA) keys are created
+    // explicitly via fromSeeds()/fromPrivateKeyHex(64-byte) and only sign
+    // SLH-DSA once the dual suite is active at the block height.
     public static PQKey createNew() {
-        byte[] seed = new byte[64];
+        byte[] seed = new byte[32];
         secureRandom.nextBytes(seed);
-        if (MLDSA_ONLY_DEFAULT) {
-            return fromMLDSA(Arrays.copyOfRange(seed, 0, 32));
-        }
-        return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
+        return fromMLDSA(seed);
     }
 
     public static PQKey fromPrivateKeyHex(String hex) {
         byte[] seed = Utils.HEX.decode(hex);
-        if (seed.length != 64)
-            throw new IllegalArgumentException("Expected 128 hex chars (64 bytes), got " + hex.length());
-        return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
+        if (seed.length == 64)
+            return fromSeeds(Arrays.copyOfRange(seed, 0, 32), Arrays.copyOfRange(seed, 32, 64));
+        if (seed.length == 32)
+            return fromMLDSA(seed);
+        throw new IllegalArgumentException("Expected 64 or 128 hex chars (32-byte ML-DSA-only or 64-byte dual seed), got " + hex.length());
     }
 
     public static PQKey createNewMLDSA() {
@@ -152,6 +148,16 @@ public class PQKey implements EncryptableItem {
     public byte[] getSLHDSAPrivateKey() { return slhDsaPrivateKey; }
 
     public SignatureBundle sign(Sha256Hash input) {
+        return sign(input, true);
+    }
+
+    /**
+     * Sign a hash with ML-DSA-87 always, and additionally with SLH-DSA-SHA2-256s
+     * when {@code includeSlhDsa} is true and this key holds an SLH-DSA private key.
+     * Transactions should keep the default (all algorithms the key holds); the
+     * proposer path passes {@code false} while the dual suite is inactive.
+     */
+    public SignatureBundle sign(Sha256Hash input, boolean includeSlhDsa) {
         if (mlDsaPrivateKey == null)
             throw new MissingPrivateKeyException();
         byte[] txHash = PQScriptUtils.domainSeparatedHash(input.getBytes(), PQConstants.TX_DOMAIN);
@@ -159,7 +165,7 @@ public class PQKey implements EncryptableItem {
         byte[] mlSig = prov.sign(PQConstants.ALG_ML_DSA_87, mlDsaPrivateKey, mlMsg);
         List<SignatureBundle.Entry> entries = new ArrayList<>();
         entries.add(new SignatureBundle.Entry(PQConstants.ALG_ML_DSA_87, mlSig));
-        if (slhDsaPrivateKey != null) {
+        if (includeSlhDsa && slhDsaPrivateKey != null) {
             byte[] slhMsg = PQScriptUtils.domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
             byte[] slhSig = prov.sign(PQConstants.ALG_SLH_DSA_SHA2_256S, slhDsaPrivateKey, slhMsg);
             entries.add(new SignatureBundle.Entry(PQConstants.ALG_SLH_DSA_SHA2_256S, slhSig));

@@ -39,10 +39,8 @@ public class ProdSimBootstrap {
         NetworkParameters params = TestParams.get();
 
         byte[] mlDsaSeed = new byte[32];
-        byte[] slhDsaSeed = new byte[32];
         Arrays.fill(mlDsaSeed, (byte) 0x01);
-        Arrays.fill(slhDsaSeed, (byte) 0x02);
-        PQKey genesisKey = PQKey.fromSeeds(mlDsaSeed, slhDsaSeed);
+        PQKey genesisKey = PQKey.fromMLDSA(mlDsaSeed);
 
         Wallet wallet = Wallet.fromKeys(params, genesisKey, serverUrl);
 

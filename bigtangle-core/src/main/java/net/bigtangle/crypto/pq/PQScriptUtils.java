@@ -137,14 +137,22 @@ public final class PQScriptUtils {
     }
 
     /**
-     * Verify a block proposer's PQ signatures.
+     * Verify a block proposer's PQ signatures (suite-gated).
+     *
+     * <p>ML-DSA-87 is always required.  When {@code requireSlhDsa} is true
+     * (dual suite active at the block height), the proposer must also carry and
+     * verify an SLH-DSA-SHA2-256s signature — ML-DSA-only proposer keys are
+     * rejected (no downgrade).  When false (ML-DSA-only phase), an SLH-DSA
+     * signature is only checked if actually present on both sides.
      *
      * @param keyBundle the proposer's public key bundle
      * @param sigBundle the proposer's signature bundle
      * @param signingHash block hash without proposer sig fields (breaks circular dependency)
-     * @return true iff both ML-DSA and SLH-DSA verify against the signing hash
+     * @param requireSlhDsa true iff SUITE_CAT5_DUAL_1 is active at the block height
+     * @return true iff the required signatures verify
      */
-    public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash) {
+    public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash,
+            boolean requireSlhDsa) {
         try {
             PQSignatureProvider p = provider();
 
@@ -158,14 +166,35 @@ public final class PQScriptUtils {
             byte[] slhMsg = domainSeparatedHash(signingHash, PQConstants.SLHDSA_SIG_DOMAIN);
             KeyBundle.Entry slhKey = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
             SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
-            if (slhKey == null || slhSig == null) return false;
-            if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
-                return false;
+            if (requireSlhDsa) {
+                if (slhKey == null || slhSig == null) return false;
+                if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
+                    return false;
+            } else {
+                // ML-DSA-only phase: SLH-DSA is checked only when actually present.
+                if (slhKey != null && slhSig != null) {
+                    if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
+                        return false;
+                }
+            }
 
             return true;
         } catch (Exception e) {
             log.warn("Proposer PQ signature verification failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Verify a block proposer's PQ signatures requiring the dual set
+     * (ML-DSA-87 + SLH-DSA-SHA2-256s).  Backward-compatible wrapper for callers
+     * that do not carry a block height.
+     *
+     * @deprecated use {@link #verifyProposerSignature(KeyBundle, SignatureBundle, byte[], boolean)}
+     *             with the suite-gate computed from the block height.
+     */
+    @Deprecated
+    public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash) {
+        return verifyProposerSignature(keyBundle, sigBundle, signingHash, true);
     }
 }

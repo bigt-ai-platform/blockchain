@@ -224,20 +224,22 @@ coordination overhead.
 
 ## Post-Quantum Security
 
-Bigtangle uses two post-quantum signature algorithms on every transaction
-input. Both are NIST-approved final standards:
+Bigtangle signs every transaction input with ML-DSA-87 (NIST-approved final
+standard). The chain ships ML-DSA-87 only and can add the SLH-DSA-SHA2-256s
+backstop at a governance-chosen chain height (`docs/pq-mldsa-only-plan.md`):
 
 | Algorithm                    | Standard | Security Level |
 | ---------------------------- | -------- | -------------- |
 | ML-DSA-87 (Dilithium)        | FIPS 204 | Category 5     |
 | SLH-DSA-SHA2-256s (SPHINCS+) | FIPS 205 | Category 5     |
 
-The two algorithms rely on mathematically independent assumptions (lattice
-cryptography and hash functions). Breaking one does not break the other. An
-attacker would need to break both simultaneously to forge a single
-transaction.
+While only ML-DSA-87 is active, signatures rely on a single mathematically
+independent assumption (lattices). After the optional dual-suite activation, an
+attacker would need to break both lattice-based and hash-based cryptography to
+forge a single transaction. The switch is one-way and additive — existing
+ML-DSA-only funds remain valid.
 
-A standard BIP39 seed phrase deterministically generates both key pairs.
+A standard BIP39 seed phrase deterministically generates the key pair(s).
 If an algorithm is ever broken, the system supports upgrading to a
 replacement without changing the transaction format or invalidating existing
 funds.

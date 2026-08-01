@@ -39,6 +39,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
 import net.bigtangle.crypto.pq.KeyBundle;
+import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 
@@ -621,7 +622,10 @@ public class Block extends Message {
 			KeyBundle keys = KeyBundle.deserialize(proposerKeyBundle);
 			SignatureBundle sigs = SignatureBundle.deserialize(proposerSignatureBundle);
 			byte[] signingHash = computeProposerSigningHash();
-			return PQScriptUtils.verifyProposerSignature(keys, sigs, signingHash);
+			// Dual suite (ML-DSA + SLH-DSA) is required only once it is active
+			// at this block height; below that the chain is ML-DSA-87 only.
+			boolean requireSlhDsa = params.isPqSuiteActive(PQConstants.SUITE_CAT5_DUAL_1, height);
+			return PQScriptUtils.verifyProposerSignature(keys, sigs, signingHash, requireSlhDsa);
 		} catch (Exception e) {
 			log.warn("Block proposer verification failed: {}", e.getMessage());
 			return false;
@@ -630,7 +634,7 @@ public class Block extends Message {
 
 	/** Hash of the header including proposerKeyBundle but excluding proposerSignatureBundle
 	 *  (signature excluded to break the circular signing dependency). */
-	private byte[] computeProposerSigningHash() {
+	public byte[] computeProposerSigningHash() {
 		try {
 			ByteArrayOutputStream bos = new ByteArrayOutputStream();
 			Utils.uint32ToByteStreamLE(version, bos);

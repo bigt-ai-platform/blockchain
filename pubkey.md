@@ -8,10 +8,10 @@ There is no P2PKH. The `Address` type survives only for P2SH scripts.
 | Aspect | This codebase | Bitcoin | Ethereum |
 |--------|---------------|---------|----------|
 | **Live?** | Yes — active from launch | Research only | Research only |
-| **Algorithm** | ML-DSA-87 + SLH-DSA-256s (dual) | Undecided | Undecided |
-| **Standard** | FIPS 204 + FIPS 205 (final) | — | — |
-| **Security level** | Category 5 (both) | — | — |
-| **Sig per input** | ~20.6 KB | Would need &lt;1 KB | Gas-constrained |
+| **Algorithm** | ML-DSA-87 now; dual ML-DSA-87 + SLH-DSA-256s after activation height H | Undecided | Undecided |
+| **Standard** | FIPS 204 (SLH-DSA: FIPS 205, optional) | — | — |
+| **Security level** | Category 5 | — | — |
+| **Sig per input** | ~4.6 KB (ML-DSA-87) | Would need &lt;1 KB | Gas-constrained |
 | **Key size** | ~2.6 KB | N/A | N/A |
 | **Address** | 35-byte SHA-256 of KeyBundle | Would use hash of pubkey | Account-based |
 | **Script** | P2PK (`<pubkey> OP_CHECKSIG`) | P2PKH-like (hash in output) | No script |
@@ -57,10 +57,13 @@ signatures per input at current transaction volumes. Likely candidates:
 ## Trade-off
 
 This codebase pays the PQ cost up front — every transaction input carries
-~23 KB of dual signatures — in exchange for active defence-in-depth from
-launch. Bitcoin and Ethereum are optimising for today's throughput and
+~4.6 KB of ML-DSA-87 signature — in exchange for active post-quantum security
+from launch. Bitcoin and Ethereum are optimising for today's throughput and
 deferring the cost, betting on smaller signatures arriving in time.
 
-The dual-algorithm approach (ML-DSA-87 + SLH-DSA-256s) provides an
-additional layer: an attacker would need to break both lattice-based and
-hash-based cryptography simultaneously to forge a single transaction.
+The chain ships ML-DSA-87 only (FIPS 204) and can add the SLH-DSA-SHA2-256s
+backstop at a governance-chosen chain height (see `docs/technical.md`
+§Governance and `docs/pq-mldsa-only-plan.md`): an attacker would then need to
+break both lattice-based and hash-based cryptography simultaneously to forge a
+signature. The switch is one-way and additive — ML-DSA-only UTXOs remain valid
+forever.
