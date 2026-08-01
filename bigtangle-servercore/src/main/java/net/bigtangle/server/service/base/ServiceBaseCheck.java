@@ -1133,7 +1133,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 
-		SolidityState difficultyResult = checkRewardDifficulty(block, store);
+		SolidityState difficultyResult = checkRewardChainLink(block, store);
 		if (difficultyResult.notSuccessState()) {
 			return difficultyResult;
 		}
@@ -1816,7 +1816,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 	}
 
-	public SolidityState checkRewardDifficulty(Block rewardBlock, BlockStoreInterface store)
+	public SolidityState checkRewardChainLink(Block rewardBlock, BlockStoreInterface store)
 			throws BlockStoreException {
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(rewardBlock.getTransactions().get(0).getData());
 
@@ -1832,20 +1832,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				&& prevRewardBlock.getBlockType() != BlockType.BLOCKTYPE_INITIAL)
 			throw new VerificationException("Previous reward block is not reward block.");
 
-		checkRewardDifficulty(rewardBlock, rewardInfo, prevRewardBlock, store);
-
 		return SolidityState.getSuccessState();
-	}
-
-	private void checkRewardDifficulty(Block rewardBlock, RewardInfo rewardInfo, Block prevRewardBlock,
-			BlockStoreInterface store) throws BlockStoreException {
-		// PoS mode — difficulty is always maxTargetReward, no retarget calculation
-	}
-
-	public long calculateNextChainDifficulty(Sha256Hash prevRewardHash, long currChainLength, long currentTime,
-			BlockStoreInterface store) throws BlockStoreException {
-		// PoS mode — return constant max reward difficulty
-		return networkParameters.getRewardDifficultyLimitCompact();
 	}
 
 	public SolidityState checkRewardReferencedBlocks(Block rewardBlock, BlockStoreInterface store)
@@ -1882,11 +1869,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		return SolidityState.getSuccessState();
-	}
-
-	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		// PoS mode — return constant max difficulty (easiest)
-		return networkParameters.getDifficultyLimitCompact();
 	}
 
 	public GetTXRewardResponse getMaxConfirmedReward(Map<String, Object> request, BlockStoreInterface store)

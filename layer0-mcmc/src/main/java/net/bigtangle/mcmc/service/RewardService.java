@@ -244,10 +244,6 @@ public class RewardService {
 		return block;
 	}
 
-	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		return networkParameters.getDifficultyLimitCompact();
-	}
-
 	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
 		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));

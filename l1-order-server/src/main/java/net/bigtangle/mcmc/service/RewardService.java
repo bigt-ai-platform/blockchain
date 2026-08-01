@@ -248,10 +248,6 @@ public class RewardService {
 
 	}
 
-	public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-		return networkParameters.getDifficultyLimitCompact();
-	}
-
 	/**
 	 * Sends the created reward block to the server via HTTP POST instead of saving directly.
 	 * This ensures proper separation between MCMC (block creation) and Server (block validation/persistence).

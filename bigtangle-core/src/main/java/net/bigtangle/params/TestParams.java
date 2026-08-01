@@ -20,9 +20,6 @@ public class TestParams extends NetworkParameters {
 
         id = ID_UNITTESTNET;
 
-        difficultyLimitCompact = 536954798L;
-        rewardDifficultyLimitCompact = 536954798L;
-
         addressHeader = 111;
         p2shHeader = 196;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };

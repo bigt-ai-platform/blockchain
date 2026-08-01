@@ -211,10 +211,6 @@ public class RewardService {
         return GetTXRewardListResponse.create(store.getAllConfirmedReward());
     }
 
-    public long calculateNextBlockDifficulty(RewardInfo currRewardInfo) {
-        return networkParameters.getDifficultyLimitCompact();
-    }
-
     private void sendBlockToServer(Block block, BlockStoreInterface store) throws Exception {
         String serverUrl = serverConfiguration.getServerurl();
         if (serverUrl == null || serverUrl.isEmpty()) {

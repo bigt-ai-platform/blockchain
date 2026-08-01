@@ -63,9 +63,6 @@ public abstract class NetworkParameters {
 	/** Unit test network. */
 	public static final String ID_UNITTESTNET = "Test";
 
-	/* Difficulty limits — encoded as compact long (genesis hash constants, do not change). */
-	protected long difficultyLimitCompact;
-	protected long rewardDifficultyLimitCompact;
 	protected int addressHeader;
 	protected int p2shHeader;
 	protected int[] acceptableAddressCodes;
@@ -267,16 +264,6 @@ public abstract class NetworkParameters {
 	/** The header bytes that identify the start of a packet on this network. */
 	public long getPacketMagic() {
 		return packetMagic;
-	}
-
-	/** Difficulty limit compact encoding — genesis hash constant, do not change. */
-	public long getDifficultyLimitCompact() {
-		return difficultyLimitCompact;
-	}
-
-	/** Reward difficulty limit compact encoding — genesis hash constant, do not change. */
-	public long getRewardDifficultyLimitCompact() {
-		return rewardDifficultyLimitCompact;
 	}
 
 	/** Returns the 4 byte header for BIP32 (HD) wallet - public key part. */
