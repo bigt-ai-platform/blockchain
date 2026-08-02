@@ -146,14 +146,14 @@ MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61
 POS_ARGS=""
 if [ -f "$ROOT/validator.env" ]; then
     set -a; . "$ROOT/validator.env"; set +a
-    # PoS-only: the reward service is disabled so the ONLY beacon producer is
-    # the slot proposer (single-headed chain, no forks). A short slot interval
-    # makes blocks confirm quickly so the remote tests' polling windows fit.
-    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
-    echo "PoS enabled: reward disabled, validator key configured (${#POS_VALIDATOR_KEY} hex)"
+    # PoS-only: the slot proposer is the only beacon producer (single-headed
+    # chain, no forks). A short slot interval makes blocks confirm quickly so
+    # the remote tests' polling windows fit.
+    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
+    echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
 fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
-  -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dserver.requester=http://127.0.0.1:$L0_PORT -Dservice.schedule.rewardonlywithreferenced=false $POS_ARGS" \
+  -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dserver.requester=http://127.0.0.1:$L0_PORT $POS_ARGS" \
   -Dspring-boot.run.arguments="$MCMC_ARGS" \
   > "$MCMC_LOG" 2>&1 &
 MCMC_PID=$!
@@ -163,7 +163,7 @@ echo "=== Step: Start L1 Order Server (port $L1_PORT) ==="
 L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.port=$L1_GOSSIP"
 L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.chain=L0"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
+  -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!

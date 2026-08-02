@@ -256,7 +256,6 @@ Repeat for the remaining nodes with unique ports/DBs and `POS_GOSSIP_PEERS`.
 | `SERVICE_SYNC` / `SERVICE_SYNC_RATE` | Block sync service | `true / 50000` |
 | `SERVICE_INITSYNC` | Sync on startup | `true` |
 | `service.schedule.microbatch` | Micro-batch service (system property, e.g. `--service.schedule.microbatch=true`; env `SERVICE_SCHEDULE_MICROBATCH`) | `true` |
-| `service.schedule.reward` | Reward service (default `true`; disable to rely solely on slot proposers) | `true` |
 | `POS_VALIDATOR_KEY` | Validator private seed (64 or 128 hex) | `…` |
 | `POS_SLOT_INTERVAL_MS` | Slot duration | `12000` |
 | `POS_SLOTS_PER_EPOCH` | Slots per epoch | `32` |
