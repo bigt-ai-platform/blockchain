@@ -34,6 +34,14 @@ import net.bigtangle.wallet.Wallet;
 
 public class DoubleSpentAttackTest extends AbstractIntegrationTest {
 
+    /**
+     * Number of attack transactions/tokens submitted per attack test. The
+     * token-creation attack is the dominant cost of this class (each iteration
+     * does an HTTP submit + MCMC prototype calc), so the default is kept low;
+     * scale up with -Dnet.bigtangle.attackCount=1000 for a full stress run.
+     */
+    private static final int ATTACK_COUNT = Integer.getInteger("net.bigtangle.attackCount", 200);
+
 
     /**
      * Builds a funded wallet for attack testing. Uses an ML-DSA-only key so the
@@ -119,8 +127,6 @@ public class DoubleSpentAttackTest extends AbstractIntegrationTest {
 
     @Test
     public void testThousandDoubleSpendAttack() throws Exception {
-        int ATTACK_COUNT = 1000;
-
         Wallet w = fundedAttackWallet();
 
         List<FreeStandingTransactionOutput> candidates = w.calculateAllSpendCandidates(null, false);
@@ -169,8 +175,6 @@ public class DoubleSpentAttackTest extends AbstractIntegrationTest {
 
     @Test
     public void testThousandTokenCreationAttack() throws Exception {
-        int ATTACK_COUNT = 1000;
-
         Wallet w = fundedAttackWallet();
         PQKey testKey = w.walletKeys(null).get(0);
         String domain = "";

@@ -61,12 +61,18 @@ DUAL_ARG=""
 if [ -n "${DUAL_H:-}" ]; then
     DUAL_ARG="-Dnet.bigtangle.pq.dualActivationHeight=${DUAL_H}"
 fi
+# Attack-test workload (DoubleSpentAttackTest). Default 200; use 1000 for a
+# full stress run: ATTACK_COUNT=1000 bash helper/testall.sh
+ATTACK_ARG=""
+if [ -n "${ATTACK_COUNT:-}" ]; then
+    ATTACK_ARG="-Dnet.bigtangle.attackCount=${ATTACK_COUNT}"
+fi
 ARG_LINE="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED ${DUAL_ARG}"
 JVM_ARGS=(-DargLine="${ARG_LINE}")
 # layer0-mcmc/pom.xml defines bigtangle.mcmc.argLine (default -Xmx2g); override
 # it so the flags reach the surefire fork (the pom argLine otherwise wins over
 # -DargLine).
-MCMC_ARG_LINE="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true ${DUAL_ARG}"
+MCMC_ARG_LINE="-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true ${DUAL_ARG} ${ATTACK_ARG}"
 MCMC_JVM_ARGS=(-Dbigtangle.mcmc.argLine="${MCMC_ARG_LINE}")
 FORK_ARGS=(-Dsurefire.forkCount=1)
 DB_ARGS="-DDB_HOSTNAME=localhost -DDB_PORT=$PG_PORT -DDB_USERNAME=root -DDB_PASSWORD=test1234"

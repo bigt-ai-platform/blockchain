@@ -1330,8 +1330,19 @@ public abstract class AbstractIntegrationTest {
 
 		mcmcService.update(store);
 		Block tipP = cacheBlockPrototypeService.getBlockPrototype(store);
-		Block block = Block.createBlock(networkParameters,
-				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
+		Block prev = store.get(tipP.getPrevBlockHash());
+		Block prevBranch = store.get(tipP.getPrevBranchBlockHash());
+		// The MCMC prototype's predecessor tips may not be persisted yet (they
+		// are queued prototypes, not saved blocks), so store.get can return null.
+		// Fall back to genesis, which is always present, to keep the token block
+		// buildable (matches the StakeService approach for STAKE blocks).
+		if (prev == null) {
+			prev = UtilGeneseBlock.createGenesis(networkParameters);
+		}
+		if (prevBranch == null) {
+			prevBranch = prev;
+		}
+		Block block = Block.createBlock(networkParameters, prev, prevBranch);
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(keys.get(2).getPubKey(), basecoin, tokenInfo, new MemoInfo("coinbase"));
 		block = adjustSolve(block);
@@ -1510,8 +1521,19 @@ public abstract class AbstractIntegrationTest {
 
 		mcmcService.update(store);
 		Block tipP = cacheBlockPrototypeService.getBlockPrototype(store);
-		Block block = Block.createBlock(networkParameters,
-				store.get(tipP.getPrevBlockHash()), store.get(tipP.getPrevBranchBlockHash()));
+		Block prev = store.get(tipP.getPrevBlockHash());
+		Block prevBranch = store.get(tipP.getPrevBranchBlockHash());
+		// The MCMC prototype's predecessor tips may not be persisted yet (they
+		// are queued prototypes, not saved blocks), so store.get can return null.
+		// Fall back to genesis, which is always present, to keep the token block
+		// buildable (matches the StakeService approach for STAKE blocks).
+		if (prev == null) {
+			prev = UtilGeneseBlock.createGenesis(networkParameters);
+		}
+		if (prevBranch == null) {
+			prevBranch = prev;
+		}
+		Block block = Block.createBlock(networkParameters, prev, prevBranch);
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 
 		if (overrideHash1 != null && overrideHash2 != null) {

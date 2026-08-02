@@ -384,13 +384,24 @@ CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing**
 
 ### Results
 
-| | Before | After |
+| | Before (dual genesis) | After (ML-DSA-only genesis) |
 |---|---|---|
-| Full suite | ~11:17, BUILD FAILURE (fork timeout) | ~5:50-6:13, BUILD SUCCESS |
-| TokenTest | ~136 s | ~56-67 s |
-| ValidatorService2Test | ~71 s | ~30-41 s |
+| Full suite | ~11:17, BUILD FAILURE (fork timeout) | ~5:45 total (~4:41 layer0), BUILD SUCCESS |
+| TokenTest | ~136 s | ~15 s |
+| ValidatorService2Test | ~71 s | ~14 s |
+| DoubleSpentAttackTest | — | ~52 s (ATTACK_COUNT=200) |
 
 All layer0 tests + core crypto tests pass. Dual-key SLH-DSA coverage is retained through `PQSignatureProviderTest` / `PQACVPVectorsTest` / `PQCrossPlatformCompatTest` and the height-gated proposer cases in `SuiteActivationTest`.
+
+### Current suite profile
+
+The layer0 suite is now dominated by `DoubleSpentAttackTest`, which submits up to
+`ATTACK_COUNT` (default **200**, was 1000) double-spend transactions and
+token-creation blocks. The token-creation attack is the single largest cost — each
+iteration does an HTTP `submitTransaction` plus an MCMC prototype calculation, and the
+cost grows as state accumulates across the suite. Scale it with
+`ATTACK_COUNT=1000 bash helper/testall.sh` (or `-Dnet.bigtangle.attackCount=1000`).
+At the default 200 the attack test takes ~52 s in-suite (was ~290 s at 1000).
 
 ### Resolution of the remaining SLH-DSA cost
 
