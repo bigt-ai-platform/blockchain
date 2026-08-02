@@ -133,10 +133,10 @@ MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61
 POS_ARGS=""
 if [ -f "$ROOT/validator.env" ]; then
     set -a; . "$ROOT/validator.env"; set +a
-    # Reward service stays enabled (proven block-persistence path); the PoS
-    # SlotService additionally proposes per-slot beacons via the validator key.
-    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY"
-    echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
+    # PoS-only: the reward service is disabled so the ONLY beacon producer is
+    # the slot proposer (single-headed chain, no forks).
+    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY"
+    echo "PoS enabled: reward disabled, validator key configured (${#POS_VALIDATOR_KEY} hex)"
 fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
   -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dserver.requester=http://127.0.0.1:$L0_PORT -Dservice.schedule.rewardonlywithreferenced=false $POS_ARGS" \

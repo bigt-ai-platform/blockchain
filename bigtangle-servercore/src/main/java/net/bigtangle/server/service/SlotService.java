@@ -3,6 +3,7 @@ package net.bigtangle.server.service;
 import java.math.BigInteger;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,8 +20,12 @@ import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.EpochRewardService;
+import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class SlotService {
@@ -57,6 +62,12 @@ public class SlotService {
 
     @Autowired
     private StakeService stakeService;
+
+    @Autowired
+    private ServerConfiguration serverConfiguration;
+
+    @Autowired
+    private ObjectMapper jsonmapper;
 
     public long getCurrentSlot() {
         return (System.currentTimeMillis() - 1532896109000L) / SLOT_DURATION_MS;
@@ -97,10 +108,22 @@ public class SlotService {
 
         List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
 
-        List<Sha256Hash> tips = ghostService.getTwoTips(store);
-        if (tips.isEmpty()) return null;
-        Block trunk = store.get(tips.get(0));
-        Block branch = tips.size() > 1 ? store.get(tips.get(1)) : trunk;
+        // Use the MCMC-validated tip pair (prototype) so the referenced DAG
+        // blocks carry a proper block evaluation. Fall back to the ghost
+        // fork-choice if the prototype is unavailable.
+        Block trunk;
+        Block branch;
+        try {
+            Block prototype = cacheBlockPrototypeService.getBlockPrototype(store);
+            trunk = store.get(prototype.getPrevBlockHash());
+            branch = store.get(prototype.getPrevBranchBlockHash());
+        } catch (Exception e) {
+            List<Sha256Hash> tips = ghostService.getTwoTips(store);
+            if (tips.isEmpty()) return null;
+            trunk = store.get(tips.get(0));
+            branch = tips.size() > 1 ? store.get(tips.get(1)) : trunk;
+        }
+        if (trunk == null || branch == null) return null;
 
         Block beaconBlock = Block.createBlock(networkParameters, trunk, branch);
         beaconBlock.setBlockType(BlockType.BLOCKTYPE_BEACON);
@@ -112,10 +135,34 @@ public class SlotService {
         RewardInfo rewardInfo = new RewardInfo();
         rewardInfo.setChainlength(chainlength);
         rewardInfo.setPrevRewardHash(prevRewardHash);
-        rewardInfo.setBlocks(new HashSet<>());
+        try {
+            // Reference the DAG blocks (token creation, orders, transfers, ...)
+            // so they are confirmed on the reward chain — matching the reward
+            // service's block collection.
+            ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+                    cacheBlockService, jsonmapper);
+            long prevChainLength = store.getRewardChainLength(prevRewardHash);
+            long cutoffheight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
+            Set<net.bigtangle.server.core.BlockWrap> blocks = new HashSet<>();
+            List<BlockType> ordertypes = List.of(
+                    BlockType.BLOCKTYPE_INITIAL, BlockType.BLOCKTYPE_TRANSFER, BlockType.BLOCKTYPE_TOKEN_CREATION,
+                    BlockType.BLOCKTYPE_FILE, BlockType.BLOCKTYPE_USERDATA, BlockType.BLOCKTYPE_GOVERNANCE,
+                    BlockType.BLOCKTYPE_CROSSTANGLE, BlockType.BLOCKTYPE_STAKE, BlockType.BLOCKTYPE_ORDER_OPEN,
+                    BlockType.BLOCKTYPE_ORDER_CANCEL, BlockType.BLOCKTYPE_CONTRACT_EVENT,
+                    BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+            serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(trunk.getHash(), store), cutoffheight,
+                    prevChainLength, ordertypes, true, true, store);
+            serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
+                    prevChainLength, ordertypes, true, true, store);
+            rewardInfo.setBlocks(serviceBase.getHashSet(blocks));
+        } catch (Exception e) {
+            log.debug("Beacon block reference collection failed, using empty set: {}", e.getMessage());
+            rewardInfo.setBlocks(new HashSet<>());
+        }
 
         Transaction tx = new Transaction(networkParameters);
         tx.setData(rewardInfo.toByteArray());
+        beaconBlock.setLastMiningRewardBlock(rewardInfo.getChainlength());
         beaconBlock.addTransaction(tx);
 
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
