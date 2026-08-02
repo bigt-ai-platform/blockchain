@@ -98,5 +98,3 @@ jobs:
             ${{ steps.meta.outputs.tags }}
             ${{ steps.dh-tags.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

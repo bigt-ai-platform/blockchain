@@ -17,11 +17,3 @@ jobs:
 
       - name: Run single-container MCMC tests
         run: ./helper/docker-test-mcmc/run-parallel-tests.sh --single
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mcmc-test-reports
-          path: helper/docker-test-mcmc/test-reports-*/
-          retention-days: 14
