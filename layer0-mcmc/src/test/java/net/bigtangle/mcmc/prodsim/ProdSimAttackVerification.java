@@ -45,12 +45,15 @@ public class ProdSimAttackVerification extends RemoteTest {
 
     private static final Logger log = LoggerFactory.getLogger(ProdSimAttackVerification.class);
 
+    private static final int PORT_OFFSET = Integer.getInteger("prodsim.portOffset", 20000);
+
     private static final String[] NODE_URLS = {
-        "http://localhost:8081/",
-        "http://localhost:8082/",
-        "http://localhost:8083/",
-        "http://localhost:8084/"
+        url(8081), url(8082), url(8083), url(8084)
     };
+
+    private static String url(int port) {
+        return "http://localhost:" + (port + PORT_OFFSET) + "/";
+    }
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -213,8 +216,15 @@ public class ProdSimAttackVerification extends RemoteTest {
                 Json.jsonmapper().writeValueAsString(new HashMap<>()));
         Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
         assertNotNull(result, "getAllConfirmedReward should return a response");
-        Object len = result.get("chainLength");
-        long chainLength = (len instanceof Number) ? ((Number) len).longValue() : 0;
+        Object txRewardObj = result.get("txReward");
+        assertNotNull(txRewardObj, "getAllConfirmedReward must include txReward");
+        long chainLength = 0;
+        for (Map<String, Object> r : (List<Map<String, Object>>) txRewardObj) {
+            Object cl = r.get("chainLength");
+            if (cl instanceof Number) {
+                chainLength = Math.max(chainLength, ((Number) cl).longValue());
+            }
+        }
         log.info("Beacon chain length after attack checks: {}", chainLength);
         assertTrue(chainLength > 0, "Beacon chain must have progressed (chainLength > 0)");
     }

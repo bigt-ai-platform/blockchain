@@ -56,6 +56,8 @@ public class ValidatorDutyService {
 
     private PQKey validatorKey;
 
+    private long lastDutySlot = -1;
+
     @PostConstruct
     public void init() {
         if (configuredValidatorKey != null && !configuredValidatorKey.isEmpty()) {
@@ -80,6 +82,14 @@ public class ValidatorDutyService {
             return;
         }
         long slot = slotService.getCurrentSlot();
+        // The slot tick may run several times per slot (pos.slotIntervalMs
+        // can be shorter than SLOT_DURATION_MS). Proposing/attesting more than
+        // once per slot creates multiple beacons for the same slot, which the
+        // slashing detector treats as a double vote. Perform duty once per slot.
+        if (slot == lastDutySlot) {
+            return;
+        }
+        lastDutySlot = slot;
         long epoch = slotService.getEpochForSlot(slot);
 
         boolean isProposer = false;

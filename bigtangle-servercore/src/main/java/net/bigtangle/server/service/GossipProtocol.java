@@ -35,10 +35,16 @@ public class GossipProtocol implements DisposableBean {
 
     @Value("${gossip.port:9093}")
     private int gossipPort;
+
+    /** Optional comma-separated list of gossip peers (host:port).  Lets a
+     *  private/test network form a block-propagation mesh without a DNS seed
+     *  server (DNS seeds are unreachable inside a Docker bridge network). */
+    @Value("${gossip.peers:}")
+    private String gossipPeers;
+
     private static final int MAGIC = 0x42474C31;
     private static final int MSG_BLOCK = 1;
     private static final int MSG_TRANSACTION = 2;
-
     @Autowired
     private NetworkParameters networkParameters;
 
@@ -121,6 +127,7 @@ public class GossipProtocol implements DisposableBean {
     }
 
     private void discoverPeers() {
+        connectExplicitPeers();
         String[] seeds = networkParameters.getDnsSeeds();
         if (seeds == null) return;
         for (String seed : seeds) {
@@ -138,14 +145,45 @@ public class GossipProtocol implements DisposableBean {
         }
     }
 
+    /** Connect to the explicitly configured gossip peers (used when no DNS seed
+     *  server is reachable, e.g. a Docker bridge network). */
+    private void connectExplicitPeers() {
+        if (gossipPeers == null || gossipPeers.trim().isEmpty()) return;
+        for (String p : gossipPeers.split(",")) {
+            String hp = p.trim();
+            if (hp.isEmpty() || peers.containsKey(hp)) continue;
+            String host = hp;
+            int port = gossipPort;
+            int colon = hp.lastIndexOf(':');
+            if (colon > 0) {
+                try {
+                    host = hp.substring(0, colon);
+                    port = Integer.parseInt(hp.substring(colon + 1));
+                } catch (NumberFormatException ignore) { }
+            }
+            if (host.equals(getSelfHost())) continue;
+            try {
+                // Skip our own address even when referenced by DNS name.
+                if (java.net.InetAddress.getByName(host).getHostAddress().equals(getSelfHost())) continue;
+            } catch (Exception ignore) { }
+            final String targetHost = host;
+            final int targetPort = port;
+            connectPool.submit(() -> connectTo(targetHost, targetPort));
+        }
+    }
+
     private void connectTo(String host) {
+        connectTo(host, gossipPort);
+    }
+
+    private void connectTo(String host, int port) {
         try {
-            Socket sock = new Socket(host, gossipPort);
+            Socket sock = new Socket(host, port);
             peers.put(host, sock);
             listenerPool.submit(() -> handleConnection(sock));
-            log.info("Connected to gossip peer: {}", host);
+            log.info("Connected to gossip peer: {}:{}", host, port);
         } catch (Exception e) {
-            log.debug("Failed to connect to {}:{} - {}", host, gossipPort, e.getMessage());
+            log.debug("Failed to connect to {}:{} - {}", host, port, e.getMessage());
         }
     }
 

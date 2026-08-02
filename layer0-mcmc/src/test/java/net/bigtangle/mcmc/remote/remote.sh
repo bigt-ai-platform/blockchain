@@ -4,14 +4,27 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../../../../../.." && pwd)"
 cd "$ROOT"
 
-# --- Config ---
-L0_PORT=8089
-L1_PORT=8086
-MCMC_PORT=8091
+# --- Config (override any via env, e.g. L0_PORT=8089 PG_PORT=5432 ./remote.sh) ---
+# Defaults below are tuned to avoid colliding with other infra running on this
+# dev machine (dev servers on 808x/909x, test-bigtangle-postgres on 21532).
+# On a clean machine use the standard ports (8089/8086/8091/5432).
+L0_PORT="${L0_PORT:-24089}"
+L1_PORT="${L1_PORT:-24086}"
+MCMC_PORT="${MCMC_PORT:-24091}"
+PG_PORT="${PG_PORT:-21532}"
+# peer/gossip ports (must be unique per process on the same host)
+L0_PEER_UDP="${L0_PEER_UDP:-46307}"
+L0_PEER_TCP="${L0_PEER_TCP:-46308}"
+L0_GOSSIP="${L0_GOSSIP:-25095}"
+MCMC_PEER_UDP="${MCMC_PEER_UDP:-46309}"
+MCMC_PEER_TCP="${MCMC_PEER_TCP:-46310}"
+MCMC_GOSSIP="${MCMC_GOSSIP:-25097}"
+L1_PEER_UDP="${L1_PEER_UDP:-46311}"
+L1_PEER_TCP="${L1_PEER_TCP:-46312}"
+L1_GOSSIP="${L1_GOSSIP:-25099}"
+DB_NAME="${DB_NAME:-info}"
 SERVER_URL="http://127.0.0.1:$L0_PORT/"
 L1_URL="http://127.0.0.1:$L1_PORT/"
-PG_PORT=5432
-DB_NAME=info
 COMPOSE_FILE="$ROOT/helper/docker-compose-base.yml"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
 SCHED_ARGS="-Dservice.schedule.mcmc=true -Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=5000 -Dservice.schedule.initsync=true"
@@ -84,7 +97,7 @@ mvn clean install -DskipTests -q \
 echo ""
 echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 # Server peer + gossip ports
-SERVER_PEER_ARGS="-Dpeer.udpPort=30307 -Dpeer.tcpPort=30308 -Dgossip.port=9095"
+SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
 nohup mvn spring-boot:run -pl layer0-server \
     -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
@@ -93,7 +106,7 @@ L0_PID=$!
 echo "L0 HTTP PID: $L0_PID"
 
 echo "Waiting for L0 HTTP..."
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
     sleep 2
     # Check if server is up by connecting to port
     if ss -tlnp 2>/dev/null | grep -q ":$L0_PORT "; then
@@ -127,15 +140,16 @@ done
 
 echo "=== Step 6: Start L0 MCMC (port $MCMC_PORT) ==="
 # Use different ports from server to avoid conflicts on same machine
-MCMC_PEER_ARGS="-Dpeer.udpPort=30309 -Dpeer.tcpPort=30310 -Dgossip.port=9097"
+MCMC_PEER_ARGS="-Dpeer.udpPort=$MCMC_PEER_UDP -Dpeer.tcpPort=$MCMC_PEER_TCP -Dgossip.port=$MCMC_GOSSIP"
 MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
 # PoS validator configuration (if the env file is present)
 POS_ARGS=""
 if [ -f "$ROOT/validator.env" ]; then
     set -a; . "$ROOT/validator.env"; set +a
     # PoS-only: the reward service is disabled so the ONLY beacon producer is
-    # the slot proposer (single-headed chain, no forks).
-    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY"
+    # the slot proposer (single-headed chain, no forks). A short slot interval
+    # makes blocks confirm quickly so the remote tests' polling windows fit.
+    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
     echo "PoS enabled: reward disabled, validator key configured (${#POS_VALIDATOR_KEY} hex)"
 fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
@@ -146,7 +160,7 @@ MCMC_PID=$!
 echo "MCMC PID: $MCMC_PID"
 
 echo "=== Step: Start L1 Order Server (port $L1_PORT) ==="
-L1_PEER_ARGS="-Dpeer.udpPort=30311 -Dpeer.tcpPort=30312 -Dgossip.port=9099"
+L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.port=$L1_GOSSIP"
 L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.chain=L0"
 nohup mvn spring-boot:run -pl l1-order-server \
   -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT -Dservice.schedule.rewardonlywithreferenced=false" \
@@ -156,7 +170,7 @@ L1_PID=$!
 echo "L1 PID: $L1_PID"
 
 echo "Waiting for L1 Order Server..."
-for i in $(seq 1 30); do
+for i in $(seq 1 60); do
     sleep 2
     if ss -tlnp 2>/dev/null | grep -q ":$L1_PORT "; then
         echo "L1 Order Server ready after ${i}s (port $L1_PORT open)"
@@ -216,7 +230,7 @@ if [ -f "$ROOT/validator.env" ] && [ -n "${VALIDATOR_PUBKEY:-}" ]; then
 
     # Wait for the mcmc's PoS beacon to be produced and confirmed
     echo "Waiting for PoS beacon production..."
-    for i in $(seq 1 30); do
+    for i in $(seq 1 60); do
         sleep 3
         HEIGHT=$(docker exec "$PG_CONTAINER" psql -U root -d $DB_NAME -t -A -c \
             "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
