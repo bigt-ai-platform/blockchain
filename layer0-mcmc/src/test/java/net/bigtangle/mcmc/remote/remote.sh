@@ -133,11 +133,13 @@ MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61
 POS_ARGS=""
 if [ -f "$ROOT/validator.env" ]; then
     set -a; . "$ROOT/validator.env"; set +a
-    POS_ARGS="-Dservice.schedule.reward=false -Dpos.validatorKey=$POS_VALIDATOR_KEY"
-    echo "PoS enabled: reward disabled, validator key configured (${#POS_VALIDATOR_KEY} hex)"
+    # Reward service stays enabled (proven block-persistence path); the PoS
+    # SlotService additionally proposes per-slot beacons via the validator key.
+    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY"
+    echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
 fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
-  -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dservice.schedule.rewardonlywithreferenced=false $POS_ARGS" \
+  -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dserver.requester=http://127.0.0.1:$L0_PORT -Dservice.schedule.rewardonlywithreferenced=false $POS_ARGS" \
   -Dspring-boot.run.arguments="$MCMC_ARGS" \
   > "$MCMC_LOG" 2>&1 &
 MCMC_PID=$!
@@ -203,7 +205,7 @@ if [ -f "$ROOT/validator.env" ] && [ -n "${VALIDATOR_PUBKEY:-}" ]; then
     sleep 2
     curl -sf -X POST "http://127.0.0.1:$L0_PORT/stakeDeposit" \
         -H 'Content-Type: application/json' \
-        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"amount\":\"32000000\"}" \
+        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"amount\":\"32000000\",\"privateKey\":\"$POS_VALIDATOR_KEY\"}" \
         >/dev/null 2>&1 && echo "stake deposited" || echo "stake deposit failed"
 
     sleep 2

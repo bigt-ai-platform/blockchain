@@ -771,7 +771,14 @@ public class DispatcherController implements DisposableBean {
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubkeyHex = (String) request.get("pubkey");
 				String amountStr = (String) request.get("amount");
-				PQKey depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				String privateKeyHex = (String) request.get("privateKey");
+				PQKey depositKey;
+				if (privateKeyHex != null && !privateKeyHex.isEmpty()) {
+					// Full key so the STAKE transaction can be signed.
+					depositKey = PQKey.fromPrivateKeyHex(privateKeyHex);
+				} else {
+					depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				}
 				BigInteger amount = new BigInteger(amountStr);
 				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
 				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());

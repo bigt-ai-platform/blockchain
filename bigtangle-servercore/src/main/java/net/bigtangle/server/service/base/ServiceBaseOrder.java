@@ -607,6 +607,8 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			break;
 		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
+		case BLOCKTYPE_STAKE:
+			break;
 		default:
 			throw new RuntimeException("Not Implemented");
 

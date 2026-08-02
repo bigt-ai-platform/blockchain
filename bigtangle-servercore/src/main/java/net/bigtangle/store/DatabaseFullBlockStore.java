@@ -3550,8 +3550,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		r.setActivatedEpoch(rs.getLong("activated_epoch"));
 		r.setSlashed(rs.getBoolean("slashed"));
 		r.setWithdrawableEpoch(rs.getLong("withdrawable_epoch"));
-		String hash = rs.getString("blockhash");
-		if (hash != null) r.setBlockHash(Sha256Hash.wrap(hash));
+		byte[] hashBytes = rs.getBytes("blockhash");
+		if (hashBytes != null) r.setBlockHash(Sha256Hash.wrap(hashBytes));
 		return r;
 	}
 
