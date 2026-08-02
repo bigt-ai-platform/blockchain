@@ -301,6 +301,15 @@ public class MempoolService {
             return BlockType.BLOCKTYPE_CONTRACT_EVENT;
         case "ContractEventCancelInfo":
             return BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL;
+        case "EVMTransactionInfo": {
+            try {
+                net.bigtangle.core.EVMTransactionInfo info = new net.bigtangle.core.EVMTransactionInfo()
+                        .parseChecked(tx.getData());
+                return info.isDeploy() ? BlockType.BLOCKTYPE_EVM_DEPLOY : BlockType.BLOCKTYPE_EVM_CALL;
+            } catch (RuntimeException e) {
+                return BlockType.BLOCKTYPE_EVM_CALL;
+            }
+        }
         case "UserSettingDataInfo":
             return BlockType.BLOCKTYPE_USERDATA;
         default:

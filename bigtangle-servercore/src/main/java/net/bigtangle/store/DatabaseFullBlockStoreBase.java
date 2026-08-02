@@ -261,6 +261,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_CONTRACTRESULT_CHAINLENGTH_SQL = getUpdate()
 			+ " contractresult SET rewardchainlength = ?   WHERE blockhash = ?";
 
+	protected final String INSERT_EVM_RECEIPT_SQL = getInsert() + "  INTO evm_receipt (blockhash, contracttokenid, "
+			+ " receipt, inserttime) " + " VALUES (?, ?, ?, ?)" + duplicateInsert();
+	protected final String SELECT_EVM_RECEIPT_SQL = "SELECT contracttokenid, receipt FROM evm_receipt WHERE blockhash = ?";
+	protected final String SELECT_EVM_RECEIPTS_BY_TOKEN_SQL = "SELECT receipt FROM evm_receipt WHERE contracttokenid = ? ORDER BY inserttime DESC";
+
+
 	protected final String UPDATE_ORDERRESULT_CONFIRMED_SQL = getUpdate() + " orderresult SET confirmed = ? "
 			+ " WHERE blockhash = ?";
 	protected final String INSERT_ORDER_RESULT_SQL = getInsert()
@@ -613,6 +619,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_ACCOUNT_TABLE);
 		sqlStatements.add("DROP TABLE IF EXISTS anchor");
 		sqlStatements.add("DROP TABLE IF EXISTS vault");
+		sqlStatements.add("DROP TABLE IF EXISTS evm_receipt");
 		return sqlStatements;
 	}
 

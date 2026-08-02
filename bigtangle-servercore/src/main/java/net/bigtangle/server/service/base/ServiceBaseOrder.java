@@ -607,6 +607,9 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			break;
 		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
+		case BLOCKTYPE_EVM_DEPLOY:
+		case BLOCKTYPE_EVM_CALL:
+			break;
 		case BLOCKTYPE_STAKE:
 			break;
 		default:

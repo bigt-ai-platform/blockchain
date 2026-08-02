@@ -48,6 +48,7 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
+import net.bigtangle.core.EVMTransactionInfo;
 import net.bigtangle.core.DataClassName;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
@@ -947,6 +948,54 @@ public class Wallet extends WalletBase {
 				beneficiary.toAddress(params).toBase58(), validToTime, validFromTime, "");
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("ContractEventInfo");
+		signTransaction(tx, aesKey);
+
+		submitTransaction(tx);
+		if (getFee() && !NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenId)) {
+			submitTransaction(feeTransaction(aesKey, coinList));
+		}
+		return tx;
+	}
+
+	/**
+	 * Builds, signs and submits an EVM transaction block (deposit / call /
+	 * deploy / withdraw) on a Layer-1 contract chain. The transaction inputs
+	 * spend {@code value} of {@code tokenId} from this wallet and produce a
+	 * change output, so the burned amount matches the EVM {@code value}.
+	 */
+	public Transaction evmTransaction(KeyParameter aesKey, EVMTransactionInfo info, String tokenId, BigInteger value)
+			throws IOException, InsufficientMoneyException, NoTokenException {
+
+		Coin amount = new Coin(value, tokenId).negate();
+
+		if (getFee() && NetworkParameters.BIGTANGLE_TOKENID_STRING.equals(tokenId)) {
+			amount = amount.add(Coin.FEE_DEFAULT.negate());
+		}
+
+		Transaction tx = new Transaction(params);
+		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
+		PQKey beneficiary = null;
+		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(tokenId, coinList)) {
+
+			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
+			amount = spendableOutput.getValue().add(amount);
+			tx.addInput(spendableOutput.getUTXO().getBlockHash(), spendableOutput);
+			if (!amount.isNegative()) {
+				tx.addOutput(amount, beneficiary);
+				break;
+			}
+		}
+		if (beneficiary == null || amount.isNegative()) {
+			Coin deficit = amount.isNegative() ? amount.negate() : amount;
+			String infoStr = "evmTransaction token=" + tokenId + " required=" + deficit + " remainder=" + amount
+					+ " outputs=" + coinList.size();
+			logInsufficientMoney("evmTransaction", infoStr, aesKey, coinList);
+			throw new InsufficientMoneyException(amount + " outputs size= " + coinList.size());
+		}
+
+		info.setFromAddress(beneficiary.toAddress(params).toBase58());
+		tx.setData(info.toByteArray());
+		tx.setDataClassName("EVMTransactionInfo");
 		signTransaction(tx, aesKey);
 
 		submitTransaction(tx);

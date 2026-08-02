@@ -27,7 +27,9 @@ public class ContractL1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_BEACON,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
-                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
+                BlockType.BLOCKTYPE_EVM_DEPLOY,
+                BlockType.BLOCKTYPE_EVM_CALL);
     }
 
 }

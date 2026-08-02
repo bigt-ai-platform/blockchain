@@ -36,6 +36,10 @@ public class ContractExecutionResult extends Spent {
 	// with re calculation to save
 	Transaction outputTx;
 	Set<ContractEventRecord> remainderContractEventRecord;
+
+	// optional engine-specific payload (e.g. the serialized EVM world state
+	// snapshot produced by the EVM contract engine), persisted with the result
+	byte[] extraData;
  
 	
 	public ContractExecutionResult() {
@@ -85,6 +89,8 @@ public class ContractExecutionResult extends Spent {
 				Utils.writeNBytes(dos, c.getBytes());
 			}
 
+			Utils.writeNBytes(dos, extraData);
+
 			dos.close();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -115,6 +121,8 @@ public class ContractExecutionResult extends Spent {
 		for (int i = 0; i < blocksSize; i++) {
 			referencedBlocks.add(Sha256Hash.wrap(Utils.readNBytes(dis)));
 		}
+
+		extraData = Utils.readNBytes(dis);
 
 		return this;
 	}
@@ -192,6 +200,14 @@ public class ContractExecutionResult extends Spent {
 
 	public Set<Sha256Hash> getReferencedBlocks() {
 		return referencedBlocks;
+	}
+
+	public byte[] getExtraData() {
+		return extraData;
+	}
+
+	public void setExtraData(byte[] extraData) {
+		this.extraData = extraData;
 	}
 
 	public void setReferencedBlocks(Set<Sha256Hash> referencedBlocks) {

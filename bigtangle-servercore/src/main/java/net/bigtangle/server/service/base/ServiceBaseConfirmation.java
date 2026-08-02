@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -33,6 +34,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.EVMTransactionInfo;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.VerificationException;
 import net.bigtangle.exception.VerificationException.InfeasiblePrototypeException;
@@ -1218,7 +1220,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		switch (block.getBlock().getBlockType()) {
 		case BLOCKTYPE_CROSSTANGLE, BLOCKTYPE_FILE, BLOCKTYPE_GOVERNANCE, BLOCKTYPE_INITIAL, BLOCKTYPE_TRANSFER,
 				BLOCKTYPE_CONTRACT_EVENT,  BLOCKTYPE_ORDER_CANCEL, BLOCKTYPE_CONTRACTEVENT_CANCEL, BLOCKTYPE_STAKE,
-				BLOCKTYPE_SLASHING:
+				BLOCKTYPE_SLASHING, BLOCKTYPE_EVM_DEPLOY, BLOCKTYPE_EVM_CALL:
 			updateBlockConfirmOnly(block.getBlockHash(), chainlength, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_BEACON:
@@ -1227,6 +1229,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// BEACON block data).
 			confirmOrderMatching(block, confirmation, blockStore);
 			confirmContractExecution(block, confirmation, blockStore);
+			confirmEVMExecution(block, confirmation, blockStore);
 			updateBlockConfirmOnly(block.getBlockHash(), chainlength, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_TOKEN_CREATION:
@@ -1408,8 +1411,96 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 	}
 
-	public void checkSum(BlockStoreInterface blockStore) {
+	/**
+	 * Confirms EVM contract execution for the given beacon block: collects the
+	 * referenced {@code BLOCKTYPE_EVM_DEPLOY} / {@code BLOCKTYPE_EVM_CALL}
+	 * blocks, runs the registered EVM executor per EVM contract token and
+	 * persists the resulting state root (world-state snapshot inside the
+	 * {@code ContractExecutionResult} blob) plus the EVM receipts.
+	 *
+	 * <p>Unlike the lottery path this always records a Contractresult, even when
+	 * the execution produced no UTXO payouts, because the EVM state itself is
+	 * the consensus output.
+	 */
+	private void confirmEVMExecution(BlockWrap blockWrap, boolean confirmation, BlockStoreInterface blockStore)
+			throws BlockStoreException {
+		try {
+			if (!confirmation) return;
+			RewardInfo rewardInfo = new RewardInfo()
+					.parseChecked(blockWrap.getBlock().getTransactions().get(0).getData());
+			ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+					cacheBlockService, jsonmapper);
+			long cutoff = serviceBase.getCurrentCutoffHeight(
+					cacheBlockService.getMaxConfirmedReward(blockStore), blockStore);
+			Set<BlockWrap> refs = new HashSet<>();
+			List<BlockType> types = List.of(BlockType.BLOCKTYPE_EVM_DEPLOY, BlockType.BLOCKTYPE_EVM_CALL);
+			serviceBase.dagBlockHashesFrom(refs,
+					serviceBase.getBlockWrap(blockWrap.getBlock().getPrevBlockHash(), blockStore),
+					cutoff, rewardInfo.getChainlength(), types, true, false, blockStore);
+			serviceBase.dagBlockHashesFrom(refs,
+					serviceBase.getBlockWrap(blockWrap.getBlock().getPrevBranchBlockHash(), blockStore),
+					cutoff, rewardInfo.getChainlength(), types, true, false, blockStore);
+			if (refs.isEmpty()) return;
 
+			Set<Sha256Hash> referencedBlocks = serviceBase.getHashSet(refs);
+			// group collected EVM blocks by their contract token
+			Map<String, Set<Sha256Hash>> byContract = new TreeMap<>();
+			for (Sha256Hash h : referencedBlocks) {
+				Block b = getBlock(h, blockStore);
+				EVMTransactionInfo info = new EVMTransactionInfo()
+						.parseChecked(b.getTransactions().get(0).getData());
+				byContract.computeIfAbsent(info.getContractTokenid(), k -> new TreeSet<>()).add(h);
+			}
+
+			long chainlength = blockWrap.getBlockEvaluation().getChainlength();
+			for (Map.Entry<String, Set<Sha256Hash>> e : byContract.entrySet()) {
+				String contractid = e.getKey();
+				Contractresult lastConfirmed = blockStore.getMaxConfirmedContractresult(contractid);
+				Contractresult prev = lastConfirmed == null ? Contractresult.firstContractresult() : lastConfirmed;
+
+				Token contract = blockStore.getTokenID(contractid).get(0);
+				String classname = new Utils().findContractValue(contract.getTokenKeyValues(), "classname");
+
+				ContractExecutionResult result = ContractExecutorRegistry.get(classname)
+						.map(exec -> {
+							try {
+								return exec.executeContract(
+										(ContractConnectSupport) serviceBase, networkParameters,
+										blockWrap.getBlock(), blockStore, contractid, prev,
+										referencedBlocks);
+							} catch (BlockStoreException ex) {
+								throw new RuntimeException(ex);
+							}
+						})
+						.orElse(null);
+				if (result == null) continue;
+
+				for (Sha256Hash ref : result.getReferencedBlocks()) {
+					Block refBlock = getBlock(ref, blockStore);
+					confirmContractEventTransaction(refBlock, true, chainlength, blockStore);
+				}
+
+				Sha256Hash resultKey = evmContractResultKey(blockWrap.getBlockHash(), contractid);
+				blockStore.insertContractResult(result, resultKey);
+				blockStore.updateContractresultChainlength(resultKey, chainlength);
+				blockStore.updateContractResultConfirmed(resultKey, true);
+				if (!result.getOutputTx().getOutputs().isEmpty()) {
+					confirmTransaction(blockWrap.getBlock(), true, result.getOutputTx(), blockStore);
+				}
+				blockStore.updateContractResultSpent(result.getPrevblockhash(), resultKey, true);
+			}
+		} catch (Exception e) {
+			logger.error("Failed to verify EVM contract execution", e);
+		}
+	}
+
+	/** Deterministic Contractresult key for an EVM contract in a beacon block. */
+	public static Sha256Hash evmContractResultKey(Sha256Hash beaconHash, String contractTokenid) {
+		return Sha256Hash.of(
+				(beaconHash.toString() + ":" + contractTokenid).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+	}
+
+	public void checkSum(BlockStoreInterface blockStore) {
 		try {
 			TokensumsMap map = checkToken(blockStore);
 			Map<String, Tokensums> r11 = map.getTokensumsMap();

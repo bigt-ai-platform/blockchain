@@ -11,7 +11,7 @@ One Layer 0 (settlement) chain worldwide; many L1 application chains.
 | Layer | Chains | Purpose |
 |-------|--------|---------|
 | **Layer 0** | `L0` | BIG mint, token creation, anchors |
-| **L1** | `ordermatch`, `L1-contract`, `PAI`, `NFT`, `PAYMENT` | Application-specific |
+| **L1** | `ordermatch`, `L1-contract`, `EVM`, `PAI`, `NFT`, `PAYMENT` | Application-specific |
 
 Full design: [blockchain.md](blockchain.md)
 
@@ -36,6 +36,8 @@ Full design: [blockchain.md](blockchain.md)
 | `l1-order-mcmc` | 8084 | L1 order-match consensus |
 | `l1-contract-server` | 8085 | L1 smart contracts |
 | `l1-contract-mcmc` | 8086 | L1 contract consensus |
+| `l1-evm-server` | 8093 | L1 EVM (Solidity) smart contracts |
+| `l1-evm-mcmc` | 8094 | L1 EVM consensus |
 | `l1-pai-server` | 8087 | L1 AI provider chain |
 | `l1-pai-mcmc` | — | L1 PAI consensus |
 | `l1-nft-server` | 8089 | L1 NFT chain |

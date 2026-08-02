@@ -13,6 +13,13 @@ info()  { echo -e "${YELLOW}[INFO]${NC} $1"; }
 EPOCHS="${EPOCHS:-10}"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.prodsim.yml"
 
+# Port offset: run the whole prodsim on its own ports so it never collides
+# with other infra (default +20000 → servers 28081-28088, postgres 25432-25435).
+PORT_OFFSET="${PORT_OFFSET:-20000}"
+SERVER_PORTS=($((8081+PORT_OFFSET)) $((8082+PORT_OFFSET)) $((8083+PORT_OFFSET)) $((8084+PORT_OFFSET)))
+PG_PORT=$((5432+PORT_OFFSET))
+L0_URL="http://localhost:$((8081+PORT_OFFSET))/"
+
 # Use Java 25 if available
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
     export JAVA_HOME=/home/jcui/.local/java-25
@@ -32,15 +39,17 @@ cd "$ROOT"
 mvn install -DskipTests -q \
     -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge,layer0-server,layer0-mcmc -am
 
-info "Rebuilding Docker image bigtangle:test..."
-docker build -t bigtangle:test -f "$ROOT/helper/bigtangle/Dockerfile" "$ROOT"
+info "Building Docker images (layer0-server, layer0-mcmc)..."
+docker build -t ghcr.io/bigt-ai-platform/layer0-server:latest \
+    -f "$ROOT/layer0-server/Dockerfile" "$ROOT/layer0-server"
+docker build -t ghcr.io/bigt-ai-platform/layer0-mcmc:latest \
+    -f "$ROOT/layer0-mcmc/Dockerfile" "$ROOT/layer0-mcmc"
 
 # ─── Start network ──────────────────────────────────────────────────
 info "Starting 4-node PoS prodsim network..."
 docker compose -f "$COMPOSE_FILE" up -d
 
 info "Waiting for server nodes to be healthy..."
-SERVER_PORTS=(8081 8082 8083 8084)
 for port in "${SERVER_PORTS[@]}"; do
   for i in $(seq 1 30); do
     if curl -sf "http://localhost:$port/" >/dev/null 2>&1; then
@@ -102,9 +111,9 @@ BOOTSTRAP_CLASS="net.bigtangle.mcmc.prodsim.ProdSimBootstrap"
 mvn exec:java -pl layer0-mcmc -q \
   -Dexec.mainClass="$BOOTSTRAP_CLASS" \
   -Dexec.classpathScope=test \
-  -DDB_HOSTNAME=localhost -DDB_PORT=5432 \
+  -DDB_HOSTNAME=localhost -DDB_PORT="$PG_PORT" \
   -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_NAME=layer0 \
-  -Dserver.url="http://localhost:8081/" 2>&1 | tail -5
+  -Dserver.url="$L0_URL" 2>&1
 
 log "Validators bootstrapped"
 
@@ -118,7 +127,8 @@ info "Running verification..."
 VERIFY_CLASS="net.bigtangle.mcmc.prodsim.ProdSimVerification"
 mvn test -pl layer0-mcmc -q \
   -Dtest="$VERIFY_CLASS" \
-  -Dserver.url="http://localhost:8081/" \
+  -Dserver.url="$L0_URL" \
+  -Dprodsim.portOffset="$PORT_OFFSET" \
   -Dprodsim.epochs="$EPOCHS" \
   -Dsurefire.failIfNoSpecifiedTests=false
 
@@ -129,7 +139,8 @@ info "Running attack-safety checks..."
 ATTACK_CLASS="net.bigtangle.mcmc.prodsim.ProdSimAttackVerification"
 mvn test -pl layer0-mcmc -q \
   -Dtest="$ATTACK_CLASS" \
-  -Dserver.url="http://localhost:8081/" \
+  -Dserver.url="$L0_URL" \
+  -Dprodsim.portOffset="$PORT_OFFSET" \
   -Dsurefire.failIfNoSpecifiedTests=false
 
 ATTACK_EXIT=$?

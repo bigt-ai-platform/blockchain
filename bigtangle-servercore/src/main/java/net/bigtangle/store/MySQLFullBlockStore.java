@@ -382,6 +382,14 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    rewardchainlength bigint NOT NULL,\n"
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
+
+    // one EVM receipt per EVM transaction block
+    private static final String CREATE_EVM_RECEIPT_TABLE = "CREATE TABLE IF NOT EXISTS evm_receipt (\n"
+            + "   blockhash binary(32) NOT NULL,\n"
+            + "   contracttokenid TEXT  NOT NULL,\n"
+            + "   receipt mediumblob NOT NULL,\n"
+            + "   inserttime bigint NOT NULL,\n"
+            + "   PRIMARY KEY (blockhash) ) ENGINE=InnoDB";
     private static final String CREATE_CHAINBLOCKQUEUE_TABLE = "CREATE TABLE chainblockqueue (\n" 
             + "    hash binary(32) NOT NULL,\n" 
             + "    block mediumblob NOT NULL,\n" 
@@ -492,6 +500,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_CONTRACTEVENT_CANCEL_TABLE);
         sqlStatements.add(CREATE_CONTRACT_RESULT_TABLE); 
         sqlStatements.add(CREATE_ORDER_RESULT_TABLE); 
+        sqlStatements.add(CREATE_EVM_RECEIPT_TABLE);
         sqlStatements.add(CREATE_CHAINBLOCKQUEUE_TABLE);
         sqlStatements.add(CREATE_LOCKOBJECT_TABLE); 
         sqlStatements.add(CREATE_MATCHINGDAILY_TABLE); 

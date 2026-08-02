@@ -36,12 +36,15 @@
 		<module>bigtangle-core</module>
 		<module>bigtangle-servercore</module>
 		<module>bigtangle-bridge</module>
+		<module>bigtangle-evm</module>
 		<module>layer0-server</module>
 		<module>layer0-mcmc</module>
 		<module>l1-contract-server</module>
 		<module>l1-order-server</module>
 		<module>l1-contract-mcmc</module>
 		<module>l1-order-mcmc</module>
+		<module>l1-evm-server</module>
+		<module>l1-evm-mcmc</module>
 		<module>l1-pai-server</module>
 		<module>l1-pai-mcmc</module>
 		<module>l1-nft-server</module>

@@ -1,32 +1,48 @@
 package net.bigtangle.server.service.base.handler;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Static holder for the {@link ContractExecutor} registered by the Layer-1
- * module. {@code bigtangle-servercore} looks the executor up here (in
- * (now only used by the inline BEACON path) instead of calling
+ * Static holder for the {@link ContractExecutor}s registered by Layer-1
+ * modules. {@code bigtangle-servercore} looks the executor up here (in the
+ * inline BEACON confirmation path) instead of calling
  * {@code new ServiceContract(...)} directly, which is what removes the compile-
  * time dependency on the contract implementation.
  *
- * <p>Registration is a one-time, process-wide set (the Layer-1 module registers
- * its {@code ContractEngine} at startup, e.g. via a Spring {@code @Bean} or in a
- * static initializer). A Layer-0-only node simply leaves it unregistered; the
- * connect/confirm sites then skip contract execution (the same behaviour as if
- * no contract block was present).
+ * <p>An executor can be registered for a specific contract classname (the
+ * {@code classname} token key-value set at contract deployment) and/or as the
+ * default executor. {@link #get(String)} prefers the classname match and falls
+ * back to the default.
+ *
+ * <p>Registration is process-wide (the Layer-1 modules register their engines
+ * at startup, e.g. via Spring {@code @Bean}s or {@code @PostConstruct}).
  */
 public final class ContractExecutorRegistry {
 
-	private static volatile ContractExecutor executor;
+	private static final Map<String, ContractExecutor> executors = new ConcurrentHashMap<>();
+	private static volatile ContractExecutor defaultExecutor;
 
-	/** Register the process-wide contract executor. */
+	/** Register the default (fallback) contract executor. */
 	public static void register(ContractExecutor e) {
-		executor = e;
+		defaultExecutor = e;
 	}
 
-	/** The registered executor, if any. */
+	/** Register an executor for a specific contract classname. */
+	public static void register(String className, ContractExecutor e) {
+		executors.put(className, e);
+	}
+
+	/** The executor registered for the classname, if any. */
+	public static Optional<ContractExecutor> get(String className) {
+		ContractExecutor e = className == null ? null : executors.get(className);
+		return Optional.ofNullable(e != null ? e : defaultExecutor);
+	}
+
+	/** The default executor, if any. */
 	public static Optional<ContractExecutor> get() {
-		return Optional.ofNullable(executor);
+		return Optional.ofNullable(defaultExecutor);
 	}
 
 	private ContractExecutorRegistry() {

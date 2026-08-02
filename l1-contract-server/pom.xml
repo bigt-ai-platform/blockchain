@@ -20,6 +20,11 @@
 			<artifactId>bigtangle-core</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>net.bigtangle</groupId>
+			<artifactId>bigtangle-evm</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<plugins>

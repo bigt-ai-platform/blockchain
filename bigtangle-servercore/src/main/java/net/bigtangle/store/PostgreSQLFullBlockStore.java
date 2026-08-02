@@ -412,6 +412,15 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    inserttime bigint NOT NULL,\n"
             + "   PRIMARY KEY (blockhash) )";
 
+    // one EVM receipt per EVM transaction block (EVM world state is persisted
+    // in the contractresult blob as the engine's extraData)
+    private static final String CREATE_EVM_RECEIPT_TABLE = "CREATE TABLE IF NOT EXISTS evm_receipt (\n"
+            + "   blockhash BYTEA NOT NULL,\n"  
+            + "   contracttokenid TEXT  NOT NULL,\n" 
+            + "   receipt BYTEA NOT NULL,\n" 
+            + "   inserttime bigint NOT NULL,\n"
+            + "   PRIMARY KEY (blockhash) )";
+
     //  the order execution result
     private static final String CREATE_ORDER_RESULT_TABLE = "CREATE TABLE orderresult (\n"
             + "   blockhash BYTEA NOT NULL,\n"  
@@ -548,6 +557,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_CONTRACTEVENT_CANCEL_TABLE);
         sqlStatements.add(CREATE_CONTRACT_RESULT_TABLE);
         sqlStatements.add(CREATE_ORDER_RESULT_TABLE);
+        sqlStatements.add(CREATE_EVM_RECEIPT_TABLE);
         sqlStatements.add(CREATE_CHAINBLOCKQUEUE_TABLE);
         sqlStatements.add(CREATE_LOCKOBJECT_TABLE);
         sqlStatements.add(CREATE_MATCHINGDAILY_TABLE);

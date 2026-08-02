@@ -64,6 +64,8 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
 		ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);
 		ordertypes.add(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+		ordertypes.add(BlockType.BLOCKTYPE_EVM_DEPLOY);
+		ordertypes.add(BlockType.BLOCKTYPE_EVM_CALL);
 
 		return ordertypes;
 	}

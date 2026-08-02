@@ -498,6 +498,15 @@ public interface BlockStoreInterface {
 
 	void insertContractResult(ContractExecutionResult record, Sha256Hash blockhash) throws BlockStoreException;
 
+	/** Persists a serialized EVM transaction receipt keyed by its EVM block hash. */
+	void insertEVMReceipt(Sha256Hash blockhash, String contracttokenid, byte[] receipt) throws BlockStoreException;
+
+	/** Reads the serialized EVM receipt for the given EVM block hash, or null. */
+	byte[] getEVMReceipt(Sha256Hash blockhash) throws BlockStoreException;
+
+	/** Lists the serialized EVM receipts for the given contract token, newest first. */
+	List<byte[]> getEVMReceiptsByToken(String contracttokenid) throws BlockStoreException;
+
 	void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
 			throws BlockStoreException;
 

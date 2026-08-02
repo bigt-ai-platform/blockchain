@@ -347,6 +347,16 @@ public class BlockSaveService {
 		case "ContractEventCancelInfo":
 			block.setBlockType(BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
 			break;
+		case "EVMTransactionInfo":
+			try {
+				net.bigtangle.core.EVMTransactionInfo evmInfo = new net.bigtangle.core.EVMTransactionInfo()
+						.parseChecked(block.getTransactions().get(0).getData());
+				block.setBlockType(
+						evmInfo.isDeploy() ? BlockType.BLOCKTYPE_EVM_DEPLOY : BlockType.BLOCKTYPE_EVM_CALL);
+			} catch (RuntimeException e) {
+				block.setBlockType(BlockType.BLOCKTYPE_EVM_CALL);
+			}
+			break;
 		case "UserSettingDataInfo":
 			block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
 			break;

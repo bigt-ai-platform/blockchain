@@ -34,6 +34,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventInfo;
+import net.bigtangle.core.EVMTransactionInfo;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MultiSignAddress;
 import net.bigtangle.core.MultiSignBy;
@@ -407,6 +408,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
 			break;
+		case BLOCKTYPE_EVM_DEPLOY:
+		case BLOCKTYPE_EVM_CALL: {
+			SolidityState evmState = checkFullEVMTransactionSolidity(block, throwExceptions, store);
+			if (!(evmState.getState() == State.Success)) {
+				return evmState;
+			}
+			break;
+		}
 		case BLOCKTYPE_STAKE:
 			break;
 		default:
@@ -419,6 +428,83 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private SolidityState checkFullContractEventSolidity(Block block, long height, boolean throwExceptions,
 			BlockStoreInterface store) throws BlockStoreException {
 		return checkFormalContractEventSolidity(block, throwExceptions, store);
+	}
+
+	public SolidityState checkFullEVMTransactionSolidity(Block block, boolean throwExceptions,
+			BlockStoreInterface store) throws BlockStoreException {
+		List<Transaction> transactions = block.getTransactions();
+
+		if (transactions.get(0).getData() == null) {
+			if (throwExceptions)
+				throw new MissingTransactionDataException();
+			return SolidityState.getFailState();
+		}
+
+		EVMTransactionInfo info;
+		try {
+			info = new EVMTransactionInfo().parse(transactions.get(0).getData());
+		} catch (IOException e) {
+			if (throwExceptions)
+				throw new MalformedTransactionDataException();
+			return SolidityState.getFailState();
+		}
+
+		if (!transactions.get(0).getDataClassName().equals("EVMTransactionInfo")) {
+			if (throwExceptions)
+				throw new MalformedTransactionDataException();
+			return SolidityState.getFailState();
+		}
+
+		if (info.getContractTokenid() == null || info.getFromAddress() == null) {
+			if (throwExceptions)
+				throw new InvalidTransactionDataException("Invalid EVM contract tokenid or sender");
+			return SolidityState.getFailState();
+		}
+
+		Token contract = store.getTokenID(info.getContractTokenid()).get(0);
+		String classname = new Utils().findContractValue(contract.getTokenKeyValues(), "classname");
+		if (!"net.bigtangle.l1.evm.EVMContract".equals(classname)) {
+			if (throwExceptions)
+				throw new VerificationException("Not an EVM contract");
+			return SolidityState.getFailState();
+		}
+
+		if (info.getValue() == null || info.getGasPrice() == null) {
+			if (throwExceptions)
+				throw new InvalidTransactionDataException("EVM value and gasPrice are required");
+			return SolidityState.getFailState();
+		}
+		if (info.getGasLimit() <= 0) {
+			if (throwExceptions)
+				throw new InvalidTransactionDataException("Invalid EVM gas limit");
+			return SolidityState.getFailState();
+		}
+		if (info.getValue().signum() < 0) {
+			if (throwExceptions)
+				throw new InvalidTransactionDataException("Invalid EVM value");
+			return SolidityState.getFailState();
+		}
+
+		// The deposited amount must match the burned UTXOs of the block.
+		String tokenid = info.getTokenid() != null ? info.getTokenid() : contract.getTokenid();
+		Coin burned = countBurnedToken(block, store, tokenid);
+		if (burned == null || !burned.getValue().equals(info.getValue())) {
+			if (throwExceptions)
+				throw new InvalidTransactionDataException("EVM deposit value does not match burned UTXOs");
+			return SolidityState.getFailState();
+		}
+
+		if (info.isCall() && info.getTo() != null) {
+			String to = info.getTo().startsWith("0x") || info.getTo().startsWith("0X") ? info.getTo().substring(2)
+					: info.getTo();
+			if (to.length() != 40 || !to.matches("[0-9a-fA-F]+")) {
+				if (throwExceptions)
+					throw new InvalidTransactionDataException("Invalid EVM recipient address");
+				return SolidityState.getFailState();
+			}
+		}
+
+		return SolidityState.getSuccessState();
 	}
 
 	public SolidityState checkFullOrderOpenSolidity(Block block, long height, boolean throwExceptions,
@@ -1316,6 +1402,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		case BLOCKTYPE_CONTRACT_EVENT:
 			break;
 		case BLOCKTYPE_CONTRACTEVENT_CANCEL:
+			break;
+		case BLOCKTYPE_EVM_DEPLOY:
+		case BLOCKTYPE_EVM_CALL:
 			break;
 		case BLOCKTYPE_STAKE:
 			break;

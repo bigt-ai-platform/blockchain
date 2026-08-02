@@ -159,6 +159,9 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 			break;
 		case BLOCKTYPE_CONTRACT_EVENT:
 			connectContractEvent(block, blockStore);
+		case BLOCKTYPE_EVM_DEPLOY:
+		case BLOCKTYPE_EVM_CALL:
+			break;
 		default:
 			break;
 

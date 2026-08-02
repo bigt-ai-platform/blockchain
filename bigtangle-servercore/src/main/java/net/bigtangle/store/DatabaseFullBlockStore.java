@@ -1648,6 +1648,53 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void insertEVMReceipt(Sha256Hash blockhash, String contracttokenid, byte[] receipt)
+			throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(INSERT_EVM_RECEIPT_SQL)) {
+			preparedStatement.setBytes(1, blockhash.getBytes());
+			preparedStatement.setString(2, contracttokenid);
+			preparedStatement.setBytes(3, receipt);
+			preparedStatement.setLong(4, Utils.currentTimeSeconds());
+			preparedStatement.executeUpdate();
+		} catch (SQLException e) {
+			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
+				throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public byte[] getEVMReceipt(Sha256Hash blockhash) throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_EVM_RECEIPT_SQL)) {
+			preparedStatement.setBytes(1, blockhash.getBytes());
+			try (ResultSet rs = preparedStatement.executeQuery()) {
+				if (rs.next()) {
+					return rs.getBytes(2);
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return null;
+	}
+
+	@Override
+	public List<byte[]> getEVMReceiptsByToken(String contracttokenid) throws BlockStoreException {
+		List<byte[]> receipts = new ArrayList<>();
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(SELECT_EVM_RECEIPTS_BY_TOKEN_SQL)) {
+			preparedStatement.setString(1, contracttokenid);
+			try (ResultSet rs = preparedStatement.executeQuery()) {
+				while (rs.next()) {
+					receipts.add(rs.getBytes(1));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return receipts;
+	}
+
+	@Override
 	public void updateContractResultSpent(Sha256Hash contractResult, Sha256Hash spentBlock, boolean spent)
 			throws BlockStoreException {
 
