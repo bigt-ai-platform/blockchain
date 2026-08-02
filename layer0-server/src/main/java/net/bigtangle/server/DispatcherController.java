@@ -7,8 +7,7 @@ package net.bigtangle.server;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-import java.math.BigInteger;
-import java.util.ArrayList;
+import java.math.BigInteger;import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -104,6 +103,9 @@ import net.bigtangle.utils.Json;
 public class DispatcherController implements DisposableBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
+
+	/** Unique index counter for fundAddresses coinbases (see fundAddresses). */
+	private static final java.util.concurrent.atomic.AtomicLong FUND_UTXO_INDEX = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
 
 	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
 			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
@@ -859,6 +861,10 @@ public class DispatcherController implements DisposableBean {
 				List<Map<String, Object>> entries = (List<Map<String, Object>>) req.get("addresses");
 				Block genesis = UtilGeneseBlock.createGenesis(this.networkParameters);
 				Sha256Hash genesisHash = genesis.getHash();
+				// All funded UTXOs share the genesis hash, so give each one a
+				// globally-unique index to avoid colliding with other fundAddresses
+				// calls (concurrent remote tests) or the genesis coinbase at index 0.
+				long startIndex = FUND_UTXO_INDEX.addAndGet(entries.size()) - entries.size();
 				List<UTXO> utxos = new ArrayList<>();
 				for (int i = 0; i < entries.size(); i++) {
 					Map<String, Object> entry = entries.get(i);
@@ -869,7 +875,7 @@ public class DispatcherController implements DisposableBean {
 						String pubkeyHex = (String) entry.get("pubkey");
 				UTXO utxo = new UTXO();
 				utxo.setHash(genesisHash);
-				utxo.setIndex(i);
+				utxo.setIndex(startIndex + i);
 				utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
 				utxo.setAddress(addrStr);
 				if (pubkeyHex != null) {
