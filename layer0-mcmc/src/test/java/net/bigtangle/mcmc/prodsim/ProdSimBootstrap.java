@@ -30,8 +30,6 @@ public class ProdSimBootstrap {
     private static final BigInteger FUND_PER_VALIDATOR = STAKE_AMOUNT.multiply(BigInteger.valueOf(5));
 
     public static void main(String[] args) throws Exception {
-        NetworkParameters params = TestParams.get();
-
         byte[] mlDsaSeed = new byte[32];
         Arrays.fill(mlDsaSeed, (byte) 0x01);
 
@@ -43,76 +41,63 @@ public class ProdSimBootstrap {
                     Arrays.copyOfRange(seed, 32, 64)));
         }
 
-        // Each of the 4 prodsim nodes has its OWN database and its OWN MCMC
-        // node, so every node must have the validators staked+activated on its
-        // own chain — otherwise only node 0 would produce beacons and the other
-        // nodes would never progress or sync the validator set.
+        // Each of the 4 prodsim nodes runs its OWN database and its OWN MCMC
+        // node with its OWN configured validator key (pos.validatorKey). The
+        // server signs STAKE deposits with that configured key and rejects any
+        // other pubkey, so each node stakes its own validator. The deposit is
+        // chain-derived: the STAKE block is saved and the validator set is
+        // derived from it.
         int basePort = 8081 + Integer.getInteger("prodsim.portOffset", 20000);
         for (int node = 0; node < 4; node++) {
             String nodeUrl = "http://localhost:" + (basePort + node) + "/";
             System.out.println("=== Bootstrapping node " + nodeUrl + " ===");
 
-            // Fund all validators via fundAddresses, which directly inserts
-            // CONFIRMED UTXOs. A normal submitTransaction can never confirm here
-            // because there is no active validator yet to produce beacons — the
-            // PoS chicken-and-egg where staking needs a confirmed balance and
-            // producing beacons needs a staked validator.
-            fundValidators(nodeUrl, params, validatorKeys, FUND_PER_VALIDATOR);
-            System.out.println("All validators funded on " + nodeUrl + ". Staking...");
+            PQKey validatorKey = validatorKeys.get(node);
+            String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
 
-            for (int i = 0; i < validatorKeys.size(); i++) {
-                PQKey validatorKey = validatorKeys.get(i);
-                String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
+            // Fund this node's validator via fundAddresses, which directly
+            // inserts CONFIRMED UTXOs. A normal submitTransaction can never
+            // confirm here because there is no active validator yet to produce
+            // beacons — the PoS chicken-and-egg.
+            fundValidator(nodeUrl, validatorKey, FUND_PER_VALIDATOR);
 
-                long balance = waitForBalance(nodeUrl, validatorKey.getPubKey(), STAKE_AMOUNT.longValue());
-                System.out.println("  Validator " + i + " confirmed balance=" + balance);
+            long balance = waitForBalance(nodeUrl, validatorKey.getPubKey(), STAKE_AMOUNT.longValue());
+            System.out.println("  Validator " + node + " confirmed balance=" + balance);
 
-                HashMap<String, Object> stakeReq = new HashMap<>();
-                stakeReq.put("pubkey", pubkeyHex);
-                stakeReq.put("amount", STAKE_AMOUNT.toString());
-                // The STAKE block is signed on the server, so the private key must
-                // be sent (see DispatcherController.stakeDeposit).
-                stakeReq.put("privateKey", VALIDATOR_KEY_HEX[i]);
-                boolean staked = false;
-                for (int attempt = 0; attempt < 3 && !staked; attempt++) {
-                    try {
-                        OkHttp3Util.postString(nodeUrl + ReqCmd.stakeDeposit.name(),
-                                Json.jsonmapper().writeValueAsString(stakeReq));
-                        System.out.println("  Staked validator " + i);
-                        staked = true;
-                    } catch (Exception e) {
-                        System.out.println("  stakeDeposit attempt " + attempt + " failed: " + e.getMessage());
-                        Thread.sleep(3000);
-                    }
+            HashMap<String, Object> stakeReq = new HashMap<>();
+            stakeReq.put("pubkey", pubkeyHex);
+            stakeReq.put("amount", STAKE_AMOUNT.toString());
+            boolean staked = false;
+            for (int attempt = 0; attempt < 3 && !staked; attempt++) {
+                try {
+                    OkHttp3Util.postString(nodeUrl + ReqCmd.stakeDeposit.name(),
+                            Json.jsonmapper().writeValueAsString(stakeReq));
+                    System.out.println("  Staked validator " + node);
+                    staked = true;
+                } catch (Exception e) {
+                    System.out.println("  stakeDeposit attempt " + attempt + " failed: " + e.getMessage());
+                    Thread.sleep(3000);
                 }
-                Thread.sleep(1000);
             }
+            Thread.sleep(1000);
 
-            Thread.sleep(12000);
-
-            for (int i = 0; i < validatorKeys.size(); i++) {
-                PQKey validatorKey = validatorKeys.get(i);
-                String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
-
-                HashMap<String, Object> activateReq = new HashMap<>();
-                activateReq.put("pubkey", pubkeyHex);
-                activateReq.put("epoch", 0L);
-                boolean activated = false;
-                for (int attempt = 0; attempt < 3 && !activated; attempt++) {
-                    try {
-                        OkHttp3Util.postString(nodeUrl + ReqCmd.activateValidator.name(),
-                                Json.jsonmapper().writeValueAsString(activateReq));
-                        System.out.println("  Activated validator " + i);
-                        activated = true;
-                    } catch (Exception e) {
-                        System.out.println("  activateValidator attempt " + attempt + " failed: " + e.getMessage());
-                        Thread.sleep(3000);
-                    }
+            HashMap<String, Object> activateReq = new HashMap<>();
+            activateReq.put("pubkey", pubkeyHex);
+            activateReq.put("epoch", 0L);
+            boolean activated = false;
+            for (int attempt = 0; attempt < 3 && !activated; attempt++) {
+                try {
+                    OkHttp3Util.postString(nodeUrl + ReqCmd.activateValidator.name(),
+                            Json.jsonmapper().writeValueAsString(activateReq));
+                    System.out.println("  Activated validator " + node);
+                    activated = true;
+                } catch (Exception e) {
+                    System.out.println("  activateValidator attempt " + attempt + " failed: " + e.getMessage());
+                    Thread.sleep(3000);
                 }
-                Thread.sleep(500);
             }
-
             Thread.sleep(3000);
+
             byte[] resp = OkHttp3Util.postString(nodeUrl + ReqCmd.getValidators.name(), "{}");
             Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
             Object validatorsObj = result.get("validators");
@@ -124,35 +109,31 @@ public class ProdSimBootstrap {
             List<Map<String, Object>> validators = (List<Map<String, Object>>) validatorsObj;
             System.out.println("Active validators on " + nodeUrl + ": "
                     + (validators != null ? validators.size() : 0));
-            if (validators == null || validators.size() < VALIDATOR_KEY_HEX.length) {
-                System.out.println("WARNING: Expected " + VALIDATOR_KEY_HEX.length + " validators on " + nodeUrl);
+            if (validators == null || validators.size() < 1) {
+                System.out.println("WARNING: Expected at least 1 validator on " + nodeUrl);
             }
         }
-        System.out.println("Bootstrap complete. All validators active on all nodes.");
+        System.out.println("Bootstrap complete. Each node staked its own validator.");
     }
 
     /**
-     * Fund every validator via the fundAddresses endpoint. This directly inserts
-     * confirmed BIG UTXOs for the validator pubkeys on the node, so staking does
-     * not depend on a beacon confirming the funding (which cannot happen until a
-     * validator is already active).
+     * Fund a single validator via the fundAddresses endpoint. This directly
+     * inserts a confirmed BIG UTXO for the validator pubkey on the node, so
+     * staking does not depend on a beacon confirming the funding.
      */
-    private static void fundValidators(String serverUrl, NetworkParameters params,
-            List<PQKey> beneficiaries, BigInteger amountPer) throws Exception {
-        for (int i = 0; i < beneficiaries.size(); i++) {
-            String pubkeyHex = Utils.HEX.encode(beneficiaries.get(i).getPubKey());
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("address", "validator" + i);
-            entry.put("value", amountPer.longValue());
-            entry.put("pubkey", pubkeyHex);
-            List<Map<String, Object>> addresses = new ArrayList<>();
-            addresses.add(entry);
-            Map<String, Object> req = new HashMap<>();
-            req.put("addresses", addresses);
-            OkHttp3Util.postString(serverUrl + ReqCmd.fundAddresses.name(),
-                    Json.jsonmapper().writeValueAsString(req));
-            System.out.println("  Funded validator " + i);
-        }
+    private static void fundValidator(String serverUrl, PQKey beneficiary, BigInteger amountPer) throws Exception {
+        String pubkeyHex = Utils.HEX.encode(beneficiary.getPubKey());
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("address", "validator");
+        entry.put("value", amountPer.longValue());
+        entry.put("pubkey", pubkeyHex);
+        List<Map<String, Object>> addresses = new ArrayList<>();
+        addresses.add(entry);
+        Map<String, Object> req = new HashMap<>();
+        req.put("addresses", addresses);
+        OkHttp3Util.postString(serverUrl + ReqCmd.fundAddresses.name(),
+                Json.jsonmapper().writeValueAsString(req));
+        System.out.println("  Funded validator");
     }
 
     /**

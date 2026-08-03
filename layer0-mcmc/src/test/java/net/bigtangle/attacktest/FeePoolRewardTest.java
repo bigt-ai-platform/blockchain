@@ -5,6 +5,7 @@
 package net.bigtangle.attacktest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,23 +116,21 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
 
         long epoch = 1;
         BigInteger poolForDistribution = poolAfterVal;
-        net.bigtangle.core.Sha256Hash rewardHash = epochRewardService.distributeEpochRewards(
-                epoch, poolForDistribution, store);
-        assertNotNull(rewardHash, "distributeEpochRewards should return a block hash");
-
-        Block rewardBlock = store.get(rewardHash);
-        assertNotNull(rewardBlock, "Reward block should exist");
-        assertEquals(BlockType.BLOCKTYPE_BEACON, rewardBlock.getBlockType());
+        // Rewards are now built as transactions embedded in the PROPOSER's
+        // epoch-first beacon, not as a competing beacon from every node.
+        List<Transaction> rewardTxs = epochRewardService.buildEpochRewardTransactions(
+                poolForDistribution, store);
+        assertFalse(rewardTxs.isEmpty(), "reward transactions should be built for active validators");
 
         long totalBigOutput = 0;
-        for (Transaction rtx : rewardBlock.getTransactions()) {
+        for (Transaction rtx : rewardTxs) {
             for (TransactionOutput out : rtx.getOutputs()) {
                 if (out.getValue().isBIG()) {
                     totalBigOutput += out.getValue().getValue().longValue();
                 }
             }
         }
-        assertTrue(totalBigOutput > 0, "Reward block should distribute BIG to validators");
+        assertTrue(totalBigOutput > 0, "Reward transactions should distribute BIG to validators");
         assertTrue(BigInteger.valueOf(totalBigOutput).compareTo(poolForDistribution) <= 0,
                 "Total distributed must not exceed pool: " + totalBigOutput + " <= " + poolForDistribution);
         log.info("Distributed {} to validators from pool of {}",

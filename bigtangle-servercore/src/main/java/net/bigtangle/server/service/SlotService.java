@@ -77,6 +77,11 @@ public class SlotService {
         return getCurrentSlot() / SLOTS_PER_EPOCH;
     }
 
+    /** Chain-derived epoch for an absolute wall-clock time (genesis-aligned). */
+    public static long epochAt(long timeMs) {
+        return ((timeMs - 1532896109000L) / SLOT_DURATION_MS) / SLOTS_PER_EPOCH;
+    }
+
     public long getSlotInEpoch(long slot) {
         return slot % SLOTS_PER_EPOCH;
     }
@@ -166,6 +171,23 @@ public class SlotService {
         beaconBlock.setLastMiningRewardBlock(rewardInfo.getChainlength());
         beaconBlock.addTransaction(tx);
 
+        // The epoch's fee pool is paid out by the PROPOSER in the first beacon
+        // of the epoch — never in a competing beacon from every node.
+        if (getSlotInEpoch(slot) == 0) {
+            String chainId = networkParameters.getChainId();
+            byte[] poolBytes = store.getPosState("fee", chainId);
+            if (poolBytes != null) {
+                java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
+                if (pool.compareTo(java.math.BigInteger.ZERO) > 0) {
+                    for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(pool, store)) {
+                        beaconBlock.addTransaction(rewardTx);
+                    }
+                    store.deletePosState("fee", chainId);
+                    log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", pool, slot);
+                }
+            }
+        }
+
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
@@ -182,24 +204,8 @@ public class SlotService {
     public void processEpoch(long epoch, BlockStoreInterface store) throws Exception {
         casperService.finalizeCheckpoint(epoch, store);
 
-        String chainId = networkParameters.getChainId();
-        byte[] poolBytes = store.getPosState("fee", chainId);
-        java.math.BigInteger epochRewardPool = poolBytes == null
-                ? java.math.BigInteger.ZERO
-                : new java.math.BigInteger(poolBytes);
-
-        if (epochRewardPool.compareTo(java.math.BigInteger.ZERO) > 0) {
-            net.bigtangle.core.Sha256Hash rewardHash = epochRewardService.distributeEpochRewards(
-                    epoch, epochRewardPool, store);
-            if (rewardHash != null) {
-                store.deletePosState("fee", chainId);
-                log.info("Epoch {} ({}): distributed {} to validators, rewardBlock={}",
-                        epoch, chainId, epochRewardPool, rewardHash);
-            }
-        }
-
         stakeService.processWithdrawals(epoch, store);
 
-        log.info("Epoch {} ({}) processed: finality updated", epoch, chainId);
+        log.info("Epoch {} ({}) processed: finality updated", epoch, networkParameters.getChainId());
     }
 }

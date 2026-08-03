@@ -125,15 +125,22 @@ public class ValidatorDutyService {
                 beaconHead = ghostService.getDagRoot(store);
             }
 
+            CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
+            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, epoch - 1);
+
             AttestationData att = new AttestationData();
             att.setSlot(slot);
             att.setEpoch(epoch);
+            att.setSourceEpoch(sourceEpoch);
+            att.setTargetEpoch(epoch);
             att.setBeaconBlockHash(beaconHead);
+            att.setSourceCheckpoint(justified != null ? justified.blockHash : Sha256Hash.ZERO_HASH);
+            att.setTargetCheckpoint(casperService.ensureCheckpoint(epoch, beaconHead).blockHash);
             att.setValidatorPubkey(validatorKey.getPubKey());
 
-            Sha256Hash msgHash = Sha256Hash.twiceOf(
-                    (slot + ":" + beaconHead.toString()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            byte[] sig = validatorKey.sign(msgHash).serialize();
+            // Signature covers the FULL attestation message (slot, epoch,
+            // checkpoints, head, pubkey), so it is verifiable end-to-end.
+            byte[] sig = validatorKey.sign(att.getMessageHash()).serialize();
             att.setSignature(sig);
 
             casperService.processVote(att, store);

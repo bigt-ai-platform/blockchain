@@ -70,6 +70,10 @@ public class BlockSaveService {
 	// blockSaveService -> crosstangleProcessorImpl -> anchorService -> blockSaveService.
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<CrosstangleProcessor> crosstangleProcessorProvider;
+	// Resolved lazily via ObjectProvider to break the circular reference
+	// blockSaveService -> stakeService -> blockSaveService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<StakeService> stakeServiceProvider;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
@@ -79,6 +83,7 @@ public class BlockSaveService {
 	public void saveBlock(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.addBlock(block, false, store);
 		accumulateBlockFees(block, store);
+		notifyChainDerived(block, store);
 		broadcastBlock(block);
 	}
 
@@ -102,6 +107,7 @@ public class BlockSaveService {
 		blockgraph.updateTransactionOutputSpendPendingDo(block);
 		accumulateBlockFees(block, store);
 		notifyCrosstangle(block, store);
+		notifyChainDerived(block, store);
 		broadcastBlock(block);
 	}
 
@@ -117,7 +123,18 @@ public class BlockSaveService {
 		accumulateBlockFees(block, store);
 		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
 		notifyCrosstangle(block, store);
+		notifyChainDerived(block, store);
 		broadcastBlock(block);
+	}
+
+	/** Applies chain-derived state (validator deposits, ...) when a block is saved. */
+	private void notifyChainDerived(Block block, BlockStoreInterface store) throws Exception {
+		if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_STAKE) {
+			StakeService stakeService = stakeServiceProvider.getIfAvailable();
+			if (stakeService != null) {
+				stakeService.applyStakeBlock(block, store);
+			}
+		}
 	}
 
 	/** Hands CROSSTANGLE (cross-chain message) blocks to the bridge module. */

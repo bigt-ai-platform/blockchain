@@ -416,12 +416,60 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			break;
 		}
-		case BLOCKTYPE_STAKE:
+		case BLOCKTYPE_STAKE: {
+			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions);
+			if (!(stakeState.getState() == State.Success)) {
+				return stakeState;
+			}
 			break;
+		}
 		default:
 			throw new RuntimeException("No Implementation");
 		}
 
+		return SolidityState.getSuccessState();
+	}
+
+	/**
+	 * Structural validation of a STAKE deposit block: the first transaction must
+	 * be a well-formed {@code StakeDeposit} (data payload present and parseable,
+	 * a BIG output of at least the minimum stake). This makes synced STAKE
+	 * blocks valid inputs to the chain-derived validator set.
+	 */
+	private SolidityState checkStakeDepositSolidity(Block block, boolean throwExceptions)
+			throws BlockStoreException {
+		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE block has no transactions");
+			return SolidityState.getFailState();
+		}
+		Transaction tx = block.getTransactions().get(0);
+		if (!net.bigtangle.server.service.StakeService.STAKE_DATA_CLASS.equals(tx.getDataClassName())
+				|| tx.getData() == null) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE block transaction is not a StakeDeposit");
+			return SolidityState.getFailState();
+		}
+		try {
+			net.bigtangle.server.service.StakeService.parseStakeDepositData(tx.getData());
+		} catch (Exception e) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE block deposit data is malformed", e);
+			return SolidityState.getFailState();
+		}
+		boolean foundBigOutput = false;
+		for (TransactionOutput out : tx.getOutputs()) {
+			if (out.getValue().isBIG()
+					&& out.getValue().getValue().compareTo(net.bigtangle.server.service.StakeService.MIN_STAKE) >= 0) {
+				foundBigOutput = true;
+				break;
+			}
+		}
+		if (!foundBigOutput) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE block has no bonded BIG output of minimum stake");
+			return SolidityState.getFailState();
+		}
 		return SolidityState.getSuccessState();
 	}
 
@@ -1421,8 +1469,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		case BLOCKTYPE_EVM_DEPLOY:
 		case BLOCKTYPE_EVM_CALL:
 			break;
-		case BLOCKTYPE_STAKE:
+		case BLOCKTYPE_STAKE: {
+			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions);
+			if (!(stakeState.getState() == State.Success)) {
+				return stakeState;
+			}
 			break;
+		}
 		default:
 			throw new RuntimeException("No Implementation");
 		}

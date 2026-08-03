@@ -276,7 +276,7 @@ if [ -f "$ROOT/validator.env" ] && [ -n "${VALIDATOR_PUBKEY:-}" ]; then
     sleep 2
     curl -sf -X POST "http://127.0.0.1:$L0_PORT/stakeDeposit" \
         -H 'Content-Type: application/json' \
-        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"amount\":\"32000000\",\"privateKey\":\"$POS_VALIDATOR_KEY\"}" \
+        -d "{\"pubkey\":\"$VALIDATOR_PUBKEY\",\"amount\":\"32000000\"}" \
         >/dev/null 2>&1 && echo "stake deposited" || echo "stake deposit failed"
 
     sleep 2
@@ -314,7 +314,7 @@ curl -sf -X POST "http://127.0.0.1:$L1_PORT/fundAddresses" \
 sleep 2
 curl -sf -X POST "http://127.0.0.1:$L1_PORT/stakeDeposit" \
     -H 'Content-Type: application/json' \
-    -d "{\"pubkey\":\"$L1_VALIDATOR_PUBKEY\",\"amount\":\"32000000\",\"privateKey\":\"$L1_VALIDATOR_KEY\"}" \
+    -d "{\"pubkey\":\"$L1_VALIDATOR_PUBKEY\",\"amount\":\"32000000\"}" \
     >/dev/null 2>&1 && echo "L1 stake deposited" || echo "L1 stake deposit failed"
 
 sleep 2

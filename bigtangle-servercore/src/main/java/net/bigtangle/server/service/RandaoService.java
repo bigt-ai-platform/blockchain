@@ -21,6 +21,7 @@ public class RandaoService {
 
     private final ConcurrentHashMap<Long, byte[]> randaoMixes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, byte[]> commitments = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, byte[]> secrets = new ConcurrentHashMap<>();
 
     @Autowired
     private StoreService storeService;
@@ -51,18 +52,26 @@ public class RandaoService {
         byte[] hash = sha256(secret);
         String key = Utils.HEX.encode(pubkey) + ":" + slot;
         commitments.put(key, hash);
+        secrets.put(key, secret);
         persistCommitment(key, hash);
+        persistSecret(key, secret);
         return hash;
     }
 
-    public byte[] computeReveal(byte[] pubkey, long slot) throws Exception {
-        return sha256(pubkey);
+    public byte[] computeReveal(byte[] pubkey, long slot) {
+        String key = Utils.HEX.encode(pubkey) + ":" + slot;
+        return secrets.get(key);
     }
 
     public void reveal(byte[] pubkey, long slot, byte[] reveal) {
         String key = Utils.HEX.encode(pubkey) + ":" + slot;
-        byte[] expected = commitments.remove(key);
+        byte[] expected = commitments.get(key);
         if (expected == null) return;
+        if (reveal == null || reveal.length == 0) {
+            log.warn("Empty RANDAO reveal for pubkey={} slot={}",
+                    Utils.HEX.encode(pubkey), slot);
+            return;
+        }
 
         byte[] computed = sha256(reveal);
         if (!Arrays.equals(expected, computed)) {
@@ -70,6 +79,8 @@ public class RandaoService {
                     Utils.HEX.encode(pubkey), slot);
             return;
         }
+        commitments.remove(key);
+        secrets.remove(key);
 
         long epoch = slot / 32;
         byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]);
@@ -82,6 +93,7 @@ public class RandaoService {
         try {
             store = storeService.getStore();
             store.savePosState("randao", "mix_" + epoch, currentMix);
+            store.deletePosState("randao", "sec_" + key);
         } catch (Exception e) {
             log.debug("Failed to persist RANDAO mix", e);
         } finally {
@@ -101,6 +113,18 @@ public class RandaoService {
             store.savePosState("randao", "cmt_" + key, hash);
         } catch (Exception e) {
             log.debug("Failed to persist commitment", e);
+        } finally {
+            try { if (store != null) store.close(); } catch (Exception e) {}
+        }
+    }
+
+    private void persistSecret(String key, byte[] secret) {
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            store.savePosState("randao", "sec_" + key, secret);
+        } catch (Exception e) {
+            log.debug("Failed to persist RANDAO secret", e);
         } finally {
             try { if (store != null) store.close(); } catch (Exception e) {}
         }

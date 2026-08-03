@@ -245,8 +245,11 @@ public class PoSTest extends AbstractIntegrationTest {
         AttestationData att = new AttestationData();
         att.setSlot(System.currentTimeMillis() / 12_000L);
         att.setEpoch(0);
+        att.setSourceEpoch(0);
+        att.setTargetEpoch(0);
         att.setBeaconBlockHash(Sha256Hash.of("beacon1".getBytes()));
         att.setValidatorPubkey(validatorKey.getPubKey());
+        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
 
         store.saveStakeDeposit(new StakeRecord(
                 validatorKey.getPubKey(), StakeService.MIN_STAKE,
@@ -263,6 +266,60 @@ public class PoSTest extends AbstractIntegrationTest {
                 "ghost votes should contain the attested block");
         assertTrue(votes.get(att.getBeaconBlockHash()) > 0,
                 "vote weight must be positive");
+    }
+
+    @Test
+    public void testRejectsUnauthenticatedAttestation() throws Exception {
+        AttestationData att = new AttestationData();
+        att.setSlot(System.currentTimeMillis() / 12_000L);
+        att.setBeaconBlockHash(Sha256Hash.of("beacon1".getBytes()));
+        att.setValidatorPubkey(validatorKey.getPubKey());
+        // NO signature — must be rejected, not counted.
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        casperService.processVote(att, store);
+
+        assertTrue(store.getSummedAttestationVotes().isEmpty(),
+                "unauthenticated attestation must not influence fork choice");
+    }
+
+    @Test
+    public void testFinalizeCheckpoint() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        // The source is the highest justified checkpoint (genesis, epoch 0),
+        // whatever its block hash is in this node's in-memory Casper state.
+        casperService.ensureCheckpoint(0, Sha256Hash.of("checkpoint0".getBytes()));
+        casperService.ensureCheckpoint(1, Sha256Hash.of("checkpoint1".getBytes()));
+        CasperService.Checkpoint source = casperService.getJustifiedCheckpoint();
+        assertNotNull(source, "genesis checkpoint must be justified");
+        Sha256Hash c1 = Sha256Hash.of("checkpoint1".getBytes());
+
+        // One active validator with the full MIN_STAKE votes source -> c1 (signed).
+        AttestationData att = new AttestationData();
+        att.setSlot(64);
+        att.setEpoch(2);
+        att.setSourceEpoch(source.getEpoch());
+        att.setTargetEpoch(1);
+        att.setBeaconBlockHash(c1);
+        att.setSourceCheckpoint(source.getBlockHash());
+        att.setTargetCheckpoint(c1);
+        att.setValidatorPubkey(validatorKey.getPubKey());
+        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+        casperService.processVote(att, store);
+
+        casperService.finalizeCheckpoint(1, store);
+
+        assertTrue(casperService.isCheckpointJustified(1),
+                "checkpoint 1 must be justified with full stake voting");
+        assertTrue(casperService.isCheckpointFinalized(1),
+                "checkpoint 1 must be finalized when its parent is finalized");
     }
 
     // ========= Slashing Tests =========

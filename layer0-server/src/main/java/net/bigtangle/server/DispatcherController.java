@@ -753,31 +753,63 @@ public class DispatcherController implements DisposableBean {
 						att2 = Json.jsonmapper().convertValue(req.get("attestation2"), AttestationData.class);
 					}
 				} catch (Exception e) {
-					// single attestation mode
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(400), watch, reqCmd);
+					break;
 				}
-				if (att1 != null) {
-					slashingService.checkDoubleVote(att1);
-					if (att2 != null) {
-						slashingService.checkSurroundVote(att1);
-					}
-					slashingService.processSlashing(att1.getValidatorPubkey(), store);
+				// A slashing proof must carry TWO authenticated attestations
+				// from the SAME validator that form a slashable pattern
+				// (double vote or surround vote). A single forged attestation
+				// can no longer disable a validator.
+				if (att1 == null || att2 == null
+						|| att1.getValidatorPubkey() == null
+						|| !java.util.Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())
+						|| !casperService.verifyAttestation(att1)
+						|| !casperService.verifyAttestation(att2)) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
 				}
+				boolean doubleVote = att1.getSlot() == att2.getSlot()
+						&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
+				boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
+						&& att2.getTargetEpoch() < att1.getTargetEpoch())
+						|| (att2.getSourceEpoch() < att1.getSourceEpoch()
+								&& att1.getTargetEpoch() < att2.getTargetEpoch());
+				if (!doubleVote && !surround) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(400), watch, reqCmd);
+					break;
+				}
+				slashingService.processSlashing(att1.getValidatorPubkey(), store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			case stakeDeposit: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkeyHex = (String) request.get("pubkey");
-				String amountStr = (String) request.get("amount");
-				String privateKeyHex = (String) request.get("privateKey");
-				PQKey depositKey;
-				if (privateKeyHex != null && !privateKeyHex.isEmpty()) {
-					// Full key so the STAKE transaction can be signed.
-					depositKey = PQKey.fromPrivateKeyHex(privateKeyHex);
-				} else {
-					depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				// Security: never accept a raw private key over HTTP. The STAKE
+				// transaction is signed with the server's CONFIGURED validator
+				// key (pos.validatorKey), and the request pubkey must match it.
+				if (request.containsKey("privateKey")) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
 				}
+				String pubkeyHex = (String) request.get("pubkey");
+				PQKey configuredKey = validatorDutyService.getValidatorKey();
+				if (configuredKey == null) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
+				}
+				if (!Utils.HEX.encode(configuredKey.getPublicKeyBytes()).equals(pubkeyHex)) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
+				}
+				PQKey depositKey = configuredKey;
+				String amountStr = (String) request.get("amount");
 				BigInteger amount = new BigInteger(amountStr);
 				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
 				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());

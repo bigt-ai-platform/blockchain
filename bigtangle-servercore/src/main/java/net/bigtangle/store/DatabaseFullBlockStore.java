@@ -3439,8 +3439,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void saveStakeDeposit(StakeRecord stake) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("INSERT INTO stake_deposits "
-					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash, pubkey_md5) "
-					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (pubkey_md5) DO NOTHING")) {
+					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash, txhash, pubkey_md5) "
+					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (pubkey_md5) DO NOTHING")) {
 			s.setBytes(1, stake.getPubkey());
 			s.setLong(2, stake.getAmount().longValue());
 			s.setBytes(3, stake.getWithdrawalCredentials());
@@ -3448,7 +3448,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			s.setBoolean(5, stake.isSlashed());
 			s.setLong(6, stake.getWithdrawableEpoch());
 			s.setBytes(7, stake.getBlockHash() != null ? stake.getBlockHash().getBytes() : null);
-			s.setObject(8, java.util.UUID.nameUUIDFromBytes(stake.getPubkey()));
+			s.setBytes(8, stake.getTxHash() != null ? stake.getTxHash().getBytes() : null);
+			s.setObject(9, java.util.UUID.nameUUIDFromBytes(stake.getPubkey()));
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -3474,7 +3475,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		List<StakeRecord> list = new ArrayList<>();
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("SELECT * FROM stake_deposits WHERE activated_epoch >= 0 "
-					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0)")) {
+					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0) "
+					+ "ORDER BY pubkey ASC")) {
 			try (ResultSet rs = s.executeQuery()) {
 				while (rs.next()) list.add(setStakeRecord(rs));
 			}
@@ -3602,6 +3604,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		r.setWithdrawableEpoch(rs.getLong("withdrawable_epoch"));
 		byte[] hashBytes = rs.getBytes("blockhash");
 		if (hashBytes != null) r.setBlockHash(Sha256Hash.wrap(hashBytes));
+		byte[] txHashBytes = rs.getBytes("txhash");
+		if (txHashBytes != null) r.setTxHash(Sha256Hash.wrap(txHashBytes));
 		return r;
 	}
 

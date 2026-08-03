@@ -1,8 +1,11 @@
 package net.bigtangle.mcmc.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import java.math.BigInteger;
 
@@ -77,27 +80,21 @@ public class EpochRewardTest extends AbstractIntegrationTest {
                 StakeService.MIN_STAKE.multiply(BigInteger.valueOf(2)),
                 totalStake);
 
-        // Distribute epoch rewards
+        // Distribute epoch rewards (now embedded in the proposer beacon).
         long epoch = 1;
         long rewardPool = 32L * 31709791L;
-        Sha256Hash rewardBlockHash = epochRewardService.distributeEpochRewards(epoch,
+        List<net.bigtangle.core.Transaction> rewardTxs = epochRewardService.buildEpochRewardTransactions(
                 BigInteger.valueOf(rewardPool), store);
-        assertNotNull(rewardBlockHash, "distributeEpochRewards should return a block hash");
+        assertFalse(rewardTxs.isEmpty(), "reward transactions should be built for active validators");
 
         // Verify total stake unchanged (rewards are new UTXOs, not stake increases)
         BigInteger postRewardStake = stakeService.getTotalActiveStake(store);
         assertEquals(expectedStake, postRewardStake,
                 "Stake should be unchanged after reward distribution");
 
-        // Verify reward block
-        Block rewardBlock = store.get(rewardBlockHash);
-        assertNotNull(rewardBlock, "Reward block should exist in store");
-        assertEquals(BlockType.BLOCKTYPE_BEACON, rewardBlock.getBlockType(),
-                "Reward block must be BLOCKTYPE_BEACON");
-
         int bigOutputs = 0;
         long totalOutput = 0;
-        for (net.bigtangle.core.Transaction tx : rewardBlock.getTransactions()) {
+        for (net.bigtangle.core.Transaction tx : rewardTxs) {
             for (net.bigtangle.core.TransactionOutput out : tx.getOutputs()) {
                 if (java.util.Arrays.equals(
                         NetworkParameters.BIGTANGLE_TOKENID,

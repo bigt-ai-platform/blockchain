@@ -1,6 +1,7 @@
 package net.bigtangle.server.service;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,11 +14,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Utils;
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.store.BlockStoreInterface;
 
+/**
+ * Casper FFG finality over the LMD-GHOST fork choice.
+ *
+ * <p>Checkpoints are created at each epoch boundary from the current beacon
+ * head. A checkpoint is justified when more than 2/3 of the active stake has
+ * attested for its source→target pair, and finalized when its parent is already
+ * finalized. Attestations are authenticated (signature over the full message)
+ * before they are counted, and only genuine double votes trigger slashing —
+ * out-of-order or duplicate delivery of an identical vote never slashes.
+ */
 @Service
 public class CasperService {
 
@@ -33,11 +46,29 @@ public class CasperService {
             this.blockHash = blockHash;
             this.epoch = epoch;
         }
+
+        public Sha256Hash getBlockHash() {
+            return blockHash;
+        }
+
+        public long getEpoch() {
+            return epoch;
+        }
+
+        public boolean isJustified() {
+            return justified;
+        }
+
+        public boolean isFinalized() {
+            return finalized;
+        }
     }
 
     private final ConcurrentHashMap<Long, Checkpoint> checkpoints = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> latestVotes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Sha256Hash> latestVoteBeacons = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Sha256Hash> latestVoteSources = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Sha256Hash> latestVoteTargets = new ConcurrentHashMap<>();
 
     @Autowired
     private GhostService ghostService;
@@ -61,13 +92,20 @@ public class CasperService {
             try {
                 Map<String, byte[]> saved = store.getPosStateByService("casper");
                 for (Map.Entry<String, byte[]> e : saved.entrySet()) {
-                    if (e.getKey().startsWith("vote_")) {
-                        String pubkey = e.getKey().substring(5);
+                    String key = e.getKey();
+                    if (key.startsWith("vote_")) {
+                        String pubkey = key.substring(5);
                         long slot = new java.math.BigInteger(e.getValue()).longValue();
                         latestVotes.put(pubkey, slot);
-                    } else if (e.getKey().startsWith("ckpt_")) {
-                        long epoch = Long.parseLong(e.getKey().substring(5));
-                        String[] parts = new String(e.getValue(), java.nio.charset.StandardCharsets.UTF_8).split(",");
+                    } else if (key.startsWith("src_")) {
+                        latestVoteSources.put(key.substring(4), new Sha256Hash(e.getValue()));
+                    } else if (key.startsWith("tgt_")) {
+                        latestVoteTargets.put(key.substring(4), new Sha256Hash(e.getValue()));
+                    } else if (key.startsWith("beacon_")) {
+                        latestVoteBeacons.put(key.substring(7), new Sha256Hash(e.getValue()));
+                    } else if (key.startsWith("ckpt_")) {
+                        long epoch = Long.parseLong(key.substring(5));
+                        String[] parts = new String(e.getValue(), StandardCharsets.UTF_8).split(",");
                         Checkpoint cp = new Checkpoint(Sha256Hash.wrap(net.bigtangle.core.Utils.HEX.decode(parts[0])), epoch);
                         cp.justified = Boolean.parseBoolean(parts[1]);
                         cp.finalized = Boolean.parseBoolean(parts[2]);
@@ -82,54 +120,130 @@ public class CasperService {
         }
     }
 
+    /** Returns the existing checkpoint for {@code epoch} or creates it at {@code blockHash}. */
+    public Checkpoint ensureCheckpoint(long epoch, Sha256Hash blockHash) {
+        return checkpoints.computeIfAbsent(epoch, e -> {
+            Checkpoint cp = new Checkpoint(blockHash, e);
+            // The genesis checkpoint is the root of trust: justified + finalized.
+            if (e == 0) {
+                cp.justified = true;
+                cp.finalized = true;
+            }
+            persistCheckpoint(cp, null);
+            return cp;
+        });
+    }
+
+    public boolean isCheckpointJustified(long epoch) {
+        Checkpoint cp = checkpoints.get(epoch);
+        return cp != null && cp.justified;
+    }
+
+    public boolean isCheckpointFinalized(long epoch) {
+        Checkpoint cp = checkpoints.get(epoch);
+        return cp != null && cp.finalized;
+    }
+
+    /** The highest justified checkpoint (the source for the next epoch's votes). */
+    public Checkpoint getJustifiedCheckpoint() {
+        Checkpoint best = null;
+        for (Checkpoint cp : checkpoints.values()) {
+            if (cp.justified && (best == null || cp.epoch > best.epoch)) {
+                best = cp;
+            }
+        }
+        return best;
+    }
+
     public void processSlot(long slot, Sha256Hash beaconHash,
             List<AttestationData> attestations, BlockStoreInterface store) throws Exception {
+        if (beaconHash != null) {
+            ensureCheckpoint(slot / 32, beaconHash);
+        }
         for (AttestationData att : attestations) {
             processVote(att, store);
         }
     }
 
     public void processVote(AttestationData att, BlockStoreInterface store) throws Exception {
+        if (att.getValidatorPubkey() == null) {
+            return;
+        }
         String vkey = Utils.HEX.encode(att.getValidatorPubkey());
-        Long lastSlot = latestVotes.get(vkey);
-        Sha256Hash lastBeacon = latestVoteBeacons.get(vkey);
 
-        boolean isDoubleVote = slashingService.checkDoubleVote(att);
-        slashingService.checkSurroundVote(att);
+        // Authenticate the attestation before it influences any state.
+        if (!verifyAttestation(att)) {
+            log.warn("Rejecting unauthenticated attestation from pubkey={} slot={}", vkey, att.getSlot());
+            return;
+        }
 
-        // A gossip-relayed duplicate of the IDENTICAL attestation (same slot and
-        // same beacon head) is not a double-vote — only a conflicting vote for
-        // the same slot is slashable. Without this, a node that both receives
-        // the direct submitAttestation and a gossip relay of the same vote would
-        // slash its own validator.
-        boolean duplicateRelay = lastSlot != null && lastSlot == att.getSlot()
-                && att.getBeaconBlockHash().equals(lastBeacon);
-
-        if (isDoubleVote || (!duplicateRelay && lastSlot != null && lastSlot >= att.getSlot())) {
-            log.warn("Slashing: double vote by pubkey={} slot={}", vkey, att.getSlot());
+        // Only a genuine double vote (two different heads for the same slot)
+        // or a surround vote slashes. Duplicate or out-of-order delivery of the
+        // same vote does not.
+        if (slashingService.checkDoubleVote(att) || slashingService.checkSurroundVote(att)) {
+            log.warn("Slashing: slashable vote by pubkey={} slot={}", vkey, att.getSlot());
             slashingService.processSlashing(att.getValidatorPubkey(), store);
             return;
         }
+
+        // Ignore stale/duplicate votes; the latest vote is the highest slot seen.
+        Long lastSlot = latestVotes.get(vkey);
+        if (lastSlot != null && att.getSlot() <= lastSlot) {
+            return;
+        }
+
         latestVotes.put(vkey, att.getSlot());
         latestVoteBeacons.put(vkey, att.getBeaconBlockHash());
+        latestVoteSources.put(vkey, att.getSourceCheckpoint() != null ? att.getSourceCheckpoint() : Sha256Hash.ZERO_HASH);
+        latestVoteTargets.put(vkey, att.getTargetCheckpoint() != null ? att.getTargetCheckpoint() : Sha256Hash.ZERO_HASH);
+
         ghostService.processAttestation(att, store);
         store.saveAttestationVote(att.getBeaconBlockHash(), att.getValidatorPubkey(),
                 stakeService.getEffectiveStake(att.getValidatorPubkey(), store));
+
         store.savePosState("casper", "vote_" + vkey,
                 java.math.BigInteger.valueOf(att.getSlot()).toByteArray());
+        if (att.getSourceCheckpoint() != null) {
+            store.savePosState("casper", "src_" + vkey, att.getSourceCheckpoint().getBytes());
+        }
+        if (att.getTargetCheckpoint() != null) {
+            store.savePosState("casper", "tgt_" + vkey, att.getTargetCheckpoint().getBytes());
+        }
+        if (att.getBeaconBlockHash() != null) {
+            store.savePosState("casper", "beacon_" + vkey, att.getBeaconBlockHash().getBytes());
+        }
 
         gossipService.broadcastAttestation(att);
     }
 
+    /** Verifies the attestation signature against the declared validator pubkey. */
+    public boolean verifyAttestation(AttestationData att) {
+        if (att.getSignature() == null || att.getSignature().length == 0 || att.getValidatorPubkey() == null) {
+            return false;
+        }
+        try {
+            PQKey signer = PQKey.fromPublicOnly(att.getValidatorPubkey());
+            return PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), att.getSignature(), att.getMessageHash());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void finalizeCheckpoint(long epoch, BlockStoreInterface store) throws Exception {
         Checkpoint target = checkpoints.get(epoch);
-        if (target == null) return;
+        if (target == null) {
+            return;
+        }
 
         Checkpoint source = checkpoints.get(epoch - 1);
-        if (source == null || !source.justified) return;
+        if (source == null || !source.justified) {
+            return;
+        }
 
         BigInteger totalStake = stakeService.getTotalActiveStake(store);
-        if (totalStake.compareTo(BigInteger.ZERO) <= 0) return;
+        if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
+            return;
+        }
 
         BigInteger votedStake = getVotedStake(source.blockHash, target.blockHash, store);
         BigInteger twoThirds = totalStake.multiply(BigInteger.valueOf(2))
@@ -137,7 +251,8 @@ public class CasperService {
 
         if (votedStake.compareTo(twoThirds) >= 0) {
             target.justified = true;
-            log.info("Checkpoint justified: epoch={}, block={}", epoch, target.blockHash);
+            log.info("Checkpoint justified: epoch={}, block={}, votedStake={}/{}",
+                    epoch, target.blockHash, votedStake, totalStake);
             persistCheckpoint(target, store);
 
             if (source.finalized) {
@@ -145,30 +260,50 @@ public class CasperService {
                 log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
                 persistCheckpoint(target, store);
             }
+        } else {
+            log.debug("Checkpoint not justified: epoch={}, votedStake={}/{} (need {})",
+                    epoch, votedStake, totalStake, twoThirds);
         }
     }
 
     private void persistCheckpoint(Checkpoint cp, BlockStoreInterface store) {
-        try {
-            String val = cp.blockHash.toString() + "," + cp.justified + "," + cp.finalized;
-            store.savePosState("casper", "ckpt_" + cp.epoch, val.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            log.debug("Failed to persist checkpoint", e);
+        String val = cp.blockHash.toString() + "," + cp.justified + "," + cp.finalized;
+        if (store != null) {
+            try {
+                store.savePosState("casper", "ckpt_" + cp.epoch, val.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                log.debug("Failed to persist checkpoint", e);
+            }
+        } else {
+            // Store is only null during ensureCheckpoint creation; persist lazily
+            // at the next store-bearing call (finalizeCheckpoint/processEpoch).
+            log.debug("Checkpoint {} created (persist deferred)", cp.epoch);
         }
     }
 
+    /**
+     * Stake that has attested the exact (source, target) checkpoint pair. Keyed
+     * by pubkey hex — never by byte[], which uses identity equality — and
+     * filtered by both checkpoints, so unrelated votes are not counted.
+     */
     private BigInteger getVotedStake(Sha256Hash source, Sha256Hash target,
             BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
-        Map<byte[], BigInteger> stakeByPubkey = new HashMap<>();
+        Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
-            stakeByPubkey.put(v.getPubkey(), v.getAmount());
+            stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), v.getAmount());
         }
 
         BigInteger voted = BigInteger.ZERO;
-        for (Map.Entry<String, Long> entry : latestVotes.entrySet()) {
-            byte[] pubkey = Utils.HEX.decode(entry.getKey());
-            BigInteger stake = stakeByPubkey.getOrDefault(pubkey, BigInteger.ZERO);
+        for (Map.Entry<String, Sha256Hash> entry : latestVoteTargets.entrySet()) {
+            if (!target.equals(entry.getValue())) {
+                continue;
+            }
+            Sha256Hash src = latestVoteSources.get(entry.getKey());
+            if (src == null || !source.equals(src)) {
+                continue;
+            }
+            BigInteger stake = stakeByPubkey.getOrDefault(entry.getKey(), BigInteger.ZERO);
             voted = voted.add(stake);
         }
         return voted;

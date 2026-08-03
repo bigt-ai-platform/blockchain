@@ -52,9 +52,11 @@ public class GhostService {
     }
 
     public void processAttestation(AttestationData att, BlockStoreInterface store) throws Exception {
+        // Only active, bonded validators contribute weight to fork choice.
+        // Unknown or slashed validators get ZERO weight, never a default.
         long weight = stakeService.getEffectiveStake(att.getValidatorPubkey(), store);
         if (weight <= 0) {
-            weight = 32_000_000L;
+            return;
         }
         forkChoiceVotes.merge(att.getBeaconBlockHash(), weight, Long::sum);
     }

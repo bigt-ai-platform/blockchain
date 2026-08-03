@@ -12,6 +12,7 @@ public class StakeRecord {
     private boolean slashed = false;
     private long withdrawableEpoch = -1;
     private Sha256Hash blockHash;
+    private Sha256Hash txHash;
 
     public StakeRecord() {}
 
@@ -35,6 +36,8 @@ public class StakeRecord {
     public void setWithdrawableEpoch(long e) { this.withdrawableEpoch = e; }
     public Sha256Hash getBlockHash() { return blockHash; }
     public void setBlockHash(Sha256Hash h) { this.blockHash = h; }
+    public Sha256Hash getTxHash() { return txHash; }
+    public void setTxHash(Sha256Hash h) { this.txHash = h; }
 
     @Override
     public String toString() {

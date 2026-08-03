@@ -1,7 +1,7 @@
 package net.bigtangle.server.service;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -19,7 +19,7 @@ public class SlashingService {
 
     private static final Logger log = LoggerFactory.getLogger(SlashingService.class);
 
-    private final HashMap<String, AttestationData> latestAttestation = new HashMap<>();
+    private final ConcurrentHashMap<String, AttestationData> latestAttestation = new ConcurrentHashMap<>();
 
     @Autowired
     private StakeService stakeService;
@@ -53,7 +53,14 @@ public class SlashingService {
         }
     }
 
+    /**
+     * Detects a double vote: the same validator attesting two different heads
+     * for the same slot. Records the vote and returns true when it is a double.
+     */
     public boolean checkDoubleVote(AttestationData att) {
+        if (att.getValidatorPubkey() == null) {
+            return false;
+        }
         String key = Utils.HEX.encode(att.getValidatorPubkey()) + ":" + att.getSlot();
         AttestationData existing = latestAttestation.get(key);
         if (existing != null && !existing.getBeaconBlockHash().equals(att.getBeaconBlockHash())) {
@@ -66,21 +73,33 @@ public class SlashingService {
         return false;
     }
 
-    public void checkSurroundVote(AttestationData att) {
+    /**
+     * Detects a surround vote: the new attestation's checkpoint range surrounds
+     * the validator's previous range (or vice versa), expressed in epoch
+     * containment — which checkpoint hashes alone cannot express.
+     */
+    public boolean checkSurroundVote(AttestationData att) {
+        if (att.getValidatorPubkey() == null) {
+            return false;
+        }
         String key = Utils.HEX.encode(att.getValidatorPubkey());
         AttestationData prev = latestAttestation.get(key + ":latest");
-        if (prev != null) {
-            boolean surrounds = prev.getSourceCheckpoint() != null && att.getTargetCheckpoint() != null
-                    && prev.getSourceCheckpoint().equals(att.getTargetCheckpoint())
-                    && att.getSourceCheckpoint() != null
-                    && att.getSourceCheckpoint().equals(prev.getTargetCheckpoint());
-            if (surrounds) {
+        boolean slashing = false;
+        if (prev != null && prev.getSourceEpoch() >= 0 && prev.getTargetEpoch() >= 0
+                && att.getSourceEpoch() >= 0 && att.getTargetEpoch() >= 0) {
+            boolean surrounds = prev.getSourceEpoch() < att.getSourceEpoch()
+                    && att.getTargetEpoch() < prev.getTargetEpoch();
+            boolean surrounded = att.getSourceEpoch() < prev.getSourceEpoch()
+                    && prev.getTargetEpoch() < att.getTargetEpoch();
+            if (surrounds || surrounded) {
                 log.warn("SLASHING: surround vote by pubkey={}",
                         Utils.HEX.encode(att.getValidatorPubkey()));
+                slashing = true;
             }
         }
         latestAttestation.put(key + ":latest", att);
         persistAttestation(key + ":latest", att);
+        return slashing;
     }
 
     public void processSlashing(byte[] pubkey, BlockStoreInterface store) throws Exception {

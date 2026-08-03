@@ -316,6 +316,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     		+ "    slashed BOOLEAN DEFAULT FALSE,\n"
     		+ "    withdrawable_epoch BIGINT DEFAULT -1,\n"
     		+ "    blockhash BYTEA,\n"
+    		+ "    txhash BYTEA,\n"
     		+ "    pubkey_md5 UUID NOT NULL,\n"
     		+ "    CONSTRAINT stake_deposits_unique UNIQUE (pubkey_md5)\n"
     		+ ")";
