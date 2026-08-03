@@ -52,8 +52,10 @@ L1_LOG="$LOG_DIR/l1-order-server.log"
 # Infra-only mode: start L0/L1/MCMC but skip the remote tests and keep
 # everything running until Ctrl+C. Activate with: ./remote.sh infra
 INFRA_ONLY=false
+STOP_ONLY=false
 case "${1:-}" in
     infra|--infra|infra-only) INFRA_ONLY=true ;;
+    stop|down) STOP_ONLY=true ;;
 esac
 
 # Skip the maven build. Default: skip in infra-only mode (assumes binaries are
@@ -72,6 +74,28 @@ cleanup() {
     echo "=== Cleanup done ==="
 }
 trap cleanup EXIT INT TERM
+
+# --- Stop mode: kill the running infra (started detached by `infra`) ---
+if [ "$STOP_ONLY" = "true" ]; then
+    echo "=== Stopping infra (ports $L0_PORT/$MCMC_PORT/$L1_PORT) ==="
+    for port in "$L0_PORT" "$MCMC_PORT" "$L1_PORT"; do
+        pid=$(ss -tlnp 2>/dev/null | grep -E ":$port " | grep -oE 'pid=[0-9]+' | head -1 | cut -d= -f2)
+        if [ -n "${pid:-}" ]; then
+            echo "Killing pid $pid (port $port)"
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    # Also kill any leftover spring-boot run wrappers
+    pkill -f "spring-boot:run" 2>/dev/null || true
+    sleep 3
+    if ss -tln 2>/dev/null | grep -qE ":(24089|24091|24086) "; then
+        echo "Ports still in use, forcing..."
+        pkill -9 -f "spring-boot:run" 2>/dev/null || true
+        sleep 2
+    fi
+    echo "=== Infra stopped ==="
+    exit 0
+fi
 
 echo "============================================="
 echo "  RemoteTest Infrastructure Setup"
