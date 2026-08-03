@@ -772,13 +772,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
-		if (transactions.size() != 1) {
+		// A chain-connected reward (BEACON) block always carries a RewardInfo
+		// in its first transaction (SlotService beacon: exactly 1 tx). The
+		// epoch reward block additionally carries coinbase-style reward-output
+		// transactions (one per validator) after the RewardInfo tx.
+		if (transactions.isEmpty()) {
 			if (throwExceptions)
 				throw new IncorrectTransactionCountException();
 			return SolidityState.getFailState();
 		}
 
-		// No output creation
+		// No output creation in the RewardInfo transaction itself
 		if (!transactions.get(0).getOutputs().isEmpty()) {
 			if (throwExceptions)
 				throw new TransactionOutputsDisallowedException();
@@ -789,6 +793,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (throwExceptions)
 				throw new MissingTransactionDataException();
 			return SolidityState.getFailState();
+		}
+
+		// Reward-output transactions (epoch reward block) must be coinbase-like:
+		// no inputs, no data, only freshly minted outputs.
+		for (int i = 1; i < transactions.size(); i++) {
+			Transaction rewardTx = transactions.get(i);
+			if (!rewardTx.getInputs().isEmpty() || rewardTx.getData() != null || rewardTx.getOutputs().isEmpty()) {
+				if (throwExceptions)
+					throw new IncorrectTransactionCountException();
+				return SolidityState.getFailState();
+			}
 		}
 
 		// Check that the tx has correct data
@@ -1549,13 +1564,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public SolidityState checkFormalRewardSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
 
-		if (transactions.size() != 1) {
+		if (transactions.isEmpty()) {
 			if (throwExceptions)
 				throw new IncorrectTransactionCountException();
 			return SolidityState.getFailState();
 		}
 
-		// No output creation
+		// No output creation in the RewardInfo transaction itself
 		if (!transactions.get(0).getOutputs().isEmpty()) {
 			if (throwExceptions)
 				throw new TransactionOutputsDisallowedException();
@@ -1566,6 +1581,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (throwExceptions)
 				throw new MissingTransactionDataException();
 			return SolidityState.getFailState();
+		}
+
+		// Reward-output transactions (epoch reward block) must be coinbase-like:
+		// no inputs, no data, only freshly minted outputs.
+		for (int i = 1; i < transactions.size(); i++) {
+			Transaction rewardTx = transactions.get(i);
+			if (!rewardTx.getInputs().isEmpty() || rewardTx.getData() != null || rewardTx.getOutputs().isEmpty()) {
+				if (throwExceptions)
+					throw new IncorrectTransactionCountException();
+				return SolidityState.getFailState();
+			}
 		}
 
 		// Check that the tx has correct data

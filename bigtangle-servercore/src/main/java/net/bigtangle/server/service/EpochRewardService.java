@@ -1,7 +1,9 @@
 package net.bigtangle.server.service;
 
 import java.math.BigInteger;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +13,9 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
@@ -41,6 +45,9 @@ public class EpochRewardService {
     private StakeService stakeService;
 
     @Autowired
+    private CacheBlockService cacheBlockService;
+
+    @Autowired
     private NetworkParameters networkParameters;
 
     /**
@@ -67,6 +74,24 @@ public class EpochRewardService {
                 store.get(proto.getPrevBlockHash()),
                 store.get(proto.getPrevBranchBlockHash()));
         rewardBlock.setBlockType(BlockType.BLOCKTYPE_BEACON);
+
+        // Every chain-connected BLOCKTYPE_BEACON must carry a RewardInfo in its
+        // first transaction (BlockStoreService.saveChainConnected parses it to
+        // solidify referenced DAG blocks). Without it the reward block crashes
+        // chain confirmation with a NullPointerException, stalling the chain.
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        Sha256Hash prevRewardHash = maxConfirmedReward.getBlockHash();
+        long chainlength = maxConfirmedReward.getChainLength() + 1;
+
+        RewardInfo rewardInfo = new RewardInfo();
+        rewardInfo.setChainlength(chainlength);
+        rewardInfo.setPrevRewardHash(prevRewardHash);
+        rewardInfo.setBlocks(new HashSet<>());
+
+        Transaction rewardTx = new Transaction(networkParameters);
+        rewardTx.setData(rewardInfo.toByteArray());
+        rewardBlock.setLastMiningRewardBlock(chainlength);
+        rewardBlock.addTransaction(rewardTx);
 
         long distributed = 0;
         long pool = totalFees.longValue();
