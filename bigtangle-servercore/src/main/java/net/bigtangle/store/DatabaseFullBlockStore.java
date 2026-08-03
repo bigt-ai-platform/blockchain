@@ -3283,12 +3283,15 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void saveAnchor(AnchorRecord anchor) throws BlockStoreException {
 		try (PreparedStatement s = getConnection().prepareStatement(INSERT_ANCHOR_SQL)) {
 			s.setString(1, anchor.getChainId());
-			s.setString(2, anchor.getL1RewardHeadHash().toString());
-			s.setLong(3, anchor.getL1Height());
-			s.setString(4, anchor.getConfirmedRoot() != null ? anchor.getConfirmedRoot().toString() : null);
-			s.setString(5, anchor.getSignatureHex());
-			s.setString(6, anchor.getBlockHash().toString());
-			s.setBoolean(7, anchor.isConfirmed());
+			s.setString(2, anchor.getEventId());
+			s.setString(3, anchor.getL1RewardHeadHash().toString());
+			s.setLong(4, anchor.getL1Height());
+			s.setString(5, anchor.getConfirmedRoot() != null ? anchor.getConfirmedRoot().toString() : null);
+			s.setString(6, anchor.getSignatureHex());
+			s.setString(7, anchor.getSpvProofHex());
+			s.setString(8, anchor.getBurnJson());
+			s.setString(9, anchor.getBlockHash().toString());
+			s.setBoolean(10, anchor.isConfirmed());
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -3605,6 +3608,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	private AnchorRecord setAnchorRecord(ResultSet rs) throws SQLException {
 		AnchorRecord anchor = new AnchorRecord();
 		anchor.setChainId(rs.getString("chainId"));
+		anchor.setEventId(rs.getString("eventId"));
 		String l1RewardHeadHash = rs.getString("l1RewardHeadHash");
 		if (l1RewardHeadHash != null) {
 			anchor.setL1RewardHeadHash(Sha256Hash.wrap(l1RewardHeadHash));
@@ -3615,6 +3619,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			anchor.setConfirmedRoot(Sha256Hash.wrap(confirmedRoot));
 		}
 		anchor.setSignatureHex(rs.getString("signatureHex"));
+		anchor.setSpvProofHex(rs.getString("spvProofHex"));
+		anchor.setBurnJson(rs.getString("burnJson"));
 		String blockHash = rs.getString("blockHash");
 		if (blockHash != null) {
 			anchor.setBlockHash(Sha256Hash.wrap(blockHash));

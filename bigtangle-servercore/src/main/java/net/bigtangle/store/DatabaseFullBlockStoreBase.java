@@ -478,12 +478,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	protected final String CONTRACTEVENTCANCEL_UPDATE_SPENT_SQL = "UPDATE contracteventcancel SET spent = ?, spenderblockhash=?  WHERE blockhash = ? ";
 
-	protected final String INSERT_ANCHOR_SQL = "INSERT INTO anchor (chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	protected final String INSERT_ANCHOR_SQL = "INSERT INTO anchor (chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex, burnJson, blockHash, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 			+ duplicateInsert();
-	protected final String SELECT_ANCHOR_BY_CHAINID_HEIGHT_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height = ?";
-	protected final String SELECT_ANCHORS_BY_CHAINID_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height >= ? ORDER BY l1Height ASC";
-	protected final String SELECT_LATEST_ANCHOR_BY_CHAINID_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE chainId = ? ORDER BY l1Height DESC LIMIT 1";
-	protected final String SELECT_ANCHOR_BY_BLOCKHASH_SQL = "SELECT chainId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, blockHash, confirmed FROM anchor WHERE blockHash = ?";
+	protected final String SELECT_ANCHOR_BY_CHAINID_HEIGHT_SQL = "SELECT chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex, burnJson, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height = ?";
+	protected final String SELECT_ANCHORS_BY_CHAINID_SQL = "SELECT chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex, burnJson, blockHash, confirmed FROM anchor WHERE chainId = ? AND l1Height >= ? ORDER BY l1Height ASC";
+	protected final String SELECT_LATEST_ANCHOR_BY_CHAINID_SQL = "SELECT chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex, burnJson, blockHash, confirmed FROM anchor WHERE chainId = ? ORDER BY l1Height DESC LIMIT 1";
+	protected final String SELECT_ANCHOR_BY_BLOCKHASH_SQL = "SELECT chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex, burnJson, blockHash, confirmed FROM anchor WHERE blockHash = ?";
 	protected final String UPDATE_ANCHOR_CONFIRMED_SQL = "UPDATE anchor SET confirmed = ? WHERE chainId = ? AND l1Height = ?";
 	protected final String INSERT_VAULT_SQL = "INSERT INTO vault (chainId, utxoBlockHash, utxoIndex, amount, tokenIdHex, ownerAddress, spent) VALUES (?, ?, ?, ?, ?, ?, ?)";
 	protected final String SELECT_VAULT_BY_CHAINID_SQL = "SELECT chainId, utxoBlockHash, utxoIndex, amount, tokenIdHex, ownerAddress, spent FROM vault WHERE chainId = ? AND spent = ?";

@@ -66,6 +66,10 @@ public class BlockSaveService {
 	protected net.bigtangle.server.service.CacheBlockService cacheBlockService;
 	@Autowired
 	protected com.fasterxml.jackson.databind.ObjectMapper jsonmapper;
+	// Resolved lazily via ObjectProvider to break the circular reference
+	// blockSaveService -> crosstangleProcessorImpl -> anchorService -> blockSaveService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<CrosstangleProcessor> crosstangleProcessorProvider;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
@@ -97,6 +101,7 @@ public class BlockSaveService {
 		// produce conflicting blocks that never confirm.
 		blockgraph.updateTransactionOutputSpendPendingDo(block);
 		accumulateBlockFees(block, store);
+		notifyCrosstangle(block, store);
 		broadcastBlock(block);
 	}
 
@@ -111,7 +116,17 @@ public class BlockSaveService {
 		}
 		accumulateBlockFees(block, store);
 		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
+		notifyCrosstangle(block, store);
 		broadcastBlock(block);
+	}
+
+	/** Hands CROSSTANGLE (cross-chain message) blocks to the bridge module. */
+	private void notifyCrosstangle(Block block, BlockStoreInterface store) throws Exception {
+		CrosstangleProcessor crosstangleProcessor = crosstangleProcessorProvider.getIfAvailable();
+		if (crosstangleProcessor == null || block.getBlockType() != net.bigtangle.core.BlockType.BLOCKTYPE_CROSSTANGLE) {
+			return;
+		}
+		crosstangleProcessor.onCrosstangleBlockSaved(block, store);
 	}
 
 	/** Best-effort status write for every user transaction in a block. */

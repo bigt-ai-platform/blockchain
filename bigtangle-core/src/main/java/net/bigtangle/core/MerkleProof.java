@@ -37,6 +37,50 @@ public class MerkleProof {
     }
 
     /**
+     * Serializes the proof for storage on the wire / in the DB: count followed
+     * by one position flag byte (0=left, 1=right) and 32-byte sibling hash per
+     * level. An empty proof is a single zero count.
+     */
+    public byte[] toByteArray() {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+        try {
+            dos.writeInt(siblings.size());
+            for (int i = 0; i < siblings.size(); i++) {
+                dos.writeBoolean(positions.get(i));
+                dos.write(siblings.get(i));
+            }
+        } catch (java.io.IOException e) {
+            throw new RuntimeException(e);
+        }
+        return baos.toByteArray();
+    }
+
+    public static MerkleProof parse(byte[] data) throws java.io.IOException {
+        MerkleProof proof = new MerkleProof();
+        java.io.DataInputStream dis = new java.io.DataInputStream(new java.io.ByteArrayInputStream(data));
+        int count = dis.readInt();
+        for (int i = 0; i < count; i++) {
+            boolean isLeft = dis.readBoolean();
+            byte[] sibling = new byte[32];
+            dis.readFully(sibling);
+            proof.addSibling(sibling, isLeft);
+        }
+        return proof;
+    }
+
+    public String toHex() {
+        return net.bigtangle.core.Utils.HEX.encode(toByteArray());
+    }
+
+    public static MerkleProof fromHex(String hex) throws java.io.IOException {
+        if (hex == null || hex.isEmpty()) {
+            return new MerkleProof();
+        }
+        return parse(net.bigtangle.core.Utils.HEX.decode(hex));
+    }
+
+    /**
      * Verifies this proof against a leaf hash and expected Merkle root.
      */
     public boolean verify(Sha256Hash leaf, Sha256Hash expectedRoot) {

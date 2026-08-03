@@ -16,6 +16,7 @@ public class LayerAnchorTest {
     public void testRoundTrip() throws Exception {
         LayerAnchor original = new LayerAnchor(
                 "L1",
+                "L1:42",
                 Sha256Hash.of("rewardHash".getBytes()),
                 42,
                 Sha256Hash.of("confirmedRoot".getBytes()),
@@ -23,12 +24,30 @@ public class LayerAnchorTest {
                 new MerkleProof()
         );
         byte[] bytes = original.toByteArray();
-        LayerAnchor reparsed = LayerAnchor.parse(bytes);
+        LayerAnchor reparsed = LayerAnchor.parseCanonical(bytes);
         assertEquals(original.getChainId(), reparsed.getChainId());
+        assertEquals(original.getEventId(), reparsed.getEventId());
         assertEquals(original.getL1RewardHeadHash(), reparsed.getL1RewardHeadHash());
         assertEquals(original.getL1Height(), reparsed.getL1Height());
         assertEquals(original.getConfirmedRoot(), reparsed.getConfirmedRoot());
         assertArrayEquals(original.getSignature(), reparsed.getSignature());
+    }
+
+    @Test
+    public void testRoundTripBurnAndProof() throws Exception {
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                "abcd:0", "recipient", 5000, "bc");
+        MerkleProof proof = new MerkleProof();
+        proof.addSibling(new byte[32], true);
+        LayerAnchor original = new LayerAnchor("L1", "L1:7",
+                Sha256Hash.of("h".getBytes()), 7, Sha256Hash.of("r".getBytes()),
+                "sig".getBytes(), proof, burn);
+        LayerAnchor reparsed = LayerAnchor.parseCanonical(original.toByteArray());
+        assertEquals(original.getBurn(), reparsed.getBurn());
+        assertEquals(original.getBurn().getVaultRef(), reparsed.getBurn().getVaultRef());
+        assertEquals(original.getBurn().getAmount(), reparsed.getBurn().getAmount());
+        assertEquals(1, reparsed.getSpvProof().getSiblings().size());
+        assertTrue(java.util.Arrays.equals(original.getSpvProof().toByteArray(), reparsed.getSpvProof().toByteArray()));
     }
 
     @Test
@@ -42,7 +61,7 @@ public class LayerAnchorTest {
                 null
         );
         byte[] bytes = original.toByteArray();
-        LayerAnchor reparsed = LayerAnchor.parse(bytes);
+        LayerAnchor reparsed = LayerAnchor.parseCanonical(bytes);
         assertEquals(original.getChainId(), reparsed.getChainId());
         assertEquals(original.getL1Height(), reparsed.getL1Height());
         assertEquals(0, reparsed.getSignature() == null ? 0 : reparsed.getSignature().length);
@@ -59,7 +78,7 @@ public class LayerAnchorTest {
                 null
         );
         byte[] bytes = original.toByteArray();
-        LayerAnchor reparsed = LayerAnchor.parse(bytes);
+        LayerAnchor reparsed = LayerAnchor.parseCanonical(bytes);
         assertEquals("", reparsed.getChainId());
         assertEquals(Sha256Hash.ZERO_HASH, reparsed.getL1RewardHeadHash());
         assertEquals(0, reparsed.getL1Height());

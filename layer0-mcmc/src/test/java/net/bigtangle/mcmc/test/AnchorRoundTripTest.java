@@ -55,22 +55,32 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         anchorConfiguration.setPubKeyHex(Utils.HEX.encode(key.getPublicKeyBytes()));
     }
 
+    /** Builds a signature- and SPV-valid anchor over the given head/root. */
+    private LayerAnchor validAnchor(PQKey signKey, Sha256Hash head, long height, Sha256Hash root, MerkleProof proof) {
+        LayerAnchor anchor = new LayerAnchor("L1", "L1:" + height, head, height, root, null, proof, null);
+        anchor.setSignature(anchor.sign(signKey).serialize());
+        return anchor;
+    }
+
     @Test
     public void testValidateAndSaveAnchor() throws Exception {
         PQKey signKey = PQKey.createNew();
         configureAnchorWithKey(signKey);
 
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-        Sha256Hash l1Hash = genesis.getHash();
-        long l1Height = 1;
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
 
-        SignatureBundle sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, l1Height, null, sig.serialize(), null);
+        LayerAnchor anchor = validAnchor(signKey, head, 1, root, proof);
+        anchorService.validateAndSaveAnchor(anchor, UtilGeneseBlock.createGenesis(networkParameters).getHash(), store);
 
-        anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
-
-        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", l1Height);
+        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
         assertNotNull(saved, "Anchor should be saved and retrievable");
+        assertEquals(root, saved.getConfirmedRoot());
     }
 
     @Test
@@ -78,16 +88,21 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         PQKey signKey = PQKey.createNew();
         configureAnchorWithKey(signKey);
 
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-        Sha256Hash l1Hash = genesis.getHash();
-        SignatureBundle sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.serialize(), null);
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        LayerAnchor anchor = validAnchor(signKey, head, 1, root, proof);
 
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName("LayerAnchor");
-        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        tx.setData(anchor.toByteArray());
         crosstangleBlock.addTransaction(tx);
 
         anchorService.processReceivedAnchor(crosstangleBlock, store);
@@ -160,16 +175,21 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         PQKey signKey = PQKey.createNew();
         configureAnchorWithKey(signKey);
 
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-        Sha256Hash l1Hash = genesis.getHash();
-        SignatureBundle sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.serialize(), null);
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        LayerAnchor anchor = validAnchor(signKey, head, 1, root, proof);
 
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
         Block crosstangleBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
         crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName("LayerAnchor");
-        tx.setData(anchor.toJson().getBytes(StandardCharsets.UTF_8));
+        tx.setData(anchor.toByteArray());
         crosstangleBlock.addTransaction(tx);
 
         anchorService.processReceivedAnchor(crosstangleBlock, store);
@@ -186,14 +206,18 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         PQKey signKey = PQKey.createNew();
         configureAnchorWithKey(signKey);
 
-        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-        Sha256Hash l1Hash = genesis.getHash();
-        SignatureBundle sig = signKey.sign(l1Hash);
-        LayerAnchor anchor = new LayerAnchor("L1", l1Hash, 1, null, sig.serialize(), null);
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        LayerAnchor anchor = validAnchor(signKey, head, 1, root, proof);
 
-        anchorService.validateAndSaveAnchor(anchor, genesis.getHash(), store);
+        anchorService.validateAndSaveAnchor(anchor, UtilGeneseBlock.createGenesis(networkParameters).getHash(), store);
 
-        AnchorRecord byHash = store.getAnchorByBlockHash(genesis.getHash());
+        AnchorRecord byHash = store.getAnchorByBlockHash(UtilGeneseBlock.createGenesis(networkParameters).getHash());
         assertNotNull(byHash, "getAnchorByBlockHash should find the anchor");
         assertEquals("L1", byHash.getChainId());
 
@@ -202,18 +226,23 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testInvalidSignatureRejected() {
+    public void testInvalidSignatureRejected() throws Exception {
         PQKey correctKey = PQKey.createNew();
         configureAnchorWithKey(correctKey);
 
         PQKey wrongKey = PQKey.createNew();
-        Sha256Hash hash = Sha256Hash.ZERO_HASH;
-        SignatureBundle sig = wrongKey.sign(hash);
-
-        LayerAnchor anchor = new LayerAnchor("L1", hash, 1, null, sig.serialize(), null);
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        // Valid structure, but signed by the WRONG key.
+        LayerAnchor anchor = validAnchor(wrongKey, head, 1, root, proof);
 
         assertThrows(BlockStoreException.class,
-                () -> anchorService.validateAndSaveAnchor(anchor, hash, store));
+                () -> anchorService.validateAndSaveAnchor(anchor, head, store));
     }
 
     @Test
@@ -274,8 +303,7 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         int leafIdx = leaves.indexOf(targetHash);
         MerkleProof spvProof = MerkleProof.buildProof(leaves, leafIdx).proof;
 
-        SignatureBundle sig = signKey.sign(targetHash);
-        LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1, confirmedRoot, sig.serialize(), spvProof);
+        LayerAnchor anchor = validAnchor(signKey, targetHash, 1, confirmedRoot, spvProof);
 
         anchorService.validateAndSaveAnchor(anchor, Sha256Hash.wrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), store);
 
@@ -289,24 +317,29 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         PQKey signKey = PQKey.createNew();
         configureAnchorWithKey(signKey);
 
-        Sha256Hash otherHash = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
-
+        // The anchored head is genuinely in a tree with this root.
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        Sha256Hash other = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
         List<Sha256Hash> leaves = new ArrayList<>();
         leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
-        leaves.add(otherHash);
+        leaves.add(head);
         Collections.sort(leaves);
+        Sha256Hash confirmedRoot = MerkleProof.computeRoot(leaves);
 
-        MerkleProof wrongProof = MerkleProof.buildProof(leaves, leaves.indexOf(otherHash)).proof;
+        // A proof built from an unrelated leaf set does not bind head to root.
+        List<Sha256Hash> wrongLeaves = new ArrayList<>();
+        wrongLeaves.add(other);
+        wrongLeaves.add(Sha256Hash.wrap("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
+        Collections.sort(wrongLeaves);
+        MerkleProof wrongProof = MerkleProof.buildProofFor(wrongLeaves, other);
 
-        Sha256Hash targetHash = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
-        SignatureBundle sig = signKey.sign(targetHash);
-        LayerAnchor anchor = new LayerAnchor("L1", targetHash, 1,
-                MerkleProof.computeRoot(leaves), sig.serialize(), wrongProof);
+        // Signature is valid (covers the tampered proof), but the proof fails.
+        LayerAnchor anchor = new LayerAnchor("L1", "L1:1", head, 1, confirmedRoot, null, wrongProof, null);
+        anchor.setSignature(anchor.sign(signKey).serialize());
 
-        anchorService.validateAndSaveAnchor(anchor,
-                Sha256Hash.wrap("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), store);
-
-        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
-        assertNotNull(saved, "Anchor with tampered SPV proof is still saved (SPV validation not yet implemented)");
+        assertThrows(BlockStoreException.class,
+                () -> anchorService.validateAndSaveAnchor(anchor,
+                        Sha256Hash.wrap("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), store),
+                "Anchor with tampered SPV proof must be rejected");
     }
 }

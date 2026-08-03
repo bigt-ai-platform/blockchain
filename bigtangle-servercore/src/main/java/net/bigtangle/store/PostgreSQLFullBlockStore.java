@@ -453,10 +453,13 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE IF NOT EXISTS anchor (\n"
             + "    chainId varchar(255) NOT NULL,\n"
+            + "    eventId varchar(255),\n"
             + "    l1RewardHeadHash varchar(255) NOT NULL,\n"
             + "    l1Height bigint NOT NULL,\n"
             + "    confirmedRoot varchar(255),\n"
             + "    signatureHex TEXT,\n"
+            + "    spvProofHex TEXT,\n"
+            + "    burnJson TEXT,\n"
             + "    blockHash varchar(255) NOT NULL,\n"
             + "    confirmed boolean NOT NULL DEFAULT false,\n"
             + "    PRIMARY KEY (chainId, l1Height)\n)";

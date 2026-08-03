@@ -50,7 +50,6 @@ import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.data.AnchorRecord;
-import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.server.data.TransactionStatus;
 import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.params.ReqCmd;
@@ -282,14 +281,12 @@ public class DispatcherController implements DisposableBean {
 							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
 					break;
 				}
-				// Process peg-out for all unspent vault records on given chain
-				List<VaultRecord> vaults = store.getVaultUTXOsByChainId(
-						networkParameters.getChainId(), false);
-				for (VaultRecord v : vaults) {
-					AnchorRecord anchor = store.getAnchorByBlockHash(v.getUtxoBlockHash());
-					if (anchor != null) {
-						bridgeService.processPegOut(anchor, store);
-					}
+				// Process peg-out for the latest confirmed anchor of this chain.
+				// Anchors are indexed by their own CROSSTANGLE block hash, NOT
+				// by a vault's peg-in block hash, so look them up by chain.
+				AnchorRecord latest = store.getLatestAnchorByChainId(networkParameters.getChainId());
+				if (latest != null) {
+					bridgeService.processPegOut(latest, store);
 				}
 				this.outPrintJSONString(httpServletResponse,
 						new net.bigtangle.response.OkResponse(), watch, reqCmd);

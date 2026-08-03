@@ -18,6 +18,7 @@ import net.bigtangle.bridge.AnchorService;
 import net.bigtangle.bridge.BridgeConfiguration;
 import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.bridge.LayerAnchor;
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.crypto.pq.SignatureBundle;
@@ -124,17 +125,96 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         MerkleProof proof = MerkleProof.buildProofFor(blockHashes, tipProto.getHash());
 
         Sha256Hash l1Hash = tipProto.getHash();
-        SignatureBundle signature = testKey.sign(l1Hash);
-        byte[] sigBytes = signature.serialize();
-
-        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, l1Hash,
-                1, root, sigBytes, proof);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":1",
+                l1Hash, 1, root, null, proof, null);
+        anchor.setSignature(anchor.sign(testKey).serialize());
         anchorService.validateAndSaveAnchor(anchor, tipProto.getHash(), store);
 
         AnchorRecord saved = store.getAnchorByBlockHash(tipProto.getHash());
         assertNotNull(saved);
         assertNotNull(saved.getConfirmedRoot());
         assertEquals(root, saved.getConfirmedRoot());
+        assertNotNull(saved.getSpvProofHex());
+    }
+
+    @Test
+    public void testPegOutReleasedWithBurn() throws Exception {
+        Sha256Hash vaultBlockHash = Sha256Hash.wrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        long vaultIndex = 0;
+        long amount = 100000;
+        String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+
+        VaultRecord vault = new VaultRecord(L1_CHAIN_ID, vaultBlockHash,
+                vaultIndex, amount, tokenIdHex, recipient, false);
+        store.saveVaultUTXO(vault);
+
+        // Build a signature- and SPV-valid anchor with an embedded burn for this vault.
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vaultBlockHash.toString() + ":" + vaultIndex, recipient, amount, tokenIdHex);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":5",
+                head, 5, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, 5, true);
+
+        AnchorRecord confirmed = store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, 5);
+        assertNotNull(confirmed);
+        assertTrue(confirmed.isConfirmed());
+
+        bridgeService.processPegOut(confirmed, store);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertTrue(unspent.isEmpty(), "Vault must be released and marked spent after peg-out with burn");
+        List<VaultRecord> spent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, true);
+        assertEquals(1, spent.size());
+        assertTrue(spent.get(0).isSpent());
+    }
+
+    @Test
+    public void testPegOutRejectsMismatchedBurnAmount() throws Exception {
+        Sha256Hash vaultBlockHash = Sha256Hash.wrap("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        long vaultIndex = 0;
+        long amount = 100000;
+        String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+
+        VaultRecord vault = new VaultRecord(L1_CHAIN_ID, vaultBlockHash,
+                vaultIndex, amount, tokenIdHex, recipient, false);
+        store.saveVaultUTXO(vault);
+
+        Sha256Hash head = Sha256Hash.wrap("2222222222222222222222222222222222222222222222222222222222222222");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        // Burn requests MORE than the vault holds -> must not release.
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vaultBlockHash.toString() + ":" + vaultIndex, recipient, amount * 2, tokenIdHex);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":6",
+                head, 6, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, 6, true);
+
+        bridgeService.processPegOut(store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, 6), store);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size());
+        assertFalse(unspent.get(0).isSpent(), "Over-amount burn must not release the vault");
     }
 
     @Test

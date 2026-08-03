@@ -68,6 +68,9 @@ public class AnchorWatcherService {
     @Autowired
     private ObjectMapper jsonmapper;
 
+    @Autowired
+    private net.bigtangle.bridge.AnchorService anchorService;
+
     @Scheduled(fixedDelayString = "${anchor.watchIntervalMs:60000}")
     public void watchAnchors() {
         if (!anchorConfiguration.isActive() || !scheduleConfiguration.isChainlength_active()
@@ -97,6 +100,13 @@ public class AnchorWatcherService {
                     continue;
                 }
                 if (l0Anchor.getL1Height() <= anchoredHeight) {
+                    continue;
+                }
+                // Do not trust remote records blindly: revalidate the
+                // signature, SPV proof and burn before persisting.
+                if (!anchorService.revalidateAnchorRecord(l0Anchor)) {
+                    logger.warn("Rejected L0 anchor for chain {} at height {}: failed revalidation",
+                            l0Anchor.getChainId(), l0Anchor.getL1Height());
                     continue;
                 }
                 logger.info("Found L0-confirmed anchor for chain {} at height {} (local: {})",

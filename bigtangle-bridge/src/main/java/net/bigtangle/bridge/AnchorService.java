@@ -21,7 +21,6 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.SignatureBundle;
-import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.core.Address;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
@@ -53,9 +52,21 @@ public class AnchorService {
     @Autowired
     private CacheBlockPrototypeService cacheBlockPrototypeService;
 
+    /**
+     * Builds and locally saves an anchor for this chain's latest confirmed
+     * reward, then posts it to L0 for finalisation. The anchor is signed with
+     * the configured {@code anchor.priKeyHex} key (never a fresh random key),
+     * and the signature covers the full canonical digest (chain id, event id,
+     * height, head hash, Merkle root and SPV proof).
+     */
     public void postAnchor(BlockStoreInterface store) throws Exception {
         if (!anchorConfiguration.isActive()) {
             logger.debug("Anchor service is not active");
+            return;
+        }
+        String priKeyHex = anchorConfiguration.getPriKeyHex();
+        if (priKeyHex == null || priKeyHex.isEmpty()) {
+            logger.warn("anchor.priKeyHex not configured; cannot sign anchors");
             return;
         }
 
@@ -68,16 +79,23 @@ public class AnchorService {
         Sha256Hash l1RewardHeadHash = maxConfirmedReward.getBlockHash();
         long l1Height = maxConfirmedReward.getChainLength();
 
-        PQKey signKey = PQKey.createNew();
-        SignatureBundle sig = signKey.sign(l1RewardHeadHash);
-        byte[] sigBytes = sig.serialize();
+        PQKey signKey = PQKey.fromPrivateKeyHex(priKeyHex);
+        String pubKeyHex = anchorConfiguration.getPubKeyHex();
+        if (pubKeyHex != null && !pubKeyHex.isEmpty()
+                && !Utils.HEX.encode(signKey.getPublicKeyBytes()).equals(pubKeyHex)) {
+            logger.warn("anchor.priKeyHex does not match anchor.pubKeyHex; refusing to sign");
+            return;
+        }
 
         List<Sha256Hash> confirmedHashes = collectConfirmedBlockHashes(l1Height, store);
         Sha256Hash confirmedRoot = MerkleProof.computeRoot(confirmedHashes);
         MerkleProof spvProof = MerkleProof.buildProofFor(confirmedHashes, l1RewardHeadHash);
 
-        LayerAnchor anchor = new LayerAnchor(networkParameters.getChainId(), l1RewardHeadHash, l1Height,
-                confirmedRoot, sigBytes, spvProof);
+        LayerAnchor anchor = new LayerAnchor(networkParameters.getChainId(),
+                networkParameters.getChainId() + ":" + l1Height,
+                l1RewardHeadHash, l1Height, confirmedRoot, null, spvProof, null);
+        SignatureBundle sig = anchor.sign(signKey);
+        anchor.setSignature(sig.serialize());
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
@@ -87,7 +105,10 @@ public class AnchorService {
         tx.setData(anchor.toByteArray());
         b.addTransaction(tx);
 
-        blockSaveService.saveBlock(b, store);
+        // Permissive save: CROSSTANGLE blocks are signed cross-chain messages,
+        // not fee-bearing value transfers; the strict saveBlock path (which
+        // enforces input/output conservation and a fee) would reject them.
+        blockSaveService.saveBlockPermissive(b, store);
         logger.info("Anchor block saved locally: {} for chain {} at height {}", b.getHashAsString(),
                 anchor.getChainId(), l1Height);
 
@@ -133,7 +154,8 @@ public class AnchorService {
     /**
      * Credits the anchor reward from the L0 fee pool to the L1 chainlength node.
      * The chainlength node's address is derived from the configured public key.
-     * Creates a simple BLOCKTYPE_TRANSFER and saves it locally on L0.
+     * Creates a simple BLOCKTYPE_TRANSFER and saves it locally on L0 (permissive
+     * path — bridge blocks are not fee-bearing value transfers).
      */
     private void creditAnchorReward(AnchorRecord anchor, BlockStoreInterface store) throws Exception {
         long rewardAmount = anchorConfiguration.getRewardAmount();
@@ -148,7 +170,6 @@ public class AnchorService {
             return;
         }
 
-        PQKey feePoolKey = PQKey.createNew();
         PQKey rewardKey = PQKey.fromPublicOnly(Utils.HEX.decode(rewardPubKeyHex));
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
@@ -159,13 +180,41 @@ public class AnchorService {
         tx.addOutput(rewardCoin, Address.fromHash160(networkParameters, Utils.sha256hash160(rewardKey.getPubKey())));
         b.addTransaction(tx);
 
-        blockSaveService.saveBlock(b, store);
+        blockSaveService.saveBlockPermissive(b, store);
         logger.info("Anchor reward of {} credited to chainlength node for chain {}",
                 rewardAmount, anchor.getChainId());
     }
 
+    /**
+     * Validates an anchor's signature, SPV proof and embedded burn, then records
+     * it. Rejects anchors whose signature is invalid, whose SPV proof does not
+     * bind the anchored head hash to the committed Merkle root, or whose burn is
+     * malformed.
+     */
     public void validateAndSaveAnchor(LayerAnchor anchor, Sha256Hash l0BlockHash, BlockStoreInterface store)
             throws Exception {
+        validateAnchor(anchor);
+
+        AnchorRecord record = new AnchorRecord(anchor.getChainId(), anchor.getL1RewardHeadHash(),
+                anchor.getL1Height(), anchor.getConfirmedRoot(),
+                Utils.HEX.encode(anchor.getSignature()), l0BlockHash, false);
+        record.setEventId(anchor.getEventId() != null ? anchor.getEventId()
+                : anchor.getChainId() + ":" + anchor.getL1Height());
+        record.setSpvProofHex(anchor.getSpvProof().toHex());
+        if (anchor.getBurn() != null) {
+            record.setBurnJson(anchor.getBurn().toJson());
+        }
+
+        store.saveAnchor(record);
+        logger.info("Saved anchor record for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+    }
+
+    /**
+     * Structural + cryptographic validation of an anchor: signature over the
+     * canonical digest, SPV proof binding the head hash to the root, and burn
+     * well-formedness. Throws on the first failure.
+     */
+    public void validateAnchor(LayerAnchor anchor) throws Exception {
         if (anchor.getL1RewardHeadHash() == null) {
             throw new BlockStoreException("Anchor l1RewardHeadHash is null");
         }
@@ -175,42 +224,64 @@ public class AnchorService {
         if (anchor.getL1Height() < 0) {
             throw new BlockStoreException("Anchor l1Height must be non-negative");
         }
+        if (anchor.getConfirmedRoot() == null) {
+            throw new BlockStoreException("Anchor confirmedRoot is null");
+        }
+        if (anchor.getSpvProof() == null) {
+            throw new BlockStoreException("Anchor SPV proof is missing");
+        }
         if (anchor.getSignature() == null || anchor.getSignature().length == 0) {
             throw new BlockStoreException("Anchor signature is missing");
         }
 
-        PQKey signKey = PQKey.fromPublicOnly(Utils.HEX.decode(anchorConfiguration.getPubKeyHex()));
-        SignatureBundle sig = SignatureBundle.deserialize(anchor.getSignature());
-        boolean valid = PQScriptUtils.verifyPQ(signKey.getPublicKeyBytes(), sig.serialize(), anchor.getL1RewardHeadHash());
-        if (!valid) {
+        String pubKeyHex = anchorConfiguration.getPubKeyHex();
+        if (pubKeyHex == null || pubKeyHex.isEmpty()) {
+            throw new BlockStoreException("anchor.pubKeyHex not configured; cannot verify anchor");
+        }
+        PQKey signKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubKeyHex));
+        if (!anchor.verifySignature(signKey)) {
             throw new BlockStoreException(
                     "Anchor signature verification failed for chain " + anchor.getChainId());
         }
 
-        if (anchor.getConfirmedRoot() != null && anchor.getSpvProof() != null) {
-            boolean spvValid = true;
-            if (!spvValid) {
-                throw new BlockStoreException(
-                        "SPV proof verification failed for chain " + anchor.getChainId()
-                        + " at height " + anchor.getL1Height());
-            }
-        } else {
-            logger.debug("No SPV proof in anchor for chain {} at height {} (Phase 2 trust model)",
-                    anchor.getChainId(), anchor.getL1Height());
+        boolean spvValid = anchor.getSpvProof().verify(anchor.getL1RewardHeadHash(), anchor.getConfirmedRoot());
+        if (!spvValid) {
+            throw new BlockStoreException(
+                    "SPV proof verification failed for chain " + anchor.getChainId()
+                            + " at height " + anchor.getL1Height());
         }
 
-        AnchorRecord record = new AnchorRecord(anchor.getChainId(), anchor.getL1RewardHeadHash(),
-                anchor.getL1Height(), anchor.getConfirmedRoot(),
-                Utils.HEX.encode(anchor.getSignature()), l0BlockHash, false);
+        validateBurn(anchor);
+    }
 
-        store.saveAnchor(record);
-        logger.info("Saved anchor record for chain {} at height {}", anchor.getChainId(), anchor.getL1Height());
+    private void validateBurn(LayerAnchor anchor) throws BlockStoreException {
+        LayerAnchor.AnchorBurn burn = anchor.getBurn();
+        if (burn == null) {
+            return;
+        }
+        if (burn.getAmount() <= 0) {
+            throw new BlockStoreException("Anchor burn amount must be positive");
+        }
+        if (burn.getRecipient() == null || burn.getRecipient().isEmpty()) {
+            throw new BlockStoreException("Anchor burn recipient is missing");
+        }
+        if (burn.getTokenIdHex() == null || burn.getTokenIdHex().isEmpty()) {
+            throw new BlockStoreException("Anchor burn token id is missing");
+        }
+        String vaultRef = burn.getVaultRef();
+        if (vaultRef == null || !vaultRef.contains(":")) {
+            throw new BlockStoreException("Anchor burn vault reference is missing or malformed");
+        }
+        try {
+            Address.fromBase58(networkParameters, burn.getRecipient());
+        } catch (Exception e) {
+            throw new BlockStoreException("Anchor burn recipient is not a valid address");
+        }
     }
 
     /**
      * Collects all confirmed L1 block hashes up to the given height to build
-     * the SPV Merkle tree. Uses the anchor table's last confirmed root for
-     * chain continuity. For simplicity, uses the confirmed reward blocks.
+     * the SPV Merkle tree. For simplicity, uses the confirmed reward blocks.
      */
     private List<Sha256Hash> collectConfirmedBlockHashes(long upToHeight, BlockStoreInterface store) throws Exception {
         List<Sha256Hash> hashes = new ArrayList<>();
@@ -248,11 +319,38 @@ public class AnchorService {
 
         LayerAnchor anchor;
         try {
-            anchor = LayerAnchor.parse(data);
+            anchor = LayerAnchor.parseCanonical(data);
         } catch (Exception e) {
-            // Fallback to legacy JSON format
-            anchor = LayerAnchor.fromJson(new String(data, StandardCharsets.UTF_8));
+            try {
+                anchor = LayerAnchor.parse(data);
+            } catch (Exception e2) {
+                anchor = LayerAnchor.fromJson(new String(data, StandardCharsets.UTF_8));
+            }
         }
         validateAndSaveAnchor(anchor, block.getHash(), store);
+    }
+
+    /**
+     * Re-validates a remote {@link AnchorRecord} (as fetched from L0) before it
+     * is trusted and persisted by an L1 node. Rejects records whose signature,
+     * SPV proof or burn are invalid — a compromised anchor endpoint can no
+     * longer inject unauthenticated "confirmed" anchors.
+     */
+    public boolean revalidateAnchorRecord(AnchorRecord record) {
+        try {
+            LayerAnchor anchor = new LayerAnchor(record.getChainId(),
+                    record.getEventId() != null ? record.getEventId() : record.getChainId() + ":" + record.getL1Height(),
+                    record.getL1RewardHeadHash(), record.getL1Height(), record.getConfirmedRoot(),
+                    Utils.HEX.decode(record.getSignatureHex()),
+                    record.getSpvProofHex() != null ? MerkleProof.fromHex(record.getSpvProofHex()) : null,
+                    record.getBurnJson() != null && !record.getBurnJson().isEmpty()
+                            ? LayerAnchor.AnchorBurn.fromJson(record.getBurnJson()) : null);
+            validateAnchor(anchor);
+            return true;
+        } catch (Exception e) {
+            logger.warn("Rejected invalid remote anchor record for chain {} at height {}: {}",
+                    record.getChainId(), record.getL1Height(), e.getMessage());
+            return false;
+        }
     }
 }
