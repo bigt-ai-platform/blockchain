@@ -117,6 +117,31 @@ public class RandaoService {
         return randaoMixes.getOrDefault(epoch, sha256(String.valueOf(epoch).getBytes()));
     }
 
+    /**
+     * Mixes an on-chain RANDAO reveal (from a confirmed beacon's SlotData) into
+     * the epoch mix. Deterministic for every node that accepts the same beacon.
+     */
+    public void applyReveal(long slot, byte[] reveal) {
+        if (reveal == null || reveal.length == 0) {
+            return;
+        }
+        long epoch = slot / 32;
+        byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]);
+        for (int i = 0; i < 32; i++) {
+            currentMix[i] ^= reveal[i];
+        }
+        randaoMixes.put(epoch, currentMix);
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            store.savePosState("randao", "mix_" + epoch, currentMix);
+        } catch (Exception e) {
+            log.debug("Failed to persist RANDAO mix", e);
+        } finally {
+            try { if (store != null) store.close(); } catch (Exception e) {}
+        }
+    }
+
     private void persistCommitment(String key, byte[] hash) {
         BlockStoreInterface store = null;
         try {

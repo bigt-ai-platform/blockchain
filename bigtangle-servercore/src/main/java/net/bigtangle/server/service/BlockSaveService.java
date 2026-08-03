@@ -74,6 +74,8 @@ public class BlockSaveService {
 	// blockSaveService -> stakeService -> blockSaveService.
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<StakeService> stakeServiceProvider;
+	@Autowired
+	protected RandaoService randaoService;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
@@ -127,7 +129,7 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
-	/** Applies chain-derived state (validator deposits, slashing, ...) when a block is saved. */
+	/** Applies chain-derived state (validator deposits, slashing, RANDAO, ...) when a block is saved. */
 	private void notifyChainDerived(Block block, BlockStoreInterface store) throws Exception {
 		StakeService stakeService = stakeServiceProvider.getIfAvailable();
 		if (stakeService == null) {
@@ -137,6 +139,24 @@ public class BlockSaveService {
 			stakeService.applyStakeBlock(block, store);
 		} else if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_SLASHING) {
 			stakeService.applySlashingBlock(block, store);
+		} else if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_BEACON
+				&& block.getTransactions() != null) {
+			// Commit the RANDAO reveal carried in the beacon's SlotData.
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					try {
+						net.bigtangle.core.SlotData sd = jsonmapper.readValue(tx.getData(),
+								net.bigtangle.core.SlotData.class);
+						if (sd != null) {
+							randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal());
+						}
+					} catch (Exception e) {
+						logger.debug("Ignoring malformed SlotData in beacon {}: {}",
+								block.getHashAsString(), e.getMessage());
+					}
+					break;
+				}
+			}
 		}
 	}
 

@@ -153,7 +153,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					utxoCache.put(cacheKey, prevOut);
 					String bondKey = in.getOutpoint().getBlockHash().toString()
 							+ ":" + in.getOutpoint().getTxHash().toString();
-					if (checkedBondedOutputs.add(bondKey)) {
+					if (in.getOutpoint().getIndex() == 0 && checkedBondedOutputs.add(bondKey)) {
 						try {
 							net.bigtangle.core.StakeRecord bonded = store.getStakeDepositByOutput(
 									in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash());
@@ -198,6 +198,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					|| block.getBlockType().equals(BlockType.BLOCKTYPE_SLASHING)) {
 				checkFee = true;
 			}
+			// Reward minting is ONLY valid in the first beacon of an epoch
+			// (slot-in-epoch 0), so an arbitrary node cannot mint in any beacon.
+			boolean beaconAtEpochStart = isBeaconAtEpochStart(block);
 			for (final Transaction tx : block.getTransactions()) {
 				boolean isCoinBase = tx.isCoinBase();
 				Map<String, Coin> valueIn = new HashMap<String, Coin>();
@@ -247,8 +250,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				// Epoch-reward transactions in BEACON blocks are a protocol mint:
 				// zero inputs, freshly created outputs (validated by
 				// checkFullRewardSolidity). They are exempt from the
-				// input/output-conservation and script checks.
-				boolean mintTx = block.getBlockType() == BlockType.BLOCKTYPE_BEACON
+				// input/output-conservation and script checks ONLY in the first
+				// beacon of an epoch; anywhere else a zero-input value tx is
+				// rejected exactly like any other.
+				boolean mintTx = beaconAtEpochStart
 						&& !isCoinBase && tx.getInputs().isEmpty();
 				if (isCoinBase) {
 					// coinbaseValue = valueOut;
@@ -492,6 +497,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					|| !java.util.Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())) {
 				throw new BlockStoreException("SLASHING proof must contain two attestations from the same validator");
 			}
+			// Both attestations must be AUTHENTICATED, otherwise anyone could
+			// forge two unsigned attestations with a victim's pubkey and slash
+			// the victim on every node.
+			if (!att1.verifySignature() || !att2.verifySignature()) {
+				throw new BlockStoreException("SLASHING proof attestations are not authenticated");
+			}
 			boolean doubleVote = att1.getSlot() == att2.getSlot()
 					&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
 			boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
@@ -511,6 +522,30 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 		return SolidityState.getSuccessState();
+	}
+
+	/**
+	 * True when the beacon is the FIRST beacon of its epoch (slot % slotsPerEpoch
+	 * == 0, from the committed SlotData). Reward minting is only permitted here.
+	 */
+	private boolean isBeaconAtEpochStart(Block block) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null) {
+			return false;
+		}
+		try {
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					net.bigtangle.core.SlotData sd = Json.jsonmapper().readValue(tx.getData(),
+							net.bigtangle.core.SlotData.class);
+					if (sd != null) {
+						return sd.getSlot() % 32 == 0;
+					}
+				}
+			}
+		} catch (Exception e) {
+			return false;
+		}
+		return false;
 	}
 
 	/**
@@ -963,6 +998,39 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					throw new IncorrectTransactionCountException();
 				return SolidityState.getFailState();
 			}
+		}
+
+		// Every reward output must pay a KNOWN depositor's address (past or
+		// present), so a malicious proposer cannot mint to arbitrary addresses.
+		// Using the full deposit set avoids false rejection when validators join
+		// or leave between reward computation and validation.
+		try {
+			java.util.Set<String> depositorAddresses = new java.util.HashSet<>();
+			for (net.bigtangle.core.StakeRecord v : store.getAllStakeDeposits()) {
+				depositorAddresses.add(net.bigtangle.core.Address
+						.fromHash160(networkParameters, Utils.sha256hash160(v.getPubkey())).toBase58());
+			}
+			for (int i = 1; i < transactions.size(); i++) {
+				for (TransactionOutput out : transactions.get(i).getOutputs()) {
+					String toAddr = null;
+					try {
+						toAddr = out.getScriptPubKey().getToAddress(networkParameters).toBase58();
+					} catch (Exception e) {
+						if (throwExceptions)
+							throw new InvalidTransactionException(
+									"Epoch reward output is not payable to a standard address");
+						return SolidityState.getFailState();
+					}
+					if (!depositorAddresses.contains(toAddr)) {
+						if (throwExceptions)
+							throw new InvalidTransactionException(
+									"Epoch reward output is not payable to a known validator");
+						return SolidityState.getFailState();
+					}
+				}
+			}
+		} catch (BlockStoreException e) {
+			// stake table unreadable — do not reject a valid beacon
 		}
 
 		// Check that the tx has correct data

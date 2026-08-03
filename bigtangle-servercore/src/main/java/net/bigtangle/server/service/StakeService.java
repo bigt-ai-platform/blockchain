@@ -280,8 +280,9 @@ public class StakeService {
         AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
         AttestationData att2 = Json.jsonmapper().convertValue(data.get("attestation2"), AttestationData.class);
         if (att1 == null || att2 == null
-                || !Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())) {
-            return;
+                || !Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())
+                || !att1.verifySignature() || !att2.verifySignature()) {
+            return; // forged / unauthenticated slashing proof — ignore
         }
         boolean doubleVote = att1.getSlot() == att2.getSlot()
                 && !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
@@ -338,6 +339,21 @@ public class StakeService {
         AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
         if (att1 == null || att1.getValidatorPubkey() == null) {
             return;
+        }
+        // Restore the confiscated bond so a reorged-out slash does not leave
+        // the validator permanently penalised.
+        StakeRecord stake = store.getStakeDeposit(att1.getValidatorPubkey());
+        if (stake != null && stake.getBlockHash() != null) {
+            Sha256Hash txHash = stake.getTxHash();
+            if (txHash == null) {
+                Block stakeBlock = store.get(stake.getBlockHash());
+                if (stakeBlock != null && !stakeBlock.getTransactions().isEmpty()) {
+                    txHash = stakeBlock.getTransactions().get(0).getHash();
+                }
+            }
+            if (txHash != null) {
+                store.updateTransactionOutputSpent(stake.getBlockHash(), txHash, 0, false, null);
+            }
         }
         store.updateStakeSlashing(att1.getValidatorPubkey(), -1L);
         log.info("Reorg: un-slashed validator for pubkey={} (block {})",
@@ -402,9 +418,10 @@ public class StakeService {
     public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {
         List<StakeRecord> allDeposits = store.getAllStakeDeposits();
         for (StakeRecord stake : allDeposits) {
-            if (stake.getWithdrawableEpoch() >= 0 && stake.getWithdrawableEpoch() <= currentEpoch
-                    && (stake.isSlashed() || stake.getActivatedEpoch() >= 0)) {
-                store.releaseStakeDeposit(stake.getPubkey());
+            if (stake.getWithdrawableEpoch() >= 0 && stake.getWithdrawableEpoch() <= currentEpoch) {
+                // The bonded output is freed: deleting the record makes it
+                // spendable again (the bond spend check no longer sees it).
+                store.deleteStakeDeposit(stake.getPubkey());
                 log.info("Stake withdrawal processed: pubkey={}, amount={}",
                         Utils.HEX.encode(stake.getPubkey()), stake.getAmount());
             }

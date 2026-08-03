@@ -599,6 +599,9 @@ public interface BlockStoreInterface {
 
 	void releaseStakeDeposit(byte[] pubkey) throws BlockStoreException;
 
+	/** Removes the stake record entirely (withdrawal): the bonded output becomes spendable. */
+	void deleteStakeDeposit(byte[] pubkey) throws BlockStoreException;
+
 	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException;
 
 	List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException;

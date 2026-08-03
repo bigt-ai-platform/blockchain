@@ -276,15 +276,7 @@ public class CasperService {
 
     /** Verifies the attestation signature against the declared validator pubkey. */
     public boolean verifyAttestation(AttestationData att) {
-        if (att.getSignature() == null || att.getSignature().length == 0 || att.getValidatorPubkey() == null) {
-            return false;
-        }
-        try {
-            PQKey signer = PQKey.fromPublicOnly(att.getValidatorPubkey());
-            return PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), att.getSignature(), att.getMessageHash());
-        } catch (Exception e) {
-            return false;
-        }
+        return att != null && att.verifySignature();
     }
 
     public void finalizeCheckpoint(long epoch, BlockStoreInterface store) throws Exception {
@@ -316,7 +308,12 @@ public class CasperService {
                     epoch, target.blockHash, votedStake, totalStake);
             persistCheckpoint(target, store);
 
-            if (source.finalized) {
+            // Casper FFG finalizes only across a ONE-epoch link: target is
+            // finalized when it is justified AND its parent (source+1) is
+            // finalized. Requiring source.epoch == target.epoch - 1 prevents
+            // two conflicting checkpoints in different epochs from both being
+            // finalized against a permanently-final genesis.
+            if (source.finalized && target.epoch == source.epoch + 1) {
                 target.finalized = true;
                 log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
                 persistCheckpoint(target, store);

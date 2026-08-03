@@ -27,6 +27,7 @@ import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.store.BlockStoreInterface;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.bigtangle.utils.Json;
 
 @Service
 public class SlotService {
@@ -219,6 +220,13 @@ public class SlotService {
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
+
+        // Commit the slot data (incl. the RANDAO reveal) on-chain so validators
+        // can scope minting to epoch-start beacons and mix the reveal.
+        Transaction slotTx = new Transaction(networkParameters);
+        slotTx.setDataClassName("SlotData");
+        slotTx.setData(Json.jsonmapper().writeValueAsBytes(slotData));
+        beaconBlock.addTransaction(slotTx);
 
         blockSaveService.saveBlock(beaconBlock, store);
 

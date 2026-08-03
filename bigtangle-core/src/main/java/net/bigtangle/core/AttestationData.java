@@ -49,6 +49,25 @@ public class AttestationData {
 
     public long getSlot() { return slot; }
     public void setSlot(long s) { this.slot = s; }
+
+    /**
+     * Verifies this attestation's signature against its declared validator
+     * pubkey, over the canonical message hash. Used by attestation processing
+     * AND by slashing-proof validation, so forged/unsigned attestations can
+     * never slash a validator.
+     */
+    public boolean verifySignature() {
+        if (signature == null || signature.length == 0 || validatorPubkey == null) {
+            return false;
+        }
+        try {
+            PQKey signer = PQKey.fromPublicOnly(validatorPubkey);
+            return net.bigtangle.crypto.pq.PQScriptUtils.verifyPQ(
+                    signer.getPublicKeyBytes(), signature, getMessageHash());
+        } catch (Exception e) {
+            return false;
+        }
+    }
     public long getEpoch() { return epoch; }
     public void setEpoch(long e) { this.epoch = e; }
     public long getSourceEpoch() { return sourceEpoch; }

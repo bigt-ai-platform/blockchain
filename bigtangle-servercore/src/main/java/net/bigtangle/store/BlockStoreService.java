@@ -573,10 +573,15 @@ public class BlockStoreService {
 			if (stakeService != null) {
 				for (BlockWrap b : blocksToUnconfirm) {
 					Block blk = b.getBlock();
-					if (blk.getBlockType() == BlockType.BLOCKTYPE_STAKE) {
-						stakeService.revertStakeBlock(blk, blockStore);
-					} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
-						stakeService.revertSlashingBlock(blk, blockStore);
+					try {
+						if (blk.getBlockType() == BlockType.BLOCKTYPE_STAKE) {
+							stakeService.revertStakeBlock(blk, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+							stakeService.revertSlashingBlock(blk, blockStore);
+						}
+					} catch (Exception e) {
+						log.warn("Failed to revert chain-derived state for block {}: {}",
+								blk.getHashAsString(), e.getMessage());
 					}
 				}
 			}
