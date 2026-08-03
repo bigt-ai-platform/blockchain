@@ -56,6 +56,14 @@ case "${1:-}" in
     infra|--infra|infra-only) INFRA_ONLY=true ;;
 esac
 
+# Skip the maven build. Default: skip in infra-only mode (assumes binaries are
+# already built), build for test runs. Force with SKIP_BUILD=0/1.
+if [ -n "${SKIP_BUILD:-}" ]; then
+    if [ "$SKIP_BUILD" = "1" ]; then SKIP_BUILD_BOOL=true; else SKIP_BUILD_BOOL=false; fi
+else
+    SKIP_BUILD_BOOL="$INFRA_ONLY"
+fi
+
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
@@ -106,10 +114,14 @@ echo "Database '$L1_DB_NAME' ready"
 
 # --- Step 3: Build modules ---
 echo ""
-echo "=== Step 3: Build modules ==="
-# Clean install so spring-boot:run picks up fresh JARs
-mvn clean install -DskipTests -q \
-    -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge,layer0-server,layer0-mcmc,l1-order-server -am
+if [ "$SKIP_BUILD_BOOL" = "true" ]; then
+    echo "=== Step 3: Build modules (SKIPPED) ==="
+else
+    echo "=== Step 3: Build modules ==="
+    # Clean install so spring-boot:run picks up fresh JARs
+    mvn clean install -DskipTests -q \
+        -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge,layer0-server,layer0-mcmc,l1-order-server -am
+fi
 
 # --- Step 4: Start L0 HTTP server ---
 echo ""
