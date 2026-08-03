@@ -94,11 +94,31 @@ public class SlotService {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
         if (validators.isEmpty()) return -1;
 
-        byte[] mix = randaoService.getRandaoMix(slot);
-        long seed = (mix[0] & 0xFF) | ((mix[1] & 0xFF) << 8) | ((mix[2] & 0xFF) << 16) | ((long)(mix[3] & 0xFF) << 24);
-        seed = seed ^ slot;
+        BigInteger totalStake = BigInteger.ZERO;
+        for (StakeRecord v : validators) {
+            totalStake = totalStake.add(v.getAmount());
+        }
+        if (totalStake.signum() <= 0) return -1;
 
-        return (seed & Long.MAX_VALUE) % validators.size();
+        // Full 32-byte RANDAO mix mixed with the slot, as a big-endian integer.
+        byte[] mix = randaoService.getRandaoMix(slot);
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(mix.length + 8);
+        buf.put(mix);
+        buf.putLong(slot);
+        byte[] seedBytes = Sha256Hash.of(buf.array()).getBytes();
+        BigInteger seed = new BigInteger(1, seedBytes);
+
+        // Weighted selection: the proposer is chosen with probability
+        // proportional to stake, not uniformly per validator.
+        BigInteger pick = seed.mod(totalStake);
+        BigInteger acc = BigInteger.ZERO;
+        for (int i = 0; i < validators.size(); i++) {
+            acc = acc.add(validators.get(i).getAmount());
+            if (pick.compareTo(acc) < 0) {
+                return i;
+            }
+        }
+        return validators.size() - 1;
     }
 
     public Block proposeBeaconBlock(long slot, BlockStoreInterface store) throws Exception {

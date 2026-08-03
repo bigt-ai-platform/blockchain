@@ -224,15 +224,21 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				}
 				if (!checkTxOutputSigns(valueOut))
 					throw new InvalidTransactionException("Transaction output value negative");
+				// Epoch-reward transactions in BEACON blocks are a protocol mint:
+				// zero inputs, freshly created outputs (validated by
+				// checkFullRewardSolidity). They are exempt from the
+				// input/output-conservation and script checks.
+				boolean mintTx = block.getBlockType() == BlockType.BLOCKTYPE_BEACON
+						&& !isCoinBase && tx.getInputs().isEmpty();
 				if (isCoinBase) {
 					// coinbaseValue = valueOut;
-				} else {
+				} else if (!mintTx) {
 					if (checkTxInputOutput(valueIn, valueOut, block)) {
 						checkFee = true;
 					}
 				}
 
-				if (!isCoinBase) {
+				if (!isCoinBase && !mintTx) {
 					FutureTask<VerificationException> future = new FutureTask<VerificationException>(
 							new Verifier(tx, prevOutScripts, verifyFlags));
 					scriptVerificationExecutor.execute(future);
@@ -856,6 +862,32 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 		// Check that the tx has correct data
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
+
+		// Lenient mint bound: when the fee pool is still present, the total
+		// epoch reward must not exceed it (otherwise reject as over-minting).
+		// When the pool has already been consumed the check is skipped, so a
+		// valid beacon is never falsely rejected for pool-lifecycle timing.
+		try {
+			byte[] poolBytes = store.getPosState("fee", networkParameters.getChainId());
+			if (poolBytes != null) {
+				java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
+				java.math.BigInteger rewardTotal = java.math.BigInteger.ZERO;
+				for (int i = 1; i < transactions.size(); i++) {
+					for (TransactionOutput out : transactions.get(i).getOutputs()) {
+						if (out.getValue().isBIG()) {
+							rewardTotal = rewardTotal.add(out.getValue().getValue());
+						}
+					}
+				}
+				if (rewardTotal.compareTo(pool) > 0) {
+					if (throwExceptions)
+						throw new InvalidTransactionException("Epoch reward exceeds the fee pool");
+					return SolidityState.getFailState();
+				}
+			}
+		} catch (BlockStoreException e) {
+			// pool unreadable — do not reject a valid beacon
+		}
 
 		// NotNull checks
 		if (rewardInfo.getPrevRewardHash() == null) {

@@ -134,8 +134,8 @@ public class ValidatorDutyService {
             att.setSourceEpoch(sourceEpoch);
             att.setTargetEpoch(epoch);
             att.setBeaconBlockHash(beaconHead);
-            att.setSourceCheckpoint(justified != null ? justified.blockHash : Sha256Hash.ZERO_HASH);
-            att.setTargetCheckpoint(casperService.ensureCheckpoint(epoch, beaconHead).blockHash);
+            att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
+            att.setTargetCheckpoint(casperService.ensureCheckpoint(epoch, store).getBlockHash());
             att.setValidatorPubkey(validatorKey.getPubKey());
 
             // Signature covers the FULL attestation message (slot, epoch,

@@ -17,8 +17,11 @@ import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
+import net.bigtangle.core.TXReward;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.PQScriptUtils;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.store.BlockStoreInterface;
 
 /**
@@ -85,6 +88,12 @@ public class CasperService {
     @Autowired
     private StoreService storeService;
 
+    @Autowired
+    private CacheBlockService cacheBlockService;
+
+    @Autowired
+    private NetworkParameters networkParameters;
+
     @PostConstruct
     public void restoreState() {
         try {
@@ -112,6 +121,16 @@ public class CasperService {
                         checkpoints.put(epoch, cp);
                     }
                 }
+                // Bootstrap finality: the genesis checkpoint is the root of
+                // trust (justified + finalized) and must survive restarts.
+                if (checkpoints.isEmpty()) {
+                    Checkpoint genesis = new Checkpoint(
+                            UtilGeneseBlock.createGenesis(networkParameters).getHash(), 0);
+                    genesis.justified = true;
+                    genesis.finalized = true;
+                    checkpoints.put(0L, genesis);
+                    persistCheckpoint(genesis, store);
+                }
             } finally {
                 store.close();
             }
@@ -125,6 +144,32 @@ public class CasperService {
         return checkpoints.computeIfAbsent(epoch, e -> {
             Checkpoint cp = new Checkpoint(blockHash, e);
             // The genesis checkpoint is the root of trust: justified + finalized.
+            if (e == 0) {
+                cp.justified = true;
+                cp.finalized = true;
+            }
+            persistCheckpoint(cp, null);
+            return cp;
+        });
+    }
+
+    /**
+     * Chain-derived checkpoint creation: the checkpoint hash for an epoch is the
+     * node's CONFIRMED reward head (deterministic for nodes that have confirmed
+     * the same chain). Both proposers and attesters derive it the same way, so
+     * their votes target the same hash instead of racing on local first-writer
+     * values.
+     */
+    public Checkpoint ensureCheckpoint(long epoch, BlockStoreInterface store) {
+        return checkpoints.computeIfAbsent(epoch, e -> {
+            Sha256Hash head = null;
+            try {
+                TXReward r = cacheBlockService.getMaxConfirmedReward(store);
+                head = r != null ? r.getBlockHash() : UtilGeneseBlock.createGenesis(networkParameters).getHash();
+            } catch (Exception ex) {
+                head = UtilGeneseBlock.createGenesis(networkParameters).getHash();
+            }
+            Checkpoint cp = new Checkpoint(head, e);
             if (e == 0) {
                 cp.justified = true;
                 cp.finalized = true;
@@ -158,7 +203,7 @@ public class CasperService {
     public void processSlot(long slot, Sha256Hash beaconHash,
             List<AttestationData> attestations, BlockStoreInterface store) throws Exception {
         if (beaconHash != null) {
-            ensureCheckpoint(slot / 32, beaconHash);
+            ensureCheckpoint(slot / 32, store);
         }
         for (AttestationData att : attestations) {
             processVote(att, store);
@@ -174,6 +219,14 @@ public class CasperService {
         // Authenticate the attestation before it influences any state.
         if (!verifyAttestation(att)) {
             log.warn("Rejecting unauthenticated attestation from pubkey={} slot={}", vkey, att.getSlot());
+            return;
+        }
+
+        // Only active validators can attest; unknown/slashed pubkeys are
+        // rejected BEFORE touching any vote/slashing/gossip state, so the
+        // endpoint cannot cause unbounded memory or DB growth.
+        if (stakeService.getEffectiveStake(att.getValidatorPubkey(), store) <= 0) {
+            log.warn("Rejecting attestation from non-validator pubkey={} slot={}", vkey, att.getSlot());
             return;
         }
 
@@ -235,8 +288,11 @@ public class CasperService {
             return;
         }
 
-        Checkpoint source = checkpoints.get(epoch - 1);
-        if (source == null || !source.justified) {
+        // The source is the highest justified checkpoint (genesis at first).
+        // Generalizing the source avoids requiring checkpoint(epoch-1) to exist,
+        // which would otherwise stall finality on a freshly bootstrapped chain.
+        Checkpoint source = getJustifiedCheckpoint();
+        if (source == null || source.epoch >= target.epoch) {
             return;
         }
 
