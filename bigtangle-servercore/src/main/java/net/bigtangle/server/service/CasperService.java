@@ -37,6 +37,7 @@ public class CasperService {
 
     private final ConcurrentHashMap<Long, Checkpoint> checkpoints = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> latestVotes = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Sha256Hash> latestVoteBeacons = new ConcurrentHashMap<>();
 
     @Autowired
     private GhostService ghostService;
@@ -91,16 +92,26 @@ public class CasperService {
     public void processVote(AttestationData att, BlockStoreInterface store) throws Exception {
         String vkey = Utils.HEX.encode(att.getValidatorPubkey());
         Long lastSlot = latestVotes.get(vkey);
+        Sha256Hash lastBeacon = latestVoteBeacons.get(vkey);
 
         boolean isDoubleVote = slashingService.checkDoubleVote(att);
         slashingService.checkSurroundVote(att);
 
-        if (isDoubleVote || (lastSlot != null && lastSlot >= att.getSlot())) {
+        // A gossip-relayed duplicate of the IDENTICAL attestation (same slot and
+        // same beacon head) is not a double-vote — only a conflicting vote for
+        // the same slot is slashable. Without this, a node that both receives
+        // the direct submitAttestation and a gossip relay of the same vote would
+        // slash its own validator.
+        boolean duplicateRelay = lastSlot != null && lastSlot == att.getSlot()
+                && att.getBeaconBlockHash().equals(lastBeacon);
+
+        if (isDoubleVote || (!duplicateRelay && lastSlot != null && lastSlot >= att.getSlot())) {
             log.warn("Slashing: double vote by pubkey={} slot={}", vkey, att.getSlot());
             slashingService.processSlashing(att.getValidatorPubkey(), store);
             return;
         }
         latestVotes.put(vkey, att.getSlot());
+        latestVoteBeacons.put(vkey, att.getBeaconBlockHash());
         ghostService.processAttestation(att, store);
         store.saveAttestationVote(att.getBeaconBlockHash(), att.getValidatorPubkey(),
                 stakeService.getEffectiveStake(att.getValidatorPubkey(), store));

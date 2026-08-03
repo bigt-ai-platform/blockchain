@@ -306,29 +306,24 @@ public class MCMCService {
 		BlockWrap currentBlock;
 		List<Rating> ratings = new ArrayList<>();
 		while ((currentBlock = blockQueue.poll()) != null) {
-			// Abort if unmaintained
 			if (currentBlock.getBlockEvaluation().getHeight() <= cutoffHeight)
 				continue;
+			HashSet<UUID> currentApprovers = approvers.get(currentBlock.getBlockHash());
+			if (currentApprovers == null) continue;
 
-			// Add your own hashes as reference if current block is one of the
-			// selected tips
-			if (selectedTipApprovers.containsKey(currentBlock.getBlockHash()))
-				approvers.get(currentBlock.getBlockHash())
-						.addAll(selectedTipApprovers.get(currentBlock.getBlockHash()));
+			if (selectedTipApprovers.containsKey(currentBlock.getBlockHash())) {
+				HashSet<UUID> tipApprovers = selectedTipApprovers.get(currentBlock.getBlockHash());
+				if (tipApprovers != null) currentApprovers.addAll(tipApprovers);
+			}
 
-			// Add all current references to both approved blocks (initialize if
-			// not yet initialized)
 			Sha256Hash prevTrunk = currentBlock.getBlock().getPrevBlockHash();
 			subUpdateRating(blockQueue, approvers, currentBlock, prevTrunk, store);
 
 			Sha256Hash prevBranch = currentBlock.getBlock().getPrevBranchBlockHash();
 			subUpdateRating(blockQueue, approvers, currentBlock, prevBranch, store);
 
-			// Update your rating if solid
-			if (currentBlock.getBlockEvaluation().getSolid() == 2)
-			// && currentBlock.getBlockEvaluation().getChainlength() < 0 )
-			{
-				ratings.add(new Rating(currentBlock.getBlockHash(), approvers.get(currentBlock.getBlockHash()).size()));
+			if (currentBlock.getBlockEvaluation().getSolid() == 2) {
+				ratings.add(new Rating(currentBlock.getBlockHash(), currentApprovers.size()));
 			}
 			approvers.remove(currentBlock.getBlockHash());
 		}
@@ -338,15 +333,17 @@ public class MCMCService {
 
 	private void subUpdateRating(PriorityQueue<BlockWrap> blockQueue, HashMap<Sha256Hash, HashSet<UUID>> approvers,
 			BlockWrap currentBlock, Sha256Hash prevTrunk, BlockStoreInterface store) throws BlockStoreException {
+		HashSet<UUID> currentApprovers = approvers.get(currentBlock.getBlockHash());
+		if (currentApprovers == null) return;
 		if (!approvers.containsKey(prevTrunk)) {
 			BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
 					jsonmapper).getBlockWrap(prevTrunk, store);
 			if (prevBlock != null) {
 				blockQueue.add(prevBlock);
-				approvers.put(prevBlock.getBlockHash(), new HashSet<>(approvers.get(currentBlock.getBlockHash())));
+				approvers.put(prevBlock.getBlockHash(), new HashSet<>(currentApprovers));
 			}
 		} else {
-			approvers.get(prevTrunk).addAll(approvers.get(currentBlock.getBlockHash()));
+			approvers.get(prevTrunk).addAll(currentApprovers);
 		}
 	}
 

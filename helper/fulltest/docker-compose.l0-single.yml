@@ -21,7 +21,7 @@ services:
       retries: 10
 
   l0-server:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-svr
     networks: [l0-test-net]
     ports:
@@ -47,7 +47,7 @@ services:
       postgres: { condition: service_healthy }
 
   l0-mcmc:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-mcmc
     networks: [l0-test-net]
     ports:

@@ -7,22 +7,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import net.bigtangle.core.Address;
-import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.Transaction;
-import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
-import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
 import net.bigtangle.response.GetBalancesResponse;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
-import net.bigtangle.wallet.FreeStandingTransactionOutput;
-import net.bigtangle.wallet.Wallet;
 
 public class ProdSimBootstrap {
 
@@ -37,14 +30,10 @@ public class ProdSimBootstrap {
     private static final BigInteger FUND_PER_VALIDATOR = STAKE_AMOUNT.multiply(BigInteger.valueOf(5));
 
     public static void main(String[] args) throws Exception {
-        String serverUrl = System.getProperty("server.url", "http://localhost:8081/");
         NetworkParameters params = TestParams.get();
 
         byte[] mlDsaSeed = new byte[32];
         Arrays.fill(mlDsaSeed, (byte) 0x01);
-        PQKey genesisKey = PQKey.fromMLDSA(mlDsaSeed);
-
-        Wallet wallet = Wallet.fromKeys(params, genesisKey, serverUrl);
 
         List<PQKey> validatorKeys = new ArrayList<>();
         for (String hex : VALIDATOR_KEY_HEX) {
@@ -54,130 +43,116 @@ public class ProdSimBootstrap {
                     Arrays.copyOfRange(seed, 32, 64)));
         }
 
-        // Fund all validators in a single transaction so no output depends on a
-        // chained change UTXO that may not be confirmed yet.
-        fundValidators(wallet, params, validatorKeys, FUND_PER_VALIDATOR);
-        System.out.println("All validators funded in one tx. Staking...");
+        // Each of the 4 prodsim nodes has its OWN database and its OWN MCMC
+        // node, so every node must have the validators staked+activated on its
+        // own chain — otherwise only node 0 would produce beacons and the other
+        // nodes would never progress or sync the validator set.
+        int basePort = 8081 + Integer.getInteger("prodsim.portOffset", 20000);
+        for (int node = 0; node < 4; node++) {
+            String nodeUrl = "http://localhost:" + (basePort + node) + "/";
+            System.out.println("=== Bootstrapping node " + nodeUrl + " ===");
 
-        for (int i = 0; i < validatorKeys.size(); i++) {
-            PQKey validatorKey = validatorKeys.get(i);
-            String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
+            // Fund all validators via fundAddresses, which directly inserts
+            // CONFIRMED UTXOs. A normal submitTransaction can never confirm here
+            // because there is no active validator yet to produce beacons — the
+            // PoS chicken-and-egg where staking needs a confirmed balance and
+            // producing beacons needs a staked validator.
+            fundValidators(nodeUrl, params, validatorKeys, FUND_PER_VALIDATOR);
+            System.out.println("All validators funded on " + nodeUrl + ". Staking...");
 
-            // Wait until the funding UTXO is confirmed and spendable
-            // (getOpenOutputs only sees confirmed UTXOs), then stake with retries.
-            long balance = waitForBalance(serverUrl, validatorKey.getPubKey(), STAKE_AMOUNT.longValue());
-            System.out.println("  Validator " + i + " confirmed balance=" + balance);
+            for (int i = 0; i < validatorKeys.size(); i++) {
+                PQKey validatorKey = validatorKeys.get(i);
+                String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
 
-            HashMap<String, Object> stakeReq = new HashMap<>();
-            stakeReq.put("pubkey", pubkeyHex);
-            stakeReq.put("amount", STAKE_AMOUNT.toString());
-            // The STAKE block is signed on the server, so the private key must
-            // be sent (see DispatcherController.stakeDeposit).
-            stakeReq.put("privateKey", VALIDATOR_KEY_HEX[i]);
-            boolean staked = false;
-            for (int attempt = 0; attempt < 3 && !staked; attempt++) {
-                try {
-                    OkHttp3Util.postString(serverUrl + ReqCmd.stakeDeposit.name(),
-                            Json.jsonmapper().writeValueAsString(stakeReq));
-                    System.out.println("  Staked validator " + i);
-                    staked = true;
-                } catch (Exception e) {
-                    System.out.println("  stakeDeposit attempt " + attempt + " failed: " + e.getMessage());
-                    Thread.sleep(3000);
+                long balance = waitForBalance(nodeUrl, validatorKey.getPubKey(), STAKE_AMOUNT.longValue());
+                System.out.println("  Validator " + i + " confirmed balance=" + balance);
+
+                HashMap<String, Object> stakeReq = new HashMap<>();
+                stakeReq.put("pubkey", pubkeyHex);
+                stakeReq.put("amount", STAKE_AMOUNT.toString());
+                // The STAKE block is signed on the server, so the private key must
+                // be sent (see DispatcherController.stakeDeposit).
+                stakeReq.put("privateKey", VALIDATOR_KEY_HEX[i]);
+                boolean staked = false;
+                for (int attempt = 0; attempt < 3 && !staked; attempt++) {
+                    try {
+                        OkHttp3Util.postString(nodeUrl + ReqCmd.stakeDeposit.name(),
+                                Json.jsonmapper().writeValueAsString(stakeReq));
+                        System.out.println("  Staked validator " + i);
+                        staked = true;
+                    } catch (Exception e) {
+                        System.out.println("  stakeDeposit attempt " + attempt + " failed: " + e.getMessage());
+                        Thread.sleep(3000);
+                    }
                 }
+                Thread.sleep(1000);
             }
-            Thread.sleep(1000);
-        }
 
-        Thread.sleep(12000);
+            Thread.sleep(12000);
 
-        for (int i = 0; i < validatorKeys.size(); i++) {
-            PQKey validatorKey = validatorKeys.get(i);
-            String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
+            for (int i = 0; i < validatorKeys.size(); i++) {
+                PQKey validatorKey = validatorKeys.get(i);
+                String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
 
-            HashMap<String, Object> activateReq = new HashMap<>();
-            activateReq.put("pubkey", pubkeyHex);
-            activateReq.put("epoch", 0L);
-            boolean activated = false;
-            for (int attempt = 0; attempt < 3 && !activated; attempt++) {
-                try {
-                    OkHttp3Util.postString(serverUrl + ReqCmd.activateValidator.name(),
-                            Json.jsonmapper().writeValueAsString(activateReq));
-                    System.out.println("  Activated validator " + i);
-                    activated = true;
-                } catch (Exception e) {
-                    System.out.println("  activateValidator attempt " + attempt + " failed: " + e.getMessage());
-                    Thread.sleep(3000);
+                HashMap<String, Object> activateReq = new HashMap<>();
+                activateReq.put("pubkey", pubkeyHex);
+                activateReq.put("epoch", 0L);
+                boolean activated = false;
+                for (int attempt = 0; attempt < 3 && !activated; attempt++) {
+                    try {
+                        OkHttp3Util.postString(nodeUrl + ReqCmd.activateValidator.name(),
+                                Json.jsonmapper().writeValueAsString(activateReq));
+                        System.out.println("  Activated validator " + i);
+                        activated = true;
+                    } catch (Exception e) {
+                        System.out.println("  activateValidator attempt " + attempt + " failed: " + e.getMessage());
+                        Thread.sleep(3000);
+                    }
                 }
+                Thread.sleep(500);
             }
-            Thread.sleep(500);
-        }
 
-        Thread.sleep(3000);
-        byte[] resp = OkHttp3Util.postString(serverUrl + ReqCmd.getValidators.name(), "{}");
-        Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
-        Object validatorsObj = result.get("validators");
-        if (validatorsObj == null && result.get("text") instanceof String) {
-            result = Json.jsonmapper().readValue((String) result.get("text"), HashMap.class);
-            validatorsObj = result.get("validators");
-        }
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> validators = (List<Map<String, Object>>) validatorsObj;
-        System.out.println("Active validators: " + (validators != null ? validators.size() : 0));
-        if (validators != null) {
-            for (Map<String, Object> v : validators) {
-                System.out.println("  Validator pubkey: " + v.get("pubkey"));
+            Thread.sleep(3000);
+            byte[] resp = OkHttp3Util.postString(nodeUrl + ReqCmd.getValidators.name(), "{}");
+            Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
+            Object validatorsObj = result.get("validators");
+            if (validatorsObj == null && result.get("text") instanceof String) {
+                result = Json.jsonmapper().readValue((String) result.get("text"), HashMap.class);
+                validatorsObj = result.get("validators");
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> validators = (List<Map<String, Object>>) validatorsObj;
+            System.out.println("Active validators on " + nodeUrl + ": "
+                    + (validators != null ? validators.size() : 0));
+            if (validators == null || validators.size() < VALIDATOR_KEY_HEX.length) {
+                System.out.println("WARNING: Expected " + VALIDATOR_KEY_HEX.length + " validators on " + nodeUrl);
             }
         }
-        if (validators != null && validators.size() >= VALIDATOR_KEY_HEX.length) {
-            System.out.println("Bootstrap complete. All validators active.");
-        } else {
-            System.out.println("WARNING: Expected " + VALIDATOR_KEY_HEX.length + " validators.");
-        }
+        System.out.println("Bootstrap complete. All validators active on all nodes.");
     }
 
     /**
-     * Fund every validator from the wallet's confirmed BIG UTXOs in a single
-     * transaction (one output per validator plus change back to the wallet).
-     * Funding in separate chained transactions is fragile because each change
-     * output must be confirmed before the next funding can spend it.
+     * Fund every validator via the fundAddresses endpoint. This directly inserts
+     * confirmed BIG UTXOs for the validator pubkeys on the node, so staking does
+     * not depend on a beacon confirming the funding (which cannot happen until a
+     * validator is already active).
      */
-    private static void fundValidators(Wallet wallet, NetworkParameters params,
+    private static void fundValidators(String serverUrl, NetworkParameters params,
             List<PQKey> beneficiaries, BigInteger amountPer) throws Exception {
-        List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
-        List<FreeStandingTransactionOutput> bigUtxos = new ArrayList<>();
-        for (FreeStandingTransactionOutput co : candidates) {
-            if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, co.getUTXO().getTokenidBuf())) {
-                bigUtxos.add(co);
-            }
+        for (int i = 0; i < beneficiaries.size(); i++) {
+            String pubkeyHex = Utils.HEX.encode(beneficiaries.get(i).getPubKey());
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("address", "validator" + i);
+            entry.put("value", amountPer.longValue());
+            entry.put("pubkey", pubkeyHex);
+            List<Map<String, Object>> addresses = new ArrayList<>();
+            addresses.add(entry);
+            Map<String, Object> req = new HashMap<>();
+            req.put("addresses", addresses);
+            OkHttp3Util.postString(serverUrl + ReqCmd.fundAddresses.name(),
+                    Json.jsonmapper().writeValueAsString(req));
+            System.out.println("  Funded validator " + i);
         }
-        if (bigUtxos.isEmpty()) {
-            throw new RuntimeException("No BIG UTXOs available");
-        }
-
-        BigInteger total = BigInteger.ZERO;
-        Transaction tx = new Transaction(params);
-        tx.setVersion(PQConstants.TX_PQ_VERSION);
-        Coin sendAmount = new Coin(amountPer, NetworkParameters.BIGTANGLE_TOKENID);
-        PQKey walletKey = wallet.walletKeys(null).get(0);
-
-        for (FreeStandingTransactionOutput co : bigUtxos) {
-            tx.addInput(co.getUTXO().getBlockHash(), co);
-            tx.getInputs().get(tx.getInputs().size() - 1).getOutpoint().connectedOutput = co;
-            total = total.add(co.getValue().getValue());
-        }
-        for (PQKey b : beneficiaries) {
-            tx.addOutput(TransactionOutput.fromCoinKey(params, tx, sendAmount, b));
-        }
-        BigInteger spent = sendAmount.getValue().multiply(BigInteger.valueOf(beneficiaries.size()));
-        BigInteger change = total.subtract(spent).subtract(Coin.FEE_DEFAULT.getValue());
-        if (change.signum() > 0) {
-            tx.addOutput(TransactionOutput.fromCoinKey(params, tx,
-                    new Coin(change, NetworkParameters.BIGTANGLE_TOKENID), walletKey));
-        }
-
-        wallet.signTransaction(tx, null);
-        wallet.submitTransaction(tx);
     }
 
     /**

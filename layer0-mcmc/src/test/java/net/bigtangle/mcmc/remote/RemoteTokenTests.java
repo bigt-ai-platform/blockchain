@@ -101,6 +101,10 @@ public class RemoteTokenTests extends RemoteTest {
         assertNotNull(foundToken, "Token " + expectedTokenId + " should exist via getTokenById");
         assertEquals("testtoken", foundToken.getTokenname());
         log.info("Token created and verified: {} ({})", foundToken.getTokenname(), expectedTokenId);
+        // Ensure the token block confirms (spends its fee UTXO) so the next
+        // token creation uses a fresh confirmed fee source instead of reusing
+        // the same one and producing a conflicting block.
+        waitForTokenUtxos(key, expectedTokenId);
     }
 
     @Test
@@ -139,6 +143,7 @@ public class RemoteTokenTests extends RemoteTest {
         assertNotNull(foundToken, "Token created via wallet should exist via getTokenById");
         assertEquals("wallettoken", foundToken.getTokenname());
         log.info("Wallet-created token verified: {} ({})", foundToken.getTokenname(), expectedTokenId);
+        waitForTokenUtxos(key, expectedTokenId);
     }
 
     @Test
@@ -234,5 +239,27 @@ public class RemoteTokenTests extends RemoteTest {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Waits until the token's minted UTXOs are CONFIRMED (spendable). Confirmation
+     * also confirms the token creation's fee change, so the next token creation
+     * can reuse a fresh confirmed fee source instead of the same one (which
+     * would produce a conflicting block that never confirms).
+     */
+    private void waitForTokenUtxos(PQKey key, String tokenId) throws Exception {
+        byte[] tokenidBuf = Utils.HEX.decode(tokenId);
+        for (int i = 0; i < 60; i++) {
+            boolean ok = false;
+            for (FreeStandingTransactionOutput co : wallet.calculateAllSpendCandidates(null, false)) {
+                if (java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf())
+                        && co.getValue().getValue().signum() > 0) {
+                    ok = true;
+                }
+            }
+            if (ok) return;
+            Thread.sleep(3000);
+        }
+        log.warn("Token {} UTXOs not confirmed after polling", tokenId.substring(0, 14));
     }
 }

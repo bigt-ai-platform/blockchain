@@ -975,7 +975,7 @@ public class Wallet extends WalletBase {
 		Transaction tx = new Transaction(params);
 		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
 		PQKey beneficiary = null;
-		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(tokenId, coinList)) {
+		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(Utils.HEX.decode(tokenId), coinList)) {
 
 			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
 			amount = spendableOutput.getValue().add(amount);

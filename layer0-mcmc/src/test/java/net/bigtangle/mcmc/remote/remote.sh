@@ -23,12 +23,20 @@ L1_PEER_UDP="${L1_PEER_UDP:-46311}"
 L1_PEER_TCP="${L1_PEER_TCP:-46312}"
 L1_GOSSIP="${L1_GOSSIP:-25099}"
 DB_NAME="${DB_NAME:-info}"
+L1_DB_NAME="${L1_DB_NAME:-info_order}"
 SERVER_URL="http://127.0.0.1:$L0_PORT/"
 L1_URL="http://127.0.0.1:$L1_PORT/"
 COMPOSE_FILE="$ROOT/helper/docker-compose-base.yml"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
+L1_DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$L1_DB_NAME"
 SCHED_ARGS="-Dservice.schedule.mcmc=true -Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=5000 -Dservice.schedule.initsync=true"
 L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
+# L1-order runs its own ordermatch chain, so it needs its own validator
+# (ML-DSA-87 seed 0x05). Using the L0 validator key here would double-vote
+# on L0 and get it slashed.
+L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0505050505050505050505050505050505050505050505050505050505050505}"
+L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-$(cat /home/jcui/git/blockchain/.l1validatorpub 2>/dev/null || true)}"
+L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
 
 # Use Java 25 if available
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
@@ -40,6 +48,13 @@ LOG_DIR=/tmp
 L0_LOG="$LOG_DIR/l0-server.log"
 MCMC_LOG="$LOG_DIR/l0-mcmc.log"
 L1_LOG="$LOG_DIR/l1-order-server.log"
+
+# Infra-only mode: start L0/L1/MCMC but skip the remote tests and keep
+# everything running until Ctrl+C. Activate with: ./remote.sh infra
+INFRA_ONLY=false
+case "${1:-}" in
+    infra|--infra|infra-only) INFRA_ONLY=true ;;
+esac
 
 cleanup() {
     echo ""
@@ -79,12 +94,15 @@ for i in $(seq 1 15); do
     sleep 2
 done
 
-# --- Step 2: Drop & recreate database ---
+# --- Step 2: Drop & recreate databases (L0 and L1-order are fully separated) ---
 echo ""
-echo "=== Step 2: Drop & recreate database '$DB_NAME' ==="
+echo "=== Step 2: Drop & recreate databases '$DB_NAME' and '$L1_DB_NAME' ==="
 docker exec "$PG_CONTAINER" psql -U root -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
 docker exec "$PG_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE $DB_NAME;"
 echo "Database '$DB_NAME' ready"
+docker exec "$PG_CONTAINER" psql -U root -d postgres -c "DROP DATABASE IF EXISTS $L1_DB_NAME;" 2>/dev/null || true
+docker exec "$PG_CONTAINER" psql -U root -d postgres -c "CREATE DATABASE $L1_DB_NAME;"
+echo "Database '$L1_DB_NAME' ready"
 
 # --- Step 3: Build modules ---
 echo ""
@@ -161,9 +179,12 @@ echo "MCMC PID: $MCMC_PID"
 
 echo "=== Step: Start L1 Order Server (port $L1_PORT) ==="
 L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.port=$L1_GOSSIP"
-L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.chain=L0"
+# L1-order runs on its OWN ordermatch chain with its OWN database, fully
+# separated from Layer 0. It connects to L0 only to pull order blocks via
+# the cross-layer transfer (blocksFromNonChainHeight), not by sharing L0's chain.
+L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.requester=http://127.0.0.1:$L0_PORT"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$DB_ARGS -Dservice.schedule.mcmc=true $L1_PEER_ARGS -Dserver.port=$L1_PORT" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!
@@ -242,8 +263,66 @@ if [ -f "$ROOT/validator.env" ] && [ -n "${VALIDATOR_PUBKEY:-}" ]; then
     sleep 5
 fi
 
-# --- Step 8: Run remote tests ---
+# --- Step 7c: Bootstrap the L1-order chain's own validator ---
+# L1-order runs a fully separated chain (own DB, own consensus). It must have
+# its own staked validator so it can produce beacons, confirm transferred
+# order blocks and run order matching.
 echo ""
+echo "=== Step 7c: Bootstrap L1-order validator ==="
+L1_FUND_AMOUNT=1000000000000
+curl -sf -X POST "http://127.0.0.1:$L1_PORT/fundAddresses" \
+    -H 'Content-Type: application/json' \
+    -d "{\"addresses\":[{\"address\":\"validator\",\"value\":$L1_FUND_AMOUNT,\"pubkey\":\"$L1_VALIDATOR_PUBKEY\"}]}" \
+    >/dev/null 2>&1 && echo "L1 validator funded" || echo "L1 validator funding failed"
+
+sleep 2
+curl -sf -X POST "http://127.0.0.1:$L1_PORT/stakeDeposit" \
+    -H 'Content-Type: application/json' \
+    -d "{\"pubkey\":\"$L1_VALIDATOR_PUBKEY\",\"amount\":\"32000000\",\"privateKey\":\"$L1_VALIDATOR_KEY\"}" \
+    >/dev/null 2>&1 && echo "L1 stake deposited" || echo "L1 stake deposit failed"
+
+sleep 2
+curl -sf -X POST "http://127.0.0.1:$L1_PORT/activateValidator" \
+    -H 'Content-Type: application/json' \
+    -d "{\"pubkey\":\"$L1_VALIDATOR_PUBKEY\",\"epoch\":0}" \
+    >/dev/null 2>&1 && echo "L1 validator activated" || echo "L1 validator activation failed"
+
+# Fund the L1 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can
+# pay fees / create tokens directly on the L1-order chain.
+L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-$(cat /home/jcui/git/blockchain/.l1genesispub 2>/dev/null || true)}"
+if [ -n "$L1_GENESIS_PUBKEY" ]; then
+    curl -sf -X POST "http://127.0.0.1:$L1_PORT/fundAddresses" \
+        -H 'Content-Type: application/json' \
+        -d "{\"addresses\":[{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L1_GENESIS_PUBKEY\"}]}" \
+        >/dev/null 2>&1 && echo "L1 genesis wallet funded" || echo "L1 genesis funding failed"
+fi
+
+# Wait for the L1-order chain to produce its own beacon
+echo "Waiting for L1-order beacon production..."
+for i in $(seq 1 60); do
+    sleep 3
+    L1_HEIGHT=$(docker exec "$PG_CONTAINER" psql -U root -d $L1_DB_NAME -t -A -c \
+        "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
+    if [ -n "$L1_HEIGHT" ] && [ "$L1_HEIGHT" -gt 0 ]; then
+        echo "L1-order beacon produced, height=$L1_HEIGHT"
+        break
+    fi
+done
+sleep 5
+
+# --- Step 8: Run remote tests (or hold if infra-only) ---
+echo ""
+if [ "$INFRA_ONLY" = "true" ]; then
+    echo "============================================="
+    echo "  INFRA RUNNING (Ctrl+C to stop)"
+    echo "  L0   : http://127.0.0.1:$L0_PORT (log: $L0_LOG)"
+    echo "  MCMC : http://127.0.0.1:$MCMC_PORT (log: $MCMC_LOG)"
+    echo "  L1   : http://127.0.0.1:$L1_PORT (log: $L1_LOG)"
+    echo "  DB   : postgres:$PG_PORT db=$DB_NAME/$L1_DB_NAME (container $PG_CONTAINER)"
+    echo "============================================="
+    while true; do sleep 3600; done
+fi
+
 echo "=== Step 6: Run remote tests ==="
 
 # Default test class, override via first argument

@@ -91,6 +91,11 @@ public class BlockSaveService {
 		store.updateBlockEvaluationSolid(block.getHash(), 2);
 		store.updateBlockEvaluationWeightAndDepth(java.util.List.of(
 				new net.bigtangle.server.data.DepthAndWeight(block.getHash(), 1, 1)));
+		// Mark the spent UTXOs as spend-pending so a wallet does not reuse a
+		// fee UTXO already committed to this (as-yet unconfirmed) block —
+		// otherwise two rapid token creations pick the same fee UTXO and
+		// produce conflicting blocks that never confirm.
+		blockgraph.updateTransactionOutputSpendPendingDo(block);
 		accumulateBlockFees(block, store);
 		broadcastBlock(block);
 	}

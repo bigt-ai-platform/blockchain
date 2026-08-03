@@ -50,7 +50,7 @@ Nodes discover each other via the `REQUESTER` bootstrap URL and gossip over Kafk
 ```bash
 # 1. Build the Docker image
 cd /home/jcui/git/blockchain
-docker build -t bigtangle:test -f helper/bigtangle/Dockerfile .
+docker build -t ghcr.io/bigt-ai-platform/test -f helper/bigtangle/Dockerfile .
 
 # 2. Start a 3-node L0 test network
 cd /home/jcui/git/blockchain/helper/fulltest
@@ -128,7 +128,7 @@ services:
 
 ```yaml
   l0-server-0:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-svr-0
     networks: [l0-test-net]
     ports:
@@ -153,7 +153,7 @@ services:
       postgres-l0-0: { condition: service_healthy }
 
   l0-server-1:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-svr-1
     networks: [l0-test-net]
     ports:
@@ -177,7 +177,7 @@ services:
       postgres-l0-1: { condition: service_healthy }
 
   l0-server-2:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-svr-2
     networks: [l0-test-net]
     ports:
@@ -205,7 +205,7 @@ services:
 
 ```yaml
   l0-mcmc-0:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-mcmc-0
     networks: [l0-test-net]
     ports:
@@ -230,7 +230,7 @@ services:
       - l0-server-0
 
   l0-mcmc-1:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-mcmc-1
     networks: [l0-test-net]
     ports:
@@ -255,7 +255,7 @@ services:
       - l0-server-1
 
   l0-mcmc-2:
-    image: bigtangle:test
+    image: ghcr.io/bigt-ai-platform/test
     container_name: l0-mcmc-2
     networks: [l0-test-net]
     ports:

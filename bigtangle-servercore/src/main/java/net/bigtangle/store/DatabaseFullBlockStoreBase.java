@@ -195,7 +195,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " height, chainlength, chainlengthlastupdate, inserttime, solid, confirmed "
 			+ " FROM blocks WHERE height > ? AND height <= ? AND solid = 2 ";
 
-	protected final String SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
+	protected final String SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash, block "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "

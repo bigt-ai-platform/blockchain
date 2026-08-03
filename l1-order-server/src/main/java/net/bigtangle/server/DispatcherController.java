@@ -7,6 +7,7 @@ package net.bigtangle.server;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,9 +42,12 @@ import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
@@ -58,6 +62,7 @@ import net.bigtangle.response.GetTransactionStatusResponse;
 import net.bigtangle.server.data.TransactionStatus;
 import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.response.OkResponse;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.AccessGrantService;
 import net.bigtangle.server.service.AccessPermissionedService;
@@ -66,6 +71,7 @@ import net.bigtangle.server.service.BlockService;
 import net.bigtangle.server.service.BlockServiceCreate;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.server.service.StakeService;
 import net.bigtangle.layer1.service.MultiSignService;
 import net.bigtangle.layer1.service.MultiSignServiceCreate;
 import net.bigtangle.layer1.service.OutputService;
@@ -85,6 +91,9 @@ import net.bigtangle.utils.Json;
 public class DispatcherController implements DisposableBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
+
+	/** Unique index counter for fundAddresses coinbases (see fundAddresses). */
+	private static final java.util.concurrent.atomic.AtomicLong FUND_UTXO_INDEX = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
 
 	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
 			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
@@ -119,6 +128,9 @@ public class DispatcherController implements DisposableBean {
 	private TokensService tokensService;
 	@Autowired
 	protected StoreService storeService;
+
+	@Autowired
+	private StakeService stakeService;
 
 	 
 	@Autowired
@@ -207,6 +219,96 @@ public class DispatcherController implements DisposableBean {
 
 				byte[] data = rollingBlock.bitcoinSerialize();
 				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
+			}
+				break;
+			case fundAddresses: {
+				@SuppressWarnings("unchecked")
+				Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
+				@SuppressWarnings("unchecked")
+				List<Map<String, Object>> entries = (List<Map<String, Object>>) req.get("addresses");
+				Block genesis = UtilGeneseBlock.createGenesis(this.networkParameters);
+				Sha256Hash genesisHash = genesis.getHash();
+				// All funded UTXOs share the genesis hash, so give each one a
+				// unique index to avoid colliding with the genesis coinbase.
+				long startIndex = FUND_UTXO_INDEX.addAndGet(entries.size()) - entries.size();
+				List<UTXO> utxos = new ArrayList<>();
+				for (int i = 0; i < entries.size(); i++) {
+					Map<String, Object> entry = entries.get(i);
+					String addrStr = (String) entry.get("address");
+					BigInteger value = entry.containsKey("value")
+							? BigInteger.valueOf(((Number) entry.get("value")).longValue())
+							: NetworkParameters.BigtangleCoinTotal.divide(BigInteger.valueOf(entries.size()));
+						String pubkeyHex = (String) entry.get("pubkey");
+				UTXO utxo = new UTXO();
+				utxo.setHash(genesisHash);
+				utxo.setIndex(startIndex + i);
+				utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
+				utxo.setAddress(addrStr);
+				if (pubkeyHex != null) {
+					byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
+					PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
+					utxo.setScript(ScriptBuilder.createOutputScript(key));
+					byte[] pubKeyHash = Utils.sha256hash160(pubkeyBytes);
+					utxo.setAddress(Address.fromHash160(networkParameters, pubKeyHash).toBase58());
+				} else {
+					utxo.setScript(ScriptBuilder
+							.createOutputScript(Address.fromBase58(networkParameters, addrStr)));
+				}
+					utxo.setCoinbase(true);
+					utxo.setBlockHash(genesisHash);
+					utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+					utxo.setConfirmed(true);
+					utxo.setSpent(false);
+					utxos.add(utxo);
+				}
+				store.addUnspentTransactionOutput(utxos);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case stakeDeposit: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkeyHex = (String) request.get("pubkey");
+				String amountStr = (String) request.get("amount");
+				String privateKeyHex = (String) request.get("privateKey");
+				PQKey depositKey;
+				if (privateKeyHex != null && !privateKeyHex.isEmpty()) {
+					// Full key so the STAKE transaction can be signed.
+					depositKey = PQKey.fromPrivateKeyHex(privateKeyHex);
+				} else {
+					depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				}
+				BigInteger amount = new BigInteger(amountStr);
+				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
+				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());
+				UTXO selected = null;
+				for (UTXO u : utxos) {
+					if (u.getValue().getValue().compareTo(amount) >= 0
+							&& java.util.Arrays.equals(u.getValue().getTokenid(), NetworkParameters.BIGTANGLE_TOKENID)) {
+						selected = u;
+						break;
+					}
+				}
+				if (selected == null) {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(404), watch, reqCmd);
+					break;
+				}
+				if (request.containsKey("withdrawalCredentials")) {
+					stakeService.processDeposit(selected,
+							Utils.HEX.decode((String) request.get("withdrawalCredentials")), depositKey, store);
+				} else {
+					stakeService.processDeposit(selected, depositKey.getPubKey(), depositKey, store);
+				}
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
+			case activateValidator: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkeyHex = (String) request.get("pubkey");
+				long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
+				stakeService.activateValidator(Utils.HEX.decode(pubkeyHex), epoch, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			case batchBlock: {

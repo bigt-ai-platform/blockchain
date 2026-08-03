@@ -51,14 +51,14 @@ docker compose -f "$COMPOSE_FILE" up -d
 
 info "Waiting for server nodes to be healthy..."
 for port in "${SERVER_PORTS[@]}"; do
-  for i in $(seq 1 30); do
+  for i in $(seq 1 90); do
     if curl -sf "http://localhost:$port/" >/dev/null 2>&1; then
       log "server :${port} ready (${i}s)"
       break
     fi
-    if [ "$i" -eq 30 ]; then
+    if [ "$i" -eq 90 ]; then
       docker logs --tail=20 "prodsim-svr-0" 2>/dev/null || true
-      fail "server :${port} not ready after 90s"
+      fail "server :${port} not ready after 270s"
     fi
     sleep 3
   done
@@ -113,7 +113,7 @@ mvn exec:java -pl layer0-mcmc -q \
   -Dexec.classpathScope=test \
   -DDB_HOSTNAME=localhost -DDB_PORT="$PG_PORT" \
   -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_NAME=layer0 \
-  -Dserver.url="$L0_URL" 2>&1
+  -Dserver.url="$L0_URL" -Dprodsim.portOffset="$PORT_OFFSET" 2>&1
 
 log "Validators bootstrapped"
 

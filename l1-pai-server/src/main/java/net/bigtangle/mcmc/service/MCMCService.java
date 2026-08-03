@@ -263,15 +263,18 @@ public class MCMCService {
         List<Rating> ratings = new ArrayList<>();
         while ((currentBlock = blockQueue.poll()) != null) {
             if (currentBlock.getBlockEvaluation().getHeight() <= cutoffHeight) continue;
-            if (selectedTipApprovers.containsKey(currentBlock.getBlockHash()))
-                approvers.get(currentBlock.getBlockHash())
-                        .addAll(selectedTipApprovers.get(currentBlock.getBlockHash()));
+            HashSet<UUID> currentApprovers = approvers.get(currentBlock.getBlockHash());
+            if (currentApprovers == null) continue;
+            if (selectedTipApprovers.containsKey(currentBlock.getBlockHash())) {
+                HashSet<UUID> tipApprovers = selectedTipApprovers.get(currentBlock.getBlockHash());
+                if (tipApprovers != null) currentApprovers.addAll(tipApprovers);
+            }
             Sha256Hash prevTrunk = currentBlock.getBlock().getPrevBlockHash();
             subUpdateRating(blockQueue, approvers, currentBlock, prevTrunk, store);
             Sha256Hash prevBranch = currentBlock.getBlock().getPrevBranchBlockHash();
             subUpdateRating(blockQueue, approvers, currentBlock, prevBranch, store);
             if (currentBlock.getBlockEvaluation().getSolid() == 2) {
-                ratings.add(new Rating(currentBlock.getBlockHash(), approvers.get(currentBlock.getBlockHash()).size()));
+                ratings.add(new Rating(currentBlock.getBlockHash(), currentApprovers.size()));
             }
             approvers.remove(currentBlock.getBlockHash());
         }
@@ -281,15 +284,17 @@ public class MCMCService {
     private void subUpdateRating(PriorityQueue<BlockWrap> blockQueue,
             HashMap<Sha256Hash, HashSet<UUID>> approvers,
             BlockWrap currentBlock, Sha256Hash prevTrunk, BlockStoreInterface store) throws BlockStoreException {
+        HashSet<UUID> currentApprovers = approvers.get(currentBlock.getBlockHash());
+        if (currentApprovers == null) return;
         if (!approvers.containsKey(prevTrunk)) {
             BlockWrap prevBlock = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
                     jsonmapper).getBlockWrap(prevTrunk, store);
             if (prevBlock != null) {
                 blockQueue.add(prevBlock);
-                approvers.put(prevBlock.getBlockHash(), new HashSet<>(approvers.get(currentBlock.getBlockHash())));
+                approvers.put(prevBlock.getBlockHash(), new HashSet<>(currentApprovers));
             }
         } else {
-            approvers.get(prevTrunk).addAll(approvers.get(currentBlock.getBlockHash()));
+            approvers.get(prevTrunk).addAll(currentApprovers);
         }
     }
 }

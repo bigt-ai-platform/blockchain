@@ -43,7 +43,11 @@ public abstract class AbstractScheduleInitService {
             }
 
             serverConfiguration.setServiceReady(true);
-            getLogger().debug("serviceReady = true");
+            // The one-time initial sync has run; let the periodic
+            // ScheduleSyncBlockService take over so new blocks are
+            // continuously pulled from the requester.
+            scheduleConfiguration.setInitSync(false);
+            getLogger().debug("serviceReady = true, initSync -> false");
 
         } catch (Exception e) {
             getLogger().error("AbstractScheduleInitService failed", e);

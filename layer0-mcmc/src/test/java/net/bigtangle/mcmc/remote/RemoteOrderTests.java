@@ -31,6 +31,15 @@ public class RemoteOrderTests extends RemoteTest {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteOrderTests.class);
 
+    /**
+     * L1-order is a fully separated chain. Order operations (token creation for
+     * trading, funding, buy/sell orders, matching) all happen on the L1-order
+     * server; Layer 0 only handles payment + token creation for the L0 chain.
+     */
+    public RemoteOrderTests() {
+        contextRoot = l1Url;
+    }
+
     @Test
     public void testCreateTokenAndTrade() throws Exception {
         // ============================================================

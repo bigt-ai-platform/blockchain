@@ -23,3 +23,6 @@ bigtangle-subtangle/.settings/org.eclipse.m2e.core.prefs
 
 # validator secrets
 validator.env
+# generated L1-order bootstrap validator keys (used by remote.sh)
+.l1validatorpub
+.l1genesispub
