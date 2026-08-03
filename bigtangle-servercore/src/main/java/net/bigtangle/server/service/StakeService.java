@@ -424,6 +424,24 @@ public class StakeService {
                 store.deleteStakeDeposit(stake.getPubkey());
                 log.info("Stake withdrawal processed: pubkey={}, amount={}",
                         Utils.HEX.encode(stake.getPubkey()), stake.getAmount());
+                continue;
+            }
+            // Reconciliation for the save-time application gap: a deposit whose
+            // STAKE block was saved but never gained confirmation (orphaned,
+            // or its beacon never confirmed) and is stale is deactivated.
+            if (stake.getActivatedEpoch() >= 0 && stake.getBlockHash() != null
+                    && currentEpoch - stake.getActivatedEpoch() > WITHDRAWAL_DELAY_EPOCHS) {
+                try {
+                    net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(stake.getBlockHash());
+                    if (be == null || !be.isConfirmed()) {
+                        store.releaseStakeDeposit(stake.getPubkey());
+                        log.info("Deactivated stale unconfirmed stake deposit: pubkey={}, block={}",
+                                Utils.HEX.encode(stake.getPubkey()), stake.getBlockHash());
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not verify confirmation for stake block {}: {}",
+                            stake.getBlockHash(), e.getMessage());
+                }
             }
         }
     }

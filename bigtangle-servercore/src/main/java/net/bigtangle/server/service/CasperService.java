@@ -177,7 +177,15 @@ public class CasperService {
                 cp.justified = true;
                 cp.finalized = true;
             }
-            persistCheckpoint(cp, null);
+            // Persist with the store so the checkpoint survives restart even
+            // before it is justified.
+            try {
+                String val = cp.blockHash.toString() + "," + cp.justified + "," + cp.finalized;
+                store.savePosState("casper", "ckpt_" + cp.epoch,
+                        val.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception ex) {
+                log.debug("Failed to persist checkpoint at creation", ex);
+            }
             return cp;
         });
     }

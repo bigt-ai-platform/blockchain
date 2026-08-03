@@ -536,6 +536,27 @@ public class BlockStoreService {
 			// Finally add the resolved new blocks to the confirmed set
 			serviceBase.confirmBlocksSorted(blockStore, -1, true, blocks, new HashSet<>());
 
+			// Confirm-time application of chain-derived state: a STAKE/SLASHING
+			// block that gains confirmation has its validator deposit applied /
+			// slash enforced. Idempotent with the save-time application, so the
+			// state survives unconfirm -> re-confirm cycles.
+			net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
+			if (stakeService != null) {
+				for (BlockWrap b : blocks) {
+					Block blk = b.getBlock();
+					try {
+						if (blk.getBlockType() == BlockType.BLOCKTYPE_STAKE) {
+							stakeService.applyStakeBlock(blk, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+							stakeService.applySlashingBlock(blk, blockStore);
+						}
+					} catch (Exception e) {
+						log.warn("Failed to apply chain-derived state for confirmed block {}: {}",
+								blk.getHashAsString(), e.getMessage());
+					}
+				}
+			}
+
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();

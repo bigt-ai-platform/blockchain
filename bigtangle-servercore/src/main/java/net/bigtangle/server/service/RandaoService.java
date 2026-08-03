@@ -54,7 +54,9 @@ public class RandaoService {
     private byte[] deriveSecret(PQKey validatorKey, long slot) {
         byte[] keyMaterial = validatorKey.getSecretBytes();
         if (keyMaterial == null) {
-            keyMaterial = validatorKey.getPubKey();
+            // No private key material: cannot derive a secret. Returning null
+            // (rather than a public value) means this key cannot commit/reveal.
+            return null;
         }
         java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(keyMaterial.length + 8);
         buf.put(keyMaterial);
@@ -64,6 +66,9 @@ public class RandaoService {
 
     public byte[] commit(PQKey validatorKey, long slot) {
         byte[] secret = deriveSecret(validatorKey, slot);
+        if (secret == null) {
+            return null;
+        }
         byte[] hash = sha256(secret);
         String key = Utils.HEX.encode(validatorKey.getPubKey()) + ":" + slot;
         commitments.put(key, hash);
