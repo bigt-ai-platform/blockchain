@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.store.BlockStoreInterface;
 
@@ -21,7 +22,6 @@ public class RandaoService {
 
     private final ConcurrentHashMap<Long, byte[]> randaoMixes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, byte[]> commitments = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, byte[]> secrets = new ConcurrentHashMap<>();
 
     @Autowired
     private StoreService storeService;
@@ -46,21 +46,33 @@ public class RandaoService {
         }
     }
 
-    public byte[] commit(byte[] pubkey, long slot) {
-        byte[] secret = new byte[32];
-        new java.security.SecureRandom().nextBytes(secret);
+    /**
+     * The secret is derived deterministically from the validator's private key
+     * and the slot, so it is NEVER persisted — only the commitment (SHA-256 of
+     * the secret) is stored. computeReveal recomputes the same secret later.
+     */
+    private byte[] deriveSecret(PQKey validatorKey, long slot) {
+        byte[] keyMaterial = validatorKey.getSecretBytes();
+        if (keyMaterial == null) {
+            keyMaterial = validatorKey.getPubKey();
+        }
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(keyMaterial.length + 8);
+        buf.put(keyMaterial);
+        buf.putLong(slot);
+        return sha256(buf.array());
+    }
+
+    public byte[] commit(PQKey validatorKey, long slot) {
+        byte[] secret = deriveSecret(validatorKey, slot);
         byte[] hash = sha256(secret);
-        String key = Utils.HEX.encode(pubkey) + ":" + slot;
+        String key = Utils.HEX.encode(validatorKey.getPubKey()) + ":" + slot;
         commitments.put(key, hash);
-        secrets.put(key, secret);
         persistCommitment(key, hash);
-        persistSecret(key, secret);
         return hash;
     }
 
-    public byte[] computeReveal(byte[] pubkey, long slot) {
-        String key = Utils.HEX.encode(pubkey) + ":" + slot;
-        return secrets.get(key);
+    public byte[] computeReveal(PQKey validatorKey, long slot) {
+        return deriveSecret(validatorKey, slot);
     }
 
     public void reveal(byte[] pubkey, long slot, byte[] reveal) {
@@ -80,7 +92,6 @@ public class RandaoService {
             return;
         }
         commitments.remove(key);
-        secrets.remove(key);
 
         long epoch = slot / 32;
         byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]);
@@ -93,7 +104,7 @@ public class RandaoService {
         try {
             store = storeService.getStore();
             store.savePosState("randao", "mix_" + epoch, currentMix);
-            store.deletePosState("randao", "sec_" + key);
+            store.deletePosState("randao", "cmt_" + key);
         } catch (Exception e) {
             log.debug("Failed to persist RANDAO mix", e);
         } finally {
@@ -113,18 +124,6 @@ public class RandaoService {
             store.savePosState("randao", "cmt_" + key, hash);
         } catch (Exception e) {
             log.debug("Failed to persist commitment", e);
-        } finally {
-            try { if (store != null) store.close(); } catch (Exception e) {}
-        }
-    }
-
-    private void persistSecret(String key, byte[] secret) {
-        BlockStoreInterface store = null;
-        try {
-            store = storeService.getStore();
-            store.savePosState("randao", "sec_" + key, secret);
-        } catch (Exception e) {
-            log.debug("Failed to persist RANDAO secret", e);
         } finally {
             try { if (store != null) store.close(); } catch (Exception e) {}
         }

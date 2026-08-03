@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SlotData;
@@ -35,6 +36,13 @@ public class SlotService {
     public static final long SLOT_DURATION_MS = 12_000L;
     public static final long SLOTS_PER_EPOCH = 32L;
     public static final long EPOCH_DURATION_MS = SLOT_DURATION_MS * SLOTS_PER_EPOCH;
+
+    /** Configurable slot/epoch parameters (pos.slotIntervalMs, pos.slotsPerEpoch). */
+    @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
+    private long slotIntervalMs = SLOT_DURATION_MS;
+
+    @org.springframework.beans.factory.annotation.Value("${pos.slotsPerEpoch:32}")
+    private long slotsPerEpoch = SLOTS_PER_EPOCH;
 
     @Autowired
     private NetworkParameters networkParameters;
@@ -70,11 +78,11 @@ public class SlotService {
     private ObjectMapper jsonmapper;
 
     public long getCurrentSlot() {
-        return (System.currentTimeMillis() - 1532896109000L) / SLOT_DURATION_MS;
+        return (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
     }
 
     public long getCurrentEpoch() {
-        return getCurrentSlot() / SLOTS_PER_EPOCH;
+        return getCurrentSlot() / slotsPerEpoch;
     }
 
     /** Chain-derived epoch for an absolute wall-clock time (genesis-aligned). */
@@ -83,11 +91,11 @@ public class SlotService {
     }
 
     public long getSlotInEpoch(long slot) {
-        return slot % SLOTS_PER_EPOCH;
+        return slot % slotsPerEpoch;
     }
 
     public long getEpochForSlot(long slot) {
-        return slot / SLOTS_PER_EPOCH;
+        return slot / slotsPerEpoch;
     }
 
     public long selectProposer(long slot, BlockStoreInterface store) throws Exception {
@@ -121,7 +129,7 @@ public class SlotService {
         return validators.size() - 1;
     }
 
-    public Block proposeBeaconBlock(long slot, BlockStoreInterface store) throws Exception {
+    public Block proposeBeaconBlock(long slot, PQKey proposerKey, BlockStoreInterface store) throws Exception {
         long epoch = getEpochForSlot(slot);
         long proposerIdx = selectProposer(slot, store);
         if (proposerIdx < 0) return null;
@@ -129,7 +137,7 @@ public class SlotService {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
         StakeRecord proposer = validators.get((int) proposerIdx);
 
-        byte[] reveal = randaoService.computeReveal(proposer.getPubkey(), slot);
+        byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
 
         List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
 

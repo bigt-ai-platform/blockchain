@@ -182,11 +182,11 @@ public class PoSTest extends AbstractIntegrationTest {
 
     @Test
     public void testRandaoCommitAndReveal() throws Exception {
-        byte[] commit = randaoService.commit(validatorKey.getPubKey(), 0);
+        byte[] commit = randaoService.commit(validatorKey, 0);
         assertNotNull(commit);
         assertEquals(32, commit.length);
 
-        byte[] reveal = randaoService.computeReveal(validatorKey.getPubKey(), 0);
+        byte[] reveal = randaoService.computeReveal(validatorKey, 0);
         assertNotNull(reveal);
 
         randaoService.reveal(validatorKey.getPubKey(), 0, reveal);
@@ -336,11 +336,11 @@ public class PoSTest extends AbstractIntegrationTest {
         att2.setValidatorPubkey(validatorKey.getPubKey());
         att2.setBeaconBlockHash(Sha256Hash.of("blockB".getBytes()));
 
-        boolean r1 = slashingService.checkDoubleVote(att1);
-        boolean r2 = slashingService.checkDoubleVote(att2);
+        AttestationData evidence1 = slashingService.checkDoubleVote(att1);
+        AttestationData evidence2 = slashingService.checkDoubleVote(att2);
 
-        assertFalse(r1, "first vote not a double");
-        assertTrue(r2, "second vote is a double");
+        assertNull(evidence1, "first vote not a double");
+        assertNotNull(evidence2, "second vote is a double");
     }
 
     @Test
@@ -374,6 +374,36 @@ public class PoSTest extends AbstractIntegrationTest {
 
         StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(slashed.isSlashed());
+    }
+
+    @Test
+    public void testSlashingBlockConsensus() throws Exception {
+        // Seed a validator, then slash it via a BLOCKTYPE_SLASHING block built
+        // from two authenticated conflicting attestations.
+        StakeRecord seeded = new StakeRecord(validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash());
+        seeded.setBlockHash(Sha256Hash.of("stakeblock".getBytes()));
+        seeded.setTxHash(Sha256Hash.of("staketx".getBytes()));
+        store.saveStakeDeposit(seeded);
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        AttestationData att1 = new AttestationData();
+        att1.setSlot(5);
+        att1.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
+        att1.setValidatorPubkey(validatorKey.getPubKey());
+        att1.setSignature(validatorKey.sign(att1.getMessageHash()).serialize());
+
+        AttestationData att2 = new AttestationData();
+        att2.setSlot(5);
+        att2.setBeaconBlockHash(Sha256Hash.of("headB".getBytes()));
+        att2.setValidatorPubkey(validatorKey.getPubKey());
+        att2.setSignature(validatorKey.sign(att2.getMessageHash()).serialize());
+
+        stakeService.submitSlashing(att1, att2, store);
+
+        StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
+        assertTrue(slashed.isSlashed(),
+                "validator must be slashed via the consensus SLASHING block");
     }
 
     // ========= Fee Tests =========

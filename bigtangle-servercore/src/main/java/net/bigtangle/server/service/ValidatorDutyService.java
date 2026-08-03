@@ -108,7 +108,7 @@ public class ValidatorDutyService {
         if (isProposer) {
             store = storeService.getStore();
             try {
-                slotService.proposeBeaconBlock(slot, store);
+                slotService.proposeBeaconBlock(slot, validatorKey, store);
             } finally {
                 store.close();
             }

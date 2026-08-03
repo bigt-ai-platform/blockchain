@@ -28,8 +28,10 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.bigtangle.utils.Json;
 
 import net.bigtangle.core.Address;
+import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
@@ -134,6 +136,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// the DB in the second pass. Keys are "blockHash:txHash:index".
 		Map<String, UTXO> utxoCache = new HashMap<>();
 		List<TransactionOutPoint> allInputTx = new ArrayList<>();
+		// Bonded stake outputs are unspendable until a withdrawal mechanism
+		// exists; cache per-block so each input is checked once.
+		java.util.Set<String> checkedBondedOutputs = new java.util.HashSet<>();
 		for (final Transaction tx : transactions) {
 			if (!tx.isCoinBase()) {
 				for (int index = 0; index < tx.getInputs().size(); index++) {
@@ -146,6 +151,20 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						return SolidityState.from(in.getOutpoint(), true);
 					}
 					utxoCache.put(cacheKey, prevOut);
+					String bondKey = in.getOutpoint().getBlockHash().toString()
+							+ ":" + in.getOutpoint().getTxHash().toString();
+					if (checkedBondedOutputs.add(bondKey)) {
+						try {
+							net.bigtangle.core.StakeRecord bonded = store.getStakeDepositByOutput(
+									in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash());
+							if (bonded != null) {
+								throw new InvalidTransactionException(
+										"Cannot spend a bonded stake output: " + bondKey);
+							}
+						} catch (BlockStoreException e) {
+							throw e;
+						}
+					}
 					if (checkUnique(allInputTx, in.getOutpoint())) {
 						throw new InvalidTransactionException(
 								"input outputpoint is not unique " + in.getOutpoint().toString());
@@ -175,7 +194,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// pro block check fee
 			boolean checkFee = false;
-			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)) {
+			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_SLASHING)) {
 				checkFee = true;
 			}
 			for (final Transaction tx : block.getTransactions()) {
@@ -429,10 +449,67 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			break;
 		}
+		case BLOCKTYPE_SLASHING: {
+			SolidityState slashState = checkSlashingSolidity(block, throwExceptions);
+			if (!(slashState.getState() == State.Success)) {
+				return slashState;
+			}
+			break;
+		}
 		default:
 			throw new RuntimeException("No Implementation");
 		}
 
+		return SolidityState.getSuccessState();
+	}
+
+	/**
+	 * Validates a BLOCKTYPE_SLASHING block: the first transaction must carry two
+	 * authenticated attestations from the SAME validator that form a slashable
+	 * pattern (double vote or surround vote). This makes slashing a consensus
+	 * decision rather than a locally-observed mutation.
+	 */
+	private SolidityState checkSlashingSolidity(Block block, boolean throwExceptions)
+			throws BlockStoreException {
+		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
+			if (throwExceptions)
+				throw new BlockStoreException("SLASHING block has no transactions");
+			return SolidityState.getFailState();
+		}
+		Transaction tx = block.getTransactions().get(0);
+		if (!net.bigtangle.server.service.StakeService.SLASHING_DATA_CLASS.equals(tx.getDataClassName())
+				|| tx.getData() == null) {
+			if (throwExceptions)
+				throw new BlockStoreException("SLASHING block transaction is not a SlashingProof");
+			return SolidityState.getFailState();
+		}
+		try {
+			@SuppressWarnings("unchecked")
+			Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+			AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
+			AttestationData att2 = Json.jsonmapper().convertValue(data.get("attestation2"), AttestationData.class);
+			if (att1 == null || att2 == null || att1.getValidatorPubkey() == null
+					|| !java.util.Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())) {
+				throw new BlockStoreException("SLASHING proof must contain two attestations from the same validator");
+			}
+			boolean doubleVote = att1.getSlot() == att2.getSlot()
+					&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
+			boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
+					&& att2.getTargetEpoch() < att1.getTargetEpoch())
+					|| (att2.getSourceEpoch() < att1.getSourceEpoch()
+							&& att1.getTargetEpoch() < att2.getTargetEpoch());
+			if (!doubleVote && !surround) {
+				throw new BlockStoreException("SLASHING proof does not form a double or surround vote");
+			}
+		} catch (BlockStoreException e) {
+			if (throwExceptions)
+				throw e;
+			return SolidityState.getFailState();
+		} catch (Exception e) {
+			if (throwExceptions)
+				throw new BlockStoreException("SLASHING proof data is malformed", e);
+			return SolidityState.getFailState();
+		}
 		return SolidityState.getSuccessState();
 	}
 
@@ -463,15 +540,43 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				throw new BlockStoreException("STAKE block deposit data is malformed", e);
 			return SolidityState.getFailState();
 		}
-		boolean foundBigOutput = false;
-		for (TransactionOutput out : tx.getOutputs()) {
-			if (out.getValue().isBIG()
-					&& out.getValue().getValue().compareTo(net.bigtangle.server.service.StakeService.MIN_STAKE) >= 0) {
-				foundBigOutput = true;
-				break;
-			}
+		byte[][] depositParts;
+		try {
+			depositParts = net.bigtangle.server.service.StakeService.parseStakeDepositData(tx.getData());
+		} catch (Exception e) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE block deposit data is malformed", e);
+			return SolidityState.getFailState();
 		}
-		if (!foundBigOutput) {
+		byte[] declaredPubkey = depositParts[0];
+		byte[] declaredHash = Utils.sha256hash160(declaredPubkey);
+		boolean foundBondedOutput = false;
+		for (TransactionOutput out : tx.getOutputs()) {
+			if (!out.getValue().isBIG()) {
+				continue;
+			}
+			if (out.getValue().getValue().compareTo(net.bigtangle.server.service.StakeService.MIN_STAKE) < 0) {
+				continue;
+			}
+			// The bonded output MUST pay the declared validator pubkey so the
+			// pubkey and the locked funds are bound together.
+			try {
+				byte[] outHash = out.getScriptPubKey().getPubKeyHash();
+				if (!java.util.Arrays.equals(outHash, declaredHash)) {
+					if (throwExceptions)
+						throw new BlockStoreException(
+								"STAKE bonded output does not pay the declared validator pubkey");
+					return SolidityState.getFailState();
+				}
+			} catch (Exception e) {
+				if (throwExceptions)
+					throw new BlockStoreException("STAKE bonded output script is not P2PKH", e);
+				return SolidityState.getFailState();
+			}
+			foundBondedOutput = true;
+			break;
+		}
+		if (!foundBondedOutput) {
 			if (throwExceptions)
 				throw new BlockStoreException("STAKE block has no bonded BIG output of minimum stake");
 			return SolidityState.getFailState();
@@ -1505,6 +1610,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions);
 			if (!(stakeState.getState() == State.Success)) {
 				return stakeState;
+			}
+			break;
+		}
+		case BLOCKTYPE_SLASHING: {
+			SolidityState slashState = checkSlashingSolidity(block, throwExceptions);
+			if (!(slashState.getState() == State.Success)) {
+				return slashState;
 			}
 			break;
 		}

@@ -759,8 +759,8 @@ public class DispatcherController implements DisposableBean {
 				}
 				// A slashing proof must carry TWO authenticated attestations
 				// from the SAME validator that form a slashable pattern
-				// (double vote or surround vote). A single forged attestation
-				// can no longer disable a validator.
+				// (double vote or surround vote). The slash is proposed as a
+				// consensus BLOCKTYPE_SLASHING block, applied by every node.
 				if (att1 == null || att2 == null
 						|| att1.getValidatorPubkey() == null
 						|| !java.util.Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())
@@ -781,7 +781,7 @@ public class DispatcherController implements DisposableBean {
 							net.bigtangle.response.ErrorResponse.create(400), watch, reqCmd);
 					break;
 				}
-				slashingService.processSlashing(att1.getValidatorPubkey(), store);
+				stakeService.submitSlashing(att1, att2, store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;

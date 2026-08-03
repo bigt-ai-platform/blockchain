@@ -3457,6 +3457,52 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void updateStakeDepositAmount(byte[] pubkey, long newAmount, Sha256Hash blockHash, Sha256Hash txHash,
+			long activatedEpoch) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"UPDATE stake_deposits SET amount = ?, blockhash = ?, txhash = ?, activated_epoch = ? WHERE pubkey = ?")) {
+			s.setLong(1, newAmount);
+			s.setBytes(2, blockHash != null ? blockHash.getBytes() : null);
+			s.setBytes(3, txHash != null ? txHash.getBytes() : null);
+			s.setLong(4, activatedEpoch);
+			s.setBytes(5, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<StakeRecord> getStakeDepositsByBlockHash(Sha256Hash blockHash) throws BlockStoreException {
+		List<StakeRecord> list = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT * FROM stake_deposits WHERE blockhash = ?")) {
+			s.setBytes(1, blockHash.getBytes());
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) list.add(setStakeRecord(rs));
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return list;
+	}
+
+	@Override
+	public StakeRecord getStakeDepositByOutput(Sha256Hash blockHash, Sha256Hash txHash) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT * FROM stake_deposits WHERE blockhash = ? AND txhash = ? LIMIT 1")) {
+			s.setBytes(1, blockHash.getBytes());
+			s.setBytes(2, txHash.getBytes());
+			try (ResultSet rs = s.executeQuery()) {
+				if (rs.next()) return setStakeRecord(rs);
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return null;
+	}
+
+	@Override
 	public StakeRecord getStakeDeposit(byte[] pubkey) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("SELECT * FROM stake_deposits WHERE pubkey = ?")) {

@@ -55,36 +55,36 @@ public class SlashingService {
 
     /**
      * Detects a double vote: the same validator attesting two different heads
-     * for the same slot. Records the vote and returns true when it is a double.
+     * for the same slot. Records the vote and returns the conflicting prior
+     * attestation (the evidence for a slashing block), or null if no double.
      */
-    public boolean checkDoubleVote(AttestationData att) {
+    public AttestationData checkDoubleVote(AttestationData att) {
         if (att.getValidatorPubkey() == null) {
-            return false;
+            return null;
         }
         String key = Utils.HEX.encode(att.getValidatorPubkey()) + ":" + att.getSlot();
         AttestationData existing = latestAttestation.get(key);
         if (existing != null && !existing.getBeaconBlockHash().equals(att.getBeaconBlockHash())) {
             log.warn("SLASHING: double vote by pubkey={} at slot={}",
                     Utils.HEX.encode(att.getValidatorPubkey()), att.getSlot());
-            return true;
+            return existing;
         }
         latestAttestation.put(key, att);
         persistAttestation(key, att);
-        return false;
+        return null;
     }
 
     /**
-     * Detects a surround vote: the new attestation's checkpoint range surrounds
-     * the validator's previous range (or vice versa), expressed in epoch
-     * containment — which checkpoint hashes alone cannot express.
+     * Detects a surround vote via epoch containment. Records the vote and
+     * returns the prior attestation (the evidence), or null if no surround.
      */
-    public boolean checkSurroundVote(AttestationData att) {
+    public AttestationData checkSurroundVote(AttestationData att) {
         if (att.getValidatorPubkey() == null) {
-            return false;
+            return null;
         }
         String key = Utils.HEX.encode(att.getValidatorPubkey());
         AttestationData prev = latestAttestation.get(key + ":latest");
-        boolean slashing = false;
+        AttestationData evidence = null;
         if (prev != null && prev.getSourceEpoch() >= 0 && prev.getTargetEpoch() >= 0
                 && att.getSourceEpoch() >= 0 && att.getTargetEpoch() >= 0) {
             boolean surrounds = prev.getSourceEpoch() < att.getSourceEpoch()
@@ -94,12 +94,12 @@ public class SlashingService {
             if (surrounds || surrounded) {
                 log.warn("SLASHING: surround vote by pubkey={}",
                         Utils.HEX.encode(att.getValidatorPubkey()));
-                slashing = true;
+                evidence = prev;
             }
         }
         latestAttestation.put(key + ":latest", att);
         persistAttestation(key + ":latest", att);
-        return slashing;
+        return evidence;
     }
 
     public void processSlashing(byte[] pubkey, BlockStoreInterface store) throws Exception {

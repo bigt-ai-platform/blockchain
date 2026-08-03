@@ -231,11 +231,16 @@ public class CasperService {
         }
 
         // Only a genuine double vote (two different heads for the same slot)
-        // or a surround vote slashes. Duplicate or out-of-order delivery of the
-        // same vote does not.
-        if (slashingService.checkDoubleVote(att) || slashingService.checkSurroundVote(att)) {
+        // or a surround vote slashes. The slash is proposed as a consensus
+        // BLOCKTYPE_SLASHING block (validated + applied by every node), never
+        // by directly mutating local UTXO state.
+        AttestationData evidence = slashingService.checkDoubleVote(att);
+        if (evidence == null) {
+            evidence = slashingService.checkSurroundVote(att);
+        }
+        if (evidence != null) {
             log.warn("Slashing: slashable vote by pubkey={} slot={}", vkey, att.getSlot());
-            slashingService.processSlashing(att.getValidatorPubkey(), store);
+            stakeService.submitSlashing(evidence, att, store);
             return;
         }
 

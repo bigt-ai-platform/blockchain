@@ -579,6 +579,16 @@ public interface BlockStoreInterface {
 
 	StakeRecord getStakeDeposit(byte[] pubkey) throws BlockStoreException;
 
+	/** Accumulates a top-up deposit onto an existing pubkey's record. */
+	void updateStakeDepositAmount(byte[] pubkey, long newAmount, Sha256Hash blockHash, Sha256Hash txHash,
+			long activatedEpoch) throws BlockStoreException;
+
+	/** Looks up a deposit by the STAKE block hash that created it (reorg revert). */
+	List<StakeRecord> getStakeDepositsByBlockHash(Sha256Hash blockHash) throws BlockStoreException;
+
+	/** Looks up a deposit whose bonded output is (blockHash, txHash) (bond enforcement). */
+	StakeRecord getStakeDepositByOutput(Sha256Hash blockHash, Sha256Hash txHash) throws BlockStoreException;
+
 	List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException;
 
 	List<StakeRecord> getAllStakeDeposits() throws BlockStoreException;

@@ -127,13 +127,16 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
-	/** Applies chain-derived state (validator deposits, ...) when a block is saved. */
+	/** Applies chain-derived state (validator deposits, slashing, ...) when a block is saved. */
 	private void notifyChainDerived(Block block, BlockStoreInterface store) throws Exception {
+		StakeService stakeService = stakeServiceProvider.getIfAvailable();
+		if (stakeService == null) {
+			return;
+		}
 		if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_STAKE) {
-			StakeService stakeService = stakeServiceProvider.getIfAvailable();
-			if (stakeService != null) {
-				stakeService.applyStakeBlock(block, store);
-			}
+			stakeService.applyStakeBlock(block, store);
+		} else if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_SLASHING) {
+			stakeService.applySlashingBlock(block, store);
 		}
 	}
 

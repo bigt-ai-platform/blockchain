@@ -85,6 +85,11 @@ public class BlockStoreService {
 	@Autowired
 	protected ObjectMapper jsonmapper;
 
+	// Resolved lazily to break the blockStoreService -> stakeService ->
+	// blockSaveService -> blockStoreService cycle.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.StakeService> stakeServiceProvider;
+
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
@@ -561,6 +566,20 @@ public class BlockStoreService {
 			}
 
 			serviceBase.unconfirmBlocksSorted(blockStore, blocksToUnconfirm, new HashSet<>(), true);
+
+			// Reorg revert of chain-derived state (stake deposits, slashing)
+			// for blocks that were unconfirmed.
+			net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
+			if (stakeService != null) {
+				for (BlockWrap b : blocksToUnconfirm) {
+					Block blk = b.getBlock();
+					if (blk.getBlockType() == BlockType.BLOCKTYPE_STAKE) {
+						stakeService.revertStakeBlock(blk, blockStore);
+					} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+						stakeService.revertSlashingBlock(blk, blockStore);
+					}
+				}
+			}
 
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {

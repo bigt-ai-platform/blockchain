@@ -7,7 +7,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Address;
+import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
@@ -32,6 +36,7 @@ import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.utils.Json;
 
 @Service
 public class StakeService {
@@ -41,6 +46,7 @@ public class StakeService {
     public static final BigInteger MIN_STAKE = BigInteger.valueOf(32_000_000L);
     public static final long WITHDRAWAL_DELAY_EPOCHS = 256;
     public static final String STAKE_DATA_CLASS = "StakeDeposit";
+    public static final String SLASHING_DATA_CLASS = "SlashingProof";
 
     @Autowired
     private NetworkParameters networkParameters;
@@ -140,7 +146,9 @@ public class StakeService {
     /**
      * Chain-derived validator-set application: derives a deposit from a
      * (validated) STAKE block and records it in the stake table, then locks the
-     * bonded output so the funds are not freely spendable. Idempotent.
+     * bonded output so the funds are not freely spendable. Supports top-ups:
+     * a new STAKE block for an already-deposited pubkey ACCUMULATES its amount.
+     * Idempotent (re-save of the same block is a no-op).
      */
     public void applyStakeBlock(Block block, BlockStoreInterface store) throws Exception {
         if (block.getBlockType() != BlockType.BLOCKTYPE_STAKE || block.getTransactions().isEmpty()) {
@@ -172,15 +180,35 @@ public class StakeService {
             return;
         }
 
-        StakeRecord stake = new StakeRecord(pubkey, amount.getValue(), creds);
-        stake.setBlockHash(block.getHash());
-        stake.setTxHash(tx.getHash());
-        stake.setActivatedEpoch(SlotService.epochAt(block.getTimeSeconds() * 1000L));
-        store.saveStakeDeposit(stake);
+        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L);
+        StakeRecord existing = store.getStakeDeposit(pubkey);
+        if (existing != null && existing.getBlockHash() != null
+                && existing.getBlockHash().equals(block.getHash())) {
+            if (existing.getActivatedEpoch() >= 0) {
+                return; // this exact block already applied
+            }
+            // Re-apply after a reorg reverted this block: restore its amount.
+            store.updateStakeDepositAmount(pubkey, amount.getValue().longValue(),
+                    block.getHash(), tx.getHash(), activatedEpoch);
+            log.info("Re-applied stake deposit for pubkey={} amount={} block={}",
+                    Utils.HEX.encode(pubkey), amount, block.getHashAsString());
+        } else if (existing != null) {
+            // Top-up: accumulate onto the existing deposit.
+            store.updateStakeDepositAmount(pubkey, existing.getAmount().add(amount.getValue()).longValue(),
+                    block.getHash(), tx.getHash(), activatedEpoch);
+            log.info("Stake top-up for pubkey={}: now {} (block {})",
+                    Utils.HEX.encode(pubkey), existing.getAmount().add(amount.getValue()), block.getHashAsString());
+        } else {
+            StakeRecord stake = new StakeRecord(pubkey, amount.getValue(), creds);
+            stake.setBlockHash(block.getHash());
+            stake.setTxHash(tx.getHash());
+            stake.setActivatedEpoch(activatedEpoch);
+            store.saveStakeDeposit(stake);
+            log.info("Applied chain-derived stake deposit for pubkey={} amount={} block={}",
+                    Utils.HEX.encode(pubkey), amount, block.getHashAsString());
+        }
 
         lockBondedOutput(block, tx, store);
-        log.info("Applied chain-derived stake deposit for pubkey={} amount={} block={}",
-                Utils.HEX.encode(pubkey), amount, block.getHashAsString());
     }
 
     /** Marks the deposit output spend-pending so the depositor's wallet treats it as locked. */
@@ -200,6 +228,122 @@ public class StakeService {
         store.updateTransactionOutputSpendPending(List.of(utxo));
     }
 
+    /**
+     * Proposes a slashing as a consensus BLOCKTYPE_SLASHING block carrying the
+     * two conflicting attestations. The actual slash + confiscation is applied
+     * by every node when the block is validated/saved (see applySlashingBlock),
+     * so nodes never diverge by slashing on locally-observed attestations.
+     */
+    public void submitSlashing(AttestationData att1, AttestationData att2, BlockStoreInterface store)
+            throws Exception {
+        if (att1 == null || att2 == null || !Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())) {
+            return;
+        }
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        Block head = store.get(maxConfirmedReward.getBlockHash());
+        Block b = Block.createBlock(networkParameters, head, head);
+        b.setBlockType(BlockType.BLOCKTYPE_SLASHING);
+
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(SLASHING_DATA_CLASS);
+        tx.setData(buildSlashingData(att1, att2));
+        b.addTransaction(tx);
+
+        blockSaveService.saveBlock(b, store);
+        log.info("Slashing block proposed for pubkey={}: {}",
+                Utils.HEX.encode(att1.getValidatorPubkey()), b.getHashAsString());
+    }
+
+    private byte[] buildSlashingData(AttestationData att1, AttestationData att2) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("attestation1", att1);
+        data.put("attestation2", att2);
+        return Json.jsonmapper().writeValueAsBytes(data);
+    }
+
+    /**
+     * Consensus application of a BLOCKTYPE_SLASHING block: verifies the two
+     * embedded attestations really form a slashable pattern, then marks the
+     * validator slashed and CONFISCATES the bonded output. Runs on every node
+     * that accepts the block, so the UTXO-set change is consensus-driven.
+     */
+    public void applySlashingBlock(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_SLASHING || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!SLASHING_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
+        AttestationData att2 = Json.jsonmapper().convertValue(data.get("attestation2"), AttestationData.class);
+        if (att1 == null || att2 == null
+                || !Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())) {
+            return;
+        }
+        boolean doubleVote = att1.getSlot() == att2.getSlot()
+                && !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
+        boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
+                && att2.getTargetEpoch() < att1.getTargetEpoch())
+                || (att2.getSourceEpoch() < att1.getSourceEpoch()
+                        && att1.getTargetEpoch() < att2.getTargetEpoch());
+        if (!doubleVote && !surround) {
+            return;
+        }
+
+        byte[] pubkey = att1.getValidatorPubkey();
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null || stake.isSlashed()) {
+            return;
+        }
+        long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
+        store.updateStakeSlashing(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        confiscateBond(pubkey, stake, store);
+        log.info("Validator slashed via consensus block {}: pubkey={}, withdrawable at epoch={}",
+                block.getHashAsString(), Utils.HEX.encode(pubkey), currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+    }
+
+    /**
+     * Reverts a STAKE block on reorg: deactivates the deposit(s) it created so
+     * a reorged-out deposit no longer counts as active stake.
+     */
+    public void revertStakeBlock(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_STAKE) {
+            return;
+        }
+        List<StakeRecord> affected = store.getStakeDepositsByBlockHash(block.getHash());
+        for (StakeRecord stake : affected) {
+            store.releaseStakeDeposit(stake.getPubkey());
+            log.info("Reorg: deactivated stake deposit for pubkey={} (block {})",
+                    Utils.HEX.encode(stake.getPubkey()), block.getHashAsString());
+        }
+    }
+
+    /**
+     * Reverts a SLASHING block on reorg: clears the slashed flag so a
+     * reorged-out slash does not permanently disable the validator.
+     */
+    public void revertSlashingBlock(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_SLASHING || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!SLASHING_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
+        if (att1 == null || att1.getValidatorPubkey() == null) {
+            return;
+        }
+        store.updateStakeSlashing(att1.getValidatorPubkey(), -1L);
+        log.info("Reorg: un-slashed validator for pubkey={} (block {})",
+                Utils.HEX.encode(att1.getValidatorPubkey()), block.getHashAsString());
+    }
+
     public void activateValidator(byte[] pubkey, long epoch, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null) {
@@ -213,26 +357,21 @@ public class StakeService {
     }
 
     /**
-     * Slashes a validator: confiscates the bonded deposit output (marked spent)
-     * and records the slashed state with a withdrawable epoch in chain-derived
-     * epoch units. The confiscation gives slashing economic weight.
+     * Legacy flag-only slashing used by store-level tests; consensus slashing
+     * goes through applySlashingBlock.
      */
     public void slashValidator(byte[] pubkey, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed()) return;
 
-        confiscateBond(pubkey, stake, store);
-
         long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
-        long withdrawableEpoch = currentEpoch + WITHDRAWAL_DELAY_EPOCHS;
-        store.updateStakeSlashing(pubkey, withdrawableEpoch);
-
-        log.info("Validator slashed: pubkey={}, withdrawable at epoch={}",
-                Utils.HEX.encode(pubkey), withdrawableEpoch);
+        store.updateStakeSlashing(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator slashed (flag only): pubkey={}, withdrawable at epoch={}",
+                Utils.HEX.encode(pubkey), currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
     }
 
-    /** Marks the bonded deposit output as spent (burned/confiscated). */
-    private void confiscateBond(byte[] pubkey, StakeRecord stake, BlockStoreInterface store) throws Exception {
+    /** Marks the bonded deposit output as spent (burned/confiscated). Consensus-driven. */
+    public void confiscateBond(byte[] pubkey, StakeRecord stake, BlockStoreInterface store) throws Exception {
         if (stake.getBlockHash() == null) {
             return; // legacy locally-seeded deposit without a chain block
         }
