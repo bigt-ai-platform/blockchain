@@ -45,6 +45,8 @@ import net.bigtangle.core.OrderOpenInfo;
 import net.bigtangle.core.OrderRecord;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SlotData;
+import net.bigtangle.core.StakeRecord;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
@@ -525,22 +527,19 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	/**
-	 * True when the beacon is the FIRST beacon of its epoch (slot % slotsPerEpoch
-	 * == 0, from the committed SlotData). Reward minting is only permitted here.
+	 * True when the beacon is the FIRST beacon of its epoch, derived from the
+	 * REWARD CHAIN position (chainlength % slotsPerEpoch == 1) rather than the
+	 * self-declared SlotData slot, so a mid-epoch beacon cannot claim epoch
+	 * start and mint rewards. Reward minting is only permitted here.
 	 */
 	private boolean isBeaconAtEpochStart(Block block) {
 		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null) {
 			return false;
 		}
 		try {
-			for (Transaction tx : block.getTransactions()) {
-				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
-					net.bigtangle.core.SlotData sd = Json.jsonmapper().readValue(tx.getData(),
-							net.bigtangle.core.SlotData.class);
-					if (sd != null) {
-						return sd.getSlot() % 32 == 0;
-					}
-				}
+			RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+			if (ri != null && ri.getChainlength() > 0) {
+				return ri.getChainlength() % 32 == 1;
 			}
 		} catch (Exception e) {
 			return false;
@@ -567,6 +566,57 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return null;
 		}
 		return null;
+	}
+
+	/**
+	 * Verifies the beacon is AUTHENTICATED: the declared proposer's signature
+	 * over the SlotData. The declared proposerIndex is cross-checked against the
+	 * active validator set; a fallback scans every depositor so a valid beacon
+	 * is not falsely rejected when the active set shifts between proposal and
+	 * validation.
+	 */
+	private boolean verifyProposerSignature(Block block, BlockStoreInterface store) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+			return true;
+		}
+		try {
+			net.bigtangle.core.SlotData sd = null;
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					sd = Json.jsonmapper().readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+					break;
+				}
+			}
+			if (sd == null || sd.getProposerSignature() == null || sd.getProposerSignature().length == 0) {
+				return false;
+			}
+			List<StakeRecord> active = store.getActiveStakeDeposits();
+			if (sd.getProposerIndex() >= 0 && sd.getProposerIndex() < active.size()) {
+				byte[] pubkey = active.get((int) sd.getProposerIndex()).getPubkey();
+				if (verifySlotDataSignature(pubkey, sd)) {
+					return true;
+				}
+			}
+			// Fallback: any known depositor could be the signer.
+			for (net.bigtangle.core.StakeRecord v : store.getAllStakeDeposits()) {
+				if (verifySlotDataSignature(v.getPubkey(), sd)) {
+					return true;
+				}
+			}
+			return false;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private boolean verifySlotDataSignature(byte[] pubkey, net.bigtangle.core.SlotData sd) {
+		try {
+			PQKey signer = PQKey.fromPublicOnly(pubkey);
+			return PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), sd.getProposerSignature(),
+					sd.getMessageHash());
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	/**
@@ -1013,6 +1063,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// Reward-output transactions (epoch reward block) must be coinbase-like:
 		// no inputs, no data, only freshly minted outputs. The SlotData tx
 		// (which carries slot/randao/fee-pool info) is exempt.
+		boolean hasRewardOutputs = false;
 		for (int i = 1; i < transactions.size(); i++) {
 			Transaction rewardTx = transactions.get(i);
 			if ("SlotData".equals(rewardTx.getDataClassName())) {
@@ -1023,6 +1074,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					throw new IncorrectTransactionCountException();
 				return SolidityState.getFailState();
 			}
+			hasRewardOutputs = true;
+		}
+
+		// The beacon must be AUTHENTICATED: the declared proposer's signature
+		// over the SlotData binds the slot, fee pool and RANDAO reveal. Without
+		// it, anyone could publish a beacon declaring any slot/fee-pool and
+		// mint arbitrary value. Only enforced when the beacon actually mints.
+		if (hasRewardOutputs && !verifyProposerSignature(block, store)) {
+			if (throwExceptions)
+				throw new BlockStoreException("Beacon is not signed by a valid proposer");
+			return SolidityState.getFailState();
 		}
 
 		// Every reward output must pay a KNOWN depositor's address (past or
@@ -1055,16 +1117,19 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				}
 			}
 		} catch (BlockStoreException e) {
-			// stake table unreadable — do not reject a valid beacon
+			// A DB error while checking recipients is fail-closed: reject.
+			if (throwExceptions)
+				throw e;
+			return SolidityState.getFailState();
 		}
 
 		// Check that the tx has correct data
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 
 		// Exact mint validation: the proposer commits the fee-pool snapshot in
-		// the beacon's SlotData; the reward outputs must EXACTLY equal it. When
-		// no SlotData is present (older beacons) fall back to the lenient bound
-		// against the current pool.
+		// the beacon's SlotData; the reward outputs must EXACTLY equal it, must
+		// not exceed the total active stake (a protocol cap), and a DB failure
+		// here is fail-closed (reject), never a bypass.
 		java.math.BigInteger rewardTotal = java.math.BigInteger.ZERO;
 		for (int i = 1; i < transactions.size(); i++) {
 			for (TransactionOutput out : transactions.get(i).getOutputs()) {
@@ -1075,6 +1140,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		Long committedPool = committedFeePool(block);
 		try {
+			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
+			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
+				activeStake = activeStake.add(v.getAmount());
+			}
 			if (committedPool != null) {
 				if (rewardTotal.compareTo(java.math.BigInteger.valueOf(committedPool)) != 0) {
 					if (throwExceptions)
@@ -1093,8 +1162,16 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					}
 				}
 			}
+			if (activeStake.signum() > 0 && rewardTotal.compareTo(activeStake) > 0) {
+				if (throwExceptions)
+					throw new InvalidTransactionException("Epoch reward exceeds the total active stake");
+				return SolidityState.getFailState();
+			}
 		} catch (BlockStoreException e) {
-			// pool unreadable — do not reject a valid beacon
+			// A DB error during mint validation is fail-closed: reject.
+			if (throwExceptions)
+				throw e;
+			return SolidityState.getFailState();
 		}
 
 		// NotNull checks

@@ -415,6 +415,26 @@ public class StakeService {
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
+    /**
+     * Voluntary exit: an honest (non-slashed) validator schedules its own
+     * withdrawal. After the delay, processWithdrawals deletes the record and
+     * the bonded output becomes spendable again.
+     */
+    public void requestExit(byte[] pubkey, BlockStoreInterface store) throws Exception {
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null) {
+            throw new IllegalArgumentException("No stake deposit for pubkey");
+        }
+        if (stake.isSlashed()) {
+            throw new IllegalStateException("Slashed validators cannot request exit");
+        }
+        long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
+        long withdrawableEpoch = currentEpoch + WITHDRAWAL_DELAY_EPOCHS;
+        store.updateStakeSlashing(pubkey, withdrawableEpoch);
+        log.info("Validator exit requested: pubkey={}, withdrawable at epoch={}",
+                Utils.HEX.encode(pubkey), withdrawableEpoch);
+    }
+
     public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {
         List<StakeRecord> allDeposits = store.getAllStakeDeposits();
         for (StakeRecord stake : allDeposits) {

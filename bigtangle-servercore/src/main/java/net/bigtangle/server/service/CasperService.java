@@ -158,36 +158,45 @@ public class CasperService {
      * PURE FUNCTION of the confirmed chain: the confirmed reward block at the
      * epoch boundary's chainlength (the last beacon of the previous epoch,
      * assuming one beacon per slot). Every node that has confirmed the same
-     * chain derives the same checkpoint, so proposers and attesters vote for
-     * the same target instead of racing on local first-writer values.
+     * chain derives the same checkpoint. When the boundary is not yet confirmed
+     * a transient (non-cached) checkpoint is returned so the cache is never
+     * poisoned with a node-local value.
      */
     public Checkpoint ensureCheckpoint(long epoch, BlockStoreInterface store) {
-        return checkpoints.computeIfAbsent(epoch, e -> {
-            Sha256Hash head = null;
-            try {
-                long targetChainlength = e * 32L;
-                TXReward boundary = store.getRewardConfirmedAtHeight(targetChainlength);
-                head = boundary != null ? boundary.getBlockHash()
-                        : confirmedHeadOrGenesis(store);
-            } catch (Exception ex) {
-                head = confirmedHeadOrGenesis(store);
+        Checkpoint existing = checkpoints.get(epoch);
+        if (existing != null) {
+            return existing;
+        }
+        TXReward boundary = null;
+        try {
+            boundary = store.getRewardConfirmedAtHeight(epoch * 32L);
+        } catch (Exception e) {
+            boundary = null;
+        }
+        if (boundary == null) {
+            // Boundary not confirmed yet: return a transient checkpoint that is
+            // NOT cached, so it cannot poison future lookups.
+            Checkpoint transientCp = new Checkpoint(confirmedHeadOrGenesis(store), epoch);
+            if (epoch == 0) {
+                transientCp.justified = true;
+                transientCp.finalized = true;
             }
-            Checkpoint cp = new Checkpoint(head, e);
-            if (e == 0) {
-                cp.justified = true;
-                cp.finalized = true;
-            }
-            // Persist with the store so the checkpoint survives restart even
-            // before it is justified.
-            try {
-                String val = cp.blockHash.toString() + "," + cp.justified + "," + cp.finalized;
-                store.savePosState("casper", "ckpt_" + cp.epoch,
-                        val.getBytes(StandardCharsets.UTF_8));
-            } catch (Exception ex) {
-                log.debug("Failed to persist checkpoint at creation", ex);
-            }
-            return cp;
-        });
+            return transientCp;
+        }
+        Checkpoint cp = new Checkpoint(boundary.getBlockHash(), epoch);
+        if (epoch == 0) {
+            cp.justified = true;
+            cp.finalized = true;
+        }
+        checkpoints.put(epoch, cp);
+        try {
+            String val = cp.blockHash.toString() + "," + cp.justified + "," + cp.finalized;
+            store.savePosState("casper", "ckpt_" + cp.epoch,
+                    val.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ex) {
+            log.debug("Failed to persist checkpoint at creation", ex);
+        }
+        return cp;
     }
 
     private Sha256Hash confirmedHeadOrGenesis(BlockStoreInterface store) {
@@ -308,11 +317,22 @@ public class CasperService {
             return;
         }
 
-        // The source is the highest justified checkpoint (genesis at first).
-        // Generalizing the source avoids requiring checkpoint(epoch-1) to exist,
-        // which would otherwise stall finality on a freshly bootstrapped chain.
-        Checkpoint source = getJustifiedCheckpoint();
-        if (source == null || source.epoch >= target.epoch) {
+        // A checkpoint finalizes only when its IMMEDIATE parent (epoch-1) is
+        // finalized AND it is justified — a one-epoch link. Using the parent
+        // (not the highest justified) means every epoch in between can finalize
+        // in sequence and never stalls.
+        if (target.justified) {
+            Checkpoint parent = checkpoints.get(epoch - 1);
+            if (parent != null && parent.finalized && !target.finalized) {
+                target.finalized = true;
+                log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
+                persistCheckpoint(target, store);
+            }
+            return;
+        }
+
+        Checkpoint justifySource = getJustifiedCheckpoint();
+        if (justifySource == null || justifySource.epoch >= target.epoch) {
             return;
         }
 
@@ -321,7 +341,9 @@ public class CasperService {
             return;
         }
 
-        BigInteger votedStake = getVotedStake(source.blockHash, target.blockHash, store);
+        // A vote for the target counts if it came from ANY justified source,
+        // so an advancing justified checkpoint cannot orphan pending votes.
+        BigInteger votedStake = getVotedStake(target.blockHash, store);
         BigInteger twoThirds = totalStake.multiply(BigInteger.valueOf(2))
                 .divide(BigInteger.valueOf(3));
 
@@ -331,12 +353,8 @@ public class CasperService {
                     epoch, target.blockHash, votedStake, totalStake);
             persistCheckpoint(target, store);
 
-            // Casper FFG finalizes only across a ONE-epoch link: target is
-            // finalized when it is justified AND its parent (source+1) is
-            // finalized. Requiring source.epoch == target.epoch - 1 prevents
-            // two conflicting checkpoints in different epochs from both being
-            // finalized against a permanently-final genesis.
-            if (source.finalized && target.epoch == source.epoch + 1) {
+            Checkpoint parent = checkpoints.get(epoch - 1);
+            if (parent != null && parent.finalized) {
                 target.finalized = true;
                 log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
                 persistCheckpoint(target, store);
@@ -363,12 +381,12 @@ public class CasperService {
     }
 
     /**
-     * Stake that has attested the exact (source, target) checkpoint pair. Keyed
-     * by pubkey hex — never by byte[], which uses identity equality — and
-     * filtered by both checkpoints, so unrelated votes are not counted.
+     * Stake that has attested the target checkpoint from ANY justified source
+     * checkpoint. Keyed by pubkey hex — never by byte[], which uses identity
+     * equality — and filtered by the exact target, so unrelated votes are not
+     * counted while pending votes are not orphaned by an advancing source.
      */
-    private BigInteger getVotedStake(Sha256Hash source, Sha256Hash target,
-            BlockStoreInterface store) throws Exception {
+    private BigInteger getVotedStake(Sha256Hash target, BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
@@ -381,12 +399,21 @@ public class CasperService {
                 continue;
             }
             Sha256Hash src = latestVoteSources.get(entry.getKey());
-            if (src == null || !source.equals(src)) {
+            if (src == null || !isJustifiedCheckpointHash(src)) {
                 continue;
             }
             BigInteger stake = stakeByPubkey.getOrDefault(entry.getKey(), BigInteger.ZERO);
             voted = voted.add(stake);
         }
         return voted;
+    }
+
+    private boolean isJustifiedCheckpointHash(Sha256Hash hash) {
+        for (Checkpoint cp : checkpoints.values()) {
+            if (cp.justified && hash.equals(cp.blockHash)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

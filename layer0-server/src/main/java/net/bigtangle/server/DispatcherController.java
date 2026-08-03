@@ -742,6 +742,14 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
+			case requestValidatorExit: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkeyHex = (String) request.get("pubkey");
+				stakeService.requestExit(Utils.HEX.decode(pubkeyHex), store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
 			case submitSlashingProof: {
 				AttestationData att1 = null, att2 = null;
 				try {

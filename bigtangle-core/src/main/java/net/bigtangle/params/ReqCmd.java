@@ -36,7 +36,7 @@ public enum ReqCmd {
     // check point value
     getAnchors,
     // PoS
-    submitAttestation, getAttestations, processWithdrawal, submitSlashingProof,
+    submitAttestation, getAttestations, processWithdrawal, submitSlashingProof, requestValidatorExit,
     stakeDeposit, activateValidator, getValidators, getBaseFee, setValidatorKey, getValidatorKey,
     // NFT
     createNft, saveUserdata, fundAddresses;

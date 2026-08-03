@@ -226,6 +226,11 @@ public class SlotService {
             // can recompute the exact expected payout deterministically.
             slotData.setFeePool(epochFeePool.longValue());
         }
+        if (proposerKey != null) {
+            // The proposer signs the slot data so the declared slot, fee pool
+            // and RANDAO reveal are authenticated, not self-declared.
+            slotData.setProposerSignature(proposerKey.sign(slotData.getMessageHash()).serialize());
+        }
 
         // Commit the slot data (incl. the RANDAO reveal) on-chain so validators
         // can scope minting to epoch-start beacons and mix the reveal.

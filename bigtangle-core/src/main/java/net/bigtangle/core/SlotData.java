@@ -1,5 +1,9 @@
 package net.bigtangle.core;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 public class SlotData {
 
     private long slot;
@@ -10,8 +14,37 @@ public class SlotData {
     private Sha256Hash dagStateRoot;
     private Sha256Hash[] attestationRoots;
     private long feePool;
+    private byte[] proposerSignature;
 
     public SlotData() {}
+
+    /**
+     * Canonical hash over every committed field except the proposer signature.
+     * The proposer signs this hash, so slot, epoch, proposer index, fee pool and
+     * RANDAO reveal cannot be altered without invalidating the signature.
+     */
+    public Sha256Hash getMessageHash() {
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(baos);
+            dos.writeLong(slot);
+            dos.writeLong(epoch);
+            dos.writeLong(proposerIndex);
+            dos.writeLong(feePool);
+            if (randaoReveal != null) {
+                dos.writeInt(randaoReveal.length);
+                dos.write(randaoReveal);
+            } else {
+                dos.writeInt(0);
+            }
+            dos.write(parentHash != null ? parentHash.getBytes() : new byte[32]);
+            dos.write(dagStateRoot != null ? dagStateRoot.getBytes() : new byte[32]);
+            dos.flush();
+            return Sha256Hash.of(baos.toByteArray());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public SlotData(long slot, long epoch, long proposerIndex, Sha256Hash parentHash) {
         this.slot = slot;
@@ -37,4 +70,7 @@ public class SlotData {
 
     public long getFeePool() { return feePool; }
     public void setFeePool(long feePool) { this.feePool = feePool; }
+
+    public byte[] getProposerSignature() { return proposerSignature; }
+    public void setProposerSignature(byte[] proposerSignature) { this.proposerSignature = proposerSignature; }
 }

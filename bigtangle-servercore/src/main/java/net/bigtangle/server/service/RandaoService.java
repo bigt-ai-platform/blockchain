@@ -131,7 +131,7 @@ public class RandaoService {
             return;
         }
         long epoch = slot / 32;
-        byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]);
+        byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]).clone();
         for (int i = 0; i < 32; i++) {
             currentMix[i] ^= reveal[i];
         }
