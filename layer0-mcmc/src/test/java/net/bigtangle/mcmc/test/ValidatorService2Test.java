@@ -612,6 +612,10 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
+		// block1's fee UTXO is now spend-pending (server marks it when the
+		// token block is saved), so fund outKey with a fresh confirmed fee
+		// source for the invalid issuance below.
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 
 		// Generate a subsequent issuance that does not work
 		PQKey pubKey2 = PQKey.createNew();
@@ -648,6 +652,10 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
+		// block1's fee UTXO is now spend-pending (server marks it when the
+		// token block is saved), so fund outKey with a fresh confirmed fee
+		// source for the invalid issuance below.
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 
 		// Generate a subsequent issuance that does not work
 		TokenInfo tokenInfo2 = new TokenInfo();
@@ -683,6 +691,10 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
+		// block1's fee UTXO is now spend-pending (server marks it when the
+		// token block is saved), so fund outKey with a fresh confirmed fee
+		// source for the invalid issuance below.
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 
 		// Generate a subsequent issuance that does not work
 		TokenInfo tokenInfo2 = new TokenInfo();
@@ -718,6 +730,10 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
+		// block1's fee UTXO is now spend-pending (server marks it when the
+		// token block is saved), so fund outKey with a fresh confirmed fee
+		// source for the invalid issuance below.
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 
 		// Generate a subsequent issuance that does not work
 		TokenInfo tokenInfo2 = new TokenInfo();
@@ -754,6 +770,10 @@ public class ValidatorService2Test extends AbstractIntegrationTest {
 		tokenInfo.getMultiSignAddresses()
 				.add(new MultiSignAddress(tokens.getTokenid(), "", outKey.getPublicKeyAsHex()));
 		Block block1 = saveTokenUnitTest(tokenInfo, coinbase, outKey, null);
+		// block1's fee UTXO is now spend-pending (server marks it when the
+		// token block is saved), so fund outKey with a fresh confirmed fee
+		// source for the invalid issuance below.
+		payBigTo(outKey, Coin.FEE_DEFAULT.getValue(), null);
 
 		// Generate a subsequent issuance that does not work
 		TokenInfo tokenInfo2 = new TokenInfo();

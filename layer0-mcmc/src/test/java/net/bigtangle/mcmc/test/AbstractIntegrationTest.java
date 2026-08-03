@@ -431,6 +431,37 @@ public abstract class AbstractIntegrationTest {
 		return b;
 	}
 
+	/**
+	 * Unique output index for {@link #addConfirmedBigUtxo} so it never collides
+	 * with the genesis coinbase (index 0) or other inserted test UTXOs.
+	 */
+	private static final java.util.concurrent.atomic.AtomicLong CONFIRMED_FEE_INDEX = new java.util.concurrent.atomic.AtomicLong(
+			1_000_000_000L);
+
+	/**
+	 * Inserts a fresh CONFIRMED, spendable BC UTXO for {@code key} directly into
+	 * the store (same shape as the genesis coinbase). Once a token block is
+	 * saved, the server marks the wallet's fee UTXO spend-pending even though
+	 * the block is not yet confirmed, so a subsequent token creation needs a new
+	 * confirmed fee source instead of reusing the committed one.
+	 */
+	protected void addConfirmedBigUtxo(PQKey key, BigInteger value) throws Exception {
+		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+		TransactionOutput genesisOut = genesis.getTransactions().get(0).getOutput(0);
+		UTXO utxo = new UTXO();
+		utxo.setHash(genesis.getTransactions().get(0).getHash());
+		utxo.setIndex(CONFIRMED_FEE_INDEX.getAndIncrement());
+		utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
+		utxo.setCoinbase(true);
+		utxo.setScript(genesisOut.getScriptPubKey());
+		utxo.setAddress(Address.fromHash160(networkParameters, key.getPubKeyHash()).toBase58());
+		utxo.setBlockHash(genesis.getHash());
+		utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+		utxo.setConfirmed(true);
+		utxo.setSpent(false);
+		store.addUnspentTransactionOutput(new ArrayList<>(java.util.List.of(utxo)));
+	}
+
 	protected Block wrapTransaction(Transaction tx) {
 		if (tx == null) return null;
 		Block block = Block.setBlock2(networkParameters, NetworkParameters.BLOCK_VERSION_GENESIS);

@@ -286,6 +286,9 @@ public class TokenTest extends AbstractIntegrationTest {
 		{
 
 			PQKey productkey = PQKey.createNew();
+			// Prior domain publication committed the wallet's spendable BC fee
+			// UTXO, so give the wallet a fresh confirmed fee source first.
+			addConfirmedBigUtxo(wallet.walletKeys().get(0), Coin.FEE_DEFAULT.getValue());
 			mcmcService.calcNewBlockPrototype(store);
 			Block block = createToken(productkey, "product", 0, "myshopname.shop", "test", BigInteger.ONE, true, null,
 					TokenType.token.ordinal(), productkey.getPublicKeyAsHex(), wallet);
@@ -620,6 +623,10 @@ public class TokenTest extends AbstractIntegrationTest {
 		PQKey issuer = PQKey.createNew();
 		TokenKeyValues kvs = certificateTokenKeyValues(issuer, userkey);
 		wallet.importKey(issuer);
+		// The prior domain/token creation committed the wallet's spendable BC
+		// fee UTXO (spend-pending at save, change not yet confirmed), so give
+		// the wallet a fresh confirmed fee source for this token creation.
+		addConfirmedBigUtxo(wallet.walletKeys().get(0), Coin.FEE_DEFAULT.getValue());
 		// Ensure tips queue is updated before wallet operations
 		mcmcService.calcNewBlockPrototype(store);
 		Block block = createToken(issuer, "identity", 0, "id.shop", "test", BigInteger.ONE, true, kvs,
