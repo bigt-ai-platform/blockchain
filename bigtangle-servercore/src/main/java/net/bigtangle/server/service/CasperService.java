@@ -154,20 +154,23 @@ public class CasperService {
     }
 
     /**
-     * Chain-derived checkpoint creation: the checkpoint hash for an epoch is the
-     * node's CONFIRMED reward head (deterministic for nodes that have confirmed
-     * the same chain). Both proposers and attesters derive it the same way, so
-     * their votes target the same hash instead of racing on local first-writer
-     * values.
+     * Chain-derived checkpoint creation. The checkpoint hash for an epoch is a
+     * PURE FUNCTION of the confirmed chain: the confirmed reward block at the
+     * epoch boundary's chainlength (the last beacon of the previous epoch,
+     * assuming one beacon per slot). Every node that has confirmed the same
+     * chain derives the same checkpoint, so proposers and attesters vote for
+     * the same target instead of racing on local first-writer values.
      */
     public Checkpoint ensureCheckpoint(long epoch, BlockStoreInterface store) {
         return checkpoints.computeIfAbsent(epoch, e -> {
             Sha256Hash head = null;
             try {
-                TXReward r = cacheBlockService.getMaxConfirmedReward(store);
-                head = r != null ? r.getBlockHash() : UtilGeneseBlock.createGenesis(networkParameters).getHash();
+                long targetChainlength = e * 32L;
+                TXReward boundary = store.getRewardConfirmedAtHeight(targetChainlength);
+                head = boundary != null ? boundary.getBlockHash()
+                        : confirmedHeadOrGenesis(store);
             } catch (Exception ex) {
-                head = UtilGeneseBlock.createGenesis(networkParameters).getHash();
+                head = confirmedHeadOrGenesis(store);
             }
             Checkpoint cp = new Checkpoint(head, e);
             if (e == 0) {
@@ -177,6 +180,18 @@ public class CasperService {
             persistCheckpoint(cp, null);
             return cp;
         });
+    }
+
+    private Sha256Hash confirmedHeadOrGenesis(BlockStoreInterface store) {
+        try {
+            TXReward r = cacheBlockService.getMaxConfirmedReward(store);
+            if (r != null) {
+                return r.getBlockHash();
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        return UtilGeneseBlock.createGenesis(networkParameters).getHash();
     }
 
     public boolean isCheckpointJustified(long epoch) {

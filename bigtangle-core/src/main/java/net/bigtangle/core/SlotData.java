@@ -9,6 +9,7 @@ public class SlotData {
     private Sha256Hash parentHash;
     private Sha256Hash dagStateRoot;
     private Sha256Hash[] attestationRoots;
+    private long feePool;
 
     public SlotData() {}
 
@@ -33,4 +34,7 @@ public class SlotData {
     public void setDagStateRoot(Sha256Hash h) { this.dagStateRoot = h; }
     public Sha256Hash[] getAttestationRoots() { return attestationRoots; }
     public void setAttestationRoots(Sha256Hash[] a) { this.attestationRoots = a; }
+
+    public long getFeePool() { return feePool; }
+    public void setFeePool(long feePool) { this.feePool = feePool; }
 }

@@ -548,6 +548,27 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		return false;
 	}
 
+	/** The fee-pool snapshot committed in the beacon's SlotData, or null if absent. */
+	private Long committedFeePool(Block block) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null) {
+			return null;
+		}
+		try {
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					net.bigtangle.core.SlotData sd = Json.jsonmapper().readValue(tx.getData(),
+							net.bigtangle.core.SlotData.class);
+					if (sd != null) {
+						return sd.getFeePool();
+					}
+				}
+			}
+		} catch (Exception e) {
+			return null;
+		}
+		return null;
+	}
+
 	/**
 	 * Structural validation of a STAKE deposit block: the first transaction must
 	 * be a well-formed {@code StakeDeposit} (data payload present and parseable,
@@ -990,9 +1011,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		// Reward-output transactions (epoch reward block) must be coinbase-like:
-		// no inputs, no data, only freshly minted outputs.
+		// no inputs, no data, only freshly minted outputs. The SlotData tx
+		// (which carries slot/randao/fee-pool info) is exempt.
 		for (int i = 1; i < transactions.size(); i++) {
 			Transaction rewardTx = transactions.get(i);
+			if ("SlotData".equals(rewardTx.getDataClassName())) {
+				continue;
+			}
 			if (!rewardTx.getInputs().isEmpty() || rewardTx.getData() != null || rewardTx.getOutputs().isEmpty()) {
 				if (throwExceptions)
 					throw new IncorrectTransactionCountException();
@@ -1036,26 +1061,36 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// Check that the tx has correct data
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 
-		// Lenient mint bound: when the fee pool is still present, the total
-		// epoch reward must not exceed it (otherwise reject as over-minting).
-		// When the pool has already been consumed the check is skipped, so a
-		// valid beacon is never falsely rejected for pool-lifecycle timing.
-		try {
-			byte[] poolBytes = store.getPosState("fee", networkParameters.getChainId());
-			if (poolBytes != null) {
-				java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
-				java.math.BigInteger rewardTotal = java.math.BigInteger.ZERO;
-				for (int i = 1; i < transactions.size(); i++) {
-					for (TransactionOutput out : transactions.get(i).getOutputs()) {
-						if (out.getValue().isBIG()) {
-							rewardTotal = rewardTotal.add(out.getValue().getValue());
-						}
-					}
+		// Exact mint validation: the proposer commits the fee-pool snapshot in
+		// the beacon's SlotData; the reward outputs must EXACTLY equal it. When
+		// no SlotData is present (older beacons) fall back to the lenient bound
+		// against the current pool.
+		java.math.BigInteger rewardTotal = java.math.BigInteger.ZERO;
+		for (int i = 1; i < transactions.size(); i++) {
+			for (TransactionOutput out : transactions.get(i).getOutputs()) {
+				if (out.getValue().isBIG()) {
+					rewardTotal = rewardTotal.add(out.getValue().getValue());
 				}
-				if (rewardTotal.compareTo(pool) > 0) {
+			}
+		}
+		Long committedPool = committedFeePool(block);
+		try {
+			if (committedPool != null) {
+				if (rewardTotal.compareTo(java.math.BigInteger.valueOf(committedPool)) != 0) {
 					if (throwExceptions)
-						throw new InvalidTransactionException("Epoch reward exceeds the fee pool");
+						throw new InvalidTransactionException(
+								"Epoch reward does not match the committed fee pool");
 					return SolidityState.getFailState();
+				}
+			} else {
+				byte[] poolBytes = store.getPosState("fee", networkParameters.getChainId());
+				if (poolBytes != null) {
+					java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
+					if (rewardTotal.compareTo(pool) > 0) {
+						if (throwExceptions)
+							throw new InvalidTransactionException("Epoch reward exceeds the fee pool");
+						return SolidityState.getFailState();
+					}
 				}
 			}
 		} catch (BlockStoreException e) {
@@ -1849,9 +1884,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 
 		// Reward-output transactions (epoch reward block) must be coinbase-like:
-		// no inputs, no data, only freshly minted outputs.
+		// no inputs, no data, only freshly minted outputs. The SlotData tx is exempt.
 		for (int i = 1; i < transactions.size(); i++) {
 			Transaction rewardTx = transactions.get(i);
+			if ("SlotData".equals(rewardTx.getDataClassName())) {
+				continue;
+			}
 			if (!rewardTx.getInputs().isEmpty() || rewardTx.getData() != null || rewardTx.getOutputs().isEmpty()) {
 				if (throwExceptions)
 					throw new IncorrectTransactionCountException();

@@ -202,24 +202,30 @@ public class SlotService {
 
         // The epoch's fee pool is paid out by the PROPOSER in the first beacon
         // of the epoch — never in a competing beacon from every node.
+        java.math.BigInteger epochFeePool = java.math.BigInteger.ZERO;
         if (getSlotInEpoch(slot) == 0) {
             String chainId = networkParameters.getChainId();
             byte[] poolBytes = store.getPosState("fee", chainId);
             if (poolBytes != null) {
-                java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
-                if (pool.compareTo(java.math.BigInteger.ZERO) > 0) {
-                    for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(pool, store)) {
-                        beaconBlock.addTransaction(rewardTx);
-                    }
-                    store.deletePosState("fee", chainId);
-                    log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", pool, slot);
+                epochFeePool = new java.math.BigInteger(poolBytes);
+            }
+            if (epochFeePool.compareTo(java.math.BigInteger.ZERO) > 0) {
+                for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(epochFeePool, store)) {
+                    beaconBlock.addTransaction(rewardTx);
                 }
+                store.deletePosState("fee", chainId);
+                log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", epochFeePool, slot);
             }
         }
 
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
+        if (getSlotInEpoch(slot) == 0) {
+            // Snapshot the fee pool that funded the reward outputs so validators
+            // can recompute the exact expected payout deterministically.
+            slotData.setFeePool(epochFeePool.longValue());
+        }
 
         // Commit the slot data (incl. the RANDAO reveal) on-chain so validators
         // can scope minting to epoch-start beacons and mix the reveal.
