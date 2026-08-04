@@ -459,7 +459,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		}
 		case BLOCKTYPE_SLASHING: {
-			SolidityState slashState = checkSlashingSolidity(block, throwExceptions);
+			SolidityState slashState = checkSlashingSolidity(block, throwExceptions, store);
 			if (!(slashState.getState() == State.Success)) {
 				return slashState;
 			}
@@ -581,6 +581,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 */
 	private SolidityState checkSlashingSolidity(Block block, boolean throwExceptions)
 			throws BlockStoreException {
+		return checkSlashingSolidity(block, throwExceptions, null);
+	}
+
+	private SolidityState checkSlashingSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
+			throws BlockStoreException {
 		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
 			if (throwExceptions)
 				throw new BlockStoreException("SLASHING block has no transactions");
@@ -625,6 +630,20 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (throwExceptions)
 				throw new BlockStoreException("SLASHING proof data is malformed", e);
 			return SolidityState.getFailState();
+		}
+		// The parent MUST be a beacon (or genesis), so the withdrawable chain
+		// epoch is derivable from the block's own position. Without this, a
+		// SLASHING block built on an arbitrary parent would make the bond
+		// withdrawable at the fallback epoch 0 on a mature chain.
+		if (store != null) {
+			Block parent = store.get(block.getPrevBlockHash());
+			if (parent == null) {
+				return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
+			}
+			if (parent.getBlockType() != BlockType.BLOCKTYPE_BEACON
+					&& parent.getBlockType() != BlockType.BLOCKTYPE_INITIAL) {
+				throw new BlockStoreException("SLASHING block parent is not a beacon");
+			}
 		}
 		return SolidityState.getSuccessState();
 	}
