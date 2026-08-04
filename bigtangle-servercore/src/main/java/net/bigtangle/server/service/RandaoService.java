@@ -127,7 +127,8 @@ public class RandaoService {
      * the epoch mix. Deterministic for every node that accepts the same beacon.
      */
     public void applyReveal(long slot, byte[] reveal) {
-        if (reveal == null || reveal.length == 0) {
+        if (reveal == null || reveal.length != 32) {
+            log.warn("Rejecting malformed RANDAO reveal (expected 32 bytes) for slot {}", slot);
             return;
         }
         long epoch = slot / 32;

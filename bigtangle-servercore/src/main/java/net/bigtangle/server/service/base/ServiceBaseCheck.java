@@ -634,7 +634,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// The parent MUST be a beacon (or genesis), so the withdrawable chain
 		// epoch is derivable from the block's own position. Without this, a
 		// SLASHING block built on an arbitrary parent would make the bond
-		// withdrawable at the fallback epoch 0 on a mature chain.
+		// withdrawable at the fallback epoch 0 on a mature chain. The parent
+		// must also be RECENT (within CHAINLENGTH_CUTOFF of the tip), so a
+		// stale/genesis parent cannot set a withdrawable epoch already in the
+		// past.
 		if (store != null) {
 			Block parent = store.get(block.getPrevBlockHash());
 			if (parent == null) {
@@ -643,6 +646,23 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (parent.getBlockType() != BlockType.BLOCKTYPE_BEACON
 					&& parent.getBlockType() != BlockType.BLOCKTYPE_INITIAL) {
 				throw new BlockStoreException("SLASHING block parent is not a beacon");
+			}
+			long parentChainlength = 0;
+			if (parent.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+				RewardInfo pri = new RewardInfo().parseChecked(parent.getTransactions().get(0).getData());
+				parentChainlength = pri != null ? pri.getChainlength() : 0;
+			}
+			try {
+				TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+				long tipChainlength = tip != null ? tip.getChainLength() : 0;
+				if (tipChainlength - parentChainlength > net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
+					throw new BlockStoreException("SLASHING block parent is too far behind the tip");
+				}
+			} catch (BlockStoreException e) {
+				throw e;
+			} catch (Exception e) {
+				// cannot determine recency — defer rather than accept
+				return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
 			}
 		}
 		return SolidityState.getSuccessState();
@@ -691,13 +711,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	/**
-	 * Verifies the beacon is AUTHENTICATED: the declared proposer's signature
-	 * over the SlotData. The primary check is that the signer is the validator
-	 * the deterministic proposer selection picks for the declared slot (using
-	 * the chain's RANDAO mix). If the mix drifted since proposal (a timing
-	 * artefact), a fallback accepts the signature from ANY currently active
-	 * validator — but NEVER from slashed/released ones, so an attacker cannot
-	 * sign with a key they staked once and abandoned.
+	 * Verifies the beacon is AUTHENTICATED: the signer must be EXACTLY the
+	 * validator the deterministic proposer selection picks for the declared slot
+	 * (using the chain's RANDAO mix). There is no "any active validator"
+	 * fallback — a beacon signed by anyone who is not the slot's proposer is
+	 * rejected, so proposer identity is actually enforced.
 	 */
 	private boolean verifyProposerSignature(Block block, BlockStoreInterface store) {
 		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
@@ -730,12 +748,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (expectedIdx >= 0 && expectedIdx < active.size()
 					&& verifySlotDataSignature(active.get((int) expectedIdx).getPubkey(), sd)) {
 				return true;
-			}
-			// Fallback: any ACTIVE validator could be the signer.
-			for (StakeRecord v : active) {
-				if (verifySlotDataSignature(v.getPubkey(), sd)) {
-					return true;
-				}
 			}
 			return false;
 		} catch (Exception e) {
