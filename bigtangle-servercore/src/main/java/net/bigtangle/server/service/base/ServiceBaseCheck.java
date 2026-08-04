@@ -515,6 +515,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
 				throw new BlockStoreException("EXIT request signature is invalid");
 			}
+			// The nonce binds the signature to a time window; a stale replay
+			// (nonce far from the current epoch) is rejected.
+			long currentEpoch = net.bigtangle.server.service.SlotService.epochAt(System.currentTimeMillis());
+			if (Math.abs(nonce - currentEpoch) > 1) {
+				throw new BlockStoreException("EXIT request nonce is stale");
+			}
 		} catch (BlockStoreException e) {
 			if (throwExceptions)
 				throw e;
@@ -1216,7 +1222,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				}
 			}
 		}
-		Long committedPool = committedFeePool(block);
 		try {
 			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
 			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
@@ -1224,29 +1229,55 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee
 			// surpluses over the CONFIRMED blocks this beacon references in
-			// RewardInfo.getBlocks — a pure function of chain state. No
-			// self-declared fee pool or node-local ledger is trusted.
-			java.math.BigInteger expectedFromBlocks = null;
-			try {
+			// RewardInfo.getBlocks — a pure function of chain state. Null or
+			// unparseable reference sets, unresolvable blocks, unconfirmed or
+			// out-of-epoch blocks, and any recomputation failure are all
+			// FAIL-CLOSED (reject), never skipped.
+			if (hasRewardOutputs) {
 				RewardInfo ri = new RewardInfo().parseChecked(transactions.get(0).getData());
-				if (ri != null && ri.getBlocks() != null) {
-					expectedFromBlocks = java.math.BigInteger.ZERO;
-					for (Sha256Hash h : ri.getBlocks()) {
-						Block referenced = store.get(h);
-						if (referenced != null) {
-							expectedFromBlocks = expectedFromBlocks.add(
-									net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
-						}
-					}
+				if (ri == null || ri.getBlocks() == null) {
+					throw new InvalidTransactionException(
+							"Epoch reward beacon has no referenced block set to recompute against");
 				}
-			} catch (Exception ignored) {
-				// cannot recompute — fail closed below via the null check
-			}
-			if (hasRewardOutputs && expectedFromBlocks != null
-					&& rewardTotal.compareTo(expectedFromBlocks) != 0) {
+				long cutoffHeight = 0;
+				try {
+					net.bigtangle.server.service.base.ServiceBaseConnect sbc =
+							new net.bigtangle.server.service.base.ServiceBaseConnect(
+									serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+					cutoffHeight = sbc.getRewardCutoffHeight(ri.getPrevRewardHash(), store);
+				} catch (Exception ignored) {
+					// cutoff unavailable — fail closed below via per-block range
+				}
+				java.math.BigInteger expectedFromBlocks = java.math.BigInteger.ZERO;
+				for (Sha256Hash h : ri.getBlocks()) {
+					Block referenced = store.get(h);
+					if (referenced == null) {
+						throw new InvalidTransactionException("Epoch reward beacon references an unknown block");
+					}
+					// Must be CONFIRMED and within the epoch window (strictly
+					// newer than the previous reward cutoff), so fees cannot be
+					// re-minted by referencing old or unconfirmed blocks.
+					net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(h);
+					if (be == null || !be.isConfirmed()) {
+						throw new InvalidTransactionException("Epoch reward beacon references an unconfirmed block");
+					}
+					if (cutoffHeight > 0 && referenced.getHeight() <= cutoffHeight) {
+						throw new InvalidTransactionException(
+								"Epoch reward beacon references a block outside the epoch window");
+					}
+					expectedFromBlocks = expectedFromBlocks.add(
+							net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
+				}
+				if (rewardTotal.compareTo(expectedFromBlocks) != 0) {
+					if (throwExceptions)
+						throw new InvalidTransactionException(
+								"Epoch reward does not match fees of the referenced confirmed blocks");
+					return SolidityState.getFailState();
+				}
+			} else if (rewardTotal.signum() != 0) {
 				if (throwExceptions)
 					throw new InvalidTransactionException(
-							"Epoch reward does not match fees of the referenced confirmed blocks");
+							"Non-minting beacon carries reward outputs");
 				return SolidityState.getFailState();
 			}
 			if (activeStake.signum() > 0 && rewardTotal.compareTo(activeStake) > 0) {
@@ -1258,6 +1289,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// A DB error during mint validation is fail-closed: reject.
 			if (throwExceptions)
 				throw e;
+			return SolidityState.getFailState();
+		} catch (InvalidTransactionException e) {
+			if (throwExceptions)
+				throw e;
+			return SolidityState.getFailState();
+		} catch (Exception e) {
+			if (throwExceptions)
+				throw new InvalidTransactionException("Epoch reward cannot be recomputed", e);
 			return SolidityState.getFailState();
 		}
 

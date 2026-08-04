@@ -232,6 +232,11 @@ public class VerificationException extends RuntimeException {
         public InvalidTransactionException(String msg) {
             super(msg);
         }
+
+        public InvalidTransactionException(String msg, Exception cause) {
+            super(msg);
+            initCause(cause);
+        }
     }
     
     public static class InvalidOrderException extends VerificationException {

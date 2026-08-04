@@ -174,9 +174,15 @@ public class SlotService {
                     UTXO utxo = store.getTransactionOutput(
                             in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
                             in.getOutpoint().getIndex());
-                    if (utxo != null) {
-                        inValue = utxo.getValue();
+                    if (utxo == null) {
+                        // An unresolvable input must PROPAGATE (fail closed),
+                        // never contribute zero — otherwise nodes with different
+                        // UTXO availability would compute different fee totals
+                        // and disagree on the same beacon.
+                        throw new net.bigtangle.exception.BlockStoreException(
+                                "Cannot resolve input UTXO for fee computation: " + in.getOutpoint());
                     }
+                    inValue = utxo.getValue();
                 }
                 if (inValue != null && inValue.isBIG()) {
                     txIn = txIn.add(inValue.getValue());
