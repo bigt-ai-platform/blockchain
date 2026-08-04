@@ -329,8 +329,13 @@ public class StakeService {
         }
         byte[] pubkey = att1.getValidatorPubkey();
         StakeRecord stake = store.getStakeDeposit(pubkey);
-        if (stake == null || stake.isSlashed()) {
+        // The record is ALREADY slashed (set at save time); idempotency is the
+        // withdrawable epoch, not the slashed flag.
+        if (stake == null) {
             return;
+        }
+        if (stake.getWithdrawableEpoch() >= 0) {
+            return; // already set at confirmation
         }
         store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
         log.info("Slash withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
@@ -386,7 +391,7 @@ public class StakeService {
                 store.updateTransactionOutputSpent(stake.getBlockHash(), txHash, 0, false, null);
             }
         }
-        store.updateStakeSlashing(att1.getValidatorPubkey(), -1L);
+        store.clearStakeSlashing(att1.getValidatorPubkey());
         log.info("Reorg: un-slashed validator for pubkey={} (block {})",
                 Utils.HEX.encode(att1.getValidatorPubkey()), block.getHashAsString());
     }
@@ -584,8 +589,11 @@ public class StakeService {
         }
         byte[] pubkey = Utils.HEX.decode(pubkeyHex);
         StakeRecord stake = store.getStakeDeposit(pubkey);
-        if (stake == null || stake.isSlashed()) {
+        if (stake == null) {
             return;
+        }
+        if (stake.getWithdrawableEpoch() >= 0) {
+            return; // already set at confirmation
         }
         store.updateStakeExit(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
         log.info("Exit withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",

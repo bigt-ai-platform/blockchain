@@ -3616,6 +3616,17 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void clearStakeSlashing(byte[] pubkey) throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"UPDATE stake_deposits SET slashed = FALSE, withdrawable_epoch = -1 WHERE pubkey = ?")) {
+			s.setBytes(1, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("INSERT INTO attestation_votes (blockhash, pubkey, weight, slot, pubkey_blockhash_md5) "

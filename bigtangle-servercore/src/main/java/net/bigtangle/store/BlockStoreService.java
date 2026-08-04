@@ -564,42 +564,85 @@ public class BlockStoreService {
 
 			// RANDAO: fold each confirmed beacon's reveal into the mix, in
 			// confirmation order, so the mix is a PURE function of the confirmed
-			// chain (never mutated by unconfirmed or competing beacons).
+			// chain (never mutated by unconfirmed or competing beacons). The
+			// writes ride the batch; memory is reloaded after COMMIT so an
+			// aborted batch cannot leave a divergent in-memory mix.
 			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
+			java.util.Set<Long> touchedMixEpochs = new java.util.HashSet<>();
 			if (randaoService != null) {
 				for (BlockWrap b : blocks) {
 					Block blk = b.getBlock();
 					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						applyRevealFromBeacon(randaoService, blk, blockStore);
+						java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
+						if (epochs != null) {
+							touchedMixEpochs.addAll(epochs);
+						}
 					}
 				}
 			}
 
 			// Withdrawable epochs for confirmed SLASHING/EXIT blocks are derived
-			// from the CONFIRMING beacon's chain epoch (the post-batch tip), not
-			// the submitter-chosen parent — fixed once confirmed.
+			// from the CONFIRMING BEACON — the beacon whose RewardInfo.blocks
+			// references the block — not from the local tip. Its chainlength is
+			// a fixed chain fact, identical on every node.
 			if (stakeService != null) {
-				long chainEpoch = 0;
-				TXReward tipAfter = blockStore.getMaxConfirmedReward();
-				if (tipAfter != null) {
-					chainEpoch = tipAfter.getChainLength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+				java.util.Map<Sha256Hash, Long> confirmingEpoch = new java.util.HashMap<>();
+				for (BlockWrap b : blocks) {
+					Block beacon = b.getBlock();
+					if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
+						continue;
+					}
+					try {
+						net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+								.parseChecked(beacon.getTransactions().get(0).getData());
+						if (ri == null || ri.getBlocks() == null) {
+							continue;
+						}
+						long epoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+						for (Sha256Hash referenced : ri.getBlocks()) {
+							confirmingEpoch.putIfAbsent(referenced, epoch);
+						}
+					} catch (Exception e) {
+						throw new net.bigtangle.exception.BlockStoreException(
+								"Cannot parse confirming beacon reward info " + beacon.getHashAsString(), e);
+					}
 				}
 				for (BlockWrap b : blocks) {
 					Block blk = b.getBlock();
+					if (blk.getBlockType() != BlockType.BLOCKTYPE_SLASHING
+							&& blk.getBlockType() != BlockType.BLOCKTYPE_EXIT) {
+						continue;
+					}
+					Long confirmingEpochVal = confirmingEpoch.get(blk.getHash());
+					if (confirmingEpochVal == null) {
+						// A block confirmed without a referencing beacon is not
+						// legitimately confirmed — fail closed.
+						throw new net.bigtangle.exception.BlockStoreException(
+								"Confirmed SLASHING/EXIT block has no referencing beacon: " + blk.getHashAsString());
+					}
 					try {
 						if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
-							stakeService.applySlashingConfirmed(blk, chainEpoch, blockStore);
-						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
-							stakeService.applyExitConfirmed(blk, chainEpoch, blockStore);
+							stakeService.applySlashingConfirmed(blk, confirmingEpochVal, blockStore);
+						} else {
+							stakeService.applyExitConfirmed(blk, confirmingEpochVal, blockStore);
 						}
 					} catch (Exception e) {
-						log.warn("Failed to set withdrawable at confirmation for block {}: {}",
-								blk.getHashAsString(), e.getMessage());
+						throw new net.bigtangle.exception.BlockStoreException(
+								"Failed to set withdrawable at confirmation for block " + blk.getHashAsString(), e);
 					}
 				}
 			}
 
 			blockStore.commitDatabaseBatchWrite();
+
+			// After a successful commit, refresh the in-memory mixes for the
+			// touched epochs so getRandaoMix (used for proposing) agrees with
+			// the persisted state (used for validation).
+			if (randaoService != null) {
+				for (Long epoch : touchedMixEpochs) {
+					randaoService.reloadMix(epoch);
+				}
+			}
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
 			throw e;
@@ -655,16 +698,25 @@ public class BlockStoreService {
 			// (XOR is its own inverse), reverting the confirmation-time fold so
 			// the mix stays a pure function of the confirmed chain.
 			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
+			java.util.Set<Long> touchedUnconfirmEpochs = new java.util.HashSet<>();
 			if (randaoService != null) {
 				for (BlockWrap b : blocksToUnconfirm) {
 					Block blk = b.getBlock();
 					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						applyRevealFromBeacon(randaoService, blk, blockStore);
+						java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
+						if (epochs != null) {
+							touchedUnconfirmEpochs.addAll(epochs);
+						}
 					}
 				}
 			}
 
 			blockStore.commitDatabaseBatchWrite();
+			if (randaoService != null) {
+				for (Long epoch : touchedUnconfirmEpochs) {
+					randaoService.reloadMix(epoch);
+				}
+			}
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
 			throw e;
@@ -679,8 +731,9 @@ public class BlockStoreService {
 	 * the caller's batch. XOR is its own inverse, so the same call in
 	 * unconfirmDo reverts it. Failures propagate (fail-closed).
 	 */
-	private void applyRevealFromBeacon(net.bigtangle.server.service.RandaoService randaoService, Block blk,
-			BlockStoreInterface store) throws BlockStoreException {
+	private java.util.Set<Long> applyRevealFromBeacon(net.bigtangle.server.service.RandaoService randaoService,
+			Block blk, BlockStoreInterface store) throws BlockStoreException {
+		java.util.Set<Long> epochs = new java.util.HashSet<>();
 		try {
 			for (Transaction tx : blk.getTransactions()) {
 				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
@@ -688,6 +741,7 @@ public class BlockStoreService {
 							net.bigtangle.core.SlotData.class);
 					if (sd != null && sd.getRandaoReveal() != null) {
 						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal(), store);
+						epochs.add(sd.getSlot() / 32);
 					}
 					break;
 				}
@@ -696,6 +750,7 @@ public class BlockStoreService {
 			throw new net.bigtangle.exception.BlockStoreException(
 					"Failed to fold RANDAO reveal for beacon " + blk.getHashAsString(), e);
 		}
+		return epochs;
 	}
 
 	public boolean checkChainHeadExecution(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)

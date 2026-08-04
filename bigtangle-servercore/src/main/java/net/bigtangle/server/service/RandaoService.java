@@ -132,10 +132,11 @@ public class RandaoService {
 
     /**
      * Mixes an on-chain RANDAO reveal (from a confirmed beacon's SlotData) into
-     * the epoch mix. When {@code store} is non-null the mix is persisted through
-     * THAT store, inside the caller's transaction/batch, so an aborted
-     * confirmation rolls the mix back with it; a persistence failure THROWS
-     * (fail-closed) rather than silently diverging on restart.
+     * the epoch mix and persists it. When {@code store} is non-null the write
+     * rides the caller's batch and the in-memory cache is NOT updated — the
+     * caller must reload the affected epochs after the batch COMMITS (see
+     * reloadMix), so an aborted batch rolls the mix back in memory too. A
+     * persistence failure THROWS (fail-closed).
      */
     public void applyReveal(long slot, byte[] reveal, BlockStoreInterface store) {
         if (reveal == null || reveal.length != 32) {
@@ -143,18 +144,39 @@ public class RandaoService {
             return;
         }
         long epoch = slot / 32;
+        if (store != null) {
+            try {
+                byte[] nextMix = mixXor(epoch, reveal);
+                store.savePosState("randao", "mix_" + epoch, nextMix);
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to persist RANDAO mix for epoch " + epoch, e);
+            }
+            return;
+        }
+        randaoMixes.put(epoch, mixXor(epoch, reveal));
+    }
+
+    private byte[] mixXor(long epoch, byte[] reveal) {
         byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]).clone();
         for (int i = 0; i < 32; i++) {
             currentMix[i] ^= reveal[i];
         }
-        randaoMixes.put(epoch, currentMix);
+        return currentMix;
+    }
 
-        if (store != null) {
-            try {
-                store.savePosState("randao", "mix_" + epoch, currentMix);
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to persist RANDAO mix for epoch " + epoch, e);
+    /** Reloads the in-memory mix for an epoch from persisted state (post-commit). */
+    public void reloadMix(long epoch) {
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            byte[] persisted = store.getPosState("randao", "mix_" + epoch);
+            if (persisted != null) {
+                randaoMixes.put(epoch, persisted);
             }
+        } catch (Exception e) {
+            log.debug("Failed to reload RANDAO mix for epoch {}", epoch, e);
+        } finally {
+            try { if (store != null) store.close(); } catch (Exception e) {}
         }
     }
     private void persistCommitment(String key, byte[] hash) {
