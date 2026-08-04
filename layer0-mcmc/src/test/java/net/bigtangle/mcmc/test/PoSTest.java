@@ -412,8 +412,9 @@ public class PoSTest extends AbstractIntegrationTest {
                 validatorKey.getPubKeyHash()));
         stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 
-        // Authenticated exit: the validator signs sha256(pubkey || nonce).
-        long nonce = SlotService.epochAt(System.currentTimeMillis());
+        // Authenticated exit: the validator signs sha256(pubkey || nonce),
+        // with the nonce bound to the chain position (max confirmed reward).
+        long nonce = store.getMaxConfirmedReward().getChainLength();
         byte[] msg = StakeService.buildExitMessage(validatorKey.getPubKey(), nonce);
         byte[] sig = validatorKey.sign(Sha256Hash.of(msg)).serialize();
         stakeService.submitExit(validatorKey.getPubKey(), sig, store);

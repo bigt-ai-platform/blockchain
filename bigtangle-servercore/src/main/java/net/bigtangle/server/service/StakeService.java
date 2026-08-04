@@ -429,9 +429,10 @@ public class StakeService {
             throw new IllegalArgumentException("Exit request is missing pubkey or signature");
         }
         // Authenticate the exit request: the signature covers sha256(pubkey ||
-        // nonce) with the nonce bound to the current epoch, so it cannot be
-        // replayed at a different epoch.
-        long nonce = SlotService.epochAt(System.currentTimeMillis());
+        // nonce) with the nonce bound to the CHAIN position (the max confirmed
+        // reward chainlength), so it is consensus-verifiable, not wall-clock.
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        long nonce = maxConfirmedReward != null ? maxConfirmedReward.getChainLength() : 0;
         PQKey signer = PQKey.fromPublicOnly(pubkey);
         Sha256Hash msg = Sha256Hash.of(buildExitMessage(pubkey, nonce));
         if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
@@ -445,7 +446,6 @@ public class StakeService {
             throw new IllegalStateException("Slashed validators cannot request exit");
         }
 
-        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
         Block head = store.get(maxConfirmedReward.getBlockHash());
         Block b = Block.createBlock(networkParameters, head, head);
         b.setBlockType(BlockType.BLOCKTYPE_EXIT);

@@ -484,6 +484,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * key), proving the validator itself requested the exit.
 	 */
 	private SolidityState checkExitSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
+		return checkExitSolidity(block, throwExceptions, null);
+	}
+
+	private SolidityState checkExitSolidity(Block block, boolean throwExceptions, BlockStoreInterface store)
+			throws BlockStoreException {
 		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
 			if (throwExceptions)
 				throw new BlockStoreException("EXIT block has no transactions");
@@ -515,11 +520,25 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
 				throw new BlockStoreException("EXIT request signature is invalid");
 			}
-			// The nonce binds the signature to a time window; a stale replay
-			// (nonce far from the current epoch) is rejected.
-			long currentEpoch = net.bigtangle.server.service.SlotService.epochAt(System.currentTimeMillis());
-			if (Math.abs(nonce - currentEpoch) > 1) {
-				throw new BlockStoreException("EXIT request nonce is stale");
+			// The nonce is bound to a CHAIN-derived epoch (the parent beacon's
+			// chainlength), never to local wall-clock time, so nodes near an
+			// epoch boundary agree and revalidation of an accepted block does
+			// not reject it. The formal path (no store) skips the window.
+			if (store != null) {
+				Block parent = store.get(block.getPrevBlockHash());
+				if (parent == null) {
+					return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
+				}
+				long expectedNonce = 0;
+				try {
+					RewardInfo pri = new RewardInfo().parseChecked(parent.getTransactions().get(0).getData());
+					expectedNonce = pri.getChainlength();
+				} catch (Exception ignored) {
+					// parent is not a reward block — leave 0, skip the window
+				}
+				if (expectedNonce > 0 && Math.abs(nonce - expectedNonce) > 1) {
+					throw new BlockStoreException("EXIT request nonce is stale");
+				}
 			}
 		} catch (BlockStoreException e) {
 			if (throwExceptions)
@@ -1229,44 +1248,70 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee
 			// surpluses over the CONFIRMED blocks this beacon references in
-			// RewardInfo.getBlocks — a pure function of chain state. Null or
-			// unparseable reference sets, unresolvable blocks, unconfirmed or
-			// out-of-epoch blocks, and any recomputation failure are all
-			// FAIL-CLOSED (reject), never skipped.
+			// RewardInfo.getBlocks — a pure function of chain state. Missing
+			// data (a referenced block, its confirmation, or an input UTXO that
+			// is not yet available locally) DEFERS with a solidity-missing state
+			// so a lagging node never permanently rejects a valid beacon; only a
+			// provable mismatch (null block set, out-of-window or already-
+			// rewarded block, wrong reward total) rejects.
 			if (hasRewardOutputs) {
 				RewardInfo ri = new RewardInfo().parseChecked(transactions.get(0).getData());
 				if (ri == null || ri.getBlocks() == null) {
 					throw new InvalidTransactionException(
 							"Epoch reward beacon has no referenced block set to recompute against");
 				}
+				// The previous beacon's referenced set: the reward must be
+				// DISJOINT from it, otherwise the same blocks are paid twice.
+				java.util.Set<Sha256Hash> prevRewarded = new java.util.HashSet<>();
+				Block prevBeacon = store.get(ri.getPrevRewardHash());
+				if (prevBeacon == null) {
+					return SolidityState.fromPrevReward(ri.getPrevRewardHash(), true);
+				}
+				try {
+					RewardInfo prevRi = new RewardInfo().parseChecked(
+							prevBeacon.getTransactions().get(0).getData());
+					if (prevRi != null && prevRi.getBlocks() != null) {
+						prevRewarded = prevRi.getBlocks();
+					}
+				} catch (Exception ignored) {
+					// no previous set — disjointness below degrades to the cutoff
+				}
+				// Lower bound: the previous reward cutoff. If it cannot be
+				// computed the node is behind — defer, never accept windowless.
 				long cutoffHeight = 0;
 				try {
 					net.bigtangle.server.service.base.ServiceBaseConnect sbc =
 							new net.bigtangle.server.service.base.ServiceBaseConnect(
 									serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
 					cutoffHeight = sbc.getRewardCutoffHeight(ri.getPrevRewardHash(), store);
-				} catch (Exception ignored) {
-					// cutoff unavailable — fail closed below via per-block range
+				} catch (Exception e) {
+					return SolidityState.fromPrevReward(ri.getPrevRewardHash(), true);
 				}
 				java.math.BigInteger expectedFromBlocks = java.math.BigInteger.ZERO;
 				for (Sha256Hash h : ri.getBlocks()) {
 					Block referenced = store.get(h);
 					if (referenced == null) {
-						throw new InvalidTransactionException("Epoch reward beacon references an unknown block");
+						return SolidityState.fromReferenced(h, true);
 					}
-					// Must be CONFIRMED and within the epoch window (strictly
-					// newer than the previous reward cutoff), so fees cannot be
-					// re-minted by referencing old or unconfirmed blocks.
 					net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(h);
 					if (be == null || !be.isConfirmed()) {
-						throw new InvalidTransactionException("Epoch reward beacon references an unconfirmed block");
+						return SolidityState.fromReferenced(h, true);
+					}
+					if (prevRewarded.contains(h)) {
+						throw new InvalidTransactionException(
+								"Epoch reward beacon re-rewards a previously rewarded block");
 					}
 					if (cutoffHeight > 0 && referenced.getHeight() <= cutoffHeight) {
 						throw new InvalidTransactionException(
 								"Epoch reward beacon references a block outside the epoch window");
 					}
-					expectedFromBlocks = expectedFromBlocks.add(
-							net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
+					try {
+						expectedFromBlocks = expectedFromBlocks.add(
+								net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
+					} catch (BlockStoreException e) {
+						// Missing input UTXO — the node is behind; defer.
+						return SolidityState.fromReferenced(h, true);
+					}
 				}
 				if (rewardTotal.compareTo(expectedFromBlocks) != 0) {
 					if (throwExceptions)
