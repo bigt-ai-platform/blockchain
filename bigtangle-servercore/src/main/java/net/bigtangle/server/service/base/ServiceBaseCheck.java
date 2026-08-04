@@ -527,12 +527,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// a BEACON, otherwise the exit cannot be validated and is rejected.
 			// The formal path (no store) skips the window.
 			if (store != null) {
-				// The validator must have an ACTIVE, not-slashed, not-already-
-				// exiting deposit — the durable replay guard. The nonce window
-				// below is defense in depth on top of this.
+				// The validator must have an ACTIVE, not-slashed deposit — the
+				// durable replay guard. isExiting() is NOT checked here: it is
+				// mutable current state that would make the block fail its own
+				// revalidation once applied; duplicate exits are handled
+				// idempotently at apply time. The nonce window below is defense
+				// in depth on top of this.
 				net.bigtangle.core.StakeRecord dep = store.getStakeDeposit(pubkey);
-				if (dep == null || dep.isSlashed() || dep.isExiting()
-						|| dep.getActivatedEpoch() < 0) {
+				if (dep == null || dep.isSlashed() || dep.getActivatedEpoch() < 0) {
 					throw new BlockStoreException("EXIT request has no active, exit-eligible deposit");
 				}
 				Block parent = store.get(block.getPrevBlockHash());
@@ -1296,12 +1298,15 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				// beacons ago is already excluded by the height cutoff below, so
 				// the walk is bounded to the last ~40 beacons — O(1) per beacon
 				// validation, not O(chain length).
-				java.util.Set<Sha256Hash> prevRewarded = new java.util.HashSet<>();
-				java.util.Set<Sha256Hash> visitedBeacons = new java.util.HashSet<>();
-				Sha256Hash cursor = ri.getPrevRewardHash();
 				// Bound the walk by ITERATION COUNT (CHAINLENGTH_CUTOFF), not by
 				// beacon height, so it is correct regardless of whether a
 				// referenced block is an ancestor of the beacon that rewarded it.
+				// Reaching the budget is CLEAN termination (the last 40 beacons
+				// are fully covered; older ones are excluded by the height
+				// cutoff); only genuinely incomplete walks defer.
+				java.util.Set<Sha256Hash> prevRewarded = new java.util.HashSet<>();
+				java.util.Set<Sha256Hash> visitedBeacons = new java.util.HashSet<>();
+				Sha256Hash cursor = ri.getPrevRewardHash();
 				int walkCount = 0;
 				boolean terminatedCleanly = false;
 				while (cursor != null && walkCount < net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
@@ -1330,6 +1335,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						prevRewarded.addAll(prevRi.getBlocks());
 					}
 					cursor = prevRi.getPrevRewardHash();
+				}
+				if (walkCount >= net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
+					terminatedCleanly = true; // budget reached — covered the window
 				}
 				if (!terminatedCleanly) {
 					return SolidityState.fromPrevReward(ri.getPrevRewardHash(), true);

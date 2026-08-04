@@ -518,8 +518,9 @@ public class StakeService {
         byte[] pubkey = Utils.HEX.decode(pubkeyHex);
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake != null) {
-            store.updateStakeExit(pubkey, -1L);
-            store.updateStakeActivation(pubkey, stake.getActivatedEpoch());
+            // Fully clear the exit flag so the record can re-validate its own
+            // EXIT block after the unconfirm (updateStakeExit only ever sets it).
+            store.clearStakeExit(pubkey);
         }
         log.info("Reorg: reverted exit for pubkey={} (block {})", pubkeyHex, block.getHashAsString());
     }

@@ -3569,6 +3569,17 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void clearStakeExit(byte[] pubkey) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("UPDATE stake_deposits SET exiting = FALSE, withdrawable_epoch = -1 WHERE pubkey = ?")) {
+			s.setBytes(1, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public List<StakeRecord> getAllStakeDeposits() throws BlockStoreException {
 		List<StakeRecord> list = new ArrayList<>();
 		try (PreparedStatement s = getConnection()
