@@ -542,7 +542,8 @@ public class BlockStoreService {
 			// Confirm-time application of chain-derived state: a STAKE/SLASHING
 			// block that gains confirmation has its validator deposit applied /
 			// slash enforced. Idempotent with the save-time application, so the
-			// state survives unconfirm -> re-confirm cycles.
+			// state survives unconfirm -> re-confirm cycles. Failures abort the
+			// batch (fail-closed), consistent with the withdrawable code below.
 			net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
 			if (stakeService != null) {
 				for (BlockWrap b : blocks) {
@@ -556,8 +557,8 @@ public class BlockStoreService {
 							stakeService.applyExitBlock(blk, blockStore);
 						}
 					} catch (Exception e) {
-						log.warn("Failed to apply chain-derived state for confirmed block {}: {}",
-								blk.getHashAsString(), e.getMessage());
+						throw new net.bigtangle.exception.BlockStoreException(
+								"Failed to apply chain-derived state for confirmed block " + blk.getHashAsString(), e);
 					}
 				}
 			}
@@ -581,61 +582,44 @@ public class BlockStoreService {
 				}
 			}
 
-			// Withdrawable epochs for confirmed SLASHING/EXIT blocks are derived
-			// from the CONFIRMING BEACON — the beacon whose RewardInfo.blocks
-			// references the block — not from the local tip. Its chainlength is
-			// a fixed chain fact, identical on every node.
+			// Withdrawable epochs for SLASHING/EXIT blocks are set when the
+			// CONFIRMING BEACON confirms — the beacon whose RewardInfo.blocks
+			// references the block drives it, so a block confirmed ahead of its
+			// beacon stays PENDING (withdrawable = -1) rather than aborting the
+			// batch. processWithdrawals gates on >= 0, so pending is safe.
 			if (stakeService != null) {
-				java.util.Map<Sha256Hash, Long> confirmingEpoch = new java.util.HashMap<>();
 				for (BlockWrap b : blocks) {
 					Block beacon = b.getBlock();
 					if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
 						continue;
 					}
+					net.bigtangle.core.RewardInfo ri;
 					try {
-						net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+						ri = new net.bigtangle.core.RewardInfo()
 								.parseChecked(beacon.getTransactions().get(0).getData());
-						if (ri == null || ri.getBlocks() == null) {
-							continue;
-						}
-						long epoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
-						for (Sha256Hash referenced : ri.getBlocks()) {
-							confirmingEpoch.putIfAbsent(referenced, epoch);
-						}
 					} catch (Exception e) {
 						throw new net.bigtangle.exception.BlockStoreException(
 								"Cannot parse confirming beacon reward info " + beacon.getHashAsString(), e);
 					}
-				}
-				for (BlockWrap b : blocks) {
-					Block blk = b.getBlock();
-					if (blk.getBlockType() != BlockType.BLOCKTYPE_SLASHING
-							&& blk.getBlockType() != BlockType.BLOCKTYPE_EXIT) {
+					if (ri == null || ri.getBlocks() == null) {
 						continue;
 					}
-					Long confirmingEpochVal = confirmingEpoch.get(blk.getHash());
-					if (confirmingEpochVal == null) {
-						// Fallback: the referencing beacon may have confirmed in
-						// an earlier batch (e.g. re-confirm after a reorg).
-						// Scan the confirmed reward chain, bounded, for a beacon
-						// referencing this block.
-						confirmingEpochVal = findConfirmingEpochFromStore(blk.getHash(), blockStore);
-					}
-					if (confirmingEpochVal == null) {
-						// A block confirmed without a referencing beacon is not
-						// legitimately confirmed — fail closed.
-						throw new net.bigtangle.exception.BlockStoreException(
-								"Confirmed SLASHING/EXIT block has no referencing beacon: " + blk.getHashAsString());
-					}
-					try {
-						if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
-							stakeService.applySlashingConfirmed(blk, confirmingEpochVal, blockStore);
-						} else {
-							stakeService.applyExitConfirmed(blk, confirmingEpochVal, blockStore);
+					long epoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+					for (Sha256Hash referenced : ri.getBlocks()) {
+						Block refBlock = blockStore.get(referenced);
+						if (refBlock == null) {
+							continue; // not yet synced — defer
 						}
-					} catch (Exception e) {
-						throw new net.bigtangle.exception.BlockStoreException(
-								"Failed to set withdrawable at confirmation for block " + blk.getHashAsString(), e);
+						try {
+							if (refBlock.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+								stakeService.applySlashingConfirmed(refBlock, epoch, blockStore);
+							} else if (refBlock.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+								stakeService.applyExitConfirmed(refBlock, epoch, blockStore);
+							}
+						} catch (Exception e) {
+							throw new net.bigtangle.exception.BlockStoreException(
+									"Failed to set withdrawable at confirmation for block " + referenced, e);
+						}
 					}
 				}
 			}
@@ -730,46 +714,6 @@ public class BlockStoreService {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
-	}
-
-	/**
-	 * Scans the confirmed reward chain (bounded by CHAINLENGTH_CUTOFF) for a
-	 * beacon whose RewardInfo.blocks references {@code target}, returning its
-	 * chain epoch, or null if none is found.
-	 */
-	private Long findConfirmingEpochFromStore(Sha256Hash target, BlockStoreInterface blockStore) {
-		try {
-			TXReward tip = blockStore.getMaxConfirmedReward();
-			if (tip == null) {
-				return null;
-			}
-			Sha256Hash cursor = tip.getBlockHash();
-			java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
-			int count = 0;
-			while (cursor != null && visited.add(cursor)
-					&& count < net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
-				count++;
-				Block beacon = blockStore.get(cursor);
-				if (beacon == null) {
-					return null;
-				}
-				if (beacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
-					return null;
-				}
-				if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
-					return null;
-				}
-				net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
-						.parseChecked(beacon.getTransactions().get(0).getData());
-				if (ri != null && ri.getBlocks() != null && ri.getBlocks().contains(target)) {
-					return ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
-				}
-				cursor = ri != null ? ri.getPrevRewardHash() : null;
-			}
-		} catch (Exception e) {
-			log.warn("Failed to find confirming beacon for {}: {}", target, e.getMessage());
-		}
-		return null;
 	}
 
 	/**
