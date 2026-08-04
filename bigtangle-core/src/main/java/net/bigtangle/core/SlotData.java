@@ -10,6 +10,7 @@ public class SlotData {
     private long epoch;
     private long proposerIndex;
     private byte[] randaoReveal;
+    private byte[] randaoCommitment;
     private Sha256Hash parentHash;
     private Sha256Hash dagStateRoot;
     private Sha256Hash[] attestationRoots;
@@ -37,6 +38,12 @@ public class SlotData {
             } else {
                 dos.writeInt(0);
             }
+            if (randaoCommitment != null) {
+                dos.writeInt(randaoCommitment.length);
+                dos.write(randaoCommitment);
+            } else {
+                dos.writeInt(0);
+            }
             dos.write(parentHash != null ? parentHash.getBytes() : new byte[32]);
             dos.write(dagStateRoot != null ? dagStateRoot.getBytes() : new byte[32]);
             dos.flush();
@@ -61,6 +68,8 @@ public class SlotData {
     public void setProposerIndex(long i) { this.proposerIndex = i; }
     public byte[] getRandaoReveal() { return randaoReveal; }
     public void setRandaoReveal(byte[] r) { this.randaoReveal = r; }
+    public byte[] getRandaoCommitment() { return randaoCommitment; }
+    public void setRandaoCommitment(byte[] c) { this.randaoCommitment = c; }
     public Sha256Hash getParentHash() { return parentHash; }
     public void setParentHash(Sha256Hash h) { this.parentHash = h; }
     public Sha256Hash getDagStateRoot() { return dagStateRoot; }

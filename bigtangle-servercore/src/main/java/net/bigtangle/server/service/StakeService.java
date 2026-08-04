@@ -311,7 +311,9 @@ public class StakeService {
      * Confirm-time variant: sets the withdrawable epoch from the CONFIRMING
      * beacon's chain epoch (passed in), which is fixed once confirmed, current,
      * and not chosen by the submitter. Called by confirmDo alongside the
-     * save-time flag application.
+     * save-time flag application. Always overwrites so the value mirrors the
+     * currently-confirmed referencing beacon; a stale value from an unconfirmed
+     * beacon is corrected on the next confirmation instead of becoming permanent.
      */
     public void applySlashingConfirmed(Block block, long chainEpoch, BlockStoreInterface store) throws Exception {
         if (block.getBlockType() != BlockType.BLOCKTYPE_SLASHING || block.getTransactions().isEmpty()) {
@@ -329,13 +331,13 @@ public class StakeService {
         }
         byte[] pubkey = att1.getValidatorPubkey();
         StakeRecord stake = store.getStakeDeposit(pubkey);
-        // The record is ALREADY slashed (set at save time); idempotency is the
-        // withdrawable epoch, not the slashed flag.
+        // The record is ALREADY slashed (set at save time). The withdrawable
+        // epoch is ALWAYS (re)derived from the confirming beacon: a value left
+        // by an unconfirmed beacon must be overwritten on the next confirmation,
+        // never frozen by a keep-first guard. Idempotency is the beacon-derived
+        // value, not a stored flag.
         if (stake == null) {
             return;
-        }
-        if (stake.getWithdrawableEpoch() >= 0) {
-            return; // already set at confirmation
         }
         store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
         log.info("Slash withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
@@ -571,7 +573,8 @@ public class StakeService {
     /**
      * Confirm-time variant: sets the withdrawable epoch from the CONFIRMING
      * beacon's chain epoch (passed in), which is fixed once confirmed, current,
-     * and not chosen by the submitter.
+     * and not chosen by the submitter. Always overwrites (see
+     * applySlashingConfirmed).
      */
     public void applyExitConfirmed(Block block, long chainEpoch, BlockStoreInterface store) throws Exception {
         if (block.getBlockType() != BlockType.BLOCKTYPE_EXIT || block.getTransactions().isEmpty()) {
@@ -592,9 +595,9 @@ public class StakeService {
         if (stake == null) {
             return;
         }
-        if (stake.getWithdrawableEpoch() >= 0) {
-            return; // already set at confirmation
-        }
+        // Always (re)derived from the confirming beacon (see
+        // applySlashingConfirmed): a stale epoch from an unconfirmed beacon must
+        // be overwritten on the next confirmation, never frozen.
         store.updateStakeExit(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
         log.info("Exit withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
                 pubkeyHex, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);

@@ -6,6 +6,7 @@
 package net.bigtangle.store;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -541,10 +542,11 @@ public class BlockStoreService {
 
 			// Confirm-time application of chain-derived state: a STAKE/SLASHING
 			// block that gains confirmation has its validator deposit applied /
-			// slash enforced. Idempotent with the save-time application. A
-			// storage error (BlockStoreException) aborts the batch; a block
-			// that is simply inapplicable (no deposit, malformed data) is
-			// skipped so one bad block cannot halt all confirmation.
+			// slash enforced. Idempotent with the save-time application. A single
+			// block that cannot be applied (inapplicable data, or a storage error
+			// on its own row) must not halt ALL confirmation, so it is logged and
+			// skipped here; a genuinely broken database still aborts the batch at
+			// COMMIT below.
 			net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
 			if (stakeService != null) {
 				for (BlockWrap b : blocks) {
@@ -557,11 +559,8 @@ public class BlockStoreService {
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
 							stakeService.applyExitBlock(blk, blockStore);
 						}
-					} catch (net.bigtangle.exception.BlockStoreException e) {
-						throw new net.bigtangle.exception.BlockStoreException(
-								"Failed to apply chain-derived state for confirmed block " + blk.getHashAsString(), e);
 					} catch (Exception e) {
-						log.warn("Skipping inapplicable chain-derived state for confirmed block {}: {}",
+						log.warn("Skipping chain-derived state for confirmed block {}: {}",
 								blk.getHashAsString(), e.getMessage());
 					}
 				}
@@ -591,12 +590,25 @@ public class BlockStoreService {
 			// references the block drives it, so a block confirmed ahead of its
 			// beacon stays PENDING (withdrawable = -1) rather than aborting the
 			// batch. processWithdrawals gates on >= 0, so pending is safe.
+			//
+			// Beacons are applied in chainlength order and the epoch is ALWAYS
+			// overwritten (never keep-first): the value must mirror the
+			// currently-confirmed referencing beacon, so a stale epoch left by an
+			// unconfirmed beacon can never be frozen. Chainlength order makes the
+			// last writer deterministic (the highest confirmed referencing beacon
+			// wins) on every node.
 			if (stakeService != null) {
+				List<BlockWrap> beacons = new ArrayList<>();
 				for (BlockWrap b : blocks) {
-					Block beacon = b.getBlock();
-					if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
-						continue;
+					if (b.getBlock().getBlockType() == BlockType.BLOCKTYPE_BEACON
+							&& !b.getBlock().getTransactions().isEmpty()) {
+						beacons.add(b);
 					}
+				}
+				beacons.sort(Comparator.comparingLong(b -> new RewardInfo()
+						.parseChecked(b.getBlock().getTransactions().get(0).getData()).getChainlength()));
+				for (BlockWrap b : beacons) {
+					Block beacon = b.getBlock();
 					net.bigtangle.core.RewardInfo ri;
 					try {
 						ri = new net.bigtangle.core.RewardInfo()
@@ -682,10 +694,11 @@ public class BlockStoreService {
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
 							stakeService.revertExitBlock(blk, blockStore);
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-							// A beacon being unconfirmed resets the withdrawable
-							// epoch of any SLASHING/EXIT block it referenced, so
-							// the epoch re-derives on re-confirmation and a stale
-							// value never becomes permanent.
+							// A beacon being unconfirmed recomputes the
+							// withdrawable epoch of any SLASHING/EXIT block it
+							// referenced from the remaining confirmed chain, so a
+							// stale value from this beacon is never left behind to
+							// become permanent.
 							resetReferencedWithdrawables(stakeService, blk, blockStore);
 						}
 					} catch (Exception e) {
@@ -727,9 +740,13 @@ public class BlockStoreService {
 	}
 
 	/**
-	 * When a beacon is unconfirmed, reset the withdrawable epoch of any
-	 * SLASHING/EXIT block it referenced back to pending (-1), so a stale beacon
-	 * cannot leave a permanent withdrawable value.
+	 * When a beacon is unconfirmed, the withdrawable epoch of every SLASHING/EXIT
+	 * block it referenced is recomputed from the remaining confirmed reward chain:
+	 * if another still-confirmed beacon references the block, its epoch is
+	 * re-derived from that beacon; otherwise the epoch is reset to pending (-1).
+	 * This ensures a stale value from an unconfirmed beacon can never become
+	 * permanent, and that a block which remains confirmed is never left pending
+	 * by the reorg.
 	 */
 	private void resetReferencedWithdrawables(net.bigtangle.server.service.StakeService stakeService, Block beacon,
 			BlockStoreInterface blockStore) throws Exception {
@@ -750,11 +767,63 @@ public class BlockStoreService {
 			if (refBlock == null) {
 				continue;
 			}
-			if (refBlock.getBlockType() == BlockType.BLOCKTYPE_SLASHING
-					|| refBlock.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+			if (refBlock.getBlockType() != BlockType.BLOCKTYPE_SLASHING
+					&& refBlock.getBlockType() != BlockType.BLOCKTYPE_EXIT) {
+				continue;
+			}
+			// The unconfirmed beacon is already removed from the confirmed
+			// reward chain by unconfirmBlocksSorted, so the scan below only
+			// finds beacons that are still confirmed and still reference this
+			// block.
+			Long stillConfirmedEpoch = findConfirmingEpochFromStore(referenced, blockStore);
+			if (stillConfirmedEpoch == null) {
 				stakeService.clearWithdrawableForBlock(refBlock, blockStore);
+			} else if (refBlock.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+				stakeService.applySlashingConfirmed(refBlock, stillConfirmedEpoch, blockStore);
+			} else {
+				stakeService.applyExitConfirmed(refBlock, stillConfirmedEpoch, blockStore);
 			}
 		}
+	}
+
+	/**
+	 * Scans the confirmed reward chain (bounded by CHAINLENGTH_CUTOFF) for a
+	 * beacon whose RewardInfo.blocks references {@code target}, returning its
+	 * chain epoch, or null if none is found. The scan walks from the tip, so the
+	 * highest (most recent) confirming beacon wins.
+	 */
+	private Long findConfirmingEpochFromStore(Sha256Hash target, BlockStoreInterface blockStore) {
+		try {
+			TXReward tip = blockStore.getMaxConfirmedReward();
+			if (tip == null) {
+				return null;
+			}
+			Sha256Hash cursor = tip.getBlockHash();
+			java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+			int count = 0;
+			while (cursor != null && visited.add(cursor) && count < NetworkParameters.CHAINLENGTH_CUTOFF) {
+				count++;
+				Block beacon = blockStore.get(cursor);
+				if (beacon == null) {
+					return null;
+				}
+				if (beacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+					return null;
+				}
+				if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
+					return null;
+				}
+				net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+						.parseChecked(beacon.getTransactions().get(0).getData());
+				if (ri != null && ri.getBlocks() != null && ri.getBlocks().contains(target)) {
+					return ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+				}
+				cursor = ri != null ? ri.getPrevRewardHash() : null;
+			}
+		} catch (Exception e) {
+			log.warn("Failed to find confirming beacon for {}: {}", target, e.getMessage());
+		}
+		return null;
 	}
 
 	/**
@@ -772,7 +841,7 @@ public class BlockStoreService {
 					net.bigtangle.core.SlotData sd = jsonmapper.readValue(tx.getData(),
 							net.bigtangle.core.SlotData.class);
 					if (sd != null && sd.getRandaoReveal() != null) {
-						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal(), store);
+						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal(), sd.getRandaoCommitment(), store);
 						epochs.add(sd.getSlot() / 32);
 					}
 					break;

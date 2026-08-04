@@ -205,6 +205,12 @@ public class SlotService {
         StakeRecord proposer = validators.get((int) proposerIdx);
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
+        // Commit to SHA-256(secret) before the reveal is seen on-chain. The
+        // commitment travels in the SAME signed beacon as the reveal, so every
+        // validator can verify SHA-256(reveal) == commitment; and because the
+        // secret is deterministically derived from the proposer's private key
+        // and slot, the reveal bytes are forced (not proposer-chosen).
+        byte[] commitment = proposerKey != null ? randaoService.commit(proposerKey, slot) : null;
 
         List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
 
@@ -289,6 +295,7 @@ public class SlotService {
 
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
+        slotData.setRandaoCommitment(commitment);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
         if (getSlotInEpoch(slot) == 0) {
             // Snapshot the fee pool that funded the reward outputs so validators

@@ -99,7 +99,7 @@ public class RandaoService {
         commitments.remove(key);
 
         long epoch = slot / 32;
-        byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]);
+        byte[] currentMix = randaoMixes.getOrDefault(epoch, sha256(String.valueOf(epoch).getBytes()));
         for (int i = 0; i < 32; i++) {
             currentMix[i] ^= reveal[i];
         }
@@ -127,7 +127,7 @@ public class RandaoService {
      * the epoch mix. Deterministic for every node that accepts the same beacon.
      */
     public void applyReveal(long slot, byte[] reveal) {
-        applyReveal(slot, reveal, null);
+        applyReveal(slot, reveal, null, null);
     }
 
     /**
@@ -137,20 +137,38 @@ public class RandaoService {
      * caller must reload the affected epochs after the batch COMMITS (see
      * reloadMix), so an aborted batch rolls the mix back in memory too. A
      * persistence failure THROWS (fail-closed).
+     *
+     * When a {@code commitment} is supplied, the reveal is bound to it:
+     * SHA-256(reveal) must equal the commitment (the deterministic secret the
+     * proposer committed to in its beacon), otherwise the reveal is rejected
+     * and the mix is NOT updated. The commitment is covered by the proposer's
+     * SlotData signature, so a proposer cannot publish a reveal that disagrees
+     * with the commitment it signed.
      */
-    public void applyReveal(long slot, byte[] reveal, BlockStoreInterface store) {
+    public void applyReveal(long slot, byte[] reveal, byte[] commitment, BlockStoreInterface store) {
         if (reveal == null || reveal.length != 32) {
             log.warn("Rejecting malformed RANDAO reveal (expected 32 bytes) for slot {}", slot);
             return;
         }
+        if (commitment != null) {
+            if (commitment.length != 32 || !Arrays.equals(sha256(reveal), commitment)) {
+                log.warn("Rejecting RANDAO reveal for slot {}: SHA-256(reveal) does not match the signed commitment",
+                        slot);
+                return;
+            }
+        }
         long epoch = slot / 32;
+        byte[] epochSeed = sha256(String.valueOf(epoch).getBytes());
         if (store != null) {
             // Fold against the PENDING value in the batch store (which reflects
             // prior reveals in the same batch), so consecutive reveals of the
             // same epoch accumulate instead of overwriting from a stale base.
+            // The base defaults to the same SHA-256(epoch) seed getRandaoMix
+            // uses, so the FIRST reveal of an epoch mixes into the seed rather
+            // than replacing it with raw proposer bytes.
             try {
                 byte[] current = store.getPosState("randao", "mix_" + epoch);
-                byte[] base = current != null ? current : new byte[32];
+                byte[] base = current != null ? current : epochSeed;
                 byte[] next = xor(base, reveal);
                 store.savePosState("randao", "mix_" + epoch, next);
             } catch (Exception e) {
@@ -158,7 +176,7 @@ public class RandaoService {
             }
             return;
         }
-        randaoMixes.put(epoch, xor(randaoMixes.getOrDefault(epoch, new byte[32]), reveal));
+        randaoMixes.put(epoch, xor(randaoMixes.getOrDefault(epoch, epochSeed), reveal));
     }
 
     private byte[] xor(byte[] a, byte[] b) {
