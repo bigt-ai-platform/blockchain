@@ -746,7 +746,16 @@ public class DispatcherController implements DisposableBean {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				String pubkeyHex = (String) request.get("pubkey");
-				stakeService.requestExit(Utils.HEX.decode(pubkeyHex), store);
+				String signatureHex = (String) request.get("signature");
+				// The validator MUST prove key ownership with a signature; the
+				// exit travels as a consensus BLOCKTYPE_EXIT block.
+				if (signatureHex == null || signatureHex.isEmpty()) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
+				}
+				stakeService.submitExit(Utils.HEX.decode(pubkeyHex),
+						Utils.HEX.decode(signatureHex), store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;

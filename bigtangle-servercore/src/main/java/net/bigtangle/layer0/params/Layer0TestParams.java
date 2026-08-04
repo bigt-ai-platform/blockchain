@@ -28,6 +28,7 @@ public class Layer0TestParams extends TestParams {
                 BlockType.BLOCKTYPE_FILE,
                 BlockType.BLOCKTYPE_GOVERNANCE,
                 BlockType.BLOCKTYPE_STAKE,
-                BlockType.BLOCKTYPE_SLASHING);
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 }

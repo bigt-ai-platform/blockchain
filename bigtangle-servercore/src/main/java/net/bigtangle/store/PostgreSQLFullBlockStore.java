@@ -314,6 +314,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     		+ "    withdrawal_credentials BYTEA,\n"
     		+ "    activated_epoch BIGINT DEFAULT -1,\n"
     		+ "    slashed BOOLEAN DEFAULT FALSE,\n"
+    		+ "    exiting BOOLEAN DEFAULT FALSE,\n"
     		+ "    withdrawable_epoch BIGINT DEFAULT -1,\n"
     		+ "    blockhash BYTEA,\n"
     		+ "    txhash BYTEA,\n"

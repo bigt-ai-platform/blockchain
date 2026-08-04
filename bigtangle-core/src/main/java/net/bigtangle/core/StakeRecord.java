@@ -10,6 +10,7 @@ public class StakeRecord {
     private byte[] withdrawalCredentials;
     private long activatedEpoch = -1;
     private boolean slashed = false;
+    private boolean exiting = false;
     private long withdrawableEpoch = -1;
     private Sha256Hash blockHash;
     private Sha256Hash txHash;
@@ -21,6 +22,9 @@ public class StakeRecord {
         this.amount = amount;
         this.withdrawalCredentials = withdrawalCredentials;
     }
+
+    public boolean isExiting() { return exiting; }
+    public void setExiting(boolean exiting) { this.exiting = exiting; }
 
     public byte[] getPubkey() { return pubkey; }
     public void setPubkey(byte[] pubkey) { this.pubkey = pubkey; }

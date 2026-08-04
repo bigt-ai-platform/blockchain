@@ -549,6 +549,8 @@ public class BlockStoreService {
 							stakeService.applyStakeBlock(blk, blockStore);
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
 							stakeService.applySlashingBlock(blk, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+							stakeService.applyExitBlock(blk, blockStore);
 						}
 					} catch (Exception e) {
 						log.warn("Failed to apply chain-derived state for confirmed block {}: {}",
@@ -599,6 +601,8 @@ public class BlockStoreService {
 							stakeService.revertStakeBlock(blk, blockStore);
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
 							stakeService.revertSlashingBlock(blk, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+							stakeService.revertExitBlock(blk, blockStore);
 						}
 					} catch (Exception e) {
 						log.warn("Failed to revert chain-derived state for block {}: {}",

@@ -169,7 +169,7 @@ public class CasperService {
         }
         TXReward boundary = null;
         try {
-            boundary = store.getRewardConfirmedAtHeight(epoch * 32L);
+            boundary = store.getRewardConfirmedAtHeight(epoch * SlotService.SLOTS_PER_EPOCH);
         } catch (Exception e) {
             boundary = null;
         }
@@ -322,6 +322,7 @@ public class CasperService {
         // (not the highest justified) means every epoch in between can finalize
         // in sequence and never stalls.
         if (target.justified) {
+            ensureCheckpoint(epoch - 1, store);
             Checkpoint parent = checkpoints.get(epoch - 1);
             if (parent != null && parent.finalized && !target.finalized) {
                 target.finalized = true;

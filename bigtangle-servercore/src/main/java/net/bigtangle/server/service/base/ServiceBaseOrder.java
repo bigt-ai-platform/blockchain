@@ -614,6 +614,8 @@ public abstract class ServiceBaseOrder extends ServiceBase {
 			break;
 		case BLOCKTYPE_SLASHING:
 			break;
+		case BLOCKTYPE_EXIT:
+			break;
 		default:
 			throw new RuntimeException("Not Implemented");
 

@@ -197,7 +197,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// pro block check fee
 			boolean checkFee = false;
 			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)
-					|| block.getBlockType().equals(BlockType.BLOCKTYPE_SLASHING)) {
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_SLASHING)
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_EXIT)) {
 				checkFee = true;
 			}
 			// Reward minting is ONLY valid in the first beacon of an epoch
@@ -463,10 +464,61 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			break;
 		}
+		case BLOCKTYPE_EXIT: {
+			SolidityState exitState = checkExitSolidity(block, throwExceptions);
+			if (!(exitState.getState() == State.Success)) {
+				return exitState;
+			}
+			break;
+		}
 		default:
 			throw new RuntimeException("No Implementation");
 		}
 
+		return SolidityState.getSuccessState();
+	}
+
+	/**
+	 * Validates a BLOCKTYPE_EXIT block: the first transaction must carry an
+	 * authenticated exit request (a signature over the pubkey by that pubkey's
+	 * key), proving the validator itself requested the exit.
+	 */
+	private SolidityState checkExitSolidity(Block block, boolean throwExceptions) throws BlockStoreException {
+		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
+			if (throwExceptions)
+				throw new BlockStoreException("EXIT block has no transactions");
+			return SolidityState.getFailState();
+		}
+		Transaction tx = block.getTransactions().get(0);
+		if (!net.bigtangle.server.service.StakeService.EXIT_DATA_CLASS.equals(tx.getDataClassName())
+				|| tx.getData() == null) {
+			if (throwExceptions)
+				throw new BlockStoreException("EXIT block transaction is not an ExitRequest");
+			return SolidityState.getFailState();
+		}
+		try {
+			@SuppressWarnings("unchecked")
+			Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+			String pubkeyHex = (String) data.get("pubkey");
+			byte[] signature = net.bigtangle.core.Utils.HEX.decode((String) data.get("signature"));
+			if (pubkeyHex == null || signature == null || signature.length == 0) {
+				throw new BlockStoreException("EXIT request is missing pubkey or signature");
+			}
+			byte[] pubkey = net.bigtangle.core.Utils.HEX.decode(pubkeyHex);
+			PQKey signer = PQKey.fromPublicOnly(pubkey);
+			Sha256Hash msg = Sha256Hash.of(net.bigtangle.core.Utils.HEX.decode(pubkeyHex));
+			if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
+				throw new BlockStoreException("EXIT request signature is invalid");
+			}
+		} catch (BlockStoreException e) {
+			if (throwExceptions)
+				throw e;
+			return SolidityState.getFailState();
+		} catch (Exception e) {
+			if (throwExceptions)
+				throw new BlockStoreException("EXIT request data is malformed", e);
+			return SolidityState.getFailState();
+		}
 		return SolidityState.getSuccessState();
 	}
 
@@ -539,7 +591,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		try {
 			RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
 			if (ri != null && ri.getChainlength() > 0) {
-				return ri.getChainlength() % 32 == 1;
+				return ri.getChainlength() % net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH == 1;
 			}
 		} catch (Exception e) {
 			return false;
@@ -570,10 +622,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	/**
 	 * Verifies the beacon is AUTHENTICATED: the declared proposer's signature
-	 * over the SlotData. The declared proposerIndex is cross-checked against the
-	 * active validator set; a fallback scans every depositor so a valid beacon
-	 * is not falsely rejected when the active set shifts between proposal and
-	 * validation.
+	 * over the SlotData. The primary check is that the signer is the validator
+	 * the deterministic proposer selection picks for the declared slot (using
+	 * the chain's RANDAO mix). If the mix drifted since proposal (a timing
+	 * artefact), a fallback accepts the signature from ANY currently active
+	 * validator — but NEVER from slashed/released ones, so an attacker cannot
+	 * sign with a key they staked once and abandoned.
 	 */
 	private boolean verifyProposerSignature(Block block, BlockStoreInterface store) {
 		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
@@ -591,14 +645,24 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				return false;
 			}
 			List<StakeRecord> active = store.getActiveStakeDeposits();
-			if (sd.getProposerIndex() >= 0 && sd.getProposerIndex() < active.size()) {
-				byte[] pubkey = active.get((int) sd.getProposerIndex()).getPubkey();
-				if (verifySlotDataSignature(pubkey, sd)) {
-					return true;
-				}
+			if (active.isEmpty()) {
+				return false;
 			}
-			// Fallback: any known depositor could be the signer.
-			for (net.bigtangle.core.StakeRecord v : store.getAllStakeDeposits()) {
+			// Chain RANDAO mix for the declared slot's epoch (pos_state) or the
+			// deterministic default, matching RandaoService.getRandaoMix.
+			long epoch = sd.getSlot() / 32;
+			byte[] mix = store.getPosState("randao", "mix_" + epoch);
+			if (mix == null) {
+				mix = sha256DefaultMix(epoch);
+			}
+			long expectedIdx = net.bigtangle.server.service.SlotService.selectProposerForSlot(
+					sd.getSlot(), active, mix);
+			if (expectedIdx >= 0 && expectedIdx < active.size()
+					&& verifySlotDataSignature(active.get((int) expectedIdx).getPubkey(), sd)) {
+				return true;
+			}
+			// Fallback: any ACTIVE validator could be the signer.
+			for (StakeRecord v : active) {
 				if (verifySlotDataSignature(v.getPubkey(), sd)) {
 					return true;
 				}
@@ -606,6 +670,15 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return false;
 		} catch (Exception e) {
 			return false;
+		}
+	}
+
+	private byte[] sha256DefaultMix(long epoch) {
+		try {
+			return java.security.MessageDigest.getInstance("SHA-256")
+					.digest(String.valueOf(epoch).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		} catch (Exception e) {
+			return new byte[32];
 		}
 	}
 
@@ -1144,7 +1217,31 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
 				activeStake = activeStake.add(v.getAmount());
 			}
-			if (committedPool != null) {
+			// Chain-derived recomputation: the reward must equal the per-epoch
+			// fee ledger for the previous epoch (epoch of this beacon - 1),
+			// derived from confirmed blocks — not an accepted declaration.
+			java.math.BigInteger expectedFromLedger = null;
+			try {
+				RewardInfo ri = new RewardInfo().parseChecked(transactions.get(0).getData());
+				if (ri != null && ri.getChainlength() > 0) {
+					long beaconEpoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+					byte[] ledgerBytes = store.getPosState(
+							"feeEpoch_" + (beaconEpoch - 1), networkParameters.getChainId());
+					if (ledgerBytes != null) {
+						expectedFromLedger = new java.math.BigInteger(ledgerBytes);
+					}
+				}
+			} catch (Exception ignored) {
+				// no ledger info — fall through to the committed-pool check
+			}
+			if (expectedFromLedger != null) {
+				if (rewardTotal.compareTo(expectedFromLedger) != 0) {
+					if (throwExceptions)
+						throw new InvalidTransactionException(
+								"Epoch reward does not match the chain-derived fee ledger");
+					return SolidityState.getFailState();
+				}
+			} else if (committedPool != null) {
 				if (rewardTotal.compareTo(java.math.BigInteger.valueOf(committedPool)) != 0) {
 					if (throwExceptions)
 						throw new InvalidTransactionException(
@@ -1797,6 +1894,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			SolidityState slashState = checkSlashingSolidity(block, throwExceptions);
 			if (!(slashState.getState() == State.Success)) {
 				return slashState;
+			}
+			break;
+		}
+		case BLOCKTYPE_EXIT: {
+			SolidityState exitState = checkExitSolidity(block, throwExceptions);
+			if (!(exitState.getState() == State.Success)) {
+				return exitState;
 			}
 			break;
 		}

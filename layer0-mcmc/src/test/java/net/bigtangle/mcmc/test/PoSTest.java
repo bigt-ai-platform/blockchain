@@ -377,8 +377,7 @@ public class PoSTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testSlashingBlockConsensus() throws Exception {
-        // Seed a validator, then slash it via a BLOCKTYPE_SLASHING block built
+    public void testSlashingBlockConsensus() throws Exception {        // Seed a validator, then slash it via a BLOCKTYPE_SLASHING block built
         // from two authenticated conflicting attestations.
         StakeRecord seeded = new StakeRecord(validatorKey.getPubKey(), StakeService.MIN_STAKE,
                 validatorKey.getPubKeyHash());
@@ -404,6 +403,35 @@ public class PoSTest extends AbstractIntegrationTest {
         StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(slashed.isSlashed(),
                 "validator must be slashed via the consensus SLASHING block");
+    }
+
+    @Test
+    public void testVoluntaryExitBlock() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        // Authenticated exit: the validator signs its own pubkey.
+        byte[] sig = validatorKey.sign(Sha256Hash.of(validatorKey.getPubKey())).serialize();
+        stakeService.submitExit(validatorKey.getPubKey(), sig, store);
+
+        StakeRecord exiting = store.getStakeDeposit(validatorKey.getPubKey());
+        assertNotNull(exiting);
+        assertTrue(exiting.isExiting(), "validator must be marked exiting");
+        assertFalse(exiting.isSlashed(), "voluntary exit must NOT mark slashed");
+        assertTrue(exiting.getWithdrawableEpoch() > 0, "withdrawable epoch must be set");
+    }
+
+    @Test
+    public void testExitRejectsBadSignature() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        // Signature over the WRONG message (ZERO_HASH, not the pubkey).
+        byte[] badSig = validatorKey.sign(Sha256Hash.ZERO_HASH).serialize();
+        assertThrows(IllegalArgumentException.class,
+                () -> stakeService.submitExit(validatorKey.getPubKey(), badSig, store));
     }
 
     // ========= Fee Tests =========

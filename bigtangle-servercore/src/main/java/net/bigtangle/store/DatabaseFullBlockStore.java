@@ -3557,6 +3557,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void updateStakeExit(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("UPDATE stake_deposits SET exiting = TRUE, withdrawable_epoch = ? WHERE pubkey = ?")) {
+			s.setLong(1, withdrawableEpoch);
+			s.setBytes(2, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public List<StakeRecord> getAllStakeDeposits() throws BlockStoreException {
 		List<StakeRecord> list = new ArrayList<>();
 		try (PreparedStatement s = getConnection()
@@ -3657,6 +3669,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		r.setWithdrawalCredentials(rs.getBytes("withdrawal_credentials"));
 		r.setActivatedEpoch(rs.getLong("activated_epoch"));
 		r.setSlashed(rs.getBoolean("slashed"));
+		r.setExiting(rs.getBoolean("exiting"));
 		r.setWithdrawableEpoch(rs.getLong("withdrawable_epoch"));
 		byte[] hashBytes = rs.getBytes("blockhash");
 		if (hashBytes != null) r.setBlockHash(Sha256Hash.wrap(hashBytes));

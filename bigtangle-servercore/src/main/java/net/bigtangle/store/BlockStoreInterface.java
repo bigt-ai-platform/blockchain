@@ -597,6 +597,9 @@ public interface BlockStoreInterface {
 
 	void updateStakeSlashing(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException;
 
+	/** Marks a validator as voluntarily exiting (distinct from slashed). */
+	void updateStakeExit(byte[] pubkey, long withdrawableEpoch) throws BlockStoreException;
+
 	void releaseStakeDeposit(byte[] pubkey) throws BlockStoreException;
 
 	/** Removes the stake record entirely (withdrawal): the bonded output becomes spendable. */

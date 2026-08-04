@@ -25,6 +25,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
@@ -47,6 +48,7 @@ public class StakeService {
     public static final long WITHDRAWAL_DELAY_EPOCHS = 256;
     public static final String STAKE_DATA_CLASS = "StakeDeposit";
     public static final String SLASHING_DATA_CLASS = "SlashingProof";
+    public static final String EXIT_DATA_CLASS = "ExitRequest";
 
     @Autowired
     private NetworkParameters networkParameters;
@@ -416,11 +418,22 @@ public class StakeService {
     }
 
     /**
-     * Voluntary exit: an honest (non-slashed) validator schedules its own
-     * withdrawal. After the delay, processWithdrawals deletes the record and
-     * the bonded output becomes spendable again.
+     * Voluntary exit as a consensus BLOCKTYPE_EXIT block: the validator signs an
+     * exit request (proving key ownership) which travels in the block. Every
+     * node validates and applies it, so the validator set never diverges via an
+     * HTTP-triggered DB write. Exiting validators stay active (and slashable)
+     * until the bond is released after the withdrawal delay.
      */
-    public void requestExit(byte[] pubkey, BlockStoreInterface store) throws Exception {
+    public void submitExit(byte[] pubkey, byte[] signature, BlockStoreInterface store) throws Exception {
+        if (pubkey == null || signature == null || signature.length == 0) {
+            throw new IllegalArgumentException("Exit request is missing pubkey or signature");
+        }
+        // Authenticate the exit request before building the block.
+        PQKey signer = PQKey.fromPublicOnly(pubkey);
+        Sha256Hash msg = Sha256Hash.of(pubkey);
+        if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
+            throw new IllegalArgumentException("Exit request signature is invalid");
+        }
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null) {
             throw new IllegalArgumentException("No stake deposit for pubkey");
@@ -428,11 +441,76 @@ public class StakeService {
         if (stake.isSlashed()) {
             throw new IllegalStateException("Slashed validators cannot request exit");
         }
+
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        Block head = store.get(maxConfirmedReward.getBlockHash());
+        Block b = Block.createBlock(networkParameters, head, head);
+        b.setBlockType(BlockType.BLOCKTYPE_EXIT);
+
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(EXIT_DATA_CLASS);
+        Map<String, Object> data = new HashMap<>();
+        data.put("pubkey", Utils.HEX.encode(pubkey));
+        data.put("signature", Utils.HEX.encode(signature));
+        tx.setData(Json.jsonmapper().writeValueAsBytes(data));
+        b.addTransaction(tx);
+
+        blockSaveService.saveBlock(b, store);
+        log.info("Exit block proposed for pubkey={}: {}", Utils.HEX.encode(pubkey), b.getHashAsString());
+    }
+
+    /**
+     * Consensus application of a BLOCKTYPE_EXIT block: marks the validator as
+     * voluntarily exiting with a withdrawable epoch. It is NOT slashed — it
+     * keeps its stake (and remains slashable) until the bond is released.
+     */
+    public void applyExitBlock(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_EXIT || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!EXIT_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        String pubkeyHex = (String) data.get("pubkey");
+        if (pubkeyHex == null) {
+            return;
+        }
+        byte[] pubkey = Utils.HEX.decode(pubkeyHex);
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null || stake.isSlashed()) {
+            return;
+        }
         long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
-        long withdrawableEpoch = currentEpoch + WITHDRAWAL_DELAY_EPOCHS;
-        store.updateStakeSlashing(pubkey, withdrawableEpoch);
-        log.info("Validator exit requested: pubkey={}, withdrawable at epoch={}",
-                Utils.HEX.encode(pubkey), withdrawableEpoch);
+        store.updateStakeExit(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator exit applied via consensus block {}: pubkey={}, withdrawable at epoch={}",
+                block.getHashAsString(), pubkeyHex, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+    }
+
+    /** Reverts an EXIT block on reorg: the validator is no longer exiting. */
+    public void revertExitBlock(Block block, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_EXIT || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!EXIT_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        String pubkeyHex = (String) data.get("pubkey");
+        if (pubkeyHex == null) {
+            return;
+        }
+        byte[] pubkey = Utils.HEX.decode(pubkeyHex);
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake != null) {
+            store.updateStakeExit(pubkey, -1L);
+            store.updateStakeActivation(pubkey, stake.getActivatedEpoch());
+        }
+        log.info("Reorg: reverted exit for pubkey={} (block {})", pubkeyHex, block.getHashAsString());
     }
 
     public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {

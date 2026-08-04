@@ -101,6 +101,15 @@ public class SlotService {
 
     public long selectProposer(long slot, BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
+        return selectProposerForSlot(slot, validators, randaoService.getRandaoMix(slot));
+    }
+
+    /**
+     * Pure, deterministic stake-weighted proposer selection over the full
+     * 32-byte RANDAO mix mixed with the slot. Also used by beacon validation to
+     * verify that a beacon's signer is the actual slot proposer.
+     */
+    public static long selectProposerForSlot(long slot, List<StakeRecord> validators, byte[] mix) {
         if (validators.isEmpty()) return -1;
 
         BigInteger totalStake = BigInteger.ZERO;
@@ -109,10 +118,9 @@ public class SlotService {
         }
         if (totalStake.signum() <= 0) return -1;
 
-        // Full 32-byte RANDAO mix mixed with the slot, as a big-endian integer.
-        byte[] mix = randaoService.getRandaoMix(slot);
-        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(mix.length + 8);
-        buf.put(mix);
+        byte[] mixBytes = mix != null ? mix : new byte[32];
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(mixBytes.length + 8);
+        buf.put(mixBytes);
         buf.putLong(slot);
         byte[] seedBytes = Sha256Hash.of(buf.array()).getBytes();
         BigInteger seed = new BigInteger(1, seedBytes);
@@ -201,11 +209,13 @@ public class SlotService {
         beaconBlock.addTransaction(tx);
 
         // The epoch's fee pool is paid out by the PROPOSER in the first beacon
-        // of the epoch — never in a competing beacon from every node.
+        // of the epoch — never in a competing beacon from every node. The pool
+        // is the CHAIN-DERIVED per-epoch ledger for the previous epoch, so
+        // validators can recompute it instead of trusting a declaration.
         java.math.BigInteger epochFeePool = java.math.BigInteger.ZERO;
         if (getSlotInEpoch(slot) == 0) {
             String chainId = networkParameters.getChainId();
-            byte[] poolBytes = store.getPosState("fee", chainId);
+            byte[] poolBytes = store.getPosState("feeEpoch_" + (epoch - 1), chainId);
             if (poolBytes != null) {
                 epochFeePool = new java.math.BigInteger(poolBytes);
             }
