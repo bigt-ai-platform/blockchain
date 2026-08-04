@@ -129,7 +129,7 @@ public class BlockSaveService {
 		broadcastBlock(block);
 	}
 
-	/** Applies chain-derived state (validator deposits, slashing, RANDAO, ...) when a block is saved. */
+	/** Applies chain-derived state (validator deposits, slashing, exits, ...) when a block is saved. */
 	private void notifyChainDerived(Block block, BlockStoreInterface store) throws Exception {
 		StakeService stakeService = stakeServiceProvider.getIfAvailable();
 		if (stakeService == null) {
@@ -141,25 +141,10 @@ public class BlockSaveService {
 			stakeService.applySlashingBlock(block, store);
 		} else if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_EXIT) {
 			stakeService.applyExitBlock(block, store);
-		} else if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_BEACON
-				&& block.getTransactions() != null) {
-			// Commit the RANDAO reveal carried in the beacon's SlotData.
-			for (Transaction tx : block.getTransactions()) {
-				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
-					try {
-						net.bigtangle.core.SlotData sd = jsonmapper.readValue(tx.getData(),
-								net.bigtangle.core.SlotData.class);
-						if (sd != null) {
-							randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal());
-						}
-					} catch (Exception e) {
-						logger.debug("Ignoring malformed SlotData in beacon {}: {}",
-								block.getHashAsString(), e.getMessage());
-					}
-					break;
-				}
-			}
 		}
+		// RANDAO reveals are folded into the mix ONLY on confirmation
+		// (BlockStoreService.confirmDo), never at save time, so the mix is a
+		// pure function of the confirmed chain rather than arrival order.
 	}
 
 	/** Hands CROSSTANGLE (cross-chain message) blocks to the bridge module. */

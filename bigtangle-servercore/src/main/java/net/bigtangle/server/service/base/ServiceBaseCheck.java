@@ -647,16 +647,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					&& parent.getBlockType() != BlockType.BLOCKTYPE_INITIAL) {
 				throw new BlockStoreException("SLASHING block parent is not a beacon");
 			}
-			long parentChainlength = 0;
-			if (parent.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-				RewardInfo pri = new RewardInfo().parseChecked(parent.getTransactions().get(0).getData());
-				parentChainlength = pri != null ? pri.getChainlength() : 0;
-			}
+			// Recency, measured against the block's OWN chain position (the
+			// reward cutoff of the parent), NOT the moving tip — so a block
+			// valid when accepted stays valid on revalidation/resync. A parent
+			// at or below its own reward cutoff is stale (genesis included).
 			try {
-				TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
-				long tipChainlength = tip != null ? tip.getChainLength() : 0;
-				if (tipChainlength - parentChainlength > net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
-					throw new BlockStoreException("SLASHING block parent is too far behind the tip");
+				net.bigtangle.server.service.base.ServiceBaseConnect sbc =
+						new net.bigtangle.server.service.base.ServiceBaseConnect(
+								serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
+				long cutoff = sbc.getRewardCutoffHeight(parent.getHash(), store);
+				if (parent.getHeight() <= cutoff) {
+					throw new BlockStoreException("SLASHING block parent is stale (at or below its reward cutoff)");
 				}
 			} catch (BlockStoreException e) {
 				throw e;

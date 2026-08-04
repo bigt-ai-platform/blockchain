@@ -377,7 +377,8 @@ public class PoSTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testSlashingBlockConsensus() throws Exception {        // Seed a validator, then slash it via a BLOCKTYPE_SLASHING block built
+    public void testSlashingBlockConsensus() throws Exception {
+        // Seed a validator, then slash it via a BLOCKTYPE_SLASHING block built
         // from two authenticated conflicting attestations.
         StakeRecord seeded = new StakeRecord(validatorKey.getPubKey(), StakeService.MIN_STAKE,
                 validatorKey.getPubKeyHash());
@@ -385,6 +386,12 @@ public class PoSTest extends AbstractIntegrationTest {
         seeded.setTxHash(Sha256Hash.of("staketx".getBytes()));
         store.saveStakeDeposit(seeded);
         stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        // Produce a real confirmed beacon so the SLASHING block's parent is a
+        // beacon (a genesis parent is stale).
+        makeRewardBlock();
+        mcmcService.update(store);
+        blockGraph.confirmDo(store);
 
         AttestationData att1 = new AttestationData();
         att1.setSlot(5);

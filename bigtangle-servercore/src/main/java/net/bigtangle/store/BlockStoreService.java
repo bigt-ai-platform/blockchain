@@ -90,6 +90,9 @@ public class BlockStoreService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.StakeService> stakeServiceProvider;
 
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.RandaoService> randaoServiceProvider;
+
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
@@ -559,6 +562,19 @@ public class BlockStoreService {
 				}
 			}
 
+			// RANDAO: fold each confirmed beacon's reveal into the mix, in
+			// confirmation order, so the mix is a PURE function of the confirmed
+			// chain (never mutated by unconfirmed or competing beacons).
+			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
+			if (randaoService != null) {
+				for (BlockWrap b : blocks) {
+					Block blk = b.getBlock();
+					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+						applyRevealFromBeacon(randaoService, blk);
+					}
+				}
+			}
+
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
@@ -611,6 +627,19 @@ public class BlockStoreService {
 				}
 			}
 
+			// RANDAO: XOR each unconfirmed beacon's reveal back out of the mix
+			// (XOR is its own inverse), reverting the confirmation-time fold so
+			// the mix stays a pure function of the confirmed chain.
+			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
+			if (randaoService != null) {
+				for (BlockWrap b : blocksToUnconfirm) {
+					Block blk = b.getBlock();
+					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+						applyRevealFromBeacon(randaoService, blk);
+					}
+				}
+			}
+
 			blockStore.commitDatabaseBatchWrite();
 		} catch (Exception e) {
 			blockStore.abortDatabaseBatchWrite();
@@ -620,9 +649,31 @@ public class BlockStoreService {
 		}
 	}
 
+	/**
+	 * Folds a confirmed beacon's RANDAO reveal (from its SlotData) into the
+	 * epoch mix. XOR is its own inverse, so the same call in unconfirmDo reverts
+	 * it. Runs only in confirmDo, so the mix is a pure function of the confirmed
+	 * chain.
+	 */
+	private void applyRevealFromBeacon(net.bigtangle.server.service.RandaoService randaoService, Block blk) {
+		try {
+			for (Transaction tx : blk.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					net.bigtangle.core.SlotData sd = jsonmapper.readValue(tx.getData(),
+							net.bigtangle.core.SlotData.class);
+					if (sd != null && sd.getRandaoReveal() != null) {
+						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal());
+					}
+					break;
+				}
+			}
+		} catch (Exception e) {
+			log.warn("Failed to fold RANDAO reveal for beacon {}: {}", blk.getHashAsString(), e.getMessage());
+		}
+	}
+
 	public boolean checkChainHeadExecution(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)
 			throws BlockStoreException {
-
 		switch (block.getBlockType()) {
 		default:
 			return true;
