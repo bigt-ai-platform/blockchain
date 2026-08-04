@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.AttestationData;
@@ -26,6 +27,11 @@ public class GhostService {
     private static final Logger log = LoggerFactory.getLogger(GhostService.class);
 
     private final ConcurrentHashMap<Sha256Hash, Long> forkChoiceVotes = new ConcurrentHashMap<>();
+    // LMD: each validator's LATEST vote only. A validator voting repeatedly must
+    // first retract its previous vote, so weights are the sum of current stake
+    // over each validator's latest vote — never an ever-growing accumulator.
+    private final ConcurrentHashMap<String, Sha256Hash> latestVoteBeacons = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> latestVoteWeights = new ConcurrentHashMap<>();
 
     @Autowired
     private StakeService stakeService;
@@ -36,6 +42,12 @@ public class GhostService {
     @Autowired
     private StoreService storeService;
 
+    // @Lazy breaks the GhostService <-> CasperService cycle (CasperService
+    // forwards attestations here).
+    @Lazy
+    @Autowired
+    private net.bigtangle.server.service.CasperService casperService;
+
     @PostConstruct
     public void restoreState() {
         try {
@@ -43,6 +55,13 @@ public class GhostService {
             try {
                 Map<Sha256Hash, Long> saved = store.getSummedAttestationVotes();
                 forkChoiceVotes.putAll(saved);
+                // Restore each validator's latest vote so a future vote retracts
+                // the correct previous weight (in-memory and persisted LMD agree).
+                for (net.bigtangle.store.BlockStoreInterface.LatestVote v : store.getLatestAttestationVotes()) {
+                    String pk = net.bigtangle.core.Utils.HEX.encode(v.pubkey);
+                    latestVoteBeacons.put(pk, v.blockHash);
+                    latestVoteWeights.put(pk, v.weight);
+                }
             } finally {
                 store.close();
             }
@@ -58,7 +77,26 @@ public class GhostService {
         if (weight <= 0) {
             return;
         }
-        forkChoiceVotes.merge(att.getBeaconBlockHash(), weight, Long::sum);
+        String pk = net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey());
+        Sha256Hash newBeacon = att.getBeaconBlockHash();
+        if (newBeacon == null) {
+            return;
+        }
+        // LMD: retract the validator's previous latest vote before adding the new
+        // one, both in memory and in the persisted store.
+        Sha256Hash prevBeacon = latestVoteBeacons.get(pk);
+        Long prevWeight = latestVoteWeights.get(pk);
+        if (prevBeacon != null && prevWeight != null && !prevBeacon.equals(newBeacon)) {
+            Long updated = forkChoiceVotes.computeIfPresent(prevBeacon, (h, w) -> w - prevWeight);
+            if (updated == null || updated <= 0) {
+                forkChoiceVotes.remove(prevBeacon);
+            }
+            store.deleteAttestationVote(prevBeacon, att.getValidatorPubkey());
+        }
+        latestVoteBeacons.put(pk, newBeacon);
+        latestVoteWeights.put(pk, weight);
+        forkChoiceVotes.merge(newBeacon, weight, Long::sum);
+        store.saveAttestationVote(newBeacon, att.getValidatorPubkey(), weight);
     }
 
     public Sha256Hash executeGhost(Sha256Hash root, BlockStoreInterface store) throws Exception {
@@ -108,6 +146,15 @@ public class GhostService {
     }
 
     public Sha256Hash getDagRoot(BlockStoreInterface store) throws Exception {
+        // GHOST starts at the highest JUSTIFIED checkpoint (the reward beacon of
+        // that epoch boundary), never at genesis — votes below a justified
+        // checkpoint cannot drag the fork choice across finalized history.
+        if (casperService != null) {
+            net.bigtangle.server.service.CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
+            if (justified != null && justified.blockHash != null) {
+                return justified.blockHash;
+            }
+        }
         return UtilGeneseBlock.createGenesis(networkParameters).getHash();
     }
 

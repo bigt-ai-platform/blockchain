@@ -183,6 +183,20 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public void dagBlockHashesFrom(Set<BlockWrap> blocks, BlockWrap headBlock, long cutoffHeight,
 			long prevChainlength, List<BlockType> blocktypes, boolean checkSpentConflict, boolean checkChainlength,
 			BlockStoreInterface store) throws BlockStoreException {
+		dagBlockHashesFrom(blocks, headBlock, cutoffHeight, prevChainlength, blocktypes, checkSpentConflict,
+				checkChainlength, false, store);
+	}
+
+	/**
+	 * Collects the DAG blocks reachable from {@code headBlock} within the reward
+	 * window. When {@code includeConfirmed} is true, blocks already on the reward
+	 * chain are collected too — used by the epoch-start beacon so it can REWARD
+	 * every block confirmed during its epoch (a block may be referenced/confirmed
+	 * by a mid-epoch beacon and rewarded once by the epoch-start beacon).
+	 */
+	public void dagBlockHashesFrom(Set<BlockWrap> blocks, BlockWrap headBlock, long cutoffHeight,
+			long prevChainlength, List<BlockType> blocktypes, boolean checkSpentConflict, boolean checkChainlength,
+			boolean includeConfirmed, BlockStoreInterface store) throws BlockStoreException {
 
 		PriorityQueue<BlockWrap> blockQueue = new PriorityQueue<>(
 				Comparator.comparingLong((BlockWrap b) -> b.getBlockEvaluation().getHeight()).reversed());
@@ -197,11 +211,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// Nothing added if already in set
 			if (checkExists(blocks, block))
 				continue;
-			// Nothing added if already in chainlength
-			if (block.getBlockEvaluation().getChainlength() >= 0)
+			// Nothing added if already in chainlength (unless the caller is the
+			// epoch-start reward collection, which needs already-confirmed blocks).
+			if (!includeConfirmed && block.getBlockEvaluation().getChainlength() >= 0)
 				continue;
-			// Check if the block is in cutoff and not in chain
-			if (block.getBlock().getHeight() <= cutoffHeight && block.getBlockEvaluation().getChainlength() < 0) {
+			// Check if the block is in cutoff: blocks at or below the reward
+			// cutoff are confirmed history and are never (re)collected.
+			if (block.getBlock().getHeight() <= cutoffHeight) {
 				continue;
 			}
 			// Check if the block is solid,

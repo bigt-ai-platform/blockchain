@@ -616,6 +616,30 @@ public interface BlockStoreInterface {
 
 	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException;
 
+	/** Removes a validator's vote on {@code blockHash} when it retracts it (LMD: latest vote only). */
+	void deleteAttestationVote(Sha256Hash blockHash, byte[] pubkey) throws BlockStoreException;
+
+	/**
+	 * A validator's latest attestation vote (one per validator after LMD
+	 * retraction): the voted beacon, the weight at vote time, and the slot.
+	 */
+	class LatestVote {
+		public final byte[] pubkey;
+		public final Sha256Hash blockHash;
+		public final long weight;
+		public final long slot;
+
+		public LatestVote(byte[] pubkey, Sha256Hash blockHash, long weight, long slot) {
+			this.pubkey = pubkey;
+			this.blockHash = blockHash;
+			this.weight = weight;
+			this.slot = slot;
+		}
+	}
+
+	/** Returns every validator's latest stored vote (for LMD restore). */
+	List<LatestVote> getLatestAttestationVotes() throws BlockStoreException;
+
 	List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException;
 
 	Map<Sha256Hash, Long> getSummedAttestationVotes() throws BlockStoreException;

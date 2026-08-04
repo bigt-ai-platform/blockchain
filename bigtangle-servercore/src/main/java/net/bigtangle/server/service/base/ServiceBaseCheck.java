@@ -696,7 +696,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * validator the deterministic proposer selection picks for the declared slot
 	 * (using the chain's RANDAO mix). There is no "any active validator"
 	 * fallback — a beacon signed by anyone who is not the slot's proposer is
-	 * rejected, so proposer identity is actually enforced.
+	 * rejected, so proposer identity is actually enforced. A beacon WITHOUT
+	 * SlotData is rejected outright once past the PoS activation height; below
+	 * it (test / pre-PoS chains) legacy beacons are tolerated.
 	 */
 	private boolean verifyProposerSignature(Block block, BlockStoreInterface store) {
 		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
@@ -710,10 +712,16 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					break;
 				}
 			}
-			if (sd == null || sd.getProposerSignature() == null || sd.getProposerSignature().length == 0) {
+			if (sd == null) {
+				return legacyBeaconAllowed(block);
+			}
+			if (sd.getProposerSignature() == null || sd.getProposerSignature().length == 0) {
 				return false;
 			}
-			List<StakeRecord> active = store.getActiveStakeDeposits();
+			// Use the SNAPSHOTTED active validator set from two epochs earlier
+			// (same boundary discipline as mixfinal_), never the node's live local
+			// set — the expected proposer must be a fixed chain fact.
+			List<StakeRecord> active = validatorsForEpoch(sd.getSlot() / 32 - 2, store);
 			if (active.isEmpty()) {
 				return false;
 			}
@@ -781,15 +789,32 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				}
 			}
 			if (sd == null) {
-				// Legacy beacon without SlotData: no RANDAO contribution, nothing
-				// to grind. Accepted for backward compatibility.
-				return true;
+				// Legacy beacon without SlotData: tolerated ONLY below the PoS
+				// activation chainlength (test / pre-PoS chains). Past the
+				// activation height an unauthenticated beacon is rejected outright
+				// — confirmation power is the privilege PoS exists to protect.
+				return legacyBeaconAllowed(block);
 			}
 			byte[] reveal = sd.getRandaoReveal();
 			if (reveal == null || reveal.length == 0) {
 				return false; // reveal is mandatory
 			}
-			List<StakeRecord> active = store.getActiveStakeDeposits();
+			// Slot/epoch correspondence is CHAIN-DERIVED: the declared slot's
+			// epoch must match both epoch == slot/32 and the beacon's reward
+			// chainlength epoch (chainlength 1 = epoch 0). This anchors the
+			// self-declared slot to the reward chain so a proposer cannot sign a
+			// beacon for an arbitrary slot.
+			if (sd.getEpoch() != sd.getSlot() / 32) {
+				return false; // epoch must equal slot/32
+			}
+			long chainlength = rewardChainlength(block);
+			if (chainlength > 0 && sd.getSlot() / 32 != (chainlength - 1)
+					/ net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH) {
+				return false; // slot's epoch must match the reward chainlength
+			}
+			// Use the SNAPSHOTTED active validator set from two epochs earlier
+			// (same boundary discipline as mixfinal_), never the node's live set.
+			List<StakeRecord> active = validatorsForEpoch(sd.getSlot() / 32 - 2, store);
 			if (active.isEmpty()) {
 				return false;
 			}
@@ -827,6 +852,44 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return java.security.MessageDigest.getInstance("SHA-256").digest(input);
 		} catch (Exception e) {
 			return null;
+		}
+	}
+
+	/**
+	 * A beacon without SlotData is only accepted strictly below the PoS
+	 * activation chainlength. The position is the chain-derived REWARD chain
+	 * length (RewardInfo.getChainlength), never the block's self-declared height.
+	 */
+	private boolean legacyBeaconAllowed(Block block) {
+		long chainlength = rewardChainlength(block);
+		return chainlength > 0 && chainlength < NetworkParameters.POS_BEACON_SLOTDATA_ACTIVATION;
+	}
+
+	/** The beacon's reward chainlength, or -1 if it cannot be derived. */
+	private long rewardChainlength(Block block) {
+		try {
+			net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+					.parseChecked(block.getTransactions().get(0).getData());
+			return ri != null ? ri.getChainlength() : -1;
+		} catch (Exception e) {
+			return -1;
+		}
+	}
+
+	/**
+	 * Active validators for proposer selection of a slot in {@code sourceEpoch + 2}:
+	 * the immutable snapshot written at the epoch boundary, or (bootstrap / a node
+	 * that has not crossed the boundary) the live active set.
+	 */
+	private List<StakeRecord> validatorsForEpoch(long sourceEpoch, BlockStoreInterface store) {
+		List<StakeRecord> snap = net.bigtangle.server.service.SlotService.getValidatorSnapshot(sourceEpoch, store);
+		if (snap != null) {
+			return snap;
+		}
+		try {
+			return store.getActiveStakeDeposits();
+		} catch (Exception e) {
+			return new java.util.ArrayList<>();
 		}
 	}
 
@@ -1314,8 +1377,9 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// The beacon must be AUTHENTICATED: the declared proposer's signature
 		// over the SlotData binds the slot, fee pool and RANDAO reveal. Without
 		// it, anyone could publish a beacon declaring any slot/fee-pool and
-		// mint arbitrary value. Only enforced when the beacon actually mints.
-		if (hasRewardOutputs && !verifyProposerSignature(block, store)) {
+		// mint arbitrary value or confirm arbitrary DAG blocks. Enforced for
+		// EVERY beacon, not only when the beacon mints.
+		if (!verifyProposerSignature(block, store)) {
 			if (throwExceptions)
 				throw new BlockStoreException("Beacon is not signed by a valid proposer");
 			return SolidityState.getFailState();
@@ -1452,7 +1516,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					if (prevRi == null) {
 						return SolidityState.fromPrevReward(cursor, true);
 					}
-					if (prevRi.getBlocks() != null) {
+					if (prevRi.getBlocks() != null
+							&& prevRi.getChainlength() % net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH == 1) {
+						// Only EPOCH-START beacons reward blocks; a block
+						// referenced/confirmed by a mid-epoch beacon is not yet
+						// rewarded and remains eligible for this epoch's payout.
 						prevRewarded.addAll(prevRi.getBlocks());
 					}
 					cursor = prevRi.getPrevRewardHash();

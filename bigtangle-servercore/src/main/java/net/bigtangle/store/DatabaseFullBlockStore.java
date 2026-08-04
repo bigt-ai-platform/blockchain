@@ -3676,6 +3676,37 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void deleteAttestationVote(Sha256Hash blockHash, byte[] pubkey) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("DELETE FROM attestation_votes WHERE blockhash = ? AND pubkey = ?")) {
+			s.setBytes(1, blockHash.getBytes());
+			s.setBytes(2, pubkey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<net.bigtangle.store.BlockStoreInterface.LatestVote> getLatestAttestationVotes()
+			throws BlockStoreException {
+		List<net.bigtangle.store.BlockStoreInterface.LatestVote> list = new ArrayList<>();
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT pubkey, blockhash, weight, slot FROM attestation_votes")) {
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					list.add(new net.bigtangle.store.BlockStoreInterface.LatestVote(
+							rs.getBytes("pubkey"), Sha256Hash.wrap(rs.getBytes("blockhash")),
+							rs.getLong("weight"), rs.getLong("slot")));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return list;
+	}
+
+	@Override
 	public List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException {
 		List<AttestationData> list = new ArrayList<>();
 		try (PreparedStatement s = getConnection()

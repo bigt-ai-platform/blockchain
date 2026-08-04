@@ -211,6 +211,12 @@ public abstract class NetworkParameters {
 	// PoS epoch configuration
 	public static final long SLOTS_PER_EPOCH = 32L;
 
+	// Reward-chainlength at which every beacon MUST carry SlotData with a valid
+	// proposer signature + RANDAO reveal. Below this height legacy beacons
+	// without SlotData are tolerated (test/pre-PoS chains); at or above it an
+	// unauthenticated beacon is rejected outright.
+	public static final long POS_BEACON_SLOTDATA_ACTIVATION = 1024L;
+
 	// Max blocks per reward chainlength
 	public static final int TARGET_MAX_BLOCKS_IN_REWARD = 5000;
 	public static final int MAX_REWARD_BLOCK_SIZE = MAX_DEFAULT_BLOCK_SIZE + TARGET_MAX_BLOCKS_IN_REWARD * 200;

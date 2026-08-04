@@ -94,6 +94,12 @@ public class BlockStoreService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.RandaoService> randaoServiceProvider;
 
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SlotService> slotServiceProvider;
+
 	
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
@@ -404,11 +410,31 @@ public class BlockStoreService {
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
-
 			boolean haveNewBestChain = serviceVerifyReward.getRewardInfo(block).getChainlength() > serviceVerifyReward
 					.getRewardInfo(head).getChainlength();
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
+			// FINALITY: a reorg may only replace the head if the winning chain
+			// descends from the last FINALIZED checkpoint. Any chain that does
+			// not is a competing fork and is saved unconfirmed — finalized
+			// history can never be reverted ("Once finalized, never reverted").
+			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+			if (haveNewBestChain && casper != null) {
+				net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+				// Only enforce the anchor when the finalized block is actually in
+				// this store: on a fresh/reset node the checkpoint belongs to a
+				// prior chain and there is nothing to anchor yet. On the live
+				// chain it is always present, so a reorg that would cross it is
+				// refused.
+				boolean anchorKnown = finalized != null
+						&& store.get(finalized.getBlockHash()) != null;
+				if (anchorKnown && !casper.descendsFrom(
+						block.getHash(), finalized.getBlockHash(), store)) {
+					log.info("Reorg refused: new chain does not descend from finalized checkpoint epoch {} ({})",
+							finalized.getEpoch(), finalized.getBlockHash());
+					haveNewBestChain = false;
+				}
+			}
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
 				connect(block, solidityState, store);
@@ -612,6 +638,13 @@ public class BlockStoreService {
 					net.bigtangle.core.SlotData sd = slotDataOf(blk);
 					if (sd != null) {
 						randaoService.finalizeEpochMix(sd.getSlot() / 32 - 1, blockStore);
+						// Same boundary discipline for the active validator set:
+						// proposer selection two epochs later reads this immutable
+						// snapshot instead of each node's live local set.
+						net.bigtangle.server.service.SlotService slotService = slotServiceProvider.getIfAvailable();
+						if (slotService != null) {
+							slotService.snapshotValidatorsForEpoch(sd.getSlot() / 32 - 1, blockStore);
+						}
 					}
 				}
 			}

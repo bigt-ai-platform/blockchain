@@ -24,6 +24,8 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.Utils;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.EpochRewardService;
@@ -104,11 +106,67 @@ public class SlotService {
     }
 
     public long selectProposer(long slot, BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
-        // Selection uses the IMMUTABLE finalized snapshot from two epochs earlier,
-        // never the in-progress mix of the slot's own epoch (which would make
-        // proposer identity depend on each node's local confirmation progress).
+        // Selection uses the SNAPSHOTTED active validator set from two epochs
+        // earlier (same boundary discipline as the RANDAO mixfinal), never the
+        // node's live, locally-confirmed set — otherwise nodes at different
+        // confirmation heights derive different proposers for the same slot.
+        long sourceEpoch = slot / 32 - 2;
+        List<StakeRecord> validators = getValidatorSnapshot(sourceEpoch, store);
+        if (validators == null) {
+            validators = store.getActiveStakeDeposits();
+        }
         return selectProposerForSlot(slot, validators, randaoService.getSelectionMix(slot, store));
+    }
+
+    /**
+     * Snapshots the active validator set into an immutable {@code validators_}
+     * record at the epoch boundary (first beacon of the following epoch
+     * confirms), exactly like the RANDAO mixfinal. Selection and validation read
+     * it two epochs later, so the expected proposer for a slot is a fixed chain
+     * fact, identical on every node.
+     */
+    public static void snapshotValidatorsForEpoch(long epoch, BlockStoreInterface store) throws BlockStoreException {
+        if (epoch < 0) {
+            return;
+        }
+        if (store.getPosState("posvalidators", "validators_" + epoch) == null) {
+            StringBuilder sb = new StringBuilder();
+            for (StakeRecord v : store.getActiveStakeDeposits()) {
+                if (sb.length() > 0) {
+                    sb.append(';');
+                }
+                sb.append(Utils.HEX.encode(v.getPubkey())).append(':').append(v.getAmount().longValue());
+            }
+            store.savePosState("posvalidators", "validators_" + epoch,
+                    sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    /** The immutable active-validator snapshot for {@code epoch}, or null if not yet written. */
+    public static List<StakeRecord> getValidatorSnapshot(long epoch, BlockStoreInterface store) {
+        try {
+            byte[] raw = epoch >= 0 ? store.getPosState("posvalidators", "validators_" + epoch) : null;
+            if (raw == null) {
+                return null;
+            }
+            String s = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+            List<StakeRecord> list = new java.util.ArrayList<>();
+            if (s.isEmpty()) {
+                return list;
+            }
+            for (String part : s.split(";")) {
+                int idx = part.indexOf(':');
+                if (idx <= 0) {
+                    continue;
+                }
+                StakeRecord v = new StakeRecord(Utils.HEX.decode(part.substring(0, idx)),
+                        java.math.BigInteger.valueOf(Long.parseLong(part.substring(idx + 1))), null);
+                list.add(v);
+            }
+            return list;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -152,8 +210,7 @@ public class SlotService {
      * the proposer and every validator derive the same expected payout from
      * chain state instead of trusting a declaration.
      */
-    public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store) throws Exception {
-        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
+    public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store) throws Exception {        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
         if (block == null || block.getTransactions() == null) {
             return surplus;
         }
@@ -197,6 +254,42 @@ public class SlotService {
             }
         }
         return surplus;
+    }
+
+    /**
+     * The set of blocks already rewarded by a previous EPOCH-START beacon within
+     * the reward window, walked back the reward chain. Only epoch-start beacons
+     * (chainlength % SLOTS_PER_EPOCH == 1) reward blocks, so only their reference
+     * sets count — a block referenced/confirmed by a mid-epoch beacon is NOT yet
+     * rewarded and remains eligible for this epoch's payout.
+     */
+    private java.util.Set<Sha256Hash> previousEpochRewarded(Sha256Hash prevRewardHash, BlockStoreInterface store) {
+        java.util.Set<Sha256Hash> rewarded = new java.util.HashSet<>();
+        Sha256Hash cursor = prevRewardHash;
+        java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+        int walkCount = 0;
+        while (cursor != null && visited.add(cursor)
+                && walkCount < net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
+            walkCount++;
+            Block prevBeacon = store.get(cursor);
+            if (prevBeacon == null || prevBeacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                break;
+            }
+            try {
+                RewardInfo prevRi = new RewardInfo().parseChecked(prevBeacon.getTransactions().get(0).getData());
+                if (prevRi != null) {
+                    if (prevRi.getChainlength() % SLOTS_PER_EPOCH == 1 && prevRi.getBlocks() != null) {
+                        rewarded.addAll(prevRi.getBlocks());
+                    }
+                    cursor = prevRi.getPrevRewardHash();
+                } else {
+                    break;
+                }
+            } catch (Exception e) {
+                break;
+            }
+        }
+        return rewarded;
     }
 
     public Block proposeBeaconBlock(long slot, PQKey proposerKey, BlockStoreInterface store) throws Exception {
@@ -255,10 +348,19 @@ public class SlotService {
                     BlockType.BLOCKTYPE_ORDER_CANCEL, BlockType.BLOCKTYPE_CONTRACT_EVENT,
                     BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL, BlockType.BLOCKTYPE_EVM_DEPLOY,
                     BlockType.BLOCKTYPE_EVM_CALL);
+            // The epoch-start beacon must REWARD every block confirmed during its
+            // epoch (a block may already be confirmed by a mid-epoch beacon that
+            // referenced it), so it collects already-confirmed blocks too and then
+            // subtracts the blocks a previous epoch-start beacon already rewarded.
+            boolean epochStart = getSlotInEpoch(slot) == 0;
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(trunk.getHash(), store), cutoffheight,
-                    prevChainLength, ordertypes, true, true, store);
+                    prevChainLength, ordertypes, true, true, epochStart, store);
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
-                    prevChainLength, ordertypes, true, true, store);
+                    prevChainLength, ordertypes, true, true, epochStart, store);
+            if (epochStart) {
+                java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
+                blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));
+            }
             rewardInfo.setBlocks(serviceBase.getHashSet(blocks));
         } catch (Exception e) {
             log.debug("Beacon block reference collection failed, using empty set: {}", e.getMessage());

@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
@@ -230,6 +232,44 @@ public class CasperService {
             }
         }
         return best;
+    }
+
+    /** The highest FINALIZED checkpoint — the immutable anchor of fork choice. */
+    public Checkpoint getLastFinalizedCheckpoint() {
+        Checkpoint best = null;
+        for (Checkpoint cp : checkpoints.values()) {
+            if (cp.finalized && (best == null || cp.epoch > best.epoch)) {
+                best = cp;
+            }
+        }
+        return best;
+    }
+
+    /** True if {@code chainAncestor} is an ancestor of (or equal to) {@code blockHash} in the reward chain. */
+    public boolean descendsFrom(Sha256Hash blockHash, Sha256Hash chainAncestor, BlockStoreInterface store) {
+        if (blockHash == null || chainAncestor == null) {
+            return false;
+        }
+        Sha256Hash cursor = blockHash;
+        java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+        int guard = 0;
+        while (cursor != null && visited.add(cursor) && guard++ < 10_000) {
+            if (cursor.equals(chainAncestor)) {
+                return true;
+            }
+            try {
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    break;
+                }
+                net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                        .parseChecked(b.getTransactions().get(0).getData());
+                cursor = ri != null ? ri.getPrevRewardHash() : null;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
     }
 
     public void processSlot(long slot, Sha256Hash beaconHash,
