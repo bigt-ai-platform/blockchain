@@ -527,6 +527,14 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// a BEACON, otherwise the exit cannot be validated and is rejected.
 			// The formal path (no store) skips the window.
 			if (store != null) {
+				// The validator must have an ACTIVE, not-slashed, not-already-
+				// exiting deposit — the durable replay guard. The nonce window
+				// below is defense in depth on top of this.
+				net.bigtangle.core.StakeRecord dep = store.getStakeDeposit(pubkey);
+				if (dep == null || dep.isSlashed() || dep.isExiting()
+						|| dep.getActivatedEpoch() < 0) {
+					throw new BlockStoreException("EXIT request has no active, exit-eligible deposit");
+				}
 				Block parent = store.get(block.getPrevBlockHash());
 				if (parent == null) {
 					return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
@@ -1291,8 +1299,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				java.util.Set<Sha256Hash> prevRewarded = new java.util.HashSet<>();
 				java.util.Set<Sha256Hash> visitedBeacons = new java.util.HashSet<>();
 				Sha256Hash cursor = ri.getPrevRewardHash();
+				// Bound the walk by ITERATION COUNT (CHAINLENGTH_CUTOFF), not by
+				// beacon height, so it is correct regardless of whether a
+				// referenced block is an ancestor of the beacon that rewarded it.
+				int walkCount = 0;
 				boolean terminatedCleanly = false;
-				while (cursor != null) {
+				while (cursor != null && walkCount < net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
+					walkCount++;
 					if (!visitedBeacons.add(cursor)) {
 						return SolidityState.fromPrevReward(cursor, true); // cycle — defer
 					}
@@ -1303,10 +1316,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					if (prevBeacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
 						terminatedCleanly = true;
 						break; // genesis — no prior rewards
-					}
-					if (cutoffHeight > 0 && prevBeacon.getHeight() <= cutoffHeight) {
-						terminatedCleanly = true;
-						break; // older beacons' rewards are already cutoff-excluded
 					}
 					RewardInfo prevRi;
 					try {
@@ -1325,24 +1334,31 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				if (!terminatedCleanly) {
 					return SolidityState.fromPrevReward(ri.getPrevRewardHash(), true);
 				}
-				java.math.BigInteger expectedFromBlocks = java.math.BigInteger.ZERO;
-				for (Sha256Hash h : ri.getBlocks()) {
-					Block referenced = store.get(h);
-					if (referenced == null) {
-						return SolidityState.fromReferenced(h, true);
-					}
-					net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(h);
-					if (be == null || !be.isConfirmed()) {
-						return SolidityState.fromReferenced(h, true);
-					}
-					if (prevRewarded.contains(h)) {
-						throw new InvalidTransactionException(
-								"Epoch reward beacon re-rewards a previously rewarded block");
-					}
-					if (cutoffHeight > 0 && referenced.getHeight() <= cutoffHeight) {
-						throw new InvalidTransactionException(
-								"Epoch reward beacon references a block outside the epoch window");
-					}
+					java.math.BigInteger expectedFromBlocks = java.math.BigInteger.ZERO;
+					for (Sha256Hash h : ri.getBlocks()) {
+						Block referenced = store.get(h);
+						if (referenced == null) {
+							return SolidityState.fromReferenced(h, true);
+						}
+						net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(h);
+						if (be == null || !be.isConfirmed()) {
+							return SolidityState.fromReferenced(h, true);
+						}
+						if (prevRewarded.contains(h)) {
+							throw new InvalidTransactionException(
+									"Epoch reward beacon re-rewards a previously rewarded block");
+						}
+						if (cutoffHeight > 0 && referenced.getHeight() <= cutoffHeight) {
+							throw new InvalidTransactionException(
+									"Epoch reward beacon references a block outside the epoch window");
+						}
+						// Ancestry: a rewarded block must be BELOW the beacon's own
+						// height (a strict predecessor in the DAG), so the height
+						// cutoff is a sound lower bound on what may be rewarded.
+						if (referenced.getHeight() >= block.getHeight()) {
+							throw new InvalidTransactionException(
+									"Epoch reward beacon references a block at or above its own height");
+						}
 					try {
 						expectedFromBlocks = expectedFromBlocks.add(
 								net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
