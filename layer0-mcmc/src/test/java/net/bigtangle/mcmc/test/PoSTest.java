@@ -430,7 +430,9 @@ public class PoSTest extends AbstractIntegrationTest {
         assertNotNull(exiting);
         assertTrue(exiting.isExiting(), "validator must be marked exiting");
         assertFalse(exiting.isSlashed(), "voluntary exit must NOT mark slashed");
-        assertTrue(exiting.getWithdrawableEpoch() > 0, "withdrawable epoch must be set");
+        // The withdrawable epoch is set at CONFIRMATION (from the confirming
+        // beacon's chain epoch), not at save; here it is still pending.
+        assertTrue(exiting.getWithdrawableEpoch() < 0, "withdrawable epoch is set at confirmation");
     }
 
     @Test

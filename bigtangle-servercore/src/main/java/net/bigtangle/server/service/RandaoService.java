@@ -127,6 +127,17 @@ public class RandaoService {
      * the epoch mix. Deterministic for every node that accepts the same beacon.
      */
     public void applyReveal(long slot, byte[] reveal) {
+        applyReveal(slot, reveal, null);
+    }
+
+    /**
+     * Mixes an on-chain RANDAO reveal (from a confirmed beacon's SlotData) into
+     * the epoch mix. When {@code store} is non-null the mix is persisted through
+     * THAT store, inside the caller's transaction/batch, so an aborted
+     * confirmation rolls the mix back with it; a persistence failure THROWS
+     * (fail-closed) rather than silently diverging on restart.
+     */
+    public void applyReveal(long slot, byte[] reveal, BlockStoreInterface store) {
         if (reveal == null || reveal.length != 32) {
             log.warn("Rejecting malformed RANDAO reveal (expected 32 bytes) for slot {}", slot);
             return;
@@ -137,17 +148,15 @@ public class RandaoService {
             currentMix[i] ^= reveal[i];
         }
         randaoMixes.put(epoch, currentMix);
-        BlockStoreInterface store = null;
-        try {
-            store = storeService.getStore();
-            store.savePosState("randao", "mix_" + epoch, currentMix);
-        } catch (Exception e) {
-            log.debug("Failed to persist RANDAO mix", e);
-        } finally {
-            try { if (store != null) store.close(); } catch (Exception e) {}
+
+        if (store != null) {
+            try {
+                store.savePosState("randao", "mix_" + epoch, currentMix);
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to persist RANDAO mix for epoch " + epoch, e);
+            }
         }
     }
-
     private void persistCommitment(String key, byte[] hash) {
         BlockStoreInterface store = null;
         try {

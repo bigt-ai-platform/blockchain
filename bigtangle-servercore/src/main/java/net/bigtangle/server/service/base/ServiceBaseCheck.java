@@ -631,13 +631,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				throw new BlockStoreException("SLASHING proof data is malformed", e);
 			return SolidityState.getFailState();
 		}
-		// The parent MUST be a beacon (or genesis), so the withdrawable chain
-		// epoch is derivable from the block's own position. Without this, a
-		// SLASHING block built on an arbitrary parent would make the bond
-		// withdrawable at the fallback epoch 0 on a mature chain. The parent
-		// must also be RECENT (within CHAINLENGTH_CUTOFF of the tip), so a
-		// stale/genesis parent cannot set a withdrawable epoch already in the
-		// past.
+		// The parent MUST be a beacon (or genesis) so the block is structurally
+		// well-formed. The withdrawable epoch is NOT derived from the parent — it
+		// comes from the CONFIRMING beacon's chain epoch at confirm time, which
+		// is fixed, current, and not submitter-chosen — so no recency bound on
+		// the parent is needed here.
 		if (store != null) {
 			Block parent = store.get(block.getPrevBlockHash());
 			if (parent == null) {
@@ -646,24 +644,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (parent.getBlockType() != BlockType.BLOCKTYPE_BEACON
 					&& parent.getBlockType() != BlockType.BLOCKTYPE_INITIAL) {
 				throw new BlockStoreException("SLASHING block parent is not a beacon");
-			}
-			// Recency, measured against the block's OWN chain position (the
-			// reward cutoff of the parent), NOT the moving tip — so a block
-			// valid when accepted stays valid on revalidation/resync. A parent
-			// at or below its own reward cutoff is stale (genesis included).
-			try {
-				net.bigtangle.server.service.base.ServiceBaseConnect sbc =
-						new net.bigtangle.server.service.base.ServiceBaseConnect(
-								serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
-				long cutoff = sbc.getRewardCutoffHeight(parent.getHash(), store);
-				if (parent.getHeight() <= cutoff) {
-					throw new BlockStoreException("SLASHING block parent is stale (at or below its reward cutoff)");
-				}
-			} catch (BlockStoreException e) {
-				throw e;
-			} catch (Exception e) {
-				// cannot determine recency — defer rather than accept
-				return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
 			}
 		}
 		return SolidityState.getSuccessState();

@@ -570,7 +570,31 @@ public class BlockStoreService {
 				for (BlockWrap b : blocks) {
 					Block blk = b.getBlock();
 					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						applyRevealFromBeacon(randaoService, blk);
+						applyRevealFromBeacon(randaoService, blk, blockStore);
+					}
+				}
+			}
+
+			// Withdrawable epochs for confirmed SLASHING/EXIT blocks are derived
+			// from the CONFIRMING beacon's chain epoch (the post-batch tip), not
+			// the submitter-chosen parent — fixed once confirmed.
+			if (stakeService != null) {
+				long chainEpoch = 0;
+				TXReward tipAfter = blockStore.getMaxConfirmedReward();
+				if (tipAfter != null) {
+					chainEpoch = tipAfter.getChainLength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+				}
+				for (BlockWrap b : blocks) {
+					Block blk = b.getBlock();
+					try {
+						if (blk.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+							stakeService.applySlashingConfirmed(blk, chainEpoch, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+							stakeService.applyExitConfirmed(blk, chainEpoch, blockStore);
+						}
+					} catch (Exception e) {
+						log.warn("Failed to set withdrawable at confirmation for block {}: {}",
+								blk.getHashAsString(), e.getMessage());
 					}
 				}
 			}
@@ -635,7 +659,7 @@ public class BlockStoreService {
 				for (BlockWrap b : blocksToUnconfirm) {
 					Block blk = b.getBlock();
 					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						applyRevealFromBeacon(randaoService, blk);
+						applyRevealFromBeacon(randaoService, blk, blockStore);
 					}
 				}
 			}
@@ -651,24 +675,26 @@ public class BlockStoreService {
 
 	/**
 	 * Folds a confirmed beacon's RANDAO reveal (from its SlotData) into the
-	 * epoch mix. XOR is its own inverse, so the same call in unconfirmDo reverts
-	 * it. Runs only in confirmDo, so the mix is a pure function of the confirmed
-	 * chain.
+	 * epoch mix, persisted through {@code store} so the write participates in
+	 * the caller's batch. XOR is its own inverse, so the same call in
+	 * unconfirmDo reverts it. Failures propagate (fail-closed).
 	 */
-	private void applyRevealFromBeacon(net.bigtangle.server.service.RandaoService randaoService, Block blk) {
+	private void applyRevealFromBeacon(net.bigtangle.server.service.RandaoService randaoService, Block blk,
+			BlockStoreInterface store) throws BlockStoreException {
 		try {
 			for (Transaction tx : blk.getTransactions()) {
 				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
 					net.bigtangle.core.SlotData sd = jsonmapper.readValue(tx.getData(),
 							net.bigtangle.core.SlotData.class);
 					if (sd != null && sd.getRandaoReveal() != null) {
-						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal());
+						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal(), store);
 					}
 					break;
 				}
 			}
 		} catch (Exception e) {
-			log.warn("Failed to fold RANDAO reveal for beacon {}: {}", blk.getHashAsString(), e.getMessage());
+			throw new net.bigtangle.exception.BlockStoreException(
+					"Failed to fold RANDAO reveal for beacon " + blk.getHashAsString(), e);
 		}
 	}
 

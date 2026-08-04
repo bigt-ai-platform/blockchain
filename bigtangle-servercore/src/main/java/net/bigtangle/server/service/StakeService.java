@@ -301,11 +301,40 @@ public class StakeService {
         if (stake == null || stake.isSlashed()) {
             return;
         }
-        long chainEpoch = chainEpochOf(block, store);
-        store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        store.updateStakeSlashing(pubkey, -1L);
         confiscateBond(pubkey, stake, store);
-        log.info("Validator slashed via consensus block {}: pubkey={}, withdrawable at epoch={}",
-                block.getHashAsString(), Utils.HEX.encode(pubkey), chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator slashed via consensus block {}: pubkey={} (withdrawable set at confirmation)",
+                block.getHashAsString(), Utils.HEX.encode(pubkey));
+    }
+
+    /**
+     * Confirm-time variant: sets the withdrawable epoch from the CONFIRMING
+     * beacon's chain epoch (passed in), which is fixed once confirmed, current,
+     * and not chosen by the submitter. Called by confirmDo alongside the
+     * save-time flag application.
+     */
+    public void applySlashingConfirmed(Block block, long chainEpoch, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_SLASHING || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!SLASHING_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
+        if (att1 == null || att1.getValidatorPubkey() == null) {
+            return;
+        }
+        byte[] pubkey = att1.getValidatorPubkey();
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null || stake.isSlashed()) {
+            return;
+        }
+        store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Slash withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
+                Utils.HEX.encode(pubkey), chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
     }
 
     /**
@@ -529,10 +558,38 @@ public class StakeService {
         if (stake == null || stake.isSlashed()) {
             return;
         }
-        long chainEpoch = chainEpochOf(block, store);
+        store.updateStakeExit(pubkey, -1L);
+        log.info("Validator exit applied via consensus block {}: pubkey={} (withdrawable set at confirmation)",
+                block.getHashAsString(), pubkeyHex);
+    }
+
+    /**
+     * Confirm-time variant: sets the withdrawable epoch from the CONFIRMING
+     * beacon's chain epoch (passed in), which is fixed once confirmed, current,
+     * and not chosen by the submitter.
+     */
+    public void applyExitConfirmed(Block block, long chainEpoch, BlockStoreInterface store) throws Exception {
+        if (block.getBlockType() != BlockType.BLOCKTYPE_EXIT || block.getTransactions().isEmpty()) {
+            return;
+        }
+        Transaction tx = block.getTransactions().get(0);
+        if (!EXIT_DATA_CLASS.equals(tx.getDataClassName()) || tx.getData() == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        String pubkeyHex = (String) data.get("pubkey");
+        if (pubkeyHex == null) {
+            return;
+        }
+        byte[] pubkey = Utils.HEX.decode(pubkeyHex);
+        StakeRecord stake = store.getStakeDeposit(pubkey);
+        if (stake == null || stake.isSlashed()) {
+            return;
+        }
         store.updateStakeExit(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
-        log.info("Validator exit applied via consensus block {}: pubkey={}, withdrawable at epoch={}",
-                block.getHashAsString(), pubkeyHex, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Exit withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
+                pubkeyHex, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
     }
 
     /** Reverts an EXIT block on reorg: the validator is no longer exiting. */
