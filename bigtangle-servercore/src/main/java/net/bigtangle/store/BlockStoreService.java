@@ -541,9 +541,10 @@ public class BlockStoreService {
 
 			// Confirm-time application of chain-derived state: a STAKE/SLASHING
 			// block that gains confirmation has its validator deposit applied /
-			// slash enforced. Idempotent with the save-time application, so the
-			// state survives unconfirm -> re-confirm cycles. Failures abort the
-			// batch (fail-closed), consistent with the withdrawable code below.
+			// slash enforced. Idempotent with the save-time application. A
+			// storage error (BlockStoreException) aborts the batch; a block
+			// that is simply inapplicable (no deposit, malformed data) is
+			// skipped so one bad block cannot halt all confirmation.
 			net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
 			if (stakeService != null) {
 				for (BlockWrap b : blocks) {
@@ -556,9 +557,12 @@ public class BlockStoreService {
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
 							stakeService.applyExitBlock(blk, blockStore);
 						}
-					} catch (Exception e) {
+					} catch (net.bigtangle.exception.BlockStoreException e) {
 						throw new net.bigtangle.exception.BlockStoreException(
 								"Failed to apply chain-derived state for confirmed block " + blk.getHashAsString(), e);
+					} catch (Exception e) {
+						log.warn("Skipping inapplicable chain-derived state for confirmed block {}: {}",
+								blk.getHashAsString(), e.getMessage());
 					}
 				}
 			}
@@ -677,6 +681,12 @@ public class BlockStoreService {
 							stakeService.revertSlashingBlock(blk, blockStore);
 						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
 							stakeService.revertExitBlock(blk, blockStore);
+						} else if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+							// A beacon being unconfirmed resets the withdrawable
+							// epoch of any SLASHING/EXIT block it referenced, so
+							// the epoch re-derives on re-confirmation and a stale
+							// value never becomes permanent.
+							resetReferencedWithdrawables(stakeService, blk, blockStore);
 						}
 					} catch (Exception e) {
 						log.warn("Failed to revert chain-derived state for block {}: {}",
@@ -713,6 +723,37 @@ public class BlockStoreService {
 			throw e;
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
+		}
+	}
+
+	/**
+	 * When a beacon is unconfirmed, reset the withdrawable epoch of any
+	 * SLASHING/EXIT block it referenced back to pending (-1), so a stale beacon
+	 * cannot leave a permanent withdrawable value.
+	 */
+	private void resetReferencedWithdrawables(net.bigtangle.server.service.StakeService stakeService, Block beacon,
+			BlockStoreInterface blockStore) throws Exception {
+		if (beacon.getTransactions().isEmpty()) {
+			return;
+		}
+		net.bigtangle.core.RewardInfo ri;
+		try {
+			ri = new net.bigtangle.core.RewardInfo().parseChecked(beacon.getTransactions().get(0).getData());
+		} catch (Exception e) {
+			return;
+		}
+		if (ri == null || ri.getBlocks() == null) {
+			return;
+		}
+		for (Sha256Hash referenced : ri.getBlocks()) {
+			Block refBlock = blockStore.get(referenced);
+			if (refBlock == null) {
+				continue;
+			}
+			if (refBlock.getBlockType() == BlockType.BLOCKTYPE_SLASHING
+					|| refBlock.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+				stakeService.clearWithdrawableForBlock(refBlock, blockStore);
+			}
 		}
 	}
 

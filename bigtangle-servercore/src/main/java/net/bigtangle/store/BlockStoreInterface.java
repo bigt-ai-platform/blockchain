@@ -611,6 +611,9 @@ public interface BlockStoreInterface {
 	/** Clears the slashed flag and withdrawable epoch (reorg revert of a SLASHING block). */
 	void clearStakeSlashing(byte[] pubkey) throws BlockStoreException;
 
+	/** Clears ONLY the withdrawable epoch, leaving slashed/exiting flags intact. */
+	void clearStakeWithdrawable(byte[] pubkey) throws BlockStoreException;
+
 	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException;
 
 	List<AttestationData> getAttestationsForSlot(long slot) throws BlockStoreException;

@@ -625,6 +625,42 @@ public class StakeService {
         log.info("Reorg: reverted exit for pubkey={} (block {})", pubkeyHex, block.getHashAsString());
     }
 
+    /**
+     * Clears the withdrawable epoch of the validator identified by a SLASHING or
+     * EXIT block. Used when the block's referencing beacon is unconfirmed: the
+     * epoch must become pending again so it is re-derived on re-confirmation
+     * (and never stuck from a stale beacon).
+     */
+    public void clearWithdrawableForBlock(Block block, BlockStoreInterface store) throws Exception {
+        byte[] pubkey = null;
+        if (block.getBlockType() == BlockType.BLOCKTYPE_SLASHING && !block.getTransactions().isEmpty()) {
+            Transaction tx = block.getTransactions().get(0);
+            if (SLASHING_DATA_CLASS.equals(tx.getDataClassName()) && tx.getData() != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+                AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
+                if (att1 != null) {
+                    pubkey = att1.getValidatorPubkey();
+                }
+            }
+        } else if (block.getBlockType() == BlockType.BLOCKTYPE_EXIT && !block.getTransactions().isEmpty()) {
+            Transaction tx = block.getTransactions().get(0);
+            if (EXIT_DATA_CLASS.equals(tx.getDataClassName()) && tx.getData() != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+                String pubkeyHex = (String) data.get("pubkey");
+                if (pubkeyHex != null) {
+                    pubkey = Utils.HEX.decode(pubkeyHex);
+                }
+            }
+        }
+        if (pubkey != null) {
+            store.clearStakeWithdrawable(pubkey);
+            log.info("Withdrawable reset to pending for pubkey={} (beacon unconfirmed)",
+                    Utils.HEX.encode(pubkey));
+        }
+    }
+
     public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {
         List<StakeRecord> allDeposits = store.getAllStakeDeposits();
         for (StakeRecord stake : allDeposits) {
@@ -639,8 +675,7 @@ public class StakeService {
             // Reconciliation for the save-time application gap: a deposit whose
             // STAKE block was saved but never gained confirmation (orphaned,
             // or its beacon never confirmed) and is stale is deactivated. Both
-            // sides are CHAIN positions (the deposit's chain position at the
-            // time its STAKE block was created vs the current position).
+            // sides are CHAIN positions (the deposit's chain position at the            // time its STAKE block was created vs the current position).
             if (stake.getActivatedEpoch() >= 0 && stake.getBlockHash() != null) {
                 Block stakeBlock = store.get(stake.getBlockHash());
                 if (stakeBlock != null) {
