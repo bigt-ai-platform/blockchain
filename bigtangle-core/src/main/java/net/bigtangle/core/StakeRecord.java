@@ -6,6 +6,7 @@ import java.util.Arrays;
 public class StakeRecord {
 
     private byte[] pubkey;
+    private byte[] blsPubkey;
     private BigInteger amount;
     private byte[] withdrawalCredentials;
     private long activatedEpoch = -1;
@@ -28,6 +29,8 @@ public class StakeRecord {
 
     public byte[] getPubkey() { return pubkey; }
     public void setPubkey(byte[] pubkey) { this.pubkey = pubkey; }
+    public byte[] getBlsPubkey() { return blsPubkey; }
+    public void setBlsPubkey(byte[] blsPubkey) { this.blsPubkey = blsPubkey; }
     public BigInteger getAmount() { return amount; }
     public void setAmount(BigInteger amount) { this.amount = amount; }
     public byte[] getWithdrawalCredentials() { return withdrawalCredentials; }

@@ -105,7 +105,10 @@ public class SlotService {
 
     public long selectProposer(long slot, BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
-        return selectProposerForSlot(slot, validators, randaoService.getRandaoMix(slot));
+        // Selection uses the IMMUTABLE finalized snapshot from two epochs earlier,
+        // never the in-progress mix of the slot's own epoch (which would make
+        // proposer identity depend on each node's local confirmation progress).
+        return selectProposerForSlot(slot, validators, randaoService.getSelectionMix(slot, store));
     }
 
     /**
@@ -205,12 +208,6 @@ public class SlotService {
         StakeRecord proposer = validators.get((int) proposerIdx);
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
-        // Commit to SHA-256(secret) before the reveal is seen on-chain. The
-        // commitment travels in the SAME signed beacon as the reveal, so every
-        // validator can verify SHA-256(reveal) == commitment; and because the
-        // secret is deterministically derived from the proposer's private key
-        // and slot, the reveal bytes are forced (not proposer-chosen).
-        byte[] commitment = proposerKey != null ? randaoService.commit(proposerKey, slot) : null;
 
         List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
 
@@ -253,7 +250,8 @@ public class SlotService {
             List<BlockType> ordertypes = List.of(
                     BlockType.BLOCKTYPE_INITIAL, BlockType.BLOCKTYPE_TRANSFER, BlockType.BLOCKTYPE_TOKEN_CREATION,
                     BlockType.BLOCKTYPE_FILE, BlockType.BLOCKTYPE_USERDATA, BlockType.BLOCKTYPE_GOVERNANCE,
-                    BlockType.BLOCKTYPE_CROSSTANGLE, BlockType.BLOCKTYPE_STAKE, BlockType.BLOCKTYPE_ORDER_OPEN,
+                    BlockType.BLOCKTYPE_CROSSTANGLE, BlockType.BLOCKTYPE_STAKE, BlockType.BLOCKTYPE_SLASHING,
+                    BlockType.BLOCKTYPE_EXIT, BlockType.BLOCKTYPE_ORDER_OPEN,
                     BlockType.BLOCKTYPE_ORDER_CANCEL, BlockType.BLOCKTYPE_CONTRACT_EVENT,
                     BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL, BlockType.BLOCKTYPE_EVM_DEPLOY,
                     BlockType.BLOCKTYPE_EVM_CALL);
@@ -295,7 +293,6 @@ public class SlotService {
 
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
-        slotData.setRandaoCommitment(commitment);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
         if (getSlotInEpoch(slot) == 0) {
             // Snapshot the fee pool that funded the reward outputs so validators

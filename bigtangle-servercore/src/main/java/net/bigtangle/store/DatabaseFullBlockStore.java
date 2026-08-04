@@ -3439,17 +3439,18 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public void saveStakeDeposit(StakeRecord stake) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("INSERT INTO stake_deposits "
-					+ "(pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash, txhash, pubkey_md5) "
-					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (pubkey_md5) DO NOTHING")) {
+					+ "(pubkey, bls_pubkey, amount, withdrawal_credentials, activated_epoch, slashed, withdrawable_epoch, blockhash, txhash, pubkey_md5) "
+					+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (pubkey_md5) DO NOTHING")) {
 			s.setBytes(1, stake.getPubkey());
-			s.setLong(2, stake.getAmount().longValue());
-			s.setBytes(3, stake.getWithdrawalCredentials());
-			s.setLong(4, stake.getActivatedEpoch());
-			s.setBoolean(5, stake.isSlashed());
-			s.setLong(6, stake.getWithdrawableEpoch());
-			s.setBytes(7, stake.getBlockHash() != null ? stake.getBlockHash().getBytes() : null);
-			s.setBytes(8, stake.getTxHash() != null ? stake.getTxHash().getBytes() : null);
-			s.setObject(9, java.util.UUID.nameUUIDFromBytes(stake.getPubkey()));
+			s.setBytes(2, stake.getBlsPubkey());
+			s.setLong(3, stake.getAmount().longValue());
+			s.setBytes(4, stake.getWithdrawalCredentials());
+			s.setLong(5, stake.getActivatedEpoch());
+			s.setBoolean(6, stake.isSlashed());
+			s.setLong(7, stake.getWithdrawableEpoch());
+			s.setBytes(8, stake.getBlockHash() != null ? stake.getBlockHash().getBytes() : null);
+			s.setBytes(9, stake.getTxHash() != null ? stake.getTxHash().getBytes() : null);
+			s.setObject(10, java.util.UUID.nameUUIDFromBytes(stake.getPubkey()));
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -3698,6 +3699,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	private StakeRecord setStakeRecord(ResultSet rs) throws SQLException {
 		StakeRecord r = new StakeRecord();
 		r.setPubkey(rs.getBytes("pubkey"));
+		r.setBlsPubkey(rs.getBytes("bls_pubkey"));
 		r.setAmount(BigInteger.valueOf(rs.getLong("amount")));
 		r.setWithdrawalCredentials(rs.getBytes("withdrawal_credentials"));
 		r.setActivatedEpoch(rs.getLong("activated_epoch"));

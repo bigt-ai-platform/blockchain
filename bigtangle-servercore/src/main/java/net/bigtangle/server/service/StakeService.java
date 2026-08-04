@@ -68,13 +68,33 @@ public class StakeService {
         return stake.getAmount().longValue();
     }
 
-    /** Serializes {@code pubkey} + {@code withdrawalCredentials} into the STAKE tx payload. */
-    public static byte[] buildStakeDepositData(byte[] pubkey, byte[] withdrawalCredentials) {
+    /**
+     * Serializes {@code pubkey} + {@code blsPubkey} + {@code blsProofOfPossession}
+     * + {@code withdrawalCredentials} into the STAKE tx payload. The BLS public
+     * key (derived deterministically from the depositor's ML-DSA private key, see
+     * RandaoService.blsPubkey) is what validators use to verify the depositor's
+     * unique RANDAO reveals; the proof of possession binds the BLS key to the
+     * ML-DSA identity so a rogue key can never be registered.
+     */
+    public static byte[] buildStakeDepositData(byte[] pubkey, byte[] blsPubkey, byte[] blsProofOfPossession,
+            byte[] withdrawalCredentials) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             DataOutputStream dos = new DataOutputStream(baos);
             dos.writeInt(pubkey.length);
             dos.write(pubkey);
+            if (blsPubkey != null) {
+                dos.writeInt(blsPubkey.length);
+                dos.write(blsPubkey);
+            } else {
+                dos.writeInt(0);
+            }
+            if (blsProofOfPossession != null) {
+                dos.writeInt(blsProofOfPossession.length);
+                dos.write(blsProofOfPossession);
+            } else {
+                dos.writeInt(0);
+            }
             if (withdrawalCredentials != null) {
                 dos.writeInt(withdrawalCredentials.length);
                 dos.write(withdrawalCredentials);
@@ -88,19 +108,34 @@ public class StakeService {
         }
     }
 
-    /** Parses {@link #buildStakeDepositData}; returns {@code {pubkey, withdrawalCredentials}}. */
+    /**
+     * Parses {@link #buildStakeDepositData}; returns
+     * {@code {pubkey, blsPubkey, blsProofOfPossession, withdrawalCredentials}}.
+     */
     public static byte[][] parseStakeDepositData(byte[] data) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
         int plen = dis.readInt();
         byte[] pubkey = new byte[plen];
         dis.readFully(pubkey);
+        int blen = dis.readInt();
+        byte[] blsPubkey = null;
+        if (blen > 0) {
+            blsPubkey = new byte[blen];
+            dis.readFully(blsPubkey);
+        }
+        int popLen = dis.readInt();
+        byte[] blsProofOfPossession = null;
+        if (popLen > 0) {
+            blsProofOfPossession = new byte[popLen];
+            dis.readFully(blsProofOfPossession);
+        }
         int clen = dis.readInt();
         byte[] creds = null;
         if (clen > 0) {
             creds = new byte[clen];
             dis.readFully(creds);
         }
-        return new byte[][] { pubkey, creds };
+        return new byte[][] { pubkey, blsPubkey, blsProofOfPossession, creds };
     }
 
     public void processDeposit(UTXO utxo, byte[] withdrawalCredentials,
@@ -119,7 +154,9 @@ public class StakeService {
 
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName(STAKE_DATA_CLASS);
-        tx.setData(buildStakeDepositData(depositKey.getPubKey(), withdrawalCredentials));
+        byte[] blsPubkey = net.bigtangle.server.service.RandaoService.blsPubkey(depositKey);
+        byte[] pop = net.bigtangle.server.service.RandaoService.blsProofOfPossession(depositKey);
+        tx.setData(buildStakeDepositData(depositKey.getPubKey(), blsPubkey, pop, withdrawalCredentials));
 
         Script script = utxo.getScript();
         if (script == null) {
@@ -169,7 +206,18 @@ public class StakeService {
             return;
         }
         byte[] pubkey = parts[0];
-        byte[] creds = parts[1];
+        byte[] blsPubkey = parts[1];
+        byte[] pop = parts[2];
+        byte[] creds = parts[3];
+
+        // The registered BLS key must be a well-formed G1 point AND proven held
+        // by the depositor (proof of possession over the ML-DSA pubkey). A
+        // deposit with a missing, malformed or unproven BLS key is REJECTED so a
+        // bad key can never join the active set and create an unfillable slot.
+        if (!net.bigtangle.server.service.RandaoService.isValidBlsPubkey(blsPubkey)
+                || !net.bigtangle.server.service.RandaoService.verifyProofOfPossession(blsPubkey, pubkey, pop)) {
+            return;
+        }
 
         Coin amount = null;
         for (TransactionOutput out : tx.getOutputs()) {
@@ -180,6 +228,19 @@ public class StakeService {
         }
         if (amount == null || amount.getValue().compareTo(MIN_STAKE) < 0) {
             return;
+        }
+
+        // Reject duplicate BLS registration by a DIFFERENT validator: two
+        // validators sharing a BLS key would fold identical reveals that cancel
+        // in the XOR mix. The depositor's own record is excluded so a top-up or
+        // re-apply of its own key is never mistaken for a duplicate.
+        for (StakeRecord other : store.getAllStakeDeposits()) {
+            if (java.util.Arrays.equals(other.getPubkey(), pubkey)) {
+                continue; // own record — top-up / reorg re-apply
+            }
+            if (other.getBlsPubkey() != null && java.util.Arrays.equals(other.getBlsPubkey(), blsPubkey)) {
+                return;
+            }
         }
 
         long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L);
@@ -202,6 +263,7 @@ public class StakeService {
                     Utils.HEX.encode(pubkey), existing.getAmount().add(amount.getValue()), block.getHashAsString());
         } else {
             StakeRecord stake = new StakeRecord(pubkey, amount.getValue(), creds);
+            stake.setBlsPubkey(blsPubkey);
             stake.setBlockHash(block.getHash());
             stake.setTxHash(tx.getHash());
             stake.setActivatedEpoch(activatedEpoch);

@@ -452,7 +452,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		}
 		case BLOCKTYPE_STAKE: {
-			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions);
+			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions, store);
 			if (!(stakeState.getState() == State.Success)) {
 				return stakeState;
 			}
@@ -717,12 +717,15 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (active.isEmpty()) {
 				return false;
 			}
-			// Chain RANDAO mix for the declared slot's epoch (pos_state) or the
-			// deterministic default, matching RandaoService.getRandaoMix.
-			long epoch = sd.getSlot() / 32;
-			byte[] mix = store.getPosState("randao", "mix_" + epoch);
+			// FINALIZED RANDAO snapshot (pos_state mixfinal_) or the deterministic
+			// default, matching RandaoService.getSelectionMix. The snapshot is
+			// written once at the epoch boundary and is IMMUTABLE, so proposer
+			// identity is identical on every node regardless of local confirmation
+			// progress or late-confirming beacons.
+			long laggedEpoch = sd.getSlot() / 32 - 2;
+			byte[] mix = laggedEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + laggedEpoch) : null;
 			if (mix == null) {
-				mix = sha256DefaultMix(epoch);
+				mix = sha256DefaultMix(laggedEpoch);
 			}
 			long expectedIdx = net.bigtangle.server.service.SlotService.selectProposerForSlot(
 					sd.getSlot(), active, mix);
@@ -756,13 +759,85 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	/**
+	 * RANDAO reveal is MANDATORY for every beacon carrying SlotData: the reveal
+	 * must be the slot proposer's unique BLS signature over the slot (verified
+	 * against the BLS public key registered in its STAKE deposit). A beacon whose
+	 * reveal is absent or does not verify is REJECTED — a proposer can never fold
+	 * grindable bytes into the mix, and proposer identity is computed from the
+	 * IMMUTABLE finalized mix two epochs earlier so every node derives the same
+	 * expected proposer.
+	 * Beacons without a SlotData transaction (legacy / non-PoS) are accepted.
+	 */
+	private boolean verifyRandaoReveal(Block block, BlockStoreInterface store) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+			return true;
+		}
+		try {
+			net.bigtangle.core.SlotData sd = null;
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					sd = Json.jsonmapper().readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+					break;
+				}
+			}
+			if (sd == null) {
+				// Legacy beacon without SlotData: no RANDAO contribution, nothing
+				// to grind. Accepted for backward compatibility.
+				return true;
+			}
+			byte[] reveal = sd.getRandaoReveal();
+			if (reveal == null || reveal.length == 0) {
+				return false; // reveal is mandatory
+			}
+			List<StakeRecord> active = store.getActiveStakeDeposits();
+			if (active.isEmpty()) {
+				return false;
+			}
+			// IMMUTABLE FINALIZED mix from two epochs earlier (matching
+			// RandaoService.getSelectionMix), so the expected proposer is a fixed
+			// chain fact, identical on every node and immune to late beacons.
+			long laggedEpoch = sd.getSlot() / 32 - 2;
+			byte[] mix = laggedEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + laggedEpoch) : null;
+			if (mix == null) {
+				mix = sha256DefaultMix(laggedEpoch);
+			}
+			long expectedIdx = net.bigtangle.server.service.SlotService.selectProposerForSlot(
+					sd.getSlot(), active, mix);
+			if (expectedIdx < 0 || expectedIdx >= active.size()) {
+				return false;
+			}
+			byte[] proposerPubkey = active.get((int) expectedIdx).getPubkey();
+			// Proposer identity (PQ signature over the SlotData) AND the reveal
+			// (unique BLS signature over the slot) must both be by the registered
+			// slot proposer — the BLS uniqueness is what forces the reveal bytes.
+			net.bigtangle.core.StakeRecord dep = store.getStakeDeposit(proposerPubkey);
+			if (dep == null || dep.getBlsPubkey() == null) {
+				return false; // proposer has no registered BLS key
+			}
+			return verifySlotDataSignature(proposerPubkey, sd)
+					&& net.bigtangle.server.service.RandaoService.verifyReveal(
+							dep.getBlsPubkey(), sd.getSlot(), reveal);
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private byte[] sha256(byte[] input) {
+		try {
+			return java.security.MessageDigest.getInstance("SHA-256").digest(input);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/**
 	 * Structural validation of a STAKE deposit block: the first transaction must
 	 * be a well-formed {@code StakeDeposit} (data payload present and parseable,
 	 * a BIG output of at least the minimum stake). This makes synced STAKE
 	 * blocks valid inputs to the chain-derived validator set.
 	 */
-	private SolidityState checkStakeDepositSolidity(Block block, boolean throwExceptions)
-			throws BlockStoreException {
+	private SolidityState checkStakeDepositSolidity(Block block, boolean throwExceptions,
+			BlockStoreInterface store) throws BlockStoreException {
 		if (block.getTransactions() == null || block.getTransactions().isEmpty()) {
 			if (throwExceptions)
 				throw new BlockStoreException("STAKE block has no transactions");
@@ -775,13 +850,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				throw new BlockStoreException("STAKE block transaction is not a StakeDeposit");
 			return SolidityState.getFailState();
 		}
-		try {
-			net.bigtangle.server.service.StakeService.parseStakeDepositData(tx.getData());
-		} catch (Exception e) {
-			if (throwExceptions)
-				throw new BlockStoreException("STAKE block deposit data is malformed", e);
-			return SolidityState.getFailState();
-		}
 		byte[][] depositParts;
 		try {
 			depositParts = net.bigtangle.server.service.StakeService.parseStakeDepositData(tx.getData());
@@ -791,6 +859,36 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 		byte[] declaredPubkey = depositParts[0];
+		// The registered BLS key must be a well-formed G1 point and proven held
+		// by the depositor (proof of possession over the ML-DSA pubkey). Without
+		// this, a MIN_STAKE deposit with a garbage BLS key creates a permanently
+		// unfillable proposer slot (verifyRandaoReveal would reject every beacon
+		// it lands on), and a rogue key can be used to cancel others' reveals.
+		byte[] declaredBlsPubkey = depositParts[1];
+		byte[] declaredPop = depositParts[2];
+		if (!net.bigtangle.server.service.RandaoService.isValidBlsPubkey(declaredBlsPubkey)
+				|| !net.bigtangle.server.service.RandaoService.verifyProofOfPossession(
+						declaredBlsPubkey, declaredPubkey, declaredPop)) {
+			if (throwExceptions)
+				throw new BlockStoreException("STAKE deposit has no valid BLS key / proof of possession");
+			return SolidityState.getFailState();
+		}
+		// Reject a BLS key already registered by a DIFFERENT validator: shared
+		// keys fold identical reveals that cancel in the XOR mix. The depositor's
+		// own record is excluded so a top-up of its own key is not rejected.
+		if (store != null) {
+			for (net.bigtangle.core.StakeRecord other : store.getAllStakeDeposits()) {
+				if (java.util.Arrays.equals(other.getPubkey(), declaredPubkey)) {
+					continue; // own record — top-up / reorg re-apply
+				}
+				if (other.getBlsPubkey() != null
+						&& java.util.Arrays.equals(other.getBlsPubkey(), declaredBlsPubkey)) {
+					if (throwExceptions)
+						throw new BlockStoreException("STAKE deposit reuses another validator's BLS key");
+					return SolidityState.getFailState();
+				}
+			}
+		}
 		byte[] declaredHash = Utils.sha256hash160(declaredPubkey);
 		boolean foundBondedOutput = false;
 		for (TransactionOutput out : tx.getOutputs()) {
@@ -1220,6 +1318,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		if (hasRewardOutputs && !verifyProposerSignature(block, store)) {
 			if (throwExceptions)
 				throw new BlockStoreException("Beacon is not signed by a valid proposer");
+			return SolidityState.getFailState();
+		}
+
+		// RANDAO reveal is MANDATORY for every beacon carrying SlotData: the
+		// reveal must be a signature over the slot by the registered proposer and
+		// bound to a 32-byte commitment. A beacon without a valid reveal/commit
+		// pair is rejected, so a proposer can never fold grindable bytes into the
+		// mix.
+		if (!verifyRandaoReveal(block, store)) {
+			if (throwExceptions)
+				throw new BlockStoreException("Beacon has an invalid or missing RANDAO reveal");
 			return SolidityState.getFailState();
 		}
 
@@ -2032,7 +2141,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		case BLOCKTYPE_EVM_CALL:
 			break;
 		case BLOCKTYPE_STAKE: {
-			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions);
+			SolidityState stakeState = checkStakeDepositSolidity(block, throwExceptions, null);
 			if (!(stakeState.getState() == State.Success)) {
 				return stakeState;
 			}

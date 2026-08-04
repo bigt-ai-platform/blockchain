@@ -310,6 +310,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_STAKE_DEPOSITS_TABLE = "CREATE TABLE stake_deposits (\n"
     		+ "    id SERIAL PRIMARY KEY,\n"
     		+ "    pubkey BYTEA NOT NULL,\n"
+    		+ "    bls_pubkey BYTEA,\n"
     		+ "    amount BIGINT NOT NULL,\n"
     		+ "    withdrawal_credentials BYTEA,\n"
     		+ "    activated_epoch BIGINT DEFAULT -1,\n"
@@ -537,6 +538,9 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PAYMULTISIGNADDRESS_TABLE);
         sqlStatements.add(CREATE_ORDER_CANCEL_TABLE);
         sqlStatements.add(CREATE_STAKE_DEPOSITS_TABLE);
+        // Migration for databases created before bls_pubkey existed: idempotent,
+        // a no-op on fresh databases.
+        sqlStatements.add("ALTER TABLE stake_deposits ADD COLUMN IF NOT EXISTS bls_pubkey BYTEA");
         sqlStatements.add(CREATE_ATTESTATION_VOTES_TABLE);
         sqlStatements.add(CREATE_POS_STATE_TABLE);
         sqlStatements.add(CREATE_BATCHBLOCK_TABLE);

@@ -1,5 +1,6 @@
 package net.bigtangle.mcmc.test;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,6 +25,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
@@ -35,6 +37,7 @@ import net.bigtangle.server.service.SlashingService;
 import net.bigtangle.server.service.SlotService;
 import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.StoreService;
+import net.bigtangle.utils.Json;
 
 public class PoSTest extends AbstractIntegrationTest {
 
@@ -181,18 +184,97 @@ public class PoSTest extends AbstractIntegrationTest {
     // ========= RANDAO Tests =========
 
     @Test
-    public void testRandaoCommitAndReveal() throws Exception {
-        byte[] commit = randaoService.commit(validatorKey, 0);
-        assertNotNull(commit);
-        assertEquals(32, commit.length);
-
+    public void testRandaoRevealAndMix() throws Exception {
         byte[] reveal = randaoService.computeReveal(validatorKey, 0);
         assertNotNull(reveal);
 
-        randaoService.reveal(validatorKey.getPubKey(), 0, reveal);
+        // A missing reveal is rejected; a present reveal folds into the mix.
+        byte[] before = randaoService.getRandaoMix(0);
+        randaoService.applyReveal(0, null, null);
+        assertArrayEquals(before, randaoService.getRandaoMix(0));
 
-        byte[] mix = randaoService.getRandaoMix(0);
-        assertNotNull(mix);
+        randaoService.applyReveal(0, reveal, null);
+        assertFalse(java.util.Arrays.equals(before, randaoService.getRandaoMix(0)),
+                "a present reveal must update the mix");
+    }
+
+    @Test
+    public void testRandaoRevealIsUniqueBlsSignature() throws Exception {
+        // The reveal must be a UNIQUE BLS signature over the slot message: for a
+        // given (key, slot) there is exactly one valid reveal, so a proposer can
+        // never grind a favourable mix by re-rolling signatures.
+        byte[] reveal = randaoService.computeReveal(validatorKey, 5);
+        assertNotNull(reveal);
+
+        byte[] blsPubkey = net.bigtangle.server.service.RandaoService.blsPubkey(validatorKey);
+        assertNotNull(blsPubkey);
+        assertTrue(net.bigtangle.server.service.RandaoService.isValidBlsPubkey(blsPubkey),
+                "a derived BLS public key must be a valid G1 point");
+        assertTrue(net.bigtangle.server.service.RandaoService.verifyReveal(blsPubkey, 5, reveal),
+                "reveal must verify as a unique BLS signature over the slot message");
+
+        // Bound to the validator's key: a different key's public key rejects it.
+        PQKey other = PQKey.createNew();
+        assertFalse(net.bigtangle.server.service.RandaoService.verifyReveal(
+                net.bigtangle.server.service.RandaoService.blsPubkey(other), 5, reveal),
+                "reveal must not verify under a different validator's BLS key");
+
+        // Unique: the same (key, slot) yields exactly one reveal.
+        assertArrayEquals(reveal, randaoService.computeReveal(validatorKey, 5));
+
+        // Garbage / malformed keys and reveals are rejected.
+        assertFalse(net.bigtangle.server.service.RandaoService.isValidBlsPubkey(new byte[48]),
+                "an all-zero key must not be a valid G1 point");
+        assertFalse(net.bigtangle.server.service.RandaoService.isValidBlsPubkey(null));
+        assertFalse(net.bigtangle.server.service.RandaoService.verifyReveal(blsPubkey, 5, new byte[96]),
+                "a garbage reveal must not verify");
+    }
+
+    @Test
+    public void testRandaoProofOfPossession() throws Exception {
+        byte[] blsPubkey = net.bigtangle.server.service.RandaoService.blsPubkey(validatorKey);
+        byte[] pop = net.bigtangle.server.service.RandaoService.blsProofOfPossession(validatorKey);
+        assertNotNull(blsPubkey);
+        assertNotNull(pop);
+        assertTrue(net.bigtangle.server.service.RandaoService.verifyProofOfPossession(
+                blsPubkey, validatorKey.getPubKey(), pop),
+                "proof of possession must bind the BLS key to the ML-DSA pubkey");
+
+        // A PoP by a different key must not verify against this BLS key.
+        PQKey other = PQKey.createNew();
+        assertFalse(net.bigtangle.server.service.RandaoService.verifyProofOfPossession(
+                blsPubkey, other.getPubKey(), pop),
+                "proof of possession must be over the depositor's ML-DSA pubkey");
+    }
+
+    @Test
+    public void testSelectionMixIsFinalizedSnapshot() throws Exception {
+        // Fold a reveal into epoch 3's live mix, then finalize epoch 3 as the
+        // snapshot. Even if epoch 3's live mix is subsequently mutated, proposer
+        // selection for epoch 5 must keep reading the frozen snapshot.
+        byte[] reveal = randaoService.computeReveal(validatorKey, 3 * 32);
+        assertNotNull(reveal);
+        randaoService.applyReveal(3 * 32, reveal, store);
+
+        byte[] liveAfterFold = store.getPosState("randao", "mix_" + 3);
+        assertNotNull(liveAfterFold, "the fold must persist the live mix");
+
+        randaoService.finalizeEpochMix(3, store);
+        byte[] snapshot = store.getPosState("randao", "mixfinal_" + 3);
+        assertNotNull(snapshot, "finalizeEpochMix must persist the immutable snapshot");
+        assertArrayEquals(liveAfterFold, snapshot);
+
+        // Mutating the live mix afterwards must NOT move the snapshot.
+        randaoService.applyReveal(3 * 32, new byte[96], store);
+        byte[] liveAfterMutation = store.getPosState("randao", "mix_" + 3);
+        assertFalse(java.util.Arrays.equals(liveAfterFold, liveAfterMutation),
+                "a late reveal must move the live mix");
+
+        assertArrayEquals(snapshot, store.getPosState("randao", "mixfinal_" + 3),
+                "the finalized snapshot must be immutable");
+
+        // Selection for epoch 5 reads the frozen snapshot.
+        assertArrayEquals(snapshot, randaoService.getSelectionMix(5 * 32, store));
     }
 
     // ========= GHOST Tests =========
@@ -374,6 +456,62 @@ public class PoSTest extends AbstractIntegrationTest {
 
         StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(slashed.isSlashed());
+    }
+
+    @Test
+    public void testSlashingWithdrawableOverwritesOnReconfirmation() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE, validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        // A SLASHING block for this validator with a valid payload.
+        Block slashBlock = new Block(networkParameters);
+        slashBlock.setBlockType(BlockType.BLOCKTYPE_SLASHING);
+        AttestationData att = new AttestationData();
+        att.setSlot(5);
+        att.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
+        att.setValidatorPubkey(validatorKey.getPubKey());
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(StakeService.SLASHING_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(Map.of("attestation1", att)));
+        slashBlock.addTransaction(tx);
+
+        // The first confirming beacon sets the withdrawable epoch...
+        stakeService.applySlashingConfirmed(slashBlock, 10, store);
+        StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
+        assertTrue(slashed.isSlashed());
+        assertEquals(10 + StakeService.WITHDRAWAL_DELAY_EPOCHS, slashed.getWithdrawableEpoch());
+
+        // ...and a re-confirming beacon (e.g. after the first beacon was
+        // unconfirmed) OVERWRITES it, so a stale epoch can never be frozen by a
+        // keep-first guard.
+        stakeService.applySlashingConfirmed(slashBlock, 20, store);
+        slashed = store.getStakeDeposit(validatorKey.getPubKey());
+        assertEquals(20 + StakeService.WITHDRAWAL_DELAY_EPOCHS, slashed.getWithdrawableEpoch());
+    }
+
+    @Test
+    public void testExitWithdrawableOverwritesOnReconfirmation() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE, validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        Block exitBlock = new Block(networkParameters);
+        exitBlock.setBlockType(BlockType.BLOCKTYPE_EXIT);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(StakeService.EXIT_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(
+                Map.of("pubkey", Utils.HEX.encode(validatorKey.getPubKey()))));
+        exitBlock.addTransaction(tx);
+
+        stakeService.applyExitConfirmed(exitBlock, 10, store);
+        StakeRecord exiting = store.getStakeDeposit(validatorKey.getPubKey());
+        assertTrue(exiting.isExiting());
+        assertEquals(10 + StakeService.WITHDRAWAL_DELAY_EPOCHS, exiting.getWithdrawableEpoch());
+
+        stakeService.applyExitConfirmed(exitBlock, 20, store);
+        exiting = store.getStakeDeposit(validatorKey.getPubKey());
+        assertEquals(20 + StakeService.WITHDRAWAL_DELAY_EPOCHS, exiting.getWithdrawableEpoch());
     }
 
     @Test
