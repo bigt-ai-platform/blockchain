@@ -501,12 +501,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
 			String pubkeyHex = (String) data.get("pubkey");
 			byte[] signature = net.bigtangle.core.Utils.HEX.decode((String) data.get("signature"));
-			if (pubkeyHex == null || signature == null || signature.length == 0) {
-				throw new BlockStoreException("EXIT request is missing pubkey or signature");
+			Long nonce = data.get("nonce") != null
+					? Long.parseLong(data.get("nonce").toString()) : null;
+			if (pubkeyHex == null || signature == null || signature.length == 0 || nonce == null) {
+				throw new BlockStoreException("EXIT request is missing pubkey, signature or nonce");
 			}
 			byte[] pubkey = net.bigtangle.core.Utils.HEX.decode(pubkeyHex);
 			PQKey signer = PQKey.fromPublicOnly(pubkey);
-			Sha256Hash msg = Sha256Hash.of(net.bigtangle.core.Utils.HEX.decode(pubkeyHex));
+			java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(pubkey.length + 8);
+			buf.put(pubkey);
+			buf.putLong(nonce);
+			Sha256Hash msg = Sha256Hash.of(buf.array());
 			if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
 				throw new BlockStoreException("EXIT request signature is invalid");
 			}
@@ -1217,47 +1222,32 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
 				activeStake = activeStake.add(v.getAmount());
 			}
-			// Chain-derived recomputation: the reward must equal the per-epoch
-			// fee ledger for the previous epoch (epoch of this beacon - 1),
-			// derived from confirmed blocks — not an accepted declaration.
-			java.math.BigInteger expectedFromLedger = null;
+			// Deterministic recomputation: the reward must equal the sum of fee
+			// surpluses over the CONFIRMED blocks this beacon references in
+			// RewardInfo.getBlocks — a pure function of chain state. No
+			// self-declared fee pool or node-local ledger is trusted.
+			java.math.BigInteger expectedFromBlocks = null;
 			try {
 				RewardInfo ri = new RewardInfo().parseChecked(transactions.get(0).getData());
-				if (ri != null && ri.getChainlength() > 0) {
-					long beaconEpoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
-					byte[] ledgerBytes = store.getPosState(
-							"feeEpoch_" + (beaconEpoch - 1), networkParameters.getChainId());
-					if (ledgerBytes != null) {
-						expectedFromLedger = new java.math.BigInteger(ledgerBytes);
+				if (ri != null && ri.getBlocks() != null) {
+					expectedFromBlocks = java.math.BigInteger.ZERO;
+					for (Sha256Hash h : ri.getBlocks()) {
+						Block referenced = store.get(h);
+						if (referenced != null) {
+							expectedFromBlocks = expectedFromBlocks.add(
+									net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
+						}
 					}
 				}
 			} catch (Exception ignored) {
-				// no ledger info — fall through to the committed-pool check
+				// cannot recompute — fail closed below via the null check
 			}
-			if (expectedFromLedger != null) {
-				if (rewardTotal.compareTo(expectedFromLedger) != 0) {
-					if (throwExceptions)
-						throw new InvalidTransactionException(
-								"Epoch reward does not match the chain-derived fee ledger");
-					return SolidityState.getFailState();
-				}
-			} else if (committedPool != null) {
-				if (rewardTotal.compareTo(java.math.BigInteger.valueOf(committedPool)) != 0) {
-					if (throwExceptions)
-						throw new InvalidTransactionException(
-								"Epoch reward does not match the committed fee pool");
-					return SolidityState.getFailState();
-				}
-			} else {
-				byte[] poolBytes = store.getPosState("fee", networkParameters.getChainId());
-				if (poolBytes != null) {
-					java.math.BigInteger pool = new java.math.BigInteger(poolBytes);
-					if (rewardTotal.compareTo(pool) > 0) {
-						if (throwExceptions)
-							throw new InvalidTransactionException("Epoch reward exceeds the fee pool");
-						return SolidityState.getFailState();
-					}
-				}
+			if (hasRewardOutputs && expectedFromBlocks != null
+					&& rewardTotal.compareTo(expectedFromBlocks) != 0) {
+				if (throwExceptions)
+					throw new InvalidTransactionException(
+							"Epoch reward does not match fees of the referenced confirmed blocks");
+				return SolidityState.getFailState();
 			}
 			if (activeStake.signum() > 0 && rewardTotal.compareTo(activeStake) > 0) {
 				if (throwExceptions)

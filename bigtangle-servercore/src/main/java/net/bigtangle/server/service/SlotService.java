@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
@@ -20,6 +21,9 @@ import net.bigtangle.core.SlotData;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.EpochRewardService;
@@ -138,6 +142,54 @@ public class SlotService {
         return validators.size() - 1;
     }
 
+    /**
+     * Deterministic fee surplus of a block: sum over non-coinbase transactions
+     * of (BIG input value − BIG output value) where positive. Used to compute
+     * the epoch reward from the CONFIRMED blocks a beacon references, so both
+     * the proposer and every validator derive the same expected payout from
+     * chain state instead of trusting a declaration.
+     */
+    public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store) throws Exception {
+        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
+        if (block == null || block.getTransactions() == null) {
+            return surplus;
+        }
+        for (Transaction tx : block.getTransactions()) {
+            if (tx.isCoinBase() || tx.getInputs() == null) {
+                continue;
+            }
+            java.math.BigInteger txIn = java.math.BigInteger.ZERO;
+            java.math.BigInteger txOut = java.math.BigInteger.ZERO;
+            for (TransactionOutput out : tx.getOutputs()) {
+                if (out.getValue().isBIG()) {
+                    txOut = txOut.add(out.getValue().getValue());
+                }
+            }
+            for (TransactionInput in : tx.getInputs()) {
+                Coin inValue = null;
+                TransactionOutput connected = in.getOutpoint().getConnectedOutput();
+                if (connected != null) {
+                    inValue = connected.getValue();
+                } else {
+                    UTXO utxo = store.getTransactionOutput(
+                            in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
+                            in.getOutpoint().getIndex());
+                    if (utxo != null) {
+                        inValue = utxo.getValue();
+                    }
+                }
+                if (inValue != null && inValue.isBIG()) {
+                    txIn = txIn.add(inValue.getValue());
+                }
+            }
+            java.math.BigInteger s = txIn.subtract(txOut);
+            if (s.signum() > 0) {
+                surplus = surplus.add(s);
+            }
+        }
+        return surplus;
+    }
+
     public Block proposeBeaconBlock(long slot, PQKey proposerKey, BlockStoreInterface store) throws Exception {
         long epoch = getEpochForSlot(slot);
         long proposerIdx = selectProposer(slot, store);
@@ -210,20 +262,21 @@ public class SlotService {
 
         // The epoch's fee pool is paid out by the PROPOSER in the first beacon
         // of the epoch — never in a competing beacon from every node. The pool
-        // is the CHAIN-DERIVED per-epoch ledger for the previous epoch, so
-        // validators can recompute it instead of trusting a declaration.
+        // is recomputed from the CONFIRMED blocks this beacon references
+        // (RewardInfo.getBlocks), so validators derive the same expected payout
+        // deterministically from chain state instead of trusting a declaration.
         java.math.BigInteger epochFeePool = java.math.BigInteger.ZERO;
         if (getSlotInEpoch(slot) == 0) {
-            String chainId = networkParameters.getChainId();
-            byte[] poolBytes = store.getPosState("feeEpoch_" + (epoch - 1), chainId);
-            if (poolBytes != null) {
-                epochFeePool = new java.math.BigInteger(poolBytes);
+            for (Sha256Hash h : rewardInfo.getBlocks()) {
+                Block referenced = store.get(h);
+                if (referenced != null) {
+                    epochFeePool = epochFeePool.add(computeFeeSurplus(referenced, store));
+                }
             }
             if (epochFeePool.compareTo(java.math.BigInteger.ZERO) > 0) {
                 for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(epochFeePool, store)) {
                     beaconBlock.addTransaction(rewardTx);
                 }
-                store.deletePosState("fee", chainId);
                 log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", epochFeePool, slot);
             }
         }

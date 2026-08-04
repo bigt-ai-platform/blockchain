@@ -428,9 +428,12 @@ public class StakeService {
         if (pubkey == null || signature == null || signature.length == 0) {
             throw new IllegalArgumentException("Exit request is missing pubkey or signature");
         }
-        // Authenticate the exit request before building the block.
+        // Authenticate the exit request: the signature covers sha256(pubkey ||
+        // nonce) with the nonce bound to the current epoch, so it cannot be
+        // replayed at a different epoch.
+        long nonce = SlotService.epochAt(System.currentTimeMillis());
         PQKey signer = PQKey.fromPublicOnly(pubkey);
-        Sha256Hash msg = Sha256Hash.of(pubkey);
+        Sha256Hash msg = Sha256Hash.of(buildExitMessage(pubkey, nonce));
         if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
             throw new IllegalArgumentException("Exit request signature is invalid");
         }
@@ -452,11 +455,19 @@ public class StakeService {
         Map<String, Object> data = new HashMap<>();
         data.put("pubkey", Utils.HEX.encode(pubkey));
         data.put("signature", Utils.HEX.encode(signature));
+        data.put("nonce", nonce);
         tx.setData(Json.jsonmapper().writeValueAsBytes(data));
         b.addTransaction(tx);
 
         blockSaveService.saveBlock(b, store);
         log.info("Exit block proposed for pubkey={}: {}", Utils.HEX.encode(pubkey), b.getHashAsString());
+    }
+
+    public static byte[] buildExitMessage(byte[] pubkey, long nonce) {
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(pubkey.length + 8);
+        buf.put(pubkey);
+        buf.putLong(nonce);
+        return buf.array();
     }
 
     /**

@@ -159,20 +159,6 @@ public class BlockSaveService {
 					break;
 				}
 			}
-			// Per-epoch mint uniqueness: the first epoch-start beacon that is
-			// applied consumes the previous epoch's fee ledger, so a second
-			// beacon at the same boundary cannot mint the pool again.
-			try {
-				net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
-						.parseChecked(block.getTransactions().get(0).getData());
-				if (ri != null && ri.getChainlength() % net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH == 1) {
-					long beaconEpoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
-					store.deletePosState("feeEpoch_" + (beaconEpoch - 1), networkParameters.getChainId());
-				}
-			} catch (Exception e) {
-				logger.debug("Could not consume fee ledger for beacon {}: {}",
-						block.getHashAsString(), e.getMessage());
-			}
 		}
 	}
 
@@ -240,20 +226,6 @@ public class BlockSaveService {
 				: new java.math.BigInteger(existing);
 		java.math.BigInteger updated = current.add(feeSurplus);
 		store.savePosState("fee", chainId, updated.toByteArray());
-
-		// Per-epoch fee ledger so the epoch reward is recomputable from chain
-		// state instead of being an accepted self-declaration.
-		try {
-			long epoch = net.bigtangle.server.service.SlotService.epochAt(block.getTimeSeconds() * 1000L);
-			String epochKey = "feeEpoch_" + epoch;
-			byte[] existingEpoch = store.getPosState(epochKey, chainId);
-			java.math.BigInteger currentEpoch = existingEpoch == null
-					? java.math.BigInteger.ZERO
-					: new java.math.BigInteger(existingEpoch);
-			store.savePosState(epochKey, chainId, currentEpoch.add(feeSurplus).toByteArray());
-		} catch (Exception e) {
-			logger.debug("Failed to update per-epoch fee ledger: {}", e.getMessage());
-		}
 	}
 
 	public void broadcastBlock(Block block) {

@@ -412,8 +412,10 @@ public class PoSTest extends AbstractIntegrationTest {
                 validatorKey.getPubKeyHash()));
         stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 
-        // Authenticated exit: the validator signs its own pubkey.
-        byte[] sig = validatorKey.sign(Sha256Hash.of(validatorKey.getPubKey())).serialize();
+        // Authenticated exit: the validator signs sha256(pubkey || nonce).
+        long nonce = SlotService.epochAt(System.currentTimeMillis());
+        byte[] msg = StakeService.buildExitMessage(validatorKey.getPubKey(), nonce);
+        byte[] sig = validatorKey.sign(Sha256Hash.of(msg)).serialize();
         stakeService.submitExit(validatorKey.getPubKey(), sig, store);
 
         StakeRecord exiting = store.getStakeDeposit(validatorKey.getPubKey());
@@ -428,8 +430,8 @@ public class PoSTest extends AbstractIntegrationTest {
         store.saveStakeDeposit(new StakeRecord(
                 validatorKey.getPubKey(), StakeService.MIN_STAKE,
                 validatorKey.getPubKeyHash()));
-        // Signature over the WRONG message (ZERO_HASH, not the pubkey).
-        byte[] badSig = validatorKey.sign(Sha256Hash.ZERO_HASH).serialize();
+        // Signature over the WRONG message (the pubkey alone, no nonce).
+        byte[] badSig = validatorKey.sign(Sha256Hash.of(validatorKey.getPubKey())).serialize();
         assertThrows(IllegalArgumentException.class,
                 () -> stakeService.submitExit(validatorKey.getPubKey(), badSig, store));
     }
