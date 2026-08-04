@@ -51,6 +51,7 @@ import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenInfo;
 import net.bigtangle.core.TokenType;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
@@ -465,7 +466,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			break;
 		}
 		case BLOCKTYPE_EXIT: {
-			SolidityState exitState = checkExitSolidity(block, throwExceptions);
+			SolidityState exitState = checkExitSolidity(block, throwExceptions, store);
 			if (!(exitState.getState() == State.Success)) {
 				return exitState;
 			}
@@ -520,21 +521,19 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), signature, msg)) {
 				throw new BlockStoreException("EXIT request signature is invalid");
 			}
-			// The nonce is bound to a CHAIN-derived epoch (the parent beacon's
-			// chainlength), never to local wall-clock time, so nodes near an
-			// epoch boundary agree and revalidation of an accepted block does
-			// not reject it. The formal path (no store) skips the window.
+			// The nonce is bound to a CHAIN-derived value the VALIDATOR derives
+			// (the current max confirmed reward chainlength), never to a block
+			// the submitter picked or to local wall-clock time. A stale signature
+			// replay (nonce far from the current chain position) is rejected.
+			// The formal path (no store) skips the window.
 			if (store != null) {
-				Block parent = store.get(block.getPrevBlockHash());
-				if (parent == null) {
-					return SolidityState.fromPrevReward(block.getPrevBlockHash(), true);
-				}
 				long expectedNonce = 0;
 				try {
-					RewardInfo pri = new RewardInfo().parseChecked(parent.getTransactions().get(0).getData());
-					expectedNonce = pri.getChainlength();
+					TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+					expectedNonce = tip != null ? tip.getChainLength() : 0;
 				} catch (Exception ignored) {
-					// parent is not a reward block — leave 0, skip the window
+					// chain state unavailable — defer rather than accept blindly
+					return SolidityState.getFailState();
 				}
 				if (expectedNonce > 0 && Math.abs(nonce - expectedNonce) > 1) {
 					throw new BlockStoreException("EXIT request nonce is stale");
@@ -1260,21 +1259,34 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					throw new InvalidTransactionException(
 							"Epoch reward beacon has no referenced block set to recompute against");
 				}
-				// The previous beacon's referenced set: the reward must be
-				// DISJOINT from it, otherwise the same blocks are paid twice.
+				// The reward must be DISJOINT from the union of ALL previously
+				// rewarded block sets (walked back through the reward chain to
+				// genesis), so no block's fees can be minted twice — not just
+				// compared against the immediately-previous beacon.
 				java.util.Set<Sha256Hash> prevRewarded = new java.util.HashSet<>();
-				Block prevBeacon = store.get(ri.getPrevRewardHash());
-				if (prevBeacon == null) {
-					return SolidityState.fromPrevReward(ri.getPrevRewardHash(), true);
-				}
-				try {
-					RewardInfo prevRi = new RewardInfo().parseChecked(
-							prevBeacon.getTransactions().get(0).getData());
-					if (prevRi != null && prevRi.getBlocks() != null) {
-						prevRewarded = prevRi.getBlocks();
+				java.util.Set<Sha256Hash> visitedBeacons = new java.util.HashSet<>();
+				Sha256Hash cursor = ri.getPrevRewardHash();
+				while (cursor != null && visitedBeacons.add(cursor)) {
+					Block prevBeacon = store.get(cursor);
+					if (prevBeacon == null) {
+						return SolidityState.fromPrevReward(cursor, true);
 					}
-				} catch (Exception ignored) {
-					// no previous set — disjointness below degrades to the cutoff
+					if (prevBeacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+						break; // genesis — no prior rewards
+					}
+					RewardInfo prevRi;
+					try {
+						prevRi = new RewardInfo().parseChecked(prevBeacon.getTransactions().get(0).getData());
+					} catch (Exception e) {
+						return SolidityState.fromPrevReward(cursor, true);
+					}
+					if (prevRi == null) {
+						return SolidityState.fromPrevReward(cursor, true);
+					}
+					if (prevRi.getBlocks() != null) {
+						prevRewarded.addAll(prevRi.getBlocks());
+					}
+					cursor = prevRi.getPrevRewardHash();
 				}
 				// Lower bound: the previous reward cutoff. If it cannot be
 				// computed the node is behind — defer, never accept windowless.
