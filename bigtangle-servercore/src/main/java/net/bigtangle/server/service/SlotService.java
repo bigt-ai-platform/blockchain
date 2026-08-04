@@ -320,7 +320,12 @@ public class SlotService {
     public void processEpoch(long epoch, BlockStoreInterface store) throws Exception {
         casperService.finalizeCheckpoint(epoch, store);
 
-        stakeService.processWithdrawals(epoch, store);
+        // Withdrawals are driven by the CHAIN position (reward chainlength),
+        // not wall-clock time, so nodes releasing bonds agree.
+        long chainPosition = 0;
+        TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+        chainPosition = tip != null ? tip.getChainLength() : 0;
+        stakeService.processWithdrawals(chainPosition, store);
 
         log.info("Epoch {} ({}) processed: finality updated", epoch, networkParameters.getChainId());
     }

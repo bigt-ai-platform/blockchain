@@ -301,11 +301,11 @@ public class StakeService {
         if (stake == null || stake.isSlashed()) {
             return;
         }
-        long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
-        store.updateStakeSlashing(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        long chainPosition = chainPositionOf(block, store);
+        store.updateStakeSlashing(pubkey, chainPosition + WITHDRAWAL_DELAY_EPOCHS);
         confiscateBond(pubkey, stake, store);
-        log.info("Validator slashed via consensus block {}: pubkey={}, withdrawable at epoch={}",
-                block.getHashAsString(), Utils.HEX.encode(pubkey), currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator slashed via consensus block {}: pubkey={}, withdrawable at chain position={}",
+                block.getHashAsString(), Utils.HEX.encode(pubkey), chainPosition + WITHDRAWAL_DELAY_EPOCHS);
     }
 
     /**
@@ -382,10 +382,14 @@ public class StakeService {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed()) return;
 
-        long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
-        store.updateStakeSlashing(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
-        log.info("Validator slashed (flag only): pubkey={}, withdrawable at epoch={}",
-                Utils.HEX.encode(pubkey), currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        // Flag-only path (tests); derive the chain position from the confirmed
+        // tip, not the wall clock.
+        long chainPosition = 0;
+        TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+        chainPosition = tip != null ? tip.getChainLength() : 0;
+        store.updateStakeSlashing(pubkey, chainPosition + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator slashed (flag only): pubkey={}, withdrawable at chain position={}",
+                Utils.HEX.encode(pubkey), chainPosition + WITHDRAWAL_DELAY_EPOCHS);
     }
 
     /** Marks the bonded deposit output as spent (burned/confiscated). Consensus-driven. */
@@ -471,6 +475,33 @@ public class StakeService {
     }
 
     /**
+     * CHAIN position of a block: the parent beacon's reward chainlength (or 0
+     * for genesis). Used for consensus state transitions (withdrawable epoch)
+     * so every node that applies the block derives the SAME value — never the
+     * local wall-clock time.
+     */
+    private long chainPositionOf(Block block, BlockStoreInterface store) {
+        try {
+            Block parent = store.get(block.getPrevBlockHash());
+            if (parent == null) {
+                return 0;
+            }
+            if (parent.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+                net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                        .parseChecked(parent.getTransactions().get(0).getData());
+                if (ri != null) {
+                    return ri.getChainlength();
+                }
+            } else if (parent.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                return 0;
+            }
+        } catch (Exception e) {
+            // fall through to 0 — should not happen for a validated block
+        }
+        return 0;
+    }
+
+    /**
      * Consensus application of a BLOCKTYPE_EXIT block: marks the validator as
      * voluntarily exiting with a withdrawable epoch. It is NOT slashed — it
      * keeps its stake (and remains slashable) until the bond is released.
@@ -494,10 +525,10 @@ public class StakeService {
         if (stake == null || stake.isSlashed()) {
             return;
         }
-        long currentEpoch = SlotService.epochAt(System.currentTimeMillis());
-        store.updateStakeExit(pubkey, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
-        log.info("Validator exit applied via consensus block {}: pubkey={}, withdrawable at epoch={}",
-                block.getHashAsString(), pubkeyHex, currentEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        long chainPosition = chainPositionOf(block, store);
+        store.updateStakeExit(pubkey, chainPosition + WITHDRAWAL_DELAY_EPOCHS);
+        log.info("Validator exit applied via consensus block {}: pubkey={}, withdrawable at chain position={}",
+                block.getHashAsString(), pubkeyHex, chainPosition + WITHDRAWAL_DELAY_EPOCHS);
     }
 
     /** Reverts an EXIT block on reorg: the validator is no longer exiting. */
@@ -538,19 +569,26 @@ public class StakeService {
             }
             // Reconciliation for the save-time application gap: a deposit whose
             // STAKE block was saved but never gained confirmation (orphaned,
-            // or its beacon never confirmed) and is stale is deactivated.
-            if (stake.getActivatedEpoch() >= 0 && stake.getBlockHash() != null
-                    && currentEpoch - stake.getActivatedEpoch() > WITHDRAWAL_DELAY_EPOCHS) {
-                try {
-                    net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(stake.getBlockHash());
-                    if (be == null || !be.isConfirmed()) {
-                        store.releaseStakeDeposit(stake.getPubkey());
-                        log.info("Deactivated stale unconfirmed stake deposit: pubkey={}, block={}",
-                                Utils.HEX.encode(stake.getPubkey()), stake.getBlockHash());
+            // or its beacon never confirmed) and is stale is deactivated. Both
+            // sides are CHAIN positions (the deposit's chain position at the
+            // time its STAKE block was created vs the current position).
+            if (stake.getActivatedEpoch() >= 0 && stake.getBlockHash() != null) {
+                Block stakeBlock = store.get(stake.getBlockHash());
+                if (stakeBlock != null) {
+                    long depositPosition = chainPositionOf(stakeBlock, store);
+                    if (currentEpoch - depositPosition > WITHDRAWAL_DELAY_EPOCHS) {
+                        try {
+                            net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(stake.getBlockHash());
+                            if (be == null || !be.isConfirmed()) {
+                                store.releaseStakeDeposit(stake.getPubkey());
+                                log.info("Deactivated stale unconfirmed stake deposit: pubkey={}, block={}",
+                                        Utils.HEX.encode(stake.getPubkey()), stake.getBlockHash());
+                            }
+                        } catch (Exception e) {
+                            log.debug("Could not verify confirmation for stake block {}: {}",
+                                    stake.getBlockHash(), e.getMessage());
+                        }
                     }
-                } catch (Exception e) {
-                    log.debug("Could not verify confirmation for stake block {}: {}",
-                            stake.getBlockHash(), e.getMessage());
                 }
             }
         }
