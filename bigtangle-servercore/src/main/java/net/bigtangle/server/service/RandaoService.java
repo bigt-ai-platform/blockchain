@@ -145,23 +145,28 @@ public class RandaoService {
         }
         long epoch = slot / 32;
         if (store != null) {
+            // Fold against the PENDING value in the batch store (which reflects
+            // prior reveals in the same batch), so consecutive reveals of the
+            // same epoch accumulate instead of overwriting from a stale base.
             try {
-                byte[] nextMix = mixXor(epoch, reveal);
-                store.savePosState("randao", "mix_" + epoch, nextMix);
+                byte[] current = store.getPosState("randao", "mix_" + epoch);
+                byte[] base = current != null ? current : new byte[32];
+                byte[] next = xor(base, reveal);
+                store.savePosState("randao", "mix_" + epoch, next);
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to persist RANDAO mix for epoch " + epoch, e);
             }
             return;
         }
-        randaoMixes.put(epoch, mixXor(epoch, reveal));
+        randaoMixes.put(epoch, xor(randaoMixes.getOrDefault(epoch, new byte[32]), reveal));
     }
 
-    private byte[] mixXor(long epoch, byte[] reveal) {
-        byte[] currentMix = randaoMixes.getOrDefault(epoch, new byte[32]).clone();
+    private byte[] xor(byte[] a, byte[] b) {
+        byte[] out = a.clone();
         for (int i = 0; i < 32; i++) {
-            currentMix[i] ^= reveal[i];
+            out[i] ^= b[i];
         }
-        return currentMix;
+        return out;
     }
 
     /** Reloads the in-memory mix for an epoch from persisted state (post-commit). */

@@ -60,6 +60,8 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 		ordertypes.add(BlockType.BLOCKTYPE_GOVERNANCE);
 		ordertypes.add(BlockType.BLOCKTYPE_CROSSTANGLE);
 		ordertypes.add(BlockType.BLOCKTYPE_STAKE);
+		ordertypes.add(BlockType.BLOCKTYPE_SLASHING);
+		ordertypes.add(BlockType.BLOCKTYPE_EXIT);
 		ordertypes.add(BlockType.BLOCKTYPE_ORDER_OPEN);
 		ordertypes.add(BlockType.BLOCKTYPE_ORDER_CANCEL);
 		ordertypes.add(BlockType.BLOCKTYPE_CONTRACT_EVENT);

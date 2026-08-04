@@ -615,6 +615,13 @@ public class BlockStoreService {
 					}
 					Long confirmingEpochVal = confirmingEpoch.get(blk.getHash());
 					if (confirmingEpochVal == null) {
+						// Fallback: the referencing beacon may have confirmed in
+						// an earlier batch (e.g. re-confirm after a reorg).
+						// Scan the confirmed reward chain, bounded, for a beacon
+						// referencing this block.
+						confirmingEpochVal = findConfirmingEpochFromStore(blk.getHash(), blockStore);
+					}
+					if (confirmingEpochVal == null) {
 						// A block confirmed without a referencing beacon is not
 						// legitimately confirmed — fail closed.
 						throw new net.bigtangle.exception.BlockStoreException(
@@ -723,6 +730,46 @@ public class BlockStoreService {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
+	}
+
+	/**
+	 * Scans the confirmed reward chain (bounded by CHAINLENGTH_CUTOFF) for a
+	 * beacon whose RewardInfo.blocks references {@code target}, returning its
+	 * chain epoch, or null if none is found.
+	 */
+	private Long findConfirmingEpochFromStore(Sha256Hash target, BlockStoreInterface blockStore) {
+		try {
+			TXReward tip = blockStore.getMaxConfirmedReward();
+			if (tip == null) {
+				return null;
+			}
+			Sha256Hash cursor = tip.getBlockHash();
+			java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+			int count = 0;
+			while (cursor != null && visited.add(cursor)
+					&& count < net.bigtangle.params.NetworkParameters.CHAINLENGTH_CUTOFF) {
+				count++;
+				Block beacon = blockStore.get(cursor);
+				if (beacon == null) {
+					return null;
+				}
+				if (beacon.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+					return null;
+				}
+				if (beacon.getBlockType() != BlockType.BLOCKTYPE_BEACON || beacon.getTransactions().isEmpty()) {
+					return null;
+				}
+				net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+						.parseChecked(beacon.getTransactions().get(0).getData());
+				if (ri != null && ri.getBlocks() != null && ri.getBlocks().contains(target)) {
+					return ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+				}
+				cursor = ri != null ? ri.getPrevRewardHash() : null;
+			}
+		} catch (Exception e) {
+			log.warn("Failed to find confirming beacon for {}: {}", target, e.getMessage());
+		}
+		return null;
 	}
 
 	/**
