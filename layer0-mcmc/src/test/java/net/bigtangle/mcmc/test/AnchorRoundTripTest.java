@@ -30,7 +30,11 @@ import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.params.ReqCmd;
 import net.bigtangle.server.data.AnchorRecord;
+import net.bigtangle.server.service.BlockSaveService;
+import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.utils.OkHttp3Util;
 
 public class AnchorRoundTripTest extends AbstractIntegrationTest {
 
@@ -199,6 +203,79 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
         assertNotNull(saved);
         assertEquals(true, saved.isConfirmed(),
                 "After processReceivedAnchor + confirmAnchor, anchor must be confirmed");
+    }
+
+    @Test
+    public void testAnchorOverBatchBlockHttpPreservesTypeAndRecords() throws Exception {
+        PQKey signKey = PQKey.createNew();
+        configureAnchorWithKey(signKey);
+
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        LayerAnchor anchor = validAnchor(signKey, head, 1, root, proof);
+
+        // The type mappings that previously dropped the CROSSTANGLE type on the
+        // wire path (F4): without them an anchor is queued/batched as TRANSFER
+        // and L0 never records it.
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName("LayerAnchor");
+        tx.setData(anchor.toByteArray());
+        assertEquals(BlockType.BLOCKTYPE_CROSSTANGLE, MempoolService.getTransactionType(tx),
+                "MempoolService.getTransactionType must map LayerAnchor -> CROSSTANGLE");
+
+        // Full wire path: /batchBlock (HTTP) -> mempool typed queue -> batch
+        // drain -> fail-closed save (the L0AnchorHandler now runs) -> bridge
+        // records the anchor.
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Block crosstangleBlock = Block.createBlock(networkParameters, genesis, genesis);
+        crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
+        Transaction anchorTx = new Transaction(networkParameters);
+        anchorTx.setDataClassName("LayerAnchor");
+        anchorTx.setData(anchor.toByteArray());
+        crosstangleBlock.addTransaction(anchorTx);
+
+        OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), crosstangleBlock.bitcoinSerialize());
+        int batched = blockSaveService.batchBlocksFromMempool();
+        assertTrue(batched >= 1, "the anchor tx must be batched via the typed mempool queue");
+
+        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(saved, "the anchor must be recorded on L0 after the wire path");
+    }
+
+    @Test
+    public void testInvalidAnchorRejectedOnBatchReceivePath() throws Exception {
+        PQKey correctKey = PQKey.createNew();
+        configureAnchorWithKey(correctKey);
+        PQKey wrongKey = PQKey.createNew();
+
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        // Valid structure, but signed by the WRONG key.
+        LayerAnchor anchor = validAnchor(wrongKey, head, 1, root, proof);
+
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Block crosstangleBlock = Block.createBlock(networkParameters, genesis, genesis);
+        crosstangleBlock.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
+        Transaction anchorTx = new Transaction(networkParameters);
+        anchorTx.setDataClassName("LayerAnchor");
+        anchorTx.setData(anchor.toByteArray());
+        crosstangleBlock.addTransaction(anchorTx);
+
+        OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), crosstangleBlock.bitcoinSerialize());
+        assertThrows(Exception.class, () -> blockSaveService.batchBlocksFromMempool(),
+                "an anchor signed by the wrong key must be rejected on the batch receive path (fail-closed)");
+        assertNull(store.getAnchorByChainIdAndHeight("L1", 1),
+                "an invalid anchor must never be recorded");
     }
 
     @Test

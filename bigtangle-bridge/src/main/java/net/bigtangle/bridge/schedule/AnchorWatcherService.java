@@ -71,6 +71,9 @@ public class AnchorWatcherService {
     @Autowired
     private net.bigtangle.bridge.AnchorService anchorService;
 
+    @Autowired
+    private net.bigtangle.server.service.CasperService casperService;
+
     @Scheduled(fixedDelayString = "${anchor.watchIntervalMs:60000}")
     public void watchAnchors() {
         if (!anchorConfiguration.isActive() || !scheduleConfiguration.isChainlength_active()
@@ -160,6 +163,22 @@ public class AnchorWatcherService {
         Block currentHead = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
         if (currentHead.getHeight() >= anchor.getL1Height()) {
             return;
+        }
+
+        // FINALITY: the L0-anchored branch may only replace the L1 head if it
+        // descends from the last FINALIZED checkpoint — the same guard
+        // connectRewardBlock enforces. An L0-confirmed anchor (signed by the
+        // single configured key) must never be able to rewrite finalized L1
+        // history. A node that has not yet confirmed the finalized anchor skips
+        // the guard (nothing to anchor).
+        if (casperService != null) {
+            net.bigtangle.server.service.CasperService.Checkpoint finalized = casperService.getLastFinalizedCheckpoint();
+            if (finalized != null && store.get(finalized.getBlockHash()) != null
+                    && !casperService.descendsFrom(anchoredHead.getHash(), finalized.getBlockHash(), store)) {
+                logger.warn("Reorg refused: anchored tip {} does not descend from finalized checkpoint epoch {}",
+                        anchor.getL1RewardHeadHash(), finalized.getEpoch());
+                return;
+            }
         }
 
         verifyReward.handleNewBestChain(anchoredHead, store);

@@ -94,7 +94,16 @@ public class BlockSaveService {
 	 *  re-validation in addBlock would reject it for unrelated reasons.
 	 *  Also seeds MCMC weight + TipsQueue so the beacon chain picks it up. */
 	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
-		blockgraph.addNonChain(block, true, store, true, true);
+		// CROSSTANGLE blocks are cross-chain VALUE messages (peg-in/peg-out,
+		// anchors): they must pass real consensus validation
+		// (L0AnchorHandler.checkFull verifies scriptSig ownership, value
+		// conservation and the anchor), so they are saved fail-closed — a block
+		// that fails validation is rejected, never force-marked solid.
+		if (block.getBlockType() == net.bigtangle.core.BlockType.BLOCKTYPE_CROSSTANGLE) {
+			blockgraph.addNonChain(block, false, store, true, true);
+		} else {
+			blockgraph.addNonChain(block, true, store, true, true);
+		}
 		// Bootstrap solid=MCMC uses, and set weight/depth so MCMC picks it up.
 		// addNonChain → solidifyBlock sets solid=1 for MissingCalculation
 		// state (inherited from prototype predecessors), but MCMC's
@@ -266,14 +275,37 @@ public class BlockSaveService {
 				return;
 			}
 			Block block = cacheBlockPrototypeService.getBlockPrototype(store);
+			// CROSSTANGLE (cross-chain message / anchor) transactions are batched
+			// SEPARATELY with the block type preserved: folding them into the
+			// TRANSFER prototype would silently drop the type, so
+			// notifyCrosstangle / the L0AnchorHandler never run and the anchor is
+			// never recorded on L0. The fail-closed validation in
+			// addNonChain/saveBatchBlock then applies to this path too.
+			Block crosstangle = null;
 			for (BatchBlock batchBlock : batchBlocks) {
 				byte[] payloadBytes = batchBlock.getBlock();
 				Block putBlock = this.networkParameters.getDefaultSerializer().makeBlock(payloadBytes);
 				for (Transaction transaction : putBlock.getTransactions()) {
-					block.addTransaction(transaction);
+					if (net.bigtangle.core.BlockType.BLOCKTYPE_CROSSTANGLE == putBlock.getBlockType()
+							|| "LayerAnchor".equals(transaction.getDataClassName())) {
+						if (crosstangle == null) {
+							crosstangle = cacheBlockPrototypeService.getBlockPrototype(store);
+							crosstangle.setBlockType(net.bigtangle.core.BlockType.BLOCKTYPE_CROSSTANGLE);
+						}
+						crosstangle.addTransaction(transaction);
+					} else {
+						block.addTransaction(transaction);
+					}
 				}
 			}
-			if (block.getTransactions().size() == 0) {
+			if (crosstangle != null && !crosstangle.getTransactions().isEmpty()) {
+				saveBatchBlock(crosstangle, store);
+				markStatus(crosstangle, net.bigtangle.server.data.TransactionStatus.IN_BLOCK, store);
+			}
+			if (block.getTransactions().isEmpty()) {
+				for (BatchBlock batchBlock : batchBlocks) {
+					store.deleteBatchBlock(batchBlock.getHash());
+				}
 				return;
 			}
 			saveBlock(block, store);
@@ -406,6 +438,12 @@ public class BlockSaveService {
 			break;
 		case "UserSettingDataInfo":
 			block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
+			break;
+		case "LayerAnchor":
+			// Cross-chain anchors must keep their CROSSTANGLE type, otherwise
+			// the block is batched as TRANSFER, notifyCrosstangle never fires
+			// and the anchor is never recorded on L0.
+			block.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 			break;
 		default:
 			break;

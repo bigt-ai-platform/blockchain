@@ -312,6 +312,11 @@ public class MempoolService {
         }
         case "UserSettingDataInfo":
             return BlockType.BLOCKTYPE_USERDATA;
+        case "LayerAnchor":
+            // Cross-chain anchors are CROSSTANGLE blocks: without this mapping
+            // the tx would be queued as TRANSFER, the block type would be lost
+            // on the wire, and L0 would never record the anchor.
+            return BlockType.BLOCKTYPE_CROSSTANGLE;
         default:
             return BlockType.BLOCKTYPE_TRANSFER;
         }

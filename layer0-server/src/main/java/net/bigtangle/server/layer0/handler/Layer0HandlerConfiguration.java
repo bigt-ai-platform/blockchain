@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 
 import net.bigtangle.bridge.AnchorService;
+import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.server.service.base.ServiceBase;
 
@@ -20,12 +21,16 @@ public class Layer0HandlerConfiguration {
 	@Autowired
 	private AnchorService anchorService;
 
+	@Autowired
+	private BridgeService bridgeService;
+
 	@PostConstruct
 	public void registerHandlers() {
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_TOKEN_CREATION, TokenCreationHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_BEACON, RewardHandler::new);
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_TRANSFER, NoOpConfirmHandler::new);
-		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CROSSTANGLE, () -> new L0AnchorHandler(anchorService));
+		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_CROSSTANGLE,
+				() -> new L0AnchorHandler(anchorService, bridgeService));
 		ServiceBase.registerGlobalHandler(BlockType.BLOCKTYPE_INITIAL, NoOpConfirmHandler::new);
 	}
 }

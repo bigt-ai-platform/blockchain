@@ -293,6 +293,168 @@ public class StakeService {
     }
 
     /**
+     * The expected proposer's ML-DSA pubkey for {@code slot}: deterministic
+     * selection over the epoch's validator snapshot with the immutable mix —
+     * the same inputs beacon validation uses.
+     */
+    public static byte[] expectedProposerPubkey(long slot, BlockStoreInterface store) throws Exception {
+        List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
+        if (validators.isEmpty()) {
+            return null;
+        }
+        long mixEpoch = slot / 32 - 2;
+        byte[] mix = mixEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + mixEpoch) : null;
+        if (mix == null) {
+            mix = sha256(String.valueOf(mixEpoch).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+        long idx = SlotService.selectProposerForSlot(slot, validators, mix);
+        if (idx < 0 || idx >= validators.size()) {
+            return null;
+        }
+        return validators.get((int) idx).getPubkey();
+    }
+
+    private static byte[] sha256(byte[] in) {
+        try {
+            return java.security.MessageDigest.getInstance("SHA-256").digest(in);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Extracts the SlotData carried by a beacon, or null. */
+    public static net.bigtangle.core.SlotData slotDataOfBeacon(Block block) {
+        if (block == null || block.getBlockType() != BlockType.BLOCKTYPE_BEACON
+                || block.getTransactions() == null) {
+            return null;
+        }
+        for (Transaction tx : block.getTransactions()) {
+            if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+                try {
+                    return Json.jsonmapper().readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+                } catch (Exception e) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Proposal equivocation (slashable, like Ethereum's proposer slashing): two
+     * DIFFERENT signed SlotDatas for the SAME slot, both authentic under the
+     * elected proposer's key. The signature covers every SlotData field, so the
+     * evidence is self-authenticating and cannot be framed onto an honest key.
+     */
+    public static boolean isProposalEquivocation(net.bigtangle.core.SlotData sd1,
+            net.bigtangle.core.SlotData sd2, byte[] proposerPubkey) {
+        if (sd1 == null || sd2 == null || proposerPubkey == null) {
+            return false;
+        }
+        if (sd1.getSlot() != sd2.getSlot()) {
+            return false;
+        }
+        if (sd1.getProposerSignature() == null || sd2.getProposerSignature() == null) {
+            return false;
+        }
+        if (sd1.getMessageHash().equals(sd2.getMessageHash())) {
+            return false; // identical content — not an equivocation
+        }
+        return PQScriptUtils.verifyPQ(proposerPubkey, sd1.getProposerSignature(), sd1.getMessageHash())
+                && PQScriptUtils.verifyPQ(proposerPubkey, sd2.getProposerSignature(), sd2.getMessageHash());
+    }
+
+    /**
+     * Records a beacon sighting for its slot (at ingest) and, when a DIFFERENT
+     * beacon was already sighted for the same slot, submits proposal-equivocation
+     * evidence as a consensus slashing block. Sightings are evidence, not chain
+     * state — they are never unrecorded by reorgs. Only sightings AUTHENTICATED
+     * under the elected proposer's key are recorded (a forged-signature beacon
+     * can neither pollute the registry nor trigger slash attempts), and the
+     * registry is capped per slot (two sightings already prove an equivocation).
+     */
+    private static final int MAX_SLOT_SIGHTINGS = 4;
+
+    public void checkSlotSightingForEquivocation(Block block, BlockStoreInterface store) {
+        try {
+            net.bigtangle.core.SlotData sd = slotDataOfBeacon(block);
+            if (sd == null || sd.getProposerSignature() == null) {
+                return;
+            }
+            byte[] proposer = expectedProposerPubkey(sd.getSlot(), store);
+            if (proposer == null
+                    || !PQScriptUtils.verifyPQ(proposer, sd.getProposerSignature(), sd.getMessageHash())) {
+                return; // not signed by the elected proposer — ignore
+            }
+            String key = "slotsight_" + sd.getSlot();
+            byte[] existing = store.getPosState("pos", key);
+            String hashes = existing != null ? new String(existing, java.nio.charset.StandardCharsets.UTF_8) : "";
+            String self = block.getHashAsString();
+            boolean known = false;
+            int count = 0;
+            for (String h : hashes.split(",")) {
+                if (h.isEmpty()) {
+                    continue;
+                }
+                count++;
+                if (h.equals(self)) {
+                    known = true;
+                    continue;
+                }
+                Block prior = store.get(Sha256Hash.wrap(Utils.HEX.decode(h)));
+                net.bigtangle.core.SlotData priorSd = slotDataOfBeacon(prior);
+                if (priorSd != null) {
+                    submitProposalSlashing(priorSd, sd, store);
+                }
+            }
+            if (!known && count < MAX_SLOT_SIGHTINGS) {
+                String updated = hashes.isEmpty() ? self : hashes + "," + self;
+                store.savePosState("pos", key, updated.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            log.debug("slot sighting check failed for {}: {}", block.getHashAsString(), e.getMessage());
+        }
+    }
+
+    /**
+     * Proposes a PROPOSAL-equivocation slashing as a consensus BLOCKTYPE_SLASHING
+     * block carrying the two conflicting signed SlotDatas. Verified locally first
+     * (no evidence spam), then validated/applied by every node (see
+     * applySlashingBlock).
+     */
+    public void submitProposalSlashing(net.bigtangle.core.SlotData sd1, net.bigtangle.core.SlotData sd2,
+            BlockStoreInterface store) throws Exception {
+        if (sd1 == null || sd2 == null || sd1.getSlot() != sd2.getSlot()) {
+            return;
+        }
+        byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store);
+        if (proposer == null || !isProposalEquivocation(sd1, sd2, proposer)) {
+            return;
+        }
+        StakeRecord stake = store.getStakeDeposit(proposer);
+        if (stake == null || stake.isSlashed()) {
+            return; // nothing to slash / already slashed
+        }
+        TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+        Block head = store.get(maxConfirmedReward.getBlockHash());
+        Block b = Block.createBlock(networkParameters, head, head);
+        b.setBlockType(BlockType.BLOCKTYPE_SLASHING);
+
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(SLASHING_DATA_CLASS);
+        Map<String, Object> data = new HashMap<>();
+        data.put("proposal", Boolean.TRUE);
+        data.put("slotData1", sd1);
+        data.put("slotData2", sd2);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(data));
+        b.addTransaction(tx);
+
+        blockSaveService.saveBlock(b, store);
+        log.info("Proposal-equivocation slashing block proposed for slot {}: {}",
+                sd1.getSlot(), b.getHashAsString());
+    }
+
+    /**
      * Proposes a slashing as a consensus BLOCKTYPE_SLASHING block carrying the
      * two conflicting attestations. The actual slash + confiscation is applied
      * by every node when the block is validated/saved (see applySlashingBlock),
@@ -341,6 +503,30 @@ public class StakeService {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+        if (Boolean.TRUE.equals(data.get("proposal"))) {
+            // Proposal equivocation: two different signed SlotDatas, same slot,
+            // by the elected proposer — verified here by every node.
+            net.bigtangle.core.SlotData sd1 = Json.jsonmapper().convertValue(data.get("slotData1"),
+                    net.bigtangle.core.SlotData.class);
+            net.bigtangle.core.SlotData sd2 = Json.jsonmapper().convertValue(data.get("slotData2"),
+                    net.bigtangle.core.SlotData.class);
+            if (sd1 == null || sd2 == null) {
+                return;
+            }
+            byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store);
+            if (proposer == null || !isProposalEquivocation(sd1, sd2, proposer)) {
+                return; // forged / unauthenticated proposal proof — ignore
+            }
+            StakeRecord stake = store.getStakeDeposit(proposer);
+            if (stake == null || stake.isSlashed()) {
+                return;
+            }
+            store.updateStakeSlashing(proposer, -1L);
+            confiscateBond(proposer, stake, store);
+            log.info("Validator slashed for proposal equivocation via consensus block {}: slot={}",
+                    block.getHashAsString(), sd1.getSlot());
+            return;
+        }
         AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
         AttestationData att2 = Json.jsonmapper().convertValue(data.get("attestation2"), AttestationData.class);
         if (att1 == null || att2 == null
@@ -370,6 +556,29 @@ public class StakeService {
     }
 
     /**
+     * The validator identified by a slashing payload of EITHER kind
+     * (attestation pair or proposal equivocation), or null when it cannot be
+     * determined.
+     */
+    private byte[] slashingEvidencePubkey(Map<String, Object> data, BlockStoreInterface store) {
+        try {
+            if (data.get("attestation1") != null) {
+                AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"),
+                        AttestationData.class);
+                return att1 != null ? att1.getValidatorPubkey() : null;
+            }
+            if (data.get("slotData1") != null) {
+                net.bigtangle.core.SlotData sd1 = Json.jsonmapper().convertValue(data.get("slotData1"),
+                        net.bigtangle.core.SlotData.class);
+                return sd1 != null ? expectedProposerPubkey(sd1.getSlot(), store) : null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
      * Confirm-time variant: sets the withdrawable epoch from the CONFIRMING
      * beacon's chain epoch (passed in), which is fixed once confirmed, current,
      * and not chosen by the submitter. Called by confirmDo alongside the
@@ -387,11 +596,10 @@ public class StakeService {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
-        AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
-        if (att1 == null || att1.getValidatorPubkey() == null) {
+        byte[] pubkey = slashingEvidencePubkey(data, store);
+        if (pubkey == null) {
             return;
         }
-        byte[] pubkey = att1.getValidatorPubkey();
         StakeRecord stake = store.getStakeDeposit(pubkey);
         // The record is ALREADY slashed (set at save time). The withdrawable
         // epoch is ALWAYS (re)derived from the confirming beacon: a value left
@@ -436,13 +644,13 @@ public class StakeService {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
-        AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
-        if (att1 == null || att1.getValidatorPubkey() == null) {
+        byte[] evidencePubkey = slashingEvidencePubkey(data, store);
+        if (evidencePubkey == null) {
             return;
         }
         // Restore the confiscated bond so a reorged-out slash does not leave
         // the validator permanently penalised.
-        StakeRecord stake = store.getStakeDeposit(att1.getValidatorPubkey());
+        StakeRecord stake = store.getStakeDeposit(evidencePubkey);
         if (stake != null && stake.getBlockHash() != null) {
             Sha256Hash txHash = stake.getTxHash();
             if (txHash == null) {
@@ -455,9 +663,9 @@ public class StakeService {
                 store.updateTransactionOutputSpent(stake.getBlockHash(), txHash, 0, false, null);
             }
         }
-        store.clearStakeSlashing(att1.getValidatorPubkey());
+        store.clearStakeSlashing(evidencePubkey);
         log.info("Reorg: un-slashed validator for pubkey={} (block {})",
-                Utils.HEX.encode(att1.getValidatorPubkey()), block.getHashAsString());
+                Utils.HEX.encode(evidencePubkey), block.getHashAsString());
     }
 
     public void activateValidator(byte[] pubkey, long epoch, BlockStoreInterface store) throws Exception {
@@ -703,10 +911,7 @@ public class StakeService {
             if (SLASHING_DATA_CLASS.equals(tx.getDataClassName()) && tx.getData() != null) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
-                AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
-                if (att1 != null) {
-                    pubkey = att1.getValidatorPubkey();
-                }
+                pubkey = slashingEvidencePubkey(data, store);
             }
         } else if (block.getBlockType() == BlockType.BLOCKTYPE_EXIT && !block.getTransactions().isEmpty()) {
             Transaction tx = block.getTransactions().get(0);

@@ -20,6 +20,7 @@ import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.PQScriptUtils;
@@ -104,6 +105,18 @@ public class CasperService {
     @Autowired
     private NetworkParameters networkParameters;
 
+    /**
+     * Optional weak-subjectivity anchor: "{@code epoch}:{hex-blockhash}". A
+     * long-range attacker who controlled historic keys can fork the chain from
+     * before any on-chain finality. The operator's node pins the finalized floor
+     * to this operator-provided checkpoint (obtained out-of-band), so a fork
+     * that rewrites pre-checkpoint history can never be adopted. Empty disables
+     * it. Fail-closed: a malformed value or a checkpoint that conflicts with the
+     * node's stored chain prevents startup.
+     */
+    @org.springframework.beans.factory.annotation.Value("${pos.weakSubjectivityCheckpoint:}")
+    private String weakSubjectivityCheckpoint = "";
+
     @PostConstruct
     public void restoreState() {
         try {
@@ -158,12 +171,58 @@ public class CasperService {
                     checkpoints.put(0L, genesis);
                     persistCheckpoint(genesis, store);
                 }
+                applyWeakSubjectivityCheckpoint(store);
             } finally {
                 store.close();
             }
         } catch (Exception e) {
             log.trace("No prior Casper state to restore", e);
         }
+    }
+
+    /**
+     * Pins the finalized floor to the operator's weak-subjectivity checkpoint
+     * (see {@link #weakSubjectivityCheckpoint}). Fail-closed: a checkpoint that
+     * conflicts with the node's stored chain (the operator's anchor differs from
+     * what the node confirmed — evidence of a wrong chain or a stale anchor)
+     * prevents startup.
+     */
+    private void applyWeakSubjectivityCheckpoint(BlockStoreInterface store) {
+        if (weakSubjectivityCheckpoint == null || weakSubjectivityCheckpoint.isBlank()) {
+            return;
+        }
+        long epoch;
+        Sha256Hash hash;
+        try {
+            String[] parts = weakSubjectivityCheckpoint.trim().split(":");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("expected epoch:hex-blockhash");
+            }
+            epoch = Long.parseLong(parts[0]);
+            hash = Sha256Hash.wrap(Utils.HEX.decode(parts[1]));
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Invalid weak-subjectivity checkpoint config '" + weakSubjectivityCheckpoint + "'", e);
+        }
+        Checkpoint existing = checkpoints.get(epoch);
+        if (existing != null) {
+            if (!existing.blockHash.equals(hash)) {
+                throw new IllegalStateException(
+                        "Weak-subjectivity checkpoint at epoch " + epoch + " conflicts with the stored chain");
+            }
+            if (!existing.justified || !existing.finalized) {
+                existing.justified = true;
+                existing.finalized = true;
+                persistCheckpoint(existing, store);
+            }
+            return;
+        }
+        Checkpoint ws = new Checkpoint(hash, epoch);
+        ws.justified = true;
+        ws.finalized = true;
+        checkpoints.put(epoch, ws);
+        persistCheckpoint(ws, store);
+        log.info("Weak-subjectivity anchor pinned: epoch={}, block={}", epoch, hash);
     }
 
     /** Returns the existing checkpoint for {@code epoch} or creates it at {@code blockHash}. */
@@ -183,24 +242,21 @@ public class CasperService {
     /**
      * Chain-derived checkpoint creation. The checkpoint hash for an epoch is a
      * PURE FUNCTION of the confirmed chain: the confirmed reward block at the
-     * epoch boundary's chainlength (the last beacon of the previous epoch,
-     * assuming one beacon per slot). Every node that has confirmed the same
-     * chain derives the same checkpoint. When the boundary is not yet confirmed
-     * a transient (non-cached) checkpoint is returned so the cache is never
-     * poisoned with a node-local value.
+     * SLOT-based epoch boundary — the last beacon with slot &lt; epoch*32 (i.e.
+     * the last beacon of the previous epoch). This stays correct under slot
+     * drift (missed slots), where a chainlength-derived boundary would land in
+     * the wrong epoch. When the boundary is not yet confirmed a transient
+     * (non-cached) checkpoint is returned so the cache is never poisoned with a
+     * node-local value. Legacy beacons without SlotData fall back to the
+     * chainlength boundary.
      */
     public Checkpoint ensureCheckpoint(long epoch, BlockStoreInterface store) {
         Checkpoint existing = checkpoints.get(epoch);
         if (existing != null) {
             return existing;
         }
-        TXReward boundary = null;
-        try {
-            boundary = store.getRewardConfirmedAtHeight(epoch * SlotService.SLOTS_PER_EPOCH);
-        } catch (Exception e) {
-            boundary = null;
-        }
-        if (boundary == null) {
+        Sha256Hash boundaryHash = slotBoundaryHash(epoch, store);
+        if (boundaryHash == null) {
             // Boundary not confirmed yet: return a transient checkpoint that is
             // NOT cached, so it cannot poison future lookups.
             Checkpoint transientCp = new Checkpoint(confirmedHeadOrGenesis(store), epoch);
@@ -210,7 +266,7 @@ public class CasperService {
             }
             return transientCp;
         }
-        Checkpoint cp = new Checkpoint(boundary.getBlockHash(), epoch);
+        Checkpoint cp = new Checkpoint(boundaryHash, epoch);
         if (epoch == 0) {
             cp.justified = true;
             cp.finalized = true;
@@ -224,6 +280,84 @@ public class CasperService {
             log.debug("Failed to persist checkpoint at creation", ex);
         }
         return cp;
+    }
+
+    /**
+     * The confirmed beacon at the slot-based epoch boundary: the last beacon
+     * with slot &lt; {@code epoch*32}, found by walking the reward chain back
+     * from the tip. Null when the chain has not yet entered {@code epoch} (the
+     * boundary is not final) or a boundary cannot be derived.
+     */
+    private Sha256Hash slotBoundaryHash(long epoch, BlockStoreInterface store) {
+        long boundarySlot = epoch * SlotService.SLOTS_PER_EPOCH;
+        try {
+            TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+            if (tip == null) {
+                return null;
+            }
+            Sha256Hash cursor = tip.getBlockHash();
+            java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+            // The boundary is only CONFIRMED once the walk observes a beacon at
+            // or beyond it (a beacon only confirms when the next one arrives).
+            // Until then the boundary is not yet buried: returning the tip would
+            // cache a PREMATURE boundary (a mid-epoch beacon) that later proves
+            // wrong — attestation targets would fragment by exact hash and
+            // justification could split/stall on a healthy network. So return
+            // null (keeping the transient, uncached checkpoint path in
+            // ensureCheckpoint) unless the boundary was actually buried.
+            boolean boundaryBuried = false;
+            while (cursor != null && visited.add(cursor)) {
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    return null;
+                }
+                Long slot = slotOf(b);
+                if (slot == null) {
+                    // Legacy beacon without SlotData: fall back to the
+                    // chainlength boundary (pre-SlotData chains).
+                    TXReward legacy = store.getRewardConfirmedAtHeight(boundarySlot);
+                    return legacy != null ? legacy.getBlockHash() : null;
+                }
+                if (slot >= boundarySlot) {
+                    // Still in (or past) epoch `epoch`: keep walking back toward
+                    // the first beacon below the boundary.
+                    boundaryBuried = true;
+                    net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                            .parseChecked(b.getTransactions().get(0).getData());
+                    if (ri == null) {
+                        return null;
+                    }
+                    cursor = ri.getPrevRewardHash();
+                    continue;
+                }
+                // First beacon below the boundary while walking from a tip at or
+                // above it: the last beacon of epoch-1 is the checkpoint. If the
+                // boundary is not buried (the tip itself is below it) the true
+                // boundary is not yet confirmed — return null, not the tip.
+                return boundaryBuried ? cursor : null;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
+    }
+
+    /** The SlotData slot of a beacon, or null when it carries none (legacy). */
+    private Long slotOf(Block b) {
+        try {
+            for (Transaction tx : b.getTransactions()) {
+                if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+                    net.bigtangle.core.SlotData sd = net.bigtangle.utils.Json.jsonmapper()
+                            .readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+                    if (sd != null) {
+                        return sd.getSlot();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 
     private Sha256Hash confirmedHeadOrGenesis(BlockStoreInterface store) {
@@ -469,6 +603,49 @@ public class CasperService {
         return att != null && att.verifySignature();
     }
 
+    /**
+     * A validator counts toward the justification denominator only if it voted
+     * within the last {@code INACTIVITY_WINDOW_EPOCHS} epochs (the inactivity
+     * leak): on a healthy network everyone votes every epoch and the denominator
+     * equals the total stake; if a large fraction of stake stops voting, its
+     * weight drains out of the denominator after the window passes, so the
+     * remaining online stake can reach 2/3 again and finality resumes.
+     */
+    public static final long INACTIVITY_WINDOW_EPOCHS = 8;
+
+    /**
+     * The 2/3 justification threshold over the ACTIVELY VOTING stake, floored at
+     * 1/3 of the total stake: the floor stops a tiny online minority (e.g. a
+     * freshly synced node with a sparse vote view) from justifying checkpoints
+     * alone — recovering finality always requires at least ~2/9 of total stake
+     * voting for the same target. The reference epoch is derived from the vote
+     * view (never the wall clock), so nodes that have seen the same votes
+     * compute the same threshold.
+     */
+    private BigInteger justificationThreshold(long targetEpoch, BigInteger totalStake,
+            BlockStoreInterface store) throws Exception {
+        // The reference epoch is the newest vote of an ACTIVE validator — never
+        // the wall clock, and never a non-active key's stale vote view.
+        long referenceEpoch = targetEpoch;
+        java.util.List<StakeRecord> active = store.getActiveStakeDeposits();
+        for (StakeRecord v : active) {
+            Long s = latestVotes.get(Utils.HEX.encode(v.getPubkey()));
+            if (s != null) {
+                referenceEpoch = Math.max(referenceEpoch, s / 32);
+            }
+        }
+        long activeFloor = referenceEpoch - INACTIVITY_WINDOW_EPOCHS;
+        BigInteger onlineStake = BigInteger.ZERO;
+        for (StakeRecord v : active) {
+            Long lastSlot = latestVotes.get(Utils.HEX.encode(v.getPubkey()));
+            if (lastSlot != null && lastSlot / 32 >= activeFloor) {
+                onlineStake = onlineStake.add(v.getAmount());
+            }
+        }
+        BigInteger denominator = onlineStake.max(totalStake.divide(BigInteger.valueOf(3)));
+        return denominator.multiply(BigInteger.valueOf(2)).divide(BigInteger.valueOf(3));
+    }
+
     public void finalizeCheckpoint(long epoch, BlockStoreInterface store) throws Exception {
         if (epoch < 0) {
             return;
@@ -492,8 +669,7 @@ public class CasperService {
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
             return;
         }
-        BigInteger twoThirds = totalStake.multiply(BigInteger.valueOf(2))
-                .divide(BigInteger.valueOf(3));
+        BigInteger twoThirds = justificationThreshold(epoch, totalStake, store);
 
         if (!target.justified) {
             Checkpoint justifySource = getJustifiedCheckpoint();

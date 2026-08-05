@@ -1,5 +1,8 @@
 package net.bigtangle.server.service.schedule;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +23,11 @@ public class SlotTickService {
 
     private static final Logger log = LoggerFactory.getLogger(SlotTickService.class);
 
+    /** Consecutive failures before backing off (skip ticks for a while). */
+    private static final int FAILURE_BACKOFF_LIMIT = 5;
+    /** Backoff: skip this many ticks after repeated failures. */
+    private static final long FAILURE_BACKOFF_TICKS = 10;
+
     @Autowired
     private SlotService slotService;
 
@@ -37,41 +45,71 @@ public class SlotTickService {
 
     private long lastProcessedEpoch = -1;
 
+    /** Guards against concurrent ticks (the scheduled task can overlap). */
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicLong consecutiveFailures = new AtomicLong(0);
+
     @Async
     @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
     public void tick() {
-        if (!scheduleConfiguration.isChainlength_active() || !serverConfiguration.checkService()) {
+        if (!running.compareAndSet(false, true)) {
+            log.trace("Slot tick already running; skipping");
             return;
         }
-
         try {
-            long slot = slotService.getCurrentSlot();
-            long epoch = slotService.getEpochForSlot(slot);
-
-            var store = storeService.getStore();
-            try {
-                // Beacon block proposal is PoS-driven: only the node whose
-                // validator key is selected for this slot proposes (see
-                // ValidatorDutyService.performDuty). Proposing unconditionally
-                // from every node produces forked beacon chains that corrupt
-                // the incremental order-matching state.
-                if (epoch != lastProcessedEpoch) {
-                    // Evaluate the just-COMPLETED epoch: only its attestations
-                    // are complete. Evaluating the current epoch (which has no
-                    // votes yet at its first tick) would never justify anything
-                    // — finality would never advance.
-                    if (epoch > 0) {
-                        slotService.processEpoch(epoch - 1, store);
-                    }
-                    lastProcessedEpoch = epoch;
-                }
-            } finally {
-                store.close();
+            if (!scheduleConfiguration.isChainlength_active() || !serverConfiguration.checkService()) {
+                return;
             }
 
-            validatorDutyService.performDuty();
-        } catch (Exception e) {
-            log.debug("Slot tick error", e);
+            // Backoff after repeated failures: skip ticks so a stuck store does
+            // not spin an error hot-loop.
+            if (consecutiveFailures.get() >= FAILURE_BACKOFF_LIMIT) {
+                if (consecutiveFailures.get() >= FAILURE_BACKOFF_LIMIT + FAILURE_BACKOFF_TICKS) {
+                    consecutiveFailures.set(0); // reset and retry
+                } else {
+                    return;
+                }
+            }
+
+            try {
+                long slot = slotService.getCurrentSlot();
+                long epoch = slotService.getEpochForSlot(slot);
+
+                var store = storeService.getStore();
+                try {
+                    // Beacon block proposal is PoS-driven: only the node whose
+                    // validator key is selected for this slot proposes (see
+                    // ValidatorDutyService.performDuty). Proposing unconditionally
+                    // from every node produces forked beacon chains that corrupt
+                    // the incremental order-matching state.
+                    if (epoch != lastProcessedEpoch) {
+                        // Evaluate the just-COMPLETED epoch: only its attestations
+                        // are complete. Evaluating the current epoch (which has no
+                        // votes yet at its first tick) would never justify anything
+                        // — finality would never advance.
+                        if (epoch > 0) {
+                            slotService.processEpoch(epoch - 1, store);
+                        }
+                        lastProcessedEpoch = epoch;
+                    }
+                } finally {
+                    store.close();
+                }
+
+                validatorDutyService.performDuty();
+                consecutiveFailures.set(0);
+            } catch (Throwable t) {
+                // Never let a tick exception kill the scheduler thread; back off
+                // on repeated failures.
+                long failures = consecutiveFailures.incrementAndGet();
+                if (log.isDebugEnabled() || failures == 1) {
+                    log.warn("Slot tick error (consecutive failures={})", failures, t);
+                } else {
+                    log.debug("Slot tick error (consecutive failures={})", failures, t);
+                }
+            }
+        } finally {
+            running.set(false);
         }
     }
 }

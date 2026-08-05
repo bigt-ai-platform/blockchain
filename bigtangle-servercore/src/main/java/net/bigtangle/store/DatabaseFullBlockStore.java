@@ -3382,10 +3382,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			s.setString(1, vault.getChainId());
 			s.setString(2, vault.getUtxoBlockHash().toString());
 			s.setLong(3, vault.getUtxoIndex());
-			s.setLong(4, vault.getAmount());
-			s.setString(5, vault.getTokenIdHex());
-			s.setString(6, vault.getOwnerAddress());
-			s.setBoolean(7, vault.isSpent());
+			s.setString(4, vault.getPegInBlockHash() != null ? vault.getPegInBlockHash().toString() : null);
+			s.setLong(5, vault.getAmount());
+			s.setString(6, vault.getTokenIdHex());
+			s.setString(7, vault.getOwnerAddress());
+			s.setBoolean(8, vault.isSpent());
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -3428,6 +3429,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		String hash = rs.getString("utxoBlockHash");
 		if (hash != null) v.setUtxoBlockHash(Sha256Hash.wrap(hash));
 		v.setUtxoIndex(rs.getLong("utxoIndex"));
+		String pegHash = rs.getString("pegInBlockHash");
+		if (pegHash != null && !pegHash.isEmpty()) v.setPegInBlockHash(Sha256Hash.wrap(pegHash));
 		v.setAmount(rs.getLong("amount"));
 		v.setTokenIdHex(rs.getString("tokenIdHex"));
 		v.setOwnerAddress(rs.getString("ownerAddress"));

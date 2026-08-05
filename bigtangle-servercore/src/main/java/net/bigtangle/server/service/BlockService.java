@@ -60,6 +60,10 @@ public class BlockService {
 	protected ObjectMapper jsonmapper;
 	@Autowired
 	protected MempoolService mempoolService;
+
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.StakeService> stakeServiceProvider;
+
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -177,6 +181,14 @@ public class BlockService {
 				try {
 					if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
+						// Record the beacon's slot sighting at INGEST: a second
+						// different beacon for the same slot is proposal
+						// equivocation — captured here as slashable evidence,
+						// regardless of which fork later wins confirmation.
+						net.bigtangle.server.service.StakeService stake = stakeServiceProvider.getIfAvailable();
+						if (stake != null) {
+							stake.checkSlotSightingForEquivocation(block, store);
+						}
 					}
 					blockgraph.addBlock(block, allowUnsolid, store);
 					// removeBlockPrototype(block,store);

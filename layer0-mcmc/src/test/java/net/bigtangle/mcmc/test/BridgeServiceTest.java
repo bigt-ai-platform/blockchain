@@ -3,8 +3,10 @@ package net.bigtangle.mcmc.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,10 +26,14 @@ import net.bigtangle.core.PQKey;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Transaction;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.data.VaultRecord;
+import net.bigtangle.utils.Json;
+import net.bigtangle.wallet.FreeStandingTransactionOutput;
 
 public class BridgeServiceTest extends AbstractIntegrationTest {
 
@@ -49,6 +55,8 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
     private static final String L1_CHAIN_ID = "ordermatch";
 
     private PQKey testKey;
+    /** Dedicated vault key (seed-derived so it round-trips bridge.vaultPriKeyHex). */
+    private PQKey vaultKey;
 
     @Override
     @BeforeEach
@@ -60,11 +68,18 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         testKey = PQKey.createNew();
         String pubKeyHex = Utils.HEX.encode(testKey.getPublicKeyBytes());
 
+        byte[] vaultSeed = new byte[32];
+        new java.security.SecureRandom().nextBytes(vaultSeed);
+        vaultKey = PQKey.fromMLDSA(vaultSeed);
+
         anchorConfiguration.setActive(true);
         anchorConfiguration.setPubKeyHex(pubKeyHex);
         anchorConfiguration.setL0Url("http://localhost:" + port + "/");
         bridgeConfiguration.setActive(true);
-        bridgeConfiguration.setVaultPubKeyHex(pubKeyHex);
+        bridgeConfiguration.setVaultPubKeyHex(Utils.HEX.encode(vaultKey.getPublicKeyBytes()));
+        bridgeConfiguration.setVaultPriKeyHex(Utils.HEX.encode(vaultSeed));
+        // Reset any per-chain registry left by a previous test.
+        anchorConfiguration.setChainPubKeys(new java.util.HashMap<>());
     }
 
     @Test
@@ -137,17 +152,58 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         assertNotNull(saved.getSpvProofHex());
     }
 
+    /**
+     * Builds a REAL vault: funds {@code userKey}, constructs a signed peg-in
+     * transaction (spending the user's UTXO, paying the vault, declaring the L1
+     * beneficiary + chain id in PegInInfo) and runs it through
+     * {@link BridgeService#processPegIn}. Returns the created (unspent) vault.
+     */
+    private VaultRecord createRealVault(PQKey userKey, String beneficiary, long amount) throws Exception {
+        List<Block> added = new ArrayList<>();
+        payBigTo(userKey, BigInteger.valueOf(amount + 100000), added);
+
+        UTXO source = null;
+        for (UTXO u : getBalance(false, List.of(userKey))) {
+            if (u.getValue().getValue().signum() > 0
+                    && java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, u.getValue().getTokenid())) {
+                source = u;
+                break;
+            }
+        }
+        assertNotNull(source, "user must hold a spendable BIG UTXO after funding");
+
+        Address vault = Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
+        Transaction tx = new Transaction(networkParameters);
+        tx.setVersion(net.bigtangle.crypto.pq.PQConstants.TX_PQ_VERSION);
+        tx.setToAddressInSubtangle(Address.fromBase58(networkParameters, beneficiary).getHash160());
+        tx.setDataClassName("PegInInfo");
+        tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of("chainId", L1_CHAIN_ID)));
+        FreeStandingTransactionOutput co = new FreeStandingTransactionOutput(networkParameters, source);
+        tx.addInput(source.getBlockHash(), co);
+        tx.getInputs().get(0).getOutpoint().connectedOutput = co;
+        tx.addOutput(source.getValue(), vault);
+        Sha256Hash sighash = tx.hashForSignature(0, source.getScript().getProgram(),
+                Transaction.SigHash.ALL, false);
+        tx.getInputs().get(0).setScriptSig(
+                net.bigtangle.script.ScriptBuilder.createInputScriptForPQ(userKey.sign(sighash), userKey));
+
+        bridgeService.processPegIn(tx, store);
+
+        List<VaultRecord> vaults = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, vaults.size(), "peg-in must create exactly one vault");
+        return vaults.get(0);
+    }
+
     @Test
     public void testPegOutReleasedWithBurn() throws Exception {
-        Sha256Hash vaultBlockHash = Sha256Hash.wrap("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        long vaultIndex = 0;
         long amount = 100000;
         String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
         String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
 
-        VaultRecord vault = new VaultRecord(L1_CHAIN_ID, vaultBlockHash,
-                vaultIndex, amount, tokenIdHex, recipient, false);
-        store.saveVaultUTXO(vault);
+        // A REAL vault, created by a signed peg-in (not hand-inserted), so the
+        // release spends an actual registered vault output and passes the
+        // CROSSTANGLE consensus validation (scriptSig + conservation).
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
 
         // Build a signature- and SPV-valid anchor with an embedded burn for this vault.
         Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
@@ -159,7 +215,7 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
 
         LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
-                vaultBlockHash.toString() + ":" + vaultIndex, recipient, amount, tokenIdHex);
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient, amount, tokenIdHex);
         LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":5",
                 head, 5, root, null, proof, burn);
         anchor.setSignature(anchor.sign(testKey).serialize());
@@ -276,5 +332,35 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         List<AnchorRecord> anchors = store.getAnchorsByChainId(L1_CHAIN_ID, 0, 100);
         assertEquals(1, anchors.size());
         assertEquals(L1_CHAIN_ID, anchors.get(0).getChainId());
+    }
+
+    @Test
+    public void testPerChainAnchorKeyRegistry() throws Exception {
+        // Configure a per-chain registry for L1_CHAIN_ID with a DIFFERENT key.
+        PQKey registered = PQKey.createNew();
+        anchorConfiguration.setChainPubKeys(java.util.Map.of(L1_CHAIN_ID,
+                java.util.List.of(Utils.HEX.encode(registered.getPublicKeyBytes()))));
+
+        Sha256Hash head = Sha256Hash.wrap("3333333333333333333333333333333333333333333333333333333333333333");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        // Signed by testKey, which is NOT in the chain's registry -> rejected,
+        // even though the global anchor.pubKeyHex fallback would accept it.
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":50",
+                head, 50, root, null, proof, null);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+        assertThrows(Exception.class, () -> anchorService.validateAnchor(anchor),
+                "anchor signed by a key outside the chain's registry must be rejected");
+
+        // Signed by the registered key -> accepted.
+        LayerAnchor ok = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":50",
+                head, 50, root, null, proof, null);
+        ok.setSignature(ok.sign(registered).serialize());
+        anchorService.validateAnchor(ok);
     }
 }

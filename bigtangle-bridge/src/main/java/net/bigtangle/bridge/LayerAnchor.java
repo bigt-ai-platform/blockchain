@@ -11,6 +11,7 @@ import java.util.Objects;
 import net.bigtangle.core.MerkleProof;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.utils.Json;
@@ -40,6 +41,7 @@ public class LayerAnchor implements Serializable {
     private long l1Height;
     private Sha256Hash confirmedRoot;
     private byte[] signature;
+    private java.util.List<byte[]> signatures = new java.util.ArrayList<>();
     private MerkleProof spvProof;
     private AnchorBurn burn;
 
@@ -115,6 +117,50 @@ public class LayerAnchor implements Serializable {
 
     public void setSignature(byte[] signature) {
         this.signature = signature;
+        if (signature != null && signature.length > 0) {
+            signatures.add(signature);
+        }
+    }
+
+    /** Adds a signer to the M-of-N quorum (each distinct authorized key counts once). */
+    public void addSignature(PQKey key) {
+        if (key != null) {
+            signatures.add(key.sign(canonicalDigest()).serialize());
+        }
+    }
+
+    public java.util.List<byte[]> getSignatures() {
+        return signatures;
+    }
+
+    /**
+     * M-of-N quorum check: the number of DISTINCT signatures that verify against
+     * the authorized keys must be at least {@code threshold}. A single signature
+     * (legacy) counts as one signer.
+     */
+    public boolean verifyQuorum(java.util.List<PQKey> authorizedKeys, int threshold) {
+        if (authorizedKeys == null || authorizedKeys.isEmpty() || threshold <= 0) {
+            return false;
+        }
+        int valid = 0;
+        java.util.Set<String> matched = new java.util.HashSet<>();
+        for (PQKey signer : authorizedKeys) {
+            for (byte[] sig : signatures) {
+                if (sig == null || sig.length == 0) {
+                    continue;
+                }
+                try {
+                    if (PQScriptUtils.verifyPQ(signer.getPublicKeyBytes(), sig, canonicalDigest())) {
+                        matched.add(Utils.HEX.encode(signer.getPublicKeyBytes()));
+                        break;
+                    }
+                } catch (Exception e) {
+                    // ignore bad signature
+                }
+            }
+        }
+        valid = matched.size();
+        return valid >= threshold;
     }
 
     public MerkleProof getSpvProof() {
@@ -203,6 +249,14 @@ public class LayerAnchor implements Serializable {
         } else {
             dos.writeInt(0);
         }
+        // Additional M-of-N signers (the primary signature above is the first).
+        int extra = Math.max(0, signatures.size() - 1);
+        dos.writeInt(extra);
+        for (int i = 1; i < signatures.size(); i++) {
+            byte[] s = signatures.get(i);
+            dos.writeInt(s.length);
+            dos.write(s);
+        }
         dos.flush();
         return baos.toByteArray();
     }
@@ -265,8 +319,24 @@ public class LayerAnchor implements Serializable {
         }
         int sigLen = dis.readInt();
         if (sigLen > 0) {
-            anchor.signature = new byte[sigLen];
-            dis.readFully(anchor.signature);
+            byte[] primary = new byte[sigLen];
+            dis.readFully(primary);
+            anchor.signature = primary;
+            anchor.signatures.add(primary);
+        }
+        // Additional M-of-N signers (absent in the legacy single-signature format).
+        if (dis.available() >= 4) {
+            try {
+                int extra = dis.readInt();
+                for (int i = 0; i < extra && dis.available() > 0; i++) {
+                    int len = dis.readInt();
+                    byte[] s = new byte[len];
+                    dis.readFully(s);
+                    anchor.signatures.add(s);
+                }
+            } catch (Exception ignored) {
+                // tolerate truncated legacy payloads
+            }
         }
         return anchor;
     }

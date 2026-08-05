@@ -7,16 +7,15 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
-import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.service.CrosstangleProcessor;
 import net.bigtangle.store.BlockStoreInterface;
 
 /**
- * Bridge-side handler for CROSSTANGLE blocks. On save (local post or batch
- * receive from L1) a layer anchor is validated and recorded; a valid anchor is
- * treated as final (signed + SPV-verified) and any embedded burn is settled by
- * the peg-out. Confirmation/un-confirmation from the core MCMC is mirrored to
- * the anchor record.
+ * Bridge-side handler for CROSSTANGLE blocks. On save a layer anchor is
+ * validated and recorded; it is NOT treated as final. The peg-out for an
+ * embedded burn is settled only when the block actually CONFIRMS on the chain
+ * (see L0AnchorHandler.confirm); an unconfirm (reorg) mirrors back to the
+ * anchor record.
  */
 @Component
 public class CrosstangleProcessorImpl implements CrosstangleProcessor {
@@ -26,21 +25,17 @@ public class CrosstangleProcessorImpl implements CrosstangleProcessor {
     @Autowired
     private AnchorService anchorService;
 
-    @Autowired
-    private BridgeService bridgeService;
-
     @Override
     public void onCrosstangleBlockSaved(Block block, BlockStoreInterface store) {
         if (block.getBlockType() != BlockType.BLOCKTYPE_CROSSTANGLE) {
             return;
         }
         try {
+            // Validate + record the anchor, but do NOT treat it as final here:
+            // a block "landed in the local DB" is not yet confirmed, and a reorg
+            // can still flip it. The peg-out is settled only on actual chain
+            // confirmation (L0AnchorHandler.confirm), never at save time.
             anchorService.processReceivedAnchor(block, store);
-            anchorService.confirmAnchor(block, true, store);
-            AnchorRecord rec = store.getAnchorByBlockHash(block.getHash());
-            if (rec != null && rec.isConfirmed()) {
-                bridgeService.processPegOut(rec, store);
-            }
         } catch (Exception e) {
             logger.warn("CROSSTANGLE block {} rejected by bridge: {}",
                     block.getHashAsString(), e.getMessage());

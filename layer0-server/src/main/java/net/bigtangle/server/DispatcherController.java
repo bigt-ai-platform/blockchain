@@ -259,18 +259,12 @@ public class DispatcherController implements DisposableBean {
 							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
 					break;
 				}
-				String reqStr = new String(bodyByte, java.nio.charset.StandardCharsets.UTF_8);
-				Map<String, String> params = Json.jsonmapper().readValue(reqStr, Map.class);
-				String utxoKey = params.get("utxo");
-				String[] parts = utxoKey.split(":");
-				UTXO utxo = store.getOutputsWithHexStr(
-						net.bigtangle.core.Utils.HEX.decode(parts[0]), Long.parseLong(parts[1]));
-				if (utxo == null) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(404), watch, reqCmd);
-					break;
-				}
-				bridgeService.processPegIn(utxo, params.get("beneficiary"), store);
+				// Accept a SIGNED transaction that spends the source UTXO and
+				// pays the vault. BridgeService verifies the input scriptSig
+				// (ownership proof) before anything is locked — a raw outpoint +
+				// beneficiary is never enough to lock someone else's UTXO.
+				Transaction pegInTx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
+				bridgeService.processPegIn(pegInTx, store);
 				this.outPrintJSONString(httpServletResponse,
 						new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}

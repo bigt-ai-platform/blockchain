@@ -471,6 +471,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    chainId varchar(255) NOT NULL,\n"
             + "    utxoBlockHash varchar(255) NOT NULL,\n"
             + "    utxoIndex bigint NOT NULL,\n"
+            + "    pegInBlockHash varchar(255),\n"
             + "    amount bigint NOT NULL,\n"
             + "    tokenIdHex TEXT,\n"
             + "    ownerAddress varchar(255),\n"
@@ -555,6 +556,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
         sqlStatements.add(CREATE_ANCHOR_TABLE);
         sqlStatements.add(CREATE_VAULT_TABLE);
+        // Migration for databases created before pegInBlockHash existed.
+        sqlStatements.add("ALTER TABLE vault ADD COLUMN IF NOT EXISTS pegInBlockHash varchar(255)");
         return sqlStatements;
     }
 

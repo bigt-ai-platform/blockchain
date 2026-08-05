@@ -41,6 +41,9 @@ public class SlashingService {
 
     @PostConstruct
     public void restoreState() {
+        // Idempotent reload: rebuild from persisted state, never merge into a
+        // stale in-memory map.
+        voteHistory.clear();
         try {
             BlockStoreInterface store = storeService.getStore();
             try {

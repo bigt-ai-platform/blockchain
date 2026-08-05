@@ -199,7 +199,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			boolean checkFee = false;
 			if (block.getBlockType().equals(BlockType.BLOCKTYPE_BEACON)
 					|| block.getBlockType().equals(BlockType.BLOCKTYPE_SLASHING)
-					|| block.getBlockType().equals(BlockType.BLOCKTYPE_EXIT)) {
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_EXIT)
+					// CROSSTANGLE is a fee-less cross-chain VALUE message. It
+					// must reach the type-specific handler (L0AnchorHandler)
+					// instead of tripping NoFeeException before it runs, or the
+					// block is never validated on the peer/gossip receive path.
+					|| block.getBlockType().equals(BlockType.BLOCKTYPE_CROSSTANGLE)) {
 				checkFee = true;
 			}
 			// Reward minting is ONLY valid in the first beacon of an epoch
@@ -601,6 +606,25 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		try {
 			@SuppressWarnings("unchecked")
 			Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
+			if (Boolean.TRUE.equals(data.get("proposal"))) {
+				// Proposal equivocation: two different signed SlotDatas, same
+				// slot, both authentic under the elected proposer's key.
+				net.bigtangle.core.SlotData sd1 = Json.jsonmapper().convertValue(data.get("slotData1"),
+						net.bigtangle.core.SlotData.class);
+				net.bigtangle.core.SlotData sd2 = Json.jsonmapper().convertValue(data.get("slotData2"),
+						net.bigtangle.core.SlotData.class);
+				if (sd1 == null || sd2 == null || sd1.getSlot() != sd2.getSlot()) {
+					throw new BlockStoreException("SLASHING proposal proof malformed");
+				}
+				if (store != null) {
+					byte[] proposer = net.bigtangle.server.service.StakeService
+							.expectedProposerPubkey(sd1.getSlot(), store);
+					if (proposer == null || !net.bigtangle.server.service.StakeService
+							.isProposalEquivocation(sd1, sd2, proposer)) {
+						throw new BlockStoreException("SLASHING proposal proof is not an authenticated equivocation");
+					}
+				}
+			} else {
 			AttestationData att1 = Json.jsonmapper().convertValue(data.get("attestation1"), AttestationData.class);
 			AttestationData att2 = Json.jsonmapper().convertValue(data.get("attestation2"), AttestationData.class);
 			if (att1 == null || att2 == null || att1.getValidatorPubkey() == null
@@ -621,6 +645,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 							&& att1.getTargetEpoch() < att2.getTargetEpoch());
 			if (!doubleVote && !surround) {
 				throw new BlockStoreException("SLASHING proof does not form a double or surround vote");
+			}
 			}
 		} catch (BlockStoreException e) {
 			if (throwExceptions)
@@ -930,7 +955,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 */
 	private List<StakeRecord> validatorsForEpoch(long sourceEpoch, BlockStoreInterface store) {
 		List<StakeRecord> snap = net.bigtangle.server.service.SlotService.getValidatorSnapshot(sourceEpoch, store);
-		if (snap != null) {
+		// An empty snapshot is treated as missing (matching
+		// SlotService.selectionValidators): an empty frozen set would make every
+		// beacon of the epoch unproposable — an unrecoverable halt.
+		if (snap != null && !snap.isEmpty()) {
 			return snap;
 		}
 		try {

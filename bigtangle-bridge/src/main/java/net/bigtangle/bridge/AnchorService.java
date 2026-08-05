@@ -152,36 +152,19 @@ public class AnchorService {
     }
 
     /**
-     * Credits the anchor reward from the L0 fee pool to the L1 chainlength node.
-     * The chainlength node's address is derived from the configured public key.
-     * Creates a simple BLOCKTYPE_TRANSFER and saves it locally on L0 (permissive
-     * path — bridge blocks are not fee-bearing value transfers).
+     * Credits the anchor reward to the L1 chainlength node. DISABLED: the
+     * previous implementation minted an output-only transaction with no input
+     * (free inflation) — the configured fee-pool key was never used to actually
+     * spend pooled funds. Until the reward is backed by a real spend of
+     * fee-pool UTXOs (signed by the fee pool key), no unbacked value is created.
      */
     private void creditAnchorReward(AnchorRecord anchor, BlockStoreInterface store) throws Exception {
         long rewardAmount = anchorConfiguration.getRewardAmount();
-        if (rewardAmount <= 0) {
-            return;
-        }
         String feePoolPriKeyHex = anchorConfiguration.getFeePoolPriKeyHex();
-        String rewardPubKeyHex = anchorConfiguration.getPubKeyHex();
-        if (feePoolPriKeyHex == null || feePoolPriKeyHex.isEmpty()
-                || rewardPubKeyHex == null || rewardPubKeyHex.isEmpty()) {
-            logger.debug("Anchor reward not configured, skipping");
+        if (rewardAmount <= 0 || feePoolPriKeyHex == null || feePoolPriKeyHex.isEmpty()) {
             return;
         }
-
-        PQKey rewardKey = PQKey.fromPublicOnly(Utils.HEX.decode(rewardPubKeyHex));
-
-        Block b = cacheBlockPrototypeService.getBlockPrototype(store);
-        b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
-
-        Transaction tx = new Transaction(networkParameters);
-        Coin rewardCoin = Coin.valueOf(rewardAmount, NetworkParameters.BIGTANGLE_TOKENID);
-        tx.addOutput(rewardCoin, Address.fromHash160(networkParameters, Utils.sha256hash160(rewardKey.getPubKey())));
-        b.addTransaction(tx);
-
-        blockSaveService.saveBlockPermissive(b, store);
-        logger.info("Anchor reward of {} credited to chainlength node for chain {}",
+        logger.warn("Anchor reward of {} for chain {} is NOT credited: no backed fee-pool spend is implemented",
                 rewardAmount, anchor.getChainId());
     }
 
@@ -238,10 +221,22 @@ public class AnchorService {
         if (pubKeyHex == null || pubKeyHex.isEmpty()) {
             throw new BlockStoreException("anchor.pubKeyHex not configured; cannot verify anchor");
         }
-        PQKey signKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubKeyHex));
-        if (!anchor.verifySignature(signKey)) {
+        // Per-chain registry + M-of-N quorum: the anchor is valid if at least
+        // chainSignersRequired DISTINCT authorized keys for its chain signed it
+        // (falls back to the global key). A single compromised key cannot forge
+        // anchors for a chain with its own registry entry, and a threshold
+        // quorum requires multiple distinct signers when configured.
+        java.util.List<String> authorized = anchorConfiguration.getChainPubKeys(anchor.getChainId());
+        if (authorized.isEmpty()) {
+            throw new BlockStoreException("No authorized anchor signer for chain " + anchor.getChainId());
+        }
+        java.util.List<PQKey> signerKeys = new ArrayList<>();
+        for (String keyHex : authorized) {
+            signerKeys.add(PQKey.fromPublicOnly(Utils.HEX.decode(keyHex)));
+        }
+        if (!anchor.verifyQuorum(signerKeys, anchorConfiguration.getChainSignersRequired())) {
             throw new BlockStoreException(
-                    "Anchor signature verification failed for chain " + anchor.getChainId());
+                    "Anchor signature quorum verification failed for chain " + anchor.getChainId());
         }
 
         boolean spvValid = anchor.getSpvProof().verify(anchor.getL1RewardHeadHash(), anchor.getConfirmedRoot());
@@ -280,16 +275,40 @@ public class AnchorService {
     }
 
     /**
-     * Collects all confirmed L1 block hashes up to the given height to build
-     * the SPV Merkle tree. For simplicity, uses the confirmed reward blocks.
+     * Collects the hashes of all CONFIRMED reward blocks up to {@code upToHeight}
+     * (the anchored chainlength) by walking the confirmed reward chain back to
+     * genesis. The Merkle root over this set commits the anchor to the actual
+     * anchored chain state — not a 2-leaf stub of {head, genesis} — so the
+     * embedded "SPV proof" is a genuine inclusion proof over the anchored chain.
      */
     private List<Sha256Hash> collectConfirmedBlockHashes(long upToHeight, BlockStoreInterface store) throws Exception {
         List<Sha256Hash> hashes = new ArrayList<>();
         TXReward reward = cacheBlockService.getMaxConfirmedReward(store);
-        if (reward != null) {
-            hashes.add(reward.getBlockHash());
+        if (reward == null) {
+            return hashes;
         }
-        hashes.add(store.get(UtilGeneseBlock.createGenesis(networkParameters).getHash()).getHash());
+        Sha256Hash cursor = reward.getBlockHash();
+        java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+        while (cursor != null && visited.add(cursor)) {
+            Block b = store.get(cursor);
+            if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                break;
+            }
+            net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                    .parseChecked(b.getTransactions().get(0).getData());
+            if (ri == null) {
+                break;
+            }
+            if (ri.getChainlength() > upToHeight) {
+                cursor = ri.getPrevRewardHash(); // still above the anchored height
+                continue;
+            }
+            hashes.add(cursor);
+            if (ri.getChainlength() <= 1) {
+                break; // reached genesis
+            }
+            cursor = ri.getPrevRewardHash();
+        }
         Collections.sort(hashes);
         return hashes;
     }

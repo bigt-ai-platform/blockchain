@@ -69,6 +69,9 @@ public class PoSTest extends AbstractIntegrationTest {
     @Autowired
     private StoreService storeService;
 
+    @Autowired
+    private net.bigtangle.server.service.ValidatorDutyService validatorDutyService;
+
     private PQKey validatorKey;
 
     @Override
@@ -1000,5 +1003,299 @@ public class PoSTest extends AbstractIntegrationTest {
         casperService.processVote(bad2, store);
         assertTrue(store.getSummedAttestationVotes().isEmpty(),
                 "far-future vote must be rejected");
+    }
+
+    // ========= Validator snapshot robustness =========
+
+    @Test
+    public void testEmptyValidatorSnapshotDoesNotBrickEpoch() throws Exception {
+        // Nothing is frozen when the active set is empty at the boundary.
+        SlotService.snapshotValidatorsForEpoch(7, store);
+        assertNull(SlotService.getValidatorSnapshot(7, store),
+                "an empty active set must never be snapshotted");
+
+        // A pre-existing EMPTY snapshot (legacy/broken state) must be treated as
+        // missing: selection falls back to the live set instead of finding no
+        // proposer for every slot of the epoch.
+        store.savePosState("posvalidators", "validators_8", new byte[0]);
+        registerValidator();
+        List<StakeRecord> sel = SlotService.selectionValidators(320, store); // 320/32 - 2 = 8
+        assertFalse(sel.isEmpty(), "empty snapshot must fall back to the live set");
+        assertTrue(Arrays.equals(sel.get(0).getPubkey(), validatorKey.getPubKey()));
+    }
+
+    // ========= Withdrawal processing =========
+
+    @Test
+    public void testProcessWithdrawals() throws Exception {
+        registerValidator();
+        store.updateStakeExit(validatorKey.getPubKey(), 5);
+
+        stakeService.processWithdrawals(4, store);
+        assertNotNull(store.getStakeDeposit(validatorKey.getPubKey()),
+                "not yet withdrawable before the withdrawable epoch");
+
+        stakeService.processWithdrawals(5, store);
+        assertNull(store.getStakeDeposit(validatorKey.getPubKey()),
+                "bond released once the chain reaches the withdrawable epoch");
+    }
+
+    // ========= Proposal equivocation slashing =========
+
+    private Block makeSignedBeacon(Block prev, Sha256Hash prevRewardHash, long chainlength, long slot,
+            Sha256Hash parentHash) throws Exception {
+        return makeSignedBeaconWithKey(prev, prevRewardHash, chainlength, slot, parentHash, validatorKey);
+    }
+
+    private Block makeSignedBeaconWithKey(Block prev, Sha256Hash prevRewardHash, long chainlength, long slot,
+            Sha256Hash parentHash, PQKey signer) throws Exception {
+        Block b = Block.createBlock(networkParameters, prev, prev);
+        b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+        Transaction rtx = new Transaction(networkParameters);
+        RewardInfo ri = new RewardInfo();
+        ri.setChainlength(chainlength);
+        ri.setPrevRewardHash(prevRewardHash);
+        ri.setBlocks(new java.util.HashSet<>());
+        rtx.setData(ri.toByteArray());
+        b.addTransaction(rtx);
+        net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, slot / 32, 0, parentHash);
+        sd.setProposerSignature(signer.sign(sd.getMessageHash()).serialize());
+        Transaction slotTx = new Transaction(networkParameters);
+        slotTx.setDataClassName("SlotData");
+        slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
+        b.addTransaction(slotTx);
+        return b;
+    }
+
+    private void seedValidatorWithBeaconParent() throws Exception {
+        StakeRecord seeded = new StakeRecord(validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash());
+        seeded.setBlockHash(Sha256Hash.of("stakeblock".getBytes()));
+        seeded.setTxHash(Sha256Hash.of("staketx".getBytes()));
+        store.saveStakeDeposit(seeded);
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+        makeRewardBlock();
+        mcmcService.update(store);
+        blockGraph.confirmDo(store);
+    }
+
+    @Test
+    public void testProposalEquivocationSlashing() throws Exception {
+        seedValidatorWithBeaconParent();
+
+        long slot = 10_000L;
+        net.bigtangle.core.SlotData sd1 = new net.bigtangle.core.SlotData(slot, slot / 32, 0,
+                Sha256Hash.of("parentA".getBytes()));
+        sd1.setProposerSignature(validatorKey.sign(sd1.getMessageHash()).serialize());
+        net.bigtangle.core.SlotData sd2 = new net.bigtangle.core.SlotData(slot, slot / 32, 0,
+                Sha256Hash.of("parentB".getBytes()));
+        sd2.setProposerSignature(validatorKey.sign(sd2.getMessageHash()).serialize());
+
+        assertTrue(StakeService.isProposalEquivocation(sd1, sd2, validatorKey.getPubKey()),
+                "two different signed SlotDatas for one slot are equivocation");
+
+        net.bigtangle.core.SlotData sdOtherSlot = new net.bigtangle.core.SlotData(slot + 1,
+                (slot + 1) / 32, 0, Sha256Hash.of("parentA".getBytes()));
+        sdOtherSlot.setProposerSignature(validatorKey.sign(sdOtherSlot.getMessageHash()).serialize());
+        assertFalse(StakeService.isProposalEquivocation(sd1, sdOtherSlot, validatorKey.getPubKey()),
+                "different slots are not equivocation");
+        assertFalse(StakeService.isProposalEquivocation(sd1, sd1, validatorKey.getPubKey()),
+                "identical content is not equivocation");
+        assertFalse(StakeService.isProposalEquivocation(sd1, sd2, PQKey.createNew().getPubKey()),
+                "signatures under another key prove nothing");
+
+        stakeService.submitProposalSlashing(sd1, sd2, store);
+        StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
+        assertTrue(slashed.isSlashed(),
+                "validator must be slashed via the consensus proposal-equivocation block");
+    }
+
+    @Test
+    public void testSlotSightingDetectsEquivocation() throws Exception {
+        seedValidatorWithBeaconParent();
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+
+        long slot = 10_100L;
+        Block b1 = makeSignedBeacon(genesis, genesis.getHash(), 1, slot, Sha256Hash.of("pA".getBytes()));
+        store.put(b1);
+        stakeService.checkSlotSightingForEquivocation(b1, store);
+        assertFalse(store.getStakeDeposit(validatorKey.getPubKey()).isSlashed(),
+                "a single beacon for a slot is not an equivocation");
+
+        Block b2 = makeSignedBeacon(genesis, genesis.getHash(), 1, slot, Sha256Hash.of("pB".getBytes()));
+        store.put(b2);
+        stakeService.checkSlotSightingForEquivocation(b2, store);
+        assertTrue(store.getStakeDeposit(validatorKey.getPubKey()).isSlashed(),
+                "a second, different beacon for the same slot must slash the proposer");
+    }
+
+    @Test
+    public void testSightingIgnoresForgedBeaconsAndCaps() throws Exception {
+        seedValidatorWithBeaconParent();
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+
+        // A beacon whose SlotData is signed by a NON-elected key is never recorded.
+        long forgedSlot = 20_100L;
+        PQKey wrongKey = PQKey.createNew();
+        Block forged = makeSignedBeaconWithKey(genesis, genesis.getHash(), 1, forgedSlot,
+                Sha256Hash.of("fp".getBytes()), wrongKey);
+        store.put(forged);
+        stakeService.checkSlotSightingForEquivocation(forged, store);
+        assertNull(store.getPosState("pos", "slotsight_" + forgedSlot),
+                "a beacon not signed by the elected proposer must never be recorded");
+
+        // Sightings are authenticated against the ACTIVE set: after the
+        // equivocation (2nd beacon) slashes the proposer, it is no longer an
+        // active validator, so later beacons signed by it are ignored.
+        long capSlot = 20_200L;
+        for (int i = 1; i <= 5; i++) {
+            Block b = makeSignedBeacon(genesis, genesis.getHash(), 1, capSlot,
+                    Sha256Hash.of(("cap" + i).getBytes()));
+            store.put(b);
+            stakeService.checkSlotSightingForEquivocation(b, store);
+        }
+        String row = new String(store.getPosState("pos", "slotsight_" + capSlot),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(2, row.split(",").length,
+                "sightings stop once the equivocating proposer is slashed (out of the active set)");
+        assertTrue(store.getStakeDeposit(validatorKey.getPubKey()).isSlashed(),
+                "the equivocation was detected and slashed");
+    }
+
+    // ========= Slashing-protection (duty) tests =========
+
+    @Test
+    public void testDutyProtectionAcrossRestart() throws Exception {
+        seedValidatorWithBeaconParent();
+        validatorDutyService.setValidatorKey(validatorKey);
+
+        validatorDutyService.performDuty();
+        long slot = slotService.getCurrentSlot();
+
+        // After duty ran, re-proposing and conflicting re-attestation are refused.
+        assertFalse(validatorDutyService.mayPropose(slot), "no second proposal for the same slot");
+        assertFalse(validatorDutyService.mayPropose(slot - 1), "no proposal for an older slot");
+        assertTrue(validatorDutyService.mayPropose(slot + 32), "a future slot is fine");
+
+        // Simulate a restart: in-memory duty state is reloaded from pos_state.
+        validatorDutyService.restoreDutyState();
+
+        assertFalse(validatorDutyService.mayPropose(slot),
+                "a restarted validator must not re-propose the same slot (self-slash)");
+
+        Sha256Hash head = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+        Sha256Hash targetCkpt = casperService.ensureCheckpoint(slot / 32, store).getBlockHash();
+        assertTrue(validatorDutyService.mayAttest(slot, head, targetCkpt),
+                "byte-identical re-vote is safe");
+        assertFalse(validatorDutyService.mayAttest(slot, Sha256Hash.of("movedHead".getBytes()), targetCkpt),
+                "a restarted validator must not re-attest with a different head (double vote)");
+        assertFalse(validatorDutyService.mayAttest(slot - 1, head, targetCkpt),
+                "stale slot attestation refused");
+    }
+
+    @Test
+    public void testSlashingEvidenceSurvivesRestart() {
+        AttestationData a1 = new AttestationData();
+        a1.setSlot(5);
+        a1.setValidatorPubkey(validatorKey.getPubKey());
+        a1.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
+        a1.setSignature(validatorKey.sign(a1.getMessageHash()).serialize());
+
+        slashingService.checkDoubleVote(a1);
+
+        // Simulate a restart: in-memory history is rebuilt from persisted rows.
+        slashingService.restoreState();
+
+        AttestationData a2 = new AttestationData();
+        a2.setSlot(5);
+        a2.setValidatorPubkey(validatorKey.getPubKey());
+        a2.setBeaconBlockHash(Sha256Hash.of("headB".getBytes()));
+        a2.setSignature(validatorKey.sign(a2.getMessageHash()).serialize());
+
+        assertNotNull(slashingService.checkDoubleVote(a2),
+                "a double vote is still detected after a restart");
+    }
+
+    // ========= Inactivity leak =========
+
+    private void registerValidator(PQKey key) throws Exception {
+        store.saveStakeDeposit(new StakeRecord(key.getPubKey(), StakeService.MIN_STAKE,
+                key.getPubKeyHash()));
+        stakeService.activateValidator(key.getPubKey(), 0, store);
+    }
+
+    private AttestationData signedVoteFor(PQKey key, long slot, long sourceEpoch, long targetEpoch,
+            Sha256Hash source, Sha256Hash target) {
+        AttestationData att = new AttestationData();
+        att.setSlot(slot);
+        att.setEpoch(slot / 32);
+        att.setSourceEpoch(sourceEpoch);
+        att.setTargetEpoch(targetEpoch);
+        att.setBeaconBlockHash(target);
+        att.setSourceCheckpoint(source);
+        att.setTargetCheckpoint(target);
+        att.setValidatorPubkey(key.getPubKey());
+        att.setSignature(key.sign(att.getMessageHash()).serialize());
+        return att;
+    }
+
+    @Test
+    public void testInactivityLeakRestoresFinality() throws Exception {
+        // Four validators with equal stake; 2 going offline must first stall
+        // (while their votes are fresh) and then stop blocking justification
+        // once the inactivity window slides past their last vote.
+        PQKey v1 = PQKey.createNew();
+        PQKey v2 = PQKey.createNew();
+        PQKey v3 = PQKey.createNew();
+        PQKey v4 = PQKey.createNew();
+        for (PQKey k : List.of(v1, v2, v3, v4)) {
+            registerValidator(k);
+        }
+
+        CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+        assertNotNull(base);
+        // Contiguous epochs: e1's parent must exist (and be finalized) for e1
+        // to finalize — a gap would leave justified-only checkpoints behind.
+        long e1 = base.getEpoch() + 1;
+        long e2 = e1 + 1;
+        CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
+                Sha256Hash.of(("leak1-" + e1).getBytes()));
+        CasperService.Checkpoint cp2 = casperService.ensureCheckpoint(e2,
+                Sha256Hash.of(("leak2-" + e2).getBytes()));
+
+        // Healthy network: all four vote for e1 -> full-stake 2/3 justification.
+        for (PQKey k : List.of(v1, v2, v3, v4)) {
+            casperService.processVote(
+                    signedVoteFor(k, e1 * 32, base.getEpoch(), e1, base.getBlockHash(),
+                            cp1.getBlockHash()),
+                    store);
+        }
+        casperService.finalizeCheckpoint(e1, store);
+        assertTrue(casperService.isCheckpointJustified(e1), "all validators voting justifies");
+        assertTrue(casperService.isCheckpointFinalized(e1));
+
+        // v3 + v4 go offline: only half the stake votes for e2. While their
+        // e1 votes are still inside the activity window, this must STALL.
+        casperService.processVote(signedVoteFor(v1, e2 * 32, e1, e2, cp1.getBlockHash(),
+                cp2.getBlockHash()), store);
+        casperService.processVote(signedVoteFor(v2, e2 * 32, e1, e2, cp1.getBlockHash(),
+                cp2.getBlockHash()), store);
+        casperService.finalizeCheckpoint(e2, store);
+        assertFalse(casperService.isCheckpointJustified(e2),
+                "half the stake cannot justify while the offline half is still counted");
+
+        // The online validators keep voting for INACTIVITY_WINDOW_EPOCHS+1
+        // epochs; the offline validators then fall out of the denominator.
+        for (long e = e2 + 1; e <= e2 + CasperService.INACTIVITY_WINDOW_EPOCHS + 1; e++) {
+            casperService.processVote(signedVoteFor(v1, e * 32, e1, e, cp1.getBlockHash(),
+                    Sha256Hash.of(("leakT1-" + e).getBytes())), store);
+            casperService.processVote(signedVoteFor(v2, e * 32, e1, e, cp1.getBlockHash(),
+                    Sha256Hash.of(("leakT2-" + e).getBytes())), store);
+        }
+        casperService.finalizeCheckpoint(e2, store);
+        assertTrue(casperService.isCheckpointJustified(e2),
+                "finality resumes once offline stake drains out of the denominator");
+        assertTrue(casperService.isCheckpointFinalized(e2),
+                "the recovered checkpoint finalizes (parent is finalized)");
     }
 }

@@ -44,12 +44,9 @@ public class SlotService {
     public static final long SLOTS_PER_EPOCH = 32L;
     public static final long EPOCH_DURATION_MS = SLOT_DURATION_MS * SLOTS_PER_EPOCH;
 
-    /** Configurable slot/epoch parameters (pos.slotIntervalMs, pos.slotsPerEpoch). */
+    /** Configurable slot-tick interval (pos.slotIntervalMs); the EPOCH length is fixed at 32 slots. */
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SLOT_DURATION_MS;
-
-    @org.springframework.beans.factory.annotation.Value("${pos.slotsPerEpoch:32}")
-    private long slotsPerEpoch = SLOTS_PER_EPOCH;
 
     @Autowired
     private NetworkParameters networkParameters;
@@ -89,7 +86,7 @@ public class SlotService {
     }
 
     public long getCurrentEpoch() {
-        return getCurrentSlot() / slotsPerEpoch;
+        return getCurrentSlot() / SLOTS_PER_EPOCH;
     }
 
     /** Chain-derived epoch for an absolute wall-clock time (genesis-aligned). */
@@ -98,11 +95,11 @@ public class SlotService {
     }
 
     public long getSlotInEpoch(long slot) {
-        return slot % slotsPerEpoch;
+        return slot % SLOTS_PER_EPOCH;
     }
 
     public long getEpochForSlot(long slot) {
-        return slot / slotsPerEpoch;
+        return slot / SLOTS_PER_EPOCH;
     }
 
     /** Epoch-start (rewarding) beacons are proposed at slot % SLOTS_PER_EPOCH == 0. */
@@ -162,7 +159,10 @@ public class SlotService {
      */
     public static List<StakeRecord> selectionValidators(long slot, BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = getValidatorSnapshot(slot / 32 - 2, store);
-        if (validators == null) {
+        // An EMPTY snapshot is treated as missing: freezing an empty set would
+        // select no proposer for every slot of the epoch — and since snapshots
+        // are only written by confirming beacons, the chain could never recover.
+        if (validators == null || validators.isEmpty()) {
             validators = store.getActiveStakeDeposits();
         }
         return validators;
@@ -189,8 +189,15 @@ public class SlotService {
             return;
         }
         if (store.getPosState("posvalidators", "validators_" + epoch) == null) {
+            List<StakeRecord> active = store.getActiveStakeDeposits();
+            // Never freeze an EMPTY set: with no fallback the epoch two epochs
+            // later would have no proposer for any slot, no beacons would
+            // confirm, no new snapshot would be written — an unrecoverable halt.
+            if (active.isEmpty()) {
+                return;
+            }
             StringBuilder sb = new StringBuilder();
-            for (StakeRecord v : store.getActiveStakeDeposits()) {
+            for (StakeRecord v : active) {
                 if (sb.length() > 0) {
                     sb.append(';');
                 }
@@ -323,7 +330,8 @@ public class SlotService {
      * referenced/confirmed by a mid-epoch beacon is NOT yet rewarded and remains
      * eligible for this epoch's payout.
      */
-    private java.util.Set<Sha256Hash> previousEpochRewarded(Sha256Hash prevRewardHash, BlockStoreInterface store) {
+    private java.util.Set<Sha256Hash> previousEpochRewarded(Sha256Hash prevRewardHash, BlockStoreInterface store)
+            throws BlockStoreException {
         java.util.Set<Sha256Hash> rewarded = new java.util.HashSet<>();
         Sha256Hash cursor = prevRewardHash;
         java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
@@ -493,16 +501,74 @@ public class SlotService {
     public void processEpoch(long epoch, BlockStoreInterface store) throws Exception {
         casperService.finalizeCheckpoint(epoch, store);
 
-        // Withdrawals are driven by the CHAIN position converted to an epoch
-        // (reward chainlength / SLOTS_PER_EPOCH), not wall-clock time, so nodes
-        // releasing bonds agree on the threshold values.
-        long chainEpoch = 0;
-        TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
-        if (tip != null) {
-            chainEpoch = tip.getChainLength() / SLOTS_PER_EPOCH;
-        }
-        stakeService.processWithdrawals(chainEpoch, store);
+        // Withdrawals are NOT processed here: bond release must happen at the
+        // same chain position on every node, so it is driven by the confirm
+        // batch (BlockStoreService.confirmDo), never by this wall-clock tick —
+        // bond-spend validation reads the stake table, and a wall-clock release
+        // would diverge between nodes that ticked at different times.
+
+        prunePosState(store);
 
         log.info("Epoch {} ({}) processed: finality updated", epoch, networkParameters.getChainId());
+    }
+
+    /**
+     * Bounds pos_state growth: per-epoch records whose epoch is below the
+     * finalized floor (finalizedEpoch - margin) can no longer influence
+     * selection, finality or slashing and are deleted. Runs at each epoch tick,
+     * so the node-local side tables (mix/mixfinal/validator snapshots/used
+     * slots/checkpoints) never grow unboundedly with chain age.
+     */
+    private void prunePosState(BlockStoreInterface store) throws Exception {
+        long floor = 0;
+        if (casperService != null) {
+            net.bigtangle.server.service.CasperService.Checkpoint fin = casperService.getLastFinalizedCheckpoint();
+            if (fin != null) {
+                floor = Math.max(0, fin.epoch - 1); // keep one epoch of slack
+            }
+        }
+        // randao: per-epoch live mixes and immutable selection snapshots.
+        pruneEpochKeys(store, "randao", "mix_", floor);
+        pruneEpochKeys(store, "randao", "mixfinal_", floor);
+        // posvalidators: per-epoch active-validator snapshots.
+        pruneEpochKeys(store, "posvalidators", "validators_", floor);
+        // pos: per-slot used-slot bindings (proposal equivocation) below the floor.
+        pruneSlotKeys(store, "pos", "usedslot_", floor);
+        // casper: per-epoch checkpoints below the floor (genesis is retained).
+        pruneEpochKeys(store, "casper", "ckpt_", floor);
+    }
+
+    private void pruneEpochKeys(BlockStoreInterface store, String service, String prefix, long floor)
+            throws Exception {
+        for (String key : store.getPosStateByService(service).keySet()) {
+            if (!key.startsWith(prefix)) {
+                continue;
+            }
+            try {
+                long epoch = Long.parseLong(key.substring(prefix.length()));
+                if (epoch < floor) {
+                    store.deletePosState(service, key);
+                }
+            } catch (NumberFormatException ignored) {
+                // non-numeric key — leave it
+            }
+        }
+    }
+
+    private void pruneSlotKeys(BlockStoreInterface store, String service, String prefix, long floor)
+            throws Exception {
+        for (String key : store.getPosStateByService(service).keySet()) {
+            if (!key.startsWith(prefix)) {
+                continue;
+            }
+            try {
+                long slot = Long.parseLong(key.substring(prefix.length()));
+                if (slot / SLOTS_PER_EPOCH < floor) {
+                    store.deletePosState(service, key);
+                }
+            } catch (NumberFormatException ignored) {
+                // non-numeric key — leave it
+            }
+        }
     }
 }

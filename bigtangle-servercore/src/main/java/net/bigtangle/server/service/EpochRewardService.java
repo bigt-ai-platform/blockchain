@@ -29,6 +29,11 @@ public class EpochRewardService {
 
     private static final Logger log = LoggerFactory.getLogger(EpochRewardService.class);
 
+    /** Max reward recipients paid out by a single epoch-start beacon. */
+    public static final int MAX_EPOCH_REWARD_RECIPIENTS = 5000;
+    /** Reward outputs packed per transaction (bounds tx count / block overhead). */
+    public static final int OUTPUTS_PER_REWARD_TX = 50;
+
     @Autowired
     private NetworkParameters networkParameters;
 
@@ -37,9 +42,12 @@ public class EpochRewardService {
      * entry per validator, proportional to stake, over the GIVEN validator list
      * (the epoch's selection snapshot — never a node-local live set, so the
      * proposer and every validator compute the identical split). The last
-     * validator in list order receives the rounding remainder. Validators with
-     * a zero share are skipped. This is the single source of truth used by both
-     * the proposer (to build the reward transactions) and beacon validation (to
+     * recipient in order receives the rounding remainder. Validators with a zero
+     * share are skipped. When the validator set exceeds
+     * {@link #MAX_EPOCH_REWARD_RECIPIENTS}, the TOP recipients by stake are paid
+     * (deterministic tie-break), so an oversized set can never overflow the
+     * beacon block size. This is the single source of truth used by both the
+     * proposer (to build the reward transactions) and beacon validation (to
      * verify them exactly).
      */
     public static java.util.Map<String, BigInteger> planEpochRewards(BigInteger totalFees,
@@ -49,18 +57,27 @@ public class EpochRewardService {
                 || totalFees.compareTo(BigInteger.ZERO) <= 0) {
             return plan;
         }
+        List<StakeRecord> recipients = validators;
+        if (validators.size() > MAX_EPOCH_REWARD_RECIPIENTS) {
+            // Deterministic cap: highest stake first, pubkey tie-break.
+            List<StakeRecord> sorted = new ArrayList<>(validators);
+            sorted.sort(java.util.Comparator
+                    .comparing((StakeRecord v) -> v.getAmount()).reversed()
+                    .thenComparing(v -> Utils.HEX.encode(v.getPubkey())));
+            recipients = sorted.subList(0, MAX_EPOCH_REWARD_RECIPIENTS);
+        }
         BigInteger totalStake = BigInteger.ZERO;
-        for (StakeRecord v : validators) {
+        for (StakeRecord v : recipients) {
             totalStake = totalStake.add(v.getAmount());
         }
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
             return plan;
         }
         BigInteger distributed = BigInteger.ZERO;
-        for (int i = 0; i < validators.size(); i++) {
-            StakeRecord v = validators.get(i);
+        for (int i = 0; i < recipients.size(); i++) {
+            StakeRecord v = recipients.get(i);
             BigInteger reward = v.getAmount().multiply(totalFees).divide(totalStake);
-            if (i == validators.size() - 1) {
+            if (i == recipients.size() - 1) {
                 reward = totalFees.subtract(distributed); // remainder to last
             }
             if (reward.signum() <= 0) {
@@ -74,19 +91,26 @@ public class EpochRewardService {
     }
 
     /**
-     * Builds one value-creation transaction per validator per
-     * {@link #planEpochRewards}. No block is created here — the caller (the
-     * elected proposer) embeds these transactions in its beacon.
+     * Builds reward transactions for {@link #planEpochRewards}, packing up to
+     * {@link #OUTPUTS_PER_REWARD_TX} outputs per transaction so a large
+     * validator set produces few transactions. No block is created here — the
+     * caller (the elected proposer) embeds these transactions in its beacon.
      */
     public List<Transaction> buildEpochRewardTransactions(BigInteger totalFees,
             List<StakeRecord> validators) throws Exception {
         java.util.Map<String, BigInteger> plan = planEpochRewards(totalFees, validators, networkParameters);
         List<Transaction> txs = new ArrayList<>();
+        Transaction current = null;
+        int outputsInCurrent = 0;
         for (java.util.Map.Entry<String, BigInteger> e : plan.entrySet()) {
-            Transaction tx = new Transaction(networkParameters);
-            tx.addOutput(new Coin(e.getValue(), NetworkParameters.BIGTANGLE_TOKENID),
+            if (current == null || outputsInCurrent >= OUTPUTS_PER_REWARD_TX) {
+                current = new Transaction(networkParameters);
+                txs.add(current);
+                outputsInCurrent = 0;
+            }
+            current.addOutput(new Coin(e.getValue(), NetworkParameters.BIGTANGLE_TOKENID),
                     net.bigtangle.core.Address.fromBase58(networkParameters, e.getKey()));
-            txs.add(tx);
+            outputsInCurrent++;
         }
         return txs;
     }

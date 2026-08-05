@@ -32,8 +32,6 @@ public class ScheduleConfiguration {
 
     @Value("${pos.slotIntervalMs:12000}")
     long posSlotIntervalMs;
-    @Value("${pos.slotsPerEpoch:32}")
-    long posSlotsPerEpoch;
 
     public boolean isChainlength_active() {
         return chainlength_active;
@@ -95,8 +93,8 @@ public class ScheduleConfiguration {
     public void setPosEnabled(boolean v) { }
     public long getPosSlotIntervalMs() { return posSlotIntervalMs; }
     public void setPosSlotIntervalMs(long v) { this.posSlotIntervalMs = v; }
-    public long getPosSlotsPerEpoch() { return posSlotsPerEpoch; }
-    public void setPosSlotsPerEpoch(long v) { this.posSlotsPerEpoch = v; }
+    public long getPosSlotsPerEpoch() { return net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH; }
+    public void setPosSlotsPerEpoch(long v) { /* epoch length is fixed at 32 slots */ }
 
 	@Override
 	public String toString() {

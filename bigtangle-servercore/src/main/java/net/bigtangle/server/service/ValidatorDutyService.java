@@ -58,6 +58,15 @@ public class ValidatorDutyService {
 
     private long lastDutySlot = -1;
 
+    // Slashing-protection state (PERSISTED — survives restarts). A validator
+    // that restarts mid-slot must never sign a second, different beacon or
+    // attestation for an already-signed slot: that is equivocation and gets
+    // slashed. These records are the local slashing-protection DB.
+    private long lastProposedSlot = -1;
+    private long lastAttestedSlot = -1;
+    private Sha256Hash lastAttestedHead;
+    private Sha256Hash lastAttestedTarget;
+
     @PostConstruct
     public void init() {
         if (configuredValidatorKey != null && !configuredValidatorKey.isEmpty()) {
@@ -66,6 +75,80 @@ public class ValidatorDutyService {
             } catch (Exception e) {
                 log.warn("Invalid pos.validatorKey config (expected 64-hex ML-DSA-only or 128-hex dual seed): {}", e.getMessage());
             }
+        }
+        restoreDutyState();
+    }
+
+    /** (Re)loads the persisted slashing-protection records, replacing in-memory state. */
+    public void restoreDutyState() {
+        lastProposedSlot = -1;
+        lastAttestedSlot = -1;
+        lastAttestedHead = null;
+        lastAttestedTarget = null;
+        try {
+            BlockStoreInterface store = storeService.getStore();
+            try {
+                byte[] prop = store.getPosState("duty", "proposed_slot");
+                if (prop != null) {
+                    lastProposedSlot = Long.parseLong(new String(prop, java.nio.charset.StandardCharsets.UTF_8));
+                }
+                byte[] att = store.getPosState("duty", "attested");
+                if (att != null) {
+                    String[] p = new String(att, java.nio.charset.StandardCharsets.UTF_8).split(":");
+                    if (p.length == 3) {
+                        lastAttestedSlot = Long.parseLong(p[0]);
+                        lastAttestedHead = Sha256Hash.wrap(Utils.HEX.decode(p[1]));
+                        lastAttestedTarget = Sha256Hash.wrap(Utils.HEX.decode(p[2]));
+                    }
+                }
+            } finally {
+                store.close();
+            }
+        } catch (Exception e) {
+            log.trace("No prior duty state to restore", e);
+        }
+    }
+
+    /** Slashing protection: never sign a beacon for a slot at or below the last proposed one. */
+    public boolean mayPropose(long slot) {
+        return slot > lastProposedSlot;
+    }
+
+    /**
+     * Slashing protection: one attestation per slot. Re-attesting a slot is only
+     * permitted with BYTE-IDENTICAL content (same head and target) — any other
+     * re-vote for the same slot is a slashable double vote.
+     */
+    public boolean mayAttest(long slot, Sha256Hash head, Sha256Hash target) {
+        if (slot > lastAttestedSlot) {
+            return true;
+        }
+        if (slot < lastAttestedSlot || lastAttestedHead == null || lastAttestedTarget == null) {
+            return false;
+        }
+        return head.equals(lastAttestedHead) && target.equals(lastAttestedTarget);
+    }
+
+    private void recordProposed(long slot, BlockStoreInterface store) {
+        lastProposedSlot = slot;
+        try {
+            store.savePosState("duty", "proposed_slot",
+                    String.valueOf(slot).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.warn("Failed to persist proposal duty for slot {}", slot, e);
+        }
+    }
+
+    private void recordAttested(long slot, Sha256Hash head, Sha256Hash target, BlockStoreInterface store) {
+        lastAttestedSlot = slot;
+        lastAttestedHead = head;
+        lastAttestedTarget = target;
+        try {
+            store.savePosState("duty", "attested",
+                    (slot + ":" + head.toString() + ":" + target.toString())
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.warn("Failed to persist attestation duty for slot {}", slot, e);
         }
     }
 
@@ -86,10 +169,12 @@ public class ValidatorDutyService {
         // can be shorter than SLOT_DURATION_MS). Proposing/attesting more than
         // once per slot creates multiple beacons for the same slot, which the
         // slashing detector treats as a double vote. Perform duty once per slot.
+        // lastDutySlot is set AFTER the duty ran: a failed duty may be retried
+        // within the slot — the persisted slashing-protection records make any
+        // retry safe.
         if (slot == lastDutySlot) {
             return;
         }
-        lastDutySlot = slot;
         long epoch = slotService.getEpochForSlot(slot);
 
         boolean isProposer = false;
@@ -108,13 +193,22 @@ public class ValidatorDutyService {
         if (isProposer) {
             store = storeService.getStore();
             try {
-                slotService.proposeBeaconBlock(slot, validatorKey, store);
+                if (mayPropose(slot)) {
+                    // Record BEFORE signing: a crash afterwards costs one missed
+                    // slot; an unrecorded proposal followed by a crash could
+                    // produce a second signed beacon for the slot (self-slash).
+                    recordProposed(slot, store);
+                    slotService.proposeBeaconBlock(slot, validatorKey, store);
+                } else {
+                    log.debug("Slashing protection: already proposed for slot {}, skipping", slot);
+                }
             } finally {
                 store.close();
             }
         }
 
         attest(slot, epoch);
+        lastDutySlot = slot;
     }
 
     private void attest(long slot, long epoch) throws Exception {
@@ -127,6 +221,16 @@ public class ValidatorDutyService {
 
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
             long sourceEpoch = justified != null ? justified.epoch : Math.max(0, epoch - 1);
+            Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(epoch, store).getBlockHash();
+
+            // Slashing protection: one attestation per slot; only a
+            // byte-identical re-vote is safe after a restart.
+            if (!mayAttest(slot, beaconHead, targetCheckpoint)) {
+                log.warn("Slashing protection: refusing to re-attest slot {} with different content", slot);
+                return;
+            }
+            // Record BEFORE signing (same crash-safety rationale as proposals).
+            recordAttested(slot, beaconHead, targetCheckpoint, store);
 
             AttestationData att = new AttestationData();
             att.setSlot(slot);
@@ -135,7 +239,7 @@ public class ValidatorDutyService {
             att.setTargetEpoch(epoch);
             att.setBeaconBlockHash(beaconHead);
             att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
-            att.setTargetCheckpoint(casperService.ensureCheckpoint(epoch, store).getBlockHash());
+            att.setTargetCheckpoint(targetCheckpoint);
             att.setValidatorPubkey(validatorKey.getPubKey());
 
             // Signature covers the FULL attestation message (slot, epoch,
@@ -145,12 +249,19 @@ public class ValidatorDutyService {
 
             casperService.processVote(att, store);
 
-            String requester = serverConfiguration.getRequester();
-            String contextRoot = requester != null && !requester.isEmpty() ? requester
-                    : "http://localhost:" + serverConfiguration.getPort() + "/";
-            if (!contextRoot.endsWith("/")) contextRoot += "/";
-            OkHttp3Util.post(contextRoot + ReqCmd.submitAttestation.name(),
-                    Json.jsonmapper().writeValueAsBytes(att));
+            // Best-effort loopback broadcast: the vote is already processed
+            // locally (processVote also gossips) — a post failure must never
+            // fail the duty.
+            try {
+                String requester = serverConfiguration.getRequester();
+                String contextRoot = requester != null && !requester.isEmpty() ? requester
+                        : "http://localhost:" + serverConfiguration.getPort() + "/";
+                if (!contextRoot.endsWith("/")) contextRoot += "/";
+                OkHttp3Util.post(contextRoot + ReqCmd.submitAttestation.name(),
+                        Json.jsonmapper().writeValueAsBytes(att));
+            } catch (Exception e) {
+                log.debug("Loopback attestation post failed: {}", e.getMessage());
+            }
         } finally {
             store.close();
         }

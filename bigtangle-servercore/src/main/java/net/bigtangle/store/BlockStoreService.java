@@ -345,20 +345,31 @@ public class BlockStoreService {
 
 	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
 			boolean allowMissingPredecessor, boolean batch) throws BlockStoreException {
- 	 	log.debug("addNonChain"+ block.toString());
+	 	log.debug("addNonChain"+ block.toString());
 		if (!batch) {
 			block.verifyHeader();
 			block.verifyTransactions();
 		}
 
+		// CROSSTANGLE blocks carry cross-chain value/messages (anchors, peg-in/out):
+		// they MUST pass real consensus validation (L0AnchorHandler), so a failure —
+		// whether reported as a fail state or thrown as an exception — is rejected
+		// regardless of allowUnsolid. The gossip/Kafka/batch receive paths use
+		// allowUnsolid=true; without this guard an invalid block would be swallowed
+		// and saved solid with zero validation.
+		boolean crosstangle = BlockType.BLOCKTYPE_CROSSTANGLE == block.getBlockType();
 		// allow non chain block predecessors not solid
 		SolidityState solidityState = new SolidityState(State.Success, null, false);
 		try {
 			solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 					.checkSolidity(block, !allowUnsolid, blockStore, allowMissingPredecessor, batch);
 		} catch (Exception e) {
-			if (!allowUnsolid)
+			if (crosstangle || !allowUnsolid)
 				throw e;
+		}
+		if (crosstangle && solidityState.isFailState()) {
+			throw new VerificationException("CROSSTANGLE block failed consensus validation: "
+					+ solidityState.getState() + " " + block.getHashAsString());
 		}
 		if (solidityState.isFailState()) {
 			// log.debug("{} block {}", solidityState, block);
@@ -436,6 +447,20 @@ public class BlockStoreService {
 						finalized.getBlockHash(), store)) {
 					log.info("Reorg refused: new chain does not descend from finalized checkpoint epoch {} ({})",
 							finalized.getEpoch(), finalized.getBlockHash());
+					haveNewBestChain = false;
+				}
+				// ATTESTATION-WEIGHTED fork choice: the canonical reward chain
+				// must extend the highest JUSTIFIED checkpoint (justification is
+				// stake-weighted via Casper). A longer fork that does NOT descend
+				// from the highest justified checkpoint cannot win — this is what
+				// gives attestations influence over which reward chain is best.
+				net.bigtangle.server.service.CasperService.Checkpoint justified = casper.getJustifiedCheckpoint();
+				if (haveNewBestChain && justified != null && store.get(justified.getBlockHash()) != null
+						&& !casper.descendsFrom(
+								serviceVerifyReward.getRewardInfo(block).getPrevRewardHash(),
+								justified.getBlockHash(), store)) {
+					log.info("Reorg refused: new chain does not descend from justified checkpoint epoch {} ({})",
+							justified.getEpoch(), justified.getBlockHash());
 					haveNewBestChain = false;
 				}
 			}
@@ -606,6 +631,7 @@ public class BlockStoreService {
 			// every node derives the same immutable mixfinal value.
 			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
 			java.util.Set<Long> touchedMixEpochs = new java.util.HashSet<>();
+			java.util.Set<Long> finalityEpochs = new java.util.HashSet<>();
 			if (randaoService != null) {
 				List<Object[]> chainBeacons = new ArrayList<>(); // {chainlength, beacon}
 				for (BlockWrap b : blocks) {
@@ -649,28 +675,12 @@ public class BlockStoreService {
 						if (slotService != null) {
 							slotService.snapshotValidatorsForEpoch(sd.getSlot() / 32 - 1, blockStore);
 						}
-						// Proposal equivocation: each slot may be used by exactly one
-						// confirmed beacon. Recording the slot -> beacon binding here
-						// lets validation reject a second beacon for the same slot.
-						recordUsedSlot(blk.getHash(), sd.getSlot(), blockStore);
-						// Chain-driven finality: evaluating at a CONFIRMED chain
-						// position makes the evaluation point identical on every
-						// node (wall-clock epoch ticks are only a backstop). The
-						// two most recently completed slot-epochs have complete
-						// votes; finalizeCheckpoint is idempotent and monotone.
-						// A failure here must NOT abort the confirm batch (it is a
-						// local-view update, re-evaluated at the next beacon).
-						net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
-						if (casper != null) {
-							try {
-								long slotEpoch = sd.getSlot() / 32;
-								for (long e = Math.max(0, slotEpoch - 2); e < slotEpoch; e++) {
-									casper.finalizeCheckpoint(e, blockStore);
-								}
-							} catch (Exception e) {
-								log.warn("Checkpoint finalization failed at beacon {}: {}",
-										blk.getHashAsString(), e.getMessage());
-							}
+						// Chain-driven finality is evaluated AFTER the commit
+						// (see below): the two most recently completed slot-epochs
+						// have complete votes. Only collect the epochs here.
+						long slotEpoch = sd.getSlot() / 32;
+						for (long e = Math.max(0, slotEpoch - 2); e < slotEpoch; e++) {
+							finalityEpochs.add(e);
 						}
 					}
 				}
@@ -743,6 +753,24 @@ public class BlockStoreService {
 						}
 					}
 				}
+
+				// Bond release is CHAIN-DRIVEN: when this batch's confirmations
+				// push the chain past a withdrawable epoch, the stake record is
+				// released inside the same batch — at the same chain position on
+				// every node. A wall-clock-driven release would free the bond at
+				// different local times on different nodes, and bond-spend
+				// validation reads this table (validation divergence).
+				if (!beacons.isEmpty()) {
+					long batchChainEpoch = (Long) beacons.get(beacons.size() - 1)[0]
+							/ net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+					try {
+						stakeService.processWithdrawals(batchChainEpoch, blockStore);
+					} catch (Exception e) {
+						// Idempotent — re-executed by the next confirm batch.
+						log.warn("Withdrawal processing failed at chain epoch {}: {}",
+								batchChainEpoch, e.getMessage());
+					}
+				}
 			}
 
 			blockStore.commitDatabaseBatchWrite();
@@ -753,6 +781,25 @@ public class BlockStoreService {
 			if (randaoService != null) {
 				for (Long epoch : touchedMixEpochs) {
 					randaoService.reloadMix(epoch);
+				}
+			}
+
+			// Chain-driven finality AFTER commit: checkpoint justified/finalized
+			// flags flip in memory only now, so an aborted batch can never leave
+			// phantom in-memory finality that the reorg guard would enforce.
+			// Evaluating at a confirmed chain position makes the evaluation point
+			// identical on every node (wall-clock epoch ticks are only a
+			// backstop); finalizeCheckpoint is idempotent and monotone, and a
+			// failure here must not fail the (already committed) batch — it is
+			// re-evaluated at the next confirmed beacon.
+			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+			if (casper != null) {
+				for (Long e : finalityEpochs) {
+					try {
+						casper.finalizeCheckpoint(e, blockStore);
+					} catch (Exception ex) {
+						log.warn("Checkpoint finalization failed for epoch {}: {}", e, ex.getMessage());
+					}
 				}
 			}
 		} catch (Exception e) {
@@ -825,12 +872,6 @@ public class BlockStoreService {
 						java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
 						if (epochs != null) {
 							touchedUnconfirmEpochs.addAll(epochs);
-						}
-						// Revert the slot -> beacon binding so a re-confirmed beacon
-						// for the same slot is not flagged as a double proposal.
-						net.bigtangle.core.SlotData sd = slotDataOf(blk);
-						if (sd != null) {
-							unrecordUsedSlot(blk.getHash(), sd.getSlot(), blockStore);
 						}
 					}
 				}
@@ -989,38 +1030,6 @@ public class BlockStoreService {
 			log.warn("Failed to parse SlotData for beacon {}: {}", blk.getHashAsString(), e.getMessage());
 		}
 		return null;
-	}
-
-	/**
-	 * Records the slot -> beacon binding at confirmation (proposal-equivocation
-	 * detection). If the slot was already used by a DIFFERENT confirmed beacon,
-	 * the proposer equivocated (two signed SlotDatas for the same slot) — logged
-	 * here; validation also rejects the second beacon outright.
-	 */
-	private void recordUsedSlot(Sha256Hash beaconHash, long slot, BlockStoreInterface blockStore) {
-		try {
-			byte[] existing = blockStore.getPosState("pos", "usedslot_" + slot);
-			if (existing == null) {
-				blockStore.savePosState("pos", "usedslot_" + slot, beaconHash.getBytes());
-			} else if (!java.util.Arrays.equals(existing, beaconHash.getBytes())) {
-				log.warn("PROPOSAL EQUIVOCATION: slot {} used by both {} and {}",
-						slot, Sha256Hash.wrap(existing), beaconHash);
-			}
-		} catch (Exception e) {
-			log.warn("Failed to record used slot {}: {}", slot, e.getMessage());
-		}
-	}
-
-	/** Reverts the slot -> beacon binding on unconfirm (reorg). */
-	private void unrecordUsedSlot(Sha256Hash beaconHash, long slot, BlockStoreInterface blockStore) {
-		try {
-			byte[] existing = blockStore.getPosState("pos", "usedslot_" + slot);
-			if (existing != null && java.util.Arrays.equals(existing, beaconHash.getBytes())) {
-				blockStore.deletePosState("pos", "usedslot_" + slot);
-			}
-		} catch (Exception e) {
-			log.warn("Failed to unrecord used slot {}: {}", slot, e.getMessage());
-		}
 	}
 
 	public boolean checkChainHeadExecution(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)
