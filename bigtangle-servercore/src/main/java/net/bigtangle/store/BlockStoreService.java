@@ -428,8 +428,12 @@ public class BlockStoreService {
 				// refused.
 				boolean anchorKnown = finalized != null
 						&& store.get(finalized.getBlockHash()) != null;
+				// Walk from the new block's prevRewardHash: the tip itself is not
+				// yet connected (store.put happens in connect below), so starting
+				// at block.getHash() would resolve nothing and refuse every reorg.
 				if (anchorKnown && !casper.descendsFrom(
-						block.getHash(), finalized.getBlockHash(), store)) {
+						serviceVerifyReward.getRewardInfo(block).getPrevRewardHash(),
+						finalized.getBlockHash(), store)) {
 					log.info("Reorg refused: new chain does not descend from finalized checkpoint epoch {} ({})",
 							finalized.getEpoch(), finalized.getBlockHash());
 					haveNewBestChain = false;
@@ -645,6 +649,29 @@ public class BlockStoreService {
 						if (slotService != null) {
 							slotService.snapshotValidatorsForEpoch(sd.getSlot() / 32 - 1, blockStore);
 						}
+						// Proposal equivocation: each slot may be used by exactly one
+						// confirmed beacon. Recording the slot -> beacon binding here
+						// lets validation reject a second beacon for the same slot.
+						recordUsedSlot(blk.getHash(), sd.getSlot(), blockStore);
+						// Chain-driven finality: evaluating at a CONFIRMED chain
+						// position makes the evaluation point identical on every
+						// node (wall-clock epoch ticks are only a backstop). The
+						// two most recently completed slot-epochs have complete
+						// votes; finalizeCheckpoint is idempotent and monotone.
+						// A failure here must NOT abort the confirm batch (it is a
+						// local-view update, re-evaluated at the next beacon).
+						net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+						if (casper != null) {
+							try {
+								long slotEpoch = sd.getSlot() / 32;
+								for (long e = Math.max(0, slotEpoch - 2); e < slotEpoch; e++) {
+									casper.finalizeCheckpoint(e, blockStore);
+								}
+							} catch (Exception e) {
+								log.warn("Checkpoint finalization failed at beacon {}: {}",
+										blk.getHashAsString(), e.getMessage());
+							}
+						}
 					}
 				}
 			}
@@ -798,6 +825,12 @@ public class BlockStoreService {
 						java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
 						if (epochs != null) {
 							touchedUnconfirmEpochs.addAll(epochs);
+						}
+						// Revert the slot -> beacon binding so a re-confirmed beacon
+						// for the same slot is not flagged as a double proposal.
+						net.bigtangle.core.SlotData sd = slotDataOf(blk);
+						if (sd != null) {
+							unrecordUsedSlot(blk.getHash(), sd.getSlot(), blockStore);
 						}
 					}
 				}
@@ -956,6 +989,38 @@ public class BlockStoreService {
 			log.warn("Failed to parse SlotData for beacon {}: {}", blk.getHashAsString(), e.getMessage());
 		}
 		return null;
+	}
+
+	/**
+	 * Records the slot -> beacon binding at confirmation (proposal-equivocation
+	 * detection). If the slot was already used by a DIFFERENT confirmed beacon,
+	 * the proposer equivocated (two signed SlotDatas for the same slot) — logged
+	 * here; validation also rejects the second beacon outright.
+	 */
+	private void recordUsedSlot(Sha256Hash beaconHash, long slot, BlockStoreInterface blockStore) {
+		try {
+			byte[] existing = blockStore.getPosState("pos", "usedslot_" + slot);
+			if (existing == null) {
+				blockStore.savePosState("pos", "usedslot_" + slot, beaconHash.getBytes());
+			} else if (!java.util.Arrays.equals(existing, beaconHash.getBytes())) {
+				log.warn("PROPOSAL EQUIVOCATION: slot {} used by both {} and {}",
+						slot, Sha256Hash.wrap(existing), beaconHash);
+			}
+		} catch (Exception e) {
+			log.warn("Failed to record used slot {}: {}", slot, e.getMessage());
+		}
+	}
+
+	/** Reverts the slot -> beacon binding on unconfirm (reorg). */
+	private void unrecordUsedSlot(Sha256Hash beaconHash, long slot, BlockStoreInterface blockStore) {
+		try {
+			byte[] existing = blockStore.getPosState("pos", "usedslot_" + slot);
+			if (existing != null && java.util.Arrays.equals(existing, beaconHash.getBytes())) {
+				blockStore.deletePosState("pos", "usedslot_" + slot);
+			}
+		} catch (Exception e) {
+			log.warn("Failed to unrecord used slot {}: {}", slot, e.getMessage());
+		}
 	}
 
 	public boolean checkChainHeadExecution(Block block, ServiceBaseConnect serviceBase, BlockStoreInterface store)

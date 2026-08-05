@@ -33,45 +33,60 @@ public class EpochRewardService {
     private NetworkParameters networkParameters;
 
     /**
-     * Builds one value-creation transaction per active validator, proportional
-     * to stake, for the given accumulated fee pool. No block is created here —
-     * the caller (the elected proposer) embeds these transactions in its beacon.
+     * The deterministic epoch-reward split: one (recipient address, BIG amount)
+     * entry per validator, proportional to stake, over the GIVEN validator list
+     * (the epoch's selection snapshot — never a node-local live set, so the
+     * proposer and every validator compute the identical split). The last
+     * validator in list order receives the rounding remainder. Validators with
+     * a zero share are skipped. This is the single source of truth used by both
+     * the proposer (to build the reward transactions) and beacon validation (to
+     * verify them exactly).
      */
-    public List<Transaction> buildEpochRewardTransactions(BigInteger totalFees,
-            BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
-        if (validators.isEmpty() || totalFees.compareTo(BigInteger.ZERO) <= 0) {
-            return List.of();
+    public static java.util.Map<String, BigInteger> planEpochRewards(BigInteger totalFees,
+            List<StakeRecord> validators, NetworkParameters params) {
+        java.util.Map<String, BigInteger> plan = new java.util.LinkedHashMap<>();
+        if (validators == null || validators.isEmpty() || totalFees == null
+                || totalFees.compareTo(BigInteger.ZERO) <= 0) {
+            return plan;
         }
-
         BigInteger totalStake = BigInteger.ZERO;
         for (StakeRecord v : validators) {
             totalStake = totalStake.add(v.getAmount());
         }
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
-            return List.of();
+            return plan;
         }
-
-        List<Transaction> txs = new ArrayList<>();
-        long pool = totalFees.longValue();
-        long distributed = 0;
-
+        BigInteger distributed = BigInteger.ZERO;
         for (int i = 0; i < validators.size(); i++) {
             StakeRecord v = validators.get(i);
-            long reward = v.getAmount().multiply(BigInteger.valueOf(pool))
-                    .divide(totalStake).longValue();
+            BigInteger reward = v.getAmount().multiply(totalFees).divide(totalStake);
             if (i == validators.size() - 1) {
-                reward = pool - distributed; // remainder to last
+                reward = totalFees.subtract(distributed); // remainder to last
             }
-            if (reward <= 0) {
+            if (reward.signum() <= 0) {
                 continue;
             }
+            plan.put(net.bigtangle.core.Address
+                    .fromHash160(params, Utils.sha256hash160(v.getPubkey())).toBase58(), reward);
+            distributed = distributed.add(reward);
+        }
+        return plan;
+    }
+
+    /**
+     * Builds one value-creation transaction per validator per
+     * {@link #planEpochRewards}. No block is created here — the caller (the
+     * elected proposer) embeds these transactions in its beacon.
+     */
+    public List<Transaction> buildEpochRewardTransactions(BigInteger totalFees,
+            List<StakeRecord> validators) throws Exception {
+        java.util.Map<String, BigInteger> plan = planEpochRewards(totalFees, validators, networkParameters);
+        List<Transaction> txs = new ArrayList<>();
+        for (java.util.Map.Entry<String, BigInteger> e : plan.entrySet()) {
             Transaction tx = new Transaction(networkParameters);
-            tx.addOutput(new Coin(BigInteger.valueOf(reward), NetworkParameters.BIGTANGLE_TOKENID),
-                    net.bigtangle.core.Address.fromHash160(networkParameters,
-                            Utils.sha256hash160(v.getPubkey())));
+            tx.addOutput(new Coin(e.getValue(), NetworkParameters.BIGTANGLE_TOKENID),
+                    net.bigtangle.core.Address.fromBase58(networkParameters, e.getKey()));
             txs.add(tx);
-            distributed += reward;
         }
         return txs;
     }

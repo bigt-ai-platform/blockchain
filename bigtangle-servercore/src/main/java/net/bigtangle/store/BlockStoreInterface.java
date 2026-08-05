@@ -614,7 +614,7 @@ public interface BlockStoreInterface {
 	/** Clears ONLY the withdrawable epoch, leaving slashed/exiting flags intact. */
 	void clearStakeWithdrawable(byte[] pubkey) throws BlockStoreException;
 
-	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException;
+	void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight, long slot) throws BlockStoreException;
 
 	/** Removes a validator's vote on {@code blockHash} when it retracts it (LMD: latest vote only). */
 	void deleteAttestationVote(Sha256Hash blockHash, byte[] pubkey) throws BlockStoreException;

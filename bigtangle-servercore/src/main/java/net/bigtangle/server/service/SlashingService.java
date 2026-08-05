@@ -21,8 +21,15 @@ public class SlashingService {
 
     private static final Logger log = LoggerFactory.getLogger(SlashingService.class);
 
-    /** Bounded per-validator vote history kept for double-vote / surround detection. */
-    private static final int MAX_VOTE_HISTORY = 128;
+    /**
+     * Votes are pruned by EPOCH AGE, not by a raw count, so a validator cannot
+     * push a slashable vote out of the window by voting a lot. A vote stays for
+     * this many epochs past the newest vote; an older vote can no longer form a
+     * slashable pair with a new vote. A hard cap bounds memory against a
+     * spammy validator (only ~32 votes/epoch are possible in practice).
+     */
+    private static final int SLASHING_LOOKBACK_EPOCHS = 8;
+    private static final int MAX_VOTE_HISTORY = 4096;
 
     private final ConcurrentHashMap<String, List<AttestationData>> voteHistory = new ConcurrentHashMap<>();
 
@@ -43,9 +50,10 @@ public class SlashingService {
                         continue;
                     }
                     String pubkeyHex = e.getKey().substring(4);
-                    AttestationData att = parsePersisted(new String(e.getValue(), java.nio.charset.StandardCharsets.UTF_8));
-                    if (att != null) {
-                        voteHistory.computeIfAbsent(pubkeyHex, k -> new ArrayList<>()).add(att);
+                    List<AttestationData> list = parseHistory(
+                            new String(e.getValue(), java.nio.charset.StandardCharsets.UTF_8));
+                    if (!list.isEmpty()) {
+                        voteHistory.put(pubkeyHex, list);
                     }
                 }
             } finally {
@@ -54,6 +62,21 @@ public class SlashingService {
         } catch (Exception e) {
             log.trace("No prior slashing state to restore", e);
         }
+    }
+
+    /** Parses a persisted per-validator vote list ("slot|...|sig" entries joined by ';'). */
+    private List<AttestationData> parseHistory(String raw) {
+        List<AttestationData> list = new ArrayList<>();
+        if (raw == null || raw.isEmpty()) {
+            return list;
+        }
+        for (String entry : raw.split(";")) {
+            AttestationData att = parsePersisted(entry);
+            if (att != null) {
+                list.add(att);
+            }
+        }
+        return list;
     }
 
     private AttestationData parsePersisted(String raw) {
@@ -84,18 +107,31 @@ public class SlashingService {
         }
     }
 
-    private void persistAttestation(AttestationData att) {
+    private String serialize(AttestationData att) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(att.getSlot()).append('|').append(att.getBeaconBlockHash().toString()).append('|')
+                .append(Utils.HEX.encode(att.getValidatorPubkey())).append('|').append(att.getEpoch()).append('|')
+                .append(att.getSourceEpoch()).append('|').append(att.getTargetEpoch()).append('|')
+                .append(att.getSourceCheckpoint() != null ? att.getSourceCheckpoint().toString() : "").append('|')
+                .append(att.getTargetCheckpoint() != null ? att.getTargetCheckpoint().toString() : "").append('|')
+                .append(att.getSignature() != null ? Utils.HEX.encode(att.getSignature()) : "");
+        return sb.toString();
+    }
+
+    /** Persists the validator's FULL vote history under a single key per pubkey. */
+    private void persistAttestation(List<AttestationData> history) {
         try {
             BlockStoreInterface store = storeService.getStore();
             try {
                 StringBuilder sb = new StringBuilder();
-                sb.append(att.getSlot()).append('|').append(att.getBeaconBlockHash().toString()).append('|')
-                        .append(Utils.HEX.encode(att.getValidatorPubkey())).append('|').append(att.getEpoch()).append('|')
-                        .append(att.getSourceEpoch()).append('|').append(att.getTargetEpoch()).append('|')
-                        .append(att.getSourceCheckpoint() != null ? att.getSourceCheckpoint().toString() : "").append('|')
-                        .append(att.getTargetCheckpoint() != null ? att.getTargetCheckpoint().toString() : "").append('|')
-                        .append(att.getSignature() != null ? Utils.HEX.encode(att.getSignature()) : "");
-                store.savePosState("slash", "att_" + Utils.HEX.encode(att.getValidatorPubkey()),
+                for (AttestationData att : history) {
+                    if (sb.length() > 0) {
+                        sb.append(';');
+                    }
+                    sb.append(serialize(att));
+                }
+                String pubkeyHex = history.isEmpty() ? "" : Utils.HEX.encode(history.get(0).getValidatorPubkey());
+                store.savePosState("slash", "att_" + pubkeyHex,
                         sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
             } finally {
                 store.close();
@@ -106,9 +142,9 @@ public class SlashingService {
     }
 
     /**
-     * Records a vote in the bounded per-validator history (dropping the oldest)
-     * so surround detection can compare against every recent vote, not just the
-     * latest one.
+     * Records a vote in the per-validator history, pruning by EPOCH AGE (a vote
+     * older than {@link #SLASHING_LOOKBACK_EPOCHS} past the newest can no longer
+     * form a slashable pair) and persisting the full history.
      */
     private void recordVote(AttestationData att) {
         String key = Utils.HEX.encode(att.getValidatorPubkey());
@@ -119,12 +155,18 @@ public class SlashingService {
             if (!history.isEmpty() && sameVote(history.get(history.size() - 1), att)) {
                 return;
             }
+            long newestEpoch = att.getEpoch();
+            for (AttestationData v : history) {
+                newestEpoch = Math.max(newestEpoch, v.getEpoch());
+            }
+            long cut = newestEpoch - SLASHING_LOOKBACK_EPOCHS;
+            history.removeIf(v -> v.getTargetEpoch() >= 0 && v.getTargetEpoch() < cut);
             history.add(att);
             while (history.size() > MAX_VOTE_HISTORY) {
                 history.remove(0);
             }
         }
-        persistAttestation(att);
+        persistAttestation(history);
     }
 
     private boolean sameVote(AttestationData a, AttestationData b) {

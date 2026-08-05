@@ -3,6 +3,7 @@ package net.bigtangle.mcmc.test;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,10 +24,13 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.SlotData;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.service.CasperService;
@@ -324,11 +328,12 @@ public class PoSTest extends AbstractIntegrationTest {
 
     @Test
     public void testCasperProcessVote() throws Exception {
+        long slot = slotService.getCurrentSlot();
         AttestationData att = new AttestationData();
-        att.setSlot(System.currentTimeMillis() / 12_000L);
-        att.setEpoch(0);
+        att.setSlot(slot);
+        att.setEpoch(slot / 32);
         att.setSourceEpoch(0);
-        att.setTargetEpoch(0);
+        att.setTargetEpoch(slot / 32);
         att.setBeaconBlockHash(Sha256Hash.of("beacon1".getBytes()));
         att.setValidatorPubkey(validatorKey.getPubKey());
         att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
@@ -655,11 +660,11 @@ public class PoSTest extends AbstractIntegrationTest {
         Sha256Hash blockHash = Sha256Hash.of("epoch1block".getBytes());
         byte[] pubkey = validatorKey.getPubKey();
         long weight = 1000L;
+        long slot = slotService.getCurrentSlot();
 
-        store.saveAttestationVote(blockHash, pubkey, weight);
+        store.saveAttestationVote(blockHash, pubkey, weight, slot);
 
-        List<AttestationData> forSlot = store.getAttestationsForSlot(
-                System.currentTimeMillis() / 12_000L);
+        List<AttestationData> forSlot = store.getAttestationsForSlot(slot);
         boolean found = forSlot.stream()
                 .anyMatch(a -> a.getBeaconBlockHash().equals(blockHash));
         assertTrue(found);
@@ -693,5 +698,307 @@ public class PoSTest extends AbstractIntegrationTest {
         StakeRecord released = store.getStakeDeposit(validatorKey.getPubKey());
         assertNotNull(released, "record should still exist (deactivated)");
         assertEquals(-1, released.getActivatedEpoch());
+    }
+
+    // ========= Finality / fork-choice regression tests =========
+
+    /** Builds a synthetic beacon with a RewardInfo (and SlotData when slot != null). */
+    private Block makeBeacon(Block prev, Sha256Hash prevRewardHash, long chainlength, Long slot)
+            throws Exception {
+        Block b = Block.createBlock(networkParameters, prev, prev);
+        b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+        Transaction rtx = new Transaction(networkParameters);
+        RewardInfo ri = new RewardInfo();
+        ri.setChainlength(chainlength);
+        ri.setPrevRewardHash(prevRewardHash);
+        ri.setBlocks(new java.util.HashSet<>());
+        rtx.setData(ri.toByteArray());
+        b.addTransaction(rtx);
+        if (slot != null) {
+            SlotData sd = new SlotData(slot, slot / 32, 0, prev.getHash());
+            Transaction slotTx = new Transaction(networkParameters);
+            slotTx.setDataClassName("SlotData");
+            slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
+            b.addTransaction(slotTx);
+        }
+        return b;
+    }
+
+    @Test
+    public void testDescendsFromRewardChain() throws Exception {
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        // main chain: genesis <- b1 <- b2 <- b3
+        Block b1 = makeBeacon(genesis, genesis.getHash(), 1, 1L);
+        store.put(b1);
+        Block b2 = makeBeacon(b1, b1.getHash(), 2, 2L);
+        store.put(b2);
+        Block b3 = makeBeacon(b2, b2.getHash(), 3, 3L);
+        store.put(b3);
+        // competing fork: genesis <- s1
+        Block s1 = makeBeacon(genesis, genesis.getHash(), 1, 4L);
+        store.put(s1);
+
+        assertTrue(casperService.descendsFrom(b2.getHash(), genesis.getHash(), store),
+                "main chain descends from genesis");
+        assertTrue(casperService.descendsFrom(b3.getHash(), b1.getHash(), store),
+                "b3 descends from b1");
+        assertTrue(casperService.descendsFrom(b1.getHash(), b1.getHash(), store),
+                "start == anchor is true");
+        assertFalse(casperService.descendsFrom(s1.getHash(), b1.getHash(), store),
+                "fork does not descend from main-chain b1");
+        assertFalse(casperService.descendsFrom(b1.getHash(), b2.getHash(), store),
+                "anchor ahead of start: chainlength bound stops the walk");
+        assertFalse(casperService.descendsFrom(
+                Sha256Hash.of("not-in-store".getBytes()), genesis.getHash(), store),
+                "unstored start hash must return false (callers pass the stored prevRewardHash)");
+    }
+
+    @Test
+    public void testLmdSameHeadRevoteDoesNotDoubleCount() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        Sha256Hash headA = Sha256Hash.of("headA".getBytes());
+        Sha256Hash headB = Sha256Hash.of("headB".getBytes());
+        long stake = StakeService.MIN_STAKE.longValue();
+
+        // The confirmed head is commonly unchanged between slots: re-votes for
+        // the same head must be idempotent, not additive.
+        ghostService.processAttestation(vote(1, headA), store);
+        ghostService.processAttestation(vote(2, headA), store);
+        ghostService.processAttestation(vote(3, headA), store);
+        assertEquals(stake, ghostService.getForkChoiceVotes().get(headA).longValue(),
+                "re-votes for the same head must not accumulate weight");
+
+        // Switching the head retracts the old weight completely.
+        ghostService.processAttestation(vote(4, headB), store);
+        assertNull(ghostService.getForkChoiceVotes().get(headA),
+                "retracted head must lose the weight");
+        assertEquals(stake, ghostService.getForkChoiceVotes().get(headB).longValue());
+
+        // Persisted state agrees with memory (one latest row per validator).
+        Map<Sha256Hash, Long> summed = store.getSummedAttestationVotes();
+        assertNull(summed.get(headA), "retracted vote must be deleted from the store");
+        assertEquals(stake, summed.get(headB).longValue());
+    }
+
+    private AttestationData vote(long slot, Sha256Hash head) {
+        AttestationData att = new AttestationData();
+        att.setSlot(slot);
+        att.setEpoch(slot / 32);
+        att.setSourceEpoch(0);
+        att.setTargetEpoch(slot / 32);
+        att.setBeaconBlockHash(head);
+        att.setValidatorPubkey(validatorKey.getPubKey());
+        return att;
+    }
+
+    @Test
+    public void testEpochStartClassificationIsSlotBased() throws Exception {
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+
+        // Missed slots make the chainlength lag the slot. Epoch-start must
+        // follow the signed slot (slot % 32 == 0), not the chainlength.
+        Block drifted = makeBeacon(genesis, genesis.getHash(), 5, 64L);
+        RewardInfo ri = new RewardInfo().parseChecked(drifted.getTransactions().get(0).getData());
+        assertTrue(SlotService.isEpochStartBeacon(drifted, ri),
+                "slot % 32 == 0 with drifted chainlength must still be epoch-start");
+
+        Block midEpoch = makeBeacon(genesis, genesis.getHash(), 33, 65L);
+        RewardInfo ri2 = new RewardInfo().parseChecked(midEpoch.getTransactions().get(0).getData());
+        assertFalse(SlotService.isEpochStartBeacon(midEpoch, ri2),
+                "slot % 32 != 0 is mid-epoch even at chainlength % 32 == 1");
+
+        // Legacy beacons without SlotData keep the chainlength classification.
+        Block legacyStart = makeBeacon(genesis, genesis.getHash(), 33, null);
+        RewardInfo ri3 = new RewardInfo().parseChecked(legacyStart.getTransactions().get(0).getData());
+        assertTrue(SlotService.isEpochStartBeacon(legacyStart, ri3),
+                "legacy fallback: chainlength % 32 == 1");
+        Block legacyMid = makeBeacon(genesis, genesis.getHash(), 32, null);
+        RewardInfo ri4 = new RewardInfo().parseChecked(legacyMid.getTransactions().get(0).getData());
+        assertFalse(SlotService.isEpochStartBeacon(legacyMid, ri4));
+    }
+
+    @Test
+    public void testSlotSequenceToleratesMissedSlots() {
+        // Regression: after a missed slot the chainlength lags the slot; the
+        // epoch-crossing beacon must remain valid (the old slot==chainlength
+        // binding rejected it and halted the chain).
+        assertTrue(SlotService.slotSequenceValid(32, 1, 30),
+                "missed slot before the boundary must not invalidate the epoch-start beacon");
+        assertTrue(SlotService.slotSequenceValid(5, 0, -1),
+                "no prev SlotData (legacy/genesis): only self-consistency");
+        assertFalse(SlotService.slotSequenceValid(32, 0, 30),
+                "epoch must equal slot/32");
+        assertFalse(SlotService.slotSequenceValid(30, 0, 30),
+                "slots must strictly increase along the reward chain");
+        assertFalse(SlotService.slotSequenceValid(29, 0, 30),
+                "a slot at/below the prev beacon's slot is rejected");
+    }
+
+    // ========= Epoch reward split tests =========
+
+    private String rewardAddress(PQKey key) {
+        return net.bigtangle.core.Address
+                .fromHash160(networkParameters, Utils.sha256hash160(key.getPubKey())).toBase58();
+    }
+
+    @Test
+    public void testEpochRewardSplitPlan() {
+        PQKey v1 = PQKey.createNew();
+        PQKey v2 = PQKey.createNew();
+        PQKey v3 = PQKey.createNew();
+        List<StakeRecord> vals = List.of(
+                new StakeRecord(v1.getPubKey(), BigInteger.valueOf(100), null),
+                new StakeRecord(v2.getPubKey(), BigInteger.valueOf(200), null),
+                new StakeRecord(v3.getPubKey(), BigInteger.valueOf(300), null));
+
+        Map<String, BigInteger> plan = net.bigtangle.server.service.EpochRewardService
+                .planEpochRewards(BigInteger.valueOf(1000), vals, networkParameters);
+
+        assertEquals(BigInteger.valueOf(166), plan.get(rewardAddress(v1)), "pro-rata share 100/600");
+        assertEquals(BigInteger.valueOf(333), plan.get(rewardAddress(v2)), "pro-rata share 200/600");
+        assertEquals(BigInteger.valueOf(501), plan.get(rewardAddress(v3)),
+                "last validator receives the rounding remainder");
+        assertEquals(BigInteger.valueOf(1000),
+                plan.values().stream().reduce(BigInteger.ZERO, BigInteger::add),
+                "the split must conserve the pool exactly");
+
+        // Determinism: same inputs -> identical plan (proposer and validators agree).
+        assertEquals(plan, net.bigtangle.server.service.EpochRewardService
+                .planEpochRewards(BigInteger.valueOf(1000), vals, networkParameters));
+
+        // Theft detection: moving a single unit to another validator breaks equality.
+        Map<String, BigInteger> stolen = new java.util.LinkedHashMap<>(plan);
+        stolen.put(rewardAddress(v1), plan.get(rewardAddress(v1)).add(BigInteger.ONE));
+        stolen.put(rewardAddress(v3), plan.get(rewardAddress(v3)).subtract(BigInteger.ONE));
+        assertNotEquals(plan, stolen, "a manipulated split must differ from the plan");
+
+        // Empty/zero cases.
+        assertTrue(net.bigtangle.server.service.EpochRewardService
+                .planEpochRewards(BigInteger.ZERO, vals, networkParameters).isEmpty());
+        assertTrue(net.bigtangle.server.service.EpochRewardService
+                .planEpochRewards(BigInteger.valueOf(1000), List.of(), networkParameters).isEmpty());
+    }
+
+    // ========= Finality accounting tests =========
+
+    private AttestationData signedVote(long slot, long sourceEpoch, long targetEpoch,
+            Sha256Hash source, Sha256Hash target) {
+        AttestationData att = new AttestationData();
+        att.setSlot(slot);
+        att.setEpoch(slot / 32);
+        att.setSourceEpoch(sourceEpoch);
+        att.setTargetEpoch(targetEpoch);
+        att.setBeaconBlockHash(target);
+        att.setSourceCheckpoint(source);
+        att.setTargetCheckpoint(target);
+        att.setValidatorPubkey(validatorKey.getPubKey());
+        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+        return att;
+    }
+
+    private void registerValidator() throws Exception {
+        store.saveStakeDeposit(new StakeRecord(
+                validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash()));
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+    }
+
+    @Test
+    public void testLateVoteStillCountsForEarlierEpoch() throws Exception {
+        registerValidator();
+        // Drive off the LIVE Casper state: checkpoint objects are singletons
+        // shared across test methods, so epochs are chosen relative to the
+        // current finalized anchor and the ACTUAL planted hashes are used.
+        CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+        assertNotNull(base);
+        long e1 = base.getEpoch() + 1;
+        long e2 = base.getEpoch() + 2;
+        CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
+                Sha256Hash.of(("lateVote1-" + e1).getBytes()));
+        CasperService.Checkpoint cp2 = casperService.ensureCheckpoint(e2,
+                Sha256Hash.of(("lateVote2-" + e2).getBytes()));
+
+        // Vote for epoch e1, THEN for epoch e2. With latest-vote-only accounting
+        // the second vote would erase the first; per-epoch records must keep it.
+        casperService.processVote(signedVote(e1 * 32, base.getEpoch(), e1, base.getBlockHash(),
+                cp1.getBlockHash()), store);
+        casperService.processVote(signedVote(e2 * 32, e1, e2, cp1.getBlockHash(),
+                cp2.getBlockHash()), store);
+
+        casperService.finalizeCheckpoint(e1, store);
+        assertTrue(casperService.isCheckpointJustified(e1),
+                "the epoch-e1 vote must still count after the validator voted in epoch e2");
+    }
+
+    @Test
+    public void testFinalizationResumesAfterSkippedEpoch() throws Exception {
+        registerValidator();
+        // Leakage-proof: all epochs are relative to the current finalized
+        // anchor and all votes use the ACTUAL checkpoint hashes (a previous
+        // test's ensureCheckpoint for the same epoch is a no-op).
+        CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+        assertNotNull(base);
+        long e1 = base.getEpoch() + 1, e3 = base.getEpoch() + 3, e4 = base.getEpoch() + 4;
+        CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
+                Sha256Hash.of(("resume1-" + e1).getBytes()));
+        CasperService.Checkpoint cp3 = casperService.ensureCheckpoint(e3,
+                Sha256Hash.of(("resume3-" + e3).getBytes()));
+        CasperService.Checkpoint cp4 = casperService.ensureCheckpoint(e4,
+                Sha256Hash.of(("resume4-" + e4).getBytes()));
+
+        // Epoch e1 justifies and finalizes (parent = finalized base).
+        casperService.processVote(signedVote(e1 * 32, base.getEpoch(), e1, base.getBlockHash(),
+                cp1.getBlockHash()), store);
+        casperService.finalizeCheckpoint(e1, store);
+        assertTrue(casperService.isCheckpointFinalized(e1));
+
+        // Epoch e2 NEVER justifies (no votes, no checkpoint). Epoch e3
+        // justifies (source = e1), but its parent (epoch e2) is not finalized:
+        // with a strict finalized-parent rule, finalization would stall here.
+        casperService.processVote(signedVote(e3 * 32, e1, e3, cp1.getBlockHash(),
+                cp3.getBlockHash()), store);
+        casperService.finalizeCheckpoint(e3, store);
+        assertTrue(casperService.isCheckpointJustified(e3));
+        assertFalse(casperService.isCheckpointFinalized(e3),
+                "epoch e3 cannot finalize while its parent never justified");
+
+        // Epoch e4 justifies with source = epoch e3: the consecutive-epoch
+        // supermajority link finalizes epoch e3, and epoch e4 follows.
+        casperService.processVote(signedVote(e4 * 32, e3, e4, cp3.getBlockHash(),
+                cp4.getBlockHash()), store);
+        casperService.finalizeCheckpoint(e4, store);
+        assertTrue(casperService.isCheckpointJustified(e4));
+        assertTrue(casperService.isCheckpointFinalized(e3),
+                "the consecutive link must finalize the justified parent (recovery)");
+        assertTrue(casperService.isCheckpointFinalized(e4),
+                "finality resumes after a skipped epoch");
+    }
+
+    @Test
+    public void testRejectsMalformedVotes() throws Exception {
+        registerValidator();
+        long slot = slotService.getCurrentSlot();
+        CasperService.Checkpoint source = casperService.getJustifiedCheckpoint();
+        assertNotNull(source);
+        Sha256Hash target = Sha256Hash.of("malformedTarget".getBytes());
+
+        // epoch field inconsistent with the slot
+        AttestationData bad1 = signedVote(slot, 0, slot / 32, source.getBlockHash(), target);
+        bad1.setEpoch(slot / 32 + 7);
+        bad1.setSignature(validatorKey.sign(bad1.getMessageHash()).serialize());
+        casperService.processVote(bad1, store);
+        assertTrue(store.getSummedAttestationVotes().isEmpty(),
+                "epoch-inconsistent vote must be rejected");
+
+        // far-future target epoch
+        long futureSlot = slot + 32 * 10_000L;
+        AttestationData bad2 = signedVote(futureSlot, 0, futureSlot / 32, source.getBlockHash(), target);
+        casperService.processVote(bad2, store);
+        assertTrue(store.getSummedAttestationVotes().isEmpty(),
+                "far-future vote must be rejected");
     }
 }

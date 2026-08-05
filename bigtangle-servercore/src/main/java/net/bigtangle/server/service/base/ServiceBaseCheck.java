@@ -650,24 +650,43 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	}
 
 	/**
-	 * True when the beacon is the FIRST beacon of its epoch, derived from the
-	 * REWARD CHAIN position (chainlength % slotsPerEpoch == 1) rather than the
-	 * self-declared SlotData slot, so a mid-epoch beacon cannot claim epoch
-	 * start and mint rewards. Reward minting is only permitted here.
+	 * True when the beacon is the FIRST beacon of its epoch. Classification is
+	 * SLOT-based (the proposer-signed SlotData slot % SLOTS_PER_EPOCH == 0, see
+	 * {@link net.bigtangle.server.service.SlotService#isEpochStartBeacon}), so a
+	 * missed slot can never permanently misalign rewards from the reward
+	 * chainlength. The proposer signature over the SlotData (verified in this
+	 * same validation pass) makes the declared slot unforgeable, so a mid-epoch
+	 * beacon cannot claim epoch start and mint rewards. Reward minting is only
+	 * permitted here.
 	 */
 	private boolean isBeaconAtEpochStart(Block block) {
-		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null
+				|| block.getTransactions().isEmpty()) {
 			return false;
 		}
 		try {
 			RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-			if (ri != null && ri.getChainlength() > 0) {
-				return ri.getChainlength() % net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH == 1;
-			}
+			return net.bigtangle.server.service.SlotService.isEpochStartBeacon(block, ri);
 		} catch (Exception e) {
 			return false;
 		}
-		return false;
+	}
+
+	/** The beacon's SlotData (from its SlotData transaction), or null if absent/unparseable. */
+	private net.bigtangle.core.SlotData slotDataOf(Block block) {
+		if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON || block.getTransactions() == null) {
+			return null;
+		}
+		try {
+			for (Transaction tx : block.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					return Json.jsonmapper().readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+				}
+			}
+		} catch (Exception e) {
+			return null;
+		}
+		return null;
 	}
 
 	/** The fee-pool snapshot committed in the beacon's SlotData, or null if absent. */
@@ -799,18 +818,16 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (reveal == null || reveal.length == 0) {
 				return false; // reveal is mandatory
 			}
-			// Slot/epoch correspondence is CHAIN-DERIVED: the declared slot's
-			// epoch must match both epoch == slot/32 and the beacon's reward
-			// chainlength epoch (chainlength 1 = epoch 0). This anchors the
-			// self-declared slot to the reward chain so a proposer cannot sign a
-			// beacon for an arbitrary slot.
-			if (sd.getEpoch() != sd.getSlot() / 32) {
-				return false; // epoch must equal slot/32
-			}
-			long chainlength = rewardChainlength(block);
-			if (chainlength > 0 && sd.getSlot() / 32 != (chainlength - 1)
-					/ net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH) {
-				return false; // slot's epoch must match the reward chainlength
+			// Slot sanity is CHAIN-DERIVED: the declared epoch must equal slot/32
+			// and slots must strictly increase along the reward chain. The slot is
+			// deliberately NOT bound to the reward chainlength — chainlength lags
+			// the slot after any missed slot, and such a binding would reject
+			// every beacon at the next epoch boundary and halt the chain. The
+			// proposer signature + RANDAO reveal already bind this beacon to the
+			// declared slot's elected proposer.
+			if (!net.bigtangle.server.service.SlotService.slotSequenceValid(sd.getSlot(), sd.getEpoch(),
+					prevBeaconSlot(block, store))) {
+				return false;
 			}
 			// Use the SNAPSHOTTED active validator set from two epochs earlier
 			// (same boundary discipline as mixfinal_), never the node's live set.
@@ -863,6 +880,36 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private boolean legacyBeaconAllowed(Block block) {
 		long chainlength = rewardChainlength(block);
 		return chainlength > 0 && chainlength < NetworkParameters.POS_BEACON_SLOTDATA_ACTIVATION;
+	}
+
+	/**
+	 * The signed slot of the beacon's prev reward beacon, or -1 when the prev
+	 * beacon carries no SlotData (legacy/genesis) or is not yet stored — in
+	 * which case the monotone-slot check is skipped (missing dependencies are
+	 * handled by the dependency solidity states).
+	 */
+	private long prevBeaconSlot(Block block, BlockStoreInterface store) {
+		try {
+			net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+					.parseChecked(block.getTransactions().get(0).getData());
+			if (ri == null || ri.getPrevRewardHash() == null) {
+				return -1;
+			}
+			Block prev = store.get(ri.getPrevRewardHash());
+			if (prev == null || prev.getTransactions() == null) {
+				return -1;
+			}
+			for (Transaction tx : prev.getTransactions()) {
+				if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+					net.bigtangle.core.SlotData psd = Json.jsonmapper().readValue(tx.getData(),
+							net.bigtangle.core.SlotData.class);
+					return psd != null ? psd.getSlot() : -1;
+				}
+			}
+			return -1;
+		} catch (Exception e) {
+			return -1;
+		}
 	}
 
 	/** The beacon's reward chainlength, or -1 if it cannot be derived. */
@@ -1517,10 +1564,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						return SolidityState.fromPrevReward(cursor, true);
 					}
 					if (prevRi.getBlocks() != null
-							&& prevRi.getChainlength() % net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH == 1) {
-						// Only EPOCH-START beacons reward blocks; a block
-						// referenced/confirmed by a mid-epoch beacon is not yet
-						// rewarded and remains eligible for this epoch's payout.
+							&& net.bigtangle.server.service.SlotService.isEpochStartBeacon(prevBeacon, prevRi)) {
+						// Only EPOCH-START beacons reward blocks (signed slot %
+						// 32 == 0); a block referenced/confirmed by a mid-epoch
+						// beacon is not yet rewarded and remains eligible for
+						// this epoch's payout.
 						prevRewarded.addAll(prevRi.getBlocks());
 					}
 					cursor = prevRi.getPrevRewardHash();
@@ -1569,6 +1617,41 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						throw new InvalidTransactionException(
 								"Epoch reward does not match fees of the referenced confirmed blocks");
 					return SolidityState.getFailState();
+				}
+				// EXACT SPLIT: the pool must be distributed pro-rata over the
+				// epoch's selection snapshot — recomputed here from chain state.
+				// A proposer paying any validator (incl. itself) more than its
+				// share, or minting non-BIG value, is rejected. Legacy beacons
+				// without SlotData skip this (pre-PoS chains had no split rule).
+				net.bigtangle.core.SlotData rsd = slotDataOf(block);
+				if (rsd != null) {
+					java.util.List<net.bigtangle.core.StakeRecord> rewardValidators = validatorsForEpoch(
+							rsd.getSlot() / 32 - 2, store);
+					java.util.Map<String, java.math.BigInteger> expectedSplit = net.bigtangle.server.service.EpochRewardService
+							.planEpochRewards(expectedFromBlocks, rewardValidators, networkParameters);
+					java.util.Map<String, java.math.BigInteger> actualSplit = new java.util.HashMap<>();
+					for (int i = 1; i < transactions.size(); i++) {
+						Transaction rtx = transactions.get(i);
+						if ("SlotData".equals(rtx.getDataClassName())) {
+							continue;
+						}
+						for (TransactionOutput out : rtx.getOutputs()) {
+							if (!out.getValue().isBIG()) {
+								if (throwExceptions)
+									throw new InvalidTransactionException(
+											"Epoch reward output is not BIG — minting other tokens is not allowed");
+								return SolidityState.getFailState();
+							}
+							String addr = out.getScriptPubKey().getToAddress(networkParameters).toBase58();
+							actualSplit.merge(addr, out.getValue().getValue(), java.math.BigInteger::add);
+						}
+					}
+					if (!expectedSplit.equals(actualSplit)) {
+						if (throwExceptions)
+							throw new InvalidTransactionException(
+									"Epoch reward split does not match the stake-proportional plan");
+						return SolidityState.getFailState();
+					}
 				}
 			} else if (rewardTotal.signum() != 0) {
 				if (throwExceptions)

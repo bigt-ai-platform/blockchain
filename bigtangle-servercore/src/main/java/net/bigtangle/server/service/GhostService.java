@@ -85,18 +85,30 @@ public class GhostService {
         // LMD: retract the validator's previous latest vote before adding the new
         // one, both in memory and in the persisted store.
         Sha256Hash prevBeacon = latestVoteBeacons.get(pk);
-        Long prevWeight = latestVoteWeights.get(pk);
-        if (prevBeacon != null && prevWeight != null && !prevBeacon.equals(newBeacon)) {
+        long prevWeight = latestVoteWeights.getOrDefault(pk, 0L);
+        if (prevBeacon != null && !prevBeacon.equals(newBeacon) && prevWeight > 0) {
             Long updated = forkChoiceVotes.computeIfPresent(prevBeacon, (h, w) -> w - prevWeight);
             if (updated == null || updated <= 0) {
                 forkChoiceVotes.remove(prevBeacon);
             }
             store.deleteAttestationVote(prevBeacon, att.getValidatorPubkey());
         }
+        // A re-vote for the SAME head is the common case (the confirmed head is
+        // unchanged between slots): adjust only by the weight delta. Adding the
+        // full weight again would inflate the in-memory weight above the single
+        // persisted (pubkey, blockhash) row and make fork choice diverge after
+        // a restart.
+        long delta = prevBeacon != null && prevBeacon.equals(newBeacon) ? weight - prevWeight : weight;
+        if (delta != 0) {
+            forkChoiceVotes.merge(newBeacon, delta, Long::sum);
+            Long total = forkChoiceVotes.get(newBeacon);
+            if (total != null && total <= 0) {
+                forkChoiceVotes.remove(newBeacon);
+            }
+        }
         latestVoteBeacons.put(pk, newBeacon);
         latestVoteWeights.put(pk, weight);
-        forkChoiceVotes.merge(newBeacon, weight, Long::sum);
-        store.saveAttestationVote(newBeacon, att.getValidatorPubkey(), weight);
+        store.saveAttestationVote(newBeacon, att.getValidatorPubkey(), weight, att.getSlot());
     }
 
     public Sha256Hash executeGhost(Sha256Hash root, BlockStoreInterface store) throws Exception {

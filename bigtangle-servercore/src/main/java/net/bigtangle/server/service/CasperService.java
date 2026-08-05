@@ -74,6 +74,14 @@ public class CasperService {
     private final ConcurrentHashMap<String, Sha256Hash> latestVoteBeacons = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Sha256Hash> latestVoteSources = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Sha256Hash> latestVoteTargets = new ConcurrentHashMap<>();
+    // Per-(validator, target-epoch) vote records: a vote for epoch E keeps
+    // counting toward E's checkpoint even after the validator votes in a later
+    // epoch (Ethereum's attestation inclusion window). With latest-vote-only
+    // accounting, a vote stops counting the moment the validator's next-epoch
+    // vote arrives, so justification at the epoch boundary depends on each
+    // node's wall-clock/gossip timing and diverges between nodes.
+    private final ConcurrentHashMap<String, ConcurrentHashMap<Long, Sha256Hash>> epochVoteTargets = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ConcurrentHashMap<Long, Sha256Hash>> epochVoteSources = new ConcurrentHashMap<>();
 
     @Autowired
     private GhostService ghostService;
@@ -121,6 +129,23 @@ public class CasperService {
                         cp.justified = Boolean.parseBoolean(parts[1]);
                         cp.finalized = Boolean.parseBoolean(parts[2]);
                         checkpoints.put(epoch, cp);
+                    } else if (key.startsWith("evotes_")) {
+                        String pubkey = key.substring(7);
+                        String raw = new String(e.getValue(), StandardCharsets.UTF_8);
+                        for (String part : raw.split(";")) {
+                            String[] p = part.split(":");
+                            if (p.length == 3) {
+                                try {
+                                    long ep = Long.parseLong(p[0]);
+                                    epochVoteTargets.computeIfAbsent(pubkey, k -> new ConcurrentHashMap<>())
+                                            .put(ep, Sha256Hash.wrap(Utils.HEX.decode(p[1])));
+                                    epochVoteSources.computeIfAbsent(pubkey, k -> new ConcurrentHashMap<>())
+                                            .put(ep, Sha256Hash.wrap(Utils.HEX.decode(p[2])));
+                                } catch (Exception ignored) {
+                                    // skip malformed entry
+                                }
+                            }
+                        }
                     }
                 }
                 // Bootstrap finality: the genesis checkpoint is the root of
@@ -245,31 +270,63 @@ public class CasperService {
         return best;
     }
 
-    /** True if {@code chainAncestor} is an ancestor of (or equal to) {@code blockHash} in the reward chain. */
-    public boolean descendsFrom(Sha256Hash blockHash, Sha256Hash chainAncestor, BlockStoreInterface store) {
-        if (blockHash == null || chainAncestor == null) {
+    /**
+     * True if the reward chain containing {@code startHash} descends from (or
+     * is) {@code chainAncestor}. {@code startHash} MUST already be persisted —
+     * callers pass the new block's prevRewardHash (whose existence solidity
+     * checking guaranteed), never the not-yet-connected tip itself: an
+     * unresolvable start hash returns false, which would refuse every reorg.
+     * The walk is bounded by the chainlength delta to the anchor (chainlength
+     * strictly decreases along prevRewardHash links), so a stalled-finality
+     * anchor far behind the head can never turn this into an unbounded scan or
+     * a wrong refusal.
+     */
+    public boolean descendsFrom(Sha256Hash startHash, Sha256Hash chainAncestor, BlockStoreInterface store) {
+        if (startHash == null || chainAncestor == null) {
             return false;
         }
-        Sha256Hash cursor = blockHash;
+        long anchorChainlength = rewardChainlengthOf(chainAncestor, store);
+        Sha256Hash cursor = startHash;
         java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
-        int guard = 0;
-        while (cursor != null && visited.add(cursor) && guard++ < 10_000) {
+        while (cursor != null && visited.add(cursor)) {
             if (cursor.equals(chainAncestor)) {
                 return true;
             }
             try {
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
-                    break;
+                    return false;
                 }
                 net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
                         .parseChecked(b.getTransactions().get(0).getData());
-                cursor = ri != null ? ri.getPrevRewardHash() : null;
+                if (ri == null) {
+                    return false;
+                }
+                // At/below the anchor's height the anchor can no longer be met.
+                if (anchorChainlength >= 0 && ri.getChainlength() <= anchorChainlength) {
+                    return false;
+                }
+                cursor = ri.getPrevRewardHash();
             } catch (Exception e) {
                 return false;
             }
         }
         return false;
+    }
+
+    /** Reward chainlength of a stored beacon, or -1 for genesis/unparseable. */
+    private long rewardChainlengthOf(Sha256Hash hash, BlockStoreInterface store) {
+        try {
+            Block b = store.get(hash);
+            if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                return -1;
+            }
+            net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                    .parseChecked(b.getTransactions().get(0).getData());
+            return ri != null ? ri.getChainlength() : -1;
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     public void processSlot(long slot, Sha256Hash beaconHash,
@@ -302,6 +359,24 @@ public class CasperService {
             return;
         }
 
+        // Sanity: the vote's epoch must be its slot's own epoch (honest votes
+        // always satisfy this), and far-future targets are rejected — otherwise
+        // a validator could inflate per-epoch vote records with arbitrary
+        // epochs. The TARGET epoch may legitimately be older than the slot's
+        // epoch (a late vote still counts toward its target, like Ethereum's
+        // attestation inclusion window).
+        if (att.getEpoch() != att.getSlot() / 32) {
+            log.warn("Rejecting attestation with inconsistent epoch from pubkey={} slot={} epoch={}",
+                    vkey, att.getSlot(), att.getEpoch());
+            return;
+        }
+        long wallEpoch = SlotService.epochAt(System.currentTimeMillis());
+        if (att.getTargetEpoch() > wallEpoch + 1) {
+            log.warn("Rejecting far-future attestation from pubkey={} slot={} (wall epoch {})",
+                    vkey, att.getSlot(), wallEpoch);
+            return;
+        }
+
         // Only a genuine double vote (two different heads for the same slot)
         // or a surround vote slashes. The slash is proposed as a consensus
         // BLOCKTYPE_SLASHING block (validated + applied by every node), never
@@ -327,9 +402,16 @@ public class CasperService {
         latestVoteSources.put(vkey, att.getSourceCheckpoint() != null ? att.getSourceCheckpoint() : Sha256Hash.ZERO_HASH);
         latestVoteTargets.put(vkey, att.getTargetCheckpoint() != null ? att.getTargetCheckpoint() : Sha256Hash.ZERO_HASH);
 
+        // Per-epoch record: the vote keeps counting toward its target epoch's
+        // checkpoint even after this validator votes in later epochs.
+        epochVoteTargets.computeIfAbsent(vkey, k -> new ConcurrentHashMap<>()).put(att.getTargetEpoch(),
+                att.getTargetCheckpoint() != null ? att.getTargetCheckpoint() : Sha256Hash.ZERO_HASH);
+        epochVoteSources.computeIfAbsent(vkey, k -> new ConcurrentHashMap<>()).put(att.getTargetEpoch(),
+                att.getSourceCheckpoint() != null ? att.getSourceCheckpoint() : Sha256Hash.ZERO_HASH);
+
+        // ghostService.processAttestation also persists the vote (LMD: one row
+        // per validator) — no separate save here.
         ghostService.processAttestation(att, store);
-        store.saveAttestationVote(att.getBeaconBlockHash(), att.getValidatorPubkey(),
-                stakeService.getEffectiveStake(att.getValidatorPubkey(), store));
 
         store.savePosState("casper", "vote_" + vkey,
                 java.math.BigInteger.valueOf(att.getSlot()).toByteArray());
@@ -342,8 +424,44 @@ public class CasperService {
         if (att.getBeaconBlockHash() != null) {
             store.savePosState("casper", "beacon_" + vkey, att.getBeaconBlockHash().getBytes());
         }
+        persistEpochVotes(vkey, store);
 
         gossipService.broadcastAttestation(att);
+    }
+
+    /** Persists the validator's per-epoch vote window (epochs below the finality floor are dropped). */
+    private void persistEpochVotes(String vkey, BlockStoreInterface store) {
+        try {
+            Checkpoint fin = getLastFinalizedCheckpoint();
+            long floor = fin != null ? fin.epoch - 1 : 0;
+            ConcurrentHashMap<Long, Sha256Hash> tgts = epochVoteTargets.get(vkey);
+            ConcurrentHashMap<Long, Sha256Hash> srcs = epochVoteSources.get(vkey);
+            StringBuilder sb = new StringBuilder();
+            if (tgts != null) {
+                for (Map.Entry<Long, Sha256Hash> en : tgts.entrySet()) {
+                    if (en.getKey() < floor) {
+                        continue;
+                    }
+                    Sha256Hash src = srcs != null ? srcs.get(en.getKey()) : null;
+                    sb.append(en.getKey()).append(':').append(en.getValue().toString()).append(':')
+                            .append(src != null ? src.toString() : Sha256Hash.ZERO_HASH.toString()).append(';');
+                }
+            }
+            store.savePosState("casper", "evotes_" + vkey, sb.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.debug("Failed to persist epoch votes", e);
+        }
+    }
+
+    /** Drops per-epoch vote records that can no longer influence justification/finalization. */
+    private void pruneEpochVotes(long finalizedEpoch) {
+        long floor = finalizedEpoch - 1; // one epoch of slack
+        for (ConcurrentHashMap<Long, Sha256Hash> m : epochVoteTargets.values()) {
+            m.keySet().removeIf(e -> e < floor);
+        }
+        for (ConcurrentHashMap<Long, Sha256Hash> m : epochVoteSources.values()) {
+            m.keySet().removeIf(e -> e < floor);
+        }
     }
 
     /** Verifies the attestation signature against the declared validator pubkey. */
@@ -352,57 +470,80 @@ public class CasperService {
     }
 
     public void finalizeCheckpoint(long epoch, BlockStoreInterface store) throws Exception {
-        Checkpoint target = checkpoints.get(epoch);
-        if (target == null) {
+        if (epoch < 0) {
             return;
         }
-
-        // A checkpoint finalizes only when its IMMEDIATE parent (epoch-1) is
-        // finalized AND it is justified — a one-epoch link. Using the parent
-        // (not the highest justified) means every epoch in between can finalize
-        // in sequence and never stalls.
-        if (target.justified) {
-            ensureCheckpoint(epoch - 1, store);
-            Checkpoint parent = checkpoints.get(epoch - 1);
-            if (parent != null && parent.finalized && !target.finalized) {
-                target.finalized = true;
-                log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
-                persistCheckpoint(target, store);
-            }
+        // Chain-derived creation: any node (including non-proposing relays)
+        // derives the checkpoint from confirmed chain state. Returning early on
+        // a missing local entry would mean finality only advances on proposer
+        // nodes.
+        Checkpoint target = ensureCheckpoint(epoch, store);
+        if (target == null || checkpoints.get(epoch) != target) {
+            // Missing, or TRANSIENT (the epoch boundary is not yet confirmed
+            // locally): justifying/finalizing a transient checkpoint would
+            // persist a checkpoint whose hash is the current confirmed head
+            // instead of the epoch boundary.
             return;
         }
-
-        Checkpoint justifySource = getJustifiedCheckpoint();
-        if (justifySource == null || justifySource.epoch >= target.epoch) {
-            return;
-        }
+        ensureCheckpoint(epoch - 1, store);
+        Checkpoint parent = checkpoints.get(epoch - 1);
 
         BigInteger totalStake = stakeService.getTotalActiveStake(store);
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
             return;
         }
-
-        // A vote for the target counts if it came from ANY justified source,
-        // so an advancing justified checkpoint cannot orphan pending votes.
-        BigInteger votedStake = getVotedStake(target.blockHash, store);
         BigInteger twoThirds = totalStake.multiply(BigInteger.valueOf(2))
                 .divide(BigInteger.valueOf(3));
 
-        if (votedStake.compareTo(twoThirds) >= 0) {
-            target.justified = true;
-            log.info("Checkpoint justified: epoch={}, block={}, votedStake={}/{}",
-                    epoch, target.blockHash, votedStake, totalStake);
-            persistCheckpoint(target, store);
-
-            Checkpoint parent = checkpoints.get(epoch - 1);
-            if (parent != null && parent.finalized) {
-                target.finalized = true;
-                log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
-                persistCheckpoint(target, store);
+        if (!target.justified) {
+            Checkpoint justifySource = getJustifiedCheckpoint();
+            if (justifySource != null && justifySource.epoch < target.epoch) {
+                // A vote for the target counts if it came from ANY justified
+                // source, so an advancing justified checkpoint cannot orphan
+                // pending votes. Counting is per (validator, target-epoch):
+                // later votes in newer epochs never erase this epoch's votes.
+                BigInteger votedStake = votedStakeFor(target, null, store);
+                if (votedStake.compareTo(twoThirds) >= 0) {
+                    target.justified = true;
+                    log.info("Checkpoint justified: epoch={}, block={}, votedStake={}/{}",
+                            epoch, target.blockHash, votedStake, totalStake);
+                    persistCheckpoint(target, store);
+                } else {
+                    log.debug("Checkpoint not justified: epoch={}, votedStake={}/{} (need {})",
+                            epoch, votedStake, totalStake, twoThirds);
+                }
             }
-        } else {
-            log.debug("Checkpoint not justified: epoch={}, votedStake={}/{} (need {})",
-                    epoch, votedStake, totalStake, twoThirds);
+        }
+
+        // Finalization (Ethereum's rules, adapted):
+        // (a) target justified + parent already finalized → the target finalizes.
+        // (b) target justified + parent justified (not finalized) + a 2/3
+        //     supermajority link parent→target → the PARENT finalizes (and the
+        //     target via (a)). Rule (b) is what lets finality RESUME after an
+        //     epoch that failed to justify: requiring an already-finalized
+        //     direct parent alone would stall finalization forever after a
+        //     single missed justification.
+        if (target.justified && !target.finalized && parent != null && parent.finalized) {
+            target.finalized = true;
+            log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
+            persistCheckpoint(target, store);
+            pruneEpochVotes(target.epoch);
+        }
+        if (target.justified && parent != null && parent.justified && !parent.finalized) {
+            BigInteger link = votedStakeFor(target, parent.blockHash, store);
+            if (link.compareTo(twoThirds) >= 0) {
+                parent.finalized = true;
+                log.info("Checkpoint FINALIZED via consecutive-epoch link: epoch={}, block={}",
+                        parent.epoch, parent.blockHash);
+                persistCheckpoint(parent, store);
+                pruneEpochVotes(parent.epoch);
+                if (!target.finalized) {
+                    target.finalized = true;
+                    log.info("Checkpoint FINALIZED: epoch={}, block={}", epoch, target.blockHash);
+                    persistCheckpoint(target, store);
+                    pruneEpochVotes(target.epoch);
+                }
+            }
         }
     }
 
@@ -422,12 +563,18 @@ public class CasperService {
     }
 
     /**
-     * Stake that has attested the target checkpoint from ANY justified source
-     * checkpoint. Keyed by pubkey hex — never by byte[], which uses identity
-     * equality — and filtered by the exact target, so unrelated votes are not
-     * counted while pending votes are not orphaned by an advancing source.
+     * Stake that has attested the target checkpoint — counted from the
+     * per-(validator, target-epoch) vote records, so a vote keeps counting
+     * toward its epoch's checkpoint even after the validator votes in a later
+     * epoch. When {@code requiredSource} is null the vote counts from ANY
+     * justified source (so an advancing justified checkpoint cannot orphan
+     * pending votes); when non-null only votes with exactly that source count
+     * (used for the consecutive-epoch supermajority link that finalizes the
+     * parent). Keyed by pubkey hex — never by byte[], which uses identity
+     * equality.
      */
-    private BigInteger getVotedStake(Sha256Hash target, BlockStoreInterface store) throws Exception {
+    private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
+            BlockStoreInterface store) throws Exception {
         List<StakeRecord> validators = store.getActiveStakeDeposits();
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
@@ -435,16 +582,21 @@ public class CasperService {
         }
 
         BigInteger voted = BigInteger.ZERO;
-        for (Map.Entry<String, Sha256Hash> entry : latestVoteTargets.entrySet()) {
-            if (!target.equals(entry.getValue())) {
+        for (Map.Entry<String, ConcurrentHashMap<Long, Sha256Hash>> entry : epochVoteTargets.entrySet()) {
+            Sha256Hash tgt = entry.getValue().get(target.epoch);
+            if (tgt == null || !tgt.equals(target.blockHash)) {
                 continue;
             }
-            Sha256Hash src = latestVoteSources.get(entry.getKey());
-            if (src == null || !isJustifiedCheckpointHash(src)) {
+            ConcurrentHashMap<Long, Sha256Hash> srcs = epochVoteSources.get(entry.getKey());
+            Sha256Hash src = srcs != null ? srcs.get(target.epoch) : null;
+            if (requiredSource != null) {
+                if (!requiredSource.equals(src)) {
+                    continue;
+                }
+            } else if (src == null || !isJustifiedCheckpointHash(src)) {
                 continue;
             }
-            BigInteger stake = stakeByPubkey.getOrDefault(entry.getKey(), BigInteger.ZERO);
-            voted = voted.add(stake);
+            voted = voted.add(stakeByPubkey.getOrDefault(entry.getKey(), BigInteger.ZERO));
         }
         return voted;
     }

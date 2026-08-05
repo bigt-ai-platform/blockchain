@@ -3639,20 +3639,23 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight) throws BlockStoreException {
+	public void saveAttestationVote(Sha256Hash blockHash, byte[] pubkey, long weight, long slot) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("INSERT INTO attestation_votes (blockhash, pubkey, weight, slot, pubkey_blockhash_md5) "
-					+ "VALUES (?, ?, ?, ?, ?) ON CONFLICT (pubkey_blockhash_md5) DO UPDATE SET weight = ?")) {
+					+ "VALUES (?, ?, ?, ?, ?) ON CONFLICT (pubkey_blockhash_md5) DO UPDATE SET weight = ?, slot = ?")) {
 			s.setBytes(1, blockHash.getBytes());
 			s.setBytes(2, pubkey);
 			s.setLong(3, weight);
-			long slot = System.currentTimeMillis() / 12_000L;
+			// The CONSENSUS slot (genesis-offset), supplied by the caller —
+			// computing a wall-clock slot here used a different epoch domain and
+			// made getAttestationsForSlot(consensusSlot) never match.
 			s.setLong(4, slot);
 			byte[] combined = new byte[pubkey.length + 32];
 			System.arraycopy(pubkey, 0, combined, 0, pubkey.length);
 			System.arraycopy(blockHash.getBytes(), 0, combined, pubkey.length, 32);
 			s.setObject(5, java.util.UUID.nameUUIDFromBytes(combined));
 			s.setLong(6, weight);
+			s.setLong(7, slot);
 			s.executeUpdate();
 		} catch (Exception e) {
 			throw new BlockStoreException(e);

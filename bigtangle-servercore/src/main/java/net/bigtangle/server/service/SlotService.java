@@ -105,17 +105,76 @@ public class SlotService {
         return slot / slotsPerEpoch;
     }
 
+    /** Epoch-start (rewarding) beacons are proposed at slot % SLOTS_PER_EPOCH == 0. */
+    public static boolean isEpochStartSlot(long slot) {
+        return slot % SLOTS_PER_EPOCH == 0;
+    }
+
+    /**
+     * Chain-derived slot sanity for a beacon: the declared epoch must equal
+     * slot/32 (self-consistent signed data) and slots must strictly increase
+     * along the reward chain ({@code prevSlot} of the prev beacon, -1 when the
+     * prev beacon carries no SlotData, e.g. legacy or genesis). This anchors
+     * the declared slot to the chain WITHOUT binding it to the reward
+     * chainlength — a missed slot must never make the next epoch's beacons
+     * invalid (chainlength lags behind the slot after any miss).
+     */
+    public static boolean slotSequenceValid(long slot, long epoch, long prevSlot) {
+        if (epoch != slot / SLOTS_PER_EPOCH) {
+            return false;
+        }
+        return prevSlot < 0 || slot > prevSlot;
+    }
+
+    /**
+     * Epoch-start classification is SLOT-based: a beacon with a signed SlotData
+     * is epoch-start iff its slot % SLOTS_PER_EPOCH == 0. Legacy beacons
+     * without SlotData fall back to the chainlength position
+     * (chainlength % SLOTS_PER_EPOCH == 1), which coincides with slot % 32 == 0
+     * on a drift-free chain, so historical beacons classify identically.
+     */
+    public static boolean isEpochStartBeacon(Block beacon, RewardInfo ri) {
+        if (beacon == null || beacon.getTransactions() == null) {
+            return false;
+        }
+        try {
+            for (Transaction tx : beacon.getTransactions()) {
+                if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+                    SlotData sd = Json.jsonmapper().readValue(tx.getData(), SlotData.class);
+                    if (sd != null) {
+                        return isEpochStartSlot(sd.getSlot());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // fall through to the legacy chainlength classification
+        }
+        return ri != null && ri.getChainlength() > 0
+                && ri.getChainlength() % SLOTS_PER_EPOCH == 1;
+    }
+
+    /**
+     * The validator set governing {@code slot}: the SNAPSHOTTED active set from
+     * two epochs earlier (same boundary discipline as the RANDAO mixfinal),
+     * falling back to the live set only before the snapshot exists (bootstrap).
+     * Proposer selection, beacon validation and the epoch-reward split must all
+     * use this exact list so they agree on every node.
+     */
+    public static List<StakeRecord> selectionValidators(long slot, BlockStoreInterface store) throws Exception {
+        List<StakeRecord> validators = getValidatorSnapshot(slot / 32 - 2, store);
+        if (validators == null) {
+            validators = store.getActiveStakeDeposits();
+        }
+        return validators;
+    }
+
     public long selectProposer(long slot, BlockStoreInterface store) throws Exception {
         // Selection uses the SNAPSHOTTED active validator set from two epochs
         // earlier (same boundary discipline as the RANDAO mixfinal), never the
         // node's live, locally-confirmed set — otherwise nodes at different
         // confirmation heights derive different proposers for the same slot.
-        long sourceEpoch = slot / 32 - 2;
-        List<StakeRecord> validators = getValidatorSnapshot(sourceEpoch, store);
-        if (validators == null) {
-            validators = store.getActiveStakeDeposits();
-        }
-        return selectProposerForSlot(slot, validators, randaoService.getSelectionMix(slot, store));
+        return selectProposerForSlot(slot, selectionValidators(slot, store),
+                randaoService.getSelectionMix(slot, store));
     }
 
     /**
@@ -259,9 +318,10 @@ public class SlotService {
     /**
      * The set of blocks already rewarded by a previous EPOCH-START beacon within
      * the reward window, walked back the reward chain. Only epoch-start beacons
-     * (chainlength % SLOTS_PER_EPOCH == 1) reward blocks, so only their reference
-     * sets count — a block referenced/confirmed by a mid-epoch beacon is NOT yet
-     * rewarded and remains eligible for this epoch's payout.
+     * (signed slot % SLOTS_PER_EPOCH == 0, see {@link #isEpochStartBeacon})
+     * reward blocks, so only their reference sets count — a block
+     * referenced/confirmed by a mid-epoch beacon is NOT yet rewarded and remains
+     * eligible for this epoch's payout.
      */
     private java.util.Set<Sha256Hash> previousEpochRewarded(Sha256Hash prevRewardHash, BlockStoreInterface store) {
         java.util.Set<Sha256Hash> rewarded = new java.util.HashSet<>();
@@ -278,7 +338,7 @@ public class SlotService {
             try {
                 RewardInfo prevRi = new RewardInfo().parseChecked(prevBeacon.getTransactions().get(0).getData());
                 if (prevRi != null) {
-                    if (prevRi.getChainlength() % SLOTS_PER_EPOCH == 1 && prevRi.getBlocks() != null) {
+                    if (prevRi.getBlocks() != null && isEpochStartBeacon(prevBeacon, prevRi)) {
                         rewarded.addAll(prevRi.getBlocks());
                     }
                     cursor = prevRi.getPrevRewardHash();
@@ -297,7 +357,10 @@ public class SlotService {
         long proposerIdx = selectProposer(slot, store);
         if (proposerIdx < 0) return null;
 
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
+        // The proposer index refers to the SELECTION SNAPSHOT list — looking it
+        // up in the live set would pick the wrong validator (or fail) whenever
+        // the two differ.
+        List<StakeRecord> validators = selectionValidators(slot, store);
         StakeRecord proposer = validators.get((int) proposerIdx);
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
@@ -386,7 +449,11 @@ public class SlotService {
                 }
             }
             if (epochFeePool.compareTo(java.math.BigInteger.ZERO) > 0) {
-                for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(epochFeePool, store)) {
+                // The split is computed over the epoch's SELECTION SNAPSHOT —
+                // the exact list beacon validation recomputes it from — so the
+                // outputs are a deterministic function of chain state.
+                for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(
+                        epochFeePool, selectionValidators(slot, store))) {
                     beaconBlock.addTransaction(rewardTx);
                 }
                 log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", epochFeePool, slot);

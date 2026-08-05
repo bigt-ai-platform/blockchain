@@ -56,7 +56,13 @@ public class SlotTickService {
                 // from every node produces forked beacon chains that corrupt
                 // the incremental order-matching state.
                 if (epoch != lastProcessedEpoch) {
-                    slotService.processEpoch(epoch, store);
+                    // Evaluate the just-COMPLETED epoch: only its attestations
+                    // are complete. Evaluating the current epoch (which has no
+                    // votes yet at its first tick) would never justify anything
+                    // — finality would never advance.
+                    if (epoch > 0) {
+                        slotService.processEpoch(epoch - 1, store);
+                    }
                     lastProcessedEpoch = epoch;
                 }
             } finally {

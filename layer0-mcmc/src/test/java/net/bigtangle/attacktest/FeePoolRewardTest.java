@@ -119,7 +119,7 @@ public class FeePoolRewardTest extends AbstractIntegrationTest {
         // Rewards are now built as transactions embedded in the PROPOSER's
         // epoch-first beacon, not as a competing beacon from every node.
         List<Transaction> rewardTxs = epochRewardService.buildEpochRewardTransactions(
-                poolForDistribution, store);
+                poolForDistribution, store.getActiveStakeDeposits());
         assertFalse(rewardTxs.isEmpty(), "reward transactions should be built for active validators");
 
         long totalBigOutput = 0;
