@@ -96,11 +96,48 @@ public class BlockStoreService {
 
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
-
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SlotService> slotServiceProvider;
 
-	
+	// Test-only escape hatch: some test harnesses deliberately seed token blocks
+	// onto an L1 chain whose production params exclude TOKEN_CREATION. The
+	// allow-set gate below is the real production enforcement; this switch lets
+	// that setup bypass it in a scoped manner (a counter, so the HTTP request
+	// thread of a test's signToken call also sees it). NEVER used by production
+	// code. Reset in every test's setUp.
+	private static final java.util.concurrent.atomic.AtomicInteger skipAllowedBlockTypeCheck =
+			new java.util.concurrent.atomic.AtomicInteger(0);
+
+	/** Test-only: scoped bypass of the layer block-type allow-set gate. */
+	public static AutoCloseable skipAllowedBlockTypeCheckForTest() {
+		skipAllowedBlockTypeCheck.incrementAndGet();
+		return () -> skipAllowedBlockTypeCheck.decrementAndGet();
+	}
+
+	/** Test-only: clears any stray bypass so a failed test cannot leak it. */
+	public static void resetAllowedBlockTypeCheckForTest() {
+		skipAllowedBlockTypeCheck.set(0);
+	}
+
+	/**
+	 * Layer scoping gate: a node only accepts the block types its
+	 * {@link NetworkParameters} allow. This is the enforcement point that used to
+	 * be dead code in {@code checkBlockBeforeSave} — every ingestion path
+	 * (gossip, sync, batch, local save) funnels through {@link #addNonChain} /
+	 * {@link #addChain}, so the allow-set is now consulted everywhere. L0-only
+	 * types (e.g. TOKEN_CREATION) cannot be smuggled onto an L1 chain.
+	 */
+	private void checkAllowedBlockType(Block block) throws BlockStoreException {
+		if (skipAllowedBlockTypeCheck.get() > 0) {
+			return;
+		}
+		if (block.getBlockType() == null
+				|| !networkParameters.getAllowedBlockTypes().contains(block.getBlockType())) {
+			throw new VerificationException("Block type " + block.getBlockType() + " is not allowed on chain "
+					+ networkParameters.getChainId());
+		}
+	}
+
 	public boolean addBlock(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		boolean added;
 		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
@@ -120,7 +157,7 @@ public class BlockStoreService {
 	 * speedup of sync without updateTransactionOutputSpendPending.
 	 */
 	public void addFromSync(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
-
+		checkAllowedBlockType(block);
 		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 			addChain(block, store);
 		} else {
@@ -130,6 +167,9 @@ public class BlockStoreService {
 	}
 
 	public boolean addChain(Block block, BlockStoreInterface store) throws BlockStoreException {
+
+		// Layer scoping: only accept block types allowed on this chain.
+		checkAllowedBlockType(block);
 
 		// Check the block is formally valid
 		block.verifyHeader();
@@ -346,6 +386,10 @@ public class BlockStoreService {
 	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
 			boolean allowMissingPredecessor, boolean batch) throws BlockStoreException {
 	 	log.debug("addNonChain"+ block.toString());
+		// Layer scoping: only accept block types allowed on this chain. Every
+		// ingestion path (gossip, sync, batch, local save) reaches this method,
+		// so the allow-set gate is enforced on all of them.
+		checkAllowedBlockType(block);
 		if (!batch) {
 			block.verifyHeader();
 			block.verifyTransactions();

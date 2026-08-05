@@ -299,8 +299,17 @@ public class BlockSaveService {
 				}
 			}
 			if (crosstangle != null && !crosstangle.getTransactions().isEmpty()) {
-				saveBatchBlock(crosstangle, store);
-				markStatus(crosstangle, net.bigtangle.server.data.TransactionStatus.IN_BLOCK, store);
+				try {
+					saveBatchBlock(crosstangle, store);
+					markStatus(crosstangle, net.bigtangle.server.data.TransactionStatus.IN_BLOCK, store);
+				} catch (Exception e) {
+					// R1: a CROSSTANGLE batch that fails consensus validation must
+					// NOT poison every later batchBlocks() run. Its rows are still
+					// deleted below (fail-closed drop of the invalid block), so the
+					// scheduled consolidation can make progress.
+					logger.warn("Dropping invalid CROSSTANGLE batch rows ({}): {}",
+							crosstangle.getHashAsString(), e.getMessage());
+				}
 			}
 			if (block.getTransactions().isEmpty()) {
 				for (BatchBlock batchBlock : batchBlocks) {

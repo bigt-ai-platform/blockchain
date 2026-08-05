@@ -215,7 +215,8 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
 
         LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
-                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient, amount, tokenIdHex);
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount(), tokenIdHex);
         LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":5",
                 head, 5, root, null, proof, burn);
         anchor.setSignature(anchor.sign(testKey).serialize());
@@ -271,6 +272,42 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
         assertEquals(1, unspent.size());
         assertFalse(unspent.get(0).isSpent(), "Over-amount burn must not release the vault");
+    }
+
+    @Test
+    public void testPegOutRejectsPartialBurn() throws Exception {
+        // R5: a burn of LESS than the full vault amount must NOT release —
+        // the remainder would be stranded (the vault record is marked spent and
+        // the change UTXO would have no unspent VaultRecord).
+        long amount = 100000;
+        String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        Sha256Hash head = Sha256Hash.wrap("9999999999999999999999999999999999999999999999999999999999999999");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        // Burn only HALF the vault.
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount() / 2, tokenIdHex);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":7",
+                head, 7, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, 7, true);
+
+        bridgeService.processPegOut(store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, 7), store);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertFalse(unspent.isEmpty(), "partial burn must not release the vault");
+        assertFalse(unspent.get(0).isSpent(), "partial burn must not mark the vault spent (R5)");
     }
 
     @Test

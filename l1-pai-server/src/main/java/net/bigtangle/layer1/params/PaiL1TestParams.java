@@ -27,6 +27,9 @@ public class PaiL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_BEACON,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
-                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL);
+                BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 }

@@ -25,6 +25,9 @@ public class PaymentL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_INITIAL,
                 BlockType.BLOCKTYPE_TRANSFER,
                 BlockType.BLOCKTYPE_BEACON,
-                BlockType.BLOCKTYPE_CROSSTANGLE);
+                BlockType.BLOCKTYPE_CROSSTANGLE,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 }

@@ -22,6 +22,7 @@ import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
+import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
@@ -251,8 +252,12 @@ public class BridgeService {
             logger.warn("Peg-out vault {} already released", burn.getVaultRef());
             return;
         }
-        if (burn.getAmount() > vault.getAmount()) {
-            logger.warn("Peg-out burn amount {} exceeds vault amount {} for {}",
+        // R5: peg-out is ALL-OR-NOTHING per vault. A partial burn is rejected:
+        // returning the remainder as a change output would strand it (the vault
+        // record is marked spent, so the change UTXO would have no unspent
+        // VaultRecord and could never be released).
+        if (burn.getAmount() != vault.getAmount()) {
+            logger.warn("Peg-out burn amount {} does not match vault amount {} for {} (partial burns rejected)",
                     burn.getAmount(), vault.getAmount(), burn.getVaultRef());
             return;
         }
@@ -283,7 +288,7 @@ public class BridgeService {
         vaultUtxo.setBlockHash(pegInBlockHash);
         vaultUtxo.setHash(vaultTxHash);
         vaultUtxo.setIndex(0); // the peg-in tx's single vault output
-        vaultUtxo.setValue(amount);
+        vaultUtxo.setValue(Coin.valueOf(vault.getAmount(), Utils.HEX.decode(burn.getTokenIdHex())));
         vaultUtxo.setTokenid(burn.getTokenIdHex());
         vaultUtxo.setAddress(vaultAddress().toBase58());
         vaultUtxo.setScript(ScriptBuilder.createOutputScript(vaultAddress()));
@@ -340,6 +345,28 @@ public class BridgeService {
      * tokens to the beneficiaries, skipping locks that were already issued
      * (replay protection). Queries L0 with the CONFIGURED vault address, not a
      * fresh random key.
+     *
+     * <p>Issuance is authenticated (N1), destination-chain-scoped (N2) and
+     * bound to a hash-verified, confirmed L0 vault lock (N3):
+     * <ul>
+     * <li>the locking block returned by L0 is hash-verified against the
+     *     requested hash, and the vault UTXO must be created by that block's
+     *     transaction,</li>
+     * <li>the lock transaction must actually pay the configured vault address
+     *     for the same value,</li>
+     * <li>the lock must declare THIS chain as its L1 destination
+     *     (PegInInfo.chainId) — otherwise one L0 deposit would mint wrapped
+     *     tokens on every watching L1 chain,</li>
+     * <li>the wrapped mint itself is a signed, chain-scoped issuance that every
+     *     L1 node re-validates via {@link L1CrosstangleHandler}.</li>
+     * </ul>
+     *
+     * <p>Residual (N3-residual): the L0 "confirmed" flag on a vault UTXO is
+     * ENDPOINT-CLAIMED (L0's MCMC confirmation, not Casper finality). The
+     * fabrication vectors above are closed (hash commitment, vault-payment
+     * binding, declared chain id); binding the mint to an L0-FINALIZED anchor
+     * or a confirmation-depth threshold is left open as a known limitation.
+     */
      */
     public void processPegInFromL0(BlockStoreInterface store) throws Exception {
         if (!bridgeConfiguration.isActive()) {
@@ -362,9 +389,49 @@ public class BridgeService {
                     logger.debug("Vault lock {}:{} already issued, skipping", output.getBlockHash(), output.getIndex());
                     continue;
                 }
+                if (!output.isConfirmed()) {
+                    logger.debug("Vault lock {}:{} not yet confirmed on L0, skipping",
+                            output.getBlockHash(), output.getIndex());
+                    continue;
+                }
 
+                // N3: fetch the locking block and verify its hash matches the
+                // requested one — the block hash is a commitment to its content,
+                // so a MITM/compromised L0 cannot return a fabricated block.
                 Block remoteBlock = getRemoteBlock(l0Url, output.getBlockHashHex());
-                byte[] toAddressInSubtangle = remoteBlock.getTransactions().get(0).getToAddressInSubtangle();
+                if (remoteBlock.getTransactions() == null || remoteBlock.getTransactions().isEmpty()) {
+                    continue;
+                }
+                Transaction lockTx = remoteBlock.getTransactions().get(0);
+                // Bind the UTXO to the fetched block: the vault output must come
+                // from THIS block's transaction.
+                if (lockTx.getHash() == null || !lockTx.getHash().equals(output.getTxHash())) {
+                    logger.warn("Vault UTXO {}:{} does not match the locking block's transaction, skipping",
+                            output.getBlockHash(), output.getIndex());
+                    continue;
+                }
+                // The lock tx must ACTUALLY pay the configured vault address for
+                // the same value — a fabricated balance listing cannot name an
+                // arbitrary L0 block as a vault lock.
+                Coin vaultValue = vaultPaymentValue(lockTx);
+                if (vaultValue == null || !vaultValue.equals(output.getValue())) {
+                    logger.warn("Locking block {}:{} does not pay the vault (or value mismatch), skipping",
+                            output.getBlockHash(), output.getIndex());
+                    continue;
+                }
+
+                // N2: the peg-in must declare THIS chain as its L1 destination;
+                // otherwise one L0 deposit would mint wrapped tokens on every
+                // watching L1 chain (1:N collateral multiplication).
+                String declaredChain = pegInChainId(lockTx);
+                if (declaredChain == null || !declaredChain.equals(networkParameters.getChainId())) {
+                    logger.debug("Vault lock {}:{} declares chain {} (this chain is {}), skipping",
+                            output.getBlockHash(), output.getIndex(), declaredChain,
+                            networkParameters.getChainId());
+                    continue;
+                }
+
+                byte[] toAddressInSubtangle = lockTx.getToAddressInSubtangle();
                 if (toAddressInSubtangle == null) {
                     continue;
                 }
@@ -374,7 +441,8 @@ public class BridgeService {
                 // minted twice (a second mint to the vault key would over-issue
                 // 2x collateral).
                 Address address = Address.fromHash160(networkParameters, toAddressInSubtangle);
-                issueWrappedTokens(vaultKey, address, output.getValue(), store);
+                issueWrappedTokens(address, output.getValue(),
+                        output.getBlockHash(), output.getIndex(), store);
 
                 // Record the issued lock so a later poll cannot mint again.
                 VaultRecord issued = new VaultRecord(networkParameters.getChainId(),
@@ -391,13 +459,56 @@ public class BridgeService {
         }
     }
 
-    private void issueWrappedTokens(PQKey signKey, Address address, Coin amount,
+    /**
+     * The value the lock transaction pays to the configured vault address, or
+     * null when it does not pay the vault at all.
+     */
+    private Coin vaultPaymentValue(Transaction lockTx) {
+        Address vault = vaultAddress();
+        for (TransactionOutput out : lockTx.getOutputs()) {
+            try {
+                Address to = Address.fromHash160(networkParameters, out.getScriptPubKey().getPubKeyHash());
+                if (to.toBase58().equals(vault.toBase58())) {
+                    return out.getValue();
+                }
+            } catch (Exception e) {
+                // not a standard address — not the vault
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Issues the wrapped tokens as an AUTHENTICATED bridge issuance: a
+     * zero-input CROSSTANGLE mint declaring this chain and the L0 lock
+     * reference, signed by the chain's DEDICATED issuance key (R4 — the vault
+     * key stays on L0 and is never used to sign issuance). Every L1 node
+     * verifies the signature (and chain id) via {@link L1CrosstangleHandler}
+     * before the block is accepted, and the lock is replay-guarded at
+     * confirmation (R3).
+     */
+    private void issueWrappedTokens(Address address, Coin amount, Sha256Hash lockBlockHash, long lockIndex,
             BlockStoreInterface store) throws Exception {
+        String issuancePriKeyHex = bridgeConfiguration.getIssuancePriKeyHex();
+        if (issuancePriKeyHex == null || issuancePriKeyHex.isEmpty()) {
+            logger.warn("bridge.issuancePriKeyHex not configured; cannot sign wrapped issuance; skipping");
+            return;
+        }
+        PQKey issuanceKey = PQKey.fromPrivateKeyHex(issuancePriKeyHex);
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 
         Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(L1CrosstangleHandler.ISSUE_WRAPPED_TOKEN_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of(
+                "chainId", networkParameters.getChainId(),
+                "lockBlockHash", lockBlockHash.toString(),
+                "lockIndex", lockIndex)));
         tx.addOutput(amount, address);
+        // The signature covers the outputs (amount + recipient), the declared
+        // chain id and the L0 lock reference — tx.getHash() excludes the
+        // dataSignature field, so it can be set after signing.
+        tx.setDataSignature(issuanceKey.sign(tx.getHash()).serialize());
         b.addTransaction(tx);
         blockSaveService.saveBlockPermissive(b, store);
     }
@@ -409,19 +520,33 @@ public class BridgeService {
                 Json.jsonmapper().writeValueAsString(keyStrHex).getBytes());
         GetBalancesResponse r = jsonmapper.readValue(response, GetBalancesResponse.class);
         List<UTXO> list = new ArrayList<>();
-        for (UTXO utxo : r.getOutputs()) {
-            if (utxo.getValue().getValue().signum() > 0) {
-                list.add(utxo);
+        if (r != null && r.getOutputs() != null) {
+            for (UTXO utxo : r.getOutputs()) {
+                if (utxo != null && utxo.getValue() != null && utxo.getValue().getValue().signum() > 0) {
+                    list.add(utxo);
+                }
             }
         }
         return list;
     }
 
+    /**
+     * Fetches a block by hash and verifies that the returned block actually
+     * hashes to the requested value — the block hash is a commitment to its
+     * content, so a MITM/compromised L0 endpoint cannot substitute a different
+     * block for the requested one.
+     */
     private Block getRemoteBlock(String l0Url, String blockHashHex) throws Exception {
         java.util.HashMap<String, Object> params = new java.util.HashMap<>();
         params.put("hashHex", blockHashHex);
         byte[] data = OkHttp3Util.postAndGetBlock(l0Url + "/" + ReqCmd.getBlockByHash.name(),
                 Json.jsonmapper().writeValueAsString(params));
-        return networkParameters.getDefaultSerializer().makeBlock(data);
+        Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+        if (block == null || block.getHash() == null
+                || !block.getHashAsString().equalsIgnoreCase(blockHashHex)) {
+            throw new BlockStoreException(
+                    "L0 returned a block whose hash does not match the requested " + blockHashHex);
+        }
+        return block;
     }
 }

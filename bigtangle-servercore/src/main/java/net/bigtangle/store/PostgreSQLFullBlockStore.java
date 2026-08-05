@@ -461,6 +461,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    l1Height bigint NOT NULL,\n"
             + "    confirmedRoot varchar(255),\n"
             + "    signatureHex TEXT,\n"
+            + "    signatureHexList TEXT,\n"
             + "    spvProofHex TEXT,\n"
             + "    burnJson TEXT,\n"
             + "    blockHash varchar(255) NOT NULL,\n"
@@ -558,6 +559,8 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_VAULT_TABLE);
         // Migration for databases created before pegInBlockHash existed.
         sqlStatements.add("ALTER TABLE vault ADD COLUMN IF NOT EXISTS pegInBlockHash varchar(255)");
+        // Migration for databases created before the M-of-N signature list existed.
+        sqlStatements.add("ALTER TABLE anchor ADD COLUMN IF NOT EXISTS signatureHexList TEXT");
         return sqlStatements;
     }
 

@@ -28,7 +28,10 @@ public class OrderMatchL1TestParams extends TestParams {
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_TOKEN_CREATION,
                 BlockType.BLOCKTYPE_ORDER_OPEN,
-                BlockType.BLOCKTYPE_ORDER_CANCEL);
+                BlockType.BLOCKTYPE_ORDER_CANCEL,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 
 }

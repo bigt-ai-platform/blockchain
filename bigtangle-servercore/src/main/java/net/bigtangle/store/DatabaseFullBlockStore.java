@@ -3288,10 +3288,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			s.setLong(4, anchor.getL1Height());
 			s.setString(5, anchor.getConfirmedRoot() != null ? anchor.getConfirmedRoot().toString() : null);
 			s.setString(6, anchor.getSignatureHex());
-			s.setString(7, anchor.getSpvProofHex());
-			s.setString(8, anchor.getBurnJson());
-			s.setString(9, anchor.getBlockHash().toString());
-			s.setBoolean(10, anchor.isConfirmed());
+			s.setString(7, anchor.getSignatureHexList());
+			s.setString(8, anchor.getSpvProofHex());
+			s.setString(9, anchor.getBurnJson());
+			s.setString(10, anchor.getBlockHash().toString());
+			s.setBoolean(11, anchor.isConfirmed());
 			s.executeUpdate();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
@@ -3359,6 +3360,21 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 				}
 			}
 			return null;
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
+	public List<AnchorRecord> getAllAnchors() throws BlockStoreException {
+		List<AnchorRecord> result = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_ALL_ANCHORS_SQL)) {
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.add(setAnchorRecord(rs));
+				}
+			}
+			return result;
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
@@ -3764,6 +3780,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			anchor.setConfirmedRoot(Sha256Hash.wrap(confirmedRoot));
 		}
 		anchor.setSignatureHex(rs.getString("signatureHex"));
+		anchor.setSignatureHexList(rs.getString("signatureHexList"));
 		anchor.setSpvProofHex(rs.getString("spvProofHex"));
 		anchor.setBurnJson(rs.getString("burnJson"));
 		String blockHash = rs.getString("blockHash");

@@ -275,13 +275,20 @@ public class DispatcherController implements DisposableBean {
 							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
 					break;
 				}
-				// Process peg-out for the latest confirmed anchor of this chain.
-				// Anchors are indexed by their own CROSSTANGLE block hash, NOT
-				// by a vault's peg-in block hash, so look them up by chain.
-				AnchorRecord latest = store.getLatestAnchorByChainId(networkParameters.getChainId());
-				if (latest != null) {
-					bridgeService.processPegOut(latest, store);
+				// Process peg-out for confirmed anchors with an embedded burn.
+				// Anchors are keyed by their L1 chain id (NOT this node's own
+				// chain id, which on L0 is always "L0") — so iterate every
+				// confirmed anchor; processPegOut is idempotent (already-spent
+				// vaults are skipped), making this a safe manual retry for
+				// previously-failed peg-outs (F7).
+				int attempted = 0;
+				for (net.bigtangle.server.data.AnchorRecord anchor : store.getAllAnchors()) {
+					if (anchor.isConfirmed() && anchor.getBurnJson() != null && !anchor.getBurnJson().isEmpty()) {
+						bridgeService.processPegOut(anchor, store);
+						attempted++;
+					}
 				}
+				logger.info("processPegOut: attempted {} confirmed anchor burns", attempted);
 				this.outPrintJSONString(httpServletResponse,
 						new net.bigtangle.response.OkResponse(), watch, reqCmd);
 			}

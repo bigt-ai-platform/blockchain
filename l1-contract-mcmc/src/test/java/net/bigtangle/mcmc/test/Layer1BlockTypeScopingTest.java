@@ -30,4 +30,19 @@ public class Layer1BlockTypeScopingTest extends AbstractIntegrationTest {
         assertTrue(ex.getMessage().contains("not allowed"),
                 "Error must mention 'not allowed'; got: " + ex.getMessage());
     }
+
+    @Test
+    public void l1RejectsTokenCreationOnBatchReceivePath() {
+        // N4: the allow-set gate must be enforced on the batch receive path
+        // (saveBatchBlock -> addNonChain), not just on the explicit
+        // checkBlockBeforeSave helper. Without it, an L0-only TOKEN_CREATION
+        // block could be smuggled onto an L1 chain via /batchBlock.
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Block badBlock = UtilsTest.createBlock(networkParameters, genesis, genesis);
+        badBlock.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
+        VerificationException ex = assertThrows(VerificationException.class,
+                () -> blockSaveService.saveBatchBlock(badBlock, store));
+        assertTrue(ex.getMessage().contains("not allowed"),
+                "Error must mention 'not allowed'; got: " + ex.getMessage());
+    }
 }

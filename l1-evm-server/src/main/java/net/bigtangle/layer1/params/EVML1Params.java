@@ -35,6 +35,9 @@ public class EVML1Params extends MainNetParams {
 				BlockType.BLOCKTYPE_CROSSTANGLE,
 				BlockType.BLOCKTYPE_TOKEN_CREATION,
 				BlockType.BLOCKTYPE_EVM_DEPLOY,
-				BlockType.BLOCKTYPE_EVM_CALL);
+				BlockType.BLOCKTYPE_EVM_CALL,
+				BlockType.BLOCKTYPE_STAKE,
+				BlockType.BLOCKTYPE_SLASHING,
+				BlockType.BLOCKTYPE_EXIT);
 	}
 }

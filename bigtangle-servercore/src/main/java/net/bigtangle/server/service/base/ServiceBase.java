@@ -606,10 +606,42 @@ public abstract class ServiceBase {
 		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper).checkSolidity(block, false, store, false);
 		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {
-			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
+			// R2: only force-solid when the missing dependency is a PREDECESSOR
+			// BLOCK that has since arrived. A MissingPredecessor caused by a
+			// NON-EXISTENT input UTXO must NOT be force-solided: that would
+			// bypass the type-specific handler and solidify a block spending
+			// phantom outputs (a consensus hole). When the predecessor / UTXO
+			// source has arrived, the regular checkSolidity pass below would have
+			// returned Success on its own.
+			Block prev = store.get(block.getPrevBlockHash());
+			Block prevBranch = store.get(block.getPrevBranchBlockHash());
+			if (prev != null && prevBranch != null && allInputsExist(block, store)) {
+				solidifyBlock(block, SolidityState.getSuccessState(), false, store);
+			} else {
+				solidifyBlock(block, solidityState, false, store);
+			}
 		} else {
 			solidifyBlock(block, solidityState, false, store);
 		}
+	}
+
+	/**
+	 * True when every non-coinbase input of every transaction in the block
+	 * resolves to a stored UTXO.
+	 */
+	private boolean allInputsExist(Block block, BlockStoreInterface store) throws BlockStoreException {
+		for (Transaction tx : block.getTransactions()) {
+			if (tx.isCoinBase()) {
+				continue;
+			}
+			for (TransactionInput in : tx.getInputs()) {
+				if (store.getTransactionOutput(in.getOutpoint().getBlockHash(),
+						in.getOutpoint().getTxHash(), in.getOutpoint().getIndex()) == null) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	public boolean getUTXOConfirmed(TransactionOutPoint txout, BlockStoreInterface store) throws BlockStoreException {

@@ -29,7 +29,10 @@ public class ContractL1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_CONTRACT_EVENT,
                 BlockType.BLOCKTYPE_CONTRACTEVENT_CANCEL,
                 BlockType.BLOCKTYPE_EVM_DEPLOY,
-                BlockType.BLOCKTYPE_EVM_CALL);
+                BlockType.BLOCKTYPE_EVM_CALL,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 
 }

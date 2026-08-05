@@ -395,7 +395,13 @@ public class ValidatorServiceTest extends AbstractIntegrationTest {
 					Block rollingBlock = UtilsTest.createBlock(networkParameters, genesisBlock, genesisBlock);
 					rollingBlock.setBlockType(type);
 					rollingBlock.addTransaction(tx);
-					blockGraph.addBlock(rollingBlock, false, store);
+					// The layer allow-set gate is not what this test targets, so
+					// skip it and exercise the coinbase-disallowance check for
+					// every non-coinbase block type.
+					try (AutoCloseable ignore = net.bigtangle.store.BlockStoreService
+							.skipAllowedBlockTypeCheckForTest()) {
+						blockGraph.addBlock(rollingBlock, false, store);
+					}
 
 					fail();
 				} catch (CoinbaseDisallowedException | UnsolidException e) {

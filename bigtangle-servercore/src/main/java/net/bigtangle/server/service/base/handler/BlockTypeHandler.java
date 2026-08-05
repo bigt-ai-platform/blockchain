@@ -41,6 +41,18 @@ public interface BlockTypeHandler {
 	}
 
 	/**
+	 * Pre-confirm veto: called for a block about to be CONFIRMED, BEFORE any of
+	 * its outputs are marked confirmed. A handler returns false to reject the
+	 * block at confirmation (it is marked invalid and excluded from future
+	 * confirmation passes). This is the hook for consensus-level, chain-derived
+	 * guards that must NOT run in {@link #checkFull} (where a node's local view
+	 * can legitimately lag the confirmed chain).
+	 */
+	default boolean checkPreConfirm(SolidityContext ctx) throws BlockStoreException {
+		return true;
+	}
+
+	/**
 	 * Confirmation hook (mirrors
 	 * {@code ServiceBaseConfirmation.confirmBlockTransactionWithType}). Called
 	 * on both confirm and unconfirm passes ({@code ctx.confirmation}).

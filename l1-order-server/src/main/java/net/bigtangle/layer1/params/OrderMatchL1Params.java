@@ -27,7 +27,10 @@ public class OrderMatchL1Params extends MainNetParams {
                 BlockType.BLOCKTYPE_BEACON,
                 BlockType.BLOCKTYPE_CROSSTANGLE,
                 BlockType.BLOCKTYPE_ORDER_OPEN,
-                BlockType.BLOCKTYPE_ORDER_CANCEL);
+                BlockType.BLOCKTYPE_ORDER_CANCEL,
+                BlockType.BLOCKTYPE_STAKE,
+                BlockType.BLOCKTYPE_SLASHING,
+                BlockType.BLOCKTYPE_EXIT);
     }
 
 }

@@ -30,6 +30,7 @@ import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
 
 @Service
@@ -184,6 +185,17 @@ public class AnchorService {
         record.setEventId(anchor.getEventId() != null ? anchor.getEventId()
                 : anchor.getChainId() + ":" + anchor.getL1Height());
         record.setSpvProofHex(anchor.getSpvProof().toHex());
+        // F6: persist the FULL M-of-N signature set so a remote AnchorRecord can
+        // be revalidated as a quorum (not just the primary signature).
+        java.util.List<String> sigHex = new ArrayList<>();
+        for (byte[] sig : anchor.getSignatures()) {
+            if (sig != null && sig.length > 0) {
+                sigHex.add(Utils.HEX.encode(sig));
+            }
+        }
+        if (!sigHex.isEmpty()) {
+            record.setSignatureHexList(Json.jsonmapper().writeValueAsString(sigHex));
+        }
         if (anchor.getBurn() != null) {
             record.setBurnJson(anchor.getBurn().toJson());
         }
@@ -206,6 +218,14 @@ public class AnchorService {
         }
         if (anchor.getL1Height() < 0) {
             throw new BlockStoreException("Anchor l1Height must be non-negative");
+        }
+        // eventId is signature-covered, but it must ALSO match the committed
+        // chain position — otherwise a signer could tag an anchor with a
+        // misleading event id while keeping a valid signature.
+        if (anchor.getEventId() != null
+                && !(anchor.getChainId() + ":" + anchor.getL1Height()).equals(anchor.getEventId())) {
+            throw new BlockStoreException("Anchor eventId '" + anchor.getEventId()
+                    + "' does not match " + anchor.getChainId() + ":" + anchor.getL1Height());
         }
         if (anchor.getConfirmedRoot() == null) {
             throw new BlockStoreException("Anchor confirmedRoot is null");
@@ -275,20 +295,105 @@ public class AnchorService {
     }
 
     /**
+     * Incremental cache of the confirmed-block set committed by the last anchor,
+     * so an anchor post walks only the newly confirmed blocks (O(delta)) instead
+     * of the whole reward chain back to genesis (O(chain length)).
+     */
+    private volatile AnchorHistoryCache historyCache;
+
+    private static final class AnchorHistoryCache {
+        final long height;             // last anchored chainlength
+        final Sha256Hash anchorHash;   // confirmed reward block at chainlength == height
+        final List<Sha256Hash> hashes; // sorted confirmed block hashes with chainlength <= height
+
+        AnchorHistoryCache(long height, Sha256Hash anchorHash, List<Sha256Hash> hashes) {
+            this.height = height;
+            this.anchorHash = anchorHash;
+            this.hashes = hashes;
+        }
+    }
+
+    /**
      * Collects the hashes of all CONFIRMED reward blocks up to {@code upToHeight}
      * (the anchored chainlength) by walking the confirmed reward chain back to
      * genesis. The Merkle root over this set commits the anchor to the actual
      * anchored chain state — not a 2-leaf stub of {head, genesis} — so the
      * embedded "SPV proof" is a genuine inclusion proof over the anchored chain.
+     *
+     * <p>Incremental: after the first walk the cache is reused and only the
+     * newly confirmed blocks are collected, unless a reorg moved the anchor
+     * point (detected by comparing the reward block at the cached chainlength),
+     * in which case the set is rebuilt from scratch.
      */
     private List<Sha256Hash> collectConfirmedBlockHashes(long upToHeight, BlockStoreInterface store) throws Exception {
+        AnchorHistoryCache cache = historyCache;
+        if (cache != null && cache.height < upToHeight) {
+            List<Sha256Hash> fresh = collectNewSince(cache.height, cache.anchorHash, upToHeight, store);
+            if (fresh != null) {
+                List<Sha256Hash> merged = new ArrayList<>(cache.hashes);
+                merged.addAll(fresh);
+                Collections.sort(merged);
+                TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+                historyCache = new AnchorHistoryCache(upToHeight,
+                        tip != null ? tip.getBlockHash() : cache.anchorHash, merged);
+                return merged;
+            }
+            // Reorg or the cached anchor point is no longer reachable: rebuild.
+        }
         List<Sha256Hash> hashes = new ArrayList<>();
         TXReward reward = cacheBlockService.getMaxConfirmedReward(store);
-        if (reward == null) {
-            return hashes;
+        Sha256Hash anchorHash = null;
+        if (reward != null) {
+            Sha256Hash cursor = reward.getBlockHash();
+            java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+            while (cursor != null && visited.add(cursor)) {
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    break;
+                }
+                net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                        .parseChecked(b.getTransactions().get(0).getData());
+                if (ri == null) {
+                    break;
+                }
+                if (ri.getChainlength() > upToHeight) {
+                    cursor = ri.getPrevRewardHash(); // still above the anchored height
+                    continue;
+                }
+                if (anchorHash == null && ri.getChainlength() == upToHeight) {
+                    anchorHash = cursor;
+                }
+                hashes.add(cursor);
+                if (ri.getChainlength() <= 1) {
+                    break; // reached genesis
+                }
+                cursor = ri.getPrevRewardHash();
+            }
+            Collections.sort(hashes);
         }
-        Sha256Hash cursor = reward.getBlockHash();
+        if (anchorHash == null && reward != null) {
+            anchorHash = reward.getBlockHash();
+        }
+        historyCache = new AnchorHistoryCache(upToHeight, anchorHash, hashes);
+        return hashes;
+    }
+
+    /**
+     * Walks the confirmed reward chain from the tip back to the cached anchor
+     * point, collecting the newly confirmed block hashes (chainlength in
+     * (fromHeight, upToHeight]). Returns null when the anchor point no longer
+     * matches (reorg) or cannot be reached — the caller then rebuilds.
+     */
+    private List<Sha256Hash> collectNewSince(long fromHeight, Sha256Hash anchorHash, long upToHeight,
+            BlockStoreInterface store) throws Exception {
+        TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+        if (tip == null) {
+            return null;
+        }
+        List<Sha256Hash> fresh = new ArrayList<>();
+        Sha256Hash cursor = tip.getBlockHash();
         java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+        boolean reachedAnchor = false;
         while (cursor != null && visited.add(cursor)) {
             Block b = store.get(cursor);
             if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
@@ -297,20 +402,25 @@ public class AnchorService {
             net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
                     .parseChecked(b.getTransactions().get(0).getData());
             if (ri == null) {
-                break;
+                return null;
             }
-            if (ri.getChainlength() > upToHeight) {
-                cursor = ri.getPrevRewardHash(); // still above the anchored height
+            long chainlength = ri.getChainlength();
+            if (chainlength > upToHeight) {
+                cursor = ri.getPrevRewardHash();
                 continue;
             }
-            hashes.add(cursor);
-            if (ri.getChainlength() <= 1) {
-                break; // reached genesis
+            if (chainlength <= fromHeight) {
+                // The cached anchor point must be the same confirmed block.
+                reachedAnchor = chainlength == fromHeight && cursor.equals(anchorHash);
+                break;
+            }
+            fresh.add(cursor);
+            if (chainlength <= 1) {
+                break;
             }
             cursor = ri.getPrevRewardHash();
         }
-        Collections.sort(hashes);
-        return hashes;
+        return reachedAnchor ? fresh : null;
     }
 
     public void processReceivedAnchor(Block block, BlockStoreInterface store) throws Exception {
@@ -360,10 +470,27 @@ public class AnchorService {
             LayerAnchor anchor = new LayerAnchor(record.getChainId(),
                     record.getEventId() != null ? record.getEventId() : record.getChainId() + ":" + record.getL1Height(),
                     record.getL1RewardHeadHash(), record.getL1Height(), record.getConfirmedRoot(),
-                    Utils.HEX.decode(record.getSignatureHex()),
+                    record.getSignatureHex() != null ? Utils.HEX.decode(record.getSignatureHex()) : null,
                     record.getSpvProofHex() != null ? MerkleProof.fromHex(record.getSpvProofHex()) : null,
                     record.getBurnJson() != null && !record.getBurnJson().isEmpty()
                             ? LayerAnchor.AnchorBurn.fromJson(record.getBurnJson()) : null);
+            // F6: restore the FULL M-of-N signature set so revalidation checks
+            // the quorum, not just the primary signature. The primary signature
+            // is always included (legacy records have no signatureHexList).
+            if (record.getSignatureHex() != null && !record.getSignatureHex().isEmpty()) {
+                anchor.getSignatures().add(Utils.HEX.decode(record.getSignatureHex()));
+            }
+            if (record.getSignatureHexList() != null && !record.getSignatureHexList().isEmpty()) {
+                java.util.List<String> sigHex = Json.jsonmapper().readValue(record.getSignatureHexList(),
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {});
+                if (sigHex != null) {
+                    for (String hex : sigHex) {
+                        if (hex != null && !hex.isEmpty()) {
+                            anchor.getSignatures().add(Utils.HEX.decode(hex));
+                        }
+                    }
+                }
+            }
             validateAnchor(anchor);
             return true;
         } catch (Exception e) {

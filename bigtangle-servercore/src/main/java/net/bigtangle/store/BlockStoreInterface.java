@@ -567,6 +567,9 @@ public interface BlockStoreInterface {
 
 	AnchorRecord getAnchorByBlockHash(Sha256Hash blockHash) throws BlockStoreException;
 
+	/** All anchor records, across every chain (used for peg-out retry scans). */
+	List<AnchorRecord> getAllAnchors() throws BlockStoreException;
+
 	void updateAnchorConfirmed(String chainId, long l1Height, boolean confirmed) throws BlockStoreException;
 
 	void saveVaultUTXO(VaultRecord vault) throws BlockStoreException;

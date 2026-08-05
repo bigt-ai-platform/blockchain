@@ -598,6 +598,23 @@ public class CasperService {
         }
     }
 
+    /**
+     * Bounds the per-epoch vote maps against growth during finality stalls: any
+     * vote whose target epoch is older than {@code currentEpoch} minus the
+     * inactivity-leak window (plus slack) can no longer contribute to a live
+     * checkpoint, so it is dropped. Runs unconditionally at each checkpoint
+     * evaluation, independent of whether finality actually advances.
+     */
+    private void pruneStaleEpochVotes(long currentEpoch) {
+        long floor = currentEpoch - INACTIVITY_WINDOW_EPOCHS - 1;
+        for (ConcurrentHashMap<Long, Sha256Hash> m : epochVoteTargets.values()) {
+            m.keySet().removeIf(e -> e < floor);
+        }
+        for (ConcurrentHashMap<Long, Sha256Hash> m : epochVoteSources.values()) {
+            m.keySet().removeIf(e -> e < floor);
+        }
+    }
+
     /** Verifies the attestation signature against the declared validator pubkey. */
     public boolean verifyAttestation(AttestationData att) {
         return att != null && att.verifySignature();
@@ -650,6 +667,15 @@ public class CasperService {
         if (epoch < 0) {
             return;
         }
+        // Bounded vote history: even when finality is stalled, prune per-epoch
+        // vote records that can no longer influence justification/finalization.
+        // The reference is the CHAIN epoch being evaluated (which advances every
+        // epoch even without finality), never the wall clock — a node's clock can
+        // be far ahead of the chain. The inactivity-leak window is
+        // INACTIVITY_WINDOW_EPOCHS, so votes for epochs older than epoch - window
+        // - slack are beyond the reach of any live checkpoint; without this, a
+        // long stall would grow epochVoteTargets/epochVoteSources without bound.
+        pruneStaleEpochVotes(epoch);
         // Chain-derived creation: any node (including non-proposing relays)
         // derives the checkpoint from confirmed chain state. Returning early on
         // a missing local entry would mean finality only advances on proposer

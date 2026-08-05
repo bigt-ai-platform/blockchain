@@ -409,6 +409,7 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + "    l1Height bigint NOT NULL,\n"
             + "    confirmedRoot varchar(255),\n"
             + "    signatureHex TEXT,\n"
+            + "    signatureHexList TEXT,\n"
             + "    spvProofHex TEXT,\n"
             + "    burnJson TEXT,\n"
             + "    blockHash varchar(255) NOT NULL,\n"
@@ -530,13 +531,21 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
            dbupdateversion("06");
        }
        if("06".equals(ver)) {
-           List<String> vaultTable = new ArrayList<String>();
-           vaultTable.add(CREATE_VAULT_TABLE);
-           updateTables(vaultTable);
-           dbupdateversion("07");
-       }
-      
-     }
+            List<String> vaultTable = new ArrayList<String>();
+            vaultTable.add(CREATE_VAULT_TABLE);
+            updateTables(vaultTable);
+            dbupdateversion("07");
+        }
+        if("07".equals(ver)) {
+            // Migration for databases created before the M-of-N signature list
+            // existed on the anchor table.
+            List<String> anchorSigList = new ArrayList<String>();
+            anchorSigList.add("ALTER TABLE anchor ADD COLUMN signatureHexList TEXT");
+            updateTables(anchorSigList);
+            dbupdateversion("08");
+        }
+       
+      }
     @Override
     protected List<String> getCreateIndexesSQL() {
         List<String> sqlStatements = new ArrayList<String>();

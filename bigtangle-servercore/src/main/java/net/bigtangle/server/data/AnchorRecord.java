@@ -12,6 +12,8 @@ public class AnchorRecord {
     private long l1Height;
     private Sha256Hash confirmedRoot;
     private String signatureHex;
+    /** JSON array of hex-encoded signatures (M-of-N quorum evidence, primary first). */
+    private String signatureHexList;
     private String spvProofHex;
     private String burnJson;
     private Sha256Hash blockHash;
@@ -80,6 +82,14 @@ public class AnchorRecord {
         this.signatureHex = signatureHex;
     }
 
+    public String getSignatureHexList() {
+        return signatureHexList;
+    }
+
+    public void setSignatureHexList(String signatureHexList) {
+        this.signatureHexList = signatureHexList;
+    }
+
     public String getSpvProofHex() {
         return spvProofHex;
     }
@@ -125,6 +135,7 @@ public class AnchorRecord {
                 && Objects.equals(l1RewardHeadHash, that.l1RewardHeadHash)
                 && Objects.equals(confirmedRoot, that.confirmedRoot)
                 && Objects.equals(signatureHex, that.signatureHex)
+                && Objects.equals(signatureHexList, that.signatureHexList)
                 && Objects.equals(spvProofHex, that.spvProofHex)
                 && Objects.equals(burnJson, that.burnJson)
                 && Objects.equals(blockHash, that.blockHash);
@@ -132,7 +143,7 @@ public class AnchorRecord {
 
     @Override
     public int hashCode() {
-        return Objects.hash(chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex, spvProofHex,
-                burnJson, blockHash, confirmed);
+        return Objects.hash(chainId, eventId, l1RewardHeadHash, l1Height, confirmedRoot, signatureHex,
+                signatureHexList, spvProofHex, burnJson, blockHash, confirmed);
     }
 }

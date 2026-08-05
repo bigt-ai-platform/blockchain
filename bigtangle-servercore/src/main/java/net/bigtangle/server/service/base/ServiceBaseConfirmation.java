@@ -1213,6 +1213,21 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
  	private void confirmBlockTransactionWithType(BlockWrap block, long chainlength, boolean confirmation,
  			BlockStoreInterface blockStore) throws BlockStoreException {
 
+ 		// Pre-confirm veto: a handler may reject a block BEFORE any of its
+ 		// outputs are confirmed (e.g. a replayed CROSSTANGLE issuance — the same
+ 		// L0 lock must never be minted twice). The block is marked invalid so it
+ 		// is excluded from future confirmation passes. Deterministic because it
+ 		// reads only chain-derived state written at prior confirmations.
+ 		if (confirmation && handlerFor(block.getBlock().getBlockType()).isPresent()) {
+ 			SolidityContext preCtx = SolidityContext.builder().block(block.getBlock()).store(blockStore)
+ 					.chainlength(chainlength).confirmation(confirmation)
+ 					.blockHash(block.getBlockHash()).base(this).build();
+ 			if (!handlerFor(block.getBlock().getBlockType()).get().checkPreConfirm(preCtx)) {
+ 				blockStore.updateBlockEvaluationSolid(block.getBlockHash(), -1);
+ 				return;
+ 			}
+ 		}
+
  		blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
 		if (confirmation) {
 			markConfirmedStatus(block.getBlock(), chainlength, blockStore);

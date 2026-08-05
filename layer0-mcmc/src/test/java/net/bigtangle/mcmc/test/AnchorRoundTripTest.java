@@ -52,6 +52,9 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
     public void setUp() throws Exception {
         super.setUp();
         scheduleConfiguration.setChainlength_active(true);
+        // Reset any per-chain registry left by a previous test.
+        anchorConfiguration.setChainPubKeys(new java.util.HashMap<>());
+        anchorConfiguration.setChainSignersRequired(1);
     }
 
     private void configureAnchorWithKey(PQKey key) {
@@ -320,6 +323,65 @@ public class AnchorRoundTripTest extends AbstractIntegrationTest {
 
         assertThrows(BlockStoreException.class,
                 () -> anchorService.validateAndSaveAnchor(anchor, head, store));
+    }
+
+    @Test
+    public void testRejectsMismatchedEventId() throws Exception {
+        PQKey signKey = PQKey.createNew();
+        configureAnchorWithKey(signKey);
+
+        Sha256Hash head = Sha256Hash.wrap("1111111111111111111111111111111111111111111111111111111111111111");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+        // Valid structure and signature, but the eventId does not match the
+        // committed chainId:l1Height (N7).
+        LayerAnchor anchor = new LayerAnchor("L1", "some-other-event", head, 1, root, null, proof, null);
+        anchor.setSignature(anchor.sign(signKey).serialize());
+
+        assertThrows(BlockStoreException.class,
+                () -> anchorService.validateAndSaveAnchor(anchor, head, store),
+                "an anchor whose eventId does not match chainId:l1Height must be rejected");
+    }
+
+    @Test
+    public void testMofNQuorumPersistedAndRevalidated() throws Exception {
+        // F6: the FULL M-of-N signature set must be persisted so a remote
+        // AnchorRecord revalidates as a quorum, not just the primary signature.
+        PQKey k1 = PQKey.createNew();
+        PQKey k2 = PQKey.createNew();
+        anchorConfiguration.setChainPubKeys(java.util.Map.of("L1",
+                java.util.List.of(Utils.HEX.encode(k1.getPublicKeyBytes()),
+                        Utils.HEX.encode(k2.getPublicKeyBytes()))));
+        anchorConfiguration.setChainSignersRequired(2);
+        // validateAnchor requires the global fallback key to be present even
+        // when a per-chain registry is used.
+        anchorConfiguration.setPubKeyHex(Utils.HEX.encode(k1.getPublicKeyBytes()));
+
+        Sha256Hash head = Sha256Hash.wrap("4444444444444444444444444444444444444444444444444444444444444444");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        LayerAnchor anchor = new LayerAnchor("L1", "L1:1", head, 1, root, null, proof, null);
+        anchor.setSignature(anchor.sign(k1).serialize()); // primary
+        anchor.addSignature(k2);                          // second signer
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+
+        AnchorRecord saved = store.getAnchorByChainIdAndHeight("L1", 1);
+        assertNotNull(saved);
+        assertNotNull(saved.getSignatureHexList(), "the M-of-N signature set must be persisted (F6)");
+
+        // The record must revalidate as a 2-of-2 quorum from the persisted list.
+        assertTrue(anchorService.revalidateAnchorRecord(saved),
+                "a persisted 2-of-2 anchor must revalidate as a quorum");
     }
 
     @Test

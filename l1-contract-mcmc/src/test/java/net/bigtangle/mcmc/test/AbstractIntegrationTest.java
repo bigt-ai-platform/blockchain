@@ -309,6 +309,7 @@ public abstract class AbstractIntegrationTest {
 	@BeforeEach
 	public void setUp() throws Exception {
 		Utils.unsetMockClock();
+		net.bigtangle.store.BlockStoreService.resetAllowedBlockTypeCheckForTest();
 		scheduleConfiguration.setInitSync(false);
 		store = storeService.getStore();
 		resetStore();
@@ -1150,7 +1151,11 @@ public abstract class AbstractIntegrationTest {
 		// mcmcService.calcNewBlockPrototype(store);
 		Block block = makeTokenUnitTest(tokenInfo, basecoin, ownerKey, aesKey, null, null);
 		block = adjustSolve(block);
-		blockGraph.addBlock(block, true, store);
+		// TOKEN_CREATION is not in the L1 allow-set; skip the production gate for
+		// this test-only token seeding.
+		try (AutoCloseable ignore = net.bigtangle.store.BlockStoreService.skipAllowedBlockTypeCheckForTest()) {
+			blockGraph.addBlock(block, true, store);
+		}
 		return block;
 	}
 
@@ -1279,7 +1284,9 @@ public abstract class AbstractIntegrationTest {
 
 		// save block, but no signature and is not saved as block, but in a
 		// table for signs
-		OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
+		try (AutoCloseable ignore = net.bigtangle.store.BlockStoreService.skipAllowedBlockTypeCheckForTest()) {
+			OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block.bitcoinSerialize());
+		}
 
 		List<PQKey> ecKeys = new ArrayList<PQKey>();
 		ecKeys.add(key1);
@@ -1324,7 +1331,9 @@ public abstract class AbstractIntegrationTest {
 			multiSignBies.add(multiSignBy0);
 			MultiSignByRequest multiSignByRequest = MultiSignByRequest.create(multiSignBies);
 			transaction.setDataSignature(Json.jsonmapper().writeValueAsBytes(multiSignByRequest));
-			checkResponse(OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize()));
+			try (AutoCloseable ignore = net.bigtangle.store.BlockStoreService.skipAllowedBlockTypeCheckForTest()) {
+				checkResponse(OkHttp3Util.post(contextRoot + ReqCmd.signToken.name(), block0.bitcoinSerialize()));
+			}
 
 		}
 
@@ -1410,8 +1419,12 @@ public abstract class AbstractIntegrationTest {
 		// Token creation on L1 uses direct block graph add for test setup,
 		// bypassing the production signToken endpoint which is gated to reject
 		// BLOCKTYPE_TOKEN_CREATION on non-L0 chains (see LAYERING-PLAN.md §5.5).
+		// The production allow-set gate in BlockStoreService is skipped for
+		// this test-only seeding path.
 		block = adjustSolve(block);
-		blockGraph.addBlock(block, true, store);
+		try (AutoCloseable ignore = net.bigtangle.store.BlockStoreService.skipAllowedBlockTypeCheckForTest()) {
+			blockGraph.addBlock(block, true, store);
+		}
 
 		PermissionedAddressesResponse permissionedAddressesResponse = this
 				.getPrevTokenMultiSignAddressList(tokenInfo.getToken());
