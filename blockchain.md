@@ -214,7 +214,7 @@ coordination overhead.
 | Chain             | Purpose                                     |
 | ----------------- | ------------------------------------------- |
 | L0 settlement     | BIG minting, token creation, global anchors |
-| L1 order match    | Decentralized order book matching           |
+| L1 order match    | Decentralized exchange matching             |
 | L1 smart contract | General-purpose contract execution          |
 | L1 AI provider    | AI provider staking and reputation          |
 | L1 NFT            | Non-fungible token creation and transfer    |
@@ -254,8 +254,8 @@ funds.
 | Consensus          | MCMC + Casper FFG  | PoH + Tower BFT     | Gasper         | Authority   |
 | Slot time          | 12s                | 400ms               | 12s            | —           |
 | Finality           | ~12.8 min\*        | ~12.8s              | ~6.4 min       | Instant     |
-| Peak tx/s          | ~4,873             | ~50,000\*           | ~30            | 24,000      |
-| Observed tx/s      | ~4,873             | ~2,000–3,000        | ~15–30         | ~1,700      |
+| Peak tx/s          | ~100,000           | ~50,000\*           | ~30            | 24,000      |
+| Observed tx/s      | ~8,873             | ~2,000–3,000        | ~15–30         | ~1,700      |
 | Parallel execution | DAG-native         | Sealevel (analysis) | Sequential EVM | Sharded DB  |
 
 \*Vendor-reported laboratory peak; observed mainnet throughput is

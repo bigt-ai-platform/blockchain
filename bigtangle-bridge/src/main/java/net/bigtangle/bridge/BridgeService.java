@@ -367,7 +367,6 @@ public class BridgeService {
      * binding, declared chain id); binding the mint to an L0-FINALIZED anchor
      * or a confirmation-depth threshold is left open as a known limitation.
      */
-     */
     public void processPegInFromL0(BlockStoreInterface store) throws Exception {
         if (!bridgeConfiguration.isActive()) {
             return;

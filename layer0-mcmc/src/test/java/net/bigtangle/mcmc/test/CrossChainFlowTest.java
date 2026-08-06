@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.bridge.AnchorConfiguration;
 import net.bigtangle.bridge.BridgeConfiguration;
 import net.bigtangle.bridge.BridgeService;
 import net.bigtangle.core.Block;
@@ -35,10 +36,7 @@ import net.bigtangle.wallet.Wallet;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = { "server.net=Test",
-                       "spring.main.allow-bean-definition-overriding=true",
-                       "bridge.active=true",
-                       "anchor.active=true" })
+        properties = { "server.net=Test" })
 public class CrossChainFlowTest extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(CrossChainFlowTest.class);
@@ -52,6 +50,9 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
     @Autowired
     protected BridgeConfiguration bridgeConfiguration;
 
+    @Autowired
+    protected AnchorConfiguration anchorConfiguration;
+
     private PQKey bobKey;
     private PQKey vaultKey;
     private List<Block> addedBlocks;
@@ -63,7 +64,11 @@ public class CrossChainFlowTest extends AbstractIntegrationTest {
         super.setUp();
         bobKey = PQKey.createNew();
         vaultKey = PQKey.createNew();
+        // Preserve the old context-level bridge.active/anchor.active toggles:
+        // this test exercises the peg/vault flow end to end.
+        bridgeConfiguration.setActive(true);
         bridgeConfiguration.setVaultPubKeyHex(Utils.HEX.encode(vaultKey.getPublicKeyBytes()));
+        anchorConfiguration.setActive(true);
     }
 
     @Test

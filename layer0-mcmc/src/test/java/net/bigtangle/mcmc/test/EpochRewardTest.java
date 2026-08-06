@@ -32,8 +32,7 @@ import net.bigtangle.server.service.StakeService;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0MCMCStart.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = { "server.net=Test",
-                       "spring.main.allow-bean-definition-overriding=true" })
+        properties = { "server.net=Test" })
 public class EpochRewardTest extends AbstractIntegrationTest {
 
     private static final Logger log = LoggerFactory.getLogger(EpochRewardTest.class);

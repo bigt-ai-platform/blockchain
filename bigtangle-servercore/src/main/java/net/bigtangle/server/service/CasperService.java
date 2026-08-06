@@ -161,22 +161,33 @@ public class CasperService {
                         }
                     }
                 }
-                // Bootstrap finality: the genesis checkpoint is the root of
-                // trust (justified + finalized) and must survive restarts.
-                if (checkpoints.isEmpty()) {
-                    Checkpoint genesis = new Checkpoint(
-                            UtilGeneseBlock.createGenesis(networkParameters).getHash(), 0);
-                    genesis.justified = true;
-                    genesis.finalized = true;
-                    checkpoints.put(0L, genesis);
-                    persistCheckpoint(genesis, store);
-                }
                 applyWeakSubjectivityCheckpoint(store);
             } finally {
                 store.close();
             }
         } catch (Exception e) {
             log.trace("No prior Casper state to restore", e);
+        }
+        // Bootstrap finality: the genesis checkpoint is the root of trust
+        // (justified + finalized) and must survive restarts. It is seeded even
+        // when the store read above failed (e.g. schema not yet created during
+        // startup), so finality always has a non-empty anchor.
+        if (checkpoints.isEmpty()) {
+            Checkpoint genesis = new Checkpoint(
+                    UtilGeneseBlock.createGenesis(networkParameters).getHash(), 0);
+            genesis.justified = true;
+            genesis.finalized = true;
+            checkpoints.put(0L, genesis);
+            try {
+                BlockStoreInterface store = storeService.getStore();
+                try {
+                    persistCheckpoint(genesis, store);
+                } finally {
+                    store.close();
+                }
+            } catch (Exception ignored) {
+                // Persist is best-effort here; the in-memory anchor still boots.
+            }
         }
     }
 
