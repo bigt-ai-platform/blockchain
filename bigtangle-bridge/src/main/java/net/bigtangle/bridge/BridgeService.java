@@ -1,7 +1,9 @@
 package net.bigtangle.bridge;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,8 +77,110 @@ public class BridgeService {
     private ObjectMapper jsonmapper;
 
     private Address vaultAddress() {
+        if (isMultisigVault()) {
+            return Address.fromP2SHScript(networkParameters, vaultScript());
+        }
         PQKey vaultKey = PQKey.fromPublicOnly(Utils.HEX.decode(bridgeConfiguration.getVaultPubKeyHex()));
         return Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
+    }
+
+    /**
+     * True when the vault is configured as an M-of-N multisig
+     * ({@code bridge.vaultPubKeyHexList} non-empty). Falls back to the legacy
+     * single-key vault otherwise.
+     */
+    private boolean isMultisigVault() {
+        return bridgeConfiguration.getVaultPubKeyHexList() != null
+                && !bridgeConfiguration.getVaultPubKeyHexList().isEmpty();
+    }
+
+    /** The sorted M-of-N redeem script ({@code M <pk...> N OP_CHECKMULTISIG}). */
+    private Script vaultRedeemScript() {
+        List<PQKey> pubkeys = new ArrayList<>();
+        for (String hex : bridgeConfiguration.getVaultPubKeyHexList()) {
+            pubkeys.add(PQKey.fromPublicOnly(Utils.HEX.decode(hex)));
+        }
+        return ScriptBuilder.createRedeemScript(bridgeConfiguration.getVaultM(), pubkeys);
+    }
+
+    /**
+     * The script that locks vault funds: P2SH over the M-of-N redeem script
+     * (multisig mode) or a P2PKH to the single vault key (legacy mode). Every
+     * peg-in must pay this script and the peg-out release spends it, so the
+     * script is the single source of truth for what "the vault" is.
+     */
+    private Script vaultScript() {
+        if (isMultisigVault()) {
+            return ScriptBuilder.createP2SHOutputScript(vaultRedeemScript());
+        }
+        return ScriptBuilder.createOutputScript(vaultAddress());
+    }
+
+    /**
+     * Signs the first input of {@code tx} so it spends the vault script.
+     * Returns false (and logs) when the configured keys cannot satisfy the
+     * vault script, so {@code processPegOut} can skip the release instead of
+     * emitting an invalid CROSSTANGLE block.
+     * <ul>
+     * <li>Legacy (single-key) mode: a P2PKH scriptSig signed by
+     *     {@code bridge.vaultPriKeyHex}.</li>
+     * <li>M-of-N mode: a P2SH scriptSig with {@code vaultM} signatures over the
+     *     redeem script, ordered by the signer's pubkey position in the sorted
+     *     redeem script (OP_CHECKMULTISIG is order-sensitive). Requires the
+     *     {@code vaultM} private keys in {@code bridge.vaultPriKeyHexList}.</li>
+     * </ul>
+     */
+    private boolean signVaultRelease(Transaction tx) throws Exception {
+        if (isMultisigVault()) {
+            Script redeem = vaultRedeemScript();
+            List<PQKey> sortedPubkeys = redeemPubKeysSorted();
+            Map<String, PQKey> signerByPub = new HashMap<>();
+            for (String hex : bridgeConfiguration.getVaultPriKeyHexList()) {
+                PQKey key = PQKey.fromPrivateKeyHex(hex);
+                signerByPub.put(Utils.HEX.encode(key.getPublicKeyBytes()), key);
+            }
+            List<byte[]> signatures = new ArrayList<>();
+            int required = bridgeConfiguration.getVaultM();
+            for (PQKey pub : sortedPubkeys) {
+                if (signatures.size() >= required) {
+                    break;
+                }
+                PQKey signer = signerByPub.get(Utils.HEX.encode(pub.getPublicKeyBytes()));
+                if (signer == null) {
+                    continue;
+                }
+                Sha256Hash sighash = tx.hashForSignature(0, redeem.getProgram(), Transaction.SigHash.ALL, false);
+                signatures.add(signer.sign(sighash).serialize());
+            }
+            if (signatures.size() < required) {
+                logger.warn("Peg-out M-of-N release requires {} signatures but only {} vault private keys "
+                        + "matched the redeem script; skipping", required, signatures.size());
+                return false;
+            }
+            tx.getInput(0).setScriptSig(
+                    ScriptBuilder.createMultiSigInputScriptBytes(signatures, redeem.getProgram()));
+            return true;
+        }
+
+        String vaultPriKeyHex = bridgeConfiguration.getVaultPriKeyHex();
+        if (vaultPriKeyHex == null || vaultPriKeyHex.isEmpty()) {
+            logger.warn("Peg-out requires bridge.vaultPriKeyHex to sign the release; skipping");
+            return false;
+        }
+        PQKey vaultKey = PQKey.fromPrivateKeyHex(vaultPriKeyHex);
+        Sha256Hash sighash = tx.hashForSignature(0, vaultScript().getProgram(), Transaction.SigHash.ALL, false);
+        tx.getInput(0).setScriptSig(ScriptBuilder.createInputScriptForPQ(vaultKey.sign(sighash), vaultKey));
+        return true;
+    }
+
+    /** The vault redeem-script pubkeys in their sorted (script) order. */
+    private List<PQKey> redeemPubKeysSorted() {
+        List<PQKey> pubkeys = new ArrayList<>();
+        for (String hex : bridgeConfiguration.getVaultPubKeyHexList()) {
+            pubkeys.add(PQKey.fromPublicOnly(Utils.HEX.decode(hex)));
+        }
+        pubkeys.sort(PQKey.PUBKEY_COMPARATOR);
+        return pubkeys;
     }
 
     /**
@@ -113,15 +217,11 @@ public class BridgeService {
         // cannot lock a UTXO it does not own.
         in.getScriptSig().correctlySpends(tx, 0, utxo.getScript(), Script.ALL_VERIFY_FLAGS);
 
-        // The output must pay the vault address.
-        Address vault = vaultAddress();
-        Address payTo;
-        try {
-            payTo = Address.fromHash160(networkParameters, tx.getOutput(0).getScriptPubKey().getPubKeyHash());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("peg-in output is not payable to a standard address");
-        }
-        if (!payTo.toBase58().equals(vault.toBase58())) {
+        // The output must pay the vault script (P2SH M-of-N or legacy P2PKH).
+        // Comparing script programs directly avoids address-version ambiguity
+        // between P2PKH and P2SH vault addresses.
+        if (!java.util.Arrays.equals(tx.getOutput(0).getScriptPubKey().getProgram(),
+                vaultScript().getProgram())) {
             throw new IllegalArgumentException("peg-in output must pay the vault address");
         }
 
@@ -291,7 +391,7 @@ public class BridgeService {
         vaultUtxo.setValue(Coin.valueOf(vault.getAmount(), Utils.HEX.decode(burn.getTokenIdHex())));
         vaultUtxo.setTokenid(burn.getTokenIdHex());
         vaultUtxo.setAddress(vaultAddress().toBase58());
-        vaultUtxo.setScript(ScriptBuilder.createOutputScript(vaultAddress()));
+        vaultUtxo.setScript(vaultScript());
         vaultUtxo.setConfirmed(true);
         vaultUtxo.setSpent(false);
 
@@ -302,18 +402,16 @@ public class BridgeService {
         tx.addInput(pegInBlockHash, new FreeStandingTransactionOutput(networkParameters, vaultUtxo));
         tx.addOutput(amount, recipient);
 
-        // The release input must be signed by the vault private key: the vault
-        // output is a P2PKH to the vault address, and CROSSTANGLE blocks are now
-        // consensus-validated (scriptSig ownership proof) before they are saved.
-        String vaultPriKeyHex = bridgeConfiguration.getVaultPriKeyHex();
-        if (vaultPriKeyHex == null || vaultPriKeyHex.isEmpty()) {
-            logger.warn("Peg-out requires bridge.vaultPriKeyHex to sign the release; skipping");
+        // The release input must prove ownership of the vault script: a legacy
+        // P2PKH release is signed by the single vault private key; an M-of-N
+        // release carries `vaultM` ordered signatures plus the redeem script
+        // (P2SH). CROSSTANGLE blocks are consensus-validated (scriptSig
+        // ownership proof) before they are saved, so a release that does not
+        // satisfy the vault script is rejected by L0.
+        if (!signVaultRelease(tx)) {
+            logger.warn("Peg-out: vault release not signed (vault {}), skipping", burn.getVaultRef());
             return;
         }
-        PQKey vaultKey = PQKey.fromPrivateKeyHex(vaultPriKeyHex);
-        Script scriptPubKey = ScriptBuilder.createOutputScript(vaultAddress());
-        Sha256Hash sighash = tx.hashForSignature(0, scriptPubKey.getProgram(), Transaction.SigHash.ALL, false);
-        tx.getInput(0).setScriptSig(ScriptBuilder.createInputScriptForPQ(vaultKey.sign(sighash), vaultKey));
         releaseBlock.addTransaction(tx);
 
         blockSaveService.saveBlockPermissive(releaseBlock, store);
@@ -463,15 +561,10 @@ public class BridgeService {
      * null when it does not pay the vault at all.
      */
     private Coin vaultPaymentValue(Transaction lockTx) {
-        Address vault = vaultAddress();
+        byte[] vaultProgram = vaultScript().getProgram();
         for (TransactionOutput out : lockTx.getOutputs()) {
-            try {
-                Address to = Address.fromHash160(networkParameters, out.getScriptPubKey().getPubKeyHash());
-                if (to.toBase58().equals(vault.toBase58())) {
-                    return out.getValue();
-                }
-            } catch (Exception e) {
-                // not a standard address — not the vault
+            if (java.util.Arrays.equals(out.getScriptPubKey().getProgram(), vaultProgram)) {
+                return out.getValue();
             }
         }
         return null;

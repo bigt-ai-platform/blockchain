@@ -30,6 +30,8 @@ import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.data.AnchorRecord;
 import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.utils.Json;
@@ -78,6 +80,10 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         bridgeConfiguration.setActive(true);
         bridgeConfiguration.setVaultPubKeyHex(Utils.HEX.encode(vaultKey.getPublicKeyBytes()));
         bridgeConfiguration.setVaultPriKeyHex(Utils.HEX.encode(vaultSeed));
+        // Reset any M-of-N vault config left by a previous test method.
+        bridgeConfiguration.setVaultPubKeyHexList(new ArrayList<>());
+        bridgeConfiguration.setVaultPriKeyHexList(new ArrayList<>());
+        bridgeConfiguration.setVaultM(1);
         // Reset any per-chain registry left by a previous test.
         anchorConfiguration.setChainPubKeys(new java.util.HashMap<>());
     }
@@ -159,6 +165,16 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
      * {@link BridgeService#processPegIn}. Returns the created (unspent) vault.
      */
     private VaultRecord createRealVault(PQKey userKey, String beneficiary, long amount) throws Exception {
+        Address vault = Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
+        return createRealVault(userKey, beneficiary, amount, vault);
+    }
+
+    /**
+     * Like {@link #createRealVault(PQKey, String, long)} but pays an explicit
+     * vault address (used for the M-of-N P2SH vault tests).
+     */
+    private VaultRecord createRealVault(PQKey userKey, String beneficiary, long amount, Address vault)
+            throws Exception {
         List<Block> added = new ArrayList<>();
         payBigTo(userKey, BigInteger.valueOf(amount + 100000), added);
 
@@ -172,7 +188,6 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         }
         assertNotNull(source, "user must hold a spendable BIG UTXO after funding");
 
-        Address vault = Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
         Transaction tx = new Transaction(networkParameters);
         tx.setVersion(net.bigtangle.crypto.pq.PQConstants.TX_PQ_VERSION);
         tx.setToAddressInSubtangle(Address.fromBase58(networkParameters, beneficiary).getHash160());
@@ -399,5 +414,115 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
                 head, 50, root, null, proof, null);
         ok.setSignature(ok.sign(registered).serialize());
         anchorService.validateAnchor(ok);
+    }
+
+    /**
+     * Builds a confirmed anchor (with a burn for the given vault) at the next
+     * free height and runs {@link BridgeService#processPegOut} on it.
+     */
+    private AnchorRecord confirmBurnAndPegOut(VaultRecord vault, String recipient, long height) throws Exception {
+        String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+        Sha256Hash head = Sha256Hash.wrap(String.format("%064x", height));
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount(), tokenIdHex);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":" + height,
+                head, height, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, height, true);
+
+        AnchorRecord confirmed = store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, height);
+        assertNotNull(confirmed);
+        assertTrue(confirmed.isConfirmed());
+        bridgeService.processPegOut(confirmed, store);
+        return confirmed;
+    }
+
+    @Test
+    public void testMofNVaultPegOutReleasesWithMultisig() throws Exception {
+        // 2-of-3 vault: the node holds v1 + v2 private keys; v3 is held
+        // elsewhere. The peg-in pays the P2SH vault script and the peg-out
+        // release must carry two ordered signatures to pass L0 consensus.
+        byte[] s1 = new byte[32];
+        byte[] s2 = new byte[32];
+        byte[] s3 = new byte[32];
+        new java.security.SecureRandom().nextBytes(s1);
+        new java.security.SecureRandom().nextBytes(s2);
+        new java.security.SecureRandom().nextBytes(s3);
+        PQKey v1 = PQKey.fromMLDSA(s1);
+        PQKey v2 = PQKey.fromMLDSA(s2);
+        PQKey v3 = PQKey.fromMLDSA(s3);
+
+        bridgeConfiguration.setVaultPubKeyHexList(java.util.List.of(
+                Utils.HEX.encode(v1.getPublicKeyBytes()),
+                Utils.HEX.encode(v2.getPublicKeyBytes()),
+                Utils.HEX.encode(v3.getPublicKeyBytes())));
+        bridgeConfiguration.setVaultM(2);
+        bridgeConfiguration.setVaultPriKeyHexList(java.util.List.of(
+                Utils.HEX.encode(s1), Utils.HEX.encode(s2)));
+
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        Script redeem = ScriptBuilder.createRedeemScript(2, java.util.List.of(v1, v2, v3));
+        Script p2sh = ScriptBuilder.createP2SHOutputScript(redeem);
+        Address vaultAddr = Address.fromP2SHScript(networkParameters, p2sh);
+
+        VaultRecord vault = createRealVault(testKey, recipient, amount, vaultAddr);
+
+        confirmBurnAndPegOut(vault, recipient, 60);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertTrue(unspent.isEmpty(),
+                "2-of-3 peg-out must release and spend the vault (release passes L0 consensus)");
+        List<VaultRecord> spent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, true);
+        assertEquals(1, spent.size());
+        assertTrue(spent.get(0).isSpent());
+    }
+
+    @Test
+    public void testMofNVaultPegOutSkippedWithoutEnoughSignatures() throws Exception {
+        // Same 2-of-3 vault, but the node only holds ONE of the required
+        // private keys: the release cannot be signed, so it is skipped and the
+        // vault stays locked.
+        byte[] s1 = new byte[32];
+        byte[] s2 = new byte[32];
+        byte[] s3 = new byte[32];
+        new java.security.SecureRandom().nextBytes(s1);
+        new java.security.SecureRandom().nextBytes(s2);
+        new java.security.SecureRandom().nextBytes(s3);
+        PQKey v1 = PQKey.fromMLDSA(s1);
+        PQKey v2 = PQKey.fromMLDSA(s2);
+        PQKey v3 = PQKey.fromMLDSA(s3);
+
+        bridgeConfiguration.setVaultPubKeyHexList(java.util.List.of(
+                Utils.HEX.encode(v1.getPublicKeyBytes()),
+                Utils.HEX.encode(v2.getPublicKeyBytes()),
+                Utils.HEX.encode(v3.getPublicKeyBytes())));
+        bridgeConfiguration.setVaultM(2);
+        bridgeConfiguration.setVaultPriKeyHexList(java.util.List.of(Utils.HEX.encode(s1)));
+
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        Script redeem = ScriptBuilder.createRedeemScript(2, java.util.List.of(v1, v2, v3));
+        Address vaultAddr = Address.fromP2SHScript(networkParameters,
+                ScriptBuilder.createP2SHOutputScript(redeem));
+
+        VaultRecord vault = createRealVault(testKey, recipient, amount, vaultAddr);
+
+        confirmBurnAndPegOut(vault, recipient, 61);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size(),
+                "a release with too few signatures must be skipped, leaving the vault locked");
+        assertFalse(unspent.get(0).isSpent());
     }
 }

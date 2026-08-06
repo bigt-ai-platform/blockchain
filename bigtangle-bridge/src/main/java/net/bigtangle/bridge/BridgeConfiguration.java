@@ -28,6 +28,8 @@ public class BridgeConfiguration {
     private List<String> vaultPubKeyHexList = new ArrayList<>();
     /** M-of-N signature threshold (default 1 = single-key mode). */
     private int vaultM = 1;
+    /** The M private keys used to sign a vault release (one per held signer key). */
+    private List<String> vaultPriKeyHexList = new ArrayList<>();
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
@@ -55,4 +57,9 @@ public class BridgeConfiguration {
 
     public int getVaultM() { return vaultM; }
     public void setVaultM(int vaultM) { this.vaultM = vaultM; }
+
+    public List<String> getVaultPriKeyHexList() { return vaultPriKeyHexList; }
+    public void setVaultPriKeyHexList(List<String> vaultPriKeyHexList) {
+        this.vaultPriKeyHexList = vaultPriKeyHexList != null ? vaultPriKeyHexList : new ArrayList<>();
+    }
 }
