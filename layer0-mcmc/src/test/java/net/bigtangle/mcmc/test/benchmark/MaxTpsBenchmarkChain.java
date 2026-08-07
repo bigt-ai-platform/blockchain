@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.store.BlockStoreInterface;
@@ -79,10 +80,14 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         List<PQKey> walletKeys = new ArrayList<>();
         for (int i = 0; i < totalTx; i++) walletKeys.add(PQKey.createNew());
 
-        Wallet genesisWallet = Wallet.fromKeys(networkParameters, PQKey.createNew(), contextRoot);
+        // Use the pre-funded genesis wallet inherited from AbstractIntegrationTest
+        // (deterministic ML-DSA seed 0x01, funded in setUp); a freshly created
+        // random key has no spendable UTXOs.
+        Wallet genesisWallet = wallet;
         HashMap<String, BigInteger> funding = new HashMap<>();
         for (PQKey k : walletKeys) {
-            funding.put(k.toAddress(networkParameters).toHex(), BigInteger.valueOf(20000));
+            funding.put(Address.fromHash160(networkParameters, k.getPubKeyHash()).toBase58(),
+                    BigInteger.valueOf(20000));
         }
         Transaction fundingTx = genesisWallet.payToList(null, funding,
                 NetworkParameters.BIGTANGLE_TOKENID, "fund");
@@ -113,7 +118,7 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
         }
         List<FreeStandingTransactionOutput> allCoins = new ArrayList<>();
         for (PQKey k : walletKeys) {
-            String addr = k.toAddress(networkParameters).toHex();
+            String addr = Address.fromHash160(networkParameters, k.getPubKeyHash()).toBase58();
             FreeStandingTransactionOutput c = addrToCoin.get(addr);
             if (c != null) allCoins.add(c);
         }
@@ -142,7 +147,9 @@ public class MaxTpsBenchmarkChain extends AbstractIntegrationTest {
                         FreeStandingTransactionOutput coin = allCoins.get(idx);
                         Wallet w = Wallet.fromKeys(networkParameters, wk, contextRoot);
                         Transaction tx = w.payToListTransaction(null,
-                                new HashMap<>(Map.of(finalRecipient.toAddress(networkParameters).toHex(), BigInteger.valueOf(15000))),
+                                new HashMap<>(Map.of(
+                                        Address.fromHash160(networkParameters, finalRecipient.getPubKeyHash()).toBase58(),
+                                        BigInteger.valueOf(15000))),
                                 NetworkParameters.BIGTANGLE_TOKENID, "pay", List.of(coin));
                         if (tx != null) txs.add(tx);
 

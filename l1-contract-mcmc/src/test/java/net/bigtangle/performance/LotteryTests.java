@@ -288,7 +288,7 @@ public class LotteryTests extends AbstractIntegrationTest {
 	}
 
 	public Address getAddress() {
-		return PQKey.createNew().toAddress(networkParameters);
+		return Address.fromHash160(networkParameters, PQKey.createNew().getPubKeyHash());
 	}
 
 	// create a token with multi sign
@@ -301,8 +301,6 @@ public class LotteryTests extends AbstractIntegrationTest {
 
 			createToken(key, tokename, decimals, domainname, description, amount, true, null,
 					TokenType.identity.ordinal(), key.getPublicKeyAsHex(), wallet);
-
-			PQKey signkey = PQKey.createNew(), signkey, null);
 
 		} catch (Exception e) {
 			// TODO: handle exception

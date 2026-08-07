@@ -48,7 +48,7 @@ public class OrderYuanTest extends AbstractIntegrationTest {
         makeTestToken(yuan, BigInteger.valueOf(tokennumber), addedBlocks, 2);
         // Make test token
         makeTestToken(testKey, BigInteger.valueOf(tokennumber), addedBlocks, 2);
-        Address address = wallet.walletKeys().get(0).toAddress(networkParameters);
+        Address address = Address.fromHash160(networkParameters, wallet.walletKeys().get(0).getPubKeyHash());
         Coin amount = MonetaryFormat.FIAT.noCode().parse("1", Utils.HEX.decode(yuanTokenPub), 2);
         List<Long> list = new ArrayList<Long>();
         long time1=System.currentTimeMillis();

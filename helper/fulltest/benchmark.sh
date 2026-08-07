@@ -144,11 +144,11 @@ run_payment_main() {
         -Dexec.args="${SERVER_URL}" 2>&1 | tee "$tmpfile" || true
 
     local tps avg wall ok fail
-    tps=$(grep -oP 'Throughput:\s+\K[\d.]+' "$tmpfile" | tail -1)
-    avg=$(grep -oP 'Avg latency/tx:\s+\K[\d.]+' "$tmpfile" | tail -1)
-    wall=$(grep -oP 'Wall time:\s+\K[\d.]+' "$tmpfile" | tail -1)
-    ok=$(grep -oP 'success' "$tmpfile" | grep -oP '\d+' | tail -1)
-    fail=$(grep -oP 'failed' "$tmpfile" | grep -oP '\d+' | tail -1)
+    tps=$(grep -oP 'Throughput:\s+\K[\d.]+' "$tmpfile" | tail -1 || true)
+    avg=$(grep -oP 'Avg latency:\s+\K[\d.]+' "$tmpfile" | tail -1 || true)
+    wall=$(grep -oP 'Wall time:\s+\K[\d.]+' "$tmpfile" | tail -1 || true)
+    ok=$(grep -oP 'OK\s+\K\d+' "$tmpfile" | tail -1 || true)
+    fail=$(grep -oP 'fail\s+\K\d+' "$tmpfile" | tail -1 || true)
     rm -f "$tmpfile"
 
     RESULTS+=("PaymentBenchmarkMain|${tps:-N/A}|${avg:-N/A} ms|${wall:-N/A} ms|${ok:-0}|${fail:-0}")

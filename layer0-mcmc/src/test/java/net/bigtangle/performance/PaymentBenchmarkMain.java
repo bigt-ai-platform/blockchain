@@ -14,16 +14,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.Block;
+import net.bigtangle.core.Address;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
-import net.bigtangle.core.NetworkParameters;
 import net.bigtangle.core.Utils;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.utils.Json;
+import net.bigtangle.utils.OkHttp3Util;
 import net.bigtangle.wallet.Wallet;
 
 /**
- * Standalone 10-client payment benchmark. Launches its own server and measures
- * throughput. Run from Maven with:
- * mvn exec:java -pl layer0-mcmc -Dexec.mainClass=net.bigtangle.performance.PaymentBenchmarkMain
+ * 10-client payment benchmark against a running server.
+ *
+ * Run from Maven with:
+ * mvn exec:java -pl layer0-mcmc -Dexec.classpathScope=test \
+ *     -Dexec.mainClass=net.bigtangle.performance.PaymentBenchmarkMain \
+ *     -Dexec.args="http://localhost:8081"
  */
 public class PaymentBenchmarkMain {
 
@@ -32,78 +38,73 @@ public class PaymentBenchmarkMain {
     private static final int PAYMENTS_PER_CLIENT = 50;
 
     public static void main(String[] args) throws Exception {
-        log.info("Starting 10-client payment benchmark...");
-
-        // Use the test server that's started externally or via Spring Boot
         String serverUrl = args.length > 0 ? args[0] : "http://localhost:8088/";
-        NetworkParameters params = NetworkParameters.testNet();
+        NetworkParameters params = new net.bigtangle.layer0.params.Layer0TestParams();
 
-        // Create genesis wallet (has all the money on testnet)
-        String testPriv = "ec1d240521f7f254c52aea69fca3f28d754d1b89f310f42b0fb094d16814317f";
-        Wallet genesisWallet = Wallet.fromKeys(params,
-                PQKey.createNew();
+        log.info("Server: {}", serverUrl);
 
-        // Create 10 client wallets and fund them
         List<PQKey> clientKeys = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) {
-            clientKeys.add(PQKey.createNew();
-        }
-        for (PQKey key : clientKeys) {
-            HashMap<String, BigInteger> funding = new HashMap<>();
-            funding.put(key.toAddress(params).toHex(), BigInteger.valueOf(100000));
-            genesisWallet.payToList(null, funding, NetworkParameters.BIGTANGLE_TOKENID, "fund");
-        }
-        log.info("Funded {} client wallets", clientKeys.size());
-
-        // Create recipient wallets
+        for (int i = 0; i < CLIENTS; i++) clientKeys.add(PQKey.createNew());
         List<PQKey> recipients = new ArrayList<>();
-        for (int i = 0; i < CLIENTS; i++) {
-            recipients.add(PQKey.createNew();
+        for (int i = 0; i < CLIENTS; i++) recipients.add(PQKey.createNew());
+
+        // Pre-fund wallets via the server's fundAddresses API
+        String apiUrl = serverUrl.endsWith("/") ? serverUrl : serverUrl + "/";
+        HashMap<String, Object> fundReq = new HashMap<>();
+        List<HashMap<String, Object>> entries = new ArrayList<>();
+        long utxoValue = PAYMENTS_PER_CLIENT + Coin.FEE_DEFAULT.getValue().longValue() * 2;
+        for (PQKey key : clientKeys) {
+            HashMap<String, Object> entry = new HashMap<>();
+            entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
+            entry.put("address", Address.fromHash160(params, key.getPubKeyHash()).toBase58());
+            entry.put("value", utxoValue);
+            entries.add(entry);
+        }
+        fundReq.put("addresses", entries);
+        OkHttp3Util.post(apiUrl + "fundAddresses",
+                Json.jsonmapper().writeValueAsString(fundReq).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        log.info("Funding done");
+
+        List<Wallet> wallets = new ArrayList<>();
+        for (PQKey key : clientKeys) {
+            wallets.add(Wallet.fromKeys(params, key, serverUrl));
         }
 
-        // Run benchmark
-        AtomicLong totalLatencyNanos = new AtomicLong(0);
-        AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger failCount = new AtomicInteger(0);
+        AtomicInteger ok = new AtomicInteger(0);
+        AtomicInteger fail = new AtomicInteger(0);
+        AtomicLong totalNs = new AtomicLong(0);
 
         ExecutorService pool = Executors.newFixedThreadPool(CLIENTS);
-        CompletableFuture<?>[] futures = new CompletableFuture[CLIENTS];
+        @SuppressWarnings("unchecked")
+        CompletableFuture<Void>[] futures = new CompletableFuture[CLIENTS];
 
         long wallStart = System.nanoTime();
-
         for (int c = 0; c < CLIENTS; c++) {
             int clientId = c;
-            PQKey fromKey = clientKeys.get(c);
-            Wallet clientWallet = Wallet.fromKeys(params, fromKey, serverUrl);
-
+            Wallet w = wallets.get(c);
             futures[c] = CompletableFuture.runAsync(() -> {
-                for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
-                    try {
-                        HashMap<String, BigInteger> payment = new HashMap<>();
-                        payment.put(recipients.get(clientId).toAddress(params).toHex(), BigInteger.valueOf(1));
-
-                        long txStart = System.nanoTime();
-                        Block b = clientWallet.payToList(null, payment,
-                                NetworkParameters.BIGTANGLE_TOKENID, "bench");
-                        if (b != null) {
-                            totalLatencyNanos.addAndGet(System.nanoTime() - txStart);
-                            successCount.incrementAndGet();
-                        }
-                    } catch (Exception e) {
-                        failCount.incrementAndGet();
+                try {
+                    long start = System.nanoTime();
+                    HashMap<String, BigInteger> pmt = new HashMap<>();
+                    for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
+                        pmt.put(Address.fromHash160(params,
+                                recipients.get((clientId + p) % CLIENTS).getPubKeyHash()).toBase58(),
+                                BigInteger.valueOf(1));
                     }
+                    w.payToList(null, pmt, NetworkParameters.BIGTANGLE_TOKENID, "bench");
+                    totalNs.addAndGet(System.nanoTime() - start);
+                    ok.addAndGet(PAYMENTS_PER_CLIENT);
+                } catch (Exception e) {
+                    fail.addAndGet(PAYMENTS_PER_CLIENT);
                 }
             }, pool);
         }
-
         CompletableFuture.allOf(futures).get(10, TimeUnit.MINUTES);
         pool.shutdownNow();
 
-        long wallTimeMs = (System.nanoTime() - wallStart) / 1_000_000;
-        long totalLatencyMs = totalLatencyNanos.get() / 1_000_000;
-        int total = successCount.get() + failCount.get();
-        double avgLatency = successCount.get() > 0 ? (double) totalLatencyMs / successCount.get() : 0;
-        double throughput = totalLatencyMs > 0 ? (double) successCount.get() / totalLatencyMs * 1000 : 0;
+        long wallMs = (System.nanoTime() - wallStart) / 1_000_000;
+        double tps = wallMs > 0 ? (double) ok.get() / wallMs * 1000 : 0;
+        double avg = ok.get() > 0 ? (double) totalNs.get() / ok.get() / 1_000_000 : 0;
 
         log.info("");
         log.info("=============================================");
@@ -112,11 +113,11 @@ public class PaymentBenchmarkMain {
         log.info("Server:           {}", serverUrl);
         log.info("Clients:          {}", CLIENTS);
         log.info("Payments/client:  {}", PAYMENTS_PER_CLIENT);
-        log.info("Total:            {} ({} OK, {} failed)",
-                total, successCount.get(), failCount.get());
-        log.info("Wall time:        {} ms", wallTimeMs);
-        log.info("Avg latency/tx:   {:.1f} ms", avgLatency);
-        log.info("Throughput:       {:.1f} tx/s", throughput);
+        log.info("Total:            {} (OK {}, fail {})", CLIENTS * PAYMENTS_PER_CLIENT, ok.get(), fail.get());
+        log.info("Wall time:        {} ms", wallMs);
+        log.info("Avg latency:      {} ms", (long) avg);
+        log.info("Throughput:       {} tx/s", (long) tps);
         log.info("=============================================");
+        System.exit(ok.get() > 0 ? 0 : 1);
     }
 }

@@ -20,10 +20,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.mcmc.test.AbstractIntegrationTest;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.wallet.Wallet;
 
@@ -47,7 +49,6 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
     @Override
     @BeforeEach
     public void setUp() throws Exception {
-        scheduleConfiguration.setMcmc_active(false);
         scheduleConfiguration.setInitSync(false);
         super.setUp();
         userKeys = createUserkey();
@@ -83,16 +84,17 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
                 for (int p = 0; p < PAYMENTS_PER_CLIENT; p++) {
                     try {
                         HashMap<String, BigInteger> payment = new HashMap<>();
-                        payment.put(toKey.toAddress(networkParameters).toHex(), BigInteger.valueOf(1));
+                        payment.put(Address.fromHash160(networkParameters, toKey.getPubKeyHash()).toBase58(),
+                                BigInteger.valueOf(1));
 
                         long txStart = System.nanoTime();
                         mcmcService.calcNewBlockPrototype(store);
-                        Block b = clientWallet.payMoneyToECKeyList(null, payment,
+                        net.bigtangle.core.Transaction tx = clientWallet.payMoneyToECKeyList(null, payment,
                                 NetworkParameters.BIGTANGLE_TOKENID, "perf-pay");
                         totalBlockTimeNanos.addAndGet(System.nanoTime() - txStart);
 
-                        if (b != null) {
-                            Block reward = makeRewardBlock(b);
+                        if (tx != null) {
+                            Block reward = makeRewardBlock();
                             totalLatencyNanos.addAndGet(System.nanoTime() - txStart);
                             successCount.incrementAndGet();
                         }
@@ -123,8 +125,8 @@ public class PaymentBenchmark extends AbstractIntegrationTest {
                 total, successCount.get(), failCount.get());
         log.info("");
         log.info("Total wall time:  {} ms", totalMs);
-        log.info("Avg latency/tx:   {:.1f} ms", avgLatency);
-        log.info("Throughput:       {:.1f} tx/s", throughput);
+        log.info("Avg latency/tx:   {} ms", (long) avgLatency);
+        log.info("Throughput:       {} tx/s", (long) throughput);
         log.info("Block time total: {} ms", blockMs);
         log.info("=============================================");
     }

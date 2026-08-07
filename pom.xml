@@ -127,9 +127,6 @@
 					<source>25</source>
 					<target>25</target>
 					<parameters>true</parameters>
-					<testExcludes>
-						<testExclude>**/performance/**</testExclude>
-					</testExcludes>
 				</configuration>
 			</plugin>
 			<plugin>

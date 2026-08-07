@@ -24,6 +24,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.Token;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.InsufficientMoneyException;
@@ -90,14 +91,13 @@ public class Lottery {
 
         log.debug("winner " + winner +" sum ="+sum()+ " \n user address size: " + userAddress.size());
 
-        List<Block> bl = batchGiveMoneyToECKeyList(winner, sum(), "win lottery", userUtxos);
+        List<Transaction> bl = batchGiveMoneyToECKeyList(winner, sum(), "win lottery", userUtxos);
         if (bl.isEmpty()) {
             log.error("payment of winner is failed");
         }
-        for (Block b : bl) {
+        for (Transaction b : bl) {
             log.debug("block " + (b == null ? "block is null" : b.toString()));
         }
-
     }
 
     /*
@@ -167,7 +167,7 @@ public class Lottery {
 
     }
 
-    public synchronized List<Block> batchGiveMoneyToECKeyList(String address, BigInteger amount, String memo,
+    public synchronized List<Transaction> batchGiveMoneyToECKeyList(String address, BigInteger amount, String memo,
             List<UTXO> userlist)
             throws JsonProcessingException, IOException, InsufficientMoneyException, UTXOProviderException, Exception {
 
