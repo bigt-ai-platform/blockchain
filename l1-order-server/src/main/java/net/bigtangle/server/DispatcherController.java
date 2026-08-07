@@ -83,6 +83,7 @@ import net.bigtangle.layer1.service.TokensService;
 import net.bigtangle.server.service.StoreService;
 import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.server.service.UserDataService;
+import net.bigtangle.server.service.ValidatorDutyService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 
@@ -131,6 +132,9 @@ public class DispatcherController implements DisposableBean {
 
 	@Autowired
 	private StakeService stakeService;
+
+	@Autowired
+	private ValidatorDutyService validatorDutyService;
 
 	 
 	@Autowired
@@ -268,16 +272,28 @@ public class DispatcherController implements DisposableBean {
 			case stakeDeposit: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkeyHex = (String) request.get("pubkey");
-				String amountStr = (String) request.get("amount");
-				String privateKeyHex = (String) request.get("privateKey");
-				PQKey depositKey;
-				if (privateKeyHex != null && !privateKeyHex.isEmpty()) {
-					// Full key so the STAKE transaction can be signed.
-					depositKey = PQKey.fromPrivateKeyHex(privateKeyHex);
-				} else {
-					depositKey = PQKey.fromPublicOnly(Utils.HEX.decode(pubkeyHex));
+				// Security: never accept a raw private key over HTTP. The STAKE
+				// transaction is signed with the server's CONFIGURED validator
+				// key (pos.validatorKey), and the request pubkey must match it.
+				if (request.containsKey("privateKey")) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
 				}
+				String pubkeyHex = (String) request.get("pubkey");
+				PQKey configuredKey = validatorDutyService.getValidatorKey();
+				if (configuredKey == null) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
+				}
+				if (!Utils.HEX.encode(configuredKey.getPublicKeyBytes()).equals(pubkeyHex)) {
+					this.outPrintJSONString(httpServletResponse,
+							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
+					break;
+				}
+				PQKey depositKey = configuredKey;
+				String amountStr = (String) request.get("amount");
 				BigInteger amount = new BigInteger(amountStr);
 				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
 				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());

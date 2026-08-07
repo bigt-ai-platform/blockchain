@@ -46,6 +46,12 @@ kafka:
   topicOutName: ${TOPIC_OUT_NAME:bigtangle}
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
 
+pos:
+  slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}
+  slotsPerEpoch: ${POS_SLOTS_PER_EPOCH:32}
+  validatorKey: ${POS_VALIDATOR_KEY:}
+  gossipPeers: ${POS_GOSSIP_PEERS:}
+
 management:
   metrics:
     export:

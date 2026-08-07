@@ -1,5 +1,6 @@
 package net.bigtangle.server.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -20,10 +21,16 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.script.Script;
+import net.bigtangle.core.ContractEventInfo;
+import net.bigtangle.core.EVMTransactionInfo;
+import net.bigtangle.core.OrderCancelInfo;
+import net.bigtangle.core.OrderOpenInfo;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.UserSettingDataInfo;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
@@ -37,6 +44,9 @@ public class MempoolService {
 
     @Autowired
     private StoreService storeService;
+
+    @Autowired
+    private NetworkParameters networkParameters;
 
     private final ConcurrentLinkedQueue<Transaction> pendingTxns = new ConcurrentLinkedQueue<>();
 
@@ -104,36 +114,42 @@ public class MempoolService {
 
     private void checkAndAdd(Transaction tx) {
         List<TransactionInput> inputs = tx.getInputs();
-        if (inputs == null || inputs.isEmpty()) {
-            return;
-        }
         Set<TransactionOutPoint> outpoints = new HashSet<>();
-        for (TransactionInput in : inputs) {
-            TransactionOutPoint outpoint = in.getOutpoint();
-            if (outpoint == null || outpoint.isCoinBase()) {
-                continue;
+        if (inputs != null) {
+            for (TransactionInput in : inputs) {
+                TransactionOutPoint outpoint = in.getOutpoint();
+                if (outpoint == null || outpoint.isCoinBase()) {
+                    continue;
+                }
+                if (spentOutpoints.containsKey(outpoint)) {
+                    throw new VerificationException.ConflictPossibleException(
+                            "Mempool double-spend: outpoint " + outpoint + " already spent by pending tx");
+                }
+                outpoints.add(outpoint);
             }
-            if (spentOutpoints.containsKey(outpoint)) {
-                throw new VerificationException.ConflictPossibleException(
-                        "Mempool double-spend: outpoint " + outpoint + " already spent by pending tx");
-            }
-            outpoints.add(outpoint);
+        }
+        // Complete full validation (structural, UTXO existence, value
+        // conservation, fee, script and type-specific data) so every
+        // transaction accepted into the mempool is solid when batched into a
+        // block — an invalid tx must be rejected at submission, not produce a
+        // silently-invalid (solid=-1) block later.
+        verifyTransaction(tx);
+        for (TransactionOutPoint outpoint : outpoints) {
+            spentOutpoints.put(outpoint, tx);
         }
         if (!outpoints.isEmpty()) {
-            verifyTransaction(tx);
-            for (TransactionOutPoint outpoint : outpoints) {
-                spentOutpoints.put(outpoint, tx);
-            }
             txOutpoints.put(tx, outpoints);
         }
     }
 
     private void verifyTransaction(Transaction tx) {
         tx.verify();
-        List<TransactionInput> inputs = tx.getInputs();
-        if (inputs == null || inputs.isEmpty()) {
+        // Coinbase-like transactions mint value by protocol design; their value
+        // conservation is validated by the reward solidity checks, not here.
+        if (tx.isCoinBase()) {
             return;
         }
+        List<TransactionInput> inputs = tx.getInputs();
 
         Map<String, net.bigtangle.core.Coin> valueIn = new HashMap<>();
         Map<String, net.bigtangle.core.Coin> valueOut = new HashMap<>();
@@ -151,75 +167,213 @@ public class MempoolService {
             }
         }
 
-        BlockStoreInterface store;
-        try {
-            store = storeService.getStore();
-        } catch (Exception e) {
-            throw new VerificationException("Mempool: cannot open store for verification");
+        // Fetch and verify each spendable (non-coinbase) input against its UTXO.
+        boolean hasSpendableInput = false;
+        if (inputs != null) {
+            for (TransactionInput in : inputs) {
+                if (in.getOutpoint() != null && !in.getOutpoint().isCoinBase()) {
+                    hasSpendableInput = true;
+                    break;
+                }
+            }
         }
-        try {
-            for (int index = 0; index < inputs.size(); index++) {
-                TransactionInput in = inputs.get(index);
-                TransactionOutPoint outpoint = in.getOutpoint();
-                if (outpoint == null || outpoint.isCoinBase()) {
-                    continue;
-                }
-                UTXO utxo = store.getTransactionOutput(outpoint.getBlockHash(),
-                        outpoint.getTxHash(), outpoint.getIndex());
-                if (utxo == null) {
-                    throw new VerificationException("Mempool: UTXO not found for " + outpoint);
-                }
-                String tokenKey = Utils.HEX.encode(utxo.getValue().getTokenid());
-                if (valueIn.containsKey(tokenKey)) {
-                    valueIn.put(tokenKey, valueIn.get(tokenKey).add(utxo.getValue()));
-                } else {
-                    valueIn.put(tokenKey, utxo.getValue());
-                }
-                Script scriptPubKey = utxo.getScript();
-                if (scriptPubKey == null) {
-                    throw new VerificationException("Mempool: no scriptPubKey for UTXO " + outpoint);
-                }
-                in.getScriptSig().correctlySpends(tx, index, scriptPubKey, Script.ALL_VERIFY_FLAGS);
+        if (hasSpendableInput) {
+            BlockStoreInterface store;
+            try {
+                store = storeService.getStore();
+            } catch (Exception e) {
+                throw new VerificationException("Mempool: cannot open store for verification");
             }
-
-            boolean feePaid = false;
-            for (Map.Entry<String, net.bigtangle.core.Coin> entry : valueOut.entrySet()) {
-                net.bigtangle.core.Coin inVal = valueIn.get(entry.getKey());
-                if (inVal == null) {
-                    throw new VerificationException.InvalidTransactionException(
-                            "Transaction input and output values do not match");
-                }
-                if (entry.getValue().isBIG() && !feePaid) {
-                    if (inVal.compareTo(entry.getValue().add(net.bigtangle.core.Coin.FEE_DEFAULT)) >= 0) {
-                        feePaid = true;
+            try {
+                for (int index = 0; index < inputs.size(); index++) {
+                    TransactionInput in = inputs.get(index);
+                    TransactionOutPoint outpoint = in.getOutpoint();
+                    if (outpoint == null || outpoint.isCoinBase()) {
+                        continue;
                     }
+                    UTXO utxo = store.getTransactionOutput(outpoint.getBlockHash(),
+                            outpoint.getTxHash(), outpoint.getIndex());
+                    if (utxo == null) {
+                        throw new VerificationException("Mempool: UTXO not found for " + outpoint);
+                    }
+                    String tokenKey = Utils.HEX.encode(utxo.getValue().getTokenid());
+                    if (valueIn.containsKey(tokenKey)) {
+                        valueIn.put(tokenKey, valueIn.get(tokenKey).add(utxo.getValue()));
+                    } else {
+                        valueIn.put(tokenKey, utxo.getValue());
+                    }
+                    Script scriptPubKey = utxo.getScript();
+                    if (scriptPubKey == null) {
+                        throw new VerificationException("Mempool: no scriptPubKey for UTXO " + outpoint);
+                    }
+                    in.getScriptSig().correctlySpends(tx, index, scriptPubKey, Script.ALL_VERIFY_FLAGS);
                 }
-                if (inVal.compareTo(entry.getValue()) < 0) {
-                    throw new VerificationException.InvalidTransactionException(
-                            "Transaction input and output values do not match");
+            } catch (VerificationException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new VerificationException("Mempool transaction verification failed: " + e.getMessage());
+            } finally {
+                try {
+                    store.close();
+                } catch (Exception e) {
+                    log.warn("Error closing store in mempool verification", e);
                 }
             }
-            if (!feePaid) {
-                net.bigtangle.core.Coin bigInput = valueIn.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
-                net.bigtangle.core.Coin bigOutput = valueOut.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
-                if (bigOutput == null && bigInput != null
-                        && bigInput.compareTo(net.bigtangle.core.Coin.FEE_DEFAULT) >= 0) {
+        }
+
+        // Value conservation: every output token must be backed by an input of
+        // the same token. Runs for every transaction (even empty-input ones), so
+        // a tx that creates value from nothing is rejected here exactly as the
+        // block-level checkTxInputOutput would.
+        boolean feePaid = false;
+        for (Map.Entry<String, net.bigtangle.core.Coin> entry : valueOut.entrySet()) {
+            net.bigtangle.core.Coin inVal = valueIn.get(entry.getKey());
+            if (inVal == null) {
+                throw new VerificationException.InvalidTransactionException(
+                        "Transaction input and output values do not match");
+            }
+            if (entry.getValue().isBIG() && !feePaid) {
+                if (inVal.compareTo(entry.getValue().add(net.bigtangle.core.Coin.FEE_DEFAULT)) >= 0) {
                     feePaid = true;
                 }
             }
-            if (!feePaid && valueIn.containsKey(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
-                throw new VerificationException.NoFeeException(net.bigtangle.core.Coin.FEE_DEFAULT.toString());
+            if (inVal.compareTo(entry.getValue()) < 0) {
+                throw new VerificationException.InvalidTransactionException(
+                        "Transaction input and output values do not match");
+            }
+        }
+        if (!feePaid) {
+            net.bigtangle.core.Coin bigInput = valueIn.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+            net.bigtangle.core.Coin bigOutput = valueOut.get(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+            if (bigOutput == null && bigInput != null
+                    && bigInput.compareTo(net.bigtangle.core.Coin.FEE_DEFAULT) >= 0) {
+                feePaid = true;
+            }
+        }
+        if (!feePaid && valueIn.containsKey(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
+            throw new VerificationException.NoFeeException(net.bigtangle.core.Coin.FEE_DEFAULT.toString());
+        }
+
+        // Type-specific data validation mirroring the block-level
+        // checkFullTypeSpecificSolidity so a mempool-accepted tx is guaranteed
+        // solid (rejects, e.g., malformed orders instead of producing a
+        // silently-invalid (solid=-1) block later).
+        verifyTransactionData(tx);
+    }
+
+    private void verifyTransactionData(Transaction tx) {
+        String dataClassName = tx.getDataClassName();
+        if (dataClassName == null || tx.getData() == null) {
+            return;
+        }
+        switch (dataClassName) {
+        case "OrderOpen":
+            verifyOrderOpenData(tx);
+            break;
+        case "OrderCancelInfo":
+            verifyOrderCancelData(tx);
+            break;
+        case "ContractEventInfo":
+            verifyContractEventData(tx);
+            break;
+        case "EVMTransactionInfo":
+            verifyEVMData(tx);
+            break;
+        case "UserSettingDataInfo":
+            verifyUserSettingData(tx);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /** Mirrors {@code checkFormalOrderOpenSolidity} for a single order tx. */
+    private void verifyOrderOpenData(Transaction tx) {
+        try {
+            OrderOpenInfo info = new OrderOpenInfo().parse(tx.getData());
+            if (info.getTargetTokenid() == null) {
+                throw new VerificationException.InvalidTransactionDataException("Invalid target tokenid");
+            }
+            if (info.getTargetValue() < 1 || info.getTargetValue() > Long.MAX_VALUE) {
+                throw new VerificationException.InvalidTransactionDataException("Invalid target value");
+            }
+            long from = info.getValidFromTime() == null ? 0 : info.getValidFromTime();
+            long to = info.getValidToTime() == null ? 0 : info.getValidToTime();
+            if (to > Math.addExact(from, NetworkParameters.ORDER_TIMEOUT_MAX)) {
+                throw new VerificationException.InvalidTransactionException(
+                        "Order timeout exceeds maximum of " + NetworkParameters.ORDER_TIMEOUT_MAX
+                                + " seconds (validFrom=" + from + ", validTo=" + to + ")");
+            }
+            if (!PQKey.fromPublicOnly(info.getBeneficiaryPubKey()).toAddress(networkParameters).toBase58()
+                    .equals(info.getBeneficiaryAddress())) {
+                throw new VerificationException.InvalidOrderException(
+                        "The address does not match with the given pubkey.");
             }
         } catch (VerificationException e) {
             throw e;
         } catch (Exception e) {
-            throw new VerificationException("Mempool transaction verification failed: " + e.getMessage());
-        } finally {
-            try {
-                store.close();
-            } catch (Exception e) {
-                log.warn("Error closing store in mempool verification", e);
-            }
+            throw new VerificationException("Mempool: malformed order transaction data: " + e.getMessage());
+        }
+    }
+
+    /** Mirrors {@code checkFormalOrderOpSolidity} for a single cancel tx. */
+    private void verifyOrderCancelData(Transaction tx) {
+        if (!tx.getOutputs().isEmpty()) {
+            throw new VerificationException.TransactionOutputsDisallowedException();
+        }
+        OrderCancelInfo info;
+        try {
+            info = new OrderCancelInfo().parse(tx.getData());
+        } catch (IOException e) {
+            throw new VerificationException.MalformedTransactionDataException();
+        }
+        if (info.getBlockHash() == null) {
+            throw new VerificationException.InvalidTransactionDataException("Invalid target txhash");
+        }
+    }
+
+    /** Mirrors {@code checkFormalContractEventSolidity} for a single event tx. */
+    private void verifyContractEventData(Transaction tx) {
+        ContractEventInfo info;
+        try {
+            info = new ContractEventInfo().parse(tx.getData());
+        } catch (IOException e) {
+            throw new VerificationException.MalformedTransactionDataException();
+        }
+        if (info.getContractTokenid() == null) {
+            throw new VerificationException.InvalidTransactionDataException("Invalid contract tokenid");
+        }
+    }
+
+    /** Mirrors {@code checkFullEVMTransactionSolidity}'s store-free checks. */
+    private void verifyEVMData(Transaction tx) {
+        EVMTransactionInfo info;
+        try {
+            info = new EVMTransactionInfo().parse(tx.getData());
+        } catch (IOException e) {
+            throw new VerificationException.MalformedTransactionDataException();
+        }
+        if (info.getContractTokenid() == null || info.getFromAddress() == null) {
+            throw new VerificationException.InvalidTransactionDataException(
+                    "Invalid EVM contract tokenid or sender");
+        }
+        if (info.getValue() == null || info.getGasPrice() == null) {
+            throw new VerificationException.InvalidTransactionDataException("EVM value and gasPrice are required");
+        }
+        if (info.getGasLimit() <= 0) {
+            throw new VerificationException.InvalidTransactionDataException("Invalid EVM gas limit");
+        }
+        if (info.getValue().signum() < 0) {
+            throw new VerificationException.InvalidTransactionDataException("Invalid EVM value");
+        }
+    }
+
+    /** Ensures the user-setting payload parses. */
+    private void verifyUserSettingData(Transaction tx) {
+        try {
+            new UserSettingDataInfo().parse(tx.getData());
+        } catch (IOException e) {
+            throw new VerificationException.MalformedTransactionDataException();
         }
     }
 

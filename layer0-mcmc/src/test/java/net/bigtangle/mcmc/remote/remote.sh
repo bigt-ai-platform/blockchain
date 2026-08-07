@@ -38,6 +38,21 @@ L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-050505050505050505050505050505050505050505
 L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-$(cat /home/jcui/git/blockchain/.l1validatorpub 2>/dev/null || true)}"
 L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
 
+# PoS validator configuration (if the env file is present). The L0 HTTP server
+# must hold the same validator key as the MCMC: /stakeDeposit authorizes the
+# deposit with the server's CONFIGURED validator key (DispatcherController
+# returns 403 when it is null), so without it the validator can never be
+# registered and no beacon is ever produced.
+POS_ARGS=""
+if [ -f "$ROOT/validator.env" ]; then
+    set -a; . "$ROOT/validator.env"; set +a
+    # PoS-only: the slot proposer is the only beacon producer (single-headed
+    # chain, no forks). A short slot interval makes blocks confirm quickly so
+    # the remote tests' polling windows fit.
+    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
+    echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
+fi
+
 # Use Java 25 if available
 if [ -x /home/jcui/.local/java-25/bin/java ]; then
     export JAVA_HOME=/home/jcui/.local/java-25
@@ -70,6 +85,17 @@ cleanup() {
     echo ""
     echo "=== Cleaning up ==="
     kill $(jobs -p) 2>/dev/null || true
+    # Also kill any JVMs this infra started, even if the launching shell was
+    # detached (setsid/nohup) and the job table is empty. Match by the exact
+    # module class names, or maven spring-boot:run for the three infra modules,
+    # so we never kill unrelated JVMs (e.g. dev servers on other ports).
+    for pat in "Layer0ServerStart" "Layer0MCMCStart" "OrderMatchL1ServerStart"; do
+        pkill -9 -f "$pat" 2>/dev/null || true
+    done
+    for mod in "layer0-server" "layer0-mcmc" "l1-order-server"; do
+        pkill -9 -f "spring-boot:run.*-pl $mod" 2>/dev/null || true
+        pkill -9 -f "-pl $mod .*spring-boot:run" 2>/dev/null || true
+    done
     wait 2>/dev/null || true
     echo "=== Cleanup done ==="
 }
@@ -85,8 +111,14 @@ if [ "$STOP_ONLY" = "true" ]; then
             kill "$pid" 2>/dev/null || true
         fi
     done
-    # Also kill any leftover spring-boot run wrappers
-    pkill -f "spring-boot:run" 2>/dev/null || true
+    # Also kill any leftover infra JVMs (detached launch leaves orphans)
+    for pat in "Layer0ServerStart" "Layer0MCMCStart" "OrderMatchL1ServerStart"; do
+        pkill -9 -f "$pat" 2>/dev/null || true
+    done
+    for mod in "layer0-server" "layer0-mcmc" "l1-order-server"; do
+        pkill -9 -f "spring-boot:run.*-pl $mod" 2>/dev/null || true
+        pkill -9 -f "-pl $mod .*spring-boot:run" 2>/dev/null || true
+    done
     sleep 3
     if ss -tln 2>/dev/null | grep -qE ":(24089|24091|24086) "; then
         echo "Ports still in use, forcing..."
@@ -153,7 +185,7 @@ echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 # Server peer + gossip ports
 SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS -Dbridge.active=false -Danchor.active=false" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $POS_ARGS -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -196,16 +228,6 @@ echo "=== Step 6: Start L0 MCMC (port $MCMC_PORT) ==="
 # Use different ports from server to avoid conflicts on same machine
 MCMC_PEER_ARGS="-Dpeer.udpPort=$MCMC_PEER_UDP -Dpeer.tcpPort=$MCMC_PEER_TCP -Dgossip.port=$MCMC_GOSSIP"
 MCMC_ARGS="--server.net=Test --server.port=$MCMC_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4"
-# PoS validator configuration (if the env file is present)
-POS_ARGS=""
-if [ -f "$ROOT/validator.env" ]; then
-    set -a; . "$ROOT/validator.env"; set +a
-    # PoS-only: the slot proposer is the only beacon producer (single-headed
-    # chain, no forks). A short slot interval makes blocks confirm quickly so
-    # the remote tests' polling windows fit.
-    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
-    echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
-fi
 nohup mvn spring-boot:run -pl layer0-mcmc \
   -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $MCMC_PEER_ARGS -Dserver.port=$MCMC_PORT -Dserver.requester=http://127.0.0.1:$L0_PORT $POS_ARGS" \
   -Dspring-boot.run.arguments="$MCMC_ARGS" \
