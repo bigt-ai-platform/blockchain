@@ -225,9 +225,10 @@ own its DDL; B is tracked as a follow-up.
 - **Shared base services** (Step 6) are the main coupling point. Option A keeps them
   compiling; do **not** move consensus-critical `ServiceBaseConnect/Confirmation`
   into a layer in the first pass.
-- **`CheckpointService`** reads `getAllOpenOrdersSorted`, `getContractEventRecordOpen`,
-  `getTokenAmountMap` — it is called by tests on both L0 and L1. Under option A it
-  keeps the union view; the concrete store still enforces the schema split.
+- **`CheckpointService`** was a test-only duplicate of `ServiceBase.checkToken`
+  (token-conservation audit). It was removed; tests now call
+  `new ServiceBaseConnect(...).checkToken(store)` directly, so only `ServiceBase`
+  holds the cross-domain read gating.
 - **Pruning** (`prunedHistoryUTXO` core vs `prunedClosedOrders`/`prunedPriceTicker`
   order) must keep their per-layer scheduler wiring.
 - **Migrations**: `updateDatabse()` version bumps must remain additive and
@@ -269,8 +270,9 @@ union-wide (services keep using `BlockStoreInterface`).
 6. **Per-layer wiring** — each layer's `BeforeStartup` builds its own domain store
    (`Core`/`Order`/`Contract`); each `application.yml` sets `store.domain`
    (`core`/`order`/`contract`).
-7. **Cross-domain read gating** — `CheckpointService` and `ServiceBase` skip
-   `getContractEventRecordOpen` when `!hasContractDomain()`; the BEACON confirm hook
+7. **Cross-domain read gating** — `ServiceBase.checkToken` (and the test helper
+   that now delegates to it) skip `getContractEventRecordOpen` when
+   `!hasContractDomain()`; the BEACON confirm hook
    in `ServiceBaseConfirmation` only runs `confirmContractExecution` /
    `confirmEVMExecution` when `hasContractDomain()`.
 

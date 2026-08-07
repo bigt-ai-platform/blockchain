@@ -116,7 +116,6 @@ import net.bigtangle.response.PermissionedAddressesResponse;
 import net.bigtangle.response.TokenIndexResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.server.checkpoint.CheckpointService;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -210,8 +209,6 @@ public abstract class AbstractIntegrationTest {
 	protected BlockSaveService blockSaveService;
 	@Autowired
 	protected MempoolService mempoolService;
-	@Autowired
-	CheckpointService checkpointService;
 	@Autowired
 	protected ObjectMapper jsonmapper;
 
@@ -1787,7 +1784,8 @@ public abstract class AbstractIntegrationTest {
 	public TokensumsMap checkSum(TokensumsMap last, boolean dag) throws JsonProcessingException, Exception {
 		try {
 			store.beginDatabaseBatchWrite();
-			TokensumsMap map = checkpointService.checkToken(store);
+			TokensumsMap map = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,
+					jsonmapper).checkToken(store);
 			Map<String, Tokensums> r11 = map.getTokensumsMap();
 
 			for (Entry<String, Tokensums> a : r11.entrySet()) {
