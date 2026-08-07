@@ -16,8 +16,8 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.store.MySQLFullBlockStore;
-import net.bigtangle.store.PostgreSQLFullBlockStore;
+import net.bigtangle.store.CoreMySQLFullBlockStore;
+import net.bigtangle.store.CorePostgreSQLFullBlockStore;
 
 @Component
 public class BeforeStartup {
@@ -33,9 +33,9 @@ public class BeforeStartup {
 		if (serverConfiguration.getCreatetable()) {
 			BlockStoreInterface store;
 			if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-				store = new MySQLFullBlockStore(networkParameters, dataSource.getConnection());
+				store = new CoreMySQLFullBlockStore(networkParameters, dataSource.getConnection());
 			} else {
-				store = new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
+				store = new CorePostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
 			}
 			try {
 				store.create();

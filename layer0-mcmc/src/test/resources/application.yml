@@ -21,6 +21,9 @@ db:
   username: ${DB_USERNAME:root}
   password: ${DB_PASSWORD:test1234}
 
+store:
+  domain: ${STORE_DOMAIN:all}
+
 service:
   schedule:
     mcmc: ${SERVICE_MCMC:false}

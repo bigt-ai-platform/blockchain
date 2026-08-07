@@ -87,4 +87,4 @@ mvn test-compile -q -f "$ROOT/pom.xml" -am -pl layer0-mcmc 2>&1 | tail -1
 echo "=== Build done ==="
 
 echo "=== Running Layer 0 tests ==="
-mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${MCMC_JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0
+mvn test -pl layer0-mcmc -f "$ROOT/pom.xml" "${MCMC_JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG $DB_ARGS -DDB_NAME=info_l0 -Dstore.domain=core

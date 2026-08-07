@@ -45,11 +45,18 @@ public class CheckpointService {
  
 
 	private List<OrderRecord> orders(String tokenid, BlockStoreInterface store) throws BlockStoreException {
+		// Order tables exist on every layer (the reward pipeline reads them);
+		// always query.
 		return store.getAllOpenOrdersSorted(null, tokenid);
 
 	}
 
 	private List<ContractEventRecord> contracts(String tokenid, BlockStoreInterface store) throws BlockStoreException {
+		// A layer-minimal store (e.g. Layer 0 / l1-order) has no contract tables;
+		// skip the read.
+		if (!store.hasContractDomain()) {
+			return new java.util.ArrayList<ContractEventRecord>();
+		}
 		return store.getContractEventRecordOpen(  tokenid);
 
 	}

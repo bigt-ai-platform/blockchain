@@ -73,6 +73,20 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	public static final String VERSION_SETTING = "version";
 
+	/** The layer domain this store is provisioned for. Defaults to all domains. */
+	private BlockStoreInterface.StoreDomain storeDomain = BlockStoreInterface.StoreDomain.ALL;
+
+	/** The layer domain this store is provisioned for. */
+	@Override
+	public BlockStoreInterface.StoreDomain getStoreDomain() {
+		return storeDomain;
+	}
+
+	/** Set the layer domain; controls which tables are created and which reads run. */
+	public void setStoreDomain(BlockStoreInterface.StoreDomain storeDomain) {
+		this.storeDomain = storeDomain == null ? BlockStoreInterface.StoreDomain.ALL : storeDomain;
+	}
+
 	// Drop table SQL.
 	private static final String DROP_SETTINGS_TABLE = "DROP TABLE IF EXISTS settings";
 	private static final String DROP_OPEN_OUTPUT_TABLE = "DROP TABLE IF EXISTS outputs";

@@ -473,6 +473,8 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_OUTPUT_TABLE);
         sqlStatements.add(CREATE_OUTPUT_MULTI_TABLE);
         sqlStatements.add(CREATE_TOKENS_TABLE);
+        // The reward pipeline (epoch rewards via generateOrderMatching) reads
+        // the order book on every layer, so the order tables are always created.
         sqlStatements.add(CREATE_MATCHING_TABLE);
         sqlStatements.add(CREATE_MULTISIGNADDRESS_TABLE); 
         sqlStatements.add(CREATE_MULTISIGN_TABLE);
@@ -500,11 +502,14 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         List<String> sqlStatements = new ArrayList<String>(); 
         sqlStatements.add(CREATE_ACCESS_PERMISSION_TABLE);
         sqlStatements.add(CREATE_ACCESS_GRANT_TABLE);
-        sqlStatements.add(CREATE_CONTRACT_EVENT_TABLE);
-        sqlStatements.add(CREATE_CONTRACTEVENT_CANCEL_TABLE);
-        sqlStatements.add(CREATE_CONTRACT_RESULT_TABLE); 
+        // Contract/EVM tables are only provisioned on the L1-contract layer.
+        if (hasContractDomain()) {
+            sqlStatements.add(CREATE_CONTRACT_EVENT_TABLE);
+            sqlStatements.add(CREATE_CONTRACTEVENT_CANCEL_TABLE);
+            sqlStatements.add(CREATE_CONTRACT_RESULT_TABLE); 
+            sqlStatements.add(CREATE_EVM_RECEIPT_TABLE);
+        }
         sqlStatements.add(CREATE_ORDER_RESULT_TABLE); 
-        sqlStatements.add(CREATE_EVM_RECEIPT_TABLE);
         sqlStatements.add(CREATE_CHAINBLOCKQUEUE_TABLE);
         sqlStatements.add(CREATE_LOCKOBJECT_TABLE); 
         sqlStatements.add(CREATE_MATCHINGDAILY_TABLE); 
@@ -572,9 +577,11 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     protected List<String> getCreateIndexesSQL2() {
         List<String> sqlStatements = new ArrayList<String>(); 
         sqlStatements.add(CREATE_OUTPUTS_FROMADDRESS_INDEX); 
-        sqlStatements.add(CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX); 
-        sqlStatements.add(CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX); 
-        sqlStatements.add(CREATE_CONTRACT_EXECUTION_CONTRACTTOKENID_TABLE_INDEX);
+        if (hasContractDomain()) {
+            sqlStatements.add(CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX); 
+            sqlStatements.add(CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX); 
+            sqlStatements.add(CREATE_CONTRACT_EXECUTION_CONTRACTTOKENID_TABLE_INDEX);
+        }
         sqlStatements.add(CREATE_ORDERS_SPENT_TABLE_INDEX);
         sqlStatements.add(CREATE_MATCHING_TOKEN_TABLE_INDEX);
         sqlStatements.add(CREATE_TOKEN_TOKENID_TABLE_INDEX);

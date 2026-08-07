@@ -655,4 +655,34 @@ public interface BlockStoreInterface {
 
 	void deletePosState(String service, String key) throws BlockStoreException;
 
+	/**
+	 * The domain the store is provisioned for. A layer-minimal store only creates
+	 * the tables of its own domain (plus the shared core domain), so cross-domain
+	 * reads must be skipped — see {@link #hasOrderDomain()} and
+	 * {@link #hasContractDomain()}.
+	 */
+	StoreDomain getStoreDomain();
+
+	/** True when this store owns the order-matching tables. */
+	default boolean hasOrderDomain() {
+		return getStoreDomain() == StoreDomain.ORDER || getStoreDomain() == StoreDomain.ALL;
+	}
+
+	/** True when this store owns the contract/EVM tables. */
+	default boolean hasContractDomain() {
+		return getStoreDomain() == StoreDomain.CONTRACT || getStoreDomain() == StoreDomain.ALL;
+	}
+
+	/** Which domain's tables a store is provisioned with. */
+	enum StoreDomain {
+		/** Layer 0 / core chain tables only (blocks, UTXO, token, stake, ...). */
+		CORE,
+		/** Core + order-matching tables (l1-order). */
+		ORDER,
+		/** Core + contract/EVM tables (l1-contract). */
+		CONTRACT,
+		/** All domains (legacy full store). */
+		ALL
+	}
+
 }

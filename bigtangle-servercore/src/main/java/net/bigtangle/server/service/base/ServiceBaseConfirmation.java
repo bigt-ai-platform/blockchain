@@ -1256,11 +1256,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			break;
 		case BLOCKTYPE_BEACON:
 			confirmReward(block, confirmation, blockStore);
-			// Order matching confirmation always runs here (matching uses
-			// BEACON block data).
-			confirmOrderMatching(block, confirmation, blockStore);
-			confirmContractExecution(block, confirmation, blockStore);
-			confirmEVMExecution(block, confirmation, blockStore);
+			// Order matching / contract execution / EVM only run on a store
+			// provisioned for those domains (l1-order / l1-contract). A Layer-0
+			// store has no order or contract tables.
+			if (blockStore.hasOrderDomain()) {
+				confirmOrderMatching(block, confirmation, blockStore);
+			}
+			if (blockStore.hasContractDomain()) {
+				confirmContractExecution(block, confirmation, blockStore);
+				confirmEVMExecution(block, confirmation, blockStore);
+			}
 			updateBlockConfirmOnly(block.getBlockHash(), chainlength, confirmation, blockStore);
 			break;
 		case BLOCKTYPE_TOKEN_CREATION:

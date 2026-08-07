@@ -31,6 +31,9 @@ db:
   username: ${DB_USERNAME:root}
   password: ${DB_PASSWORD:test1234}
 
+store:
+  domain: ${STORE_DOMAIN:core}
+
 spring:
   datasource:
     hikari:
