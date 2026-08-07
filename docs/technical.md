@@ -365,6 +365,92 @@ ML-DSA-only while the dual suite is inactive, and both once it is active.
 
 This is a **consensus/security decision**, not a test optimization — it changes what the chain's root-of-trust signs with.
 
+## PQ pubkey encoding: prefixed vs. raw
+
+`PQKey` exposes **two different byte forms** for a public key. Getting them
+confused silently breaks signature verification, address derivation, or key
+lookups, so every consumer must use the form the producer wrote.
+
+### The two accessors
+
+| Accessor | Bytes | Purpose |
+|---|---|---|
+| `getPubKey()` / `getPublicKeyBytes()` / `getPublicKeyAsHex()` | `0x05 \|\| KeyBundle.serialize()` — **prefixed** | the canonical on-chain / script-stack identifier |
+| `getKeyBundleBytes()` / `getKeyBundle()` | `KeyBundle.serialize()` — **raw**, no prefix | internal key material, tests, benchmarks |
+
+The `0x05` prefix (`PQScriptUtils.PQ_PUBKEY_PREFIX`) distinguishes a PQ pubkey
+from legacy EC pubkeys (`0x02/0x03/0x04`) by its first byte, so
+`Script.executeCheckSig` dispatches PQ keys to `PQScriptUtils.verifyPQ` instead
+of EC verification. It was introduced in `9a943a265` (PQ verification
+integration).
+
+Round-trips are symmetric:
+- write: `getPublicKeyBytes()` → `[0x05 | bundle]`
+- read: `PQScriptUtils.extractKeyBundle(prefixed)` strips byte 0
+  (`PQScriptUtils.java:61`); `PQKey.fromPublicOnly(prefixedPubkey)` rebuilds
+  the key; `fromPublicOnlyBytes(raw)` is the raw-bundle counterpart.
+
+### Consistency rule
+
+`getPubKey()`/`getPublicKeyBytes()`/`getPublicKeyAsHex()` all return the
+**prefixed** form. Any code that persists, hashes, compares, or verifies a
+pubkey must use this form on both the writer and the reader. The raw bundle is
+only for key material transport (test vectors, `Block.setProposerKeyBundle`,
+which is in-memory and not part of consensus).
+
+### Audited consumers (all consistent, prefixed)
+
+- **Scripts**: `ScriptBuilder.createOutputScript(PQKey)` /
+  `createInputScriptForPQ(SignatureBundle, PQKey)` push `getPubKey()` onto the
+  stack; `Script.executeCheckSig` / `verifyPQ` consume the same prefixed bytes.
+- **Addresses / hash160**: `PQKey.getPubKeyHash()` =
+  `sha256hash160(getPubKey())`; all `Address.fromHash160(...,
+  sha256hash160(key.getPubKey()))` call sites (wallet, stake deposit,
+  bridge vault, order beneficiary) use the same prefixed hash. `Script.getPubKeyHash()`
+  returns the hash160 already embedded in the scriptPubKey, so the bonded-output
+  check in `checkStakeDepositSolidity` (`sha256hash160(declaredPubkey)` vs
+  `out.getScriptPubKey().getPubKeyHash()`) matches.
+- **Staking**: `StakeService` builds deposit data from `depositKey.getPubKey()`
+  (prefixed); `applyStakeBlock` / `checkStakeDepositSolidity` read the same
+  bytes back and store them as `StakeRecord.pubkey`. `RandaoService` signs the
+  **prefixed** pubkey in the BLS proof of possession and verifies against the
+  same prefixed bytes.
+- **Proposer / validator**: `ValidatorDutyService.isProposer` compares
+  `proposer.getPubkey()` (prefixed, from `StakeRecord`) with
+  `validatorKey.getPubKey()`; `SlotService` selection input / mix commits use
+  `v.getPubkey()`; beacon validation rebuilds `PQKey.fromPublicOnly(pubkey)`
+  (prefixed) then `verifyPQ(signer.getPublicKeyBytes(), ...)`.
+- **Orders**: `OrderOpenInfo.beneficiaryPubKey` = `beneficiary.getPubKey()`
+  (prefixed); `checkFullOrderOpenSolidity` derives the address with
+  `PQKey.fromPublicOnly(...)` (prefixed) and `checkFullOrderOpSolidity` passes
+  the stored `OrderRecord.beneficiaryPubKey` straight into `verifyPQ`.
+- **Multisig / tokens**: `MultiSignAddress` hex pubkeys are
+  `ecKey.getPublicKeyAsHex()` (prefixed); tokenids are `getPublicKeyAsHex()`.
+- **Bridge / anchors**: `BridgeService` pubkey→signer maps and `LayerAnchor`
+  signer matching key on `HEX.encode(getPublicKeyBytes())`; `AnchorService` and
+  both `DispatcherController` validators compare the configured pubkey hex
+  against the prefixed hex.
+- **Wallet key chains**: `BasicKeyChain` stores/looks up by `getPubKey()`
+  (prefixed) and `getPubKeyHash()`; `findKeyFromPubKey` receives prefixed
+  bytes from script chunks / wallet keys.
+
+### No raw-bundle hashing / mixing found
+
+There is **no** production call site that hashes `getKeyBundleBytes()` or
+`sha256hash160` of the raw bundle — the raw form never reaches addresses,
+signatures, or comparisons in consensus code. The only raw-bundle consumers are
+tests (`PQKeyCrossPlatformCompareTest`, `SuiteActivationTest`) and the
+benchmark key store.
+
+### Caveats
+
+- Config values (e.g. `anchor.pubKeyHex`, `pos.validatorKey`,
+  `l1order`/`layer0` `stakeDeposit` pubkeys) are **prefixed hex** of
+  `getPublicKeyBytes()`. If a value was generated from the raw bundle it will
+  fail the equality checks above.
+- When adding new pubkey consumers, prefer `getPublicKeyBytes()` / `getPubKey()`
+  (prefixed); reserve `getKeyBundleBytes()` for key-material transport and tests.
+
 ## Test-suite performance work
 
 `testall.sh` runs `bigtangle-core` tests (no DB) then `layer0-mcmc` integration tests (PostgreSQL, single surefire fork). Original runtime was ~11:17 with a surefire fork timeout failure (600 s).
