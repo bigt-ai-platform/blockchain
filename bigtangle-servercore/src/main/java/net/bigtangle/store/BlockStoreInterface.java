@@ -264,6 +264,9 @@ public interface BlockStoreInterface {
 	/* Transaction status tracking */
 	void upsertTransactionStatus(net.bigtangle.server.data.TransactionStatusRecord record) throws BlockStoreException;
 
+	void upsertTransactionStatuses(List<net.bigtangle.server.data.TransactionStatusRecord> records)
+			throws BlockStoreException;
+
 	net.bigtangle.server.data.TransactionStatusRecord getTransactionStatus(Sha256Hash txhash)
 			throws BlockStoreException;
 

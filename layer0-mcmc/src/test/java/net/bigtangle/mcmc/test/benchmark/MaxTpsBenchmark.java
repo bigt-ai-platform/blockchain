@@ -187,7 +187,8 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
         long submitWallMs = (System.nanoTime() - wallStart) / 1_000_000;
 
         // Server-side batch: drain mempool into blocks (parallel groups)
-        BlockSaveService.BATCH_TX_PER_BLOCK = 50000; // default: all tx in one block
+        // 1000 tx/block → 5000 tx splits into 5 parallel groups
+        BlockSaveService.BATCH_TX_PER_BLOCK = 1000;
         long batchStart = System.nanoTime();
         int batched = blockSaveService.batchBlocksFromMempool();
         long batchMs = (System.nanoTime() - batchStart) / 1_000_000;

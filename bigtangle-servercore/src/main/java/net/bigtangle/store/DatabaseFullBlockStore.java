@@ -549,6 +549,60 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		}
 	}
 
+	/** Dialect-specific multi-row upsert suffix for transactionstatus. */
+	protected String getBatchUpsertStatusSuffix() {
+		return " ON CONFLICT (txhash) DO UPDATE SET status = EXCLUDED.status,"
+				+ " blockhash = EXCLUDED.blockhash, chainlength = EXCLUDED.chainlength,"
+				+ " address = EXCLUDED.address, updatedtime = EXCLUDED.updatedtime";
+	}
+
+	@Override
+	public void upsertTransactionStatuses(java.util.List<net.bigtangle.server.data.TransactionStatusRecord> records)
+			throws BlockStoreException {
+		if (records == null || records.isEmpty()) {
+			return;
+		}
+		java.util.List<net.bigtangle.server.data.TransactionStatusRecord> valid = new java.util.ArrayList<>();
+		for (net.bigtangle.server.data.TransactionStatusRecord r : records) {
+			if (r != null && r.getTxHash() != null) {
+				valid.add(r);
+			}
+		}
+		if (valid.isEmpty()) {
+			return;
+		}
+		StringBuilder sql = new StringBuilder(128 + valid.size() * 70);
+		sql.append("INSERT INTO transactionstatus (txhash, status, blockhash, chainlength, address, createdtime, updatedtime) VALUES ");
+		for (int i = 0; i < valid.size(); i++) {
+			if (i > 0) {
+				sql.append(", ");
+			}
+			sql.append("(?, ?, ?, ?, ?, ?, ?)");
+		}
+		sql.append(getBatchUpsertStatusSuffix());
+		try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
+			int idx = 1;
+			for (net.bigtangle.server.data.TransactionStatusRecord r : valid) {
+				ps.setBytes(idx++, r.getTxHash().getBytes());
+				ps.setString(idx++, r.getStatus().name());
+				ps.setBytes(idx++, r.getBlockHash() == null ? null : r.getBlockHash().getBytes());
+				if (r.getChainlength() != null) {
+					ps.setLong(idx++, r.getChainlength());
+				} else {
+					ps.setNull(idx++, java.sql.Types.BIGINT);
+				}
+				ps.setString(idx++, r.getAddress());
+				ps.setLong(idx++, r.getCreatedTime());
+				ps.setLong(idx++, r.getUpdatedTime());
+			}
+			ps.executeUpdate();
+		} catch (SQLException e) {
+			if (!getDuplicateKeyErrorCode().equals(e.getSQLState())) {
+				throw new BlockStoreException(e);
+			}
+		}
+	}
+
 	@Override
 	public net.bigtangle.server.data.TransactionStatusRecord getTransactionStatus(Sha256Hash txhash)
 			throws BlockStoreException {

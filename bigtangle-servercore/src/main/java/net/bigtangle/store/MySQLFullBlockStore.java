@@ -460,6 +460,13 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
     }
 
     @Override
+    protected String getBatchUpsertStatusSuffix() {
+        return " ON DUPLICATE KEY UPDATE status = VALUES(status),"
+                + " blockhash = VALUES(blockhash), chainlength = VALUES(chainlength),"
+                + " address = VALUES(address), updatedtime = VALUES(updatedtime)";
+    }
+
+    @Override
     protected List<String> getCreateTablesSQL() {
         List<String> sqlStatements = new ArrayList<String>();
         sqlStatements.addAll( getCreateTablesSQL1());

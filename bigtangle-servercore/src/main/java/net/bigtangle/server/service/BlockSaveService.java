@@ -18,6 +18,7 @@ import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
+import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.exception.BlockStoreException;
@@ -190,18 +191,40 @@ public class BlockSaveService {
 					txOut = txOut.add(out.getValue().getValue());
 				}
 			}
+			// Batch-read missing input UTXOs per referenced (block, tx) instead of
+			// one DB round-trip per input.
+			java.util.Map<TransactionOutPoint, net.bigtangle.core.UTXO> missing = new java.util.HashMap<>();
+			java.util.Map<TransactionOutPoint, net.bigtangle.core.Coin> inValues = new java.util.HashMap<>();
 			for (TransactionInput in : tx.getInputs()) {
-				net.bigtangle.core.Coin inValue = null;
 				TransactionOutput connected = in.getOutpoint().getConnectedOutput();
 				if (connected != null) {
-					inValue = connected.getValue();
+					inValues.put(in.getOutpoint(), connected.getValue());
 				} else {
-					net.bigtangle.core.UTXO utxo = store.getTransactionOutput(
-							in.getOutpoint().getBlockHash(),
-							in.getOutpoint().getTxHash(),
-							in.getOutpoint().getIndex());
-					if (utxo != null) inValue = utxo.getValue();
+					missing.put(in.getOutpoint(), null);
 				}
+			}
+			if (!missing.isEmpty()) {
+				java.util.Map<Sha256Hash, java.util.List<TransactionOutPoint>> byTx = new java.util.HashMap<>();
+				for (TransactionOutPoint op : missing.keySet()) {
+					byTx.computeIfAbsent(op.getTxHash(), k -> new java.util.ArrayList<>()).add(op);
+				}
+				for (java.util.Map.Entry<Sha256Hash, java.util.List<TransactionOutPoint>> e : byTx.entrySet()) {
+					java.util.List<Long> indices = new java.util.ArrayList<>();
+					for (TransactionOutPoint op : e.getValue()) {
+						indices.add(op.getIndex());
+					}
+					java.util.Map<Long, net.bigtangle.core.UTXO> got = store.getTransactionOutputs(
+							e.getValue().get(0).getBlockHash(), e.getKey(), indices);
+					for (TransactionOutPoint op : e.getValue()) {
+						net.bigtangle.core.UTXO utxo = got.get(op.getIndex());
+						if (utxo != null) {
+							inValues.put(op, utxo.getValue());
+						}
+					}
+				}
+			}
+			for (java.util.Map.Entry<TransactionOutPoint, net.bigtangle.core.Coin> e : inValues.entrySet()) {
+				net.bigtangle.core.Coin inValue = e.getValue();
 				if (inValue != null && inValue.isBIG()) {
 					txIn = txIn.add(inValue.getValue());
 				}

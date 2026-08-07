@@ -62,11 +62,17 @@ public class TransactionStatusRecord implements java.io.Serializable {
 		if (block == null || block.getTransactions() == null) {
 			return;
 		}
+		long now = System.currentTimeMillis();
+		List<TransactionStatusRecord> records = new java.util.ArrayList<>();
 		for (Transaction tx : block.getTransactions()) {
 			if (tx.isCoinBase() || tx.getInputs() == null || tx.getInputs().isEmpty()) {
 				continue;
 			}
-			mark(store, tx, status, block.getHash(), chainlength, params);
+			records.add(new TransactionStatusRecord(tx.getHash(), status, block.getHash(), chainlength,
+					deriveAddress(tx, params), now, now));
+		}
+		if (!records.isEmpty()) {
+			store.upsertTransactionStatuses(records);
 		}
 	}
 
