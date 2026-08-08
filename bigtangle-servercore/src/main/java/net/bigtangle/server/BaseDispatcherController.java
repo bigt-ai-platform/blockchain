@@ -1,17 +1,13 @@
-/*******************************************************************************
- * <p>
- *  Copyright   2018  Inasset GmbH. 
- *******************************************************************************/
 package net.bigtangle.server;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
-import java.math.BigInteger;import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -31,7 +27,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
 
 import com.google.common.base.Stopwatch;
 
@@ -40,126 +35,107 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
-import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
-import net.bigtangle.crypto.pq.PQScriptUtils;
-import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.server.data.AnchorRecord;
-import net.bigtangle.server.data.TransactionStatus;
-import net.bigtangle.server.data.TransactionStatusRecord;
-import net.bigtangle.params.ReqCmd;
-import net.bigtangle.response.AbstractResponse;
-import net.bigtangle.response.ErrorResponse;
-import net.bigtangle.response.GetBlockListResponse;
-import net.bigtangle.response.GetStringResponse;
-import net.bigtangle.response.GetTokensResponse;
-import net.bigtangle.response.GetTransactionStatusResponse;
-import net.bigtangle.response.OkResponse;
-import net.bigtangle.core.UtilGeneseBlock;
-import net.bigtangle.script.ScriptBuilder;
-import net.bigtangle.response.PermissionedAddressesResponse;
-import net.bigtangle.server.config.ServerConfiguration;
-import net.bigtangle.core.Address;
-import net.bigtangle.core.AttestationData;
-import net.bigtangle.core.Coin;
-import net.bigtangle.core.PQKey;
-import net.bigtangle.core.StakeRecord;
-import net.bigtangle.core.Transaction;
-import net.bigtangle.core.UTXO;
-import net.bigtangle.server.service.AccessGrantService;
-import net.bigtangle.server.service.AccessPermissionedService;
-import net.bigtangle.bridge.BridgeService;
-import net.bigtangle.server.service.BlockSaveService;
-import net.bigtangle.server.service.BlockService;
-import net.bigtangle.server.service.CasperService;
-import net.bigtangle.server.service.FeeService;
-import net.bigtangle.server.service.MempoolService;
-import net.bigtangle.server.service.SlashingService;
-import net.bigtangle.server.service.StakeService;
-import net.bigtangle.server.service.ValidatorDutyService;
-import net.bigtangle.server.service.BlockServiceCreate;
-import net.bigtangle.server.service.CacheBlockPrototypeService;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.layer0.service.MultiSignService;
 import net.bigtangle.layer0.service.MultiSignServiceCreate;
 import net.bigtangle.layer0.service.OutputService;
-import net.bigtangle.layer0.service.PayMultiSignService;
- 
-import net.bigtangle.server.service.StoreService;
-import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.layer0.service.TokenDomainnameService;
 import net.bigtangle.layer0.service.TokensService;
+import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.server.data.TransactionStatus;
+import net.bigtangle.server.data.TransactionStatusRecord;
+import net.bigtangle.response.ErrorResponse;
+import net.bigtangle.response.GetBlockListResponse;
+import net.bigtangle.response.GetStringResponse;
+import net.bigtangle.response.GetTransactionStatusResponse;
+import net.bigtangle.response.OkResponse;
+import net.bigtangle.server.config.ServerConfiguration;
+import net.bigtangle.server.service.AccessGrantService;
+import net.bigtangle.server.service.AccessPermissionedService;
+import net.bigtangle.server.service.BlockSaveService;
+import net.bigtangle.server.service.BlockService;
+import net.bigtangle.server.service.BlockServiceCreate;
+import net.bigtangle.server.service.CacheBlockPrototypeService;
+import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.server.service.StoreService;
+import net.bigtangle.server.service.SubtanglePermissionService;
 import net.bigtangle.server.service.UserDataService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 
-@RestController
-@RequestMapping("/")
-public class DispatcherController implements DisposableBean {
+/**
+ * Shared REST dispatcher for the layer-minimal L1 servers (l1-contract,
+ * l1-pai, ...). Holds the request plumbing (auth, errors, response helpers)
+ * and the common command handlers. Subclasses register as {@code @RestController}
+ * with {@code @RequestMapping("/")} and only supply layer-specific handlers via
+ * {@link #handleLayerSpecific(ReqCmd, byte[], HttpServletResponse, Stopwatch, BlockStoreInterface, String)}.
+ *
+ * <p>The layer-agnostic service dependencies are the {@code layer0.service}
+ * types (defined in bigtangle-servercore), so every L1 server can reuse them
+ * without duplicating empty {@code layer1.service} subclasses.
+ */
+public abstract class BaseDispatcherController implements DisposableBean {
 
-	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
+	private static final Logger logger = LoggerFactory.getLogger(BaseDispatcherController.class);
 
 	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
 			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
 
 	@Autowired
-	private NetworkParameters networkParameters;
+	protected NetworkParameters networkParameters;
 	@Autowired
-	private UserDataService userDataService;
+	protected UserDataService userDataService;
 	@Autowired
-	private OutputService walletService;
+	protected OutputService walletService;
 	@Autowired
-	private BlockService blockService;
+	protected BlockService blockService;
 	@Autowired
-	private BlockServiceCreate blockServiceCreate;
+	protected BlockServiceCreate blockServiceCreate;
 	@Autowired
-	private BlockSaveService blockSaveService;
+	protected BlockSaveService blockSaveService;
 	@Autowired
-	private TokensService tokensService;
+	protected SubtanglePermissionService subtanglePermissionService;
 	@Autowired
-	private MultiSignService multiSignService;
+	protected ServerConfiguration serverConfiguration;
 	@Autowired
-	private MultiSignServiceCreate multiSignServiceCreate;
+	protected TokenDomainnameService tokenDomainnameService;
 	@Autowired
-	private PayMultiSignService payMultiSignService;
+	protected MultiSignService multiSignService;
 	@Autowired
-	private SubtanglePermissionService subtanglePermissionService;
+	protected MultiSignServiceCreate multiSignServiceCreate;
 	@Autowired
-	ServerConfiguration serverConfiguration;
+	protected TokensService tokensService;
 	@Autowired
 	protected StoreService storeService;
 	@Autowired
-	private TokenDomainnameService tokenDomainnameService;
-
-	 
+	protected AccessPermissionedService accessPermissionedService;
 	@Autowired
-	private AccessPermissionedService accessPermissionedService;
-	@Autowired
-	private AccessGrantService accessGrantService;
+	protected AccessGrantService accessGrantService;
 	@Autowired
 	protected CacheBlockPrototypeService cacheBlockPrototypeService;
 	@Autowired
-	private MempoolService mempoolService;
-	@Autowired(required = false)
-	private BridgeService bridgeService;
-	@Autowired
-	private CasperService casperService;
-	@Autowired
-	private SlashingService slashingService;
-	@Autowired
-	private StakeService stakeService;
-	@Autowired
-	private FeeService feeService;
-	@Autowired
-	private ValidatorDutyService validatorDutyService;
+	protected MempoolService mempoolService;
 
 	@Override
 	public void destroy() {
 		requestExecutor.shutdownNow();
+	}
+
+	/** Layer-specific display name shown at the root path. */
+	protected abstract String getChainName();
+
+	@RequestMapping("/")
+	public String index() {
+		return getChainName();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -169,14 +145,14 @@ public class DispatcherController implements DisposableBean {
 		userDataService.addStatistcs(reqCmd, remoteAddr(httprequest));
 		if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 			Stopwatch watch = Stopwatch.createStarted();
-            errorLimit(httpServletResponse, watch);
+			errorLimit(httpServletResponse, watch);
 			return;
-        }
+		}
 		@SuppressWarnings("rawtypes")
 		final Future<String> handler = requestExecutor.submit((Callable) () -> {
-            processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
-            return "";
-        });
+			processDo(reqCmd, contentBytes, httpServletResponse, httprequest);
+			return "";
+		});
 		try {
 			handler.get(serverConfiguration.getTimeoutMinute(), TimeUnit.MINUTES);
 		} catch (TimeoutException e) {
@@ -187,8 +163,16 @@ public class DispatcherController implements DisposableBean {
 			resp.setMessage(sw.toString());
 			writeJsonResponse(httpServletResponse, resp, reqCmd);
 		}
-
 	}
+
+	/**
+	 * Handles a command that is specific to this layer. Subclasses return
+	 * {@code true} when they wrote a response; the shared dispatcher rejects
+	 * unhandled commands otherwise.
+	 */
+	protected abstract boolean handleLayerSpecific(ReqCmd reqCmd, byte[] bodyByte,
+			HttpServletResponse httpServletResponse, Stopwatch watch, BlockStoreInterface store, String reqCmdName)
+			throws Exception;
 
 	@SuppressWarnings("unchecked")
 	public void processDo(@PathVariable("reqCmd") String reqCmd, @RequestBody byte[] contentBytes,
@@ -209,18 +193,25 @@ public class DispatcherController implements DisposableBean {
 			if (!checkReady(httpServletResponse, watch)) {
 				return;
 			}
+			if (handleLayerSpecific(reqCmd0000, bodyByte, httpServletResponse, watch, store, reqCmd)) {
+				return;
+			}
 			switch (reqCmd0000) {
 			case getTip: {
 				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
 					// return bomb
-                    logger.debug("bomb getDifficultyTarget {} {}", remoteAddr(httprequest), reqCmd);
+					logger.debug("bomb getDifficultyTarget {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
-                }
+				}
 
 				byte[] data = rollingBlock.bitcoinSerialize();
 				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
+			}
+				break;
+			case batchBlock: {
+				batchBlock(bodyByte, httpServletResponse, watch, store);
 			}
 				break;
 			case submitTransaction: {
@@ -228,7 +219,7 @@ public class DispatcherController implements DisposableBean {
 				mempoolService.submitTransaction(tx);
 				recordMempoolStatus(tx, store);
 				blockSaveService.broadcastTransaction(tx);
-				this.outPrintJSONString(httpServletResponse, new net.bigtangle.response.OkResponse(), watch, reqCmd);
+				this.outPrintJSONString(httpServletResponse, new OkResponse(), watch, reqCmd);
 			}
 				break;
 			case submitTransactions: {
@@ -245,58 +236,14 @@ public class DispatcherController implements DisposableBean {
 					blockSaveService.broadcastTransaction(tx);
 					count++;
 				}
-				net.bigtangle.response.GetStringResponse resp = new net.bigtangle.response.GetStringResponse();
+				GetStringResponse resp = new GetStringResponse();
 				resp.setMessage(String.valueOf(count));
 				this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
 			}
 				break;
-			case processPegIn: {
-				if (bridgeService == null) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
-					break;
-				}
-				// Accept a SIGNED transaction that spends the source UTXO and
-				// pays the vault. BridgeService verifies the input scriptSig
-				// (ownership proof) before anything is locked — a raw outpoint +
-				// beneficiary is never enough to lock someone else's UTXO.
-				Transaction pegInTx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
-				bridgeService.processPegIn(pegInTx, store);
-				this.outPrintJSONString(httpServletResponse,
-						new net.bigtangle.response.OkResponse(), watch, reqCmd);
-			}
-				break;
-			case processPegOut: {
-				if (bridgeService == null) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(503), watch, reqCmd);
-					break;
-				}
-				// Process peg-out for confirmed anchors with an embedded burn.
-				// Anchors are keyed by their L1 chain id (NOT this node's own
-				// chain id, which on L0 is always "L0") — so iterate every
-				// confirmed anchor; processPegOut is idempotent (already-spent
-				// vaults are skipped), making this a safe manual retry for
-				// previously-failed peg-outs (F7).
-				int attempted = 0;
-				for (net.bigtangle.server.data.AnchorRecord anchor : store.getAllAnchors()) {
-					if (anchor.isConfirmed() && anchor.getBurnJson() != null && !anchor.getBurnJson().isEmpty()) {
-						bridgeService.processPegOut(anchor, store);
-						attempted++;
-					}
-				}
-				logger.info("processPegOut: attempted {} confirmed anchor burns", attempted);
-				this.outPrintJSONString(httpServletResponse,
-						new net.bigtangle.response.OkResponse(), watch, reqCmd);
-			}
-				break;
-			case batchBlock: {
-				batchBlock(bodyByte, httpServletResponse, watch, store);
-			}
-				break;
 			case getOutputs: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-                    logger.debug("getOutputs denied {} {}", remoteAddr(httprequest), reqCmd);
+					logger.debug("getOutputs denied {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
 				}
@@ -310,10 +257,6 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case getOutputsHistory: {
-				outputHistory(bodyByte, httpServletResponse, watch, store);
-			}
-				break;
 			case outputsOfTokenid: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -322,36 +265,9 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-
-			case searchTokens: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				GetTokensResponse response = tokensService.searchTokens((String) request.get("name"), store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case searchWebTokens: {
-                AbstractResponse response = tokensService.getWebTokensList(store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case searchExchangeTokens: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				GetTokensResponse response = tokensService.searchExchangeTokens((String) request.get("name"), store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getTokenById: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = tokensService.getTokenById((String) request.get("tokenid"), store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
 			case getBalances: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-                    logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
+					logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
 					return;
 				}
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
@@ -364,7 +280,6 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-
 			case getTransactionStatus: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -414,7 +329,7 @@ public class DispatcherController implements DisposableBean {
 
 			case getAccountBalances: {
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-                    logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
+					logger.debug("getOutputs getBalances {} {}", remoteAddr(httprequest), reqCmd);
 					return;
 				}
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
@@ -427,7 +342,6 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-
 			case findBlockEvaluation: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -489,6 +403,47 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case getUserData: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String dataclassname = (String) request.get("dataclassname");
+				String pubKey = (String) request.get("pubKey");
+				byte[] buf = this.userDataService.getUserData(dataclassname, pubKey, store);
+				this.outPointBinaryArray(httpServletResponse, buf, reqCmd);
+			}
+				break;
+			case userDataList: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				int blocktype = (int) request.get("blocktype");
+				List<String> pubKeyList = (List<String>) request.get("pubKeyList");
+				AbstractResponse response = this.userDataService.getUserDataList(blocktype, pubKeyList, store);
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
+			case regSubtangle: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkey = (String) request.get("pubkey");
+				String signHex = (String) request.get("signHex");
+				boolean flag = subtanglePermissionService.savePubkey(pubkey, signHex, store);
+				if (flag) {
+					this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+				} else {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
+				}
+			}
+				break;
+			case updateSubtangle: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String pubkey = (String) request.get("pubkey");
+				String userdataPubkey = (String) request.get("userdataPubkey");
+				String status = (String) request.get("status");
+				subtanglePermissionService.updateSubtanglePermission(pubkey, "", userdataPubkey, status, store);
+				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
+			}
+				break;
 			case getTokenSignByAddress: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
@@ -518,13 +473,18 @@ public class DispatcherController implements DisposableBean {
 				}
 				Boolean isSign = (Boolean) request.get("isSign");
 				AbstractResponse response = this.multiSignService.getMultiSignListWithTokenid(tokenid,
-						 Integer.valueOf(tokenindex), (List<String>) request.get("addresses"),
-                        isSign != null && isSign, store);
+						Integer.valueOf(tokenindex), (List<String>) request.get("addresses"), isSign != null && isSign,
+						store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+
 			case signToken: {
 				Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
+				if (!networkParameters.getAllowedBlockTypes().contains(BlockType.BLOCKTYPE_TOKEN_CREATION)) {
+					throw new VerificationException(
+							"Token creation is not allowed on chain " + networkParameters.getChainId());
+				}
 				this.multiSignServiceCreate.signTokenAndSaveBlock(block, store);
 				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
@@ -538,96 +498,18 @@ public class DispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
-			case getUserData: {
+			case getTokenById: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String dataclassname = (String) request.get("dataclassname");
-				String pubKey = (String) request.get("pubKey");
-				byte[] buf = this.userDataService.getUserData(dataclassname, pubKey, store);
-				this.outPointBinaryArray(httpServletResponse, buf, reqCmd);
-			}
-				break;
-			case userDataList: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				int blocktype = (int) request.get("blocktype");
-				List<String> pubKeyList = (List<String>) request.get("pubKeyList");
-				AbstractResponse response = this.userDataService.getUserDataList(blocktype, pubKeyList, store);
+				AbstractResponse response = tokensService.getTokenById((String) request.get("tokenid"), store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case launchPayMultiSign: {
-				this.payMultiSignService.launchPayMultiSign(bodyByte, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case payMultiSign: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				AbstractResponse response = this.payMultiSignService.payMultiSign(request, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getPayMultiSignList: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				List<String> keyStrHex000 = Json.jsonmapper().readValue(reqStr, List.class);
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignList(keyStrHex000, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getPayMultiSignAddressList: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String orderid = (String) request.get("orderid");
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignAddressList(orderid, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case payMultiSignDetails: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String orderid = (String) request.get("orderid");
-				AbstractResponse response = this.payMultiSignService.getPayMultiSignDetails(orderid, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-			case getOutputByKey: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String hexStr = (String) request.get("hexStr");
-				AbstractResponse response = walletService.getOutputsWithHexStr(hexStr, store);
-				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
-			}
-				break;
-
-			case regSubtangle: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkey = (String) request.get("pubkey");
-				String signHex = (String) request.get("signHex");
-				boolean flag = subtanglePermissionService.savePubkey(pubkey, signHex, store);
-				if (flag) {
-					this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-				} else {
-					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
-				}
-			}
-				break;
-			case updateSubtangle: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkey = (String) request.get("pubkey");
-				String userdataPubkey = (String) request.get("userdataPubkey");
-				String status = (String) request.get("status");
-				subtanglePermissionService.updateSubtanglePermission(pubkey, "", userdataPubkey, status, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			case getTokenPermissionedAddresses: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				final String domainNameBlockHash = (String) request.get("domainNameBlockHash");
-				PermissionedAddressesResponse response = this.tokenDomainnameService
+				AbstractResponse response = this.tokenDomainnameService
 						.queryDomainnameTokenPermissionedAddresses(domainNameBlockHash, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
@@ -639,29 +521,26 @@ public class DispatcherController implements DisposableBean {
 				final String token = (String) request.get("token");
 				if (token == null || token.isEmpty()) {
 					this.outPrintJSONString(httpServletResponse,
-							this.tokenDomainnameService.queryParentDomainnameBlockHash(domainname, store), watch,
-							reqCmd);
+							this.tokenDomainnameService.queryParentDomainnameBlockHash(domainname, store), watch, reqCmd);
 				} else {
 					this.outPrintJSONString(httpServletResponse,
 							this.tokenDomainnameService.queryDomainnameBlockHash(domainname, store), watch, reqCmd);
 				}
-
 			}
 				break;
-
 			case getChainNumber: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-					Json.jsonmapper().readValue(reqStr, Map.class);
-					AbstractResponse response = blockService.getMaxConfirmedReward(store);
-	
+				Json.jsonmapper().readValue(reqStr, Map.class);
+				AbstractResponse response = blockService.getMaxConfirmedReward(store);
+
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
 
 			case getAllConfirmedReward: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-                Json.jsonmapper().readValue(reqStr, Map.class);
-                AbstractResponse response = blockService.getAllConfirmedReward(store);
+				Json.jsonmapper().readValue(reqStr, Map.class);
+				AbstractResponse response = blockService.getAllConfirmedReward(store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
@@ -700,209 +579,11 @@ public class DispatcherController implements DisposableBean {
 			}
 				break;
 
-			case getAnchors: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String chainId = (String) request.get("chainId");
-				long sinceHeight = Long.parseLong(request.get("sinceHeight") + "");
-				int limit = Integer.parseInt(request.get("limit") + "");
-				List<AnchorRecord> anchors = storeService.getStore().getAnchorsByChainId(
-						chainId, sinceHeight, limit);
-				String json = Json.jsonmapper().writeValueAsString(anchors);
-				httpServletResponse.setCharacterEncoding("UTF-8");
-				httpServletResponse.getOutputStream().write(json.getBytes(StandardCharsets.UTF_8));
-			}
-				break;
-
-			case submitAttestation: {
-				AttestationData att = Json.jsonmapper().readValue(bodyByte, AttestationData.class);
-				casperService.processVote(att, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case getAttestations: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				long slot = Long.parseLong(request.getOrDefault("slot", "0").toString());
-				List<AttestationData> attestations = store.getAttestationsForSlot(slot);
-				Map<String, Object> result = new HashMap<>();
-				result.put("attestations", attestations);
-				this.outPrintJSONString(httpServletResponse,
-						net.bigtangle.response.GetStringResponse.create(
-								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
-			}
-				break;
-			case processWithdrawal: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
-				stakeService.processWithdrawals(epoch, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case requestValidatorExit: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkeyHex = (String) request.get("pubkey");
-				String signatureHex = (String) request.get("signature");
-				// The validator MUST prove key ownership with a signature; the
-				// exit travels as a consensus BLOCKTYPE_EXIT block.
-				if (signatureHex == null || signatureHex.isEmpty()) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
-					break;
-				}
-				stakeService.submitExit(Utils.HEX.decode(pubkeyHex),
-						Utils.HEX.decode(signatureHex), store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case submitSlashingProof: {
-				AttestationData att1 = null, att2 = null;
-				try {
-					Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
-					if (req.containsKey("attestation1")) {
-						att1 = Json.jsonmapper().convertValue(req.get("attestation1"), AttestationData.class);
-					}
-					if (req.containsKey("attestation2")) {
-						att2 = Json.jsonmapper().convertValue(req.get("attestation2"), AttestationData.class);
-					}
-				} catch (Exception e) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(400), watch, reqCmd);
-					break;
-				}
-				// A slashing proof must carry TWO authenticated attestations
-				// from the SAME validator that form a slashable pattern
-				// (double vote or surround vote). The slash is proposed as a
-				// consensus BLOCKTYPE_SLASHING block, applied by every node.
-				if (att1 == null || att2 == null
-						|| att1.getValidatorPubkey() == null
-						|| !java.util.Arrays.equals(att1.getValidatorPubkey(), att2.getValidatorPubkey())
-						|| !casperService.verifyAttestation(att1)
-						|| !casperService.verifyAttestation(att2)) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
-					break;
-				}
-				boolean doubleVote = att1.getSlot() == att2.getSlot()
-						&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
-				boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
-						&& att2.getTargetEpoch() < att1.getTargetEpoch())
-						|| (att2.getSourceEpoch() < att1.getSourceEpoch()
-								&& att1.getTargetEpoch() < att2.getTargetEpoch());
-				if (!doubleVote && !surround) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(400), watch, reqCmd);
-					break;
-				}
-				stakeService.submitSlashing(att1, att2, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case stakeDeposit: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				// Security: never accept a raw private key over HTTP. The STAKE
-				// transaction is signed with the server's CONFIGURED validator
-				// key (pos.validatorKey), and the request pubkey must match it.
-				if (request.containsKey("privateKey")) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
-					break;
-				}
-				String pubkeyHex = (String) request.get("pubkey");
-				PQKey configuredKey = validatorDutyService.getValidatorKey();
-				if (configuredKey == null) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
-					break;
-				}
-				if (!Utils.HEX.encode(configuredKey.getPublicKeyBytes()).equals(pubkeyHex)) {
-					this.outPrintJSONString(httpServletResponse,
-							net.bigtangle.response.ErrorResponse.create(403), watch, reqCmd);
-					break;
-				}
-				PQKey depositKey = configuredKey;
-				String amountStr = (String) request.get("amount");
-				BigInteger amount = new BigInteger(amountStr);
-				Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
-				List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());
-				UTXO selected = null;
-				for (UTXO u : utxos) {
-					if (u.getValue().getValue().compareTo(amount) >= 0
-							&& java.util.Arrays.equals(u.getValue().getTokenid(), NetworkParameters.BIGTANGLE_TOKENID)) {
-						selected = u;
-						break;
-					}
-				}
-				if (selected == null) {
-					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(404), watch, reqCmd);
-					break;
-				}
-				if (request.containsKey("withdrawalCredentials")) {
-					stakeService.processDeposit(selected,
-							Utils.HEX.decode((String) request.get("withdrawalCredentials")), depositKey, store);
-				} else {
-					stakeService.processDeposit(selected, depositKey.getPubKey(), depositKey, store);
-				}
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case activateValidator: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String pubkeyHex = (String) request.get("pubkey");
-				long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
-				stakeService.activateValidator(Utils.HEX.decode(pubkeyHex), epoch, store);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case getValidators: {
-				List<StakeRecord> validators = store.getActiveStakeDeposits();
-				Map<String, Object> result = new HashMap<>();
-				result.put("validators", validators);
-				this.outPrintJSONString(httpServletResponse,
-						net.bigtangle.response.GetStringResponse.create(
-								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
-			}
-				break;
-			case getBaseFee: {
-				Map<String, Object> result = new HashMap<>();
-				result.put("baseFee", feeService.getBaseFee());
-				result.put("feeDefault", Coin.FEE_DEFAULT.getValue().longValue());
-				this.outPrintJSONString(httpServletResponse,
-						net.bigtangle.response.GetStringResponse.create(
-								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
-			}
-				break;
-			case setValidatorKey: {
-				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-				String keyHex = (String) request.get("privateKey");
-				if (keyHex != null && !keyHex.isEmpty()) {
-					PQKey key = PQKey.createNew();
-				}
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
-			}
-				break;
-			case getValidatorKey: {
-				Map<String, Object> result = new HashMap<>();
-				result.put("configured", validatorDutyService.getValidatorKey() != null);
-				PQKey key = validatorDutyService.getValidatorKey();
-				if (key != null) {
-					result.put("pubkey", Utils.HEX.encode(key.getPubKey()));
-				}
-				this.outPrintJSONString(httpServletResponse,
-						net.bigtangle.response.GetStringResponse.create(
-								Json.jsonmapper().writeValueAsString(result)), watch, reqCmd);
-			}
-				break;
 			default:
 				logger.warn("reqCmd {} rejected: not handled by this {} node", reqCmd,
 						store.getStoreDomain());
 				this.outPrintJSONString(httpServletResponse,
-						net.bigtangle.response.ErrorResponse.create(100), watch, reqCmd);
+						ErrorResponse.create(100), watch, reqCmd);
 				break;
 			}
 		} catch (BlockStoreException e) {
@@ -931,31 +612,12 @@ public class DispatcherController implements DisposableBean {
 		} finally {
 			store.close();
 			if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
-                logger.info("{} takes {} from {}", reqCmd, watch.elapsed(TimeUnit.MILLISECONDS), remoteAddr(httprequest));
+				logger.info("{} takes {} from {}", reqCmd, watch.elapsed(TimeUnit.MILLISECONDS), remoteAddr(httprequest));
 			watch.stop();
 		}
 	}
 
-	@RequestMapping("/")
-	public String index() {
-		return "Bigtangle";
-	}
-
-	private void outputHistory(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
-			BlockStoreInterface store)
-			throws Exception {
-		String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
-		@SuppressWarnings("unchecked")
-		Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-		String fromaddress = request.get("fromaddress") == null ? "" : request.get("fromaddress").toString();
-		String toaddress = request.get("toaddress") == null ? "" : request.get("toaddress").toString();
-		Long starttime = request.get("starttime") == null ? null : Long.valueOf(request.get("starttime").toString());
-		Long endtime = request.get("endtime") == null ? null : Long.valueOf(request.get("endtime").toString());
-		AbstractResponse response = walletService.getOutputsHistory(fromaddress, toaddress, starttime, endtime, store);
-		this.outPrintJSONString(httpServletResponse, response, watch, "outputHistory");
-	}
-
-	private void batchBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
+	protected void batchBlock(byte[] bodyByte, HttpServletResponse httpServletResponse, Stopwatch watch,
 			BlockStoreInterface store) throws Exception {
 		Block block = networkParameters.getDefaultSerializer().makeBlock(bodyByte);
 
@@ -977,7 +639,7 @@ public class DispatcherController implements DisposableBean {
 		}
 	}
 
-	private void errorLimit(HttpServletResponse httpServletResponse, Stopwatch watch) throws Exception {
+	protected void errorLimit(HttpServletResponse httpServletResponse, Stopwatch watch) throws Exception {
 		AbstractResponse resp = ErrorResponse.create(101);
 		resp.setErrorcode(403);
 		resp.setMessage(" limit reached. ");
@@ -1037,13 +699,13 @@ public class DispatcherController implements DisposableBean {
 	}
 
 	public boolean checkAuth(HttpServletRequest httprequest,
-							 BlockStoreInterface store) {
+			BlockStoreInterface store) {
 		String header = httprequest.getHeader("accessToken");
 		boolean flag = false;
 		if (header != null && !header.trim().isEmpty()) {
 			HttpSession session = httprequest.getSession(true);
 			if ("key_verified".equals(session.getAttribute("key_verify_flag"))) {
-                return true;
+				return true;
 			}
 			String pubkey = header.split(",")[0];
 			String signHex = header.split(",")[1];
@@ -1052,7 +714,7 @@ public class DispatcherController implements DisposableBean {
 
 			byte[] buf = Utils.HEX.decode(accessToken);
 			byte[] signature = Utils.HEX.decode(signHex);
-			flag = PQScriptUtils.verifyPQ(key.getPublicKeyBytes(), signature, Sha256Hash.wrap(buf));
+			flag = net.bigtangle.crypto.pq.PQScriptUtils.verifyPQ(key.getPubKey(), signature, Sha256Hash.of(buf));
 
 			if (flag) {
 				int count = this.accessPermissionedService.checkSessionRandomNumResp(pubkey, accessToken, store);
@@ -1113,12 +775,12 @@ public class DispatcherController implements DisposableBean {
 			remoteAddr = request.getRemoteAddr();
 		} else {
 			StringTokenizer tokenizer = new StringTokenizer(remoteAddr, ",");
-            if (tokenizer.hasMoreTokens()) {
-                do {
-                    remoteAddr = tokenizer.nextToken();
-                    break;
-                } while (tokenizer.hasMoreTokens());
-            }
+			if (tokenizer.hasMoreTokens()) {
+				do {
+					remoteAddr = tokenizer.nextToken();
+					break;
+				} while (tokenizer.hasMoreTokens());
+			}
 		}
 		return remoteAddr;
 	}

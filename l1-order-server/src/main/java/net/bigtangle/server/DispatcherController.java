@@ -692,6 +692,10 @@ public class DispatcherController implements DisposableBean {
 
  
 			default:
+				logger.warn("reqCmd {} rejected: not handled by this {} node", reqCmd,
+						store.getStoreDomain());
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.ErrorResponse.create(100), watch, reqCmd);
 				break;
 			}
 		} catch (BlockStoreException e) {
