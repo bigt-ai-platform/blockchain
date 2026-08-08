@@ -200,9 +200,19 @@ public class StakeIT extends AbstractIntegrationTest {
 
         boolean found = false;
         for (Map<String, Object> v : validators) {
-            if (pubkeyHex.equals(v.get("pubkey"))) {
+            // getValidators serializes StakeRecord via Jackson, which encodes
+            // byte[] (pubkey) as base64 — decode and compare with the hex key.
+            Object pk = v.get("pubkey");
+            if (pk == null) continue;
+            byte[] pkBytes;
+            try {
+                pkBytes = java.util.Base64.getDecoder().decode((String) pk);
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            if (java.util.Arrays.equals(validatorKey.getPubKey(), pkBytes)) {
                 found = true;
-                log.info("Found validator via HTTP: {}", v);
+                log.info("Found validator via HTTP");
                 break;
             }
         }
