@@ -131,7 +131,7 @@ public class ProdSimBootstrap {
         addresses.add(entry);
         Map<String, Object> req = new HashMap<>();
         req.put("addresses", addresses);
-        OkHttp3Util.postString(serverUrl + ReqCmd.fundAddresses.name(),
+        OkHttp3Util.postString(serverUrl + "fundAddresses",
                 Json.jsonmapper().writeValueAsString(req));
         System.out.println("  Funded validator");
     }

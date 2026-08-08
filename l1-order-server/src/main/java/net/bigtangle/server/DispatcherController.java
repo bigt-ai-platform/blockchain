@@ -93,9 +93,6 @@ public class DispatcherController implements DisposableBean {
 
 	private static final Logger logger = LoggerFactory.getLogger(DispatcherController.class);
 
-	/** Unique index counter for fundAddresses coinbases (see fundAddresses). */
-	private static final java.util.concurrent.atomic.AtomicLong FUND_UTXO_INDEX = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
-
 	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
 			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
 
@@ -223,50 +220,6 @@ public class DispatcherController implements DisposableBean {
 
 				byte[] data = rollingBlock.bitcoinSerialize();
 				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
-			}
-				break;
-			case fundAddresses: {
-				@SuppressWarnings("unchecked")
-				Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
-				@SuppressWarnings("unchecked")
-				List<Map<String, Object>> entries = (List<Map<String, Object>>) req.get("addresses");
-				Block genesis = UtilGeneseBlock.createGenesis(this.networkParameters);
-				Sha256Hash genesisHash = genesis.getHash();
-				// All funded UTXOs share the genesis hash, so give each one a
-				// unique index to avoid colliding with the genesis coinbase.
-				long startIndex = FUND_UTXO_INDEX.addAndGet(entries.size()) - entries.size();
-				List<UTXO> utxos = new ArrayList<>();
-				for (int i = 0; i < entries.size(); i++) {
-					Map<String, Object> entry = entries.get(i);
-					String addrStr = (String) entry.get("address");
-					BigInteger value = entry.containsKey("value")
-							? BigInteger.valueOf(((Number) entry.get("value")).longValue())
-							: NetworkParameters.BigtangleCoinTotal.divide(BigInteger.valueOf(entries.size()));
-						String pubkeyHex = (String) entry.get("pubkey");
-				UTXO utxo = new UTXO();
-				utxo.setHash(genesisHash);
-				utxo.setIndex(startIndex + i);
-				utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
-				utxo.setAddress(addrStr);
-				if (pubkeyHex != null) {
-					byte[] pubkeyBytes = Utils.HEX.decode(pubkeyHex);
-					PQKey key = PQKey.fromPublicOnly(pubkeyBytes);
-					utxo.setScript(ScriptBuilder.createOutputScript(key));
-					byte[] pubKeyHash = Utils.sha256hash160(pubkeyBytes);
-					utxo.setAddress(Address.fromHash160(networkParameters, pubKeyHash).toBase58());
-				} else {
-					utxo.setScript(ScriptBuilder
-							.createOutputScript(Address.fromBase58(networkParameters, addrStr)));
-				}
-					utxo.setCoinbase(true);
-					utxo.setBlockHash(genesisHash);
-					utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
-					utxo.setConfirmed(true);
-					utxo.setSpent(false);
-					utxos.add(utxo);
-				}
-				store.addUnspentTransactionOutput(utxos);
-				this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmd);
 			}
 				break;
 			case stakeDeposit: {

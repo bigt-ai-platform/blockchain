@@ -131,6 +131,14 @@ public class ServerConfiguration {
      * Disable on test networks for higher throughput.
      */
 
+    /**
+     * Whether the coin-minting {@code fundAddresses} endpoint is enabled.
+     * Defaults to {@code false}: a production node must never mint confirmed
+     * UTXOs over an unauthenticated API. Enable only in test/benchmark/
+     * bootstrap setups (e.g. prodsim, remote integration tests).
+     */
+    private Boolean fundEnabled = false;
+
     
     /** 
      * Block interval for creating checkpoints.
@@ -459,6 +467,23 @@ public class ServerConfiguration {
      */
     public void setRunKafkaStream(Boolean runKafkaStream) {
         this.runKafkaStream = runKafkaStream;
+    }
+
+    /**
+     * Checks whether the coin-minting {@code fundAddresses} endpoint is
+     * enabled (test/benchmark bootstrap setups only).
+     * @return true if {@code fundAddresses} may mint confirmed UTXOs
+     */
+    public Boolean getFundEnabled() {
+        return fundEnabled;
+    }
+
+    /**
+     * Enables or disables the coin-minting {@code fundAddresses} endpoint.
+     * @param fundEnabled true to allow {@code fundAddresses} to mint coins
+     */
+    public void setFundEnabled(Boolean fundEnabled) {
+        this.fundEnabled = fundEnabled;
     }
 
     /**

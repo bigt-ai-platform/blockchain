@@ -29,6 +29,8 @@ x-common-server: &common-server
     SERVICE_INITSYNC: "true"
     SYNCBLOCKS: 1000
     CREATETABLE: "true"
+    FUND_ENABLED: "true"
+    RUNKAFKASTREAM: "false"
     POS_SLOT_INTERVAL_MS: 2000
     POS_SLOTS_PER_EPOCH: 8
     SERVICE_BLOCKBATCH: "true"
@@ -51,6 +53,8 @@ x-common-mcmc: &common-mcmc
     SERVICE_INITSYNC: "true"
     SYNCBLOCKS: 1000
     CREATETABLE: "false"
+    FUND_ENABLED: "true"
+    RUNKAFKASTREAM: "false"
     POS_SLOT_INTERVAL_MS: 2000
     POS_SLOTS_PER_EPOCH: 8
     SERVICE_BLOCKBATCH: "true"

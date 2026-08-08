@@ -39,5 +39,5 @@ public enum ReqCmd {
     submitAttestation, getAttestations, processWithdrawal, submitSlashingProof, requestValidatorExit,
     stakeDeposit, activateValidator, getValidators, getBaseFee, setValidatorKey, getValidatorKey,
     // NFT
-    createNft, saveUserdata, fundAddresses;
+    createNft, saveUserdata;
 }

@@ -136,6 +136,7 @@ java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   --server.createtable=true \
   --service.schedule.mcmc=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
+  --server.runKafkaStream=false \
   --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
 ```
 
@@ -153,6 +154,7 @@ java -Xmx2048m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   --db.username=root --db.password=test1234 --db.dbtype=postgresql \
   --server.requester=http://127.0.0.1:8081 \
   --server.createtable=false \
+  --server.runKafkaStream=false \
   --service.schedule.mcmc=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true \
   --pos.validatorKey=<POS_VALIDATOR_KEY_0> \
@@ -165,7 +167,7 @@ For **every** validator `i` (submit to any reachable node; the STAKE blocks
 propagate through the DAG):
 
 ```bash
-# 1) Fund the validator's address
+# 1) Fund the validator's address (requires FUND_ENABLED=true, see below)
 curl -X POST http://127.0.0.1:8081/fundAddresses -H 'Content-Type: application/json' \
   -d '{"addresses":[{"address":"validator","value":1000000000000,"pubkey":"<VALIDATOR_PUBKEY_i>"}]}'
 
@@ -228,6 +230,7 @@ docker run -d --net=cc-bridged-network --name l0-svr -p 8081:8081 \
   -e SERVER_PORT=8081 -e SERVER_NET=Mainnet \
   -e DB_HOSTNAME=l0-pg -e DB_NAME=layer0 -e DB_USERNAME=root -e DB_PASSWORD=test1234 -e DBTYPE=postgresql \
   -e SERVICE_MCMC=true -e SERVICE_BLOCKBATCH=true -e SERVICE_SCHEDULE_MICROBATCH=true -e CREATETABLE=true \
+  -e RUNKAFKASTREAM=false \
   ghcr.io/bigt-ai-platform/layer0-server
 
 docker run -d --net=cc-bridged-network --name l0-mcmc -p 8091:8091 \
@@ -235,6 +238,7 @@ docker run -d --net=cc-bridged-network --name l0-mcmc -p 8091:8091 \
   -e DB_HOSTNAME=l0-pg -e DB_NAME=layer0 -e DB_USERNAME=root -e DB_PASSWORD=test1234 -e DBTYPE=postgresql \
   -e REQUESTER=http://l0-svr:8081 -e CREATETABLE=false \
   -e SERVICE_MCMC=true -e SERVICE_BLOCKBATCH=true -e SERVICE_SCHEDULE_MICROBATCH=true \
+  -e RUNKAFKASTREAM=false \
   -e POS_VALIDATOR_KEY=<POS_VALIDATOR_KEY_0> \
   ghcr.io/bigt-ai-platform/layer0-mcmc
 ```
@@ -256,6 +260,8 @@ Repeat for the remaining nodes with unique ports/DBs and `POS_GOSSIP_PEERS`.
 | `SERVICE_SYNC` / `SERVICE_SYNC_RATE` | Block sync service | `true / 50000` |
 | `SERVICE_INITSYNC` | Sync on startup | `true` |
 | `service.schedule.microbatch` | Micro-batch service (system property, e.g. `--service.schedule.microbatch=true`; env `SERVICE_SCHEDULE_MICROBATCH`) | `true` |
+| `RUNKAFKASTREAM` | Kafka stream processing (unused in this deployment; leave off) | `false` |
+| `FUND_ENABLED` | Enable the coin-minting `fundAddresses` endpoint (**test/bootstrap only**; must stay `false` on Mainnet) | `false` |
 | `POS_VALIDATOR_KEY` | Validator private seed (64 or 128 hex) | `…` |
 | `POS_SLOT_INTERVAL_MS` | Slot duration | `12000` |
 | `POS_SLOTS_PER_EPOCH` | Slots per epoch | `32` |
@@ -280,6 +286,9 @@ docker logs -f l0-mcmc
 
 - `POS_VALIDATOR_KEY` is a private seed. Keep it in a gitignored `validator.env`,
   never log it, and never commit it.
+- **`fundAddresses` mints confirmed coins over an unauthenticated endpoint.** It
+  is disabled by default (`FUND_ENABLED=false`) and must remain disabled on any
+  public or production node. Only enable it for test/bootstrap networks.
 - `stakeDeposit` accepts the validator private key over HTTP — in production
   enable TLS (`SSL=true` + `KEYSTORE`) and/or restrict the endpoint to trusted
   operators.

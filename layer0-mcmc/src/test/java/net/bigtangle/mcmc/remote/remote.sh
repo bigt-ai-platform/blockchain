@@ -185,7 +185,7 @@ echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 # Server peer + gossip ports
 SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $POS_ARGS -Dbridge.active=false -Danchor.active=false" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $POS_ARGS -Dserver.fundEnabled=true -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -242,7 +242,7 @@ L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.p
 # the cross-layer transfer (blocksFromNonChainHeight), not by sharing L0's chain.
 L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.requester=http://127.0.0.1:$L0_PORT"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS -Dserver.fundEnabled=true" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!

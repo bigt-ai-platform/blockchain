@@ -14,7 +14,7 @@
 		<!-- Overridable via -Dbigtangle.mcmc.argLine to allow testall.sh to
 		     tune heap / JVM flags per run. Default matches the previous
 		     hardcoded argLine exactly. -->
-		<bigtangle.mcmc.argLine>-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true</bigtangle.mcmc.argLine>
+		<bigtangle.mcmc.argLine>-Xmx2g --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -Dspring.main.allow-bean-definition-overriding=true -Dserver.fundEnabled=true</bigtangle.mcmc.argLine>
 	</properties>
 	<dependencies>
 
