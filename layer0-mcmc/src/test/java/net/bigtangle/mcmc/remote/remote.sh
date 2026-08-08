@@ -368,6 +368,26 @@ for i in $(seq 1 60); do
 done
 sleep 5
 
+# Wait until the L0 beacon chain is STABLE before running token-creating tests.
+# A token block built on an early beacon parent can be orphaned when the beacon
+# chain still reorganises; once a few beacons have confirmed the chain is
+# stable enough that freshly created token blocks confirm promptly.
+STABLE_BEACONS="${STABLE_BEACONS:-6}"
+echo "Waiting for a stable L0 beacon chain (>= $STABLE_BEACONS confirmed beacons)..."
+for i in $(seq 1 60); do
+    STABLE_COUNT=$(docker exec "$PG_CONTAINER" psql -U root -d $DB_NAME -t -A -c \
+        "SELECT count(*) FROM blocks WHERE confirmed AND chainlength > 0;" 2>/dev/null || echo "0")
+    if [ -n "$STABLE_COUNT" ] && [ "${STABLE_COUNT//[^0-9]/}" -ge "$STABLE_BEACONS" ]; then
+        echo "L0 beacon chain stable: $STABLE_COUNT confirmed beacons"
+        break
+    fi
+    if [ "$i" -eq 60 ]; then
+        echo "WARNING: L0 beacon chain not stable after 180s (confirmed=$STABLE_COUNT), continuing anyway"
+    fi
+    sleep 3
+done
+sleep 3
+
 # --- Step 8: Run remote tests (or hold if infra-only) ---
 echo ""
 if [ "$INFRA_ONLY" = "true" ]; then

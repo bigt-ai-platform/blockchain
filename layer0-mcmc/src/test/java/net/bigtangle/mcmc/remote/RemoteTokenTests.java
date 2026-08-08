@@ -173,7 +173,11 @@ public class RemoteTokenTests extends RemoteTest {
         assertNotNull(foundToken, "Token should exist after creation");
         log.info("Token {} created, id={}", tokenName, tokenId);
 
-        Thread.sleep(15000);
+        // Wait until the token's minted UTXOs are CONFIRMED (spendable), not a
+        // fixed sleep: the live chain confirms on its own schedule. Confirmation
+        // also confirms this creation's fee change, so the next token-creating
+        // test has a fresh confirmed BIG fee source instead of the same spent one.
+        waitForTokenUtxos(issuer, tokenId);
 
         byte[] tokenidBuf = Utils.HEX.decode(tokenId);
         List<FreeStandingTransactionOutput> allCandidates = wallet.calculateAllSpendCandidates(null, false);
@@ -187,15 +191,6 @@ public class RemoteTokenTests extends RemoteTest {
             if (java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf())) {
                 tokenUtxos.add(co);
             }
-        }
-
-        if (tokenUtxos.isEmpty()) {
-            String balanceUrl = contextRoot + ReqCmd.getBalances.name();
-            java.util.List<String> keyHex = java.util.List.of(
-                    Utils.HEX.encode(issuer.getPubKeyHash()));
-            byte[] balResp = OkHttp3Util.post(balanceUrl,
-                    Json.jsonmapper().writeValueAsString(keyHex).getBytes());
-            log.info("Balance response for issuer: {}", new String(balResp));
         }
 
         assertTrue(!tokenUtxos.isEmpty(), "Issuer should have token UTXOs (supply=" + supply + ")");
