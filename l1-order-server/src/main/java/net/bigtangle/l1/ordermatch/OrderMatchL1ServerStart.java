@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @ComponentScan(basePackages = { "net.bigtangle" },
     excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX,
-        pattern = "net\\.bigtangle\\.layer0\\..*|net\\.bigtangle\\.l1\\.contract\\..*|net\\.bigtangle\\.l1\\.pai\\..*|net\\.bigtangle\\.l1\\.nft\\..*|net\\.bigtangle\\.l1\\.payment\\..*|net\\.bigtangle\\.server\\.config\\.NetConfiguration"))
+        pattern = "net\\.bigtangle\\.l1\\.contract\\..*|net\\.bigtangle\\.l1\\.pai\\..*|net\\.bigtangle\\.l1\\.nft\\..*|net\\.bigtangle\\.l1\\.payment\\..*|net\\.bigtangle\\.server\\.config\\.NetConfiguration"))
 @EnableScheduling
 public class OrderMatchL1ServerStart {
 

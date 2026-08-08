@@ -162,6 +162,14 @@ public abstract class BaseDispatcherController implements DisposableBean {
 			StringWriter sw = new StringWriter();
 			resp.setMessage(sw.toString());
 			writeJsonResponse(httpServletResponse, resp, reqCmd);
+		} catch (java.util.concurrent.ExecutionException e) {
+			logger.error("ERROR ExecutionException reqCmd={} cause={}", reqCmd,
+					e.getCause() != null ? e.getCause().getClass().getName() + ": " + e.getCause().getMessage() : "null");
+			logger.error("process ExecutionException for reqCmd={}", reqCmd, e.getCause());
+			Stopwatch watch = Stopwatch.createStarted();
+			AbstractResponse resp = ErrorResponse.create(101);
+			resp.setMessage(e.getCause() != null ? e.getCause().getLocalizedMessage() : e.getLocalizedMessage());
+			this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
 		}
 	}
 
