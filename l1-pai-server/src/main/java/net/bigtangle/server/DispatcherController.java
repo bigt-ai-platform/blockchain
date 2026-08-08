@@ -162,6 +162,12 @@ public class DispatcherController implements DisposableBean {
                     contentBytes.length);
             bodyByte = contentBytes;
             ReqCmd reqCmd0000 = ReqCmd.valueOf(reqCmd);
+            if (!store.getStoreDomain().satisfies(reqCmd0000.getDomain())) {
+                logger.warn("reqCmd {} rejected: command domain {} not provided by this node's store domain {}",
+                        reqCmd, reqCmd0000.getDomain(), store.getStoreDomain());
+                this.outPrintJSONString(httpServletResponse, ErrorResponse.create(100), watch, reqCmd);
+                return;
+            }
             if (!checkPermission(httpServletResponse, httprequest, watch, store)) {
                 return;
             }

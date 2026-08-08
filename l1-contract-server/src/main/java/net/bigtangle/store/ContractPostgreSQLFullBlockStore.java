@@ -6,6 +6,7 @@ package net.bigtangle.store;
 
 import java.sql.Connection;
 
+import net.bigtangle.core.StoreDomain;
 import net.bigtangle.params.NetworkParameters;
 
 /**
@@ -18,6 +19,6 @@ public class ContractPostgreSQLFullBlockStore extends PostgreSQLFullBlockStore {
 
     public ContractPostgreSQLFullBlockStore(NetworkParameters params, Connection conn) {
         super(params, conn);
-        setStoreDomain(BlockStoreInterface.StoreDomain.CONTRACT);
+        setStoreDomain(StoreDomain.CONTRACT);
     }
 }

@@ -7,11 +7,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import net.bigtangle.core.StoreDomain;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.store.BlockStoreInterface.StoreDomain;
 import net.bigtangle.store.DatabaseFullBlockStoreBase;
 import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;

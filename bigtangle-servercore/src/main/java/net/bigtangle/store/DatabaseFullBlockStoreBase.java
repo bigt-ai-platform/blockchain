@@ -43,6 +43,7 @@ import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OutputsMulti;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
+import net.bigtangle.core.StoreDomain;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenKeyValues;
@@ -74,17 +75,17 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public static final String VERSION_SETTING = "version";
 
 	/** The layer domain this store is provisioned for. Defaults to all domains. */
-	private BlockStoreInterface.StoreDomain storeDomain = BlockStoreInterface.StoreDomain.ALL;
+	private StoreDomain storeDomain = StoreDomain.ALL;
 
 	/** The layer domain this store is provisioned for. */
 	@Override
-	public BlockStoreInterface.StoreDomain getStoreDomain() {
+	public StoreDomain getStoreDomain() {
 		return storeDomain;
 	}
 
 	/** Set the layer domain; controls which tables are created and which reads run. */
-	public void setStoreDomain(BlockStoreInterface.StoreDomain storeDomain) {
-		this.storeDomain = storeDomain == null ? BlockStoreInterface.StoreDomain.ALL : storeDomain;
+	public void setStoreDomain(StoreDomain storeDomain) {
+		this.storeDomain = storeDomain == null ? StoreDomain.ALL : storeDomain;
 	}
 
 	// Drop table SQL.
