@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +18,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
+import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.server.service.StakeService;
@@ -181,10 +184,18 @@ public class StakeIT extends AbstractIntegrationTest {
                 Json.jsonmapper().writeValueAsString(activateReq));
         log.info("activateValidator response: {}", new String(actResp));
 
-        // Query validators via HTTP API
+        // Query validators via HTTP API. getValidators wraps the JSON payload in
+        // GetStringResponse.text, so unwrap it when the top-level "validators"
+        // key is absent (see ProdSimVerification).
         byte[] queryResp = OkHttp3Util.postString(contextRoot + ReqCmd.getValidators.name(), "{}");
-        Map<String, Object> result = Json.jsonmapper().readValue(queryResp, HashMap.class);
-        List<Map<String, Object>> validators = (List<Map<String, Object>>) result.get("validators");
+        Map<String, Object> wrapper = Json.jsonmapper().readValue(queryResp, HashMap.class);
+        Object validatorsObj = wrapper.get("validators");
+        if (validatorsObj == null && wrapper.get("text") instanceof String) {
+            Map<String, Object> inner = Json.jsonmapper()
+                    .readValue((String) wrapper.get("text"), HashMap.class);
+            validatorsObj = inner.get("validators");
+        }
+        List<Map<String, Object>> validators = (List<Map<String, Object>>) validatorsObj;
         assertNotNull(validators, "Validators list should not be null");
 
         boolean found = false;
@@ -197,5 +208,112 @@ public class StakeIT extends AbstractIntegrationTest {
         }
         assertTrue(found, "Validator should be findable via getValidators HTTP API");
         log.info("Validator activated and confirmed via HTTP. Total: {}", validators.size());
+    }
+
+    /**
+     * Drives the REAL stakeDeposit path end-to-end: fund a validator with a
+     * confirmed BIG UTXO, then call {@link StakeService#processDeposit}. That
+     * builds and saves a BLOCKTYPE_STAKE block through
+     * {@code BlockSaveService.saveBlock}, whose {@code accumulateBlockFees}
+     * batch-reads the spent input via {@code store.getTransactionOutputs}.
+     *
+     * <p>Regression test: the batch UTXO query SELECT (added in the perf commit)
+     * omitted the {@code outputindex} column while the row loop read it, so every
+     * processDeposit threw PSQLException and no STAKE block was ever saved —
+     * which silently blocked the entire PoS validator bootstrap.
+     */
+    @Test
+    public void testProcessDepositSavesStakeBlock() throws Exception {
+        PQKey validatorKey = PQKey.createNew();
+        BigInteger stakeAmount = StakeService.MIN_STAKE;
+
+        // Insert a confirmed, spendable BIG output owned by the validator key
+        // with a proper P2PKH script (addConfirmedBigUtxo reuses the genesis
+        // script, which does not match an arbitrary key and fails verify).
+        Block genesis = net.bigtangle.core.UtilGeneseBlock.createGenesis(networkParameters);
+        UTXO funded = new UTXO();
+        funded.setHash(genesis.getTransactions().get(0).getHash());
+        funded.setIndex(2_000_000_000L + System.nanoTime() % 1_000_000L);
+        funded.setValue(new Coin(stakeAmount.add(BigInteger.valueOf(100000)),
+                net.bigtangle.params.NetworkParameters.BIGTANGLE_TOKENID));
+        funded.setCoinbase(true);
+        funded.setScript(net.bigtangle.script.ScriptBuilder.createOutputScript(validatorKey));
+        funded.setAddress(net.bigtangle.core.Address
+                .fromHash160(networkParameters, Utils.sha256hash160(validatorKey.getPubKey())).toBase58());
+        funded.setBlockHash(genesis.getHash());
+        funded.setTokenid(net.bigtangle.params.NetworkParameters.BIGTANGLE_TOKENID_STRING);
+        funded.setConfirmed(true);
+        funded.setSpent(false);
+        store.addUnspentTransactionOutput(new ArrayList<>(java.util.List.of(funded)));
+
+        // processDeposit requires an OPEN (confirmed, unspent) output for the key.
+        String addr = net.bigtangle.core.Address.fromHash160(networkParameters,
+                Utils.sha256hash160(validatorKey.getPubKey())).toBase58();
+        List<UTXO> open = store.getOpenTransactionOutputs(addr);
+        assertTrue(!open.isEmpty(), "funded validator must have an open BIG output");
+
+        // This is the exact path that was broken: processDeposit -> saveBlock ->
+        // accumulateBlockFees -> getTransactionOutputs.
+        store.close();
+        store = storeService.getStore();
+        stakeService.processDeposit(open.get(0), validatorKey.getPubKey(), validatorKey, store);
+
+        // A STAKE block must have been persisted with the deposit.
+        List<UTXO> spentAfter = store.getOpenTransactionOutputs(addr);
+        StakeRecord saved = store.getStakeDeposit(validatorKey.getPubKey());
+        log.info("Stake deposit processed; open outputs remaining: {}", spentAfter.size());
+        // The deposit UTXO was spent and the STAKE block saved without exception.
+        assertTrue(spentAfter.size() <= open.size(),
+                "staking must spend the funded output (open " + open.size() + " -> " + spentAfter.size() + ")");
+        assertNotNull(saved, "store should report the deposit after processDeposit");
+        assertTrue(saved.getAmount().compareTo(stakeAmount) >= 0,
+                "staked amount must be at least the minimum stake (was " + saved.getAmount() + ")");
+    }
+
+    /**
+     * Direct regression test for the batch UTXO query: insert confirmed outputs
+     * with distinct indices and verify {@code getTransactionOutputs} returns all
+     * of them keyed by index. This is the SQL that threw 'The column name
+     * outputindex was not found in this ResultSet' when the SELECT column list
+     * was missing outputindex.
+     */
+    @Test
+    public void testGetTransactionOutputsBatchQuery() throws Exception {
+        // Use the genesis coinbase as the referencing block/tx so the rows are
+        // valid, but give each output a unique index.
+        Block genesis = net.bigtangle.core.UtilGeneseBlock.createGenesis(networkParameters);
+        byte[] txHash = genesis.getTransactions().get(0).getHash().getBytes();
+        byte[] blockHash = genesis.getHash().getBytes();
+        byte[] script = genesis.getTransactions().get(0).getOutput(0).getScriptPubKey().getProgram();
+
+        List<UTXO> toInsert = new ArrayList<>();
+        List<Long> indices = new ArrayList<>();
+        for (long i = 1001; i <= 1004; i++) {
+            UTXO u = new UTXO();
+            u.setHash(genesis.getTransactions().get(0).getHash());
+            u.setIndex(i);
+            u.setValue(new Coin(BigInteger.valueOf(i), net.bigtangle.params.NetworkParameters.BIGTANGLE_TOKENID));
+            u.setCoinbase(true);
+            u.setScript(new net.bigtangle.script.Script(script));
+            u.setAddress(genesis.getTransactions().get(0).getOutput(0).getScriptPubKey().getToAddress(networkParameters)
+                    .toBase58());
+            u.setBlockHash(genesis.getHash());
+            u.setTokenid(net.bigtangle.params.NetworkParameters.BIGTANGLE_TOKENID_STRING);
+            u.setConfirmed(true);
+            u.setSpent(false);
+            toInsert.add(u);
+            indices.add(i);
+        }
+        store.addUnspentTransactionOutput(toInsert);
+
+        // The buggy SQL read rs.getLong("outputindex") without SELECTing it;
+        // this call must not throw and must return all four outputs.
+        java.util.Map<Long, UTXO> got = store.getTransactionOutputs(
+                genesis.getHash(), genesis.getTransactions().get(0).getHash(), indices);
+        assertEquals(4, got.size(), "batch query must return all requested outputs");
+        for (Long idx : indices) {
+            assertTrue(got.containsKey(idx), "result must contain output index " + idx);
+        }
+        log.info("getTransactionOutputs returned {} outputs", got.size());
     }
 }
