@@ -483,7 +483,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_OUTPUTS_BRIN_INDEX = "CREATE INDEX outputs_blockhash_brin_idx ON outputs USING brin(blockhash) WITH (pages_per_range=32) ";
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) ";
     private static final String CREATE_OUTPUTS_TOADDRESS_INDEX = "CREATE INDEX outputs_toaddress_idx ON outputs (toaddress) ";
-    private static final String CREATE_OUTPUTS_FROMADDRESS_INDEX = "CREATE INDEX outputs_fromaddress_idx ON outputs (fromaddress) ";
     
     private static final String CREATE_PREVBRANCH_HASH_INDEX = "CREATE INDEX blocks_prevbranchblockhash_idx ON blocks (prevbranchblockhash) ";
     private static final String CREATE_PREVTRUNK_HASH_INDEX = "CREATE INDEX blocks_prevblockhash_idx ON blocks (prevblockhash) ";
@@ -638,7 +637,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     }
     protected List<String> getCreateIndexesSQL2() {
         List<String> sqlStatements = new ArrayList<String>(); 
-        sqlStatements.add(CREATE_OUTPUTS_FROMADDRESS_INDEX); 
         if (hasContractDomain()) {
             sqlStatements.add(CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX); 
             sqlStatements.add(CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX); 

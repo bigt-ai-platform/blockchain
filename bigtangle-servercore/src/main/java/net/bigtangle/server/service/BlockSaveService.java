@@ -128,10 +128,12 @@ public class BlockSaveService {
 	 *  transient mempool dumps that don't need archival — the PostgreSQL
 	 *  row alone suffices for the MCMC bridge. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
+		store.setBatchDurability(true);
 		try (AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
 		     AutoCloseable copyFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.usePgCopyForBatch()) {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
+		store.setBatchDurability(false);
 		accumulateBlockFees(block, store);
 		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
 		notifyCrosstangle(block, store);

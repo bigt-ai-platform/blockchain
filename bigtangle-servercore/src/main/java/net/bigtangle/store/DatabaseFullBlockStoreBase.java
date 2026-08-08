@@ -512,6 +512,23 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		return conn;
 	}
 
+	@Override
+	public void setBatchDurability(boolean asyncCommit) throws BlockStoreException {
+		// synchronous_commit is PostgreSQL-only; MySQL uses a different
+		// durability model and is left as-is (no-op).
+		if (!(conn instanceof org.postgresql.PGConnection)) {
+			return;
+		}
+		try {
+			try (PreparedStatement s = getConnection()
+					.prepareStatement("SET synchronous_commit = " + (asyncCommit ? "off" : "on"))) {
+				s.execute();
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
 	/**
 	 * <p>
 	 * Create a new DatabaseFullBlockStore, using the full connection URL instead of

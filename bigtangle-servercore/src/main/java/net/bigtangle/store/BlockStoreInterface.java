@@ -96,6 +96,10 @@ public interface BlockStoreInterface {
 	/** Closes the store. */
 	void close() throws BlockStoreException;
 
+	/** Sets batch-path durability. No-op for stores that don't support it. */
+	default void setBatchDurability(boolean asyncCommit) throws BlockStoreException {
+	}
+
 	/**
 	 * Get the {@link net.bigtangle.params.NetworkParameters} of this store.
 	 * 
