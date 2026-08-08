@@ -60,7 +60,7 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
     private static final int CLIENTS = 20;
     private static final int TX_PER_CLIENT = 250;
     private static final int BATCH_SIZE = 250;
-    private static final int TOTAL_TX = Math.min(CLIENTS * TX_PER_CLIENT, 5000);
+    private static final int TOTAL_TX = Math.min(Integer.getInteger("bench.totalTx", CLIENTS * TX_PER_CLIENT), 50000);
 
     private static final File KEY_FILE = new File(System.getProperty("user.dir")
             .replace("/layer0-mcmc", "").replace("/l1-pai-mcmc", ""), "helper/testpq.json");
@@ -188,7 +188,9 @@ public class MaxTpsBenchmark extends AbstractIntegrationTest {
 
         // Server-side batch: drain mempool into blocks (parallel groups)
         // 1000 tx/block → 5000 tx splits into 5 parallel groups
-        BlockSaveService.BATCH_TX_PER_BLOCK = 1000;
+        BlockSaveService.BATCH_TX_PER_BLOCK = Integer.getInteger("batch.txperblock", 1000);
+        BlockSaveService.BATCH_PARALLELISM = Integer.getInteger("batch.parallelism",
+                Math.max(8, Runtime.getRuntime().availableProcessors() * 2));
         long batchStart = System.nanoTime();
         int batched = blockSaveService.batchBlocksFromMempool();
         long batchMs = (System.nanoTime() - batchStart) / 1_000_000;

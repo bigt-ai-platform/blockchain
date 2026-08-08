@@ -545,8 +545,10 @@ public abstract class ServiceBase {
 			blockStore.updateBlockEvaluationSolid(block.getHash(), 0);
 			break;
 		case Success:
-			// If already set, nothing to do here...
-			if (getBlockWrap(block.getHash(), blockStore).getBlockEvaluation().getSolid() == 2)
+			// If already set, nothing to do here... (read only the small
+			// evaluation row — avoids re-reading + decompressing the whole block)
+			BlockEvaluation storedEval = blockStore.getBlockEvaluationsByhashs(block.getHash());
+			if (storedEval != null && storedEval.getSolid() == 2)
 				return;
 			connectUTXOs(block, blockStore);
 			connectTypeSpecificUTXOs(block, blockStore);

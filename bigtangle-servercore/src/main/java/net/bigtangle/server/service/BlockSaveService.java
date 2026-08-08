@@ -80,8 +80,8 @@ public class BlockSaveService {
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
 	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
-	private static final ExecutorService parallelBatchPool = Executors.newFixedThreadPool(
-			Math.max(8, Runtime.getRuntime().availableProcessors() * 2));
+	public static int BATCH_PARALLELISM = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
+	private static final ExecutorService parallelBatchPool = Executors.newFixedThreadPool(BATCH_PARALLELISM);
 
 	public void saveBlock(Block block, BlockStoreInterface store) throws Exception {
 		blockgraph.addBlock(block, false, store);
