@@ -38,7 +38,6 @@ import net.bigtangle.core.PayMultiSign;
 import net.bigtangle.core.PayMultiSignAddress;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SpentBlockData;
-import net.bigtangle.core.StoreDomain;
 import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.StakeRecord;
 
@@ -669,7 +668,7 @@ public interface BlockStoreInterface {
 	 * reads must be skipped — see {@link #hasOrderDomain()} and
 	 * {@link #hasContractDomain()}.
 	 */
-	net.bigtangle.core.StoreDomain getStoreDomain();
+	StoreDomain getStoreDomain();
 
 	/** True when this store owns the order-matching tables. */
 	default boolean hasOrderDomain() {
@@ -679,6 +678,18 @@ public interface BlockStoreInterface {
 	/** True when this store owns the contract/EVM tables. */
 	default boolean hasContractDomain() {
 		return getStoreDomain() == StoreDomain.CONTRACT || getStoreDomain() == StoreDomain.ALL;
+	}
+
+	/** Which domain's tables a store is provisioned with. */
+	enum StoreDomain {
+		/** Layer 0 / core chain tables only (blocks, UTXO, token, stake, ...). */
+		CORE,
+		/** Core + order-matching tables (l1-order). */
+		ORDER,
+		/** Core + contract/EVM tables (l1-contract). */
+		CONTRACT,
+		/** All domains (legacy full store). */
+		ALL
 	}
 
 }

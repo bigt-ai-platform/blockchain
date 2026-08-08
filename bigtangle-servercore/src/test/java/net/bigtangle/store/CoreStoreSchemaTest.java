@@ -7,7 +7,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.StoreDomain;
 import net.bigtangle.params.TestParams;
 
 /**
@@ -18,7 +17,7 @@ import net.bigtangle.params.TestParams;
 public class CoreStoreSchemaTest {
 
     private static final class Probe extends PostgreSQLFullBlockStore {
-        Probe(StoreDomain domain) {
+        Probe(BlockStoreInterface.StoreDomain domain) {
             super(TestParams.get(), null);
             setStoreDomain(domain);
         }
@@ -26,13 +25,13 @@ public class CoreStoreSchemaTest {
     }
 
     private String coreDdl() {
-        return String.join("\n", new Probe(StoreDomain.CORE).ddl());
+        return String.join("\n", new Probe(BlockStoreInterface.StoreDomain.CORE).ddl());
     }
     private String contractDdl() {
-        return String.join("\n", new Probe(StoreDomain.CONTRACT).ddl());
+        return String.join("\n", new Probe(BlockStoreInterface.StoreDomain.CONTRACT).ddl());
     }
     private String orderDdl() {
-        return String.join("\n", new Probe(StoreDomain.ORDER).ddl());
+        return String.join("\n", new Probe(BlockStoreInterface.StoreDomain.ORDER).ddl());
     }
 
     @Test

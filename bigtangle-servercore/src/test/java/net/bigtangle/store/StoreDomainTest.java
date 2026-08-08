@@ -8,7 +8,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import net.bigtangle.core.StoreDomain;
 import net.bigtangle.params.TestParams;
 
 /**
@@ -33,7 +32,7 @@ public class StoreDomainTest {
 
     /** A Postgres store subclass exposing the protected DDL for testing. */
     private static final class DdlProbe extends PostgreSQLFullBlockStore {
-        DdlProbe(Connection conn, StoreDomain domain) {
+        DdlProbe(Connection conn, BlockStoreInterface.StoreDomain domain) {
             super(TestParams.get(), conn);
             setStoreDomain(domain);
         }
@@ -43,13 +42,13 @@ public class StoreDomainTest {
         }
     }
 
-    private String allDdl(StoreDomain domain) {
+    private String allDdl(BlockStoreInterface.StoreDomain domain) {
         return String.join("\n", new DdlProbe(null, domain).ddl());
     }
 
     @Test
     public void testCoreStoreHasNoContractTables() {
-        String all = allDdl(StoreDomain.CORE);
+        String all = allDdl(BlockStoreInterface.StoreDomain.CORE);
         assertTrue(all.contains(CORE_BLOCKS_TABLE), "core store must create blocks");
         assertTrue(all.contains(CORE_OUTPUTS_TABLE), "core store must create outputs");
         // The reward pipeline (epoch rewards) reads the order book on every
@@ -62,7 +61,7 @@ public class StoreDomainTest {
 
     @Test
     public void testOrderStoreHasNoContractTables() {
-        String all = allDdl(StoreDomain.ORDER);
+        String all = allDdl(BlockStoreInterface.StoreDomain.ORDER);
         assertTrue(all.contains(ORDER_TABLE), "order store must create orders");
         assertTrue(all.contains(MATCHING_TABLE), "order store must create matching");
         assertFalse(all.contains(CONTRACT_EVENT_TABLE), "order store must not create contractevent");
@@ -71,7 +70,7 @@ public class StoreDomainTest {
 
     @Test
     public void testContractStoreHasOrderTablesAndNoContractGatingOnOrder() {
-        String all = allDdl(StoreDomain.CONTRACT);
+        String all = allDdl(BlockStoreInterface.StoreDomain.CONTRACT);
         assertTrue(all.contains(CONTRACT_EVENT_TABLE), "contract store must create contractevent");
         assertTrue(all.contains(CONTRACT_RESULT_TABLE), "contract store must create contractresult");
         assertTrue(all.contains(EVM_RECEIPT_TABLE), "contract store must create evm_receipt");
@@ -81,7 +80,7 @@ public class StoreDomainTest {
 
     @Test
     public void testAllStoreHasEverything() {
-        String all = allDdl(StoreDomain.ALL);
+        String all = allDdl(BlockStoreInterface.StoreDomain.ALL);
         assertTrue(all.contains(ORDER_TABLE), "ALL store must create orders");
         assertTrue(all.contains(CONTRACT_EVENT_TABLE), "ALL store must create contractevent");
         assertTrue(all.contains(CORE_BLOCKS_TABLE), "ALL store must create blocks");

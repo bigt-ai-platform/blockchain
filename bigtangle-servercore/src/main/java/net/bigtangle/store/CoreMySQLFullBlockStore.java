@@ -6,7 +6,6 @@ package net.bigtangle.store;
 
 import java.sql.Connection;
 
-import net.bigtangle.core.StoreDomain;
 import net.bigtangle.params.NetworkParameters;
 
 /**
@@ -18,6 +17,6 @@ public class CoreMySQLFullBlockStore extends MySQLFullBlockStore {
 
     public CoreMySQLFullBlockStore(NetworkParameters params, Connection conn) {
         super(params, conn);
-        setStoreDomain(StoreDomain.CORE);
+        setStoreDomain(BlockStoreInterface.StoreDomain.CORE);
     }
 }
