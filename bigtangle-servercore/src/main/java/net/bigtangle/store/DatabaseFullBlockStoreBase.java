@@ -1138,7 +1138,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		Map<Long, UTXO> result = new HashMap<>();
 		if (indices.isEmpty()) return result;
 		StringBuilder sql = new StringBuilder(
-				"SELECT coinvalue, scriptbytes, coinbase, toaddress, addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND blockhash = ? AND outputindex IN (");
+				"SELECT outputindex, coinvalue, scriptbytes, coinbase, toaddress, addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND blockhash = ? AND outputindex IN (");
 		Iterator<Long> iter = indices.iterator();
 		while (iter.hasNext()) {
 			iter.next();
