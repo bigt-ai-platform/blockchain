@@ -159,7 +159,9 @@ public class DispatcherController extends BaseDispatcherController {
 		case searchExchangeTokens: {
 			String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 			Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
-			GetTokensResponse response = tokensService.searchExchangeTokens((String) request.get("name"), store);
+			String keyword = request.get("name") != null ? request.get("name").toString()
+					: request.get("keyword") != null ? request.get("keyword").toString() : null;
+			GetTokensResponse response = tokensService.searchTokensByNameOrId(keyword, store);
 			this.outPrintJSONString(httpServletResponse, response, watch, reqCmdName);
 			return true;
 		}

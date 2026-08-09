@@ -314,6 +314,12 @@ public interface BlockStoreInterface {
 
 	List<Token> getTokensList(String name) throws BlockStoreException;
 
+	/**
+	 * Search confirmed tokens by token name OR token id (case-insensitive
+	 * substring), capped at 500 results.
+	 */
+	List<Token> getTokensByNameOrId(String keyword) throws BlockStoreException;
+
 	Map<String, BigInteger> getTokenAmountMap() throws BlockStoreException;
 
 	List<BlockEvaluationDisplay> getSearchBlockEvaluations(List<String> address, String lastestAmount, long height,

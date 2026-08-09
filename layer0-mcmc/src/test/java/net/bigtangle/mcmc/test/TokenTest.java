@@ -1099,4 +1099,52 @@ public class TokenTest extends AbstractIntegrationTest {
 		}
 		return buf;
 	}
+
+	/**
+	 * The exchange-token search must match confirmed tokens by token NAME and
+	 * by token ID (case-insensitive substring). Used by the wallet's order and
+	 * balance token selectors.
+	 */
+	@Test
+	public void testSearchTokensByNameOrId() throws Exception {
+		PQKey walletKey = wallet.walletKeys().get(0);
+		Block tokenBlock = testCreateToken(walletKey, "SearchMeToken");
+		makeRewardBlock();
+		for (Transaction tx : tokenBlock.getTransactions()) {
+			for (int idx = 0; idx < tx.getOutputs().size(); idx++) {
+				store.updateTransactionOutputConfirmed(tokenBlock.getHash(), tx.getHash(), idx, true);
+			}
+		}
+		// The tokens table only marks confirmed=true once the creation block is
+		// confirmed, so mark it explicitly for the search test.
+		store.updateTokenConfirmed(tokenBlock.getHash(), true);
+
+		String tokenid = Utils.HEX.encode(Sha256Hash.hash(walletKey.getPubKey()));
+		log.info("testSearchTokensByNameOrId: tokenid=" + tokenid + " block=" + tokenBlock.getHashAsString());
+
+		// Search by name (substring)
+		HashMap<String, Object> byName = new HashMap<String, Object>();
+		byName.put("name", "SearchMe");
+		byte[] resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchExchangeTokens.name(),
+				Json.jsonmapper().writeValueAsString(byName));
+		GetTokensResponse nameRes = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+		log.info("name search returned {} tokens", nameRes.getTokens() == null ? 0 : nameRes.getTokens().size());
+		assertTrue(nameRes.getTokens() != null && !nameRes.getTokens().isEmpty(),
+				"search by name substring should find the token");
+
+		// Search by id (substring)
+		HashMap<String, Object> byId = new HashMap<String, Object>();
+		byId.put("name", tokenid.substring(0, 24));
+		resp = OkHttp3Util.postString(contextRoot + ReqCmd.searchExchangeTokens.name(),
+				Json.jsonmapper().writeValueAsString(byId));
+		GetTokensResponse idRes = Json.jsonmapper().readValue(resp, GetTokensResponse.class);
+		log.info("id search returned {} tokens", idRes.getTokens() == null ? 0 : idRes.getTokens().size());
+		if (idRes.getTokens() != null) {
+			for (Token tk : idRes.getTokens()) {
+				log.info("  id search token: " + tk.getTokenname() + " " + tk.getTokenid());
+			}
+		}
+		assertTrue(idRes.getTokens() != null && !idRes.getTokens().isEmpty(),
+				"search by token id substring should find the token");
+	}
 }

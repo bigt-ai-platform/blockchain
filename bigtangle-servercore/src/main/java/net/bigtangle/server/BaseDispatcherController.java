@@ -526,6 +526,15 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case searchExchangeTokens: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String keyword = request.get("name") != null ? request.get("name").toString()
+						: request.get("keyword") != null ? request.get("keyword").toString() : null;
+				AbstractResponse response = tokensService.searchTokensByNameOrId(keyword, store);
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
 			case getTokenPermissionedAddresses: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);

@@ -2138,6 +2138,43 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		}
 	}
 
+	@Override
+	public List<Token> getTokensByNameOrId(String keyword) throws BlockStoreException {
+		List<Token> list = new ArrayList<>();
+		PreparedStatement preparedStatement = null;
+		try {
+			String sql = SELECT_CONFIRMED_TOKENS_SQL;
+			if (keyword != null && !keyword.trim().isEmpty()) {
+				sql += " AND (tokenname ILIKE ? OR tokenid ILIKE ? OR description ILIKE ? OR domainname ILIKE ?)";
+			}
+			sql += LIMIT_500;
+			preparedStatement = getConnection().prepareStatement(sql);
+			if (keyword != null && !keyword.trim().isEmpty()) {
+				String like = "%" + keyword.trim() + "%";
+				preparedStatement.setString(1, like);
+				preparedStatement.setString(2, like);
+				preparedStatement.setString(3, like);
+				preparedStatement.setString(4, like);
+			}
+			ResultSet resultSet = preparedStatement.executeQuery();
+			while (resultSet.next()) {
+				Token tokens = new Token();
+				setToken(resultSet, tokens);
+				list.add(tokens);
+			}
+			return list;
+		} catch (Exception ex) {
+			throw new BlockStoreException(ex);
+		} finally {
+			if (preparedStatement != null) {
+				try {
+					preparedStatement.close();
+				} catch (SQLException e) {
+				}
+			}
+		}
+	}
+
 	protected void setToken(ResultSet resultSet, Token tokens) throws SQLException, IOException {
 		tokens.setBlockHash(Sha256Hash.wrap(resultSet.getBytes("blockhash")));
 		tokens.setConfirmed(resultSet.getBoolean("confirmed"));

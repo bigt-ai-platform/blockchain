@@ -53,5 +53,14 @@ public class TokensService {
         return GetTokensResponse.create(list, null);
     }
 
+    /**
+     * Search confirmed tokens by name OR token id (case-insensitive substring),
+     * capped at 500 results. Used by the wallet's order/balance token selectors.
+     */
+    public GetTokensResponse searchTokensByNameOrId(String keyword, BlockStoreInterface store)
+            throws BlockStoreException {
+        return GetTokensResponse.create(store.getTokensByNameOrId(keyword), null);
+    }
+
 
 }
