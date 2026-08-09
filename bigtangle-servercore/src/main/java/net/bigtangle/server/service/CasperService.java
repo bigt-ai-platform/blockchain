@@ -105,6 +105,10 @@ public class CasperService {
     @Autowired
     private NetworkParameters networkParameters;
 
+    /** Slot-tick interval (pos.slotIntervalMs); must match SlotService's epoch base. */
+    @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
+    private long slotIntervalMs = SlotService.SLOT_DURATION_MS;
+
     /**
      * Optional weak-subjectivity anchor: "{@code epoch}:{hex-blockhash}". A
      * long-range attacker who controlled historic keys can fork the chain from
@@ -515,7 +519,7 @@ public class CasperService {
                     vkey, att.getSlot(), att.getEpoch());
             return;
         }
-        long wallEpoch = SlotService.epochAt(System.currentTimeMillis());
+        long wallEpoch = SlotService.epochAt(System.currentTimeMillis(), slotIntervalMs);
         if (att.getTargetEpoch() > wallEpoch + 1) {
             log.warn("Rejecting far-future attestation from pubkey={} slot={} (wall epoch {})",
                     vkey, att.getSlot(), wallEpoch);

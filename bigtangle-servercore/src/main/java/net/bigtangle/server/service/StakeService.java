@@ -62,6 +62,10 @@ public class StakeService {
     @Autowired
     private BlockSaveService blockSaveService;
 
+    /** Slot-tick interval (pos.slotIntervalMs); must match SlotService's epoch base. */
+    @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
+    private long slotIntervalMs = SlotService.SLOT_DURATION_MS;
+
     public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
@@ -243,7 +247,7 @@ public class StakeService {
             }
         }
 
-        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L);
+        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs);
         StakeRecord existing = store.getStakeDeposit(pubkey);
         if (existing != null && existing.getBlockHash() != null
                 && existing.getBlockHash().equals(block.getHash())) {

@@ -376,6 +376,89 @@ public class PoSTest extends AbstractIntegrationTest {
                 "unauthenticated attestation must not influence fork choice");
     }
 
+    /**
+     * Regression test for the far-future attestation gate when the configured
+     * slot interval is shorter than the canonical 12s. The MCMC proposes slots
+     * with {@code pos.slotIntervalMs} (2000ms in the docker/remote PoS harness),
+     * so its epoch is {@code slot/32}. The gate must compare against a wall
+     * epoch computed with the SAME interval: previously {@code SlotService.epochAt}
+     * was hardcoded to 12s, making every attestation look 6x ahead and
+     * rejecting all of them, so no beacon ever confirmed.
+     */
+    @Test
+    public void testFarFutureGateUsesConfiguredSlotInterval() throws Exception {
+        Object original = org.springframework.test.util.ReflectionTestUtils
+                .getField(slotService, "slotIntervalMs");
+        Object originalCasper = org.springframework.test.util.ReflectionTestUtils
+                .getField(casperService, "slotIntervalMs");
+        Object originalStake = org.springframework.test.util.ReflectionTestUtils
+                .getField(stakeService, "slotIntervalMs");
+        try {
+            // Simulate the PoS harness config (POS_SLOT_INTERVAL_MS=2000). In
+            // production every service reads the same pos.slotIntervalMs, so the
+            // slot producer, the far-future gate and the stake activation epoch
+            // must all agree on the interval.
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(slotService, "slotIntervalMs", 2000L);
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(casperService, "slotIntervalMs", 2000L);
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(stakeService, "slotIntervalMs", 2000L);
+
+            // The wall-clock epoch must match the slot-derived epoch.
+            long slot = slotService.getCurrentSlot();
+            long epoch = slotService.getEpochForSlot(slot);
+            assertEquals(epoch, slotService.epochAt(System.currentTimeMillis()),
+                    "epochAt must use the configured slot interval");
+
+            // A valid attestation for the CURRENT slot must be accepted, not
+            // rejected as far-future.
+            AttestationData att = new AttestationData();
+            att.setSlot(slot);
+            att.setEpoch(epoch);
+            att.setSourceEpoch(0);
+            att.setTargetEpoch(epoch);
+            att.setBeaconBlockHash(Sha256Hash.of("beacon-short-slot".getBytes()));
+            att.setValidatorPubkey(validatorKey.getPubKey());
+            att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+
+            store.saveStakeDeposit(new StakeRecord(
+                    validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                    validatorKey.getPubKeyHash()));
+            stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+            casperService.processVote(att, store);
+
+            Map<Sha256Hash, Long> votes = store.getSummedAttestationVotes();
+            assertTrue(votes.containsKey(att.getBeaconBlockHash()),
+                    "current-slot attestation must be accepted, not rejected as far-future");
+            assertTrue(votes.get(att.getBeaconBlockHash()) > 0,
+                    "vote weight must be positive");
+
+            // A genuinely far-future attestation must STILL be rejected.
+            AttestationData farFuture = new AttestationData();
+            farFuture.setSlot(slot);
+            farFuture.setEpoch(epoch);
+            farFuture.setSourceEpoch(0);
+            farFuture.setTargetEpoch(epoch + 1000);
+            farFuture.setBeaconBlockHash(Sha256Hash.of("beacon-far-future".getBytes()));
+            farFuture.setValidatorPubkey(validatorKey.getPubKey());
+            farFuture.setSignature(validatorKey.sign(farFuture.getMessageHash()).serialize());
+
+            casperService.processVote(farFuture, store);
+
+            assertFalse(store.getSummedAttestationVotes().containsKey(farFuture.getBeaconBlockHash()),
+                    "far-future attestation must still be rejected");
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(slotService, "slotIntervalMs", original);
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(casperService, "slotIntervalMs", originalCasper);
+            org.springframework.test.util.ReflectionTestUtils
+                    .setField(stakeService, "slotIntervalMs", originalStake);
+        }
+    }
+
     @Test
     public void testFinalizeCheckpoint() throws Exception {
         store.saveStakeDeposit(new StakeRecord(

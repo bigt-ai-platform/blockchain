@@ -89,9 +89,21 @@ public class SlotService {
         return getCurrentSlot() / SLOTS_PER_EPOCH;
     }
 
-    /** Chain-derived epoch for an absolute wall-clock time (genesis-aligned). */
-    public static long epochAt(long timeMs) {
-        return ((timeMs - 1532896109000L) / SLOT_DURATION_MS) / SLOTS_PER_EPOCH;
+    /**
+     * Chain-derived epoch for an absolute wall-clock time (genesis-aligned).
+     * Uses the CONFIGURED slot interval ({@code pos.slotIntervalMs}) so it stays
+     * consistent with {@link #getCurrentSlot()}: when the interval is shorter
+     * than the canonical {@link #SLOT_DURATION_MS} (e.g. 2000ms in test), slots
+     * advance faster and their epochs must use the same base, otherwise every
+     * attestation looks like it targets a far-future epoch and is rejected.
+     */
+    public long epochAt(long timeMs) {
+        return ((timeMs - 1532896109000L) / slotIntervalMs) / SLOTS_PER_EPOCH;
+    }
+
+    /** Static variant for consumers that inject the slot interval themselves. */
+    public static long epochAt(long timeMs, long slotIntervalMs) {
+        return ((timeMs - 1532896109000L) / slotIntervalMs) / SLOTS_PER_EPOCH;
     }
 
     public long getSlotInEpoch(long slot) {
