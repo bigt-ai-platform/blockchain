@@ -209,4 +209,29 @@ public class RemoteOrderTests extends RemoteTest {
             return null;
         }
     }
+
+    /**
+     * The L1-order server inherits {@code getOutputsHistory} from
+     * BaseDispatcherController (same as Layer 0). It must return a valid
+     * outputs history for an address with optional from/to date filters instead
+     * of an unknown-command error.
+     */
+    @Test
+    public void testGetOutputsHistoryOnL1() throws Exception {
+        PQKey key = PQKey.createNew();
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("fromaddress", "");
+        params.put("toaddress", key.toAddress(networkParameters).toHex());
+        params.put("starttime", null);
+        params.put("endtime", null);
+
+        byte[] response = OkHttp3Util.postString(contextRoot + ReqCmd.getOutputsHistory.name(),
+                Json.jsonmapper().writeValueAsString(params));
+
+        net.bigtangle.response.GetBalancesResponse balancesResponse = Json.jsonmapper().readValue(response,
+                net.bigtangle.response.GetBalancesResponse.class);
+        assertNotNull(balancesResponse.getOutputs(),
+                "getOutputsHistory on L1 must return an outputs list (not an error)");
+        log.info("getOutputsHistory on L1 returned {} outputs", balancesResponse.getOutputs().size());
+    }
 }

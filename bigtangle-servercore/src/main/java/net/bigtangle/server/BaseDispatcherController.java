@@ -265,6 +265,19 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case getOutputsHistory: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String fromaddress = (String) request.get("fromaddress");
+				String toaddress = (String) request.get("toaddress");
+				Long starttime = request.get("starttime") == null ? null
+						: ((Number) request.get("starttime")).longValue();
+				Long endtime = request.get("endtime") == null ? null : ((Number) request.get("endtime")).longValue();
+				AbstractResponse response = walletService.getOutputsHistory(fromaddress, toaddress, starttime, endtime,
+						store);
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
 			case outputsOfTokenid: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
