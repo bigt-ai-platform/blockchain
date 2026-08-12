@@ -54,6 +54,17 @@ public class ValidatorDutyService {
     @Value("${pos.validatorKey:}")
     private String configuredValidatorKey;
 
+    /**
+     * Whether this node performs validator duties (propose beacons, attest).
+     * Disabled on the L0 HTTP server in a split-node setup so only the MCMC
+     * (the consensus node) proposes — otherwise two processes sharing the same
+     * validator key both run the slot tick and produce competing beacons,
+     * forking the chain and orphaning transaction blocks (payments stuck in
+     * BATCHED). The validator key must STAY configured for stakeDeposit auth.
+     */
+    @Value("${pos.dutyEnabled:true}")
+    private boolean dutyEnabled = true;
+
     private PQKey validatorKey;
 
     private long lastDutySlot = -1;
@@ -162,6 +173,12 @@ public class ValidatorDutyService {
 
     public void performDuty() throws Exception {
         if (validatorKey == null) {
+            return;
+        }
+        if (!dutyEnabled) {
+            // API/requester node: holds the key for stakeDeposit authorization
+            // but must not propose/attest (a second producer with the same key
+            // double-signs each slot and forks the beacon chain).
             return;
         }
         long slot = slotService.getCurrentSlot();

@@ -36,7 +36,7 @@ L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqk
 # on L0 and get it slashed.
 L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0505050505050505050505050505050505050505050505050505050505050505}"
 L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-$(cat /home/jcui/git/blockchain/.l1validatorpub 2>/dev/null || true)}"
-L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
+L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY -Dpos.slotIntervalMs=${L1_SLOT_INTERVAL_MS:-2000}"
 
 # PoS validator configuration (if the env file is present). The L0 HTTP server
 # must hold the same validator key as the MCMC: /stakeDeposit authorizes the
@@ -49,7 +49,7 @@ if [ -f "$ROOT/validator.env" ]; then
     # PoS-only: the slot proposer is the only beacon producer (single-headed
     # chain, no forks). A short slot interval makes blocks confirm quickly so
     # the remote tests' polling windows fit.
-    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=2000"
+    POS_ARGS="-Dpos.validatorKey=$POS_VALIDATOR_KEY -Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-2000}"
     echo "PoS enabled: validator key configured (${#POS_VALIDATOR_KEY} hex)"
 fi
 
@@ -184,8 +184,13 @@ echo ""
 echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 # Server peer + gossip ports
 SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
+# L0 HTTP server: API/requester node. It keeps the validator key ONLY to
+# authorize /stakeDeposit (DispatcherController matches the configured key).
+# Validator DUTY (beacon proposal + attestation) is disabled here so the MCMC
+# is the single beacon producer — both sharing the same key would double-sign
+# every slot and fork the beacon chain, orphaning transaction blocks.
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $POS_ARGS -Dserver.fundEnabled=true -Dbridge.active=false -Danchor.active=false" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $POS_ARGS -Dpos.dutyEnabled=false -Dserver.fundEnabled=true -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
