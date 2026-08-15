@@ -23,6 +23,7 @@ public class TestParams extends NetworkParameters {
 
         addressHeader = 111;
         p2shHeader = 196;
+        dumpedPrivateKeyHeader = 128;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
 
         packetMagic = 0xf9beb4d9L;

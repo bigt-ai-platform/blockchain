@@ -36,6 +36,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
+import net.bigtangle.core.Key;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -150,7 +151,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * 
 	 * @return Whether the key was removed or not.
 	 */
-	public boolean removeKey(PQKey key) {
+	public boolean removeKey(Key key) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.removeImportedKey(key);
@@ -163,7 +164,34 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Returns a list of the non-deterministic keys that have been imported into the
 	 * wallet, or the empty list if none.
 	 */
+	/**
+	 * Returns the imported PQ keys only (legacy EC keys excluded). Prefer
+	 * {@link #getAllImportedKeys()} when both key types must be considered.
+	 */
+	public List<PQKey> getImportedPQKeys() {
+		keyChainGroupLock.lock();
+		try {
+			List<PQKey> pqKeys = new ArrayList<>();
+			for (Key k : keyChainGroup.getImportedKeys())
+				if (k instanceof PQKey)
+					pqKeys.add((PQKey) k);
+			return pqKeys;
+		} finally {
+			keyChainGroupLock.unlock();
+		}
+	}
+
+	/**
+	 * @deprecated Ambiguous name — returns PQ keys only. Use
+	 *             {@link #getImportedPQKeys()} (PQ only) or
+	 *             {@link #getAllImportedKeys()} (both key types).
+	 */
+	@Deprecated
 	public List<PQKey> getImportedKeys() {
+		return getImportedPQKeys();
+	}
+
+	public List<Key> getAllImportedKeys() {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.getImportedKeys();
@@ -183,7 +211,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * the wallet, does nothing and returns false.
 	 * </p>
 	 */
-	public boolean importKey(PQKey key) {
+	public boolean importKey(Key key) {
 		return importKeys(Lists.newArrayList(key)) == 1;
 	}
 
@@ -193,7 +221,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * of keys added, after duplicates are ignored. The onKeyAdded event will be
 	 * called for each key in the list that was not already present.
 	 */
-	public int importKeys(final List<PQKey> keys) {
+	public int importKeys(final List<? extends Key> keys) {
 		// API usage check.
 		checkNoDeterministicKeys(keys);
 		int result;
@@ -207,11 +235,11 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		return result;
 	}
 
-	private void checkNoDeterministicKeys(List<PQKey> keys) {
+	private void checkNoDeterministicKeys(List<? extends Key> keys) {
 		// Watch out for someone doing
 		// wallet.importKey(wallet.freshReceiveKey()); or equivalent: we never
 		// tested this.
-		for (PQKey key : keys)
+		for (Key key : keys)
 			if (key instanceof DeterministicKey)
 				throw new IllegalArgumentException("Cannot import HD keys back into the wallet");
 	}
@@ -220,7 +248,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Takes a list of keys and a password, then encrypts and imports them in one
 	 * step using the current keycrypter.
 	 */
-	public int importKeysAndEncrypt(final List<PQKey> keys, CharSequence password) {
+	public int importKeysAndEncrypt(final List<? extends Key> keys, CharSequence password) {
 		keyChainGroupLock.lock();
 		int result;
 		try {
@@ -237,7 +265,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 * Takes a list of keys and an AES key, then encrypts and imports them in one
 	 * step using the current keycrypter.
 	 */
-	public int importKeysAndEncrypt(final List<PQKey> keys, KeyParameter aesKey) {
+	public int importKeysAndEncrypt(final List<? extends Key> keys, KeyParameter aesKey) {
 		keyChainGroupLock.lock();
 		try {
 			checkNoDeterministicKeys(keys);
@@ -256,7 +284,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 */
 	@Override
 	@Nullable
-	public PQKey findKeyFromPubHash(byte[] pubkeyHash) {
+	public Key findKeyFromPubHash(byte[] pubkeyHash) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findKeyFromPubHash(pubkeyHash);
@@ -272,7 +300,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	 */
 	@Override
 	@Nullable
-	public PQKey findKeyFromPubKey(byte[] pubkey) {
+	public Key findKeyFromPubKey(byte[] pubkey) {
 		keyChainGroupLock.lock();
 		try {
 			return keyChainGroup.findKeyFromPubKey(pubkey);
@@ -462,7 +490,7 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 		USE_DUMMY_SIG,
 		/**
 		 * If signature is missing, will be thrown for P2SH and
-		 * {@link PQKey.MissingPrivateKeyException} for other tx types.
+		 * {@link Key.MissingPrivateKeyException} for other tx types.
 		 */
 		THROW
 	}
@@ -558,26 +586,57 @@ public abstract class WalletBase extends BaseTaggableObject implements KeyBag {
 	}
 
 	/*
-	 * get all keys in the wallet
+	 * get all PQ keys in the wallet (legacy EC keys excluded)
 	 */
+	public List<PQKey> walletPQKeys(@Nullable KeyParameter aesKey) {
+		List<PQKey> pqKeys = new ArrayList<>();
+		for (Key key : walletKeysAll(aesKey))
+			if (key instanceof PQKey)
+				pqKeys.add((PQKey) key);
+		return pqKeys;
+	}
+
+	/**
+	 * @deprecated Ambiguous name — returns PQ keys only. Use
+	 *             {@link #walletPQKeys(KeyParameter)} (PQ only) or
+	 *             {@link #walletKeysAll(KeyParameter)} (both key types).
+	 */
+	@Deprecated
 	public List<PQKey> walletKeys(@Nullable KeyParameter aesKey) {
+		return walletPQKeys(aesKey);
+	}
+
+	/*
+	 * get all keys in the wallet (both PQ and legacy EC)
+	 */
+	public List<Key> walletKeysAll(@Nullable KeyParameter aesKey) {
 		DecryptingKeyBag maybeDecryptingKeyBag = new DecryptingKeyBag(this, aesKey);
-		List<PQKey> walletKeys = new ArrayList<>();
-		for (PQKey key : getImportedKeys()) {
-			PQKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+		List<Key> walletKeys = new ArrayList<>();
+		for (Key key : getAllImportedKeys()) {
+			Key ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 			walletKeys.add(ecKey);
 		}
 		for (DeterministicKeyChain chain : getKeyChainGroup().getDeterministicKeyChains()) {
-			for (PQKey key : chain.getLeafKeys()) {
-				PQKey ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
+			for (Key key : chain.getLeafKeys()) {
+				Key ecKey = maybeDecryptingKeyBag.maybeDecrypt(key);
 				walletKeys.add(ecKey);
 			}
 		}
 		return walletKeys;
 	}
 
+	public List<PQKey> walletPQKeys() {
+		return walletPQKeys(null);
+	}
+
+	/**
+	 * @deprecated Ambiguous name — returns PQ keys only. Use
+	 *             {@link #walletPQKeys()} (PQ only) or
+	 *             {@link #walletKeysAll(KeyParameter)} (both key types).
+	 */
+	@Deprecated
 	public List<PQKey> walletKeys() {
-		return walletKeys(null);
+		return walletPQKeys(null);
 	}
 
 	// use the fixed server

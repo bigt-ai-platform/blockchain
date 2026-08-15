@@ -46,10 +46,12 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
+import net.bigtangle.core.ECKey;
 import net.bigtangle.core.ContractEventCancelInfo;
 import net.bigtangle.core.ContractEventInfo;
 import net.bigtangle.core.EVMTransactionInfo;
 import net.bigtangle.core.DataClassName;
+import net.bigtangle.core.Key;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
@@ -119,8 +121,8 @@ public class Wallet extends WalletBase {
 	 * by the given watching key. A watching key corresponds to account zero in the
 	 * recommended BIP32 key hierarchy.
 	 */
-	public static Wallet fromKeys(NetworkParameters params, List<PQKey> keys) {
-		for (PQKey key : keys)
+	public static Wallet fromKeys(NetworkParameters params, List<? extends Key> keys) {
+		for (Key key : keys)
 			checkArgument(!(key instanceof DeterministicKey));
 
 		KeyChainGroup group = new KeyChainGroup(params);
@@ -136,15 +138,15 @@ public class Wallet extends WalletBase {
 	 * Creates a wallet containing a given set of keys. All further keys will be
 	 * derived from the oldest key.
 	 */
-	public static Wallet fromKeys(NetworkParameters params, PQKey key) {
+	public static Wallet fromKeys(NetworkParameters params, Key key) {
 
 		return fromKeys(params, key, null);
 	}
 
-	public static Wallet fromKeys(NetworkParameters params, PQKey key, String url) {
+	public static Wallet fromKeys(NetworkParameters params, Key key, String url) {
 
 		checkArgument(!(key instanceof DeterministicKey));
-		List<PQKey> keys = new ArrayList<>();
+		List<Key> keys = new ArrayList<>();
 		keys.add(key);
 		KeyChainGroup group = new KeyChainGroup(params);
 		group.importKeys(keys);
@@ -211,7 +213,7 @@ public class Wallet extends WalletBase {
 
 		List<UTXO> candidates = new ArrayList<>();
 		List<String> pubKeyHashs = new ArrayList<>();
-		for (PQKey ecKey : walletKeys(aesKey)) {
+		for (Key ecKey : walletKeysAll(aesKey)) {
 			pubKeyHashs.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
 		byte[] response = OkHttp3Util.post(getServerURL() + ReqCmd.getOutputs.name(),
@@ -427,7 +429,7 @@ public class Wallet extends WalletBase {
 		multispent.setMemo(memo);
 		multispent.addOutput(amount, Address.fromBase58(params, destination));
 		Coin restAmount = amount.negate();
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		if (getFee() && amount.isBIG()) {
 			restAmount = restAmount.add(Coin.FEE_DEFAULT.negate());
 		}
@@ -467,7 +469,7 @@ public class Wallet extends WalletBase {
 		multispent.setMemo(memo);
 		multispent.addOutput(amount, script);
 		Coin restAmount = amount.negate();
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		if (getFee() && amount.isBIG()) {
 			restAmount = restAmount.add(Coin.FEE_DEFAULT.negate());
 		}
@@ -556,7 +558,7 @@ public class Wallet extends WalletBase {
 			amount = amount.add(Coin.FEE_DEFAULT.negate());
 		}
 
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		// filter only for tokenid
 		List<FreeStandingTransactionOutput> coinListTokenid = filterTokenid(tokenid, coinList);
 		for (FreeStandingTransactionOutput spendableOutput : coinListTokenid) {
@@ -591,7 +593,7 @@ public class Wallet extends WalletBase {
 		spent.setMemo(new MemoInfo("fee"));
 		// Fixed fee in BIG
 		Coin amount = Coin.FEE_DEFAULT.negate();
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		// filter only for NetworkParameters.BIGTANGLE_TOKENID
 		List<FreeStandingTransactionOutput> coinListTokenid = filterTokenid(NetworkParameters.BIGTANGLE_TOKENID,
 				coinList);
@@ -710,7 +712,7 @@ public class Wallet extends WalletBase {
 		}
 		Transaction tx = new Transaction(params);
 
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 
 		for (FreeStandingTransactionOutput spendableOutput : candidates) {
 			if (orderBaseToken.equals(spendableOutput.getUTXO().getTokenId())) {
@@ -739,7 +741,7 @@ public class Wallet extends WalletBase {
 		}
 
 		OrderOpenInfo info = new OrderOpenInfo(targetValue, targetToken.getTokenid(), beneficiary.getPubKey(),
-				validToTime, validFromTime, Side.BUY, beneficiary.toAddress(params).toBase58(), orderBaseToken,
+				validToTime, validFromTime, Side.BUY, beneficiary.toAddressString(params), orderBaseToken,
 				buyPrice,
 				totalAmount(buyPrice, targetValue, targetToken.getDecimals() + priceshift, allowRemainder).longValue(),
 				orderBaseToken);
@@ -800,7 +802,7 @@ public class Wallet extends WalletBase {
 
 		Transaction tx = new Transaction(params);
 
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		for (FreeStandingTransactionOutput spendableOutput : candidates) {
 			if (t.getTokenid().equals(spendableOutput.getUTXO().getTokenId())) {
 				beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
@@ -836,7 +838,7 @@ public class Wallet extends WalletBase {
 		}
 
 		OrderOpenInfo info = new OrderOpenInfo(targetvalue.longValue(), orderBaseToken, beneficiary.getPubKey(),
-				validToTime, validFromTime, Side.SELL, beneficiary.toAddress(params).toBase58(), orderBaseToken,
+				validToTime, validFromTime, Side.SELL, beneficiary.toAddressString(params), orderBaseToken,
 				sellPrice, offervalue, t.getTokenid());
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("OrderOpen");
@@ -853,8 +855,10 @@ public class Wallet extends WalletBase {
 	public Transaction cancelOrder(Sha256Hash orderblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
 		PQKey legitimatingKey = null;
-		for (PQKey ecKey : walletKeys(aesKey)) {
-			if (address.equals(ecKey.toAddress(params).toString())) {
+		for (Key k : walletPQKeys(aesKey)) {
+			if (!(k instanceof PQKey)) continue;
+			PQKey ecKey = (PQKey) k;
+			if (address.equals(ecKey.toAddressString(params))) {
 				legitimatingKey = ecKey;
 				break;
 			}
@@ -884,8 +888,10 @@ public class Wallet extends WalletBase {
 	public Transaction contractEventCancel(Sha256Hash eventblockhash, KeyParameter aesKey, String address)
 			throws IOException, InsufficientMoneyException, NoDataException {
 		PQKey legitimatingKey = null;
-		for (PQKey ecKey : walletKeys(aesKey)) {
-			if (address.equals(ecKey.toAddress(params).toString())) {
+		for (Key k : walletPQKeys(aesKey)) {
+			if (!(k instanceof PQKey)) continue;
+			PQKey ecKey = (PQKey) k;
+			if (address.equals(ecKey.toAddressString(params))) {
 				legitimatingKey = ecKey;
 				break;
 			}
@@ -924,7 +930,7 @@ public class Wallet extends WalletBase {
 
 		Transaction tx = new Transaction(params);
 		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(amount.getTokenid(), coinList)) {
 
 			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
@@ -945,7 +951,7 @@ public class Wallet extends WalletBase {
 		}
 
 		ContractEventInfo info = new ContractEventInfo(contractTokenid, payAmount, tokenId,
-				beneficiary.toAddress(params).toBase58(), validToTime, validFromTime, "");
+				beneficiary.toAddressString(params), validToTime, validFromTime, "");
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("ContractEventInfo");
 		signTransaction(tx, aesKey);
@@ -974,7 +980,7 @@ public class Wallet extends WalletBase {
 
 		Transaction tx = new Transaction(params);
 		List<FreeStandingTransactionOutput> coinList = calculateAllSpendCandidates(aesKey, false);
-		PQKey beneficiary = null;
+		Key beneficiary = null;
 		for (FreeStandingTransactionOutput spendableOutput : filterTokenid(Utils.HEX.decode(tokenId), coinList)) {
 
 			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
@@ -993,7 +999,7 @@ public class Wallet extends WalletBase {
 			throw new InsufficientMoneyException(amount + " outputs size= " + coinList.size());
 		}
 
-		info.setFromAddress(beneficiary.toAddress(params).toBase58());
+		info.setFromAddress(beneficiary.toAddressString(params));
 		tx.setData(info.toByteArray());
 		tx.setDataClassName("EVMTransactionInfo");
 		signTransaction(tx, aesKey);
@@ -1064,13 +1070,13 @@ public class Wallet extends WalletBase {
 
 	private void logWalletKeys(KeyParameter aesKey) {
 		try {
-			List<PQKey> keys = walletKeys(aesKey);
+			List<Key> keys = walletKeysAll(aesKey);
 			if (keys == null || keys.isEmpty()) {
 				log.info("Wallet keys unavailable (no keys returned)");
 				return;
 			}
-			for (PQKey ecKey : keys) {
-				log.info("Wallet key: {}", ecKey.toAddress(params));
+			for (Key ecKey : keys) {
+				log.info("Wallet key: {}", ecKey.toAddressString(params));
 			}
 		} catch (Exception e) {
 			log.info("Wallet keys unavailable ({})", e.getMessage());
@@ -1099,7 +1105,7 @@ public class Wallet extends WalletBase {
 		return total;
 	}
 
-	public Transaction paySubtangle(KeyParameter aesKey, String outputStr, PQKey connectKey, Address toAddressInSubtangle,
+	public Transaction paySubtangle(KeyParameter aesKey, String outputStr, Key connectKey, Address toAddressInSubtangle,
 			Coin coin, Address address) throws IOException {
 
 		HashMap<String, Object> requestParam = new HashMap<>();
@@ -1121,7 +1127,11 @@ public class Wallet extends WalletBase {
 		Sha256Hash sighash = transaction.hashForSignature(0, spendableOutput.getScriptBytes(), Transaction.SigHash.ALL,
 				false);
 
-		TransactionSignature tsrecsig = ((DeterministicKey) connectKey).ecSign(sighash, aesKey);
+		TransactionSignature tsrecsig;
+		if (connectKey instanceof DeterministicKey)
+			tsrecsig = ((DeterministicKey) connectKey).ecSign(sighash, aesKey);
+		else
+			tsrecsig = ((ECKey) connectKey).sign(sighash, aesKey);
 		Script inputScript = ScriptBuilder.createInputScript(tsrecsig);
 		input.setScriptSig(inputScript);
 
@@ -1129,24 +1139,16 @@ public class Wallet extends WalletBase {
 		return transaction;
 	}
 
-	public PQKey getECKey(KeyParameter aesKey, String address) {
+	public Key getECKey(KeyParameter aesKey, String address) {
 
-		List<PQKey> keys = walletKeys(aesKey);
-		PQKey beneficiary;
-		for (PQKey ecKey : keys) {
-			if (address.equals(ecKey.toAddress(params).toString())) {
-				beneficiary = ecKey;
-				return beneficiary;
-			}
-			// Try hex-encoded PQAddress (matching PQKey.toAddress().toHex())
-			if (address.equals(ecKey.toAddress(params).toHex())) {
-				beneficiary = ecKey;
-				return beneficiary;
+		List<Key> keys = walletKeysAll(aesKey);
+		for (Key ecKey : keys) {
+			if (address.equals(ecKey.toAddressString(params))) {
+				return ecKey;
 			}
 			// Try base58-encoded hash160 (matching Address.fromHash160().toBase58())
 			if (address.equals(Address.fromHash160(params, ecKey.getPubKeyHash()).toBase58())) {
-				beneficiary = ecKey;
-				return beneficiary;
+				return ecKey;
 			}
 		}
 		throw new RuntimeException("no key in wallet is found for this address " + address);
@@ -1170,6 +1172,29 @@ public class Wallet extends WalletBase {
 		return payFromList(aesKey, destination, amount, memo);
 	}
 
+	/**
+	 * Pays to a key (EC or PQ). This is the primary migration path: an ECKey
+	 * wallet can send directly to a PQKey, and vice versa.
+	 */
+	public List<Transaction> pay(KeyParameter aesKey, Key destination, Coin amount, MemoInfo memo)
+			throws IOException, InsufficientMoneyException {
+
+		Transaction tx = payToKey(aesKey, destination, amount, memo);
+		if (tx == null)
+			return Collections.emptyList();
+		submitTransaction(tx);
+		if (getFee() && !amount.isBIG()) {
+			submitTransaction(feeTransaction(aesKey, calculateAllSpendCandidates(aesKey, false)));
+		}
+		return Collections.singletonList(tx);
+	}
+
+	public List<Transaction> pay(KeyParameter aesKey, Key destination, Coin amount, String memo)
+			throws IOException, InsufficientMoneyException {
+
+		return pay(aesKey, destination, amount, new MemoInfo(memo));
+	}
+
 	public Transaction createTransaction(KeyParameter aesKey, String destination, Coin amount, MemoInfo memo)
 			throws IOException, InsufficientMoneyException {
 
@@ -1187,6 +1212,53 @@ public class Wallet extends WalletBase {
 			Address destination, Coin amount, String memo) throws InsufficientMoneyException {
 
 		return payFromListNoSplitTransaction(aesKey, destination.toString(), amount, new MemoInfo(memo), candidates);
+	}
+
+	/**
+	 * Creates a single transaction paying {@code amount} to the given key (EC or
+	 * PQ) from the wallet's spend candidates. Mirrors
+	 * {@link #payFromListNoSplitTransaction(KeyParameter, String, Coin, MemoInfo, List)}
+	 * but resolves the destination to a key instead of a base58 address string.
+	 */
+	public Transaction payToKey(KeyParameter aesKey, Key destination, Coin amount, MemoInfo memo)
+			throws InsufficientMoneyException, IOException {
+		return payToKey(aesKey, destination, amount, memo, calculateAllSpendCandidates(aesKey, false));
+	}
+
+	public Transaction payToKey(KeyParameter aesKey, Key destination, Coin amount, MemoInfo memo,
+			List<FreeStandingTransactionOutput> coinList) throws InsufficientMoneyException {
+		Transaction tx = new Transaction(params);
+		tx.setMemo(memo);
+		tx.addOutput(amount, destination);
+		Coin restAmount = amount.negate();
+		Key beneficiary = null;
+		if (getFee() && amount.isBIG()) {
+			restAmount = restAmount.add(Coin.FEE_DEFAULT.negate());
+		}
+
+		List<FreeStandingTransactionOutput> coinTokenList = filterTokenid(restAmount.getTokenid(), coinList);
+
+		for (FreeStandingTransactionOutput spendableOutput : coinTokenList) {
+			beneficiary = getECKey(aesKey, spendableOutput.getUTXO().getAddress());
+			restAmount = spendableOutput.getValue().add(restAmount);
+			tx.addInput(spendableOutput.getUTXO().getBlockHash(), spendableOutput);
+			if (!restAmount.isNegative()) {
+				if (restAmount.isPositive()) {
+					tx.addOutput(restAmount, beneficiary);
+				}
+				break;
+			}
+		}
+		if (beneficiary == null || restAmount.isNegative()) {
+			Coin deficit = restAmount.isNegative() ? restAmount.negate() : restAmount;
+			String info = "destination key payment requested=" + amount + " remaining=" + restAmount
+					+ " deficit=" + deficit + " inputs=" + coinTokenList.size();
+			logInsufficientMoney("payToKey", info, aesKey, coinTokenList);
+			throw new InsufficientMoneyException(amount + " outputs size= " + coinTokenList.size());
+		}
+
+		signTransaction(tx, aesKey);
+		return tx;
 	}
 
 	public Transaction payTransaction(List<Transaction> txs) throws IOException {
@@ -1234,10 +1306,6 @@ public class Wallet extends WalletBase {
 
 	public Transaction saveUserdata(PQKey userKey, Transaction transaction, boolean encrypt, KeyParameter aesKey)
 			throws IOException, InsufficientMoneyException, InvalidCipherTextException {
-		if (encrypt && userKey instanceof DeterministicKey) {
-			byte[] cipher = ECIESCoder.encrypt(DeterministicKey.CURVE.getCurve().decodePoint(((DeterministicKey)userKey).getPubKey()), transaction.getData());
-			transaction.setData(cipher);
-		}
 
 		Sha256Hash sighash = transaction.getHash();
 		SignatureBundle party1Signature = userKey.sign(sighash);
@@ -1267,12 +1335,7 @@ public class Wallet extends WalletBase {
 				Json.jsonmapper().writeValueAsString(requestParam0));
 		UserSettingDataInfo userSettingDataInfo = null;
 		if (buf != null && buf.length > 0) {
-			if (encrypt && userKey instanceof DeterministicKey) {
-				byte[] decryptedPayload = ECIESCoder.decrypt(((DeterministicKey)userKey).getPrivKey(), buf);
-				userSettingDataInfo = new UserSettingDataInfo().parse(decryptedPayload);
-			} else {
-				userSettingDataInfo = new UserSettingDataInfo().parse(buf);
-			}
+			userSettingDataInfo = new UserSettingDataInfo().parse(buf);
 
 		}
 		return userSettingDataInfo;

@@ -136,7 +136,7 @@ public class TransactionTest {
 
 	@Test
 	public void testAddSignedInputThrowsExceptionWhenScriptIsNotToRawPubKeyAndIsNotToAddress() {
-		assertThrows(ClassCastException.class, () -> {
+		assertThrows(ScriptException.class, () -> {
 			PQKey key = PQKey.createNew();
 			Address addr = Address.fromHash160(PARAMS, Utils.sha256hash160(key.getPubKey()));
 			Transaction fakeTx = FakeTxBuilder.createFakeTx(PARAMS, Coin.COIN, addr);

@@ -65,6 +65,7 @@ public abstract class NetworkParameters {
 
 	protected int addressHeader;
 	protected int p2shHeader;
+	protected int dumpedPrivateKeyHeader;
 	protected int[] acceptableAddressCodes;
 	protected int bip32HeaderPub;
 	protected int bip32HeaderPriv;
@@ -282,6 +283,14 @@ public abstract class NetworkParameters {
 	 */
 	public int getP2SHHeader() {
 		return p2shHeader;
+	}
+
+	/**
+	 * First byte of a base58 encoded dumped (WIF) private key. See
+	 * {@link net.bigtangle.utils.DumpedPrivateKey}.
+	 */
+	public int getDumpedPrivateKeyHeader() {
+		return dumpedPrivateKeyHeader;
 	}
 
 	/** The header bytes that identify the start of a packet on this network. */

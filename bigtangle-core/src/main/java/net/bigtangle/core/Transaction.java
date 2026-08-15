@@ -823,14 +823,14 @@ public class Transaction extends ChildMessage {
 	 * @throws ScriptException if the scriptPubKey is not a pay to address or pay to
 	 *                         pubkey script.
 	 */
-	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey,
+	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, Key sigKey,
 			SigHash sigHash, boolean anyoneCanPay) throws ScriptException {
 		// Verify the API user didn't try to do operations out of order.
 		checkState(!outputs.isEmpty(), "Attempting to sign tx without outputs.");
 		TransactionInput input = TransactionInput.fromOutpoint4(params, this, new byte[] {}, prevOut);
 		addInput(input);
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, sigHash, anyoneCanPay);
-		TransactionSignature txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
+		TransactionSignature txSig = signEc(sigKey, hash, sigHash, anyoneCanPay);
 		if (scriptPubKey.isSentToAddress())
 			input.setScriptSig(ScriptBuilder.createInputScript(txSig, sigKey));
 		else if (scriptPubKey.isSentToMultiSig())
@@ -840,9 +840,9 @@ public class Transaction extends ChildMessage {
 		return input;
 	}
 
-	public void signInputs(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey) throws ScriptException {
+	public void signInputs(TransactionOutPoint prevOut, Script scriptPubKey, Key sigKey) throws ScriptException {
 		Sha256Hash hash = hashForSignature(inputs.size() - 1, scriptPubKey, SigHash.ALL, false);
-		TransactionSignature txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
+		TransactionSignature txSig = signEc(sigKey, hash, SigHash.ALL, false);
 		for (TransactionInput input : getInputs()) {
 			// TODO only sign if valid signature can be created
 			if (input.getScriptBytes().length != 0)
@@ -856,13 +856,27 @@ public class Transaction extends ChildMessage {
 		}
 	}
 
+	private TransactionSignature signEc(Key sigKey, Sha256Hash hash, SigHash sigHash, boolean anyoneCanPay)
+			throws ScriptException {
+		TransactionSignature txSig;
+		if (sigKey instanceof DeterministicKey) {
+			txSig = ((DeterministicKey) sigKey).ecSign(hash, null);
+		} else if (sigKey instanceof ECKey) {
+			txSig = ((ECKey) sigKey).sign(hash);
+		} else {
+			throw new ScriptException("EC signing requires an EC key, got " + sigKey.getClass().getSimpleName());
+		}
+		return new TransactionSignature(txSig.r, txSig.s,
+				TransactionSignature.calcSigHashValue(sigHash, anyoneCanPay));
+	}
+
 	/**
 	 * Same as
-	 * {@link #addSignedInput(TransactionOutPoint, net.bigtangle.script.Script, PQKey, net.bigtangle.core.Transaction.SigHash, boolean)}
+	 * {@link #addSignedInput(TransactionOutPoint, net.bigtangle.script.Script, Key, net.bigtangle.core.Transaction.SigHash, boolean)}
 	 * but defaults to {@link SigHash#ALL} and "false" for the anyoneCanPay flag.
 	 * This is normally what you want.
 	 */
-	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, PQKey sigKey)
+	public TransactionInput addSignedInput(TransactionOutPoint prevOut, Script scriptPubKey, Key sigKey)
 			throws ScriptException {
 		return addSignedInput(prevOut, scriptPubKey, sigKey, SigHash.ALL, false);
 	}
@@ -912,6 +926,16 @@ public class Transaction extends ChildMessage {
 	}
 
 	/**
+	 * Creates an output paying to the given key, dispatching to the legacy
+	 * address form for EC keys and the PQ key form for PQ keys.
+	 */
+	public TransactionOutput addOutput(Coin value, Key key) {
+		if (key.getKeyType() == KeyType.PQ)
+			return addOutput(value, (PQKey) key);
+		return addOutput(value, ((ECKey) key).toAddress(params));
+	}
+
+	/**
 	 * Creates an output that pays to the given script. The address and key forms
 	 * are specialisations of this method, you won't normally need to use it unless
 	 * you're doing unusual things.
@@ -937,10 +961,12 @@ public class Transaction extends ChildMessage {
 	 * @return A newly calculated signature object that wraps the r, s and sighash
 	 *         components.
 	 */
- 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, byte[] redeemScript, SigHash hashType,
+ 	public TransactionSignature calculateSignature(int inputIndex, Key key, byte[] redeemScript, SigHash hashType,
  			boolean anyoneCanPay) {
  		Sha256Hash hash = hashForSignature(inputIndex, redeemScript, hashType, anyoneCanPay);
- 		SignatureBundle sigBundle = key.sign(hash);
+ 		if (key.getKeyType() == KeyType.EC)
+ 			return ecSign(key, hash, hashType, anyoneCanPay);
+ 		SignatureBundle sigBundle = ((PQKey) key).sign(hash);
  		// Store PQ signature for later use by LocalTransactionSigner
  		if (version >= PQConstants.TX_PQ_VERSION) {
  			pqSignatureBundle = sigBundle.serialize();
@@ -948,15 +974,26 @@ public class Transaction extends ChildMessage {
  		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
  	}
  
- 	public TransactionSignature calculateSignature(int inputIndex, PQKey key, Script redeemScript, SigHash hashType,
+ 	public TransactionSignature calculateSignature(int inputIndex, Key key, Script redeemScript, SigHash hashType,
  			boolean anyoneCanPay) {
  		Sha256Hash hash = hashForSignature(inputIndex, redeemScript.getProgram(), hashType, anyoneCanPay);
- 		SignatureBundle sigBundle = key.sign(hash);
+ 		if (key.getKeyType() == KeyType.EC)
+ 			return ecSign(key, hash, hashType, anyoneCanPay);
+ 		SignatureBundle sigBundle = ((PQKey) key).sign(hash);
  		// Store PQ signature for later use by LocalTransactionSigner
  		if (version >= PQConstants.TX_PQ_VERSION) {
  			pqSignatureBundle = sigBundle.serialize();
  		}
  		return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
+ 	}
+
+ 	private TransactionSignature ecSign(Key key, Sha256Hash hash, SigHash hashType, boolean anyoneCanPay) {
+ 		TransactionSignature ts;
+ 		if (key instanceof DeterministicKey)
+ 			ts = ((DeterministicKey) key).ecSign(hash, null);
+ 		else
+ 			ts = ((ECKey) key).sign(hash);
+ 		return new TransactionSignature(ts.r, ts.s, TransactionSignature.calcSigHashValue(hashType, anyoneCanPay));
  	}
 
 	/**

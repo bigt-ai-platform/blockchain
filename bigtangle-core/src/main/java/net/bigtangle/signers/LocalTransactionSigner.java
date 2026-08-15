@@ -24,7 +24,7 @@ import java.util.EnumSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Key;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
 import net.bigtangle.crypto.DeterministicKey;
@@ -96,11 +96,11 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
             // For P2SH inputs we need to share derivation path of the signing key with other signers, so that they
             // use correct key to calculate their signatures.
             // Married keys all have the same derivation path, so we can safely just take first one here.
-            PQKey pubKey = redeemData.keys.get(0);
+            Key pubKey = redeemData.keys.get(0);
             if (pubKey instanceof DeterministicKey)
                 propTx.keyPaths.put(scriptPubKey, (((DeterministicKey) pubKey).getPath()));
 
-            PQKey key;
+            Key key;
             // locate private key in redeem data. For pay-to-address and pay-to-key inputs RedeemData will always contain
             // only one key (with private bytes). For P2SH inputs RedeemData will contain multiple keys, one of which MAY
             // have private bytes
@@ -142,9 +142,9 @@ public class LocalTransactionSigner extends StatelessTransactionSigner {
                 int sigIndex = 0;
                 inputScript = scriptPubKey.getScriptSigWithSignature(inputScript, signature.encodeToBitcoin(), sigIndex);
                 txIn.setScriptSig(inputScript);
-            } catch (PQKey.KeyIsEncryptedException e) {
+            } catch (Key.KeyIsEncryptedException e) {
                 throw e;
-            } catch (PQKey.MissingPrivateKeyException e) {
+            } catch (Key.MissingPrivateKeyException e) {
                 log.warn("No private key in keypair for input {}", i);
             }
 

@@ -25,7 +25,6 @@ import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 
 import net.bigtangle.core.*;
-import net.bigtangle.crypto.pq.KeyBundle;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Base58;
 
@@ -44,7 +43,7 @@ import java.util.Comparator;
 import static com.google.common.base.Preconditions.*;
 import static net.bigtangle.core.Utils.HEX;
 
-public class DeterministicKey extends PQKey {
+public class DeterministicKey implements Key {
 
     public static final ECDomainParameters CURVE;
 
@@ -55,9 +54,9 @@ public class DeterministicKey extends PQKey {
 
     public static final BigInteger HALF_CURVE_ORDER = CURVE.getN().shiftRight(1);
 
-    public static final Comparator<PQKey> CHILDNUM_ORDER = new Comparator<PQKey>() {
+    public static final Comparator<Key> CHILDNUM_ORDER = new Comparator<Key>() {
         @Override
-        public int compare(PQKey k1, PQKey k2) {
+        public int compare(Key k1, Key k2) {
             ChildNumber cn1 = ((DeterministicKey) k1).getChildNumber();
             ChildNumber cn2 = ((DeterministicKey) k2).getChildNumber();
             return cn1.compareTo(cn2);
@@ -506,7 +505,7 @@ public class DeterministicKey extends PQKey {
     }
 
     public void formatKeyWithAddress(boolean includePrivateKeys, StringBuilder builder, NetworkParameters params) {
-        builder.append("  addr:").append(super.toAddress(params).toHex());
+        builder.append("  addr:").append(Address.fromHash160(params, getPubKeyHash()).toBase58());
         builder.append("  hash160:").append(Utils.HEX.encode(getPubKeyHash()));
         builder.append("  (").append(getPathAsString()).append(")\n");
         if (includePrivateKeys) {
@@ -554,6 +553,38 @@ public class DeterministicKey extends PQKey {
         return hasPrivKey();
     }
 
+    @Override
+    public KeyType getKeyType() {
+        return KeyType.EC;
+    }
+
+    @Override
+    public String getPublicKeyAsHex() {
+        return Utils.HEX.encode(getPubKey());
+    }
+
+    @Override
+    public String toAddressString(NetworkParameters params) {
+        return Address.fromHash160(params, getPubKeyHash()).toBase58();
+    }
+
+    @Override
+    @Nullable
+    public EncryptedData getEncryptedPrivateKey() {
+        return encryptedPrivateKey;
+    }
+
+    @Override
+    @Nullable
+    public EncryptedData getEncryptedData() {
+        return getEncryptedPrivateKey();
+    }
+
+    @Override
+    public EncryptionType getEncryptionType() {
+        return keyCrypter != null ? keyCrypter.getUnderstoodEncryptionType() : EncryptionType.UNENCRYPTED;
+    }
+
     public byte[] getPublicKeyBytes() {
         return getPubKey();
     }
@@ -570,11 +601,11 @@ public class DeterministicKey extends PQKey {
         return new TransactionSignature(r, s);
     }
 
-    public static class MissingPrivateKeyException extends RuntimeException {
+    public static class MissingPrivateKeyException extends Key.MissingPrivateKeyException {
         private static final long serialVersionUID = 1L;
     }
 
-    public static class KeyIsEncryptedException extends MissingPrivateKeyException {
+    public static class KeyIsEncryptedException extends Key.KeyIsEncryptedException {
         private static final long serialVersionUID = 1L;
     }
 }

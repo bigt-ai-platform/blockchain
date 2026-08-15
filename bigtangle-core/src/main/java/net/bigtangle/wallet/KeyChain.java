@@ -23,7 +23,7 @@ import java.util.List;
 
  
 
-import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Key;
 
 /**
  * <p>A KeyChain is a class that stores a collection of keys for a {@link net.bigtangle.wallet.Wallet}. Key chains
@@ -38,7 +38,7 @@ import net.bigtangle.core.PQKey;
  */
 public interface KeyChain {
     /** Returns true if the given key is in the chain. */
-    boolean hasKey(PQKey key);
+    boolean hasKey(Key key);
 
     enum KeyPurpose {
         RECEIVE_FUNDS,
@@ -51,7 +51,7 @@ public interface KeyChain {
     List<? > getKeys(KeyPurpose purpose, int numberOfKeys);
 
     /** Obtains a key intended for the given purpose. The chain may create a new key, derive one, or re-use an old one. */
-    PQKey getKey(KeyPurpose purpose);
+    Key getKey(KeyPurpose purpose);
 
     /** Returns a list of keys serialized. */
     List<byte[]> serializeToProtobuf();

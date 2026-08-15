@@ -444,7 +444,7 @@ public class Script {
      * Having incomplete input script allows to pass around partially signed tx.
      * It is expected that this program later on will be updated with proper signatures.
      */
-    public Script createEmptyInputScript(@Nullable PQKey key, @Nullable Script redeemScript) {
+    public Script createEmptyInputScript(@Nullable Key key, @Nullable Script redeemScript) {
         if (isSentToAddress()) {
             checkArgument(key != null, "Key required to create pay-to-address input script");
             return ScriptBuilder.createInputScript(null, key);
@@ -1459,7 +1459,7 @@ public class Script {
 
                 // TODO: Should check hash type is known
                 Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                sigValid = PQScriptUtils.verifyPQ(pubKey, sig.encodeToBitcoin(), hash);
+                sigValid = ECKey.verify(hash.getBytes(), sig, pubKey);
             } catch (Exception e1) {
                 // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
                 // Because I can't verify there aren't more, we use a very generic Exception catch
@@ -1538,7 +1538,7 @@ public class Script {
                 } else {
                     TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, false);
                     Sha256Hash hash = txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                    if (PQScriptUtils.verifyPQ(pubKey, sig.encodeToBitcoin(), hash))
+                    if (ECKey.verify(hash.getBytes(), sig, pubKey))
                         sigs.pollFirst();
                 }
             } catch (Exception e) {

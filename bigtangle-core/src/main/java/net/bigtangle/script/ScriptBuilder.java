@@ -22,7 +22,7 @@ package net.bigtangle.script;
 import com.google.common.collect.Lists;
 
 import net.bigtangle.core.Address;
-import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Key;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.TransactionSignature;
 import net.bigtangle.crypto.pq.KeyBundle;
@@ -243,7 +243,7 @@ public class ScriptBuilder {
     }
 
     /** Creates a P2PKH scriptPubKey that encodes payment to the given key. */
-    public static Script createOutputScript(PQKey key) {
+    public static Script createOutputScript(Key key) {
         return new ScriptBuilder()
                 .op(OP_DUP).op(OP_HASH160)
                 .data(key.getPubKeyHash())
@@ -274,7 +274,7 @@ public class ScriptBuilder {
      * Creates a scriptSig that redeems a P2PKH output backed by a PQ key.
      * Includes the pubkey in the scriptSig: {@code <sigBundle> <pubkey>}.
      */
-    public static Script createInputScriptForPQ(SignatureBundle sigBundle, PQKey pubKey) {
+    public static Script createInputScriptForPQ(SignatureBundle sigBundle, Key pubKey) {
         return new ScriptBuilder().data(sigBundle.serialize()).data(pubKey.getPubKey()).build();
     }
 
@@ -282,7 +282,7 @@ public class ScriptBuilder {
      * Creates a scriptSig that can redeem a pay-to-address output.
      * If given signature is null, incomplete scriptSig will be created with OP_0 instead of signature
      */
-    public static Script createInputScript(@Nullable TransactionSignature signature, PQKey pubKey) {
+    public static Script createInputScript(@Nullable TransactionSignature signature, Key pubKey) {
         byte[] pubkeyBytes = pubKey.getPubKey();
         byte[] sigBytes = signature != null ? signature.encodeToBitcoin() : new byte[]{};
         return new ScriptBuilder().data(sigBytes).data(pubkeyBytes).build();
@@ -298,13 +298,13 @@ public class ScriptBuilder {
     }
 
     /** Creates a program that requires at least N of the given keys to sign, using OP_CHECKMULTISIG. */
-    public static Script createMultiSigOutputScript(int threshold, List<PQKey> pubkeys) {
+    public static Script createMultiSigOutputScript(int threshold, List<? extends Key> pubkeys) {
         checkArgument(threshold > 0);
         checkArgument(threshold <= pubkeys.size());
         checkArgument(pubkeys.size() <= 16);  // That's the max we can represent with a single opcode.
         ScriptBuilder builder = new ScriptBuilder();
         builder.smallNum(threshold);
-        for (PQKey key : pubkeys) {
+        for (Key key : pubkeys) {
             builder.data(key.getPubKey());
         }
         builder.smallNum(pubkeys.size());
@@ -450,7 +450,7 @@ public class ScriptBuilder {
      * Creates a P2SH output script with given public keys and threshold. Given public keys will be placed in
      * redeem script in the lexicographical sorting order.
      */
-    public static Script createP2SHOutputScript(int threshold, List<PQKey> pubkeys) {
+    public static Script createP2SHOutputScript(int threshold, List<? extends Key> pubkeys) {
         Script redeemScript = createRedeemScript(threshold, pubkeys);
         return createP2SHOutputScript(redeemScript);
     }
@@ -459,9 +459,15 @@ public class ScriptBuilder {
      * Creates redeem script with given public keys and threshold. Given public keys will be placed in
      * redeem script in the lexicographical sorting order.
      */
-    public static Script createRedeemScript(int threshold, List<PQKey> pubkeys) {
-        pubkeys = new ArrayList<PQKey>(pubkeys);
-        Collections.sort(pubkeys, PQKey.PUBKEY_COMPARATOR);
+    public static Script createRedeemScript(int threshold, List<? extends Key> pubkeys) {
+        pubkeys = new ArrayList<Key>(pubkeys);
+        Collections.sort(pubkeys, (a, b) -> {
+            byte[] ba = a.getPubKey();
+            byte[] bb = b.getPubKey();
+            int len = Math.min(ba.length, bb.length);
+            for (int i = 0; i < len; i++) { int c = (ba[i] & 0xFF) - (bb[i] & 0xFF); if (c != 0) return c; }
+            return ba.length - bb.length;
+        });
         return ScriptBuilder.createMultiSigOutputScript(threshold, pubkeys);
     }
 
@@ -475,7 +481,7 @@ public class ScriptBuilder {
         return new ScriptBuilder().op(OP_RETURN).data(data).build();
     }
 
-    public static Script createCLTVPaymentChannelOutput(BigInteger time, PQKey from, PQKey to) {
+    public static Script createCLTVPaymentChannelOutput(BigInteger time, Key from, Key to) {
         byte[] timeBytes = Utils.reverseBytes(Utils.encodeMPI(time, false));
         if (timeBytes.length > 5) {
             throw new RuntimeException("Time too large to encode as 5-byte int");

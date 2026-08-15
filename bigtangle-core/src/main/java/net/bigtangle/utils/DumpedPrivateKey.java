@@ -1,0 +1,109 @@
+/*******************************************************************************
+ *  Copyright   2018  Inasset GmbH.
+ *
+ *******************************************************************************/
+/*
+ * Copyright 2011 Google Inc.
+ * Copyright 2015 Andreas Schildbach
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package net.bigtangle.utils;
+
+import com.google.common.base.Objects;
+import com.google.common.base.Preconditions;
+
+import net.bigtangle.core.ECKey;
+import net.bigtangle.core.VersionedChecksummedBytes;
+import net.bigtangle.exception.AddressFormatException;
+import net.bigtangle.exception.WrongNetworkException;
+import net.bigtangle.params.NetworkParameters;
+
+import java.util.Arrays;
+
+import jakarta.annotation.Nullable;
+
+/**
+ * Parses and generates private keys in the form used by the Bitcoin "dumpprivkey" command (WIF). This is the private key
+ * bytes with a header byte and 4 checksum bytes at the end. If there are 33 private key bytes instead of 32, then
+ * the last byte is a discriminator value for the compressed pubkey.
+ *
+ * <p>Re-introduced so legacy EC private keys can be imported/exported in the
+ * standard WIF form alongside the new {@code PQKey} type.
+ */
+public class DumpedPrivateKey extends VersionedChecksummedBytes {
+    private static final long serialVersionUID = 1L;
+    private boolean compressed;
+
+    /**
+     * Construct a private key from its Base58 representation.
+     */
+    public static DumpedPrivateKey fromBase58(@Nullable NetworkParameters params, String base58) throws AddressFormatException {
+        VersionedChecksummedBytes vcb = VersionedChecksummedBytes.fromBase58(base58);
+        return new DumpedPrivateKey(params, vcb);
+    }
+
+    // Used by ECKey.getPrivateKeyEncoded()
+    public DumpedPrivateKey(NetworkParameters params, byte[] keyBytes, boolean compressed) {
+        super(params.getDumpedPrivateKeyHeader(), encode(keyBytes, compressed));
+        this.compressed = compressed;
+    }
+
+    private static byte[] encode(byte[] keyBytes, boolean compressed) {
+        Preconditions.checkArgument(keyBytes.length == 32, "Private keys must be 32 bytes");
+        if (!compressed) {
+            return keyBytes;
+        } else {
+            // Keys that have compressed public components have an extra 1 byte on the end in dumped form.
+            byte[] bytes = new byte[33];
+            System.arraycopy(keyBytes, 0, bytes, 0, 32);
+            bytes[32] = 1;
+            return bytes;
+        }
+    }
+
+    private DumpedPrivateKey(@Nullable NetworkParameters params, VersionedChecksummedBytes vcb) throws AddressFormatException {
+        super(vcb.getVersion(), vcb.getBytes());
+        if (params != null && version != params.getDumpedPrivateKeyHeader())
+            throw new WrongNetworkException(version, new int[]{ params.getDumpedPrivateKeyHeader() });
+        byte[] bytes = vcb.getBytes();
+        if (bytes.length == 33 && bytes[32] == 1) {
+            compressed = true;
+            this.bytes = Arrays.copyOf(bytes, 32);  // Chop off the additional marker byte.
+        } else if (bytes.length == 32) {
+            compressed = false;
+        } else {
+            throw new AddressFormatException("Wrong number of bytes for a private key, not 32 or 33");
+        }
+    }
+
+    /** Returns an ECKey created from this encoded private key. */
+    public ECKey getKey() {
+        final ECKey key = ECKey.fromPrivate(bytes);
+        return compressed ? key : key.decompress();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DumpedPrivateKey other = (DumpedPrivateKey) o;
+        return version == other.version && compressed == other.compressed && Arrays.equals(bytes, other.bytes);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(version, compressed, Arrays.hashCode(bytes));
+    }
+}

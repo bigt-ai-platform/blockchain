@@ -19,7 +19,7 @@
  */
 package net.bigtangle.wallet;
 
-import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Key;
 import net.bigtangle.core.Utils;
 import net.bigtangle.script.Script;
 
@@ -41,14 +41,14 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 public class RedeemData {
     public final Script redeemScript;
-    public final List<PQKey> keys;
+    public final List<Key> keys;
 
-    private RedeemData(List<PQKey> keys, Script redeemScript) {
+    private RedeemData(List<Key> keys, Script redeemScript) {
         this.redeemScript = redeemScript;
-        List<PQKey> sortedKeys = new ArrayList<PQKey>(keys);
-        Collections.sort(sortedKeys, new Comparator<PQKey>() {
+        List<Key> sortedKeys = new ArrayList<Key>(keys);
+        Collections.sort(sortedKeys, new Comparator<Key>() {
             @Override
-            public int compare(PQKey k1, PQKey k2) {
+            public int compare(Key k1, Key k2) {
                 byte[] b1 = k1.getPublicKeyBytes();
                 byte[] b2 = k2.getPublicKeyBytes();
                 int len = Math.min(b1.length, b2.length);
@@ -62,7 +62,7 @@ public class RedeemData {
         this.keys = sortedKeys;
     }
 
-    public static RedeemData of(List<PQKey> keys, Script redeemScript) {
+    public static RedeemData of(List<Key> keys, Script redeemScript) {
         return new RedeemData(keys, redeemScript);
     }
 
@@ -70,7 +70,7 @@ public class RedeemData {
      * Creates RedeemData for pay-to-address or pay-to-pubkey input. Provided key is a single private key needed
      * to spend such inputs and provided program should be a proper CHECKSIG program.
      */
-    public static RedeemData of(PQKey key, Script program) {
+    public static RedeemData of(Key key, Script program) {
         checkArgument(program.isSentToAddress());
         return key != null ? new RedeemData(Collections.singletonList(key), program) : null;
     }
@@ -78,8 +78,8 @@ public class RedeemData {
     /**
      * Returns the first key that has private bytes
      */
-    public PQKey getFullKey() {
-        for (PQKey key : keys)
+    public Key getFullKey() {
+        for (Key key : keys)
             if (key.hasPrivateKey())
                 return key;
         return null;

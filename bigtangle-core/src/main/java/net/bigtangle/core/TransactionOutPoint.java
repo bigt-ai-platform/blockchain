@@ -169,7 +169,7 @@ public class TransactionOutPoint extends ChildMessage {
 	 * @return an PQKey or null if the connected key cannot be found in the wallet.
 	 */
 	@Nullable
-	public PQKey getConnectedKey(KeyBag keyBag) throws ScriptException {
+	public Key getConnectedKey(KeyBag keyBag) throws ScriptException {
 		TransactionOutput connectedOutput = getConnectedOutput();
 		checkNotNull(connectedOutput, "Input is not connected so cannot retrieve key");
 		Script connectedScript = connectedOutput.getScriptPubKey();
@@ -183,10 +183,10 @@ public class TransactionOutPoint extends ChildMessage {
 		}
 	}
 
-	public PQKey getConnectedKey(KeyBag keyBag, List<PQKey> ecs) throws ScriptException {
+	public Key getConnectedKey(KeyBag keyBag, List<? extends Key> ecs) throws ScriptException {
 
-		for (PQKey ec : ecs) {
-			PQKey a = keyBag.findKeyFromPubKey(ec.getPubKey());
+		for (Key ec : ecs) {
+			Key a = keyBag.findKeyFromPubKey(ec.getPubKey());
 			if (a != null)
 				return a;
 		}

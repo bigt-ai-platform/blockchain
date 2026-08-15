@@ -30,7 +30,7 @@ import net.bigtangle.crypto.pq.SignatureBundle;
 import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 
-public class PQKey implements EncryptableItem {
+public class PQKey implements Key {
 
     private static final Logger log = LoggerFactory.getLogger(PQKey.class);
     private static final SecureRandom secureRandom = new SecureRandom();
@@ -42,19 +42,35 @@ public class PQKey implements EncryptableItem {
 
     public static PQSignatureProvider provider() { return prov; }
 
+    @Override
+    public KeyType getKeyType() { return KeyType.PQ; }
+
     private final byte[] mlDsaPrivateKey;
     private final byte[] slhDsaPrivateKey;
     private final KeyBundle keyBundle;
     @Nullable private PQAddress address;
+
+    // The 32-byte seeds used to derive the private keys (only present for keys
+    // created from a seed; null for public-only or bundle-imported keys).  These
+    // enable a compact, WIF-equivalent "PQ key file" via getPrivateKeySeedAsHex().
+    @Nullable private final byte[] mlDsaSeed;
+    @Nullable private final byte[] slhDsaSeed;
 
     protected long creationTimeSeconds;
     protected KeyCrypter keyCrypter;
     protected EncryptedData encryptedPrivateKey;
 
     public PQKey(byte[] mlDsaPrivateKey, byte[] slhDsaPrivateKey, KeyBundle keyBundle) {
+        this(mlDsaPrivateKey, slhDsaPrivateKey, keyBundle, null, null);
+    }
+
+    public PQKey(byte[] mlDsaPrivateKey, byte[] slhDsaPrivateKey, KeyBundle keyBundle,
+            @Nullable byte[] mlDsaSeed, @Nullable byte[] slhDsaSeed) {
         this.mlDsaPrivateKey = mlDsaPrivateKey;
         this.slhDsaPrivateKey = slhDsaPrivateKey;
         this.keyBundle = keyBundle;
+        this.mlDsaSeed = mlDsaSeed;
+        this.slhDsaSeed = slhDsaSeed;
         this.creationTimeSeconds = Utils.currentTimeSeconds();
     }
 
@@ -62,6 +78,8 @@ public class PQKey implements EncryptableItem {
         this.mlDsaPrivateKey = null;
         this.slhDsaPrivateKey = null;
         this.keyBundle = null;
+        this.mlDsaSeed = null;
+        this.slhDsaSeed = null;
     }
 
     // Default: ML-DSA-87 only (FIPS 204).  Dual (SLH-DSA) keys are created
@@ -95,7 +113,7 @@ public class PQKey implements EncryptableItem {
         entries.add(new KeyBundle.Entry(PQConstants.ALG_ML_DSA_87, mlKp.publicKey()));
         entries.add(new KeyBundle.Entry(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKp.publicKey()));
         KeyBundle bundle = new KeyBundle(entries);
-        return new PQKey(mlKp.privateKey(), slhKp.privateKey(), bundle);
+        return new PQKey(mlKp.privateKey(), slhKp.privateKey(), bundle, mlDsaSeed, slhDsaSeed);
     }
 
     public static PQKey fromMLDSA(byte[] mlDsaSeed) {
@@ -103,7 +121,7 @@ public class PQKey implements EncryptableItem {
         List<KeyBundle.Entry> entries = new ArrayList<>();
         entries.add(new KeyBundle.Entry(PQConstants.ALG_ML_DSA_87, mlKp.publicKey()));
         KeyBundle bundle = new KeyBundle(entries);
-        return new PQKey(mlKp.privateKey(), null, bundle);
+        return new PQKey(mlKp.privateKey(), null, bundle, mlDsaSeed, null);
     }
 
     public static PQKey fromPrivateKeyBundle(byte[] mlDsaPriv, byte[] slhDsaPriv, KeyBundle pubKeyBundle) {
@@ -186,6 +204,11 @@ public class PQKey implements EncryptableItem {
         return toAddress(PQConstants.NETWORK_TESTNET);
     }
 
+    @Override
+    public String toAddressString(NetworkParameters params) {
+        return toAddress(params).toHex();
+    }
+
     public byte[] getPubKey() { return getPublicKeyBytes(); }
 
     public String getPublicKeyAsHex() {
@@ -200,6 +223,25 @@ public class PQKey implements EncryptableItem {
     @Nullable
     public String getPrivateKeySlhAsHex() {
         return slhDsaPrivateKey != null ? Utils.HEX.encode(slhDsaPrivateKey) : null;
+    }
+
+    /**
+     * Returns the compact seed-based private key in hex, compatible with
+     * {@link #fromPrivateKeyHex(String)}: 64 hex chars (32-byte ML-DSA seed) for
+     * ML-DSA-only keys, or 128 hex chars (64-byte dual seed) for dual keys. This
+     * is the WIF-equivalent "PQ key file" for backup/import. Returns {@code null}
+     * for public-only or bundle-imported keys that carry no seed.
+     */
+    @Nullable
+    public String getPrivateKeySeedAsHex() {
+        if (mlDsaSeed == null)
+            return null;
+        if (slhDsaSeed == null)
+            return Utils.HEX.encode(mlDsaSeed);
+        byte[] combined = new byte[64];
+        System.arraycopy(mlDsaSeed, 0, combined, 0, 32);
+        System.arraycopy(slhDsaSeed, 0, combined, 32, 32);
+        return Utils.HEX.encode(combined);
     }
 
     @Override
@@ -358,11 +400,11 @@ public class PQKey implements EncryptableItem {
         builder.append("\n");
     }
 
-    public static class MissingPrivateKeyException extends RuntimeException {
+    public static class MissingPrivateKeyException extends Key.MissingPrivateKeyException {
         private static final long serialVersionUID = 1L;
     }
 
-    public static class KeyIsEncryptedException extends MissingPrivateKeyException {
+    public static class KeyIsEncryptedException extends Key.KeyIsEncryptedException {
         private static final long serialVersionUID = 1L;
     }
 }

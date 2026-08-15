@@ -36,6 +36,7 @@ public class MainNetParams extends NetworkParameters {
         super();
         addressHeader = 0;
         p2shHeader = 5;
+        dumpedPrivateKeyHeader = 128;
         acceptableAddressCodes = new int[] { addressHeader, p2shHeader };
 
         packetMagic = 0xf9beb4d9L;

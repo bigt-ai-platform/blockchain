@@ -74,6 +74,7 @@ import net.bigtangle.core.ContractEventRecord;
 import net.bigtangle.core.ContractExecutionResult;
 import net.bigtangle.layer1.contract.ContractEngine;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Key;
 import net.bigtangle.core.KeyValue;
 import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.MultiSign;
@@ -1102,7 +1103,7 @@ public abstract class AbstractIntegrationTest {
 		return getBalance(withZero, wallet.walletKeys(null));
 	}
 
-	protected UTXO getBalance(String tokenid, boolean withZero, List<PQKey> keys) throws Exception {
+	protected UTXO getBalance(String tokenid, boolean withZero, List<? extends Key> keys) throws Exception {
 		List<UTXO> ulist = getBalance(withZero, keys);
 
 		for (UTXO u : ulist) {
@@ -1115,11 +1116,11 @@ public abstract class AbstractIntegrationTest {
 	}
 
 	// get balance for the walletKeys
-	protected List<UTXO> getBalance(boolean withZero, List<PQKey> keys) throws Exception {
+	protected List<UTXO> getBalance(boolean withZero, List<? extends Key> keys) throws Exception {
 		List<UTXO> listUTXO = new ArrayList<UTXO>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (PQKey ecKey : keys) {
+		for (Key ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -1140,11 +1141,11 @@ public abstract class AbstractIntegrationTest {
 		return listUTXO;
 	}
 
-	protected List<Coin> getBalanceAccount(boolean withZero, List<PQKey> keys) throws Exception {
+	protected List<Coin> getBalanceAccount(boolean withZero, List<? extends Key> keys) throws Exception {
 		List<Coin> listCoin = new ArrayList<Coin>();
 		List<String> keyStrHex000 = new ArrayList<String>();
 
-		for (PQKey ecKey : keys) {
+		for (Key ecKey : keys) {
 			// keyStrHex000.add(ecKey.toAddress(networkParameters).toHex());
 			keyStrHex000.add(Utils.HEX.encode(ecKey.getPubKeyHash()));
 		}
@@ -1179,8 +1180,8 @@ public abstract class AbstractIntegrationTest {
 		return listUTXO;
 	}
 
-	protected List<UTXO> getBalance(boolean withZero, PQKey ecKey) throws Exception {
-		List<PQKey> keys = new ArrayList<PQKey>();
+	protected List<UTXO> getBalance(boolean withZero, Key ecKey) throws Exception {
+		List<Key> keys = new ArrayList<Key>();
 		keys.add(ecKey);
 		return getBalance(withZero, keys);
 	}
@@ -1261,13 +1262,13 @@ public abstract class AbstractIntegrationTest {
 		assertTrue(error == code);
 	}
 
-	protected void checkBalance(Coin coin, PQKey ecKey) throws Exception {
-		ArrayList<PQKey> a = new ArrayList<PQKey>();
+	protected void checkBalance(Coin coin, Key ecKey) throws Exception {
+		ArrayList<Key> a = new ArrayList<Key>();
 		a.add(ecKey);
 		checkBalance(coin, a);
 	}
 
-	protected void checkBalance(Coin coin, List<PQKey> a) throws Exception {
+	protected void checkBalance(Coin coin, List<? extends Key> a) throws Exception {
 		List<UTXO> ulist = getBalance(false, a);
 		UTXO myutxo = null;
 		for (UTXO u : ulist) {
@@ -1281,13 +1282,13 @@ public abstract class AbstractIntegrationTest {
 		log.debug(myutxo.toString());
 	}
 
-	protected void checkBalanceSum(Coin coin, PQKey a) throws Exception {
-		List<PQKey> keys = new ArrayList<>();
+	protected void checkBalanceSum(Coin coin, Key a) throws Exception {
+		List<Key> keys = new ArrayList<>();
 		keys.add(a);
 		checkBalanceSum(coin, keys);
 	}
 
-	protected void checkBalanceSum(Coin coin, List<PQKey> a) throws Exception {
+	protected void checkBalanceSum(Coin coin, List<? extends Key> a) throws Exception {
 		List<UTXO> ulist = getBalance(false, a);
 
 		Coin sum = new Coin(0, coin.getTokenid());
