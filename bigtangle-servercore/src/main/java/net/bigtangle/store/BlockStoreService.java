@@ -533,6 +533,30 @@ public class BlockStoreService {
 		}
 		new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.solidifyBlock(block, solidityState, false, store);
+		// Connect-time application of chain-derived state. This is what makes a
+		// STAKE/SLASHING/EXIT block received via sync/gossip apply on EVERY node:
+		// the local-save path (BlockSaveService.notifyChainDerived) and the
+		// confirm batch (confirmDo) only cover locally-created blocks and
+		// confirmed ones, so a synced-but-unconfirmed deposit would otherwise
+		// never enter the validator set and the network could not converge on a
+		// shared active set. Idempotent with both.
+		net.bigtangle.server.service.StakeService stakeService = stakeServiceProvider.getIfAvailable();
+		if (stakeService != null) {
+			try {
+				if (block.getBlockType() == BlockType.BLOCKTYPE_STAKE) {
+					stakeService.applyStakeBlock(block, store);
+				} else if (block.getBlockType() == BlockType.BLOCKTYPE_SLASHING) {
+					stakeService.applySlashingBlock(block, store);
+				} else if (block.getBlockType() == BlockType.BLOCKTYPE_EXIT) {
+					stakeService.applyExitBlock(block, store);
+				}
+			} catch (Exception e) {
+				// A single inapplicable block must not halt connection; genuine
+				// storage failures still abort at the enclosing batch commit.
+				log.warn("Skipping chain-derived state for connected block {}: {}",
+						block.getHashAsString(), e.getMessage());
+			}
+		}
 	}
 
 	// TODO update other output data can be deadlock, as non chain block

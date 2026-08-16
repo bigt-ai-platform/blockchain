@@ -54,15 +54,19 @@ public class ProdSimBootstrap {
 
             PQKey validatorKey = validatorKeys.get(node);
             String pubkeyHex = Utils.HEX.encode(validatorKey.getPubKey());
+            System.out.println("  VALIDATOR_PUBKEY_" + node + "=" + pubkeyHex);
 
-            // Fund this node's validator via fundAddresses, which directly
-            // inserts CONFIRMED UTXOs. A normal submitTransaction can never
-            // confirm here because there is no active validator yet to produce
-            // beacons — the PoS chicken-and-egg.
-            fundValidator(nodeUrl, validatorKey, FUND_PER_VALIDATOR);
-
+            // Validators are funded IN THE GENESIS distribution (the shared
+            // GenesisOutput.csv), so the funding UTXOs exist identically on
+            // every node and the stake blocks apply cross-node. fundAddresses
+            // inserts only local UTXOs that never propagate — with it the 4
+            // nodes can never converge on a shared active set.
             long balance = waitForBalance(nodeUrl, validatorKey.getPubKey(), STAKE_AMOUNT.longValue());
             System.out.println("  Validator " + node + " confirmed balance=" + balance);
+            if (balance < STAKE_AMOUNT.longValue()) {
+                throw new IllegalStateException(
+                        "Validator " + node + " not funded in genesis (balance=" + balance + ")");
+            }
 
             HashMap<String, Object> stakeReq = new HashMap<>();
             stakeReq.put("pubkey", pubkeyHex);
