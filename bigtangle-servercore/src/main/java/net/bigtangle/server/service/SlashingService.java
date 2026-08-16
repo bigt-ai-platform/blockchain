@@ -180,22 +180,25 @@ public class SlashingService {
     }
 
     /**
-     * Ethereum's two slashable double-vote forms:
-     * (a) same slot, two different heads (beacon block hashes), and
-     * (b) same target epoch, two different target checkpoints (regardless of slot).
+     * Ethereum's slashable double-vote form used on-chain today:
+     * same slot, two different heads (beacon block hashes).
+     *
+     * <p>The same-target-epoch form (two different target checkpoints for the
+     * same target epoch) is NOT enforced: the attestation target checkpoint is
+     * currently derived from the transient confirmed head until the epoch
+     * boundary is buried (see CasperService.ensureCheckpoint), so two honest
+     * attestations in the same epoch can legitimately carry different targets
+     * while the head advances. Enforcing form (b) there would slash honest
+     * single validators. Re-enable it once the target is made deterministic
+     * (stable, boundary-based) — tracked as a production-readiness follow-up.
      */
     public static boolean isDoubleVote(AttestationData a, AttestationData b) {
         if (a == null || b == null) {
             return false;
         }
-        if (a.getSlot() == b.getSlot()
+        return a.getSlot() == b.getSlot()
                 && a.getBeaconBlockHash() != null && b.getBeaconBlockHash() != null
-                && !a.getBeaconBlockHash().equals(b.getBeaconBlockHash())) {
-            return true;
-        }
-        return a.getTargetEpoch() >= 0 && a.getTargetEpoch() == b.getTargetEpoch()
-                && a.getTargetCheckpoint() != null && b.getTargetCheckpoint() != null
-                && !a.getTargetCheckpoint().equals(b.getTargetCheckpoint());
+                && !a.getBeaconBlockHash().equals(b.getBeaconBlockHash());
     }
 
     /** Ethereum's surround-vote slashable pattern (strict epoch containment). */
@@ -213,9 +216,8 @@ public class SlashingService {
 
     /**
      * Detects a double vote: the same validator attesting two different heads
-     * for the same slot, or two different target checkpoints for the same target
-     * epoch. Records the vote and returns the conflicting prior attestation (the
-     * evidence for a slashing block), or null if no double.
+     * for the same slot. Records the vote and returns the conflicting prior
+     * attestation (the evidence for a slashing block), or null if no double.
      */
     public AttestationData checkDoubleVote(AttestationData att) {
         if (att.getValidatorPubkey() == null) {

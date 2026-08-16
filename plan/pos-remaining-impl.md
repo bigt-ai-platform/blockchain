@@ -11,12 +11,12 @@ Status of the Ethereum-Gasper parity work, keyed to the findings in
 | 0.1 pure 2/3-of-total justification threshold | ✅ implemented + tested |
 | 0.2 inactivity leak (chain-derived) | ✅ implemented + tested |
 | 1.1 proposer self-id (snapshot vs live) | ✅ implemented + tested |
-| 1.2 double-vote slashing gap | ✅ implemented + tested |
+| 1.2 double-vote slashing gap | ⚠️ same-slot form kept; same-target-epoch form reverted (see note below) |
 | 1.3 reorg-safe checkpoint invalidation | ✅ implemented + tested |
 | 2.1 per-attestation (voter-filtered) rewards | ✅ implemented + tested |
 | 2.2 effective-balance cap | ✅ implemented + tested |
 | 2.3 graded slashing + whistleblower | ⛔ blocked (see below) |
-| 3.1 activation delay (MAX_SEED_LOOKAHEAD) | ✅ implemented + tested |
+| 3.1 activation delay (MAX_SEED_LOOKAHEAD) | ❌ reverted (see note below) |
 | 3.2 activation churn limit | ✅ implemented + tested |
 | 3.3 exit queue (churn-capped withdrawals) | ✅ implemented + tested |
 | 4.1 proposer boost (40%) | ✅ implemented + tested |
@@ -32,6 +32,31 @@ Status of the Ethereum-Gasper parity work, keyed to the findings in
 | Hard fork-epoch gate for chain reads (`onChainAttestationActive`, replaces "non-empty" heuristic) | ✅ implemented |
 | Discard equivocating validators from LMD-GHOST (PR #2845) | ✅ implemented |
 | Bouncing-attack defense (justified-checkpoint switch window) | ✅ implemented |
+
+## Convergence-test fixes (multi-node `remote.sh` harness, Phase 2)
+
+The `remote.sh` epoch-reward convergence test exposed two consensus bugs that the
+single-node unit/integration suite could not catch. Both are fixed and the test
+now passes (`RemoteEpochRewardTests` → SUCCESS).
+
+1. **3.1 activation delay — REVERTED.** `MAX_SEED_LOOKAHEAD` compared the
+   *wall-clock slot epoch* of the deposit block (`activatedEpoch = epochAt(block
+   time)`, huge) against the *chainlength epoch* (`currentChainEpoch =
+   chainlength/32`, small) — two different domains. A freshly deposited validator
+   was therefore never "active", its attestations were rejected as
+   "non-validator", and the beacon chain never started. The delay is redundant
+   with the existing 2-epoch proposer-selection snapshot. A proper
+   chain-ordered activation queue is the follow-up (tracked with the churn
+   cap).
+2. **1.2 same-target-epoch double-vote form — REVERTED (deferred).** Form (b)
+   (same target epoch, two different target checkpoints) is Ethereum-correct,
+   but here the attestation target checkpoint is the *transient confirmed head*
+   until the epoch boundary is buried (see `CasperService.ensureCheckpoint`), so
+   two honest same-epoch attestations legitimately carry different targets while
+   the head advances. Enforcing form (b) slashed honest single validators and
+   stalled the chain. Re-enable form (b) once the target is made deterministic
+   (stable, boundary-based) — tracked as a production-readiness follow-up. Form
+   (a) (same slot, two heads) remains enforced.
 
 ---
 

@@ -46,12 +46,16 @@ public class PosConsensusHardeningTest {
     }
 
     @Test
-    public void doubleVoteSameTargetEpochDifferentTargetRoot() {
+    public void sameTargetEpochDifferentTargetRootIsNotDoubleVote() {
         // Different slots, same target epoch, two different target checkpoints:
-        // Ethereum's second double-vote form — previously NOT detected.
+        // NOT enforced today — the target checkpoint derives from the transient
+        // confirmed head until the epoch boundary is buried (see
+        // CasperService.ensureCheckpoint), so honest same-epoch attestations can
+        // carry different targets while the head advances. Slashing them would
+        // slash honest single validators. Re-enable with a stable target.
         AttestationData a = att(33, 0, 1, h(1), h(1));
         AttestationData b = att(40, 0, 1, h(2), h(2));
-        assertTrue(SlashingService.isDoubleVote(a, b));
+        assertFalse(SlashingService.isDoubleVote(a, b));
     }
 
     @Test
