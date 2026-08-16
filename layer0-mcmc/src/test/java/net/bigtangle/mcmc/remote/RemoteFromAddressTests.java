@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -102,27 +101,24 @@ public class RemoteFromAddressTests extends RemoteTest {
 
 	public List<PQKey> payKeys() throws Exception {
 		List<PQKey> userkeys = new ArrayList<PQKey>();
-		HashMap<String, BigInteger> giveMoneyResult = new HashMap<>();
-
 		PQKey key = PQKey.createNew();
-		giveMoneyResult.put(key.toAddress(networkParameters).toHex(), BigInteger.valueOf(100));
 		userkeys.add(key);
 		PQKey key2 = PQKey.createNew();
-		giveMoneyResult.put(key2.toAddress(networkParameters).toHex(), BigInteger.valueOf(100));
 		userkeys.add(key2);
 
+		// PQ-aware payment: payToList() only accepts legacy base58 Address, but
+		// these are PQ keys — use the Key overload of Wallet.pay() (the primary
+		// EC/PQ migration path) once per recipient.
 		String memo = "pay to user";
-		Transaction b = yuanWallet.payToList(null, giveMoneyResult, Utils.HEX.decode(yuanTokenPub), memo);
-		log.debug("block " + (b == null ? "block is null" : b.toString()));
+		byte[] yuanToken = Utils.HEX.decode(yuanTokenPub);
+		yuanWallet.pay(null, key, Coin.valueOf(100, yuanToken), memo);
+		yuanWallet.pay(null, key2, Coin.valueOf(100, yuanToken), memo);
 
- 
 		payBigTo(key, Coin.FEE_DEFAULT.getValue(), null);
 
-	 
 		// fee=1000
 		payBigTo(key2, Coin.FEE_DEFAULT.getValue(), null);
 
-	 
 		return userkeys;
 	}
 

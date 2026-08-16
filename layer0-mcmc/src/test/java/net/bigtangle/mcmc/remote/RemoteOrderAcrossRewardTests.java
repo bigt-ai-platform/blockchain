@@ -128,7 +128,12 @@ public class RemoteOrderAcrossRewardTests extends RemoteTest {
         // ============================================================
         // 4. Wait until the next epoch reward boundary has passed.
         // ============================================================
-        long epochMs = 12_000L * 32L; // SLOT_DURATION_MS * SLOTS_PER_EPOCH
+        // Epoch length must match the harness slot interval (remote.sh runs
+        // pos.slotIntervalMs=2000, so an epoch is 2000*32 = 64 s — NOT the
+        // 12 s default). Aligning the wait with the REAL epoch boundary is what
+        // makes the buy land mid-epoch, where it confirms via the next beacon
+        // instead of being picked up only by the (reward-payout) epoch-start one.
+        long epochMs = 2_000L * 32L; // slotIntervalMs * SLOTS_PER_EPOCH
         long origin = 1532896109000L;
         long now = System.currentTimeMillis();
         long currentEpoch = (now - origin) / epochMs;
@@ -165,6 +170,13 @@ public class RemoteOrderAcrossRewardTests extends RemoteTest {
             remaining = queryOpenOrders();
             if (remaining.isEmpty()) break;
             Thread.sleep(2000);
+        }
+        if (remaining != null) {
+            for (OrderRecord o : remaining) {
+                log.info("REMAINING ORDER side={} offer={} {} target={} {} price={} blockhash={} beneficiary={}",
+                        o.getSide(), o.getOfferValue(), o.getOfferTokenid(), o.getTargetValue(),
+                        o.getTargetTokenid(), o.getPrice(), o.getBlockHash(), o.getBeneficiaryAddress());
+            }
         }
         assertTrue(remaining != null && remaining.isEmpty(),
                 "All orders should have matched after the buy order, but " + remaining.size() + " remain");

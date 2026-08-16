@@ -57,7 +57,10 @@ public class RemoteEpochRewardTests extends RemoteTest {
         //    block is created by SlotService.processEpoch at the first
         //    slot tick after an epoch change).
         // ============================================================
-        long epochMs = 12_000L * 32L; // SLOT_DURATION_MS * SLOTS_PER_EPOCH
+        // Epoch length must match the harness slot interval (remote.sh runs
+        // pos.slotIntervalMs=2000, so an epoch is 2000*32 = 64 s — NOT the
+        // 12 s default).
+        long epochMs = 2_000L * 32L; // slotIntervalMs * SLOTS_PER_EPOCH
         long origin = 1532896109000L;
         long now = System.currentTimeMillis();
         long currentEpoch = (now - origin) / epochMs;
