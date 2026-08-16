@@ -83,6 +83,15 @@ public class RandaoService {
         return BLS12_381BasicScheme.keyGen(ikm, BLS_KEY_INFO);
     }
 
+    /** BLS signature over a message using the validator's derived BLS key. */
+    public static byte[] blsSign(PQKey validatorKey, byte[] message) {
+        BigInteger sk = blsSecretScalar(validatorKey);
+        if (sk == null) {
+            return null;
+        }
+        return BLS12_381Serialization.compressG2(BLS12_381BasicScheme.sign(sk, message));
+    }
+
     /**
      * The BLS public key for a validator, derived deterministically from its
      * ML-DSA private key. Registered on-chain in the STAKE deposit.

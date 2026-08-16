@@ -90,6 +90,20 @@ public class SlotService {
     }
 
     /**
+     * The CHAIN-derived current epoch (max confirmed reward chainlength / 32).
+     * Deterministic from chain state (unlike the wall-clock {@link #getCurrentEpoch()}),
+     * used for activation/weighting comparisons so all nodes agree.
+     */
+    public static long currentChainEpoch(BlockStoreInterface store) {
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            return tip != null ? tip.getChainLength() / SLOTS_PER_EPOCH : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
      * Chain-derived epoch for an absolute wall-clock time (genesis-aligned).
      * Uses the CONFIGURED slot interval ({@code pos.slotIntervalMs}) so it stays
      * consistent with {@link #getCurrentSlot()}: when the interval is shorter
@@ -175,7 +189,7 @@ public class SlotService {
         // select no proposer for every slot of the epoch — and since snapshots
         // are only written by confirming beacons, the chain could never recover.
         if (validators == null || validators.isEmpty()) {
-            validators = store.getActiveStakeDeposits();
+            validators = store.getActiveStakeDeposits(currentChainEpoch(store));
         }
         return validators;
     }
@@ -201,7 +215,7 @@ public class SlotService {
             return;
         }
         if (store.getPosState("posvalidators", "validators_" + epoch) == null) {
-            List<StakeRecord> active = store.getActiveStakeDeposits();
+            List<StakeRecord> active = store.getActiveStakeDeposits(epoch);
             // Never freeze an EMPTY set: with no fallback the epoch two epochs
             // later would have no proposer for any slot, no beacons would
             // confirm, no new snapshot would be written — an unrecoverable halt.
@@ -257,7 +271,7 @@ public class SlotService {
 
         BigInteger totalStake = BigInteger.ZERO;
         for (StakeRecord v : validators) {
-            totalStake = totalStake.add(v.getAmount());
+            totalStake = totalStake.add(StakeService.effectiveBalance(v));
         }
         if (totalStake.signum() <= 0) return -1;
 
@@ -269,11 +283,11 @@ public class SlotService {
         BigInteger seed = new BigInteger(1, seedBytes);
 
         // Weighted selection: the proposer is chosen with probability
-        // proportional to stake, not uniformly per validator.
+        // proportional to effective (capped) stake, not uniformly per validator.
         BigInteger pick = seed.mod(totalStake);
         BigInteger acc = BigInteger.ZERO;
         for (int i = 0; i < validators.size(); i++) {
-            acc = acc.add(validators.get(i).getAmount());
+            acc = acc.add(StakeService.effectiveBalance(validators.get(i)));
             if (pick.compareTo(acc) < 0) {
                 return i;
             }
@@ -469,11 +483,14 @@ public class SlotService {
                 }
             }
             if (epochFeePool.compareTo(java.math.BigInteger.ZERO) > 0) {
-                // The split is computed over the epoch's SELECTION SNAPSHOT —
-                // the exact list beacon validation recomputes it from — so the
-                // outputs are a deterministic function of chain state.
+                // The split is computed over the epoch's SELECTION SNAPSHOT,
+                // restricted to the validators that actually attested the
+                // rewarded epoch (two epochs back — fully confirmed, matching the
+                // snapshot/RANDAO lag), so the outputs are a deterministic
+                // function of chain state.
                 for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(
-                        epochFeePool, selectionValidators(slot, store))) {
+                        epochFeePool, selectionValidators(slot, store),
+                        CasperService.votersForEpoch(epoch - 2, store))) {
                     beaconBlock.addTransaction(rewardTx);
                 }
                 log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", epochFeePool, slot);
@@ -483,6 +500,11 @@ public class SlotService {
         SlotData slotData = new SlotData(slot, epoch, proposerIdx, trunk.getHash());
         slotData.setRandaoReveal(reveal);
         slotData.setDagStateRoot(ghostService.getDagRoot(store));
+        // Inclusion commitment: commit the full attestation set the proposer
+        // includes, plus a deterministic root over it in the signed SlotData.
+        List<AttestationData> includedAttestations = casperService.getAttestationsForSlot(slot, store);
+        slotData.setAttestationRoot(casperService.computeAttestationRoot(includedAttestations));
+        slotData.setAttestations(includedAttestations);
         if (getSlotInEpoch(slot) == 0) {
             // Snapshot the fee pool that funded the reward outputs so validators
             // can recompute the exact expected payout deterministically.

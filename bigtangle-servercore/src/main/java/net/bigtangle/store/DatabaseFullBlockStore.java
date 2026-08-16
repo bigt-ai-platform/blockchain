@@ -3591,20 +3591,27 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
-	public List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException {
-		List<StakeRecord> list = new ArrayList<>();
-		try (PreparedStatement s = getConnection()
-				.prepareStatement("SELECT * FROM stake_deposits WHERE activated_epoch >= 0 "
-					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0) "
-					+ "ORDER BY pubkey ASC")) {
-			try (ResultSet rs = s.executeQuery()) {
-				while (rs.next()) list.add(setStakeRecord(rs));
-			}
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-		return list;
-	}
+ 	public List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException {
+ 		return getActiveStakeDeposits(Long.MAX_VALUE);
+ 	}
+
+ 	@Override
+ 	public List<StakeRecord> getActiveStakeDeposits(long currentEpoch) throws BlockStoreException {
+ 		List<StakeRecord> list = new ArrayList<>();
+ 		try (PreparedStatement s = getConnection()
+ 				.prepareStatement("SELECT * FROM stake_deposits WHERE activated_epoch >= 0 "
+ 					+ "AND activated_epoch <= ? "
+ 					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0) "
+ 					+ "ORDER BY pubkey ASC")) {
+ 			s.setLong(1, currentEpoch);
+ 			try (ResultSet rs = s.executeQuery()) {
+ 				while (rs.next()) list.add(setStakeRecord(rs));
+ 			}
+ 		} catch (SQLException e) {
+ 			throw new BlockStoreException(e);
+ 		}
+ 		return list;
+ 	}
 
 	@Override
 	public void updateStakeActivation(byte[] pubkey, long epoch) throws BlockStoreException {

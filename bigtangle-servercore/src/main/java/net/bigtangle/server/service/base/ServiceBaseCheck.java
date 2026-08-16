@@ -637,12 +637,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!att1.verifySignature() || !att2.verifySignature()) {
 				throw new BlockStoreException("SLASHING proof attestations are not authenticated");
 			}
-			boolean doubleVote = att1.getSlot() == att2.getSlot()
-					&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
-			boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
-					&& att2.getTargetEpoch() < att1.getTargetEpoch())
-					|| (att2.getSourceEpoch() < att1.getSourceEpoch()
-							&& att1.getTargetEpoch() < att2.getTargetEpoch());
+			boolean doubleVote = net.bigtangle.server.service.SlashingService.isDoubleVote(att1, att2);
+			boolean surround = net.bigtangle.server.service.SlashingService.isSurroundVote(att1, att2);
 			if (!doubleVote && !surround) {
 				throw new BlockStoreException("SLASHING proof does not form a double or surround vote");
 			}
@@ -883,10 +879,34 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			return verifySlotDataSignature(proposerPubkey, sd)
 					&& net.bigtangle.server.service.RandaoService.verifyReveal(
-							dep.getBlsPubkey(), sd.getSlot(), reveal);
+							dep.getBlsPubkey(), sd.getSlot(), reveal)
+					&& verifyEmbeddedAttestations(sd);
 		} catch (Exception e) {
 			return false;
 		}
+	}
+
+	/**
+	 * Inclusion integrity: the committed attestation root must equal the
+	 * deterministic root over the embedded attestations, and every embedded
+	 * attestation must carry a valid BLS signature. A proposer cannot claim a
+	 * root that does not match the attestations it actually includes.
+	 */
+	private boolean verifyEmbeddedAttestations(SlotData sd) {
+		net.bigtangle.core.Sha256Hash committed = sd.getAttestationRoot();
+		net.bigtangle.core.Sha256Hash actual = net.bigtangle.server.service.CasperService
+				.computeAttestationRoot(sd.getAttestations());
+		if (!actual.equals(committed != null ? committed : net.bigtangle.core.Sha256Hash.ZERO_HASH)) {
+			return false;
+		}
+		if (sd.getAttestations() != null) {
+			for (AttestationData a : sd.getAttestations()) {
+				if (a == null || !a.verifySignature()) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	private byte[] sha256(byte[] input) {
@@ -962,7 +982,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return snap;
 		}
 		try {
-			return store.getActiveStakeDeposits();
+			return store.getActiveStakeDeposits(Math.max(0, sourceEpoch));
 		} catch (Exception e) {
 			return new java.util.ArrayList<>();
 		}
@@ -1524,7 +1544,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		try {
 			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
-			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
+			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits(
+					net.bigtangle.server.service.SlotService.currentChainEpoch(store))) {
 				activeStake = activeStake.add(v.getAmount());
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee
@@ -1653,10 +1674,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				// without SlotData skip this (pre-PoS chains had no split rule).
 				net.bigtangle.core.SlotData rsd = slotDataOf(block);
 				if (rsd != null) {
+					long rewardEpoch = rsd.getSlot() / 32 - 2;
 					java.util.List<net.bigtangle.core.StakeRecord> rewardValidators = validatorsForEpoch(
-							rsd.getSlot() / 32 - 2, store);
+							rewardEpoch, store);
+					java.util.Set<String> rewardVoters = net.bigtangle.server.service.CasperService
+							.votersForEpoch(rewardEpoch, store);
 					java.util.Map<String, java.math.BigInteger> expectedSplit = net.bigtangle.server.service.EpochRewardService
-							.planEpochRewards(expectedFromBlocks, rewardValidators, networkParameters);
+							.planEpochRewards(expectedFromBlocks, rewardValidators, rewardVoters, networkParameters);
 					java.util.Map<String, java.math.BigInteger> actualSplit = new java.util.HashMap<>();
 					for (int i = 1; i < transactions.size(); i++) {
 						Transaction rtx = transactions.get(i);

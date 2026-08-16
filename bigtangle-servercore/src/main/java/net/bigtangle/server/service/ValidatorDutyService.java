@@ -197,7 +197,11 @@ public class ValidatorDutyService {
         boolean isProposer = false;
         BlockStoreInterface store = storeService.getStore();
         try {
-            List<StakeRecord> validators = store.getActiveStakeDeposits();
+            // The proposer index refers to the SELECTION SNAPSHOT list (two epochs
+            // back), the same list beacon validation recomputes it from — looking
+            // it up in the live set would misidentify the proposer whenever the
+            // two differ (activation/exit/top-up within the lookback window).
+            List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
             long proposerIdx = slotService.selectProposer(slot, store);
             if (proposerIdx >= 0 && proposerIdx < validators.size()) {
                 StakeRecord proposer = validators.get((int) proposerIdx);
@@ -258,10 +262,14 @@ public class ValidatorDutyService {
             att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
             att.setTargetCheckpoint(targetCheckpoint);
             att.setValidatorPubkey(validatorKey.getPubKey());
+            // BLS key (deterministically derived from the ML-DSA seed, registered
+            // in the STAKE deposit) so attestations verify against the on-chain
+            // key and can be aggregated.
+            att.setBlsPubkey(RandaoService.blsPubkey(validatorKey));
 
-            // Signature covers the FULL attestation message (slot, epoch,
-            // checkpoints, head, pubkey), so it is verifiable end-to-end.
-            byte[] sig = validatorKey.sign(att.getMessageHash()).serialize();
+            // BLS signature covers the FULL attestation message (slot, epoch,
+            // checkpoints, head, pubkeys), so it is verifiable end-to-end.
+            byte[] sig = RandaoService.blsSign(validatorKey, att.getMessageHash().getBytes());
             att.setSignature(sig);
 
             casperService.processVote(att, store);

@@ -143,10 +143,12 @@ public class StakeIT extends AbstractIntegrationTest {
         store.saveStakeDeposit(new StakeRecord(v2.getPubKey(), amount2, v2.getPubKeyHash()));
         stakeService.activateValidator(v2.getPubKey(), 0, store);
 
-        // Verify total active stake
+        // Verify total active stake = sum of EFFECTIVE (capped) balances.
+        // v2 deposited 2x MIN_STAKE, but its effective balance is capped at
+        // MAX_EFFECTIVE_BALANCE (= MIN_STAKE).
         BigInteger total = stakeService.getTotalActiveStake(store);
-        assertEquals(amount1.add(amount2), total,
-                "Total active stake should be sum of both validators");
+        assertEquals(StakeService.effectiveBalance(amount1).add(StakeService.effectiveBalance(amount2)), total,
+                "Total active stake should be the sum of effective balances");
         log.info("Total active stake: {}", total);
     }
 

@@ -3,6 +3,7 @@ package net.bigtangle.core;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.List;
 
 public class SlotData {
 
@@ -15,13 +16,22 @@ public class SlotData {
     private Sha256Hash[] attestationRoots;
     private long feePool;
     private byte[] proposerSignature;
+    /** Deterministic root over the attestations included with this beacon (inclusion commitment). */
+    private Sha256Hash attestationRoot;
+    /**
+     * The full (signed) attestations included with this beacon. Serialized as
+     * part of the SlotData JSON but NOT hashed into {@link #getMessageHash()} —
+     * {@link #attestationRoot} (which IS in the message hash) commits to them.
+     */
+    private List<AttestationData> attestations;
 
     public SlotData() {}
 
     /**
      * Canonical hash over every committed field except the proposer signature.
-     * The proposer signs this hash, so slot, epoch, proposer index, fee pool and
-     * RANDAO reveal cannot be altered without invalidating the signature.
+     * The proposer signs this hash, so slot, epoch, proposer index, fee pool,
+     * RANDAO reveal and attestation root cannot be altered without invalidating
+     * the signature.
      */
     public Sha256Hash getMessageHash() {
         try {
@@ -39,6 +49,7 @@ public class SlotData {
             }
             dos.write(parentHash != null ? parentHash.getBytes() : new byte[32]);
             dos.write(dagStateRoot != null ? dagStateRoot.getBytes() : new byte[32]);
+            dos.write(attestationRoot != null ? attestationRoot.getBytes() : new byte[32]);
             dos.flush();
             return Sha256Hash.of(baos.toByteArray());
         } catch (IOException e) {
@@ -73,4 +84,10 @@ public class SlotData {
 
     public byte[] getProposerSignature() { return proposerSignature; }
     public void setProposerSignature(byte[] proposerSignature) { this.proposerSignature = proposerSignature; }
+
+    public Sha256Hash getAttestationRoot() { return attestationRoot; }
+    public void setAttestationRoot(Sha256Hash attestationRoot) { this.attestationRoot = attestationRoot; }
+
+    public List<AttestationData> getAttestations() { return attestations; }
+    public void setAttestations(List<AttestationData> attestations) { this.attestations = attestations; }
 }

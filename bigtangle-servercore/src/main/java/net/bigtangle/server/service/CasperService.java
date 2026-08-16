@@ -2,9 +2,13 @@ package net.bigtangle.server.service;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import jakarta.annotation.PostConstruct;
@@ -123,6 +127,15 @@ public class CasperService {
 
     @PostConstruct
     public void restoreState() {
+        // Idempotent reload: rebuild in-memory state from persisted rows, never
+        // merge into stale maps (so a test/restart reset cannot leak old votes).
+        checkpoints.clear();
+        latestVotes.clear();
+        latestVoteBeacons.clear();
+        latestVoteSources.clear();
+        latestVoteTargets.clear();
+        epochVoteTargets.clear();
+        epochVoteSources.clear();
         try {
             BlockStoreInterface store = storeService.getStore();
             try {
@@ -574,6 +587,7 @@ public class CasperService {
             store.savePosState("casper", "beacon_" + vkey, att.getBeaconBlockHash().getBytes());
         }
         persistEpochVotes(vkey, store);
+        persistFullAttestation(att, store);
 
         gossipService.broadcastAttestation(att);
     }
@@ -636,46 +650,166 @@ public class CasperService {
     }
 
     /**
-     * A validator counts toward the justification denominator only if it voted
-     * within the last {@code INACTIVITY_WINDOW_EPOCHS} epochs (the inactivity
-     * leak): on a healthy network everyone votes every epoch and the denominator
-     * equals the total stake; if a large fraction of stake stops voting, its
-     * weight drains out of the denominator after the window passes, so the
-     * remaining online stake can reach 2/3 again and finality resumes.
+     * Deterministic root over an (unordered) set of attestations: sorts by
+     * message hash and hashes the concatenation. The same set yields the same
+     * root on every node — the inclusion commitment the proposer signs.
+     */
+    public static Sha256Hash computeAttestationRoot(List<AttestationData> attestations) {
+        if (attestations == null || attestations.isEmpty()) {
+            return Sha256Hash.ZERO_HASH;
+        }
+        List<AttestationData> sorted = new ArrayList<>(attestations);
+        sorted.sort(Comparator.comparing(a -> a.getMessageHash().toString()));
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        for (AttestationData a : sorted) {
+            baos.write(a.getMessageHash().getBytes(), 0, 32);
+        }
+        return Sha256Hash.of(baos.toByteArray());
+    }
+
+    /** Persists the full (signed) attestation so it can be committed into the beacon. */
+    private void persistFullAttestation(AttestationData att, BlockStoreInterface store) {
+        try {
+            byte[] json = net.bigtangle.utils.Json.jsonmapper().writeValueAsBytes(att);
+            store.savePosState("attestation",
+                    "att_" + att.getSlot() + "_" + Utils.HEX.encode(att.getValidatorPubkey()), json);
+        } catch (Exception e) {
+            log.debug("Failed to persist full attestation for slot {}", att.getSlot(), e);
+        }
+    }
+
+    /** The full (signed) attestations persisted for {@code slot} on this node. */
+    public List<AttestationData> getAttestationsForSlot(long slot, BlockStoreInterface store) {
+        List<AttestationData> list = new ArrayList<>();
+        String prefix = "att_" + slot + "_";
+        try {
+            for (Map.Entry<String, byte[]> e : store.getPosStateByService("attestation").entrySet()) {
+                if (!e.getKey().startsWith(prefix)) {
+                    continue;
+                }
+                try {
+                    AttestationData att = net.bigtangle.utils.Json.jsonmapper()
+                            .readValue(e.getValue(), AttestationData.class);
+                    if (att != null) {
+                        list.add(att);
+                    }
+                } catch (Exception ex) {
+                    // skip malformed entry
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to read attestations for slot {}", slot, e);
+        }
+        return list;
+    }
+
+    /**
+     * Bounds per-(validator, target-epoch) vote records during finality stalls:
+     * votes whose target epoch is older than this window past the evaluated
+     * epoch can no longer contribute to a live checkpoint, so they are pruned to
+     * bound memory. NOTE: this is a bookkeeping bound only — justification
+     * itself uses a pure 2/3-of-total-stake threshold, never this window.
      */
     public static final long INACTIVITY_WINDOW_EPOCHS = 8;
 
     /**
-     * The 2/3 justification threshold over the ACTIVELY VOTING stake, floored at
-     * 1/3 of the total stake: the floor stops a tiny online minority (e.g. a
-     * freshly synced node with a sparse vote view) from justifying checkpoints
-     * alone — recovering finality always requires at least ~2/9 of total stake
-     * voting for the same target. The reference epoch is derived from the vote
-     * view (never the wall clock), so nodes that have seen the same votes
-     * compute the same threshold.
+     * The inactivity leak (Ethereum): when the chain fails to finalize for more
+     * than this many epochs, validators that stopped voting have their effective
+     * weight drained so the remaining online stake regains 2/3 and finality
+     * resumes. The leak is a pure function of CHAIN state (on-chain embedded
+     * attestations + finality delay), never the node's local vote view.
      */
-    private BigInteger justificationThreshold(long targetEpoch, BigInteger totalStake,
-            BlockStoreInterface store) throws Exception {
-        // The reference epoch is the newest vote of an ACTIVE validator — never
-        // the wall clock, and never a non-active key's stale vote view.
-        long referenceEpoch = targetEpoch;
-        java.util.List<StakeRecord> active = store.getActiveStakeDeposits();
-        for (StakeRecord v : active) {
-            Long s = latestVotes.get(Utils.HEX.encode(v.getPubkey()));
-            if (s != null) {
-                referenceEpoch = Math.max(referenceEpoch, s / 32);
+    public static final long INACTIVITY_PENALTY_THRESHOLD_EPOCHS = 4;
+    /** Quadratic-drain divisor for the leak (Ethereum's inactivity score analog). */
+    public static final long INACTIVITY_LEAK_DIVISOR = 64;
+
+    /**
+     * The 2/3 justification threshold over the TOTAL active stake — Ethereum's
+     * rule. It is a pure function of chain state, never the node's local vote
+     * view, so every node that applied the same chain derives the identical
+     * threshold and cannot disagree on justification.
+     */
+    private BigInteger justificationThreshold(BigInteger totalStake) {
+        return totalStake.multiply(BigInteger.valueOf(2)).divide(BigInteger.valueOf(3));
+    }
+
+    /**
+     * Total active stake with the inactivity leak applied: when finality has
+     * stalled past the threshold, validators with no recent on-chain vote have
+     * their effective weight drained quadratically (down to ~0), so the online
+     * majority regains 2/3 of the reduced total and finality resumes. Fully
+     * deterministic — derived from chain state only.
+     */
+    private BigInteger leakedTotalStake(BlockStoreInterface store, long epoch) {
+        try {
+            List<StakeRecord> active = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+            Checkpoint fin = getLastFinalizedCheckpoint();
+            long delay = fin != null ? epoch - fin.epoch : 0;
+            if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
+                BigInteger total = BigInteger.ZERO;
+                for (StakeRecord v : active) {
+                    total = total.add(StakeService.effectiveBalance(v));
+                }
+                return total;
+            }
+            Set<String> voters = recentVoters(store, epoch);
+            BigInteger leaked = BigInteger.ZERO;
+            for (StakeRecord v : active) {
+                BigInteger eb = StakeService.effectiveBalance(v);
+                if (!voters.contains(Utils.HEX.encode(v.getPubkey()))) {
+                    BigInteger div = BigInteger.valueOf(INACTIVITY_LEAK_DIVISOR + delay * delay);
+                    eb = eb.multiply(BigInteger.valueOf(INACTIVITY_LEAK_DIVISOR)).divide(div);
+                }
+                leaked = leaked.add(eb);
+            }
+            return leaked;
+        } catch (Exception e) {
+            log.debug("Failed to compute leaked total stake", e);
+            return BigInteger.ZERO;
+        }
+    }
+
+    /** Pubkeys (hex) with a recent vote: on-chain embedded attestations first,
+     *  falling back to the gossip view pre-fork (no embedded attestations yet). */
+    private Set<String> recentVoters(BlockStoreInterface store, long epoch) {
+        Set<String> voters = new HashSet<>();
+        Map<String, AttestationData> included = collectIncludedAttestations(store);
+        if (!included.isEmpty()) {
+            for (AttestationData att : included.values()) {
+                if (att.getTargetEpoch() >= epoch - INACTIVITY_WINDOW_EPOCHS) {
+                    voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
+                }
+            }
+            return voters;
+        }
+        // Pre-fork: no on-chain attestations — use the gossip latest-vote view.
+        for (Map.Entry<String, Long> e : latestVotes.entrySet()) {
+            if (e.getValue() / SlotService.SLOTS_PER_EPOCH >= epoch - INACTIVITY_WINDOW_EPOCHS) {
+                voters.add(e.getKey());
             }
         }
-        long activeFloor = referenceEpoch - INACTIVITY_WINDOW_EPOCHS;
-        BigInteger onlineStake = BigInteger.ZERO;
-        for (StakeRecord v : active) {
-            Long lastSlot = latestVotes.get(Utils.HEX.encode(v.getPubkey()));
-            if (lastSlot != null && lastSlot / 32 >= activeFloor) {
-                onlineStake = onlineStake.add(v.getAmount());
+        return voters;
+    }
+
+    /**
+     * Pubkeys (hex) that attested the given target epoch, from on-chain embedded
+     * attestations. Returns {@code null} when the confirmed chain carries no
+     * embedded attestations yet (pre-fork), which callers treat as "reward all
+     * active validators". Deterministic post-fork — the basis for per-attestation
+     * rewards.
+     */
+    public static Set<String> votersForEpoch(long epoch, BlockStoreInterface store) {
+        Map<String, AttestationData> included = collectIncludedAttestations(store);
+        if (included.isEmpty()) {
+            return null;
+        }
+        Set<String> voters = new HashSet<>();
+        for (AttestationData att : included.values()) {
+            if (att.getTargetEpoch() == epoch) {
+                voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
             }
         }
-        BigInteger denominator = onlineStake.max(totalStake.divide(BigInteger.valueOf(3)));
-        return denominator.multiply(BigInteger.valueOf(2)).divide(BigInteger.valueOf(3));
+        return voters;
     }
 
     public void finalizeCheckpoint(long epoch, BlockStoreInterface store) throws Exception {
@@ -706,11 +840,11 @@ public class CasperService {
         ensureCheckpoint(epoch - 1, store);
         Checkpoint parent = checkpoints.get(epoch - 1);
 
-        BigInteger totalStake = stakeService.getTotalActiveStake(store);
+        BigInteger totalStake = leakedTotalStake(store, epoch);
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
             return;
         }
-        BigInteger twoThirds = justificationThreshold(epoch, totalStake, store);
+        BigInteger twoThirds = justificationThreshold(totalStake);
 
         if (!target.justified) {
             Checkpoint justifySource = getJustifiedCheckpoint();
@@ -780,22 +914,145 @@ public class CasperService {
     }
 
     /**
-     * Stake that has attested the target checkpoint — counted from the
-     * per-(validator, target-epoch) vote records, so a vote keeps counting
-     * toward its epoch's checkpoint even after the validator votes in a later
-     * epoch. When {@code requiredSource} is null the vote counts from ANY
-     * justified source (so an advancing justified checkpoint cannot orphan
-     * pending votes); when non-null only votes with exactly that source count
-     * (used for the consecutive-epoch supermajority link that finalizes the
-     * parent). Keyed by pubkey hex — never by byte[], which uses identity
-     * equality.
+     * Drops cached and persisted checkpoints at/above {@code epoch} so they are
+     * re-derived from the (possibly reorged) canonical chain. Called by the
+     * confirm/unconfirm path when beacons at/above the epoch are reverted. The
+     * genesis checkpoint (epoch 0) and any finalized checkpoint BELOW the reorg
+     * point are left intact — the fork-choice rule never lets a reorg cross a
+     * finalized checkpoint, so only non-finalized checkpoints need re-deriving.
+     */
+    public void invalidateCheckpointsFrom(long epoch, BlockStoreInterface store) {
+        checkpoints.keySet().removeIf(e -> e >= epoch);
+        if (store != null) {
+            try {
+                for (String key : store.getPosStateByService("casper").keySet()) {
+                    if (!key.startsWith("ckpt_")) {
+                        continue;
+                    }
+                    try {
+                        long e = Long.parseLong(key.substring(5));
+                        if (e >= epoch) {
+                            store.deletePosState("casper", key);
+                        }
+                    } catch (NumberFormatException ignore) {
+                        // non-numeric key — leave it
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("Failed to invalidate persisted checkpoints from epoch {}", epoch, e);
+            }
+        }
+    }
+
+    /**
+     * Stake that has attested the target checkpoint. Counted from the
+     * ON-CHAIN embedded attestations (the deterministic inclusion set) when the
+     * confirmed chain carries them; otherwise (pre-fork / bootstrap, when no
+     * beacon embeds attestations yet) from the node-local gossip vote view.
+     * When {@code requiredSource} is null the vote counts from ANY justified
+     * source; when non-null only votes with exactly that source count (used for
+     * the consecutive-epoch supermajority link that finalizes the parent).
      */
     private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
+        Map<String, AttestationData> included = collectIncludedAttestations(store);
+        if (included.isEmpty()) {
+            return votedStakeFromGossip(target, requiredSource, store);
+        }
+        return votedStakeFromChain(target, requiredSource, store, included);
+    }
+
+    /**
+     * The latest ON-CHAIN embedded attestation per (validator, target-epoch),
+     * walked from the confirmed tip back through the reward chain. This is the
+     * deterministic inclusion set every node derives identically from the
+     * confirmed chain — the source of truth for justification post-fork.
+     */
+    static Map<String, AttestationData> collectIncludedAttestations(BlockStoreInterface store) {
+        Map<String, AttestationData> latest = new HashMap<>();
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            if (tip == null) {
+                return latest;
+            }
+            Sha256Hash cursor = tip.getBlockHash();
+            Set<Sha256Hash> visited = new HashSet<>();
+            int count = 0;
+            while (cursor != null && visited.add(cursor)
+                    && count < NetworkParameters.CHAINLENGTH_CUTOFF) {
+                count++;
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    break;
+                }
+                for (AttestationData att : embeddedAttestationsOf(b)) {
+                    String key = Utils.HEX.encode(att.getValidatorPubkey()) + ":" + att.getTargetEpoch();
+                    AttestationData existing = latest.get(key);
+                    if (existing == null || att.getSlot() > existing.getSlot()) {
+                        latest.put(key, att);
+                    }
+                }
+                net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                        .parseChecked(b.getTransactions().get(0).getData());
+                cursor = ri != null ? ri.getPrevRewardHash() : null;
+            }
+        } catch (Exception e) {
+            log.debug("Failed to collect included attestations", e);
+        }
+        return latest;
+    }
+
+    /** The attestations embedded in a beacon's SlotData, or empty. */
+    static List<AttestationData> embeddedAttestationsOf(Block b) {
+        for (Transaction tx : b.getTransactions()) {
+            if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+                try {
+                    net.bigtangle.core.SlotData sd = net.bigtangle.utils.Json.jsonmapper()
+                            .readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+                    if (sd != null && sd.getAttestations() != null) {
+                        return sd.getAttestations();
+                    }
+                } catch (Exception e) {
+                    return List.of();
+                }
+            }
+        }
+        return List.of();
+    }
+
+    private BigInteger votedStakeFromChain(Checkpoint target, Sha256Hash requiredSource,
+            BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
+        List<StakeRecord> validators = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
-            stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), v.getAmount());
+            stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));
+        }
+        BigInteger voted = BigInteger.ZERO;
+        for (AttestationData att : included.values()) {
+            if (att.getTargetEpoch() != target.epoch) {
+                continue;
+            }
+            if (att.getTargetCheckpoint() == null || !att.getTargetCheckpoint().equals(target.blockHash)) {
+                continue;
+            }
+            if (requiredSource != null) {
+                if (!requiredSource.equals(att.getSourceCheckpoint())) {
+                    continue;
+                }
+            } else if (att.getSourceCheckpoint() == null || !isJustifiedCheckpointHash(att.getSourceCheckpoint())) {
+                continue;
+            }
+            voted = voted.add(stakeByPubkey.getOrDefault(Utils.HEX.encode(att.getValidatorPubkey()), BigInteger.ZERO));
+        }
+        return voted;
+    }
+
+    private BigInteger votedStakeFromGossip(Checkpoint target, Sha256Hash requiredSource,
+            BlockStoreInterface store) throws Exception {
+        List<StakeRecord> validators = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+        Map<String, BigInteger> stakeByPubkey = new HashMap<>();
+        for (StakeRecord v : validators) {
+            stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));
         }
 
         BigInteger voted = BigInteger.ZERO;

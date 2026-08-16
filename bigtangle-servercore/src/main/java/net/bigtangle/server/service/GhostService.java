@@ -1,6 +1,7 @@
 package net.bigtangle.server.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,8 +16,14 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.TXReward;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
+import net.bigtangle.core.Utils;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.server.service.StoreService;
@@ -47,6 +54,12 @@ public class GhostService {
     @Lazy
     @Autowired
     private net.bigtangle.server.service.CasperService casperService;
+
+    // @Lazy breaks the GhostService <-> SlotService cycle (SlotService uses
+    // GhostService for fork choice; the proposer boost reads the slot/proposer).
+    @Lazy
+    @Autowired
+    private SlotService slotService;
 
     @PostConstruct
     public void restoreState() {
@@ -121,6 +134,15 @@ public class GhostService {
         if (excludeSubtree != null) {
             collectSubtree(excludeSubtree, excluded, store);
         }
+        // Chain-first fork-choice weight: once beacons embed attestations, the
+        // weight is a deterministic function of the confirmed chain (LMD head
+        // votes). Pre-fork (no embedded attestations) fall back to the local
+        // gossip vote view.
+        Map<Sha256Hash, Long> weights = chainForkChoiceVotes(store);
+        if (weights.isEmpty()) {
+            weights = forkChoiceVotes;
+        }
+        weights = applyProposerBoost(weights, store);
         Sha256Hash head = root;
         while (true) {
             List<Sha256Hash> children = getChildren(head, store);
@@ -131,7 +153,7 @@ public class GhostService {
             long bestWeight = -1;
 
             for (Sha256Hash child : children) {
-                long weight = forkChoiceVotes.getOrDefault(child, 0L);
+                long weight = weights.getOrDefault(child, 0L);
                 if (weight > bestWeight) {
                     bestWeight = weight;
                     bestChild = child;
@@ -142,6 +164,112 @@ public class GhostService {
             head = bestChild;
         }
         return head;
+    }
+
+    /**
+     * Deterministic LMD-GHOST head-vote weight derived from the ON-CHAIN
+     * embedded attestations: each validator's LATEST embedded head vote (by
+     * slot) contributes its effective stake to the voted block. Empty when the
+     * confirmed chain carries no embedded attestations (pre-fork).
+     */
+    private Map<Sha256Hash, Long> chainForkChoiceVotes(BlockStoreInterface store) {
+        Map<String, AttestationData> latestHead = new HashMap<>();
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            if (tip == null) {
+                return new HashMap<>();
+            }
+            Sha256Hash cursor = tip.getBlockHash();
+            Set<Sha256Hash> visited = new HashSet<>();
+            int count = 0;
+            while (cursor != null && visited.add(cursor)
+                    && count < NetworkParameters.CHAINLENGTH_CUTOFF) {
+                count++;
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    break;
+                }
+                for (AttestationData att : embeddedAttestationsOf(b)) {
+                    String pk = Utils.HEX.encode(att.getValidatorPubkey());
+                    AttestationData existing = latestHead.get(pk);
+                    if (existing == null || att.getSlot() > existing.getSlot()) {
+                        latestHead.put(pk, att);
+                    }
+                }
+                RewardInfo ri = new RewardInfo().parseChecked(b.getTransactions().get(0).getData());
+                cursor = ri != null ? ri.getPrevRewardHash() : null;
+            }
+        } catch (Exception e) {
+            log.debug("Failed to derive chain fork-choice votes", e);
+        }
+        Map<Sha256Hash, Long> weights = new HashMap<>();
+        for (AttestationData att : latestHead.values()) {
+            if (att.getBeaconBlockHash() == null) {
+                continue;
+            }
+            long w = 0;
+            try {
+                w = stakeService.getEffectiveStake(att.getValidatorPubkey(), store);
+            } catch (Exception e) {
+                w = 0;
+            }
+            if (w <= 0) {
+                continue;
+            }
+            weights.merge(att.getBeaconBlockHash(), w, Long::sum);
+        }
+        return weights;
+    }
+
+    /** The attestations embedded in a beacon's SlotData, or empty. */
+    private List<AttestationData> embeddedAttestationsOf(Block b) {
+        for (Transaction tx : b.getTransactions()) {
+            if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
+                try {
+                    net.bigtangle.core.SlotData sd = net.bigtangle.utils.Json.jsonmapper()
+                            .readValue(tx.getData(), net.bigtangle.core.SlotData.class);
+                    if (sd != null && sd.getAttestations() != null) {
+                        return sd.getAttestations();
+                    }
+                } catch (Exception e) {
+                    return List.of();
+                }
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Proposer boost (Ethereum PROPOSER_SCORE_BOOST): adds 40% of total active
+     * stake to the current slot proposer's beacon so a just-proposed block is
+     * not cheaply reorged. Local fork-choice defense, not a consensus rule.
+     */
+    private Map<Sha256Hash, Long> applyProposerBoost(Map<Sha256Hash, Long> weights, BlockStoreInterface store) {
+        try {
+            long slot = slotService.getCurrentSlot();
+            byte[] existing = store.getPosState("pos", "slotsight_" + slot);
+            if (existing == null) {
+                return weights;
+            }
+            String s = new String(existing, java.nio.charset.StandardCharsets.UTF_8);
+            String[] parts = s.split(",");
+            if (parts.length == 0 || parts[0].isEmpty()) {
+                return weights;
+            }
+            Sha256Hash beacon = Sha256Hash.wrap(Utils.HEX.decode(parts[0]));
+            java.math.BigInteger total = stakeService.getTotalActiveStake(store);
+            long boost = total.multiply(java.math.BigInteger.valueOf(40))
+                    .divide(java.math.BigInteger.valueOf(100)).longValue();
+            if (boost <= 0) {
+                return weights;
+            }
+            Map<Sha256Hash, Long> boosted = new HashMap<>(weights);
+            boosted.merge(beacon, boost, Long::sum);
+            return boosted;
+        } catch (Exception e) {
+            log.debug("Proposer boost skipped: {}", e.getMessage());
+            return weights;
+        }
     }
 
     public List<Sha256Hash> getTwoTips(BlockStoreInterface store) throws Exception {

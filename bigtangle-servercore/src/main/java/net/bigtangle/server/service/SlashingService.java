@@ -180,9 +180,42 @@ public class SlashingService {
     }
 
     /**
+     * Ethereum's two slashable double-vote forms:
+     * (a) same slot, two different heads (beacon block hashes), and
+     * (b) same target epoch, two different target checkpoints (regardless of slot).
+     */
+    public static boolean isDoubleVote(AttestationData a, AttestationData b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getSlot() == b.getSlot()
+                && a.getBeaconBlockHash() != null && b.getBeaconBlockHash() != null
+                && !a.getBeaconBlockHash().equals(b.getBeaconBlockHash())) {
+            return true;
+        }
+        return a.getTargetEpoch() >= 0 && a.getTargetEpoch() == b.getTargetEpoch()
+                && a.getTargetCheckpoint() != null && b.getTargetCheckpoint() != null
+                && !a.getTargetCheckpoint().equals(b.getTargetCheckpoint());
+    }
+
+    /** Ethereum's surround-vote slashable pattern (strict epoch containment). */
+    public static boolean isSurroundVote(AttestationData a, AttestationData b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getSourceEpoch() < 0 || a.getTargetEpoch() < 0
+                || b.getSourceEpoch() < 0 || b.getTargetEpoch() < 0) {
+            return false;
+        }
+        return (a.getSourceEpoch() < b.getSourceEpoch() && b.getTargetEpoch() < a.getTargetEpoch())
+                || (b.getSourceEpoch() < a.getSourceEpoch() && a.getTargetEpoch() < b.getTargetEpoch());
+    }
+
+    /**
      * Detects a double vote: the same validator attesting two different heads
-     * for the same slot. Records the vote and returns the conflicting prior
-     * attestation (the evidence for a slashing block), or null if no double.
+     * for the same slot, or two different target checkpoints for the same target
+     * epoch. Records the vote and returns the conflicting prior attestation (the
+     * evidence for a slashing block), or null if no double.
      */
     public AttestationData checkDoubleVote(AttestationData att) {
         if (att.getValidatorPubkey() == null) {
@@ -193,8 +226,7 @@ public class SlashingService {
         if (history != null) {
             synchronized (history) {
                 for (AttestationData existing : history) {
-                    if (existing.getSlot() == att.getSlot()
-                            && !existing.getBeaconBlockHash().equals(att.getBeaconBlockHash())) {
+                    if (isDoubleVote(existing, att)) {
                         log.warn("SLASHING: double vote by pubkey={} at slot={}",
                                 key, att.getSlot());
                         recordVote(att);
@@ -222,15 +254,7 @@ public class SlashingService {
         if (history != null) {
             synchronized (history) {
                 for (AttestationData prev : history) {
-                    if (prev.getSourceEpoch() < 0 || prev.getTargetEpoch() < 0
-                            || att.getSourceEpoch() < 0 || att.getTargetEpoch() < 0) {
-                        continue;
-                    }
-                    boolean surrounds = prev.getSourceEpoch() < att.getSourceEpoch()
-                            && att.getTargetEpoch() < prev.getTargetEpoch();
-                    boolean surrounded = att.getSourceEpoch() < prev.getSourceEpoch()
-                            && prev.getTargetEpoch() < att.getTargetEpoch();
-                    if (surrounds || surrounded) {
+                    if (isSurroundVote(prev, att)) {
                         log.warn("SLASHING: surround vote by pubkey={}", key);
                         recordVote(att);
                         return prev;

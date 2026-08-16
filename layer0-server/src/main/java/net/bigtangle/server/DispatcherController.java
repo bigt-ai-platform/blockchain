@@ -292,12 +292,8 @@ public class DispatcherController extends BaseDispatcherController {
 						net.bigtangle.response.ErrorResponse.create(403), watch, reqCmdName);
 				return true;
 			}
-			boolean doubleVote = att1.getSlot() == att2.getSlot()
-					&& !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
-			boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
-					&& att2.getTargetEpoch() < att1.getTargetEpoch())
-					|| (att2.getSourceEpoch() < att1.getSourceEpoch()
-							&& att1.getTargetEpoch() < att2.getTargetEpoch());
+			boolean doubleVote = net.bigtangle.server.service.SlashingService.isDoubleVote(att1, att2);
+			boolean surround = net.bigtangle.server.service.SlashingService.isSurroundVote(att1, att2);
 			if (!doubleVote && !surround) {
 				this.outPrintJSONString(httpServletResponse,
 						net.bigtangle.response.ErrorResponse.create(400), watch, reqCmdName);

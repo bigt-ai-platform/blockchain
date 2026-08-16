@@ -151,7 +151,9 @@ public class PosFinalityBenchmark extends AbstractIntegrationTest {
                 att.setEpoch(epoch);
                 att.setBeaconBlockHash(block.getHash());
                 att.setValidatorPubkey(attester.getPubKey());
-                att.setSignature(attester.sign(block.getHash()).serialize());
+                att.setBlsPubkey(net.bigtangle.server.service.RandaoService.blsPubkey(attester));
+                att.setSignature(net.bigtangle.server.service.RandaoService.blsSign(attester,
+                        att.getMessageHash().getBytes()));
                 casperService.processVote(att, store);
                 attestations.add(att);
             }

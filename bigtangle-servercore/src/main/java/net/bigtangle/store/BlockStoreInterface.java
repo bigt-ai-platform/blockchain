@@ -607,6 +607,13 @@ public interface BlockStoreInterface {
 
 	List<StakeRecord> getActiveStakeDeposits() throws BlockStoreException;
 
+	/**
+	 * Active validators whose activation epoch is {@code <= currentEpoch} — the
+	 * selectable/weighted set (activation delay: a deposit is only active once
+	 * its future activation epoch has been reached on the chain).
+	 */
+	List<StakeRecord> getActiveStakeDeposits(long currentEpoch) throws BlockStoreException;
+
 	List<StakeRecord> getAllStakeDeposits() throws BlockStoreException;
 
 	void updateStakeActivation(byte[] pubkey, long epoch) throws BlockStoreException;

@@ -45,7 +45,38 @@ public class StakeService {
     private static final Logger log = LoggerFactory.getLogger(StakeService.class);
 
     public static final BigInteger MIN_STAKE = BigInteger.valueOf(32_000_000L);
+    /**
+     * Cap on the EFFECTIVE balance used for proposer selection, attestation
+     * weight, rewards and the justification denominator. Bonds the influence of
+     * any single validator (Ethereum's MAX_EFFECTIVE_BALANCE = 32 ETH analog;
+     * here 32 BIG). The full bonded amount stays on-chain; only its effective
+     * weight is capped.
+     */
+    public static final BigInteger MAX_EFFECTIVE_BALANCE = MIN_STAKE;
     public static final long WITHDRAWAL_DELAY_EPOCHS = 256;
+    /** Activation delay (Ethereum MAX_SEED_LOOKAHEAD): a deposit becomes active
+     *  this many epochs + 1 after it is registered. */
+    public static final long MAX_SEED_LOOKAHEAD = 4;
+    /** Minimum validators entering/exiting per epoch (Ethereum churn floor). */
+    public static final int MIN_PER_EPOCH_CHURN_LIMIT = 4;
+    /** Ethereum CHURN_LIMIT_QUOTIENT. */
+    public static final int CHURN_LIMIT_QUOTIENT = 65536;
+
+    /** Validators that may enter/exit per epoch (bounds validator-set churn). */
+    public static long churnLimit(long activeCount) {
+        return Math.max(MIN_PER_EPOCH_CHURN_LIMIT, activeCount / CHURN_LIMIT_QUOTIENT);
+    }
+
+    /** Deposits whose activation epoch equals {@code epoch} (deterministic in chain order). */
+    private long countActivatingAt(long epoch, BlockStoreInterface store) throws Exception {
+        return store.getAllStakeDeposits().stream()
+                .filter(s -> s.getActivatedEpoch() == epoch)
+                .count();
+    }
+    /** Planned graded-slash penalty fraction (1/32, Ethereum's minimum). The
+     *  refund-mint lifecycle is not yet wired in — see plan/pos-remaining-impl.md
+     *  item 2.3. Current behavior is full confiscation (see confiscateBond). */
+    public static final int SLASH_PENALTY_DIVISOR = 32;
     public static final String STAKE_DATA_CLASS = "StakeDeposit";
     public static final String SLASHING_DATA_CLASS = "SlashingProof";
     public static final String EXIT_DATA_CLASS = "ExitRequest";
@@ -69,7 +100,19 @@ public class StakeService {
     public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
-        return stake.getAmount().longValue();
+        if (stake.getActivatedEpoch() > SlotService.currentChainEpoch(store)) return 0L; // not yet active
+        return effectiveBalance(stake.getAmount()).longValue();
+    }
+
+    /** Capped effective balance for a stake amount (bounded influence). */
+    public static BigInteger effectiveBalance(BigInteger amount) {
+        if (amount == null || amount.signum() <= 0) return BigInteger.ZERO;
+        return amount.min(MAX_EFFECTIVE_BALANCE);
+    }
+
+    /** Capped effective balance of a validator record. */
+    public static BigInteger effectiveBalance(StakeRecord stake) {
+        return stake == null ? BigInteger.ZERO : effectiveBalance(stake.getAmount());
     }
 
     /**
@@ -247,7 +290,16 @@ public class StakeService {
             }
         }
 
-        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs);
+        // Activation delay: the deposit only becomes active (selectable/weighted)
+        // MAX_SEED_LOOKAHEAD + 1 epochs after it is registered, so a new deposit
+        // is visible to every node before it can influence consensus. Churn limit:
+        // at most churnLimit deposits activate in the same epoch.
+        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs)
+                + MAX_SEED_LOOKAHEAD + 1;
+        long churn = churnLimit(store.getActiveStakeDeposits().size());
+        while (countActivatingAt(activatedEpoch, store) >= churn) {
+            activatedEpoch++;
+        }
         StakeRecord existing = store.getStakeDeposit(pubkey);
         if (existing != null && existing.getBlockHash() != null
                 && existing.getBlockHash().equals(block.getHash())) {
@@ -538,12 +590,8 @@ public class StakeService {
                 || !att1.verifySignature() || !att2.verifySignature()) {
             return; // forged / unauthenticated slashing proof — ignore
         }
-        boolean doubleVote = att1.getSlot() == att2.getSlot()
-                && !att1.getBeaconBlockHash().equals(att2.getBeaconBlockHash());
-        boolean surround = (att1.getSourceEpoch() < att2.getSourceEpoch()
-                && att2.getTargetEpoch() < att1.getTargetEpoch())
-                || (att2.getSourceEpoch() < att1.getSourceEpoch()
-                        && att1.getTargetEpoch() < att2.getTargetEpoch());
+        boolean doubleVote = SlashingService.isDoubleVote(att1, att2);
+        boolean surround = SlashingService.isSurroundVote(att1, att2);
         if (!doubleVote && !surround) {
             return;
         }
@@ -728,8 +776,8 @@ public class StakeService {
     }
 
     public BigInteger getTotalActiveStake(BlockStoreInterface store) throws Exception {
-        return store.getActiveStakeDeposits().stream()
-                .map(StakeRecord::getAmount)
+        return store.getActiveStakeDeposits(SlotService.currentChainEpoch(store)).stream()
+                .map(StakeService::effectiveBalance)
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
 
@@ -937,14 +985,31 @@ public class StakeService {
 
     public void processWithdrawals(long currentEpoch, BlockStoreInterface store) throws Exception {
         List<StakeRecord> allDeposits = store.getAllStakeDeposits();
+        // Exit queue: at most churnLimit validators withdraw per epoch (bounds
+        // validator-set churn). Withdrawable deposits are processed in a
+        // deterministic order (withdrawable epoch, then pubkey).
+        long churn = churnLimit(allDeposits.size());
+        List<StakeRecord> withdrawable = allDeposits.stream()
+                .filter(s -> s.getWithdrawableEpoch() >= 0 && s.getWithdrawableEpoch() <= currentEpoch)
+                .sorted(java.util.Comparator
+                        .comparingLong((StakeRecord s) -> s.getWithdrawableEpoch())
+                        .thenComparing(s -> Utils.HEX.encode(s.getPubkey())))
+                .collect(java.util.stream.Collectors.toList());
+        int released = 0;
+        for (StakeRecord stake : withdrawable) {
+            if (released >= churn) {
+                break;
+            }
+            // The bonded output is freed: deleting the record makes it
+            // spendable again (the bond spend check no longer sees it).
+            store.deleteStakeDeposit(stake.getPubkey());
+            released++;
+            log.info("Stake withdrawal processed: pubkey={}, amount={}",
+                    Utils.HEX.encode(stake.getPubkey()), stake.getAmount());
+        }
         for (StakeRecord stake : allDeposits) {
             if (stake.getWithdrawableEpoch() >= 0 && stake.getWithdrawableEpoch() <= currentEpoch) {
-                // The bonded output is freed: deleting the record makes it
-                // spendable again (the bond spend check no longer sees it).
-                store.deleteStakeDeposit(stake.getPubkey());
-                log.info("Stake withdrawal processed: pubkey={}, amount={}",
-                        Utils.HEX.encode(stake.getPubkey()), stake.getAmount());
-                continue;
+                continue; // already handled above (or deferred by the churn cap)
             }
             // Reconciliation for the save-time application gap: a deposit whose
             // STAKE block was saved but never gained confirmation (orphaned,

@@ -907,21 +907,37 @@ public class BlockStoreService {
 			// RANDAO: XOR each unconfirmed beacon's reveal back out of the mix
 			// (XOR is its own inverse), reverting the confirmation-time fold so
 			// the mix stays a pure function of the confirmed chain.
-			net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
-			java.util.Set<Long> touchedUnconfirmEpochs = new java.util.HashSet<>();
-			if (randaoService != null) {
-				for (BlockWrap b : blocksToUnconfirm) {
-					Block blk = b.getBlock();
-					if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
-						if (epochs != null) {
-							touchedUnconfirmEpochs.addAll(epochs);
-						}
+		net.bigtangle.server.service.RandaoService randaoService = randaoServiceProvider.getIfAvailable();
+		java.util.Set<Long> touchedUnconfirmEpochs = new java.util.HashSet<>();
+		if (randaoService != null) {
+			for (BlockWrap b : blocksToUnconfirm) {
+				Block blk = b.getBlock();
+				if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+					java.util.Set<Long> epochs = applyRevealFromBeacon(randaoService, blk, blockStore);
+					if (epochs != null) {
+						touchedUnconfirmEpochs.addAll(epochs);
 					}
 				}
 			}
+		}
 
-			blockStore.commitDatabaseBatchWrite();
+		// Casper: invalidate cached/persisted checkpoints at/above the epoch of
+		// each unconfirmed beacon so they re-derive from the reorged chain (a
+		// checkpoint cached once must not pin a now-reverted boundary hash).
+		net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+		if (casper != null) {
+			for (BlockWrap b : blocksToUnconfirm) {
+				Block blk = b.getBlock();
+				if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+					net.bigtangle.core.SlotData sd = slotDataOf(blk);
+					if (sd != null) {
+						casper.invalidateCheckpointsFrom(sd.getSlot() / 32, blockStore);
+					}
+				}
+			}
+		}
+
+		blockStore.commitDatabaseBatchWrite();
 			if (randaoService != null) {
 				for (Long epoch : touchedUnconfirmEpochs) {
 					randaoService.reloadMix(epoch);

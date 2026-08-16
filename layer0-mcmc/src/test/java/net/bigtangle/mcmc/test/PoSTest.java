@@ -78,10 +78,20 @@ public class PoSTest extends AbstractIntegrationTest {
     @BeforeEach
     public void setUp() throws Exception {
         super.setUp();
+        // Reset the shared Casper in-memory checkpoint/vote state (the Spring
+        // bean outlives individual tests; restoreState re-derives genesis from
+        // the freshly reset store).
+        casperService.restoreState();
         mcmcService.update(store);
         mcmcService.calcNewBlockPrototype(store);
 
         validatorKey = PQKey.createNew();
+    }
+
+    /** Signs an attestation with the validator's derived BLS key (on-chain scheme). */
+    private void signAttestation(PQKey key, AttestationData att) {
+        att.setBlsPubkey(net.bigtangle.server.service.RandaoService.blsPubkey(key));
+        att.setSignature(net.bigtangle.server.service.RandaoService.blsSign(key, att.getMessageHash().getBytes()));
     }
 
     // ========= Slot Tests =========
@@ -164,14 +174,28 @@ public class PoSTest extends AbstractIntegrationTest {
         store.saveStakeDeposit(new StakeRecord(v2.getPubKey(),
                 StakeService.MIN_STAKE, v2.getPubKeyHash()));
 
-        stakeService.activateValidator(v1.getPubKey(), 1, store);
-        stakeService.activateValidator(v2.getPubKey(), 1, store);
+        stakeService.activateValidator(v1.getPubKey(), 0, store);
+        stakeService.activateValidator(v2.getPubKey(), 0, store);
 
         List<StakeRecord> active = store.getActiveStakeDeposits();
         assertEquals(2, active.size());
 
         BigInteger total = stakeService.getTotalActiveStake(store);
         assertEquals(StakeService.MIN_STAKE.multiply(BigInteger.valueOf(2)), total);
+    }
+
+    @Test
+    public void testActivationDelayExcludesFutureEpochs() throws Exception {
+        // A validator whose activation epoch is in the future must NOT be
+        // weighted yet (MAX_SEED_LOOKAHEAD delay).
+        PQKey v = PQKey.createNew();
+        store.saveStakeDeposit(new StakeRecord(v.getPubKey(), StakeService.MIN_STAKE, v.getPubKeyHash()));
+        stakeService.activateValidator(v.getPubKey(), 5, store); // future activation
+
+        assertEquals(0L, stakeService.getEffectiveStake(v.getPubKey(), store),
+                "not yet active (activation epoch in the future)");
+        assertEquals(BigInteger.ZERO, stakeService.getTotalActiveStake(store),
+                "no active stake while the only validator is not yet activated");
     }
 
     @Test
@@ -339,7 +363,7 @@ public class PoSTest extends AbstractIntegrationTest {
         att.setTargetEpoch(slot / 32);
         att.setBeaconBlockHash(Sha256Hash.of("beacon1".getBytes()));
         att.setValidatorPubkey(validatorKey.getPubKey());
-        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+        signAttestation(validatorKey, att);
 
         store.saveStakeDeposit(new StakeRecord(
                 validatorKey.getPubKey(), StakeService.MIN_STAKE,
@@ -420,7 +444,7 @@ public class PoSTest extends AbstractIntegrationTest {
             att.setTargetEpoch(epoch);
             att.setBeaconBlockHash(Sha256Hash.of("beacon-short-slot".getBytes()));
             att.setValidatorPubkey(validatorKey.getPubKey());
-            att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+            signAttestation(validatorKey, att);
 
             store.saveStakeDeposit(new StakeRecord(
                     validatorKey.getPubKey(), StakeService.MIN_STAKE,
@@ -443,7 +467,7 @@ public class PoSTest extends AbstractIntegrationTest {
             farFuture.setTargetEpoch(epoch + 1000);
             farFuture.setBeaconBlockHash(Sha256Hash.of("beacon-far-future".getBytes()));
             farFuture.setValidatorPubkey(validatorKey.getPubKey());
-            farFuture.setSignature(validatorKey.sign(farFuture.getMessageHash()).serialize());
+            signAttestation(validatorKey, farFuture);
 
             casperService.processVote(farFuture, store);
 
@@ -484,7 +508,7 @@ public class PoSTest extends AbstractIntegrationTest {
         att.setSourceCheckpoint(source.getBlockHash());
         att.setTargetCheckpoint(c1);
         att.setValidatorPubkey(validatorKey.getPubKey());
-        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+        signAttestation(validatorKey, att);
         casperService.processVote(att, store);
 
         casperService.finalizeCheckpoint(1, store);
@@ -626,13 +650,13 @@ public class PoSTest extends AbstractIntegrationTest {
         att1.setSlot(5);
         att1.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
         att1.setValidatorPubkey(validatorKey.getPubKey());
-        att1.setSignature(validatorKey.sign(att1.getMessageHash()).serialize());
+        signAttestation(validatorKey, att1);
 
         AttestationData att2 = new AttestationData();
         att2.setSlot(5);
         att2.setBeaconBlockHash(Sha256Hash.of("headB".getBytes()));
         att2.setValidatorPubkey(validatorKey.getPubKey());
-        att2.setSignature(validatorKey.sign(att2.getMessageHash()).serialize());
+        signAttestation(validatorKey, att2);
 
         stakeService.submitSlashing(att1, att2, store);
 
@@ -942,7 +966,7 @@ public class PoSTest extends AbstractIntegrationTest {
                 new StakeRecord(v3.getPubKey(), BigInteger.valueOf(300), null));
 
         Map<String, BigInteger> plan = net.bigtangle.server.service.EpochRewardService
-                .planEpochRewards(BigInteger.valueOf(1000), vals, networkParameters);
+                .planEpochRewards(BigInteger.valueOf(1000), vals, null, networkParameters);
 
         assertEquals(BigInteger.valueOf(166), plan.get(rewardAddress(v1)), "pro-rata share 100/600");
         assertEquals(BigInteger.valueOf(333), plan.get(rewardAddress(v2)), "pro-rata share 200/600");
@@ -954,7 +978,7 @@ public class PoSTest extends AbstractIntegrationTest {
 
         // Determinism: same inputs -> identical plan (proposer and validators agree).
         assertEquals(plan, net.bigtangle.server.service.EpochRewardService
-                .planEpochRewards(BigInteger.valueOf(1000), vals, networkParameters));
+                .planEpochRewards(BigInteger.valueOf(1000), vals, null, networkParameters));
 
         // Theft detection: moving a single unit to another validator breaks equality.
         Map<String, BigInteger> stolen = new java.util.LinkedHashMap<>(plan);
@@ -964,9 +988,18 @@ public class PoSTest extends AbstractIntegrationTest {
 
         // Empty/zero cases.
         assertTrue(net.bigtangle.server.service.EpochRewardService
-                .planEpochRewards(BigInteger.ZERO, vals, networkParameters).isEmpty());
+                .planEpochRewards(BigInteger.ZERO, vals, null, networkParameters).isEmpty());
         assertTrue(net.bigtangle.server.service.EpochRewardService
-                .planEpochRewards(BigInteger.valueOf(1000), List.of(), networkParameters).isEmpty());
+                .planEpochRewards(BigInteger.valueOf(1000), List.of(), null, networkParameters).isEmpty());
+
+        // Voter filter: only validators in the voters set are paid.
+        java.util.Set<String> voters = java.util.Set.of(Utils.HEX.encode(v1.getPubKey()));
+        Map<String, BigInteger> filtered = net.bigtangle.server.service.EpochRewardService
+                .planEpochRewards(BigInteger.valueOf(1000), vals, voters, networkParameters);
+        assertEquals(1, filtered.size(), "only the voting validator is rewarded");
+        assertEquals(BigInteger.valueOf(1000), filtered.get(rewardAddress(v1)),
+                "the sole voter receives the entire pool");
+        assertNull(filtered.get(rewardAddress(v2)), "non-voter receives nothing");
     }
 
     // ========= Finality accounting tests =========
@@ -982,7 +1015,7 @@ public class PoSTest extends AbstractIntegrationTest {
         att.setSourceCheckpoint(source);
         att.setTargetCheckpoint(target);
         att.setValidatorPubkey(validatorKey.getPubKey());
-        att.setSignature(validatorKey.sign(att.getMessageHash()).serialize());
+        signAttestation(validatorKey, att);
         return att;
     }
 
@@ -1075,7 +1108,7 @@ public class PoSTest extends AbstractIntegrationTest {
         // epoch field inconsistent with the slot
         AttestationData bad1 = signedVote(slot, 0, slot / 32, source.getBlockHash(), target);
         bad1.setEpoch(slot / 32 + 7);
-        bad1.setSignature(validatorKey.sign(bad1.getMessageHash()).serialize());
+        signAttestation(validatorKey, bad1);
         casperService.processVote(bad1, store);
         assertTrue(store.getSummedAttestationVotes().isEmpty(),
                 "epoch-inconsistent vote must be rejected");
@@ -1282,7 +1315,7 @@ public class PoSTest extends AbstractIntegrationTest {
         a1.setSlot(5);
         a1.setValidatorPubkey(validatorKey.getPubKey());
         a1.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
-        a1.setSignature(validatorKey.sign(a1.getMessageHash()).serialize());
+        signAttestation(validatorKey, a1);
 
         slashingService.checkDoubleVote(a1);
 
@@ -1293,7 +1326,7 @@ public class PoSTest extends AbstractIntegrationTest {
         a2.setSlot(5);
         a2.setValidatorPubkey(validatorKey.getPubKey());
         a2.setBeaconBlockHash(Sha256Hash.of("headB".getBytes()));
-        a2.setSignature(validatorKey.sign(a2.getMessageHash()).serialize());
+        signAttestation(validatorKey, a2);
 
         assertNotNull(slashingService.checkDoubleVote(a2),
                 "a double vote is still detected after a restart");
@@ -1318,15 +1351,17 @@ public class PoSTest extends AbstractIntegrationTest {
         att.setSourceCheckpoint(source);
         att.setTargetCheckpoint(target);
         att.setValidatorPubkey(key.getPubKey());
-        att.setSignature(key.sign(att.getMessageHash()).serialize());
+        signAttestation(key, att);
         return att;
     }
 
     @Test
-    public void testInactivityLeakRestoresFinality() throws Exception {
-        // Four validators with equal stake; 2 going offline must first stall
-        // (while their votes are fresh) and then stop blocking justification
-        // once the inactivity window slides past their last vote.
+    public void testFinalityRequiresTwoThirdsOfTotalStake() throws Exception {
+        // Four validators with equal stake. Justification requires 2/3 of the
+        // TOTAL active stake (Ethereum's rule), so once half the validators go
+        // offline the remaining half can never justify — regardless of how many
+        // epochs it keeps voting. (A real inactivity leak, which PENALIZES the
+        // offline validators, is a separate follow-up.)
         PQKey v1 = PQKey.createNew();
         PQKey v2 = PQKey.createNew();
         PQKey v3 = PQKey.createNew();
@@ -1337,8 +1372,6 @@ public class PoSTest extends AbstractIntegrationTest {
 
         CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
         assertNotNull(base);
-        // Contiguous epochs: e1's parent must exist (and be finalized) for e1
-        // to finalize — a gap would leave justified-only checkpoints behind.
         long e1 = base.getEpoch() + 1;
         long e2 = e1 + 1;
         CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
@@ -1357,18 +1390,18 @@ public class PoSTest extends AbstractIntegrationTest {
         assertTrue(casperService.isCheckpointJustified(e1), "all validators voting justifies");
         assertTrue(casperService.isCheckpointFinalized(e1));
 
-        // v3 + v4 go offline: only half the stake votes for e2. While their
-        // e1 votes are still inside the activity window, this must STALL.
+        // v3 + v4 go offline: only half the stake votes for e2. This must STALL.
         casperService.processVote(signedVoteFor(v1, e2 * 32, e1, e2, cp1.getBlockHash(),
                 cp2.getBlockHash()), store);
         casperService.processVote(signedVoteFor(v2, e2 * 32, e1, e2, cp1.getBlockHash(),
                 cp2.getBlockHash()), store);
         casperService.finalizeCheckpoint(e2, store);
         assertFalse(casperService.isCheckpointJustified(e2),
-                "half the stake cannot justify while the offline half is still counted");
+                "half the stake cannot justify");
 
-        // The online validators keep voting for INACTIVITY_WINDOW_EPOCHS+1
-        // epochs; the offline validators then fall out of the denominator.
+        // The online validators keep voting for many epochs. With a pure 2/3-of-
+        // total threshold the offline half never falls out of the denominator,
+        // so justification must stay stalled.
         for (long e = e2 + 1; e <= e2 + CasperService.INACTIVITY_WINDOW_EPOCHS + 1; e++) {
             casperService.processVote(signedVoteFor(v1, e * 32, e1, e, cp1.getBlockHash(),
                     Sha256Hash.of(("leakT1-" + e).getBytes())), store);
@@ -1376,9 +1409,57 @@ public class PoSTest extends AbstractIntegrationTest {
                     Sha256Hash.of(("leakT2-" + e).getBytes())), store);
         }
         casperService.finalizeCheckpoint(e2, store);
-        assertTrue(casperService.isCheckpointJustified(e2),
-                "finality resumes once offline stake drains out of the denominator");
-        assertTrue(casperService.isCheckpointFinalized(e2),
-                "the recovered checkpoint finalizes (parent is finalized)");
+        assertFalse(casperService.isCheckpointJustified(e2),
+                "2/3 of TOTAL stake is required to justify; half cannot, even after many epochs");
+    }
+
+    @Test
+    public void testInactivityLeakRestoresFinality() throws Exception {
+        // Four validators with equal stake. Once finality stalls past the
+        // penalty threshold, validators that stopped voting are drained from the
+        // denominator (inactivity leak), so the online half regains 2/3 of the
+        // reduced total and finality resumes.
+        PQKey v1 = PQKey.createNew();
+        PQKey v2 = PQKey.createNew();
+        PQKey v3 = PQKey.createNew();
+        PQKey v4 = PQKey.createNew();
+        for (PQKey k : List.of(v1, v2, v3, v4)) {
+            registerValidator(k);
+        }
+
+        CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+        assertNotNull(base);
+        long e1 = base.getEpoch() + 1;
+        CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
+                Sha256Hash.of(("leak1-" + e1).getBytes()));
+
+        // Healthy: all four vote e1 -> justify + finalize.
+        for (PQKey k : List.of(v1, v2, v3, v4)) {
+            casperService.processVote(
+                    signedVoteFor(k, e1 * 32, base.getEpoch(), e1, base.getBlockHash(), cp1.getBlockHash()),
+                    store);
+        }
+        casperService.finalizeCheckpoint(e1, store);
+        assertTrue(casperService.isCheckpointJustified(e1), "all validators voting justifies");
+        assertTrue(casperService.isCheckpointFinalized(e1));
+
+        // v3 + v4 go offline; v1 + v2 keep voting. Justification must resume
+        // once the leak drains the offline half out of the denominator.
+        boolean resumed = false;
+        for (long e = e1 + 1; e <= e1 + CasperService.INACTIVITY_WINDOW_EPOCHS + 3; e++) {
+            CasperService.Checkpoint cp = casperService.ensureCheckpoint(e,
+                    Sha256Hash.of(("leak" + e).getBytes()));
+            casperService.processVote(signedVoteFor(v1, e * 32, e1, e, cp1.getBlockHash(),
+                    cp.getBlockHash()), store);
+            casperService.processVote(signedVoteFor(v2, e * 32, e1, e, cp1.getBlockHash(),
+                    cp.getBlockHash()), store);
+            casperService.finalizeCheckpoint(e, store);
+            if (casperService.isCheckpointJustified(e)) {
+                resumed = true;
+                break;
+            }
+        }
+        assertTrue(resumed,
+                "finality resumes once offline stake is drained by the inactivity leak");
     }
 }

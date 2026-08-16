@@ -83,7 +83,7 @@ public class EpochRewardTest extends AbstractIntegrationTest {
         long epoch = 1;
         long rewardPool = 32L * 31709791L;
         List<net.bigtangle.core.Transaction> rewardTxs = epochRewardService.buildEpochRewardTransactions(
-                BigInteger.valueOf(rewardPool), store.getActiveStakeDeposits());
+                BigInteger.valueOf(rewardPool), store.getActiveStakeDeposits(), null);
         assertFalse(rewardTxs.isEmpty(), "reward transactions should be built for active validators");
 
         // Verify total stake unchanged (rewards are new UTXOs, not stake increases)
