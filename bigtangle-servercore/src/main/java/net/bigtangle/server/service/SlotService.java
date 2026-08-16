@@ -85,6 +85,12 @@ public class SlotService {
         return (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
     }
 
+    /** The wall-clock slot's position within its epoch, for the given interval. */
+    public static long currentSlotInEpoch(long slotIntervalMs) {
+        long slot = (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
+        return slot % SLOTS_PER_EPOCH;
+    }
+
     public long getCurrentEpoch() {
         return getCurrentSlot() / SLOTS_PER_EPOCH;
     }

@@ -24,6 +24,15 @@ Status of the Ethereum-Gasper parity work, keyed to the findings in
 | 4.3 BLS attestation aggregation | ⏳ deferred (throughput only) |
 | On-chain attestations (BLS → embed → root → validate → chain reads) | ✅ implemented + tested |
 
+## Follow-up fixes (implemented after re-review)
+
+| Item | Status |
+|------|--------|
+| Activation churn determinism (remove save-order `countActivatingAt` loop; keep delay) | ✅ fixed; hard churn cap → activation queue (deferred) |
+| Hard fork-epoch gate for chain reads (`onChainAttestationActive`, replaces "non-empty" heuristic) | ✅ implemented |
+| Discard equivocating validators from LMD-GHOST (PR #2845) | ✅ implemented |
+| Bouncing-attack defense (justified-checkpoint switch window) | ✅ implemented |
+
 ---
 
 ## 2.3 Graded slashing + whistleblower reward  (BLOCKED)

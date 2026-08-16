@@ -549,6 +549,8 @@ public class CasperService {
         }
         if (evidence != null) {
             log.warn("Slashing: slashable vote by pubkey={} slot={}", vkey, att.getSlot());
+            // Discard the equivocating validator from fork choice (PR #2845).
+            ghostService.markEquivocating(att.getValidatorPubkey());
             stakeService.submitSlashing(evidence, att, store);
             return;
         }
@@ -650,6 +652,23 @@ public class CasperService {
     }
 
     /**
+     * Whether on-chain embedded attestations are the source of truth for
+     * justification/fork-choice. A HARD height gate (not a "non-empty" heuristic):
+     * at/above {@code POS_BEACON_SLOTDATA_ACTIVATION} votes are read from the
+     * embedded chain set; below it the gossip view is used. This makes the fork
+     * transition deterministic — every node on the same chain height uses the
+     * same source.
+     */
+    public static boolean onChainAttestationActive(BlockStoreInterface store) {
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            return tip != null && tip.getChainLength() >= NetworkParameters.POS_BEACON_SLOTDATA_ACTIVATION;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Deterministic root over an (unordered) set of attestations: sorts by
      * message hash and hashes the concatenation. The same set yields the same
      * root on every node — the inclusion commitment the proposer signs.
@@ -713,6 +732,13 @@ public class CasperService {
     public static final long INACTIVITY_WINDOW_EPOCHS = 8;
 
     /**
+     * Bouncing-attack defense (Ethereum): a justified checkpoint may only switch
+     * to a competing (non-descendant) chain during the first this-many slots of
+     * an epoch; afterwards it must descend from the current justified checkpoint.
+     */
+    public static final long SAFE_SLOTS_TO_UPDATE_JUSTIFIED = 8;
+
+    /**
      * The inactivity leak (Ethereum): when the chain fails to finalize for more
      * than this many epochs, validators that stopped voting have their effective
      * weight drained so the remaining online stake regains 2/3 and finality
@@ -731,6 +757,27 @@ public class CasperService {
      */
     private BigInteger justificationThreshold(BigInteger totalStake) {
         return totalStake.multiply(BigInteger.valueOf(2)).divide(BigInteger.valueOf(3));
+    }
+
+    /**
+     * Bouncing-attack defense: a justified checkpoint may only switch to a
+     * competing (non-descendant) chain during the first
+     * {@link #SAFE_SLOTS_TO_UPDATE_JUSTIFIED} slots of the current epoch; after
+     * that it must descend from the current justified checkpoint (same chain).
+     */
+    private boolean canSwitchJustification(Checkpoint target, Checkpoint source, BlockStoreInterface store) {
+        if (!onChainAttestationActive(store)) {
+            return true; // pre-fork: checkpoints may be synthetic (bootstrap/tests)
+        }
+        if (SlotService.currentSlotInEpoch(slotIntervalMs) < SAFE_SLOTS_TO_UPDATE_JUSTIFIED) {
+            return true;
+        }
+        try {
+            return descendsFrom(target.blockHash, source.blockHash, store);
+        } catch (Exception e) {
+            log.debug("Justification descent check failed: {}", e.getMessage());
+            return true; // fail-open on resolution errors (avoid liveness stall)
+        }
     }
 
     /**
@@ -769,20 +816,19 @@ public class CasperService {
         }
     }
 
-    /** Pubkeys (hex) with a recent vote: on-chain embedded attestations first,
-     *  falling back to the gossip view pre-fork (no embedded attestations yet). */
+    /** Pubkeys (hex) with a recent vote: on-chain embedded attestations
+     *  post-fork (hard height gate), gossip latest-vote view pre-fork. */
     private Set<String> recentVoters(BlockStoreInterface store, long epoch) {
         Set<String> voters = new HashSet<>();
-        Map<String, AttestationData> included = collectIncludedAttestations(store);
-        if (!included.isEmpty()) {
-            for (AttestationData att : included.values()) {
+        if (onChainAttestationActive(store)) {
+            for (AttestationData att : collectIncludedAttestations(store).values()) {
                 if (att.getTargetEpoch() >= epoch - INACTIVITY_WINDOW_EPOCHS) {
                     voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
                 }
             }
             return voters;
         }
-        // Pre-fork: no on-chain attestations — use the gossip latest-vote view.
+        // Pre-fork: use the gossip latest-vote view.
         for (Map.Entry<String, Long> e : latestVotes.entrySet()) {
             if (e.getValue() / SlotService.SLOTS_PER_EPOCH >= epoch - INACTIVITY_WINDOW_EPOCHS) {
                 voters.add(e.getKey());
@@ -793,18 +839,16 @@ public class CasperService {
 
     /**
      * Pubkeys (hex) that attested the given target epoch, from on-chain embedded
-     * attestations. Returns {@code null} when the confirmed chain carries no
-     * embedded attestations yet (pre-fork), which callers treat as "reward all
-     * active validators". Deterministic post-fork — the basis for per-attestation
-     * rewards.
+     * attestations. Returns {@code null} pre-fork (below the activation height),
+     * which callers treat as "reward all active validators". Deterministic
+     * post-fork — the basis for per-attestation rewards.
      */
     public static Set<String> votersForEpoch(long epoch, BlockStoreInterface store) {
-        Map<String, AttestationData> included = collectIncludedAttestations(store);
-        if (included.isEmpty()) {
+        if (!onChainAttestationActive(store)) {
             return null;
         }
         Set<String> voters = new HashSet<>();
-        for (AttestationData att : included.values()) {
+        for (AttestationData att : collectIncludedAttestations(store).values()) {
             if (att.getTargetEpoch() == epoch) {
                 voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
             }
@@ -854,7 +898,8 @@ public class CasperService {
                 // pending votes. Counting is per (validator, target-epoch):
                 // later votes in newer epochs never erase this epoch's votes.
                 BigInteger votedStake = votedStakeFor(target, null, store);
-                if (votedStake.compareTo(twoThirds) >= 0) {
+                if (votedStake.compareTo(twoThirds) >= 0
+                        && canSwitchJustification(target, justifySource, store)) {
                     target.justified = true;
                     log.info("Checkpoint justified: epoch={}, block={}, votedStake={}/{}",
                             epoch, target.blockHash, votedStake, totalStake);
@@ -945,21 +990,19 @@ public class CasperService {
     }
 
     /**
-     * Stake that has attested the target checkpoint. Counted from the
-     * ON-CHAIN embedded attestations (the deterministic inclusion set) when the
-     * confirmed chain carries them; otherwise (pre-fork / bootstrap, when no
-     * beacon embeds attestations yet) from the node-local gossip vote view.
-     * When {@code requiredSource} is null the vote counts from ANY justified
-     * source; when non-null only votes with exactly that source count (used for
-     * the consecutive-epoch supermajority link that finalizes the parent).
+     * Stake that has attested the target checkpoint. Counted from the ON-CHAIN
+     * embedded attestations at/above the activation height; below it from the
+     * node-local gossip vote view. When {@code requiredSource} is null the vote
+     * counts from ANY justified source; when non-null only votes with exactly
+     * that source count (used for the consecutive-epoch supermajority link that
+     * finalizes the parent).
      */
     private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store) throws Exception {
-        Map<String, AttestationData> included = collectIncludedAttestations(store);
-        if (included.isEmpty()) {
-            return votedStakeFromGossip(target, requiredSource, store);
+        if (onChainAttestationActive(store)) {
+            return votedStakeFromChain(target, requiredSource, store, collectIncludedAttestations(store));
         }
-        return votedStakeFromChain(target, requiredSource, store, included);
+        return votedStakeFromGossip(target, requiredSource, store);
     }
 
     /**

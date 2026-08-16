@@ -39,6 +39,10 @@ public class GhostService {
     // over each validator's latest vote — never an ever-growing accumulator.
     private final ConcurrentHashMap<String, Sha256Hash> latestVoteBeacons = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> latestVoteWeights = new ConcurrentHashMap<>();
+    // Validators caught equivocating (double/surround vote). Discarded from fork
+    // choice entirely (Ethereum PR #2845), so their weight can't tip the balance
+    // between two forks (the "balancing attack, LMD edition").
+    private final java.util.Set<String> equivocatingValidators = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     @Autowired
     private StakeService stakeService;
@@ -84,13 +88,17 @@ public class GhostService {
     }
 
     public void processAttestation(AttestationData att, BlockStoreInterface store) throws Exception {
+        String pk = net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey());
+        // Equivocating validators are discarded from fork choice entirely.
+        if (equivocatingValidators.contains(pk)) {
+            return;
+        }
         // Only active, bonded validators contribute weight to fork choice.
         // Unknown or slashed validators get ZERO weight, never a default.
         long weight = stakeService.getEffectiveStake(att.getValidatorPubkey(), store);
         if (weight <= 0) {
             return;
         }
-        String pk = net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey());
         Sha256Hash newBeacon = att.getBeaconBlockHash();
         if (newBeacon == null) {
             return;
@@ -124,6 +132,25 @@ public class GhostService {
         store.saveAttestationVote(newBeacon, att.getValidatorPubkey(), weight, att.getSlot());
     }
 
+    /**
+     * Marks a validator as equivocating and retracts its fork-choice weight, so
+     * it can no longer tip the balance between two forks (Ethereum PR #2845).
+     * Called when a double/surround vote is detected.
+     */
+    public void markEquivocating(byte[] pubkey) {
+        String pk = net.bigtangle.core.Utils.HEX.encode(pubkey);
+        if (equivocatingValidators.add(pk)) {
+            Sha256Hash prevBeacon = latestVoteBeacons.remove(pk);
+            long prevWeight = latestVoteWeights.removeOrDefault(pk, 0L);
+            if (prevBeacon != null && prevWeight > 0) {
+                Long updated = forkChoiceVotes.computeIfPresent(prevBeacon, (h, w) -> w - prevWeight);
+                if (updated == null || updated <= 0) {
+                    forkChoiceVotes.remove(prevBeacon);
+                }
+            }
+        }
+    }
+
     public Sha256Hash executeGhost(Sha256Hash root, BlockStoreInterface store) throws Exception {
         return executeGhost(root, store, null);
     }
@@ -134,12 +161,13 @@ public class GhostService {
         if (excludeSubtree != null) {
             collectSubtree(excludeSubtree, excluded, store);
         }
-        // Chain-first fork-choice weight: once beacons embed attestations, the
-        // weight is a deterministic function of the confirmed chain (LMD head
-        // votes). Pre-fork (no embedded attestations) fall back to the local
-        // gossip vote view.
-        Map<Sha256Hash, Long> weights = chainForkChoiceVotes(store);
-        if (weights.isEmpty()) {
+        // Fork-choice weight: at/above the on-chain-attestation activation height
+        // the weight is a deterministic function of the confirmed chain (LMD head
+        // votes); below it, the local gossip vote view.
+        Map<Sha256Hash, Long> weights;
+        if (net.bigtangle.server.service.CasperService.onChainAttestationActive(store)) {
+            weights = chainForkChoiceVotes(store);
+        } else {
             weights = forkChoiceVotes;
         }
         weights = applyProposerBoost(weights, store);
@@ -206,6 +234,9 @@ public class GhostService {
         for (AttestationData att : latestHead.values()) {
             if (att.getBeaconBlockHash() == null) {
                 continue;
+            }
+            if (equivocatingValidators.contains(net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey()))) {
+                continue; // discard equivocating validators (PR #2845)
             }
             long w = 0;
             try {

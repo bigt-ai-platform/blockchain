@@ -66,13 +66,6 @@ public class StakeService {
     public static long churnLimit(long activeCount) {
         return Math.max(MIN_PER_EPOCH_CHURN_LIMIT, activeCount / CHURN_LIMIT_QUOTIENT);
     }
-
-    /** Deposits whose activation epoch equals {@code epoch} (deterministic in chain order). */
-    private long countActivatingAt(long epoch, BlockStoreInterface store) throws Exception {
-        return store.getAllStakeDeposits().stream()
-                .filter(s -> s.getActivatedEpoch() == epoch)
-                .count();
-    }
     /** Planned graded-slash penalty fraction (1/32, Ethereum's minimum). The
      *  refund-mint lifecycle is not yet wired in — see plan/pos-remaining-impl.md
      *  item 2.3. Current behavior is full confiscation (see confiscateBond). */
@@ -292,14 +285,14 @@ public class StakeService {
 
         // Activation delay: the deposit only becomes active (selectable/weighted)
         // MAX_SEED_LOOKAHEAD + 1 epochs after it is registered, so a new deposit
-        // is visible to every node before it can influence consensus. Churn limit:
-        // at most churnLimit deposits activate in the same epoch.
+        // is visible to every node before it can influence consensus. The epoch is
+        // derived from the block's OWN timestamp (chain state, identical on every
+        // node) — NOT from a mutable count of other deposits, which would depend on
+        // gossip save order and diverge across nodes. A hard per-epoch activation
+        // churn cap needs a chain-ordered activation queue (tracked as a follow-up);
+        // the delay itself bounds the rate a new deposit can join.
         long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs)
                 + MAX_SEED_LOOKAHEAD + 1;
-        long churn = churnLimit(store.getActiveStakeDeposits().size());
-        while (countActivatingAt(activatedEpoch, store) >= churn) {
-            activatedEpoch++;
-        }
         StakeRecord existing = store.getStakeDeposit(pubkey);
         if (existing != null && existing.getBlockHash() != null
                 && existing.getBlockHash().equals(block.getHash())) {
