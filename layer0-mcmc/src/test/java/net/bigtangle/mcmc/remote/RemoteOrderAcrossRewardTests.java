@@ -165,18 +165,16 @@ public class RemoteOrderAcrossRewardTests extends RemoteTest {
         buyerWallet.buyOrder(aesKey, tokenid, sellPrice, sellAmount, null, null,
                 NetworkParameters.BIGTANGLE_TOKENID_STRING, false);
 
+        // The match is deterministic but can lag: L1 order matching loads the
+        // resting book by the previous reward-chain head (getOrderMatchingIssuedOrders),
+        // which only advances once the sell's confirming beacon confirms. With 2 s
+        // slots that confirmation latency occasionally exceeds a 2 min window, so poll
+        // up to 6 min before declaring failure.
         List<OrderRecord> remaining = null;
-        for (int i = 0; i < 60; i++) {
+        for (int i = 0; i < 180; i++) {
             remaining = queryOpenOrders();
             if (remaining.isEmpty()) break;
             Thread.sleep(2000);
-        }
-        if (remaining != null) {
-            for (OrderRecord o : remaining) {
-                log.info("REMAINING ORDER side={} offer={} {} target={} {} price={} blockhash={} beneficiary={}",
-                        o.getSide(), o.getOfferValue(), o.getOfferTokenid(), o.getTargetValue(),
-                        o.getTargetTokenid(), o.getPrice(), o.getBlockHash(), o.getBeneficiaryAddress());
-            }
         }
         assertTrue(remaining != null && remaining.isEmpty(),
                 "All orders should have matched after the buy order, but " + remaining.size() + " remain");
