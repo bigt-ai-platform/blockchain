@@ -662,7 +662,7 @@ public class CasperService {
     public static boolean onChainAttestationActive(BlockStoreInterface store) {
         try {
             TXReward tip = store.getMaxConfirmedReward();
-            return tip != null && tip.getChainLength() >= NetworkParameters.POS_BEACON_SLOTDATA_ACTIVATION;
+            return tip != null && tip.getChainLength() >= NetworkParameters.posAttestationActivation();
         } catch (Exception e) {
             return false;
         }

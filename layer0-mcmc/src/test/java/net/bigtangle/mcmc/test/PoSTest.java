@@ -199,6 +199,60 @@ public class PoSTest extends AbstractIntegrationTest {
     }
 
     @Test
+    public void testOnChainAttestationReadsEmbeddedAttestations() throws Exception {
+        // Post-fork path: once the activation height is reached, votes are read
+        // from the ON-CHAIN embedded attestations, not the gossip view.
+        String key = "net.bigtangle.pos.attestationActivation";
+        String original = System.getProperty(key);
+        try {
+            System.setProperty(key, "0");
+
+            PQKey v1 = PQKey.createNew();
+            long slot = 1;
+            long epoch = slot / 32;
+            CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+            Sha256Hash target = Sha256Hash.of("ckpt0".getBytes());
+            AttestationData att = signedVoteFor(v1, slot, base.getEpoch(), epoch, base.getBlockHash(), target);
+
+            net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, epoch, 0,
+                    Sha256Hash.of("parent".getBytes()));
+            sd.setAttestations(List.of(att));
+            sd.setAttestationRoot(CasperService.computeAttestationRoot(List.of(att)));
+
+            Block prev = UtilGeneseBlock.createGenesis(networkParameters);
+            Block b = Block.createBlock(networkParameters, prev, prev);
+            b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+            Transaction rtx = new Transaction(networkParameters);
+            RewardInfo ri = new RewardInfo();
+            ri.setChainlength(1);
+            ri.setPrevRewardHash(prev.getHash());
+            ri.setBlocks(new java.util.HashSet<>());
+            rtx.setData(ri.toByteArray());
+            b.addTransaction(rtx);
+            Transaction slotTx = new Transaction(networkParameters);
+            slotTx.setDataClassName("SlotData");
+            slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
+            b.addTransaction(slotTx);
+
+            store.put(b);
+            store.insertReward(b.getHash(), prev.getHash(), 1);
+            store.updateRewardConfirmed(b.getHash(), true);
+
+            assertTrue(CasperService.onChainAttestationActive(store),
+                    "chain-read must be active at/above the (lowered) activation height");
+            java.util.Set<String> voters = CasperService.votersForEpoch(epoch, store);
+            assertTrue(voters.contains(Utils.HEX.encode(v1.getPubKey())),
+                    "embedded attestation must be read from the confirmed chain");
+        } finally {
+            if (original != null) {
+                System.setProperty(key, original);
+            } else {
+                System.clearProperty(key);
+            }
+        }
+    }
+
+    @Test
     public void testStakeEffectiveStake() throws Exception {
         store.saveStakeDeposit(new StakeRecord(
                 validatorKey.getPubKey(), StakeService.MIN_STAKE,

@@ -924,7 +924,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 */
 	private boolean legacyBeaconAllowed(Block block) {
 		long chainlength = rewardChainlength(block);
-		return chainlength > 0 && chainlength < NetworkParameters.POS_BEACON_SLOTDATA_ACTIVATION;
+		return chainlength > 0 && chainlength < NetworkParameters.posAttestationActivation();
 	}
 
 	/**

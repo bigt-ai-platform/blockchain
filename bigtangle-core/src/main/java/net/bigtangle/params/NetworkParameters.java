@@ -218,6 +218,16 @@ public abstract class NetworkParameters {
 	// unauthenticated beacon is rejected outright.
 	public static final long POS_BEACON_SLOTDATA_ACTIVATION = 1024L;
 
+	/**
+	 * Effective activation height for on-chain attestations. Read from the
+	 * system property {@code net.bigtangle.pos.attestationActivation} (default
+	 * {@link #POS_BEACON_SLOTDATA_ACTIVATION}), so tests/forks can lower it.
+	 */
+	public static long posAttestationActivation() {
+		return Long.parseLong(System.getProperty("net.bigtangle.pos.attestationActivation",
+				String.valueOf(POS_BEACON_SLOTDATA_ACTIVATION)));
+	}
+
 	// Max blocks per reward chainlength
 	public static final int TARGET_MAX_BLOCKS_IN_REWARD = 5000;
 	public static final int MAX_REWARD_BLOCK_SIZE = MAX_DEFAULT_BLOCK_SIZE + TARGET_MAX_BLOCKS_IN_REWARD * 200;
