@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.AttestationData;
+import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SlotData;
 import net.bigtangle.core.StakeRecord;
@@ -209,5 +210,31 @@ public class PosConsensusHardeningTest {
         assertEquals(2, back.getAttestations().size(), "embedded attestations survive JSON round-trip");
         assertEquals(CasperService.computeAttestationRoot(back.getAttestations()),
                 back.getAttestationRoot(), "root still matches after round-trip");
+    }
+
+    @Test
+    public void attestationBlsSignatureVerifiesAndDetectsTamper() {
+        PQKey key = PQKey.createNew();
+        AttestationData a = att(1, 0, 0, h(1), h(1));
+        a.setValidatorPubkey(key.getPubKey());
+        a.setBlsPubkey(RandaoService.blsPubkey(key));
+        a.setSignature(RandaoService.blsSign(key, a.getMessageHash().getBytes()));
+        assertTrue(a.verifySignature(), "a BLS-signed attestation must verify");
+
+        // Tampered signature must fail (this is what verifyEmbeddedAttestations
+        // and slashing-proof validation rely on).
+        byte[] sig = a.getSignature().clone();
+        sig[0] ^= 1;
+        AttestationData b = att(1, 0, 0, h(1), h(1));
+        b.setValidatorPubkey(key.getPubKey());
+        b.setBlsPubkey(RandaoService.blsPubkey(key));
+        b.setSignature(sig);
+        assertFalse(b.verifySignature(), "a tampered signature must not verify");
+
+        // Unsigned attestation must not verify.
+        AttestationData c = att(1, 0, 0, h(1), h(1));
+        c.setValidatorPubkey(key.getPubKey());
+        c.setBlsPubkey(RandaoService.blsPubkey(key));
+        assertFalse(c.verifySignature(), "an unsigned attestation must not verify");
     }
 }
