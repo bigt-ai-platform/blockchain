@@ -572,10 +572,36 @@ public class SlotService {
         pruneEpochKeys(store, "randao", "mixfinal_", floor);
         // posvalidators: per-epoch active-validator snapshots.
         pruneEpochKeys(store, "posvalidators", "validators_", floor);
-        // pos: per-slot used-slot bindings (proposal equivocation) below the floor.
+        // pos: per-slot used-slot bindings (proposal equivocation) + proposer-boost
+        // sighting registry below the floor.
         pruneSlotKeys(store, "pos", "usedslot_", floor);
+        pruneSlotKeys(store, "pos", "slotsight_", floor);
         // casper: per-epoch checkpoints below the floor (genesis is retained).
         pruneEpochKeys(store, "casper", "ckpt_", floor);
+        // attestation: full signed attestations persisted per slot (chain-read).
+        pruneAttestationKeys(store, floor);
+    }
+
+    /** Prunes persisted full attestations whose slot is below the finalized floor. */
+    private void pruneAttestationKeys(BlockStoreInterface store, long floor) throws Exception {
+        for (String key : store.getPosStateByService("attestation").keySet()) {
+            if (!key.startsWith("att_")) {
+                continue;
+            }
+            try {
+                // key format: "att_<slot>_<pubkeyhex>"
+                int secondUnderscore = key.indexOf('_', "att_".length());
+                if (secondUnderscore < 0) {
+                    continue;
+                }
+                long slot = Long.parseLong(key.substring("att_".length(), secondUnderscore));
+                if (slot / SLOTS_PER_EPOCH < floor) {
+                    store.deletePosState("attestation", key);
+                }
+            } catch (NumberFormatException ignored) {
+                // malformed key — leave it
+            }
+        }
     }
 
     private void pruneEpochKeys(BlockStoreInterface store, String service, String prefix, long floor)

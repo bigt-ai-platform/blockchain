@@ -739,6 +739,14 @@ public class CasperService {
     public static final long SAFE_SLOTS_TO_UPDATE_JUSTIFIED = 8;
 
     /**
+     * Chain-read lookback (slots) for on-chain embedded attestations: 10 epochs
+     * covers the inactivity window (8) plus the 2-epoch reward lookback. Must be
+     * longer than the MCMC horizon — the attestation read needs to reach further
+     * back than {@code CHAINLENGTH_CUTOFF}.
+     */
+    public static final int ATTESTATION_LOOKBACK_SLOTS = 320;
+
+    /**
      * The inactivity leak (Ethereum): when the chain fails to finalize for more
      * than this many epochs, validators that stopped voting have their effective
      * weight drained so the remaining online stake regains 2/3 and finality
@@ -1022,7 +1030,7 @@ public class CasperService {
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
-                    && count < NetworkParameters.CHAINLENGTH_CUTOFF) {
+                    && count < ATTESTATION_LOOKBACK_SLOTS) {
                 count++;
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {

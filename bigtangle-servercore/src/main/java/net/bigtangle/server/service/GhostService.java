@@ -141,7 +141,8 @@ public class GhostService {
         String pk = net.bigtangle.core.Utils.HEX.encode(pubkey);
         if (equivocatingValidators.add(pk)) {
             Sha256Hash prevBeacon = latestVoteBeacons.remove(pk);
-            long prevWeight = latestVoteWeights.removeOrDefault(pk, 0L);
+            long prevWeight = latestVoteWeights.getOrDefault(pk, 0L);
+            latestVoteWeights.remove(pk);
             if (prevBeacon != null && prevWeight > 0) {
                 Long updated = forkChoiceVotes.computeIfPresent(prevBeacon, (h, w) -> w - prevWeight);
                 if (updated == null || updated <= 0) {
@@ -211,7 +212,7 @@ public class GhostService {
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
-                    && count < NetworkParameters.CHAINLENGTH_CUTOFF) {
+                    && count < net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
                 count++;
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
