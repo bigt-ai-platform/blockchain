@@ -253,6 +253,76 @@ public class PoSTest extends AbstractIntegrationTest {
     }
 
     @Test
+    public void testJustificationViaChainRead() throws Exception {
+        // Post-fork: a checkpoint is justified from the ON-CHAIN embedded
+        // attestations (the deterministic path), not the gossip vote view.
+        String key = "net.bigtangle.pos.attestationActivation";
+        String original = System.getProperty(key);
+        try {
+            System.setProperty(key, "0");
+
+            PQKey v1 = PQKey.createNew();
+            registerValidator(v1);
+
+            Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+            long epoch = 1;
+            long slot = epoch * 32;
+            CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+
+            // Checkpoint beacon C (epoch-1 boundary), descending from genesis.
+            Block c = Block.createBlock(networkParameters, genesis, genesis);
+            c.setBlockType(BlockType.BLOCKTYPE_BEACON);
+            Transaction crtx = new Transaction(networkParameters);
+            RewardInfo cri = new RewardInfo();
+            cri.setChainlength(1);
+            cri.setPrevRewardHash(genesis.getHash());
+            cri.setBlocks(new java.util.HashSet<>());
+            crtx.setData(cri.toByteArray());
+            c.addTransaction(crtx);
+            store.put(c);
+            store.insertReward(c.getHash(), genesis.getHash(), 1);
+            store.updateRewardConfirmed(c.getHash(), true);
+
+            // Vote beacon V, descending from C, carrying an attestation targeting C.
+            Block v = Block.createBlock(networkParameters, c, c);
+            v.setBlockType(BlockType.BLOCKTYPE_BEACON);
+            Transaction vrtx = new Transaction(networkParameters);
+            RewardInfo vri = new RewardInfo();
+            vri.setChainlength(2);
+            vri.setPrevRewardHash(c.getHash());
+            vri.setBlocks(new java.util.HashSet<>());
+            vrtx.setData(vri.toByteArray());
+            v.addTransaction(vrtx);
+
+            AttestationData att = signedVoteFor(v1, slot, base.getEpoch(), epoch, base.getBlockHash(), c.getHash());
+            net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, epoch, 0, c.getHash());
+            sd.setAttestations(List.of(att));
+            sd.setAttestationRoot(CasperService.computeAttestationRoot(List.of(att)));
+            Transaction slotTx = new Transaction(networkParameters);
+            slotTx.setDataClassName("SlotData");
+            slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
+            v.addTransaction(slotTx);
+            store.put(v);
+            store.insertReward(v.getHash(), c.getHash(), 2);
+            store.updateRewardConfirmed(v.getHash(), true);
+
+            // Pre-create the checkpoint for epoch 1 at C's hash, then finalize —
+            // the vote must come from the chain (V's embedded attestation).
+            casperService.ensureCheckpoint(epoch, c.getHash());
+            casperService.finalizeCheckpoint(epoch, store);
+
+            assertTrue(casperService.isCheckpointJustified(epoch),
+                    "checkpoint must justify from on-chain embedded attestations");
+        } finally {
+            if (original != null) {
+                System.setProperty(key, original);
+            } else {
+                System.clearProperty(key);
+            }
+        }
+    }
+
+    @Test
     public void testStakeEffectiveStake() throws Exception {
         store.saveStakeDeposit(new StakeRecord(
                 validatorKey.getPubKey(), StakeService.MIN_STAKE,
