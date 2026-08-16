@@ -195,7 +195,7 @@ public class SlotService {
         // select no proposer for every slot of the epoch — and since snapshots
         // are only written by confirming beacons, the chain could never recover.
         if (validators == null || validators.isEmpty()) {
-            validators = store.getActiveStakeDeposits(currentChainEpoch(store));
+            validators = store.getActiveStakeDeposits();
         }
         return validators;
     }
@@ -221,7 +221,7 @@ public class SlotService {
             return;
         }
         if (store.getPosState("posvalidators", "validators_" + epoch) == null) {
-            List<StakeRecord> active = store.getActiveStakeDeposits(epoch);
+            List<StakeRecord> active = store.getActiveStakeDeposits();
             // Never freeze an EMPTY set: with no fallback the epoch two epochs
             // later would have no proposer for any slot, no beacons would
             // confirm, no new snapshot would be written — an unrecoverable halt.

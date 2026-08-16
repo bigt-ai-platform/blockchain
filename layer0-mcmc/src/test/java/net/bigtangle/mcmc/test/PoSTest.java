@@ -185,20 +185,6 @@ public class PoSTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testActivationDelayExcludesFutureEpochs() throws Exception {
-        // A validator whose activation epoch is in the future must NOT be
-        // weighted yet (MAX_SEED_LOOKAHEAD delay).
-        PQKey v = PQKey.createNew();
-        store.saveStakeDeposit(new StakeRecord(v.getPubKey(), StakeService.MIN_STAKE, v.getPubKeyHash()));
-        stakeService.activateValidator(v.getPubKey(), 5, store); // future activation
-
-        assertEquals(0L, stakeService.getEffectiveStake(v.getPubKey(), store),
-                "not yet active (activation epoch in the future)");
-        assertEquals(BigInteger.ZERO, stakeService.getTotalActiveStake(store),
-                "no active stake while the only validator is not yet activated");
-    }
-
-    @Test
     public void testOnChainAttestationReadsEmbeddedAttestations() throws Exception {
         // Post-fork path: once the activation height is reached, votes are read
         // from the ON-CHAIN embedded attestations, not the gossip view.

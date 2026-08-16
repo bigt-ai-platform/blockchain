@@ -982,7 +982,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return snap;
 		}
 		try {
-			return store.getActiveStakeDeposits(Math.max(0, sourceEpoch));
+			return store.getActiveStakeDeposits();
 		} catch (Exception e) {
 			return new java.util.ArrayList<>();
 		}
@@ -1544,8 +1544,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		try {
 			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
-			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits(
-					net.bigtangle.server.service.SlotService.currentChainEpoch(store))) {
+			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
 				activeStake = activeStake.add(v.getAmount());
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee

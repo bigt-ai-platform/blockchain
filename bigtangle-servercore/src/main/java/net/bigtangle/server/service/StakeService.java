@@ -93,7 +93,6 @@ public class StakeService {
     public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
         if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
-        if (stake.getActivatedEpoch() > SlotService.currentChainEpoch(store)) return 0L; // not yet active
         return effectiveBalance(stake.getAmount()).longValue();
     }
 
@@ -291,8 +290,7 @@ public class StakeService {
         // gossip save order and diverge across nodes. A hard per-epoch activation
         // churn cap needs a chain-ordered activation queue (tracked as a follow-up);
         // the delay itself bounds the rate a new deposit can join.
-        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs)
-                + MAX_SEED_LOOKAHEAD + 1;
+        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs);
         StakeRecord existing = store.getStakeDeposit(pubkey);
         if (existing != null && existing.getBlockHash() != null
                 && existing.getBlockHash().equals(block.getHash())) {
@@ -769,7 +767,7 @@ public class StakeService {
     }
 
     public BigInteger getTotalActiveStake(BlockStoreInterface store) throws Exception {
-        return store.getActiveStakeDeposits(SlotService.currentChainEpoch(store)).stream()
+        return store.getActiveStakeDeposits().stream()
                 .map(StakeService::effectiveBalance)
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }

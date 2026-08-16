@@ -797,7 +797,7 @@ public class CasperService {
      */
     private BigInteger leakedTotalStake(BlockStoreInterface store, long epoch) {
         try {
-            List<StakeRecord> active = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+            List<StakeRecord> active = store.getActiveStakeDeposits();
             Checkpoint fin = getLastFinalizedCheckpoint();
             long delay = fin != null ? epoch - fin.epoch : 0;
             if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
@@ -1073,7 +1073,7 @@ public class CasperService {
 
     private BigInteger votedStakeFromChain(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+        List<StakeRecord> validators = store.getActiveStakeDeposits();
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
             stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));
@@ -1100,7 +1100,7 @@ public class CasperService {
 
     private BigInteger votedStakeFromGossip(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+        List<StakeRecord> validators = store.getActiveStakeDeposits();
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
             stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));
