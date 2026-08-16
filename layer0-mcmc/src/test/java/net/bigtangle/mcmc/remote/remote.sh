@@ -408,8 +408,10 @@ fi
 
 echo "=== Step 6: Run remote tests ==="
 
-# Default test class, override via first argument
-TEST_CLASS="${1:-net.bigtangle.mcmc.remote.RemoteTokenTests}"
+# Default: run ALL remote tests (wildcard matches every Remote*Tests class;
+# RemoteTest is the abstract base and has no @Test). Override via first argument,
+# e.g. ./remote.sh RemoteTokenTests or ./remote.sh 'Remote*Tests'.
+TEST_CLASS="${1:-net.bigtangle.mcmc.remote.Remote*Tests}"
 
 mvn test -pl layer0-mcmc \
     -Dtest="$TEST_CLASS" \
