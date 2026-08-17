@@ -35,11 +35,24 @@ public class StoreService {
     public BlockStoreInterface getStore() throws BlockStoreException {
         try {
             StoreDomain domain = parseDomain();
+            java.sql.Connection c = dataSource.getConnection();
+            // A pooled connection can be returned mid-transaction if a batch
+            // write was not properly finalized (autocommit=false + open
+            // transaction). Queries on such a connection then see a STALE
+            // snapshot — e.g. getStakeDeposit returns null for a record that
+            // was committed after the stale transaction began, which in
+            // multi-node operation makes validators reject their own
+            // attestations. Reset the connection to a clean state so every
+            // store starts from the latest committed view.
+            if (!c.getAutoCommit()) {
+                c.rollback();
+                c.setAutoCommit(true);
+            }
             BlockStoreInterface store;
             if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-                store = new MySQLFullBlockStore(networkParameters, dataSource.getConnection());
+                store = new MySQLFullBlockStore(networkParameters, c);
             } else {
-                store = new PostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
+                store = new PostgreSQLFullBlockStore(networkParameters, c);
             }
             if (domain != StoreDomain.ALL && store instanceof DatabaseFullBlockStoreBase base) {
                 base.setStoreDomain(domain);

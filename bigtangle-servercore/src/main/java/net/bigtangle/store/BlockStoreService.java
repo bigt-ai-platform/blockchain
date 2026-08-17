@@ -307,7 +307,7 @@ public class BlockStoreService {
 			saveChainConnected(block, store);
 			deleteChainQueue(chainBlockQueue, store);
 		} catch (net.bigtangle.exception.VerificationException.InfeasiblePrototypeException
-				| net.bigtangle.exception.MissingDependencyException e) {
+				| net.bigtangle.exception.VerificationException.MissingDependencyException e) {
 			// The beacon references DAG blocks this node has not synced yet
 			// (multi-node gossip lag). Dropping it would fork the chain: keep it
 			// in the ChainBlockQueue and retry on the next tick, by which time
