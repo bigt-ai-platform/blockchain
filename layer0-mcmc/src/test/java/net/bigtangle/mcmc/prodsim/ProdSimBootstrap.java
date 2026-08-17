@@ -83,6 +83,10 @@ public class ProdSimBootstrap {
                     Thread.sleep(3000);
                 }
             }
+            if (!staked) {
+                throw new IllegalStateException(
+                        "Validator " + node + " could not stake after 3 attempts on " + nodeUrl);
+            }
             Thread.sleep(1000);
 
             HashMap<String, Object> activateReq = new HashMap<>();
@@ -99,6 +103,10 @@ public class ProdSimBootstrap {
                     System.out.println("  activateValidator attempt " + attempt + " failed: " + e.getMessage());
                     Thread.sleep(3000);
                 }
+            }
+            if (!activated) {
+                throw new IllegalStateException(
+                        "Validator " + node + " could not be activated after 3 attempts on " + nodeUrl);
             }
             Thread.sleep(3000);
 

@@ -982,7 +982,10 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return snap;
 		}
 		try {
-			return store.getActiveStakeDeposits();
+			// Activation-delay aware: the live fallback set only includes
+			// validators active as of the current chain epoch.
+			return store.getActiveStakeDeposits(
+					net.bigtangle.server.service.SlotService.currentChainEpoch(store));
 		} catch (Exception e) {
 			return new java.util.ArrayList<>();
 		}
@@ -1544,7 +1547,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		try {
 			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
-			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits()) {
+			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits(
+					net.bigtangle.server.service.SlotService.currentChainEpoch(store))) {
 				activeStake = activeStake.add(v.getAmount());
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee
@@ -2914,6 +2918,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 			// Get all blocks approved by previous reward blocks
 			long cutoffHeight = getRewardCutoffHeight(prevRewardHash, store);
+			if (cutoffHeight < 0) {
+				// Predecessor chain not fully synced — the cutoff cannot be
+				// verified. Defer (never reject): the check re-runs once the
+				// chain is synced. Previously this NPE'd and stalled the chain.
+				return SolidityState.fromPrevReward(prevRewardHash, true);
+			}
 
 			for (Sha256Hash hash : rewardInfo.getBlocks()) {
 				BlockWrap block = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService,

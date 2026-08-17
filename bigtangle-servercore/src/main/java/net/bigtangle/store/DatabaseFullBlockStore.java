@@ -3899,6 +3899,51 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		return result;
 	}
 
+	/**
+	 * Upper bound for an exact-prefix range scan: every string that starts with
+	 * the prefix compares less than {@code prefix + "\uffff"} (max BMP
+	 * codepoint), so {@code key >= prefix AND key < prefix + "\uffff"} selects
+	 * exactly the keys with that prefix. The pos_state keys are ASCII (service
+	 * names, digits, pubkey hex), so collation order is irrelevant here.
+	 */
+	private static String prefixUpperBound(String keyPrefix) {
+		return keyPrefix + "\uffff";
+	}
+
+	@Override
+	public Map<String, byte[]> getPosStateByServicePrefix(String service, String keyPrefix)
+			throws BlockStoreException {
+		Map<String, byte[]> result = new HashMap<>();
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT key, value FROM pos_state WHERE service = ? AND key >= ? AND key < ?")) {
+			s.setString(1, service);
+			s.setString(2, keyPrefix);
+			s.setString(3, prefixUpperBound(keyPrefix));
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.put(rs.getString("key"), rs.getBytes("value"));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
+	public void deletePosStateByServiceKeyRange(String service, String fromKey, String beforeKey)
+			throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"DELETE FROM pos_state WHERE service = ? AND key >= ? AND key < ?")) {
+			s.setString(1, service);
+			s.setString(2, fromKey);
+			s.setString(3, beforeKey);
+			s.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
 	@Override
 	public void deletePosState(String service, String key) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()

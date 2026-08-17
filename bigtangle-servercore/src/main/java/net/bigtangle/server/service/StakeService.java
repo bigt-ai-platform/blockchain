@@ -66,10 +66,22 @@ public class StakeService {
     public static long churnLimit(long activeCount) {
         return Math.max(MIN_PER_EPOCH_CHURN_LIMIT, activeCount / CHURN_LIMIT_QUOTIENT);
     }
-    /** Planned graded-slash penalty fraction (1/32, Ethereum's minimum). The
-     *  refund-mint lifecycle is not yet wired in — see plan/pos-remaining-impl.md
-     *  item 2.3. Current behavior is full confiscation (see confiscateBond). */
+    /**
+     * Graded slash (Ethereum's minimum penalty): 1/32 of the bond is
+     * confiscated — 1/512 of that (the "slashed" amount) goes to the
+     * whistleblower who proposed the proof, the rest is burned. The remaining
+     * 31/32 is minted back to the slashed validator as a reorg-aware refund
+     * UTXO (see {@link #mintSlashingRefund}). Enabled by the refund-mint
+     * lifecycle wired in alongside {@link #applySlashingBlock} /
+     * {@link #applySlashingConfirmed} / {@link #revertSlashingBlock}.
+     */
     public static final int SLASH_PENALTY_DIVISOR = 32;
+    /** Whistleblower share of the slashed penalty (Ethereum's WHISTLEBLOWER_REWARD_QUOTIENT). */
+    public static final int WHISTLEBLOWER_REWARD_DIVISOR = 512;
+    /** Synthetic output index for the store-level slashing refund UTXO mint. */
+    private static final long SLASHING_REFUND_OUTPUT_INDEX = 1L;
+    /** Synthetic output index for the store-level whistleblower reward UTXO mint. */
+    private static final long SLASHING_REPORTER_OUTPUT_INDEX = 2L;
     public static final String STAKE_DATA_CLASS = "StakeDeposit";
     public static final String SLASHING_DATA_CLASS = "SlashingProof";
     public static final String EXIT_DATA_CLASS = "ExitRequest";
@@ -90,10 +102,49 @@ public class StakeService {
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SlotService.SLOT_DURATION_MS;
 
+    /** This node's configured validator key (pos.validatorKey), hex. When set,
+     *  SLASHING blocks proposed by this node carry it as the whistleblower
+     *  identity and receive the 1/512 reporter reward. */
+    @org.springframework.beans.factory.annotation.Value("${pos.validatorKey:}")
+    private String configuredValidatorKeyHex = "";
+
     public long getEffectiveStake(byte[] pubkey, BlockStoreInterface store) throws Exception {
         StakeRecord stake = store.getStakeDeposit(pubkey);
+        // The activation delay is enforced here too: a deposit is not yet active
+        // (cannot attest) until the CURRENT CHAIN epoch reaches its activation
+        // epoch. Same chain-derived domain on every node.
         if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
+        if (stake.getActivatedEpoch() > SlotService.currentChainEpoch(store)) return 0L;
         return effectiveBalance(stake.getAmount()).longValue();
+    }
+
+    /**
+     * Chain-derived activation epoch for a STAKE deposit block: the deposit's
+     * chain epoch (parent beacon chainlength / SLOTS_PER_EPOCH) plus
+     * {@link #MAX_SEED_LOOKAHEAD} + 1. The FIRST epoch (chain epoch 0) is the
+     * genesis bootstrap window — those deposits activate immediately so the
+     * initial validator set can start producing beacons (no validators yet
+     * means no beacons, so no chain position to delay against). Fully
+     * deterministic: derived from the block's parent chain, never from wall
+     * clock or gossip save order.
+     */
+    private long depositActivationEpoch(Block block, BlockStoreInterface store) {
+        long depositEpoch;
+        try {
+            depositEpoch = chainEpochOf(block, store);
+        } catch (Exception e) {
+            // Parent not a beacon/genesis (e.g. during early sync before the
+            // parent chain is available). Fall back to the current confirmed
+            // chain epoch; the block's own position is re-derived on
+            // confirmation.
+            log.debug("Deposit block {} has no beacon parent, using current chain epoch: {}",
+                    block.getHashAsString(), e.getMessage());
+            depositEpoch = SlotService.currentChainEpoch(store);
+        }
+        if (depositEpoch <= 0) {
+            return 0L; // genesis bootstrap window — activate immediately
+        }
+        return depositEpoch + MAX_SEED_LOOKAHEAD + 1;
     }
 
     /** Capped effective balance for a stake amount (bounded influence). */
@@ -285,12 +336,15 @@ public class StakeService {
         // Activation delay: the deposit only becomes active (selectable/weighted)
         // MAX_SEED_LOOKAHEAD + 1 epochs after it is registered, so a new deposit
         // is visible to every node before it can influence consensus. The epoch is
-        // derived from the block's OWN timestamp (chain state, identical on every
-        // node) — NOT from a mutable count of other deposits, which would depend on
-        // gossip save order and diverge across nodes. A hard per-epoch activation
-        // churn cap needs a chain-ordered activation queue (tracked as a follow-up);
-        // the delay itself bounds the rate a new deposit can join.
-        long activatedEpoch = SlotService.epochAt(block.getTimeSeconds() * 1000L, slotIntervalMs);
+        // CHAIN-derived from the deposit block's own position (the parent beacon's
+        // reward chainlength / SLOTS_PER_EPOCH), identical on every node — NOT the
+        // wall-clock slot epoch of the block timestamp. Mixing the two domains was
+        // the root of the original activation bug: a wall-clock epoch
+        // (thousands) compared against a chain epoch (chainlength/32, small)
+        // meant a fresh deposit was never active. A hard per-epoch activation
+        // churn cap needs a chain-ordered activation queue (tracked as a
+        // follow-up); the delay itself bounds the rate a new deposit can join.
+        long activatedEpoch = depositActivationEpoch(block, store);
         StakeRecord existing = store.getStakeDeposit(pubkey);
         if (existing != null && existing.getBlockHash() != null
                 && existing.getBlockHash().equals(block.getHash())) {
@@ -493,6 +547,10 @@ public class StakeService {
         data.put("proposal", Boolean.TRUE);
         data.put("slotData1", sd1);
         data.put("slotData2", sd2);
+        byte[] reporter = localReporterPubkey();
+        if (reporter != null) {
+            data.put("reporter", Utils.HEX.encode(reporter));
+        }
         tx.setData(Json.jsonmapper().writeValueAsBytes(data));
         b.addTransaction(tx);
 
@@ -531,7 +589,25 @@ public class StakeService {
         Map<String, Object> data = new HashMap<>();
         data.put("attestation1", att1);
         data.put("attestation2", att2);
+        byte[] reporter = localReporterPubkey();
+        if (reporter != null) {
+            data.put("reporter", Utils.HEX.encode(reporter));
+        }
         return Json.jsonmapper().writeValueAsBytes(data);
+    }
+
+    /** The node's configured validator ML-DSA pubkey (whistleblower identity),
+     *  or null when no validator key is configured (test/sync-only nodes). */
+    private byte[] localReporterPubkey() {
+        if (configuredValidatorKeyHex == null || configuredValidatorKeyHex.isEmpty()) {
+            return null;
+        }
+        try {
+            PQKey key = PQKey.fromPrivateKeyHex(configuredValidatorKeyHex);
+            return key != null ? key.getPubKey() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -570,6 +646,8 @@ public class StakeService {
             }
             store.updateStakeSlashing(proposer, -1L);
             confiscateBond(proposer, stake, store);
+            mintSlashingRefund(block, proposer, stake, store);
+            mintWhistleblowerReward(block, data, stake, store);
             log.info("Validator slashed for proposal equivocation via consensus block {}: slot={}",
                     block.getHashAsString(), sd1.getSlot());
             return;
@@ -594,6 +672,8 @@ public class StakeService {
         }
         store.updateStakeSlashing(pubkey, -1L);
         confiscateBond(pubkey, stake, store);
+        mintSlashingRefund(block, pubkey, stake, store);
+        mintWhistleblowerReward(block, data, stake, store);
         log.info("Validator slashed via consensus block {}: pubkey={} (withdrawable set at confirmation)",
                 block.getHashAsString(), Utils.HEX.encode(pubkey));
     }
@@ -653,6 +733,9 @@ public class StakeService {
             return;
         }
         store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        // The slashing block confirmed: its refund/reporter mints ride the
+        // normal confirm lifecycle (restored even after a prior revert).
+        confirmSlashingMints(block, store);
         log.info("Slash withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
                 Utils.HEX.encode(pubkey), chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
     }
@@ -707,6 +790,9 @@ public class StakeService {
             }
         }
         store.clearStakeSlashing(evidencePubkey);
+        // Cancel the refund/reporter mints the slashing block created so they
+        // cannot be claimed after the slash is reverted.
+        cancelSlashingMints(block, store);
         log.info("Reorg: un-slashed validator for pubkey={} (block {})",
                 Utils.HEX.encode(evidencePubkey), block.getHashAsString());
     }
@@ -766,8 +852,182 @@ public class StakeService {
         }
     }
 
+    /**
+     * Graded-slash refund: mints the slashed validator's remaining bond
+     * (amount - amount/32) back to them as a STORE-LEVEL UTXO keyed to the
+     * slashing block. A plain transaction output on the SLASHING block would
+     * break value conservation (the block is not a minting block), so the mint
+     * is a store-level reorg-aware write: created (idempotently) when the
+     * slashing block is applied, confirmed with the block by
+     * {@link #applySlashingConfirmed}, and cancelled by
+     * {@link #revertSlashingBlock} on unconfirm. Net protocol effect: the
+     * validator is burned exactly amount/32 instead of the full bond.
+     */
+    private void mintSlashingRefund(Block block, byte[] pubkey, StakeRecord stake,
+            BlockStoreInterface store) throws Exception {
+        BigInteger penalty = stake.getAmount()
+                .divide(BigInteger.valueOf(SLASH_PENALTY_DIVISOR));
+        BigInteger refund = stake.getAmount().subtract(penalty);
+        if (refund.signum() <= 0) {
+            return;
+        }
+        String[] bonded = bondedOutputScript(stake, store);
+        if (bonded == null) {
+            return;
+        }
+        UTXO utxo = buildSlashingMintUtxo(block, SLASHING_REFUND_OUTPUT_INDEX, refund,
+                Utils.HEX.decode(bonded[0]), bonded[1], store);
+        if (utxo != null) {
+            store.addUnspentTransactionOutput(List.of(utxo));
+            log.info("Slashing refund of {} minted to slashed pubkey={} (block {})",
+                    refund, Utils.HEX.encode(pubkey), block.getHashAsString());
+        }
+    }
+
+    /**
+     * Whistleblower reward: mints 1/512 of the slashed penalty (the reporter's
+     * share) to the reporter identity embedded in the slashing proof. The
+     * reporter is whoever proposed the proof (finders-keepers); no protocol
+     * value is created or destroyed — the reward is carved out of the
+     * validator's 1/32 penalty, and nodes are indifferent to who receives it.
+     */
+    private void mintWhistleblowerReward(Block block, Map<String, Object> data,
+            StakeRecord stake, BlockStoreInterface store) throws Exception {
+        Object reporterObj = data.get("reporter");
+        if (!(reporterObj instanceof String)) {
+            return;
+        }
+        byte[] reporterPubkey;
+        try {
+            reporterPubkey = Utils.HEX.decode((String) reporterObj);
+        } catch (Exception e) {
+            return;
+        }
+        BigInteger penalty = stake.getAmount().divide(BigInteger.valueOf(SLASH_PENALTY_DIVISOR));
+        BigInteger reward = penalty.divide(BigInteger.valueOf(WHISTLEBLOWER_REWARD_DIVISOR));
+        if (reward.signum() <= 0) {
+            return;
+        }
+        Script reporterScript;
+        try {
+            reporterScript = ScriptBuilder.createOutputScript(PQKey.fromPublicOnly(reporterPubkey));
+        } catch (Exception e) {
+            log.warn("Could not build reporter script for slashing block {}: {}",
+                    block.getHashAsString(), e.getMessage());
+            return;
+        }
+        String reporterAddress = Address
+                .fromHash160(networkParameters, Utils.sha256hash160(reporterPubkey)).toBase58();
+        UTXO utxo = buildSlashingMintUtxo(block, SLASHING_REPORTER_OUTPUT_INDEX, reward,
+                reporterScript.getProgram(), reporterAddress, store);
+        if (utxo != null) {
+            store.addUnspentTransactionOutput(List.of(utxo));
+            log.info("Whistleblower reward of {} minted to reporter (block {})",
+                    reward, block.getHashAsString());
+        }
+    }
+
+    /**
+     * Builds a store-level mint UTXO keyed to the slashing block (proof-tx hash
+     * + output index), so the row is idempotent (re-apply of the same slashing
+     * block is a no-op) and reorg-revert is a stable key.
+     */
+    private UTXO buildSlashingMintUtxo(Block block, long index, BigInteger value,
+            byte[] scriptProgram, String address, BlockStoreInterface store) throws Exception {
+        if (scriptProgram == null) {
+            return null;
+        }
+        UTXO utxo = new UTXO();
+        utxo.setHash(slashingMintTxHash(block));
+        utxo.setIndex(index);
+        utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
+        utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
+        utxo.setScript(new Script(scriptProgram));
+        utxo.setAddress(address);
+        utxo.setCoinbase(true);
+        utxo.setBlockHash(block.getHash());
+        utxo.setConfirmed(isBlockConfirmed(block, store));
+        utxo.setSpent(false);
+        return utxo;
+    }
+
+    /** Deterministic synthetic tx hash for the store-level slashing mints:
+     *  the slashing PROOF tx hash itself (always available, even on a
+     *  not-yet-hashed block during tests/sync) so the row is idempotent across
+     *  re-apply and reorg-revert. The refund/reporter rows are distinguished
+     *  by their output index. */
+    private Sha256Hash slashingMintTxHash(Block block) {
+        return block.getTransactions().get(0).getHash();
+    }
+
+    /** Whether the block is currently confirmed, from its block evaluation. */
+    private boolean isBlockConfirmed(Block block, BlockStoreInterface store) throws Exception {
+        net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(block.getHash());
+        return be != null && be.isConfirmed();
+    }
+
+    /** The script program (hex) and address of the bonded deposit output (the
+     *  validator's P2PKH), or null. */
+    private String[] bondedOutputScript(StakeRecord stake, BlockStoreInterface store) throws Exception {
+        if (stake.getBlockHash() == null) {
+            return null;
+        }
+        Sha256Hash txHash = stake.getTxHash();
+        if (txHash == null) {
+            Block block = store.get(stake.getBlockHash());
+            if (block != null && !block.getTransactions().isEmpty()) {
+                txHash = block.getTransactions().get(0).getHash();
+            }
+        }
+        if (txHash == null) {
+            return null;
+        }
+        UTXO bonded = store.getTransactionOutput(stake.getBlockHash(), txHash, 0);
+        if (bonded != null && bonded.getScript() != null) {
+            return new String[] { Utils.HEX.encode(bonded.getScript().getProgram()), bonded.getAddress() };
+        }
+        // Fallback: rebuild the P2PKH from the withdrawal credentials.
+        if (stake.getWithdrawalCredentials() != null) {
+            String addr = Address.fromHash160(networkParameters, stake.getWithdrawalCredentials()).toBase58();
+            return new String[] { Utils.HEX.encode(ScriptBuilder
+                    .createOutputScript(Address.fromHash160(networkParameters, stake.getWithdrawalCredentials()))
+                    .getProgram()), addr };
+        }
+        return null;
+    }
+
+    /** Confirmation-time restore: the slashing block confirmed, so its refund
+     *  and reporter mints ride the normal confirm lifecycle. Idempotent. Only
+     *  flips a mint back to unspent when it was CANCELLED by a prior revert
+     *  (spent by ZERO_HASH) — a genuinely spent refund is left alone. */
+    private void confirmSlashingMints(Block block, BlockStoreInterface store) throws Exception {
+        for (long idx : new long[] { SLASHING_REFUND_OUTPUT_INDEX, SLASHING_REPORTER_OUTPUT_INDEX }) {
+            Sha256Hash mintHash = slashingMintTxHash(block);
+            UTXO minted = store.getTransactionOutput(block.getHash(), mintHash, idx);
+            if (minted != null && minted.getSpenderBlockHash() != null
+                    && !minted.getSpenderBlockHash().equals(Sha256Hash.ZERO_HASH)) {
+                continue; // genuinely spent — do not resurrect
+            }
+            store.updateTransactionOutputConfirmed(block.getHash(), mintHash, idx, true);
+            store.updateTransactionOutputSpent(block.getHash(), mintHash, idx, false, null);
+        }
+    }
+
+    /** Reorg revert: the slashing block unconfirmed, so its refund and reporter
+     *  mints are cancelled (unconfirmed + marked spent so they can never be
+     *  claimed). A later re-confirmation re-mints via applySlashingConfirmed. */
+    private void cancelSlashingMints(Block block, BlockStoreInterface store) throws Exception {
+        for (long idx : new long[] { SLASHING_REFUND_OUTPUT_INDEX, SLASHING_REPORTER_OUTPUT_INDEX }) {
+            store.updateTransactionOutputConfirmed(block.getHash(), slashingMintTxHash(block), idx, false);
+            store.updateTransactionOutputSpent(block.getHash(), slashingMintTxHash(block), idx, true,
+                    Sha256Hash.ZERO_HASH);
+        }
+    }
+
     public BigInteger getTotalActiveStake(BlockStoreInterface store) throws Exception {
-        return store.getActiveStakeDeposits().stream()
+        // Active as of the CURRENT CHAIN epoch: validators that activated within
+        // the delay window (activatedEpoch > currentChainEpoch) are excluded.
+        return store.getActiveStakeDeposits(SlotService.currentChainEpoch(store)).stream()
                 .map(StakeService::effectiveBalance)
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }

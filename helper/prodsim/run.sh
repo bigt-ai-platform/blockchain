@@ -9,8 +9,10 @@ log()   { echo -e "${GREEN}[OK]${NC} $1"; }
 fail()  { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
 info()  { echo -e "${YELLOW}[INFO]${NC} $1"; }
 
-# Default: 10 epochs x 16s = 160s
+# Default: 10 epochs x 64s (32 slots/epoch @ POS_SLOT_INTERVAL_MS=2000) = 640s
 EPOCHS="${EPOCHS:-10}"
+# Must match POS_SLOT_INTERVAL_MS in docker-compose.prodsim.yml (2000ms).
+SLOT_INTERVAL_MS="${SLOT_INTERVAL_MS:-2000}"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.prodsim.yml"
 
 # Port offset: run the whole prodsim on its own ports so it never collides
@@ -46,8 +48,23 @@ docker build -t ghcr.io/bigt-ai-platform/layer0-mcmc:latest \
     -f "$ROOT/layer0-mcmc/Dockerfile" "$ROOT/layer0-mcmc"
 
 # ─── Start network ──────────────────────────────────────────────────
-info "Starting 4-node PoS prodsim network..."
-docker compose -f "$COMPOSE_FILE" up -d
+# Wipe any leftover prodsim state from a previous run. The named volumes
+# survive `docker compose stop`/`down` (without -v), so without this a stale
+# genesis/stake set contaminates the bootstrap (e.g. a validator already bonded
+# → "Cannot spend a bonded stake output").
+info "Removing stale prodsim containers + volumes..."
+docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+
+# Start ONLY the databases and API servers first. The mcmc beacon producers
+# stay down during bootstrap: beacon production ramps up as soon as the first
+# validator is staked+active, so if they were up the later stake deposits would
+# land on a moving head and get reorged out (the 4 nodes stake on diverging
+# chains and never converge on one active set). Staking all 4 validators while
+# the chain is still at genesis (no beacons) makes the bootstrap deterministic.
+info "Starting databases + API servers (mcmc beacon producers held back)..."
+docker compose -f "$COMPOSE_FILE" up -d \
+  postgres-l0-0 postgres-l0-1 postgres-l0-2 postgres-l0-3 \
+  l0-server-0 l0-server-1 l0-server-2 l0-server-3
 
 info "Waiting for server nodes to be healthy..."
 for port in "${SERVER_PORTS[@]}"; do
@@ -78,18 +95,6 @@ for i in $(seq 1 15); do
   fi
 done
 
-info "Waiting for MCMC nodes to be running..."
-MCMC_NAMES=(prodsim-mcmc-0 prodsim-mcmc-1 prodsim-mcmc-2 prodsim-mcmc-3)
-for name in "${MCMC_NAMES[@]}"; do
-  for i in $(seq 1 15); do
-    if docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
-      log "${name} running"
-      break
-    fi
-    sleep 2
-  done
-done
-
 # Insert genesis into TipsQueue on all 4 databases
 info "Inserting genesis into TipsQueues..."
 PG_NAMES=(prodsim-pg-0 prodsim-pg-1 prodsim-pg-2 prodsim-pg-3)
@@ -117,8 +122,36 @@ mvn exec:java -pl layer0-mcmc -q \
 
 log "Validators bootstrapped"
 
+# ─── Start beacon producers ─────────────────────────────────────────
+# All 4 validators are staked+active on the genesis chain; NOW it is safe to
+# start the mcmc proposers. Proposer selection is deterministic and every node
+# derives the same active set, so the beacon chain starts single.
+info "Starting mcmc beacon producers..."
+docker compose -f "$COMPOSE_FILE" up -d \
+  l0-mcmc-0 l0-mcmc-1 l0-mcmc-2 l0-mcmc-3
+
+info "Waiting for MCMC nodes to be running..."
+MCMC_NAMES=(prodsim-mcmc-0 prodsim-mcmc-1 prodsim-mcmc-2 prodsim-mcmc-3)
+for name in "${MCMC_NAMES[@]}"; do
+  for i in $(seq 1 30); do
+    if docker ps --format '{{.Names}}' | grep -q "^${name}$"; then
+      log "${name} running"
+      break
+    fi
+    if [ "$i" -eq 30 ]; then
+      docker logs --tail=20 "${name}" 2>/dev/null || true
+      fail "${name} did not start"
+    fi
+    sleep 2
+  done
+done
+
 # ─── Simulation run ────────────────────────────────────────────────
-SIM_DURATION=$((EPOCHS * 16 + 10))  # epochs x 16s + margin
+# The sim must run enough REAL epochs for the beacon chain to settle and the
+# 4 nodes to converge on a single head. Duration is derived from the ACTUAL
+# slot interval (32 slots/epoch @ POS_SLOT_INTERVAL_MS), not a 16s assumption
+# that ran ~2.6 epochs for EPOCHS=10 and left tip convergence marginal.
+SIM_DURATION=$(( (EPOCHS * 32 * SLOT_INTERVAL_MS) / 1000 + 10 ))
 info "Running simulation for $EPOCHS epochs (~${SIM_DURATION}s)..."
 sleep "$SIM_DURATION"
 

@@ -113,6 +113,15 @@ public class CasperService {
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SlotService.SLOT_DURATION_MS;
 
+    /** Bounded clock-skew tolerance (pos.maxClockSkewMs, 0 = default one slot).
+     *  See {@link net.bigtangle.server.service.SlotService#maxClockSkewMs()}. */
+    @org.springframework.beans.factory.annotation.Value("${pos.maxClockSkewMs:0}")
+    private long maxClockSkewMs = 0;
+
+    private long maxClockSkewMs() {
+        return maxClockSkewMs > 0 ? maxClockSkewMs : slotIntervalMs;
+    }
+
     /**
      * Optional weak-subjectivity anchor: "{@code epoch}:{hex-blockhash}". A
      * long-range attacker who controlled historic keys can fork the chain from
@@ -269,23 +278,25 @@ public class CasperService {
 
     /**
      * Chain-derived checkpoint creation. The checkpoint hash for an epoch is a
-     * PURE FUNCTION of the confirmed chain: the confirmed reward block at the
-     * SLOT-based epoch boundary — the last beacon with slot &lt; epoch*32 (i.e.
-     * the last beacon of the previous epoch). This stays correct under slot
-     * drift (missed slots), where a chainlength-derived boundary would land in
-     * the wrong epoch. When the boundary is not yet confirmed a transient
+     * PURE FUNCTION of the confirmed chain: the last confirmed beacon with slot
+     * &lt; epoch*32 (the epoch boundary, see {@link #epochBoundaryHash}). This
+     * is deterministic AND stable for the whole epoch — beacons of the epoch
+     * have slots at/above the boundary, so the boundary never changes while the
+     * epoch advances. Because the boundary is a confirmed, immutable block, the
+     * checkpoint can be cached as soon as it is derivable; a reorg invalidates
+     * it via {@link #invalidateCheckpointsFrom}. When the boundary is not yet
+     * derivable (epoch 0 pre-genesis, or an empty chain) a transient
      * (non-cached) checkpoint is returned so the cache is never poisoned with a
-     * node-local value. Legacy beacons without SlotData fall back to the
-     * chainlength boundary.
+     * node-local value.
      */
     public Checkpoint ensureCheckpoint(long epoch, BlockStoreInterface store) {
         Checkpoint existing = checkpoints.get(epoch);
         if (existing != null) {
             return existing;
         }
-        Sha256Hash boundaryHash = slotBoundaryHash(epoch, store);
+        Sha256Hash boundaryHash = epochBoundaryHash(epoch, store);
         if (boundaryHash == null) {
-            // Boundary not confirmed yet: return a transient checkpoint that is
+            // Boundary not derivable yet: return a transient checkpoint that is
             // NOT cached, so it cannot poison future lookups.
             Checkpoint transientCp = new Checkpoint(confirmedHeadOrGenesis(store), epoch);
             if (epoch == 0) {
@@ -311,66 +322,8 @@ public class CasperService {
     }
 
     /**
-     * The confirmed beacon at the slot-based epoch boundary: the last beacon
-     * with slot &lt; {@code epoch*32}, found by walking the reward chain back
-     * from the tip. Null when the chain has not yet entered {@code epoch} (the
-     * boundary is not final) or a boundary cannot be derived.
+     * The SlotData slot of a beacon, or null when it carries none (legacy).
      */
-    private Sha256Hash slotBoundaryHash(long epoch, BlockStoreInterface store) {
-        long boundarySlot = epoch * SlotService.SLOTS_PER_EPOCH;
-        try {
-            TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
-            if (tip == null) {
-                return null;
-            }
-            Sha256Hash cursor = tip.getBlockHash();
-            java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
-            // The boundary is only CONFIRMED once the walk observes a beacon at
-            // or beyond it (a beacon only confirms when the next one arrives).
-            // Until then the boundary is not yet buried: returning the tip would
-            // cache a PREMATURE boundary (a mid-epoch beacon) that later proves
-            // wrong — attestation targets would fragment by exact hash and
-            // justification could split/stall on a healthy network. So return
-            // null (keeping the transient, uncached checkpoint path in
-            // ensureCheckpoint) unless the boundary was actually buried.
-            boolean boundaryBuried = false;
-            while (cursor != null && visited.add(cursor)) {
-                Block b = store.get(cursor);
-                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
-                    return null;
-                }
-                Long slot = slotOf(b);
-                if (slot == null) {
-                    // Legacy beacon without SlotData: fall back to the
-                    // chainlength boundary (pre-SlotData chains).
-                    TXReward legacy = store.getRewardConfirmedAtHeight(boundarySlot);
-                    return legacy != null ? legacy.getBlockHash() : null;
-                }
-                if (slot >= boundarySlot) {
-                    // Still in (or past) epoch `epoch`: keep walking back toward
-                    // the first beacon below the boundary.
-                    boundaryBuried = true;
-                    net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
-                            .parseChecked(b.getTransactions().get(0).getData());
-                    if (ri == null) {
-                        return null;
-                    }
-                    cursor = ri.getPrevRewardHash();
-                    continue;
-                }
-                // First beacon below the boundary while walking from a tip at or
-                // above it: the last beacon of epoch-1 is the checkpoint. If the
-                // boundary is not buried (the tip itself is below it) the true
-                // boundary is not yet confirmed — return null, not the tip.
-                return boundaryBuried ? cursor : null;
-            }
-        } catch (Exception e) {
-            return null;
-        }
-        return null;
-    }
-
-    /** The SlotData slot of a beacon, or null when it carries none (legacy). */
     private Long slotOf(Block b) {
         try {
             for (Transaction tx : b.getTransactions()) {
@@ -398,6 +351,63 @@ public class CasperService {
             // fall through
         }
         return UtilGeneseBlock.createGenesis(networkParameters).getHash();
+    }
+
+    /**
+     * The DETERMINISTIC attestation-target checkpoint for {@code epoch}: the
+     * last CONFIRMED beacon with slot &lt; {@code epoch*32} (the epoch
+     * boundary). This value is a pure function of the confirmed chain and is
+     * STABLE for the whole epoch — beacons of {@code epoch} have slot >=
+     * epoch*32, so they never change "the last confirmed beacon below the
+     * boundary". Honest attestations therefore all carry the SAME target for a
+     * given epoch, which is what enables the same-target-epoch double-vote
+     * slashing form (SlashingService.isDoubleVote form (b)): two different
+     * targets for one epoch can no longer be produced by honest single
+     * validators. Returns null only when no confirmed beacon is below the
+     * boundary (epoch 0 pre-genesis, or an empty chain).
+     */
+    public Sha256Hash epochBoundaryHash(long epoch, BlockStoreInterface store) {
+        long boundarySlot = epoch * SlotService.SLOTS_PER_EPOCH;
+        try {
+            TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
+            if (tip == null) {
+                return null;
+            }
+            Sha256Hash cursor = tip.getBlockHash();
+            java.util.Set<Sha256Hash> visited = new java.util.HashSet<>();
+            while (cursor != null && visited.add(cursor)) {
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    // Reached genesis: it is the boundary of epoch 0 and the
+                    // floor for every later epoch's walk.
+                    return cursor;
+                }
+                Long slot = slotOf(b);
+                if (slot == null) {
+                    // Legacy beacon without SlotData: fall back to the
+                    // chainlength boundary (pre-SlotData chains).
+                    TXReward legacy = store.getRewardConfirmedAtHeight(boundarySlot);
+                    return legacy != null ? legacy.getBlockHash() : cursor;
+                }
+                if (slot >= boundarySlot) {
+                    // Still in (or past) epoch `epoch`: keep walking back toward
+                    // the first beacon below the boundary.
+                    net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                            .parseChecked(b.getTransactions().get(0).getData());
+                    if (ri == null) {
+                        return cursor;
+                    }
+                    cursor = ri.getPrevRewardHash();
+                    continue;
+                }
+                // First beacon below the boundary: the last confirmed beacon of
+                // the previous epoch is the deterministic epoch checkpoint.
+                return cursor;
+            }
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 
     public boolean isCheckpointJustified(long epoch) {
@@ -532,7 +542,10 @@ public class CasperService {
                     vkey, att.getSlot(), att.getEpoch());
             return;
         }
-        long wallEpoch = SlotService.epochAt(System.currentTimeMillis(), slotIntervalMs);
+        // The wall epoch uses the bounded clock-skew upper bound: a node whose
+        // clock is behind by up to maxClockSkewMs must not reject attestations
+        // for the REAL current epoch as "far future".
+        long wallEpoch = SlotService.epochAt(System.currentTimeMillis() + maxClockSkewMs(), slotIntervalMs);
         if (att.getTargetEpoch() > wallEpoch + 1) {
             log.warn("Rejecting far-future attestation from pubkey={} slot={} (wall epoch {})",
                     vkey, att.getSlot(), wallEpoch);
@@ -686,12 +699,21 @@ public class CasperService {
         return Sha256Hash.of(baos.toByteArray());
     }
 
+    /**
+     * Zero-padded slot in the pos_state attestation key so lexicographic key
+     * order matches slot order. This lets the epoch prune delete the stale range
+     * in a single statement and keeps the per-slot prefix read exact.
+     */
+    static String attestationKey(long slot, byte[] validatorPubkey) {
+        return "att_" + String.format("%020d", slot) + "_" + Utils.HEX.encode(validatorPubkey);
+    }
+
     /** Persists the full (signed) attestation so it can be committed into the beacon. */
     private void persistFullAttestation(AttestationData att, BlockStoreInterface store) {
         try {
             byte[] json = net.bigtangle.utils.Json.jsonmapper().writeValueAsBytes(att);
             store.savePosState("attestation",
-                    "att_" + att.getSlot() + "_" + Utils.HEX.encode(att.getValidatorPubkey()), json);
+                    attestationKey(att.getSlot(), att.getValidatorPubkey()), json);
         } catch (Exception e) {
             log.debug("Failed to persist full attestation for slot {}", att.getSlot(), e);
         }
@@ -700,12 +722,12 @@ public class CasperService {
     /** The full (signed) attestations persisted for {@code slot} on this node. */
     public List<AttestationData> getAttestationsForSlot(long slot, BlockStoreInterface store) {
         List<AttestationData> list = new ArrayList<>();
-        String prefix = "att_" + slot + "_";
+        String prefix = "att_" + String.format("%020d", slot) + "_";
         try {
-            for (Map.Entry<String, byte[]> e : store.getPosStateByService("attestation").entrySet()) {
-                if (!e.getKey().startsWith(prefix)) {
-                    continue;
-                }
+            // Prefix-scoped read: only this slot's attestations are loaded, so the
+            // per-slot proposer path stays O(attestations of the slot) instead of
+            // scanning the whole "attestation" service map.
+            for (Map.Entry<String, byte[]> e : store.getPosStateByServicePrefix("attestation", prefix).entrySet()) {
                 try {
                     AttestationData att = net.bigtangle.utils.Json.jsonmapper()
                             .readValue(e.getValue(), AttestationData.class);
@@ -756,6 +778,8 @@ public class CasperService {
     public static final long INACTIVITY_PENALTY_THRESHOLD_EPOCHS = 4;
     /** Quadratic-drain divisor for the leak (Ethereum's inactivity score analog). */
     public static final long INACTIVITY_LEAK_DIVISOR = 64;
+    /** pos_state service namespace for the real inactivity leak bookkeeping. */
+    public static final String LEAK_SERVICE = "leak";
 
     /**
      * The 2/3 justification threshold over the TOTAL active stake — Ethereum's
@@ -777,7 +801,12 @@ public class CasperService {
         if (!onChainAttestationActive(store)) {
             return true; // pre-fork: checkpoints may be synthetic (bootstrap/tests)
         }
-        if (SlotService.currentSlotInEpoch(slotIntervalMs) < SAFE_SLOTS_TO_UPDATE_JUSTIFIED) {
+        // The safe window uses the EARLIEST plausible wall-clock time (now minus
+        // the bounded skew): a node whose clock is ahead must not think the
+        // window already closed and refuse a switch the rest of the network
+        // allows — fail-safe on the permissive side.
+        long earliestNow = System.currentTimeMillis() - maxClockSkewMs();
+        if (SlotService.currentSlotInEpoch(earliestNow, slotIntervalMs) < SAFE_SLOTS_TO_UPDATE_JUSTIFIED) {
             return true;
         }
         try {
@@ -789,67 +818,130 @@ public class CasperService {
     }
 
     /**
-     * Total active stake with the inactivity leak applied: when finality has
-     * stalled past the threshold, validators with no recent on-chain vote have
-     * their effective weight drained quadratically (down to ~0), so the online
-     * majority regains 2/3 of the reduced total and finality resumes. Fully
-     * deterministic — derived from chain state only.
+     * Total active stake for the justification denominator at {@code epoch}.
+     * Sums the effective balances of the validators active as of that epoch.
+     * The REAL inactivity leak ({@link #applyInactivityLeak}) has already
+     * reduced the stake.amount of non-voters at each epoch boundary, so this
+     * sum shrinks naturally when finality stalls — the online majority regains
+     * 2/3 of the reduced total and finality resumes. Fully deterministic —
+     * derived from chain state only.
      */
     private BigInteger leakedTotalStake(BlockStoreInterface store, long epoch) {
         try {
-            List<StakeRecord> active = store.getActiveStakeDeposits();
-            Checkpoint fin = getLastFinalizedCheckpoint();
-            long delay = fin != null ? epoch - fin.epoch : 0;
-            if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
-                BigInteger total = BigInteger.ZERO;
-                for (StakeRecord v : active) {
-                    total = total.add(StakeService.effectiveBalance(v));
-                }
-                return total;
-            }
-            Set<String> voters = recentVoters(store, epoch);
-            BigInteger leaked = BigInteger.ZERO;
+            List<StakeRecord> active = store.getActiveStakeDeposits(epoch);
+            BigInteger total = BigInteger.ZERO;
             for (StakeRecord v : active) {
-                BigInteger eb = StakeService.effectiveBalance(v);
-                if (!voters.contains(Utils.HEX.encode(v.getPubkey()))) {
-                    BigInteger div = BigInteger.valueOf(INACTIVITY_LEAK_DIVISOR + delay * delay);
-                    eb = eb.multiply(BigInteger.valueOf(INACTIVITY_LEAK_DIVISOR)).divide(div);
-                }
-                leaked = leaked.add(eb);
+                total = total.add(StakeService.effectiveBalance(v));
             }
-            return leaked;
+            return total;
         } catch (Exception e) {
             log.debug("Failed to compute leaked total stake", e);
             return BigInteger.ZERO;
         }
     }
 
-    /** Pubkeys (hex) with a recent vote: on-chain embedded attestations
-     *  post-fork (hard height gate), gossip latest-vote view pre-fork. */
-    private Set<String> recentVoters(BlockStoreInterface store, long epoch) {
-        Set<String> voters = new HashSet<>();
-        if (onChainAttestationActive(store)) {
-            for (AttestationData att : collectIncludedAttestations(store).values()) {
-                if (att.getTargetEpoch() >= epoch - INACTIVITY_WINDOW_EPOCHS) {
-                    voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
+    /**
+     * REAL inactivity leak: when finality is stalled past the threshold, each
+     * active validator that did NOT attest the just-ended epoch has its ACTUAL
+     * bonded balance reduced quadratically (stake.amount * 64 / (64 + delay^2)),
+     * applied deterministically at the epoch boundary (the first beacon of the
+     * following epoch confirms). This is a real balance bleed — not a virtual
+     * denominator drain — so leaked validators' weight, rewards and withdrawn
+     * bond all shrink. Reorg-aware: the reductions are keyed to the boundary
+     * beacon and reverted by {@link #revertInactivityLeak} on unconfirm.
+     *
+     * <p>Only runs post-fork ({@link #onChainAttestationActive}), where the
+     * voter set is the deterministic chain-read set. Pre-fork the vote view is
+     * not chain-authoritative, so no balance is destroyed.
+     */
+    public void applyInactivityLeak(long epoch, Block boundaryBeacon, BlockStoreInterface store) {
+        if (boundaryBeacon == null) {
+            return;
+        }
+        try {
+            // Idempotent: this boundary beacon has already applied its leak.
+            String appliedKey = "applied_" + boundaryBeacon.getHashAsString();
+            if (store.getPosState(LEAK_SERVICE, appliedKey) != null) {
+                return;
+            }
+            Set<String> voters = votersForEpoch(epoch, store);
+            if (voters == null) {
+                return; // pre-fork — no chain-authoritative voter set
+            }
+            Checkpoint fin = getLastFinalizedCheckpoint();
+            long delay = fin != null ? epoch - fin.epoch : 0;
+            if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
+                store.savePosState(LEAK_SERVICE, appliedKey, new byte[] { 1 });
+                return; // no leak while finality is healthy
+            }
+            long div = INACTIVITY_LEAK_DIVISOR + delay * delay;
+            for (StakeRecord v : store.getActiveStakeDeposits(epoch)) {
+                if (voters.contains(Utils.HEX.encode(v.getPubkey()))) {
+                    continue;
                 }
+                // Record the pre-leak balance for reorg revert, then reduce it.
+                store.savePosState(LEAK_SERVICE,
+                        "pre_" + boundaryBeacon.getHashAsString() + "_" + Utils.HEX.encode(v.getPubkey()),
+                        v.getAmount().toByteArray());
+                BigInteger reduced = v.getAmount()
+                        .multiply(BigInteger.valueOf(INACTIVITY_LEAK_DIVISOR))
+                        .divide(BigInteger.valueOf(div));
+                if (reduced.compareTo(v.getAmount()) >= 0) {
+                    continue; // no reduction — nothing to record
+                }
+                store.updateStakeDepositAmount(v.getPubkey(), reduced.longValue(),
+                        v.getBlockHash(), v.getTxHash(), v.getActivatedEpoch());
+                log.info("Inactivity leak: epoch={} reduced stake of {} {} -> {}",
+                        epoch, Utils.HEX.encode(v.getPubkey()), v.getAmount(), reduced);
             }
-            return voters;
+            store.savePosState(LEAK_SERVICE, appliedKey, new byte[] { 1 });
+        } catch (Exception e) {
+            log.debug("Inactivity leak application failed for epoch {} beacon {}: {}",
+                    epoch, boundaryBeacon.getHashAsString(), e.getMessage());
         }
-        // Pre-fork: use the gossip latest-vote view.
-        for (Map.Entry<String, Long> e : latestVotes.entrySet()) {
-            if (e.getValue() / SlotService.SLOTS_PER_EPOCH >= epoch - INACTIVITY_WINDOW_EPOCHS) {
-                voters.add(e.getKey());
-            }
-        }
-        return voters;
     }
 
     /**
-     * Pubkeys (hex) that attested the given target epoch, from on-chain embedded
-     * attestations. Returns {@code null} pre-fork (below the activation height),
-     * which callers treat as "reward all active validators". Deterministic
-     * post-fork — the basis for per-attestation rewards.
+     * Reverts the inactivity leak applied by a boundary beacon that was
+     * unconfirmed: restores each leaked validator's pre-leak balance. Idempotent
+     * — a beacon that never applied a leak has nothing to revert.
+     */
+    public void revertInactivityLeak(Block boundaryBeacon, BlockStoreInterface store) {
+        if (boundaryBeacon == null) {
+            return;
+        }
+        try {
+            String appliedKey = "applied_" + boundaryBeacon.getHashAsString();
+            if (store.getPosState(LEAK_SERVICE, appliedKey) == null) {
+                return;
+            }
+            String prefix = "pre_" + boundaryBeacon.getHashAsString() + "_";
+            for (Map.Entry<String, byte[]> e : store.getPosStateByService(LEAK_SERVICE).entrySet()) {
+                if (!e.getKey().startsWith(prefix)) {
+                    continue;
+                }
+                byte[] pubkey = Utils.HEX.decode(e.getKey().substring(prefix.length()));
+                BigInteger pre = new BigInteger(e.getValue());
+                StakeRecord v = store.getStakeDeposit(pubkey);
+                if (v != null) {
+                    store.updateStakeDepositAmount(pubkey, pre.longValue(),
+                            v.getBlockHash(), v.getTxHash(), v.getActivatedEpoch());
+                }
+                store.deletePosState(LEAK_SERVICE, e.getKey());
+            }
+            store.deletePosState(LEAK_SERVICE, appliedKey);
+            log.info("Reorg: reverted inactivity leak for beacon {}",
+                    boundaryBeacon.getHashAsString());
+        } catch (Exception e) {
+            log.debug("Inactivity leak revert failed for beacon {}: {}",
+                    boundaryBeacon.getHashAsString(), e.getMessage());
+        }
+    }
+
+    /** Pubkeys (hex) that attested the given target epoch, from on-chain embedded
+     *  attestations. Returns {@code null} pre-fork (below the activation height),
+     *  which callers treat as "reward all active validators". Deterministic
+     *  post-fork — the basis for per-attestation rewards.
      */
     public static Set<String> votersForEpoch(long epoch, BlockStoreInterface store) {
         if (!onChainAttestationActive(store)) {
@@ -1073,7 +1165,9 @@ public class CasperService {
 
     private BigInteger votedStakeFromChain(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
+        // Stake is counted only for validators active at the TARGET epoch: a
+        // deposit still in its activation-delay window has zero weight.
+        List<StakeRecord> validators = store.getActiveStakeDeposits(target.epoch);
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
             stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));
@@ -1100,7 +1194,9 @@ public class CasperService {
 
     private BigInteger votedStakeFromGossip(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = store.getActiveStakeDeposits();
+        // Stake is counted only for validators active at the TARGET epoch: a
+        // deposit still in its activation-delay window has zero weight.
+        List<StakeRecord> validators = store.getActiveStakeDeposits(target.epoch);
         Map<String, BigInteger> stakeByPubkey = new HashMap<>();
         for (StakeRecord v : validators) {
             stakeByPubkey.put(Utils.HEX.encode(v.getPubkey()), StakeService.effectiveBalance(v));

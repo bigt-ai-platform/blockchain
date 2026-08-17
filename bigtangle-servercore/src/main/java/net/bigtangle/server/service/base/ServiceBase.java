@@ -363,21 +363,44 @@ public abstract class ServiceBase {
 		return Long.MAX_VALUE;
 	}
 
+	/**
+	 * The reward-chain cutoff height below which a referenced block would already
+	 * have been rewarded: walks the confirmed reward chain back from
+	 * {@code prevRewardHash} to the genesis floor. Returns {@code -1} when a
+	 * predecessor block is not (yet) in the store — the cutoff cannot be
+	 * determined, and callers MUST defer rather than reject (a lagging node must
+	 * never permanently reject a valid beacon; previously a missing predecessor
+	 * NPE'd here and hard-failed the whole confirmation pipeline). Genesis is
+	 * checked BEFORE parsing, so the genesis coinbase is never misread as a
+	 * RewardInfo (which yielded a garbage prevRewardHash and a downstream NPE).
+	 */
 	public long getRewardCutoffHeight(Sha256Hash prevRewardHash, BlockStoreInterface store) throws BlockStoreException {
-
+		// The genesis floor is taken from the STORE (the reward block at
+		// chainlength 0), not from UtilGeneseBlock.createGenesis(networkParameters):
+		// the latter reconstructs the genesis from process-local config (the
+		// genesis CSV), which can DIFFER between the API server and a shared-DB
+		// MCMC process — a mismatched genesis hash then makes the walk NPE on
+		// the coinbase parse. The stored genesis is identical on every process
+		// sharing the DB.
+		TXReward genesisReward = store.getRewardConfirmedAtHeight(0);
+		Sha256Hash genesisHash = genesisReward != null ? genesisReward.getBlockHash()
+				: UtilGeneseBlock.createGenesis(networkParameters).getHash();
 		Sha256Hash currPrevRewardHash = prevRewardHash;
 		for (int i = 0; i < NetworkParameters.CHAINLENGTH_CUTOFF; i++) {
-			Block currRewardBlock;
-			currRewardBlock = getBlock(currPrevRewardHash, store);
+			if (currPrevRewardHash.equals(genesisHash)) {
+				return 0;
+			}
+			Block currRewardBlock = getBlock(currPrevRewardHash, store);
+			if (currRewardBlock == null) {
+				// Predecessor not synced yet — cutoff undeterminable. Defer.
+				return -1;
+			}
 			RewardInfo currRewardInfo = new RewardInfo()
 					.parseChecked(currRewardBlock.getTransactions().get(0).getData());
-			if (currPrevRewardHash.equals(UtilGeneseBlock.createGenesis(networkParameters ).getHash()))
-				return 0;
-
 			currPrevRewardHash = currRewardInfo.getPrevRewardHash();
-
 		}
-		return getBlock(currPrevRewardHash, store).getHeight();
+		Block tail = getBlock(currPrevRewardHash, store);
+		return tail != null ? tail.getHeight() : -1;
 	}
 
 	public SolidityState getMinPredecessorSolidity(Block block, List<BlockWrap> allPredecessors,

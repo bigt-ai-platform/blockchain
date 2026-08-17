@@ -29,6 +29,7 @@ import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.SlotData;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
@@ -689,8 +690,11 @@ public class PoSTest extends AbstractIntegrationTest {
                 validatorKey.getPubKey(), StakeService.MIN_STAKE, validatorKey.getPubKeyHash()));
         stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 
-        // A SLASHING block for this validator with a valid payload.
-        Block slashBlock = new Block(networkParameters);
+        // A SLASHING block for this validator with a valid payload. It needs a
+        // real chain parent so its hash (the store-level refund/reporter mint
+        // key) is computable.
+        Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+        Block slashBlock = Block.createBlock(networkParameters, genesis, genesis);
         slashBlock.setBlockType(BlockType.BLOCKTYPE_SLASHING);
         AttestationData att = new AttestationData();
         att.setSlot(5);
@@ -773,6 +777,63 @@ public class PoSTest extends AbstractIntegrationTest {
         StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(slashed.isSlashed(),
                 "validator must be slashed via the consensus SLASHING block");
+    }
+
+    @Test
+    public void testGradedSlashingMintsRefund() throws Exception {
+        // Graded slashing (Ethereum 1/32 penalty): the bonded output is burned,
+        // but amount - amount/32 is minted back to the slashed validator as a
+        // store-level refund UTXO keyed to the slashing block. Net burn = 1/32,
+        // not 100%.
+        StakeRecord seeded = new StakeRecord(validatorKey.getPubKey(), StakeService.MIN_STAKE,
+                validatorKey.getPubKeyHash());
+        seeded.setBlockHash(Sha256Hash.of("stakeblock".getBytes()));
+        seeded.setTxHash(Sha256Hash.of("staketx".getBytes()));
+        store.saveStakeDeposit(seeded);
+        stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
+
+        makeRewardBlock();
+        mcmcService.update(store);
+        blockGraph.confirmDo(store);
+
+        AttestationData att1 = new AttestationData();
+        att1.setSlot(5);
+        att1.setBeaconBlockHash(Sha256Hash.of("headA".getBytes()));
+        att1.setValidatorPubkey(validatorKey.getPubKey());
+        signAttestation(validatorKey, att1);
+
+        AttestationData att2 = new AttestationData();
+        att2.setSlot(5);
+        att2.setBeaconBlockHash(Sha256Hash.of("headB".getBytes()));
+        att2.setValidatorPubkey(validatorKey.getPubKey());
+        signAttestation(validatorKey, att2);
+
+        // Build the consensus SLASHING block directly (mirrors
+        // submitSlashing) so the block reference is in scope.
+        TXReward maxReward = store.getMaxConfirmedReward();
+        Block head = store.get(maxReward.getBlockHash());
+        Block slashBlock = Block.createBlock(networkParameters, head, head);
+        slashBlock.setBlockType(BlockType.BLOCKTYPE_SLASHING);
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(StakeService.SLASHING_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(Map.of(
+                "attestation1", att1, "attestation2", att2)));
+        slashBlock.addTransaction(tx);
+
+        stakeService.applySlashingBlock(slashBlock, store);
+
+        StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
+        assertTrue(slashed.isSlashed());
+
+        Sha256Hash mintHash = slashBlock.getTransactions().get(0).getHash();
+        UTXO refund = store.getTransactionOutput(slashBlock.getHash(), mintHash, 1);
+        assertNotNull(refund, "a refund UTXO must be minted for the slashed bond");
+        BigInteger expected = StakeService.MIN_STAKE
+                .subtract(StakeService.MIN_STAKE.divide(BigInteger.valueOf(StakeService.SLASH_PENALTY_DIVISOR)));
+        assertEquals(expected, refund.getValue().getValue(),
+                "refund = amount - amount/32 (net burn is exactly 1/32)");
+        assertEquals(slashBlock.getHash(), refund.getBlockHash(),
+                "the refund is keyed to the slashing block");
     }
 
     @Test
@@ -1525,51 +1586,110 @@ public class PoSTest extends AbstractIntegrationTest {
 
     @Test
     public void testInactivityLeakRestoresFinality() throws Exception {
-        // Four validators with equal stake. Once finality stalls past the
-        // penalty threshold, validators that stopped voting are drained from the
-        // denominator (inactivity leak), so the online half regains 2/3 of the
-        // reduced total and finality resumes.
-        PQKey v1 = PQKey.createNew();
-        PQKey v2 = PQKey.createNew();
-        PQKey v3 = PQKey.createNew();
-        PQKey v4 = PQKey.createNew();
-        for (PQKey k : List.of(v1, v2, v3, v4)) {
-            registerValidator(k);
-        }
+        // REAL inactivity leak: when finality is stalled past the threshold,
+        // validators that stopped voting have their ACTUAL bonded balance
+        // reduced quadratically at the epoch boundary (chain-read voter set),
+        // so the online majority regains 2/3 of the reduced total and finality
+        // resumes. This drives the boundary application directly and asserts
+        // the balance bleed is real, reorg-revertible, and restores the 2/3
+        // supermajority for the online set.
+        String key = "net.bigtangle.pos.attestationActivation";
+        String original = System.getProperty(key);
+        try {
+            System.setProperty(key, "0");
 
-        CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
-        assertNotNull(base);
-        long e1 = base.getEpoch() + 1;
-        CasperService.Checkpoint cp1 = casperService.ensureCheckpoint(e1,
-                Sha256Hash.of(("leak1-" + e1).getBytes()));
+            PQKey v1 = PQKey.createNew();
+            PQKey v2 = PQKey.createNew();
+            PQKey v3 = PQKey.createNew();
+            PQKey v4 = PQKey.createNew();
+            for (PQKey k : List.of(v1, v2, v3, v4)) {
+                registerValidator(k);
+            }
 
-        // Healthy: all four vote e1 -> justify + finalize.
-        for (PQKey k : List.of(v1, v2, v3, v4)) {
-            casperService.processVote(
-                    signedVoteFor(k, e1 * 32, base.getEpoch(), e1, base.getBlockHash(), cp1.getBlockHash()),
-                    store);
-        }
-        casperService.finalizeCheckpoint(e1, store);
-        assertTrue(casperService.isCheckpointJustified(e1), "all validators voting justifies");
-        assertTrue(casperService.isCheckpointFinalized(e1));
+            CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+            assertNotNull(base);
+            // The leaked epoch must be past the penalty threshold relative to
+            // the last finalized checkpoint. A delay of 9 (threshold + 5) makes
+            // a SINGLE leak application reduce each offline validator below
+            // half of MIN_STAKE, so the 2-online / 2-offline split regains a
+            // 2/3 supermajority of the leaked total.
+            long epoch = base.getEpoch() + CasperService.INACTIVITY_PENALTY_THRESHOLD_EPOCHS + 5;
+            long slot = epoch * 32;
 
-        // v3 + v4 go offline; v1 + v2 keep voting. Justification must resume
-        // once the leak drains the offline half out of the denominator.
-        boolean resumed = false;
-        for (long e = e1 + 1; e <= e1 + CasperService.INACTIVITY_WINDOW_EPOCHS + 3; e++) {
-            CasperService.Checkpoint cp = casperService.ensureCheckpoint(e,
-                    Sha256Hash.of(("leak" + e).getBytes()));
-            casperService.processVote(signedVoteFor(v1, e * 32, e1, e, cp1.getBlockHash(),
-                    cp.getBlockHash()), store);
-            casperService.processVote(signedVoteFor(v2, e * 32, e1, e, cp1.getBlockHash(),
-                    cp.getBlockHash()), store);
-            casperService.finalizeCheckpoint(e, store);
-            if (casperService.isCheckpointJustified(e)) {
-                resumed = true;
-                break;
+            // Boundary beacon carrying on-chain attestations from the two
+            // ONLINE validators for the target epoch (chain-read voter set).
+            Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+            Block b = Block.createBlock(networkParameters, genesis, genesis);
+            b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+            Transaction rtx = new Transaction(networkParameters);
+            RewardInfo ri = new RewardInfo();
+            ri.setChainlength(1);
+            ri.setPrevRewardHash(genesis.getHash());
+            ri.setBlocks(new java.util.HashSet<>());
+            rtx.setData(ri.toByteArray());
+            b.addTransaction(rtx);
+            AttestationData att1 = signedVoteFor(v1, slot, base.getEpoch(), epoch,
+                    base.getBlockHash(), Sha256Hash.of(("leakB-" + epoch).getBytes()));
+            AttestationData att2 = signedVoteFor(v2, slot, base.getEpoch(), epoch,
+                    base.getBlockHash(), Sha256Hash.of(("leakB-" + epoch).getBytes()));
+            net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, epoch, 0, genesis.getHash());
+            sd.setAttestations(List.of(att1, att2));
+            sd.setAttestationRoot(CasperService.computeAttestationRoot(List.of(att1, att2)));
+            Transaction slotTx = new Transaction(networkParameters);
+            slotTx.setDataClassName("SlotData");
+            slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
+            b.addTransaction(slotTx);
+            store.put(b);
+            store.insertReward(b.getHash(), genesis.getHash(), 1);
+            store.updateRewardConfirmed(b.getHash(), true);
+
+            assertTrue(CasperService.onChainAttestationActive(store),
+                    "chain-read voter set must be active");
+            assertEquals(2, CasperService.votersForEpoch(epoch, store).size(),
+                    "only the online validators are in the chain-read voter set");
+
+            // No leak below the threshold: the online set alone cannot justify.
+            assertEquals(StakeService.MIN_STAKE.multiply(BigInteger.valueOf(4)),
+                    stakeService.getTotalActiveStake(store));
+
+            // Apply the leak at the epoch boundary.
+            casperService.applyInactivityLeak(epoch, b, store);
+            long div = CasperService.INACTIVITY_LEAK_DIVISOR
+                    + (long) (epoch - base.getEpoch()) * (epoch - base.getEpoch());
+            BigInteger leaked = StakeService.MIN_STAKE
+                    .multiply(BigInteger.valueOf(CasperService.INACTIVITY_LEAK_DIVISOR))
+                    .divide(BigInteger.valueOf(div));
+            assertEquals(leaked, store.getStakeDeposit(v3.getPubKey()).getAmount(),
+                    "offline validator v3 must be leaked for real (balance reduced)");
+            assertEquals(leaked, store.getStakeDeposit(v4.getPubKey()).getAmount(),
+                    "offline validator v4 must be leaked for real (balance reduced)");
+            assertEquals(StakeService.MIN_STAKE, store.getStakeDeposit(v1.getPubKey()).getAmount(),
+                    "online validator v1 is not leaked");
+            assertEquals(StakeService.MIN_STAKE, store.getStakeDeposit(v2.getPubKey()).getAmount(),
+                    "online validator v2 is not leaked");
+
+            // The online half now exceeds 2/3 of the reduced total.
+            BigInteger online = StakeService.MIN_STAKE.multiply(BigInteger.valueOf(2));
+            BigInteger total = stakeService.getTotalActiveStake(store);
+            assertTrue(online.multiply(BigInteger.valueOf(3)).compareTo(total.multiply(BigInteger.valueOf(2))) > 0,
+                    "online stake must exceed 2/3 of the leaked total: " + online + " vs " + total);
+
+            // Reorg revert restores the leaked balances.
+            casperService.revertInactivityLeak(b, store);
+            assertEquals(StakeService.MIN_STAKE, store.getStakeDeposit(v3.getPubKey()).getAmount(),
+                    "revert restores v3's pre-leak balance");
+            assertEquals(StakeService.MIN_STAKE, store.getStakeDeposit(v4.getPubKey()).getAmount(),
+                    "revert restores v4's pre-leak balance");
+            // And the application is idempotent after re-apply.
+            casperService.applyInactivityLeak(epoch, b, store);
+            assertEquals(leaked, store.getStakeDeposit(v3.getPubKey()).getAmount(),
+                    "re-applied leak is idempotent (single reduction)");
+        } finally {
+            if (original != null) {
+                System.setProperty(key, original);
+            } else {
+                System.clearProperty(key);
             }
         }
-        assertTrue(resumed,
-                "finality resumes once offline stake is drained by the inactivity leak");
     }
 }

@@ -33,9 +33,11 @@ psql_cmd() {
 echo "Snapshotting ${DB_HOST}:${DB_PORT}/${DB_NAME} (tokenid=${TOKENID}) ..."
 
 # Aggregate confirmed, unspent BIG outputs per address. Order by address so the
-# CSV (and thus the genesis hash) is deterministic.
+# CSV (and thus the genesis hash) is deterministic. The pubkey column is emitted
+# empty (legacy rows carry no pubkey); the CSV consumer
+# (UtilGeneseBlock.createGenesis) expects address,pubkey,value.
 psql_cmd -A -F, -t -c "
-SELECT toaddress, SUM(coinvalue)
+SELECT toaddress, '' AS pubkey, SUM(coinvalue)
 FROM outputs
 WHERE confirmed = true
   AND spent = false
@@ -46,6 +48,16 @@ GROUP BY toaddress
 ORDER BY toaddress;
 " > /tmp/genesis_rows.csv
 
+# Exact integer total (computed in PostgreSQL, not awk's float): the genesis
+# supply check must never fail on a rounding artefact.
+total=$(psql_cmd -A -t -c "
+SELECT COALESCE(SUM(coinvalue), 0)
+FROM outputs
+WHERE confirmed = true
+  AND spent = false
+  AND tokenid = '${TOKENID}';
+")
+
 # Build the CSV: header (address,pubkey,value) + data rows (pubkey empty).
 {
     echo "address,pubkey,value"
@@ -53,7 +65,7 @@ ORDER BY toaddress;
 } > "${OUT_CSV}"
 
 rows=$(($(wc -l < "${OUT_CSV}") - 1))
-sum=$(awk -F, 'NR>1 { s += $3 } END { printf "%d", s+0 }' "${OUT_CSV}")
+sum="${total:-0}"
 
 echo "Wrote ${OUT_CSV} (${rows} addresses, total ${sum} satoshis)"
 

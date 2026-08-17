@@ -752,6 +752,15 @@ public class BlockStoreService {
 						if (slotService != null) {
 							slotService.snapshotValidatorsForEpoch(sd.getSlot() / 32 - 1, blockStore);
 						}
+						// Real inactivity leak: applied at the epoch boundary
+						// (keyed to this beacon) when finality is stalled, so the
+						// balance bleed is a deterministic chain function and is
+						// reverted on unconfirm.
+						net.bigtangle.server.service.CasperService casperLeak =
+								casperServiceProvider.getIfAvailable();
+						if (casperLeak != null) {
+							casperLeak.applyInactivityLeak(sd.getSlot() / 32 - 1, blk, blockStore);
+						}
 						// Chain-driven finality is evaluated AFTER the commit
 						// (see below): the two most recently completed slot-epochs
 						// have complete votes. Only collect the epochs here.
@@ -929,6 +938,13 @@ public class BlockStoreService {
 							// stale value from this beacon is never left behind to
 							// become permanent.
 							resetReferencedWithdrawables(stakeService, blk, blockStore);
+							// Revert the real inactivity leak this boundary beacon
+							// applied (restore pre-leak balances).
+							net.bigtangle.server.service.CasperService casperLeak =
+									casperServiceProvider.getIfAvailable();
+							if (casperLeak != null) {
+								casperLeak.revertInactivityLeak(blk, blockStore);
+							}
 						}
 					} catch (Exception e) {
 						log.warn("Failed to revert chain-derived state for block {}: {}",

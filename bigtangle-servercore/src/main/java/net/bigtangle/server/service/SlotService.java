@@ -81,6 +81,34 @@ public class SlotService {
     @Autowired
     private ObjectMapper jsonmapper;
 
+    /**
+     * Bounded clock-skew tolerance ({@code pos.maxClockSkewMs}, default one
+     * slot). Slot derivation is wall-clock based (the chain has no block
+     * timestamps to anchor the "current" slot), so a node whose clock drifts by
+     * up to this much must still behave identically to a well-synced node.
+     * Consensus gates that must NOT reject valid input under a behind clock use
+     * {@link #nowSkewed()}; gates that must not over-restrict under an ahead
+     * clock subtract the skew. Operators should run NTP; this window absorbs
+     * the residual drift. See plan/pos-production-readiness.md Phase 5.1.
+     */
+    @org.springframework.beans.factory.annotation.Value("${pos.maxClockSkewMs:0}")
+    private long maxClockSkewMs = 0;
+
+    /** The configured bounded clock-skew tolerance in ms (0 = disabled). */
+    public long maxClockSkewMs() {
+        return maxClockSkewMs > 0 ? maxClockSkewMs : slotIntervalMs;
+    }
+
+    /**
+     * The latest plausible wall-clock time given the bounded skew. A node whose
+     * clock is behind by up to {@link #maxClockSkewMs()} must use this upper
+     * bound when rejecting far-future input, so valid traffic for the real
+     * current slot is never mistaken for future traffic.
+     */
+    public long nowSkewed() {
+        return System.currentTimeMillis() + maxClockSkewMs();
+    }
+
     public long getCurrentSlot() {
         return (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
     }
@@ -88,6 +116,16 @@ public class SlotService {
     /** The wall-clock slot's position within its epoch, for the given interval. */
     public static long currentSlotInEpoch(long slotIntervalMs) {
         long slot = (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
+        return slot % SLOTS_PER_EPOCH;
+    }
+
+    /**
+     * Wall-clock slot-in-epoch for an ABSOLUTE time (used to tolerate clock
+     * skew on gates that must not over-restrict under an ahead clock: the
+     * caller passes the EARLIEST plausible time).
+     */
+    public static long currentSlotInEpoch(long timeMs, long slotIntervalMs) {
+        long slot = (timeMs - 1532896109000L) / slotIntervalMs;
         return slot % SLOTS_PER_EPOCH;
     }
 
@@ -195,7 +233,10 @@ public class SlotService {
         // select no proposer for every slot of the epoch — and since snapshots
         // are only written by confirming beacons, the chain could never recover.
         if (validators == null || validators.isEmpty()) {
-            validators = store.getActiveStakeDeposits();
+            // Bootstrap fallback: the LIVE set of validators active as of the
+            // current chain epoch (activation-delay aware), so a not-yet-active
+            // deposit can never be selected as proposer.
+            validators = store.getActiveStakeDeposits(currentChainEpoch(store));
         }
         return validators;
     }
@@ -221,7 +262,11 @@ public class SlotService {
             return;
         }
         if (store.getPosState("posvalidators", "validators_" + epoch) == null) {
-            List<StakeRecord> active = store.getActiveStakeDeposits();
+            // Activation-delay aware: only validators whose activation epoch the
+            // CURRENT CHAIN epoch has reached are frozen into the snapshot, so a
+            // deposit still in its delay window can never influence proposer
+            // selection, rewards or justification.
+            List<StakeRecord> active = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
             // Never freeze an EMPTY set: with no fallback the epoch two epochs
             // later would have no proposer for any slot, no beacons would
             // confirm, no new snapshot would be written — an unrecoverable halt.
@@ -584,24 +629,11 @@ public class SlotService {
 
     /** Prunes persisted full attestations whose slot is below the finalized floor. */
     private void pruneAttestationKeys(BlockStoreInterface store, long floor) throws Exception {
-        for (String key : store.getPosStateByService("attestation").keySet()) {
-            if (!key.startsWith("att_")) {
-                continue;
-            }
-            try {
-                // key format: "att_<slot>_<pubkeyhex>"
-                int secondUnderscore = key.indexOf('_', "att_".length());
-                if (secondUnderscore < 0) {
-                    continue;
-                }
-                long slot = Long.parseLong(key.substring("att_".length(), secondUnderscore));
-                if (slot / SLOTS_PER_EPOCH < floor) {
-                    store.deletePosState("attestation", key);
-                }
-            } catch (NumberFormatException ignored) {
-                // malformed key — leave it
-            }
-        }
+        // Keys are "att_<zero-padded slot>_<pubkeyhex>" (see CasperService.
+        // attestationKey), so lexicographic order == slot order and the whole
+        // stale range is dropped in a single statement — no per-key map scan.
+        store.deletePosStateByServiceKeyRange("attestation", "att_",
+                "att_" + String.format("%020d", floor * SLOTS_PER_EPOCH) + "_");
     }
 
     private void pruneEpochKeys(BlockStoreInterface store, String service, String prefix, long floor)

@@ -47,14 +47,20 @@ public class PosConsensusHardeningTest {
 
     @Test
     public void sameTargetEpochDifferentTargetRootIsNotDoubleVote() {
-        // Different slots, same target epoch, two different target checkpoints:
-        // NOT enforced today — the target checkpoint derives from the transient
-        // confirmed head until the epoch boundary is buried (see
-        // CasperService.ensureCheckpoint), so honest same-epoch attestations can
-        // carry different targets while the head advances. Slashing them would
-        // slash honest single validators. Re-enable with a stable target.
+        // Form (b) is DISABLED: attestations target the CURRENT wall-clock epoch,
+        // whose boundary is the moving chain tip while the epoch is live, so two
+        // honest attestations within one epoch legitimately differ in target and
+        // must NOT be slashable (see SlashingService.isDoubleVote). Form (b) may
+        // only be re-enabled once attestations target a stable past boundary.
         AttestationData a = att(33, 0, 1, h(1), h(1));
         AttestationData b = att(40, 0, 1, h(2), h(2));
+        assertFalse(SlashingService.isDoubleVote(a, b));
+    }
+
+    @Test
+    public void sameTargetEpochSameTargetRootIsNotDoubleVote() {
+        AttestationData a = att(33, 0, 1, h(1), h(1));
+        AttestationData b = att(40, 0, 1, h(1), h(1));
         assertFalse(SlashingService.isDoubleVote(a, b));
     }
 
@@ -75,12 +81,17 @@ public class PosConsensusHardeningTest {
     // ---- Surround vote (unchanged semantics, now via shared helper) ----
 
     @Test
-    public void surroundVoteDetected() {
-        // a: (0, 3) surrounds b: (1, 2)
+    public void surroundVoteNotEnforced() {
+        // Surround detection is DISABLED: the source (justified-checkpoint
+        // epoch) can regress after a reorg while the wall-clock target never
+        // does, which the strict containment test read as a surround on honest
+        // votes (see SlashingService.isSurroundVote). Re-enable together with
+        // the same-target-epoch double-vote form once attestations target
+        // stable chain-epoch boundaries.
         AttestationData a = att(0, 0, 3, h(1), h(1));
         AttestationData b = att(33, 1, 2, h(2), h(2));
-        assertTrue(SlashingService.isSurroundVote(a, b));
-        assertTrue(SlashingService.isSurroundVote(b, a));
+        assertFalse(SlashingService.isSurroundVote(a, b));
+        assertFalse(SlashingService.isSurroundVote(b, a));
     }
 
     @Test

@@ -180,38 +180,48 @@ public class SlashingService {
     }
 
     /**
-     * Ethereum's slashable double-vote form used on-chain today:
-     * same slot, two different heads (beacon block hashes).
-     *
-     * <p>The same-target-epoch form (two different target checkpoints for the
-     * same target epoch) is NOT enforced: the attestation target checkpoint is
-     * currently derived from the transient confirmed head until the epoch
-     * boundary is buried (see CasperService.ensureCheckpoint), so two honest
-     * attestations in the same epoch can legitimately carry different targets
-     * while the head advances. Enforcing form (b) there would slash honest
-     * single validators. Re-enable it once the target is made deterministic
-     * (stable, boundary-based) — tracked as a production-readiness follow-up.
+     * Ethereum's slashable double-vote forms:
+     * <p>(a) same slot, two different heads (beacon block hashes), and
+     * <p>(b) same target epoch, two different target checkpoints.
+     * <p>Form (b) is DISABLED: it requires the attestation target to be
+     * deterministic for the whole epoch, which only holds for a boundary the
+     * chain has already crossed. Attestations currently target the CURRENT
+     * wall-clock epoch, whose boundary (epochBoundaryHash — the last confirmed
+     * beacon below the epoch boundary) is the moving chain tip while the epoch
+     * is live, so an honest validator attesting twice within one epoch legitimately
+     * produces two different targets and would be falsely slashed (reproduced in
+     * the 4-node prodsim: all four honest validators slashed within seconds).
+     * Form (b) may only be re-enabled once attestations target a STABLE past
+     * boundary (e.g. the epoch-two-behind chain-epoch checkpoint used by the
+     * selection snapshot / reward lookback).
      */
     public static boolean isDoubleVote(AttestationData a, AttestationData b) {
         if (a == null || b == null) {
             return false;
         }
-        return a.getSlot() == b.getSlot()
+        // Form (a): same slot, two different heads.
+        if (a.getSlot() == b.getSlot()
                 && a.getBeaconBlockHash() != null && b.getBeaconBlockHash() != null
-                && !a.getBeaconBlockHash().equals(b.getBeaconBlockHash());
+                && !a.getBeaconBlockHash().equals(b.getBeaconBlockHash())) {
+            return true;
+        }
+        // Form (b) is intentionally not enforced — see javadoc.
+        return false;
     }
 
-    /** Ethereum's surround-vote slashable pattern (strict epoch containment). */
+    /**
+     * Ethereum's surround-vote slashable pattern (strict epoch containment).
+     * DISABLED: it assumes a validator's (source, target) epoch pairs advance
+     * monotonically. In this chain the SOURCE is the local justified-checkpoint
+     * epoch, which can REGRESS after a reorg invalidates the justified
+     * checkpoint, while the TARGET is the monotonic wall-clock epoch — so an
+     * honest validator's later vote (higher target) can carry a lower source,
+     * which the strict containment test reads as a surround and falsely slashes
+     * it (reproduced in the 4-node prodsim). Re-enable together with form (b)
+     * once attestations target stable chain-epoch boundaries.
+     */
     public static boolean isSurroundVote(AttestationData a, AttestationData b) {
-        if (a == null || b == null) {
-            return false;
-        }
-        if (a.getSourceEpoch() < 0 || a.getTargetEpoch() < 0
-                || b.getSourceEpoch() < 0 || b.getTargetEpoch() < 0) {
-            return false;
-        }
-        return (a.getSourceEpoch() < b.getSourceEpoch() && b.getTargetEpoch() < a.getTargetEpoch())
-                || (b.getSourceEpoch() < a.getSourceEpoch() && a.getTargetEpoch() < b.getTargetEpoch());
+        return false;
     }
 
     /**

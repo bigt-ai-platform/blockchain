@@ -673,6 +673,22 @@ public interface BlockStoreInterface {
 
 	Map<String, byte[]> getPosStateByService(String service) throws BlockStoreException;
 
+	/**
+	 * Returns only the pos_state entries of {@code service} whose key starts with
+	 * {@code keyPrefix}. Pushed into SQL so the caller never materializes the
+	 * whole service map (bounds the per-slot proposer path to the attestations of
+	 * that slot instead of every persisted attestation).
+	 */
+	Map<String, byte[]> getPosStateByServicePrefix(String service, String keyPrefix) throws BlockStoreException;
+
+	/**
+	 * Deletes every pos_state entry of {@code service} whose key is in
+	 * {@code [fromKey, beforeKey)}. Used by the epoch-boundary prune to drop
+	 * stale attestation rows in a single statement instead of per-key.
+	 */
+	void deletePosStateByServiceKeyRange(String service, String fromKey, String beforeKey)
+			throws BlockStoreException;
+
 	void deletePosState(String service, String key) throws BlockStoreException;
 
 	/**
