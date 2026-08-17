@@ -99,6 +99,9 @@ public class BlockStoreService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SlotService> slotServiceProvider;
 
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SyncBlockService> syncBlockServiceProvider;
+
 	// Test-only escape hatch: some test harnesses deliberately seed token blocks
 	// onto an L1 chain whose production params exclude TOKEN_CREATION. The
 	// allow-set gate below is the real production enforcement; this switch lets
@@ -313,6 +316,21 @@ public class BlockStoreService {
 			// in the ChainBlockQueue and retry on the next tick, by which time
 			// the referenced blocks will usually have arrived.
 			log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}", e.getMessage());
+			// Actively pull the missing reward parent from a peer so the queue
+			// entry can connect on a later tick (this is outside any open DB
+			// batch, so requesting + re-adding the parent cannot deadlock).
+			try {
+				RewardInfo ri = new RewardInfo()
+						.parseChecked(block.getTransactions().get(0).getData());
+				if (ri.getPrevRewardHash() != null) {
+					net.bigtangle.server.service.SyncBlockService sync = syncBlockServiceProvider.getIfAvailable();
+					if (sync != null) {
+						sync.requestBlock(ri.getPrevRewardHash(), store);
+					}
+				}
+			} catch (Exception reqEx) {
+				log.debug("Failed to request missing beacon parent: {}", reqEx.getMessage());
+			}
 		} catch (Exception e) {
 			deleteChainQueue(chainBlockQueue, store);
 			throw e;
@@ -344,11 +362,17 @@ public class BlockStoreService {
 					cacheBlockService, jsonmapper).checkChainSolidity(block, true, store);
 
 			if (solidityState.isDirectlyMissing()) {
-				log.debug("Block isDirectlyMissing. saveChainConnected stop to save.{}", block);
-				// sync the lastest chain from remote start from the -2 rewards
-				// syncBlockService.startSingleProcess(block.getLastMiningRewardBlock()
-				// - 2, false);
-				return;
+				// The beacon's reward-chain parent (prevRewardHash) or a referenced
+				// DAG block has not been synced yet (multi-node gossip/sync lag).
+				// Previously this returned normally, so the queue wrapper deleted
+				// the beacon from ChainBlockQueue forever — a node that fell behind
+				// the proposer could never rejoin the canonical chain, permanently
+				// forking the network. Throw MissingDependencyException instead so
+				// the queue wrapper keeps the beacon queued, requests the missing
+				// parent from a peer, and retries on the next tick.
+				log.debug("Beacon isDirectlyMissing, deferring for sync: {}", block.getHash());
+				throw new MissingDependencyException(
+						"beacon parent/reference not synced yet: " + block.getHash());
 			}
 
 			if (solidityState.isFailState()) {
