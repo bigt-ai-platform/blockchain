@@ -56,9 +56,12 @@ http_post() { # $1=path  $2=json-body
 # ---- Database --------------------------------------------------------------
 db_setup() {
     log "creating database ${DB_NAME} (if absent)"
-    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" \
+    # Connect to the always-present 'postgres' DB to run CREATE DATABASE (psql
+    # without -d would try the user-named DB, which does not exist on a fresh
+    # postgres image).
+    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" -d postgres \
         -tc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 \
-        || PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" \
+        || PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" -d postgres \
              -c "CREATE DATABASE ${DB_NAME};"
 }
 
