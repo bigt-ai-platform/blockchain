@@ -162,6 +162,19 @@ public class TipsService {
 			HashSet<BlockWrap> currentApprovedNonChainlengthBlocks, BlockStoreInterface store)
 			throws BlockStoreException {
 		List<BlockWrap> entryPoints = getEntryPoints(2, maxConfirmedReward.getChainLength(), store);
+		if (entryPoints == null || entryPoints.size() < 2 || entryPoints.get(0) == null
+				|| entryPoints.get(1) == null) {
+			// Entry points could not be resolved (e.g. MCMC tips reference blocks
+			// not yet synced on this node). Fall back to the last CONFIRMED beacon
+			// head so a fresh, conflict-free prototype is always available — the
+			// single slot proposer must not stall on a stale TipsQueue head.
+			BlockWrap head = store.getBlockWrap(maxConfirmedReward.getBlockHash());
+			if (head == null) {
+				throw new InfeasiblePrototypeException("No valid MCMC entry point or confirmed head");
+			}
+			return getValidatedBlockPair(maxConfirmedReward,
+					currentApprovedNonChainlengthBlocks, head, head, store);
+		}
 		BlockWrap left = entryPoints.get(0);
 		BlockWrap right = entryPoints.get(1);
 		// When both entry points select the same block in a simple chain,
@@ -201,9 +214,29 @@ public class TipsService {
 
 		// Necessary: Initial test if the prototype's
 		// currentApprovedNonChainlengthBlocks are actually valid
-
-		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store))
+		if (!serviceBase.isEligibleForApprovalSelection(currentApprovedUnconfirmedBlocks, store)) {
+			// The MCMC-selected tips conflict with the confirmed chain (e.g. the
+			// node has not yet synced all referenced DAG blocks, or the tips
+			// reference spent/unconfirmed inputs). Previously this threw and the
+			// MCMC stopped producing prototypes, so the single slot proposer kept
+			// building on a STALE TipsQueue head — the beacon chain diverged and
+			// nodes never converged on one canonical head. Fall back to the last
+			// CONFIRMED beacon head (trunk == branch == confirmed head): it is
+			// always conflict-free, so a fresh prototype is always available and
+			// the proposer extends the canonical chain. The next MCMC tick (after
+			// the DAG syncs) will resume tip-based selection.
+			Block confirmed = store.get(maxConfirmedReward.getBlockHash());
+			if (confirmed != null) {
+				BlockWrap head = store.getBlockWrap(maxConfirmedReward.getBlockHash());
+				if (head != null) {
+					log.warn("InfeasiblePrototype: falling back to confirmed head chainlength={}",
+							maxConfirmedReward.getChainLength());
+					return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, head, head, store, watch,
+							serviceBase, cutoffHeight, maxHeight);
+				}
+			}
 			throw new InfeasiblePrototypeException("The given prototype is invalid under the current chainlength");
+		}
 
 		return getValidatedBlockPair(currentApprovedUnconfirmedBlocks, left, right, store, watch, serviceBase,
 				cutoffHeight, maxHeight);

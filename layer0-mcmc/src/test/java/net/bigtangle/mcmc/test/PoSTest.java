@@ -1471,7 +1471,8 @@ public class PoSTest extends AbstractIntegrationTest {
                 "a restarted validator must not re-propose the same slot (self-slash)");
 
         Sha256Hash head = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
-        Sha256Hash targetCkpt = casperService.ensureCheckpoint(slot / 32, store).getBlockHash();
+        long chainEpoch = SlotService.currentChainEpoch(store);
+        Sha256Hash targetCkpt = casperService.ensureCheckpoint(chainEpoch, store).getBlockHash();
         assertTrue(validatorDutyService.mayAttest(slot, head, targetCkpt),
                 "byte-identical re-vote is safe");
         assertFalse(validatorDutyService.mayAttest(slot, Sha256Hash.of("movedHead".getBytes()), targetCkpt),

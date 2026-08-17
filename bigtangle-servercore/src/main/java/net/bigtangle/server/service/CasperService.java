@@ -355,22 +355,41 @@ public class CasperService {
 
     /**
      * The DETERMINISTIC attestation-target checkpoint for {@code epoch}: the
-     * last CONFIRMED beacon with slot &lt; {@code epoch*32} (the epoch
-     * boundary). This value is a pure function of the confirmed chain and is
-     * STABLE for the whole epoch — beacons of {@code epoch} have slot >=
-     * epoch*32, so they never change "the last confirmed beacon below the
-     * boundary". Honest attestations therefore all carry the SAME target for a
-     * given epoch, which is what enables the same-target-epoch double-vote
-     * slashing form (SlashingService.isDoubleVote form (b)): two different
-     * targets for one epoch can no longer be produced by honest single
-     * validators. Returns null only when no confirmed beacon is below the
-     * boundary (epoch 0 pre-genesis, or an empty chain).
+     * last CONFIRMED beacon at chainlength {@code &lt;= epoch*32} (the epoch
+     * boundary). The boundary is derived from the CONFIRMED reward chain's
+     * position (RewardInfo.chainlength), NOT from the beacon's absolute
+     * wall-clock slot.
+     *
+     * <p>Beacon slots are absolute wall-clock slots since the 2018 genesis
+     * (slot ~21,000,000 today), so a slot-relative walk ({@code slot < epoch*32})
+     * can never find the boundary for the FIRST chain epochs on a fresh chain —
+     * every beacon has a huge slot, the walk always falls through to genesis,
+     * and every node derives a fragmented/identical-to-genesis checkpoint, so
+     * 2/3 justification never forms. Chainlength, by contrast, is a pure
+     * function of the confirmed reward chain: position {@code E*32} is
+     * deterministic and identical on every node that has confirmed the same
+     * chain, so honest attestations all target the same checkpoint.
+     *
+     * <p>Returns the genesis hash when {@code epoch} is 0 or the chain has not
+     * yet reached the boundary (the genesis checkpoint is the root of trust).
      */
     public Sha256Hash epochBoundaryHash(long epoch, BlockStoreInterface store) {
-        long boundarySlot = epoch * SlotService.SLOTS_PER_EPOCH;
+        long boundaryChainlength = epoch * SlotService.SLOTS_PER_EPOCH;
         try {
             TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
             if (tip == null) {
+                return null;
+            }
+            if (tip.getChainLength() <= boundaryChainlength) {
+                // The chain has not yet reached this epoch's boundary: the
+                // highest confirmed position is the current floor, but for the
+                // target epoch the boundary is the confirmed beacon at exactly
+                // boundaryChainlength. If the chain is still inside this epoch
+                // (tip <= boundary), the checkpoint for THIS epoch is not yet
+                // confirmable — the last complete epoch boundary is the tip of
+                // the previous one. Callers (ensureCheckpoint) only create a
+                // cached checkpoint once the boundary is confirmed; until then a
+                // transient checkpoint is returned and no finality is attempted.
                 return null;
             }
             Sha256Hash cursor = tip.getBlockHash();
@@ -382,26 +401,22 @@ public class CasperService {
                     // floor for every later epoch's walk.
                     return cursor;
                 }
-                Long slot = slotOf(b);
-                if (slot == null) {
-                    // Legacy beacon without SlotData: fall back to the
-                    // chainlength boundary (pre-SlotData chains).
-                    TXReward legacy = store.getRewardConfirmedAtHeight(boundarySlot);
-                    return legacy != null ? legacy.getBlockHash() : cursor;
-                }
-                if (slot >= boundarySlot) {
-                    // Still in (or past) epoch `epoch`: keep walking back toward
-                    // the first beacon below the boundary.
-                    net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
+                net.bigtangle.core.RewardInfo ri;
+                try {
+                    ri = new net.bigtangle.core.RewardInfo()
                             .parseChecked(b.getTransactions().get(0).getData());
-                    if (ri == null) {
-                        return cursor;
-                    }
+                } catch (Exception e) {
+                    return cursor;
+                }
+                long cl = ri.getChainlength();
+                if (cl > boundaryChainlength) {
+                    // Still inside (or past) epoch `epoch`: walk back toward the
+                    // first beacon at/below the boundary.
                     cursor = ri.getPrevRewardHash();
                     continue;
                 }
-                // First beacon below the boundary: the last confirmed beacon of
-                // the previous epoch is the deterministic epoch checkpoint.
+                // First confirmed beacon at/below the boundary chainlength: the
+                // deterministic epoch checkpoint.
                 return cursor;
             }
         } catch (Exception e) {

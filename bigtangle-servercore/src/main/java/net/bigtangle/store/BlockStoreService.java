@@ -314,23 +314,12 @@ public class BlockStoreService {
 			// The beacon references DAG blocks this node has not synced yet
 			// (multi-node gossip lag). Dropping it would fork the chain: keep it
 			// in the ChainBlockQueue and retry on the next tick, by which time
-			// the referenced blocks will usually have arrived.
+			// the referenced blocks will usually have arrived. The periodic
+			// SyncBlockService.connectingOrphans/syncChain pass re-requests any
+			// still-missing parents outside the DB batch, so no network call is
+			// made here (a nested write on a poisoned transaction would abort the
+			// connection and stall the node).
 			log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}", e.getMessage());
-			// Actively pull the missing reward parent from a peer so the queue
-			// entry can connect on a later tick (this is outside any open DB
-			// batch, so requesting + re-adding the parent cannot deadlock).
-			try {
-				RewardInfo ri = new RewardInfo()
-						.parseChecked(block.getTransactions().get(0).getData());
-				if (ri.getPrevRewardHash() != null) {
-					net.bigtangle.server.service.SyncBlockService sync = syncBlockServiceProvider.getIfAvailable();
-					if (sync != null) {
-						sync.requestBlock(ri.getPrevRewardHash(), store);
-					}
-				}
-			} catch (Exception reqEx) {
-				log.debug("Failed to request missing beacon parent: {}", reqEx.getMessage());
-			}
 		} catch (Exception e) {
 			deleteChainQueue(chainBlockQueue, store);
 			throw e;

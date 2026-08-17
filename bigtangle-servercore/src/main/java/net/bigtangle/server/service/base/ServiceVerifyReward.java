@@ -77,9 +77,23 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.checkSolidity(newChainlengthBlock, false, store, false);
 
-		if (solidityState.notSuccessState())
+		if (solidityState.notSuccessState()) {
+			// A missing predecessor means the beacon's DAG parents (prevBlockHash
+			// / prevBranchBlockHash) or a referenced block have not been synced to
+			// this node yet (multi-node gossip lag). The beacon is VALID — it will
+			// connect once the missing blocks arrive — so signal a retryable
+			// MissingDependencyException: the queue wrapper keeps the beacon queued
+			// (and requests the missing parent) instead of deleting it forever.
+			// Dropping it would fork the chain: the single slot proposer builds on
+			// the confirmed head, but nodes that dropped its beacons could never
+			// confirm them and would diverge permanently.
+			if (solidityState.isDirectlyMissing()) {
+				throw new net.bigtangle.exception.VerificationException.MissingDependencyException(
+						"beacon DAG parent not synced yet: " + solidityState.getMissingDependency());
+			}
 			throw new VerificationException(
 					" .checkSolidity is failed: " + solidityState + "\n with block = " + newChainlengthBlock);
+		}
 
 		long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
 

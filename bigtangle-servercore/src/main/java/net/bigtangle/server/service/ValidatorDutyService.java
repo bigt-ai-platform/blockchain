@@ -240,9 +240,20 @@ public class ValidatorDutyService {
                 beaconHead = ghostService.getDagRoot(store);
             }
 
+            // CHAIN-derived attestation target. The beacon chain advances ~1
+            // confirmed block per proposer slot, so the wall-clock epoch (slot/32)
+            // runs FAR ahead of the chain epoch (confirmed chainlength/32) on a
+            // young chain. Targeting the wall-clock epoch makes every node derive
+            // a different (or non-existent) epoch-boundary checkpoint, so
+            // attestations fragment and 2/3 justification never forms. Targeting
+            // the CHAIN epoch (deterministic from confirmed chainlength) makes
+            // all nodes agree on the same checkpoint — the source of convergence.
+            long chainEpoch = SlotService.currentChainEpoch(store);
+            long targetEpoch = Math.max(0, chainEpoch);
+
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
-            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, epoch - 1);
-            Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(epoch, store).getBlockHash();
+            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, targetEpoch - 1);
+            Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(targetEpoch, store).getBlockHash();
 
             // Slashing protection: one attestation per slot; only a
             // byte-identical re-vote is safe after a restart.
@@ -257,7 +268,7 @@ public class ValidatorDutyService {
             att.setSlot(slot);
             att.setEpoch(epoch);
             att.setSourceEpoch(sourceEpoch);
-            att.setTargetEpoch(epoch);
+            att.setTargetEpoch(targetEpoch);
             att.setBeaconBlockHash(beaconHead);
             att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
             att.setTargetCheckpoint(targetCheckpoint);
