@@ -109,9 +109,13 @@ Generated under `helper/prod/validators/`:
 - `generate_keys.sh` — uses `ValidatorKeyTool` to produce `POS_VALIDATOR_KEY` /
   `VALIDATOR_PUBKEY` (and address) for each validator.
 - `node-<i>/validator.env` — gitignored; holds that node's private seed.
-- `node-<i>/setup.sh` — per node: create DB → start `layer0-server` + `layer0-mcmc`
-  (unique ports/DB/`pos.validatorKey`/`pos.gossipPeers`) → fund → `stakeDeposit` →
-  `activateValidator` (idempotent via `getValidators`).
+- `node-<i>/setup.sh <phase>` — phased per-node setup: `server` (create DB + start
+  `layer0-server`), `stake` (fund → `stakeDeposit` → `activateValidator`),
+  `mcmc` (start `layer0-mcmc`), `verify` (cross-node acceptance). Run the phases
+  **in order across ALL nodes**: the mcmc producers must not start until every
+  validator is staked+active (see `validators/README.md` and the cutover
+  runbook). `REQUESTER`/`POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` derive from
+  `SEED_HOSTS` as a full mesh so every node can pull missing beacon parents.
 
 ## Phase 5 — Seeds / network formation
 

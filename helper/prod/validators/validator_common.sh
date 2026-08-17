@@ -18,12 +18,34 @@ MCMC_GOSSIP=$((9097 + NODE_INDEX * 2))
 if [ "$NODE_INDEX" = "0" ]; then DB_NAME=layer0; else DB_NAME="layer0_${NODE_INDEX}"; fi
 API_BASE="http://${NODE_HOST}:${SERVER_PORT}"
 
-# Seed/peer derivation: REQUESTER points at the first seed's API server;
-# POS_GOSSIP_PEERS is the full attestation mesh (every validator's server).
-FIRST_SEED_HOST="$(echo "${SEED_HOSTS}" | cut -d, -f1)"
-REQUESTER="http://${FIRST_SEED_HOST}"
-POS_GOSSIP_PEERS="${SEED_HOSTS}"
+# Seed/peer derivation:
+#   REQUESTER        = FULL mesh (every validator's server API). A node pulls
+#                      missing beacon parents ONLY from its configured requester
+#                      (SyncBlockService.requestBlock); a single/self requester
+#                      stalls the bootstrap node at the first missing parent and
+#                      it confirms zero beacons (the 4-node prodsim regression).
+#   POS_GOSSIP_PEERS = full attestation mesh (every validator's server).
 CREATETABLE="true"
+REQUESTER=""
+for _hp in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
+    [ -n "${REQUESTER}" ] && REQUESTER="${REQUESTER},"
+    REQUESTER="${REQUESTER}http://${_hp}"
+done
+POS_GOSSIP_PEERS="${SEED_HOSTS}"
+
+# Gossip block mesh (host:gossipPort of every node's SERVER gossip listener).
+# Defaults to the per-node port scheme (9095 + 2*index) matched to SEED_HOSTS
+# order; override GOSSIP_SEEDS in common.env for custom port mappings.
+if [ -z "${GOSSIP_SEEDS:-}" ]; then
+    GOSSIP_SEEDS=""
+    _gi=0
+    for _hp in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
+        _h="${_hp%%:*}"
+        [ -n "${GOSSIP_SEEDS}" ] && GOSSIP_SEEDS="${GOSSIP_SEEDS},"
+        GOSSIP_SEEDS="${GOSSIP_SEEDS}${_h}:$((9095 + _gi * 2))"
+        _gi=$((_gi + 1))
+    done
+fi
 
 log()  { echo "[node-${NODE_INDEX}] $*"; }
 
@@ -70,9 +92,11 @@ start_server() {
         --server.createtable="${createtable}" \
         --server.runKafkaStream=false \
         --server.fundEnabled="${FUND_ENABLED:-false}" \
+        --server.requester="${REQUESTER}" \
         --service.schedule.mcmc=true --service.schedule.blockbatch=true \
         --service.schedule.microbatch=true --service.schedule.initsync=true \
         --peer.udpPort="${SERVER_PEER_UDP}" --peer.tcpPort="${SERVER_PEER_TCP}" --gossip.port="${SERVER_GOSSIP}" \
+        --gossip.peers="${GOSSIP_SEEDS}" \
         --pos.validatorKey="${POS_VALIDATOR_KEY}" --pos.dutyEnabled=false \
         --pos.gossipPeers="${POS_GOSSIP_PEERS}"
 }
@@ -91,6 +115,7 @@ start_mcmc() {
         --service.schedule.microbatch=true \
         --pos.validatorKey="${POS_VALIDATOR_KEY}" --pos.dutyEnabled=true \
         --pos.gossipPeers="${POS_GOSSIP_PEERS}" \
+        --gossip.peers="${GOSSIP_SEEDS}" \
         --peer.udpPort="${MCMC_PEER_UDP}" --peer.tcpPort="${MCMC_PEER_TCP}" --gossip.port="${MCMC_GOSSIP}"
 }
 
@@ -106,16 +131,19 @@ wait_api() {
 
 balance_big() { # sums confirmed BIG balance for PUBKEY_HASH
     http_post "/getBalances" "[\"${PUBKEY_HASH}\"]" | python3 -c '
-import sys, json
+import sys, json, base64
 try:
     d = json.load(sys.stdin)
 except Exception:
     print(0); sys.exit(0)
-bal = d.get("balance", [])
+# tokenid is a byte[] serialized as base64 ("bc" -> "YmM="); match on the
+# decoded value, summing the confirmed outputs (same source as the wallet).
+want = base64.b64encode(b"bc").decode()
 total = 0
-for c in bal:
-    if isinstance(c, dict) and c.get("tokenid") == "bc":
-        total += int(c.get("value", 0))
+for u in d.get("outputs") or []:
+    v = (u or {}).get("value") or {}
+    if isinstance(v, dict) and v.get("tokenid") == want:
+        total += int(v.get("value") or 0)
 print(total)
 '
 }
@@ -151,25 +179,66 @@ activate_validator() {
     http_post "/activateValidator" "{\"pubkey\":\"${VALIDATOR_PUBKEY}\",\"epoch\":${ACTIVATE_EPOCH:-0}}"
 }
 
-verify_validators() {
-    log "active validator set:"
-    http_post "/getValidators" "{}"
-    echo
-}
-
-# ---- Full per-node flow ----------------------------------------------------
-run_all() {
+# ---- Phased bootstrap (production ordering) --------------------------------
+# The mcmc beacon producers MUST NOT start until every validator is staked and
+# active. If they start earlier, beacon production ramps up as soon as the first
+# validator activates and the later stake deposits land on a moving head and get
+# reorged out (the 4-node prodsim regression). Operators run the phases in order
+# across ALL nodes:  server → stake → mcmc → verify.
+phase_server() {
     db_setup
     start_server
-    sleep 5
-    start_mcmc
     wait_api
-    fund_validator
+    log "server up"
+}
+
+phase_stake() {
+    wait_api
+    [ "${FUND_MODE}" = "bootstrap" ] && fund_validator
     wait_balance "${STAKE_AMOUNT}"
     stake_validator
     sleep 3
     activate_validator
     sleep 3
-    verify_validators
-    log "done"
+    log "staked + activated ${VALIDATOR_PUBKEY}"
+}
+
+phase_mcmc() {
+    start_mcmc
+    log "mcmc up"
+}
+
+# Cross-node acceptance: every node reports the full active set (nothing
+# slashed/reverted), every node has confirmed a beacon, and the confirmed
+# chainlengths agree within one epoch.
+verify_network() {
+    local expected="${EXPECTED_VALIDATORS:-$(echo "${SEED_HOSTS}" | tr ',' '\n' | wc -l | tr -d ' ')}"
+    local epoch="${POS_SLOTS_PER_EPOCH:-32}"
+    local maxcl=0 mincl=999999999
+    log "verifying ${expected}-node network across: ${SEED_HOSTS}"
+    for hostport in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
+        local base="http://${hostport}"
+        local v cl
+        v=$(curl -s -X POST "${base}/getValidators" -H 'Content-Type: application/json' -d '{}' \
+            | python3 -c 'import sys,json; d=json.load(sys.stdin); v=d.get("validators"); import json as j; v=j.loads(v) if isinstance(v,str) else v; print(len(v) if v is not None else 0)' 2>/dev/null || echo 0)
+        cl=$(curl -s -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
+            | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("txReward"); import json as j; r=j.loads(r) if isinstance(r,str) else r; print((r or {}).get("chainLength",0))' 2>/dev/null || echo 0)
+        echo "  ${hostport}: validators=${v} chainlength=${cl}"
+        [ "${v}" -lt "${expected}" ] && { echo "  FAIL: ${hostport} has ${v}/${expected} validators" >&2; return 1; }
+        [ "${cl}" -gt "${maxcl}" ] && maxcl="${cl}"
+        [ "${cl}" -lt "${mincl}" ] && mincl="${cl}"
+    done
+    [ "${maxcl}" -eq 0 ] && { echo "  FAIL: no node has confirmed a beacon" >&2; return 1; }
+    [ $((maxcl - mincl)) -gt "${epoch}" ] && { echo "  FAIL: confirmed chainlength spread ${mincl}..${maxcl} > ${epoch}" >&2; return 1; }
+    log "OK: ${expected} validators active on all nodes; confirmed chainlength ${mincl}..${maxcl}"
+}
+
+run_phase() { # $1 = server | stake | mcmc | verify
+    case "$1" in
+        server) phase_server ;;
+        stake)  phase_stake ;;
+        mcmc)   phase_mcmc ;;
+        verify) verify_network ;;
+        *) echo "usage: setup.sh <server|stake|mcmc|verify>" >&2; return 2 ;;
+    esac
 }

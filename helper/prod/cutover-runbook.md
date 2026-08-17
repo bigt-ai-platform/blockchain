@@ -43,32 +43,54 @@ fork gate is a *chainlength* gate, not a hot fork of a live chain.
 
 ## 2. Coordinated validator bootstrap
 
-For every validator `i`, submit `stakeDeposit`/`activateValidator` to **its own**
-node (the STAKE tx is signed with that node's configured `pos.validatorKey`):
+Use the phased per-validator scripts (`helper/prod/validators/`) — this is the
+production version of the verified prodsim ordering:
 
 ```bash
-# stake (>= 32,000,000 satoshis = 32 BIG)
+# On EVERY node, in order:
+node-<i>/setup.sh server    # 1) create DB + start layer0-server (no beacons yet)
+node-<i>/setup.sh stake     # 2) fund(genesis→skip)/stake/activate THIS node's validator
+node-<i>/setup.sh mcmc      # 3) ONLY after ALL validators are staked+active
+```
+
+`setup.sh stake` submits `stakeDeposit`/`activateValidator` to the node's **own**
+API (the STAKE tx is signed with that node's configured `pos.validatorKey`):
+
+```bash
 curl -X POST http://<node-i>:8081/stakeDeposit -H 'Content-Type: application/json' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","amount":"32000000"}'
-
-# activate at chain epoch 0 (genesis bootstrap window → immediate activation)
 curl -X POST http://<node-i>:8081/activateValidator -H 'Content-Type: application/json' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","epoch":0}'
 ```
 
 Checkpoint per node: `getValidators` grows 1 → 2 → 3 → … → N, and after the last
-validator every node reports the **same** active set (N). Only proceed when the
-set has converged on every node.
+validator every node reports the **same** active set (N). Only start the mcmc
+producers once the set has converged on every node — starting them earlier
+reorgs the later stake deposits out (the prodsim regression).
 
 ## 3. Start beacon production
 
-1. Start the `layer0-mcmc` processes (`--pos.dutyEnabled=true`,
-   `--server.requester=http://<seed-node>:8081`,
-   `--pos.gossipPeers=<all server host:ports>`, `--server.createtable=false`).
+1. Start the `layer0-mcmc` processes on every node (`--pos.dutyEnabled=true`,
+   `--server.requester=<full requester mesh>`, `--pos.gossipPeers=<all server
+   host:ports>`, `--gossip.peers=<gossip mesh>`, `--server.createtable=false`).
+   The scripts derive the full requester/gossip mesh from `SEED_HOSTS` — a
+   bootstrap node with no (or self-only) requester confirms zero beacons.
 2. Confirm the first beacon confirms: `getChainHeight` advances past 0 and
    `getValidators` stays N on every node.
 3. Run at least 2–3 epochs (≈ 20 min at 12 s slots) before the activation height
    is reached, so the gossip fallback path is exercised first.
+
+## 3b. Cross-node acceptance
+
+From any node, run the acceptance check across all hosts:
+
+```bash
+node-<i>/setup.sh verify
+```
+
+This asserts every node reports the full active set (N, nothing slashed/reverted),
+every node has confirmed at least one beacon, and the confirmed chainlengths
+agree within one epoch. Run it before the fork height is reached.
 
 ## 4. Fork / activation height
 

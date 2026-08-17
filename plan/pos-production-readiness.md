@@ -107,15 +107,22 @@ choice all changed; single-node tests don't prove multi-node convergence.
    empty `pubkey` column and sums exactly in PostgreSQL. Verified pass
    (10^17 → OK) and fail (10^17+1 → exit 1) against a synthetic legacy DB.
 2. Per-validator bootstrap: `helper/prod/validators/generate_keys.sh` →
-   `setup.sh`, `FUND_MODE=genesis`. Reviewed; server = API/requester
-   (`pos.dutyEnabled=false`), MCMC = single beacon producer
-   (`pos.dutyEnabled=true`), `server.fundEnabled=false` in production.
+   `setup.sh <phase>`, `FUND_MODE=genesis`. ✅ REVIEWED + FIXED for production:
+   the per-node scripts are now a PHASED bootstrap (`setup.sh server` →
+   `stake` → `mcmc` → `verify` run across all nodes) so the mcmc producers
+   start only after every validator is staked+active — the old `run_all`
+   started mcmc before staking, which reorgs the later stake deposits out (the
+   prodsim regression). `REQUESTER`/`POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` derive
+   from `SEED_HOSTS` as a FULL mesh (a node pulls missing beacon parents only
+   from its requester; a self-only requester on the bootstrap node confirms zero
+   beacons), `balance_big` parses the base64 tokenid, and `setup.sh verify`
+   runs the cross-node acceptance check.
 3. Cutover procedure: freeze legacy writes → build → coordinated deploy behind
    `POS_BEACON_SLOTDATA_ACTIVATION` → verify `getChainHeight` + `getValidators`
    converge → enable TLS → confirm `FUND_ENABLED=false`. ✅ documented in
-   `helper/prod/cutover-runbook.md` (stake-all-validators-before-mcmc, fork
-   height 1024 / `net.bigtangle.pos.attestationActivation`, TLS, fund-disable
-   checks, rollback path). ⏳ staging execution still pending.
+   `helper/prod/cutover-runbook.md` (phased stake-all-before-mcmc, fork height
+   1024 / `net.bigtangle.pos.attestationActivation`, TLS, fund-disable checks,
+   rollback path). ⏳ staging execution still pending.
 4. Document the fork activation height and rollback path. ✅ in
    `helper/prod/cutover-runbook.md` §4 and Rollback path.
 

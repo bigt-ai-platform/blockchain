@@ -8,10 +8,10 @@ Per-validator production setup, used by the migration plan
 ```
 validators/
   common.env             shared config (docker images, DB, PoS, stake, seeds)
-  validator_common.sh    shared functions (db/start/stake/activate)
+  validator_common.sh    shared functions (db/start/stake/activate/verify)
   generate_keys.sh       produce node-<i>/validator.env credentials
   validator.env.example  template for per-node secrets
-  node-<i>/setup.sh      per-validator entry point (identical; sources ./validator.env)
+  node-<i>/setup.sh      per-validator entry point: setup.sh <phase>
   node-<i>/validator.env gitignored; holds that node's key (generated, not committed)
 ```
 
@@ -33,13 +33,38 @@ validators/
    reachable IP/hostname.
 
 4. Edit `common.env`: set `DB_*`, `SEED_HOSTS` (the `host:serverPort` list of
-   every validator), and `FUND_MODE` (`genesis` or `bootstrap`).
+   every validator), `GENESIS_CSV` (the migration distribution CSV, identical on
+   every node), and `FUND_MODE=genesis` for production.
 
-5. On each node, run:
+## Phased bootstrap (production ordering)
 
-   ```bash
-   node-<i>/setup.sh
-   ```
+Run the phases **in order across ALL nodes** on each node's own host. The mcmc
+beacon producers MUST NOT start until every validator is staked and active:
+beacon production ramps up as soon as the first validator activates, and later
+stake deposits then land on a moving head and get reorged out (the 4-node
+prodsim regression). Phases:
+
+```bash
+# 1) On EVERY node: create the DB + start layer0-server (no beacons yet).
+node-<i>/setup.sh server
+
+# 2) On EVERY node: fund (bootstrap mode only) + stake + activate THIS node's
+#    validator, through its own API (getValidators grows 1,2,3,…,N).
+node-<i>/setup.sh stake
+
+# 3) On EVERY node: start the layer0-mcmc beacon producer — only now, with the
+#    full active set agreed everywhere.
+node-<i>/setup.sh mcmc
+
+# 4) From ANY node: cross-node acceptance (validators == N everywhere, beacon
+#    confirmed on every node, chainlengths within one epoch).
+node-<i>/setup.sh verify
+```
+
+`REQUESTER` and `POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` are derived from `SEED_HOSTS`
+as a FULL mesh: a node pulls missing beacon parents only from its configured
+requester, so a single/self requester stalls the bootstrap node at the first
+missing parent and it confirms zero beacons.
 
 ## Notes
 
