@@ -302,12 +302,20 @@ public class BlockStoreService {
 
 	private void saveChainConnected(ChainBlockQueue chainBlockQueue, BlockStoreInterface store)
 			throws VerificationException, BlockStoreException {
+		Block block = networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock());
 		try {
-			// It can be down lock for update of this on database
-			Block block = networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock());
 			saveChainConnected(block, store);
-		} finally {
 			deleteChainQueue(chainBlockQueue, store);
+		} catch (net.bigtangle.exception.VerificationException.InfeasiblePrototypeException
+				| net.bigtangle.exception.MissingDependencyException e) {
+			// The beacon references DAG blocks this node has not synced yet
+			// (multi-node gossip lag). Dropping it would fork the chain: keep it
+			// in the ChainBlockQueue and retry on the next tick, by which time
+			// the referenced blocks will usually have arrived.
+			log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}", e.getMessage());
+		} catch (Exception e) {
+			deleteChainQueue(chainBlockQueue, store);
+			throw e;
 		}
 	}
 
@@ -328,8 +336,9 @@ public class BlockStoreService {
 				new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 						.solidifyBlocks(currRewardInfo, store);
 			} catch (MissingDependencyException e) {
-				log.warn("Block isFailState. MissingDependencyException{} MissingDependencyException{}", block, e);
-				return;
+				// Propagate so the queue wrapper keeps this beacon for retry once
+				// the missing referenced blocks have synced.
+				throw e;
 			}
 			SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService, jsonmapper).checkChainSolidity(block, true, store);
