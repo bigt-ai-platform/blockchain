@@ -117,7 +117,52 @@ public class ProdSimBootstrap {
                 System.out.println("WARNING: Expected at least 1 validator on " + nodeUrl);
             }
         }
-        System.out.println("Bootstrap complete. Each node staked its own validator.");
+
+        // Wait for the full active set to converge on EVERY node before beacon
+        // production ramps up. The stake blocks gossip to all nodes and apply at
+        // connect time, but if the sim starts while the sets are still asymmetric
+        // (node 0 sees 1, node 3 sees 4), each node picks a different proposer
+        // for the same slots and forks the beacon chain irrecoverably.
+        System.out.println("Waiting for validator-set convergence on all nodes...");
+        int maxWaitSec = Integer.getInteger("prodsim.convergeWaitSec", 120);
+        long deadline = System.currentTimeMillis() + maxWaitSec * 1000L;
+        boolean converged = false;
+        while (System.currentTimeMillis() < deadline) {
+            int minActive = Integer.MAX_VALUE;
+            for (int node = 0; node < 4; node++) {
+                int count = activeValidatorCount("http://localhost:" + (basePort + node) + "/");
+                minActive = Math.min(minActive, count);
+            }
+            System.out.println("  min active validators across nodes: " + minActive);
+            if (minActive >= 4) {
+                converged = true;
+                break;
+            }
+            Thread.sleep(5000);
+        }
+        if (!converged) {
+            throw new IllegalStateException(
+                    "Validator set did not converge to 4 on all nodes within " + maxWaitSec + "s");
+        }
+        System.out.println("Bootstrap complete. Each node staked its own validator; active set converged.");
+    }
+
+    private static int activeValidatorCount(String nodeUrl) {
+        try {
+            byte[] resp = OkHttp3Util.postString(nodeUrl + ReqCmd.getValidators.name(), "{}");
+            Map<String, Object> result = Json.jsonmapper().readValue(resp, HashMap.class);
+            Object validatorsObj = result.get("validators");
+            if (validatorsObj == null && result.get("text") instanceof String) {
+                result = Json.jsonmapper().readValue((String) result.get("text"), HashMap.class);
+                validatorsObj = result.get("validators");
+            }
+            if (validatorsObj instanceof List) {
+                return ((List<?>) validatorsObj).size();
+            }
+        } catch (Exception e) {
+            // transient — keep polling
+        }
+        return 0;
     }
 
     /**
