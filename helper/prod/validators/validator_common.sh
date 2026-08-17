@@ -5,17 +5,19 @@
 set -euo pipefail
 
 # ---- Derived per-node values ----------------------------------------------
-SERVER_PORT=$((8081 + NODE_INDEX))
-SERVER_PEER_UDP=$((30307 + NODE_INDEX * 2))
-SERVER_PEER_TCP=$((30308 + NODE_INDEX * 2))
-SERVER_GOSSIP=$((9095 + NODE_INDEX * 2))
+# Each value can be overridden in node-<i>/validator.env (needed when several
+# nodes share one host, e.g. node-0 + node-1 on the same server).
+SERVER_PORT="${SERVER_PORT:-$((8081 + NODE_INDEX))}"
+SERVER_PEER_UDP="${SERVER_PEER_UDP:-$((30307 + NODE_INDEX * 2))}"
+SERVER_PEER_TCP="${SERVER_PEER_TCP:-$((30308 + NODE_INDEX * 2))}"
+SERVER_GOSSIP="${SERVER_GOSSIP:-$((9095 + NODE_INDEX * 2))}"
 
-MCMC_PORT=$((8091 + NODE_INDEX))
-MCMC_PEER_UDP=$((30309 + NODE_INDEX * 2))
-MCMC_PEER_TCP=$((30310 + NODE_INDEX * 2))
-MCMC_GOSSIP=$((9097 + NODE_INDEX * 2))
+MCMC_PORT="${MCMC_PORT:-$((8091 + NODE_INDEX))}"
+MCMC_PEER_UDP="${MCMC_PEER_UDP:-$((30309 + NODE_INDEX * 2))}"
+MCMC_PEER_TCP="${MCMC_PEER_TCP:-$((30310 + NODE_INDEX * 2))}"
+MCMC_GOSSIP="${MCMC_GOSSIP:-$((9097 + NODE_INDEX * 2))}"
 
-if [ "$NODE_INDEX" = "0" ]; then DB_NAME=layer0; else DB_NAME="layer0_${NODE_INDEX}"; fi
+if [ "$NODE_INDEX" = "0" ]; then DB_NAME="${DB_NAME:-layer0}"; else DB_NAME="${DB_NAME:-layer0_${NODE_INDEX}}"; fi
 API_BASE="http://${NODE_HOST}:${SERVER_PORT}"
 
 # Seed/peer derivation:
@@ -89,7 +91,8 @@ start_server() {
     log "starting layer0-server on :${SERVER_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-server" "${SERVER_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_SERVER} "${genesis_csv_arg[@]}" -jar /app/app.jar \
-        --server.port="${SERVER_PORT}" --server.net="${SERVER_NET}" --server.chain="${SERVER_CHAIN}" \
+        --server.port="${SERVER_PORT}" --server.address="${NODE_HOST}" \
+        --server.net="${SERVER_NET}" --server.chain="${SERVER_CHAIN}" \
         --db.hostname="${DB_HOSTNAME}" --db.port="${DB_PORT}" --db.dbName="${DB_NAME}" \
         --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" --db.dbtype="${DBTYPE}" \
         --server.createtable="${createtable}" \
@@ -108,7 +111,7 @@ start_mcmc() {
     log "starting layer0-mcmc on :${MCMC_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-mcmc" "${MCMC_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_MCMC} -jar /app/app.jar \
-        --server.port="${MCMC_PORT}" --server.net="${SERVER_NET}" \
+        --server.port="${MCMC_PORT}" --server.address="${NODE_HOST}" --server.net="${SERVER_NET}" \
         --db.hostname="${DB_HOSTNAME}" --db.port="${DB_PORT}" --db.dbName="${DB_NAME}" \
         --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" --db.dbtype="${DBTYPE}" \
         --server.requester="${REQUESTER}" \
@@ -126,7 +129,7 @@ start_mcmc() {
 wait_api() {
     log "waiting for API ${API_BASE}"
     for _ in $(seq 1 120); do
-        if curl -sf "${API_BASE}/getChainHeight" >/dev/null 2>&1; then return 0; fi
+        if curl -sf "${API_BASE}/" >/dev/null 2>&1; then return 0; fi
         sleep 3
     done
     log "API did not come up"; return 1
@@ -139,13 +142,13 @@ try:
     d = json.load(sys.stdin)
 except Exception:
     print(0); sys.exit(0)
-# tokenid is a byte[] serialized as base64 ("bc" -> "YmM="); match on the
-# decoded value, summing the confirmed outputs (same source as the wallet).
-want = base64.b64encode(b"bc").decode()
+# tokenid is the byte[] serialized as base64: BIGTANGLE_TOKENID = {0xbc} ->
+# base64 "vA==". Match the decoded bytes (same source as the wallet/prodsim).
+want = b"\xbc"
 total = 0
 for u in d.get("outputs") or []:
     v = (u or {}).get("value") or {}
-    if isinstance(v, dict) and v.get("tokenid") == want:
+    if isinstance(v, dict) and base64.b64decode(v.get("tokenid") or "") == want:
         total += int(v.get("value") or 0)
 print(total)
 '
@@ -223,7 +226,7 @@ verify_network() {
         local base="http://${hostport}"
         local v cl
         v=$(curl -s -X POST "${base}/getValidators" -H 'Content-Type: application/json' -d '{}' \
-            | python3 -c 'import sys,json; d=json.load(sys.stdin); v=d.get("validators"); import json as j; v=j.loads(v) if isinstance(v,str) else v; print(len(v) if v is not None else 0)' 2>/dev/null || echo 0)
+            | python3 -c 'import sys,json; d=json.load(sys.stdin); v=d.get("text") or d.get("validators"); import json as j; v=j.loads(v) if isinstance(v,str) else v; v=(v or {}).get("validators") if isinstance(v,dict) else v; print(len(v) if v is not None else 0)' 2>/dev/null || echo 0)
         cl=$(curl -s -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
             | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("txReward"); import json as j; r=j.loads(r) if isinstance(r,str) else r; print((r or {}).get("chainLength",0))' 2>/dev/null || echo 0)
         echo "  ${hostport}: validators=${v} chainlength=${cl}"

@@ -30,7 +30,7 @@ fork gate is a *chainlength* gate, not a hot fork of a live chain.
 1. Start **only** the `layer0-server` processes (one per node, unique DB/ports,
    `--pos.dutyEnabled=false`, `--pos.validatorKey=<key_i>`, `--server.createtable=true`).
    Do **not** start the mcmc beacon producers yet.
-2. Confirm each node: `getChainHeight` == `0` and the genesis hash is identical
+2. Confirm each node: `getChainNumber` == `0` and the genesis hash is identical
    on every node (same genesis distribution ⇒ same genesis block).
 
 > Why servers-only first: beacon production ramps up as soon as the first
@@ -75,7 +75,7 @@ reorgs the later stake deposits out (the prodsim regression).
    host:ports>`, `--gossip.peers=<gossip mesh>`, `--server.createtable=false`).
    The scripts derive the full requester/gossip mesh from `SEED_HOSTS` — a
    bootstrap node with no (or self-only) requester confirms zero beacons.
-2. Confirm the first beacon confirms: `getChainHeight` advances past 0 and
+2. Confirm the first beacon confirms: `getChainNumber` advances past 0 and
    `getValidators` stays N on every node.
 3. Run at least 2–3 epochs (≈ 20 min at 12 s slots) before the activation height
    is reached, so the gossip fallback path is exercised first.
@@ -137,7 +137,7 @@ curl -sf -X POST http://127.0.0.1:8081/fundAddresses \
   && echo "UNSAFE: fundAddresses still enabled" || echo "OK: disabled"
 
 # 2. Chain advances (height strictly increasing, epoch boundaries passing)
-curl http://127.0.0.1:8081/getChainHeight
+curl -X POST http://127.0.0.1:8081/getChainNumber -H 'Content-Type: application/json' -d '{}'
 
 # 3. Active set identical on all nodes
 curl -X POST http://127.0.0.1:8081/getValidators -H 'Content-Type: application/json' -d '{}'
@@ -191,7 +191,7 @@ If a defect is found **after** the activation height:
 
 | Signal | Where |
 |--------|-------|
-| `getChainHeight` stops advancing on any node | `prod.md` §9 / logs |
+| `getChainNumber` stops advancing on any node | `prod.md` §9 / logs |
 | Validator sets differ across nodes | `getValidators` |
 | Beacon proposals for the same slot from >1 node (fork) | mcmc logs / slashing |
 | `SUM(coinvalue)` drift from `10^17` | audit SQL |

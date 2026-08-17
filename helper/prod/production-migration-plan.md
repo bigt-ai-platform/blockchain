@@ -70,7 +70,7 @@ Companion to `prod.md`. Covers the five required steps:
    - PostgreSQL `layer0`, user `root`.
    - `layer0-server` with `--server.createtable=true --server.net=Mainnet --server.chain=L0 …`.
    - `layer0-mcmc` with `--pos.validatorKey=<KEY_0> --server.requester=http://127.0.0.1:8081 …`.
-3. Confirm genesis created and `getChainHeight` returns 0 (no beacon yet).
+3. Confirm genesis created and `getChainNumber` returns 0 (no beacon yet).
 
 ## Phase 3 — Pay from genesis to snapshot addresses
 
@@ -124,12 +124,12 @@ Generated under `helper/prod/validators/`:
    of the seed bootstrap; update `bigt-ai-platform/seeds` to answer for those hosts.
 3. On **every** node set `--server.requester=http://<seed>:8081` and
    `--pos.gossipPeers="<seed0>,<seed1>,…"` so attestations/slashing reach all.
-4. Verify cross-node sync: each node's `getChainHeight` and `getValidators`
+4. Verify cross-node sync: each node's `getChainNumber` and `getValidators`
    converge to the same set.
 
 ## Phase 6 — Verify & cutover
 
-- `getChainHeight` advances (slots 12 s × 32 slots/epoch).
+- `getChainNumber` advances (slots 12 s × 32 slots/epoch).
 - `getValidators` == the intended N-validator active set.
 - Spot-check migrated balances via `getBalances`.
 - Full audit: `SUM(coinvalue)` of open outputs == `10^17`; every snapshot address present.

@@ -306,7 +306,7 @@ mirror §4 and are the recommended form.
 
 ```bash
 # Server is up (returns chain height)
-curl http://localhost:8081/getChainHeight
+curl -X POST http://localhost:8081/getChainNumber -H 'Content-Type: application/json' -d '{}'
 
 # Active validator set
 curl -X POST http://localhost:8081/getValidators -H 'Content-Type: application/json' -d '{}'
