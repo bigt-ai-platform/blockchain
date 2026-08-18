@@ -27,12 +27,6 @@ MODULES["l1-nft-server"]="l1-nft-server/Dockerfile"
 MODULES["l1-payment-server"]="l1-payment-server/Dockerfile"
 MODULES["l1-contract-server"]="l1-contract-server/Dockerfile"
 MODULES["l1-evm-server"]="l1-evm-server/Dockerfile"
-MODULES["layer0-mcmc"]="layer0-mcmc/Dockerfile"
-MODULES["l1-pai-mcmc"]="l1-pai-mcmc/Dockerfile"
-MODULES["l1-order-mcmc"]="l1-order-mcmc/Dockerfile"
-MODULES["l1-contract-mcmc"]="l1-contract-mcmc/Dockerfile"
-MODULES["l1-evm-mcmc"]="l1-evm-mcmc/Dockerfile"
-MODULES["l1-payment-mcmc"]="l1-payment-mcmc/Dockerfile"
 
 usage() {
     echo "Usage: $0 [options]"
@@ -67,7 +61,7 @@ fi
 
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
-MAVEN_PLUGINS="-pl layer0-server,layer0-mcmc,l1-pai-server,l1-pai-mcmc,l1-order-server,l1-order-mcmc,l1-nft-server,l1-payment-server,l1-payment-mcmc,l1-contract-server,l1-contract-mcmc,l1-evm-server,l1-evm-mcmc"
+MAVEN_PLUGINS="-pl layer0-server,l1-pai-server,l1-order-server,l1-nft-server,l1-payment-server,l1-contract-server,l1-evm-server"
 if [ -n "${MODULE:-}" ]; then
     MAVEN_PLUGINS="-pl $MODULE"
 fi

@@ -37,7 +37,6 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
-import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.OutputsMulti;
@@ -56,8 +55,6 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
 import net.bigtangle.server.core.BlockWrap;
-import net.bigtangle.server.data.DepthAndWeight;
-import net.bigtangle.server.data.Rating;
 /**
  * <p>
  * A generic full block store for a relational database. This generic class
@@ -118,7 +115,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private static final String DROP_ORDER_RESULT_TABLE = "DROP TABLE IF EXISTS orderresult";
 	private static final String DROP_CHAINBLOCKQUEUE_TABLE = "DROP TABLE  IF EXISTS chainblockqueue";
 
-	private static final String DROP_MCMC_TABLE = "DROP TABLE  IF EXISTS mcmc";
 	private static final String DROP_LOCKOBJECT_TABLE = "DROP TABLE  IF EXISTS lockobject";
 	private static final String DROP_TIPSQUEUE_TABLE = "DROP TABLE  IF EXISTS tipsqueue";
 	private static final String DROP_MATCHING_LAST_TABLE = "DROP TABLE  IF EXISTS matchinglast";
@@ -140,11 +136,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " and height <= (select max(height) from blocks where  chainlength >= ? and  chainlength <=?) "
 			+ " order by height asc ";
 
-	protected final String SELECT_MCMC_TEMPLATE = "  hash, rating, depth, cumulativeweight ";
-
 	protected final String SELECT_NOT_INVALID_APPROVER_BLOCKS_SQL = "SELECT " + SELECT_BLOCKS_TEMPLATE
-			+ "  , rating, depth, cumulativeweight "
-			+ "  FROM blocks, mcmc WHERE blocks.hash= mcmc.hash and (prevblockhash = ? or prevbranchblockhash = ?) AND solid >= 0 ";
+			+ "  FROM blocks WHERE (prevblockhash = ? or prevbranchblockhash = ?) AND solid >= 0 ";
 
 	protected final String SELECT_APPROVER_HASHES_SQL = "SELECT hash FROM blocks "
 			+ "WHERE blocks.prevblockhash = ? or blocks.prevbranchblockhash = ?";
@@ -191,13 +184,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	// Tables exist SQL.
 	protected final String SELECT_CHECK_TABLES_EXIST_SQL = "SELECT * FROM settings WHERE 1 = 2";
 
-	protected final String SELECT_BLOCKS_MCMC_CONFIRM = "SELECT" + SELECT_BLOCKS_TEMPLATE
-			+ " FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false AND height > ?"
-			+ " AND height <= ? AND mcmc.rating >= " + NetworkParameters.CONFIRMATION_UPPER_THRESHOLD;
+	protected final String SELECT_BLOCKS_SOLID_INTERVAL_SQL = "SELECT" + SELECT_BLOCKS_TEMPLATE
+			+ " FROM blocks WHERE solid=2 AND chainlength = -1 AND confirmed = false AND height > ?"
+			+ " AND height <= ?";
 
 	protected final String SELECT_BLOCKS_TO_UNCONFIRM_SQL = "SELECT" + SELECT_BLOCKS_TEMPLATE
-			+ "  FROM blocks , mcmc WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = true AND mcmc.rating < "
-			+ NetworkParameters.CONFIRMATION_LOWER_THRESHOLD;
+			+ "  FROM blocks WHERE solid=2 AND chainlength = -1 AND confirmed = true";
 
 	protected final String SELECT_BLOCKS_IN_CHAINLENGTH_INTERVAL_SQL = "SELECT hash "
 			+ "  FROM blocks WHERE chainlength >= ? AND chainlength <= ?";
@@ -360,21 +352,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_OUTPUTS_SPENDPENDING_SQL = getUpdate()
 			+ " outputs SET spendpending = ?, spendpendingtime=? WHERE hash = ? AND outputindex= ? AND blockhash = ?";
 
-	protected final String UPDATE_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL = getUpdate()
-			+ " mcmc SET cumulativeweight = ?, depth = ? WHERE hash = ?";
-	protected final String INSERT_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL = getInsert()
-			+ " into mcmc ( cumulativeweight  , depth   , hash, rating  ) VALUES (?,?,?, ?)  " + duplicateInsert();
-
-	protected final String SELECT_MCMC_CHAINLENGHT_SQL = "  select mcmc.hash "
-			+ " from blocks, mcmc where mcmc.hash=blocks.hash and chainlength < ?  and chainlength > 0  ";
-
 	protected final String UPDATE_BLOCKEVALUATION_CHAINLENGTH_SQL = getUpdate()
 			+ " blocks SET chainlength = ?, chainlengthlastupdate= ?  WHERE hash = ?";
 
 	protected final String UPDATE_BLOCKEVALUATION_CONFIRMED_SQL = getUpdate()
 			+ " blocks SET confirmed = ? WHERE hash = ?";
-
-	protected final String UPDATE_BLOCKEVALUATION_RATING_SQL = getUpdate() + " mcmc SET rating = ? WHERE hash = ?";
 
 	protected final String UPDATE_BLOCKEVALUATION_SOLID_SQL = getUpdate() + " blocks SET solid = ? WHERE hash = ?";
 	protected final String RESET_CHAINLENGTH_SOLID_SQL = getUpdate() + " blocks SET solid = 0 WHERE chainlength = ?";
@@ -459,11 +441,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String DELETE_BATCHBLOCK_SQL = "DELETE FROM batchblock WHERE hash = ?";
 	protected final String SELECT_BATCHBLOCK_SQL = "SELECT hash, block, inserttime FROM batchblock order by inserttime ASC";
 
-	protected final String INSERT_TIPSQUEUE_SQL = "INSERT INTO tipsqueue (hash, block, height, inserttime) VALUES (?, ?, ?, ?)"
-			+ duplicateInsert();
-	protected final String DELETE_TIPSQUEUE_SQL = "DELETE FROM tipsqueue WHERE hash = ?";
-	protected final String SELECT_TIPSQUEUE_SQL = "SELECT hash, block, height, inserttime FROM tipsqueue ORDER BY height DESC, inserttime ASC LIMIT 1";
-	protected final String SELECT_ALL_TIPSQUEUE_SQL = "SELECT hash, block, height, inserttime FROM tipsqueue ORDER BY height DESC, inserttime ASC";
 	protected final String INSERT_SUBTANGLE_PERMISSION_SQL = "INSERT INTO  subtangle_permission (pubkey, userdataPubkey , status) VALUES (?, ?, ?)"
 			+ duplicateInsert();
 
@@ -642,7 +619,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		sqlStatements.add(DROP_CONTRACT_EVENT_TABLE);
 		sqlStatements.add(DROP_CONTRACT_EVENT_CANCEL_TABLE);
 		sqlStatements.add(DROP_CHAINBLOCKQUEUE_TABLE);
-		sqlStatements.add(DROP_MCMC_TABLE);
 		sqlStatements.add(DROP_LOCKOBJECT_TABLE);
 		sqlStatements.add(DROP_TIPSQUEUE_TABLE);
 		sqlStatements.add(DROP_MATCHING_LAST_TABLE);
@@ -793,11 +769,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			Token bigtangle = Token.genesisToken(params);
 			insertToken(bigtangle.getBlockHash(), bigtangle);
 			updateTokenConfirmed(genesisBlock.getHash(), true);
-
-			// insert MCMC table
-			ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<>();
-			depthAndWeight.add(new DepthAndWeight(genesisBlock.getHash(), 1, 0));
-			updateBlockEvaluationWeightAndDepth(depthAndWeight);
 
 		} catch (VerificationException e) {
 			throw new RuntimeException(e); // Cannot happen.
@@ -999,39 +970,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
-	public BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException {
-
-		try (PreparedStatement s = getConnection()
-				.prepareStatement("SELECT " + SELECT_MCMC_TEMPLATE + " from mcmc where hash = ?")) {
-			s.setBytes(1, hash.getBytes());
-			ResultSet results = s.executeQuery();
-			if (!results.next()) {
-				return null;
-			} else {
-				return setBlockMCMC(results);
-			}
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
-		}
-
-	}
-
-	@Override
-	public List<BlockMCMC> getMCMCDepth(long number) throws BlockStoreException {
-		List<BlockMCMC> blockMCMC = new ArrayList<>();
-		try (PreparedStatement s = getConnection().prepareStatement(
-				"SELECT " + SELECT_MCMC_TEMPLATE + " from mcmc  order by depth desc limit " + number)) {
-			ResultSet results = s.executeQuery();
-			while (results.next()) {
-				blockMCMC.add(setBlockMCMC(results));
-			}
-			return blockMCMC;
-		} catch (SQLException ex) {
-			throw new BlockStoreException(ex);
-		}
-	}
-
-	@Override
 	public List<BlockWrap> getNotInvalidApproverBlocks(Sha256Hash hash) throws BlockStoreException {
 		List<BlockWrap> storedBlocks = new ArrayList<>();
 
@@ -1041,10 +979,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			ResultSet resultSet = s.executeQuery();
 			while (resultSet.next()) {
 				BlockEvaluation blockEvaluation = setBlockEvaluationNumber(resultSet);
-				BlockMCMC mcmc = setBlockMCMC(resultSet);
 				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block)) {
-					storedBlocks.add(new BlockWrap(block, blockEvaluation, mcmc, params));
+					storedBlocks.add(new BlockWrap(block, blockEvaluation, params));
 				}
 			}
 			return storedBlocks;
@@ -1520,7 +1457,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 
 			Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
-			return new BlockWrap(block, blockEvaluation, getMCMC(hash), params);
+			return new BlockWrap(block, blockEvaluation, params);
 		} catch (Exception ex) {
 			throw new BlockStoreException(ex);
 		}
@@ -1549,7 +1486,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				while (resultSet.next()) {
 					BlockEvaluation blockEvaluation = setBlockEvaluation(resultSet);
 					Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
-					result.add(new BlockWrap(block, blockEvaluation, getMCMC(block.getHash()), params));
+					result.add(new BlockWrap(block, blockEvaluation, params));
 				}
 				return result;
 			}
@@ -1619,7 +1556,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				.thenComparing((BlockWrap b) -> b.getBlock().getHash());
 		TreeSet<BlockWrap> storedBlockHashes = new TreeSet<>(comparator);
 
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_MCMC_CONFIRM)) {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_BLOCKS_SOLID_INTERVAL_SQL)) {
 			preparedStatement.setLong(1, cutoffHeight);
 			preparedStatement.setLong(2, maxHeight);
 			ResultSet resultSet = preparedStatement.executeQuery();
@@ -1628,8 +1565,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
-					storedBlockHashes.add(
-							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
+					storedBlockHashes.add(new BlockWrap(block, blockEvaluation, params));
 			}
 			return storedBlockHashes;
 		} catch (Exception ex) {
@@ -1672,8 +1608,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 				Block block = params.getDefaultSerializer().makeZippedBlockStream(resultSet.getBinaryStream("block"));
 				if (verifyHeader(block))
-					blocksByDescendingHeight.add(
-							new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
+					blocksByDescendingHeight.add(new BlockWrap(block, blockEvaluation, params));
 			}
 			return blocksByDescendingHeight;
 		} catch (Exception ex) {
@@ -1714,8 +1649,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				long insertTime = resultSet.getLong("inserttime");
 				block.setTime(Math.max(insertTime / 1000, 1));
 
-				blocksByDescendingHeight.add(
-						new BlockWrap(block, blockEvaluation, getMCMC(blockEvaluation.getBlockHash()), params));
+				blocksByDescendingHeight.add(new BlockWrap(block, blockEvaluation, params));
 			}
 			return blocksByDescendingHeight;
 		} catch (Exception ex) {
@@ -1770,62 +1704,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 				resultSet.getLong("inserttime"), resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
 	}
 
-	private BlockMCMC setBlockMCMC(ResultSet resultSet) throws SQLException {
-		return new BlockMCMC(Sha256Hash.wrap(resultSet.getBytes("hash")), resultSet.getLong("rating"),
-				resultSet.getLong("depth"), resultSet.getLong("cumulativeweight"));
-
-	}
-
-	@Override
-	public void deleteMCMC(long chainlength) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_MCMC_CHAINLENGHT_SQL);
-				PreparedStatement deleteStatement = getConnection()
-						.prepareStatement(" delete from mcmc where hash = ?")) {
-			preparedStatement.setLong(1, chainlength);
-			ResultSet results = preparedStatement.executeQuery();
-			if (results.next()) {
-				deleteStatement.setBytes(1, results.getBytes("hash"));
-				deleteStatement.addBatch();
-			}
-			deleteStatement.executeBatch();
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-
-	}
-
-	@Override
-	public void updateBlockEvaluationWeightAndDepth(List<DepthAndWeight> depthAndWeight) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(UPDATE_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL);
-				PreparedStatement insertStatement = getConnection()
-						.prepareStatement(INSERT_BLOCKEVALUATION_WEIGHT_AND_DEPTH_SQL)) {
-
-			for (DepthAndWeight d : depthAndWeight) {
-				if (getMCMC(d.getBlockHash()) == null) {
-					insertStatement.setLong(1, d.getWeight());
-					insertStatement.setLong(2, d.getDepth());
-					insertStatement.setBytes(3, d.getBlockHash().getBytes());
-					insertStatement.setLong(4, 0);
-					insertStatement.addBatch();
-				} else {
-					preparedStatement.setLong(1, d.getWeight());
-					preparedStatement.setLong(2, d.getDepth());
-					preparedStatement.setBytes(3, d.getBlockHash().getBytes());
-					preparedStatement.addBatch();
-				}
-			}
-			preparedStatement.executeBatch();
-			insertStatement.executeBatch();
-		} catch (SQLException e) {
-			if (!(e.getSQLState().equals(getDuplicateKeyErrorCode())))
-				throw new BlockStoreException(e);
-
-		}
-	}
-
 	@Override
 	public void updateBlockEvaluationChainlength(Sha256Hash blockhash, long b) throws BlockStoreException {
 
@@ -1849,24 +1727,6 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			preparedStatement.setBoolean(1, b);
 			preparedStatement.setBytes(2, blockhash.getBytes());
 			preparedStatement.executeUpdate();
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-
-	}
-
-	@Override
-	public void updateBlockEvaluationRating(List<Rating> ratings) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection()
-				.prepareStatement(UPDATE_BLOCKEVALUATION_RATING_SQL)) {
-
-			for (Rating r : ratings) {
-				preparedStatement.setLong(1, r.getRating());
-				preparedStatement.setBytes(2, r.getBlockhash().getBytes());
-				preparedStatement.addBatch();
-			}
-			preparedStatement.executeBatch();
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
@@ -2450,7 +2310,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 						resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 						resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
-				blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
+				blockEvaluation.setRatingWithDefault();
 				result.add(blockEvaluation);
 			}
 			return result;
@@ -2508,7 +2368,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 							resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 						resultSet.getLong("inserttime"), blockTypeFromDB(resultSet), resultSet.getLong("solid"),
 							resultSet.getBoolean("confirmed"), maxConfirmedReward.getChainLength());
-					blockEvaluation.setMcmcWithDefault(getMCMC(blockEvaluation.getBlockHash()));
+					blockEvaluation.setRatingWithDefault();
 					result.add(blockEvaluation);
 				}
 			}

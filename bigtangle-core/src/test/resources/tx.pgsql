@@ -1,5 +1,4 @@
 select * from blocks  where chainlength <0 order by height desc ;
-select * from mcmc;
 select * from contractevent   ;
 select * FROM contractevent a, outputs b WHERE  a.confirmed=false AND a.blockhash=b.blockhash
 select * FROM contractevent a, outputs b WHERE  a.blockhash=b.blockhash and  a.spent=false and a.confirmed=true
@@ -17,14 +16,6 @@ select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockha
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash and   a.confirmed=true and a.spent=false
 select * FROM contractevent a, contractresult b WHERE a.collectinghash=b.blockhash  
 or  a.collectinghash=0x0000000000000000000000000000000000000000000000000000000000000000    order by collectinghash
-
-select * FROM contractevent order by  spenderblockhash, collectinghash
-select * FROM contractevent order by   collectinghash, blockhash
-select * FROM contractresult b, mcmc m WHERE  m.hash=b.blockhash
-select * FROM blocks b, mcmc m WHERE  m.hash=b.hash and b.chainlength <0
-select * FROM contractresult a, blocks b, mcmc m WHERE  m.hash=b.hash and b.chainlength  and a.blockhash=b.hash
-
-select * from orders  where spent=false and confirmed=true order by blockhash;
 select * from orderresult order by inserttime desc ;
 select * from orderresult , blocks  WHERE orderresult.blockhash=blocks.hash and orderresult.rewardchainlength>0 ;
 select * from orders a, blocks b where a.blockhash=b.hash  ;
@@ -49,12 +40,7 @@ select * from blocks join unsolidblocks on blocks.hash = unsolidblocks.hash orde
 select * from blocks order by inserttime desc limit 1000  ;
 select * from blocks where confirmed=1 order by height desc limit 500 ;
 select * from orders where spent=0 and confirmed=1  ;
-
-select * from mcmc  ;
 select * from orderresult  ;
-select *  FROM blocks, mcmc  WHERE blocks.hash=mcmc.hash and solid=2 AND chainlength = -1 
-AND confirmed = false   AND mcmc.rating >= 5;
-
 select *  FROM info.blocks where  hash=0x0017a6120fecbf4eb1731def0dd0660c9dc350fed488f104aa3a4dbef27ea9a3;
 select * from outputs where blockhash = 0x0009a0d2309039774e93ab211205a865737ab7f82bd235b6c63519b05d47bf05;
 select * from outputs where hash = 0x0aef356676f4ba274b40c52020e04c9b9e9e4fba1b1da51962278a13ec4d8897;
@@ -65,23 +51,6 @@ select * from blocks order by chainlength;
 select * from blocks where chainlength <0 ;
 select * from blocks where chainlength > 0 ;
 select max(height) FROM blocks
-select count(*) FROM blocks, mcmc  WHERE 
-blocks.hash = mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false
-
-select  *  FROM blocks, mcmc  WHERE 
-blocks.hash = mcmc.hash and solid=2 AND chainlength = -1 AND confirmed = false
-
-select  * FROM blocks WHERE chainlength = -1   AND solid = 2
- SELECT blockhash, txreward.confirmed, txreward.spent, txreward.spenderblockhash, txreward.prevblockhash, 
- txreward.difficulty, txreward.chainlength FROM txreward order by  txreward.chainlength desc
-JOIN blocks on blocks.hash=txreward.blockhash WHERE chainlength=339
-
-delete from txreward where chainlength=197088
-select count( *) from txreward
-
-select  * from txreward order by chainlength desc limit 10
-
-select * from blocks where hash = 0x0000000c1c45469ab3bcea91afbf582027800e7280c2dd90e05b5249296ed7f28;
 
  SELECT blockhash, txreward.confirmed, txreward.spent, txreward.spenderblockhash, txreward.prevblockhash, 
  txreward.difficulty, txreward.chainlength FROM txreward 

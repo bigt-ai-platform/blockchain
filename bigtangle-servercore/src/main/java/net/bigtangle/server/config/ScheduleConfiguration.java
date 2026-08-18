@@ -10,10 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ScheduleConfiguration {
 
-    @Value("${service.schedule.mcmc:false}")
+    @Value("${service.schedule.chainlength:false}")
     boolean chainlength_active;
-    @Value("${service.schedule.mcmcrate:500}")
-    Long mcmcrate;
 
     @Value("${service.schedule.blockbatch:false}")
     boolean blockBatchService_active;
@@ -57,14 +55,6 @@ public class ScheduleConfiguration {
         this.blockbatchrate = blockbatchrate;
     }
 
-    public Long getMcmcrate() {
-        return mcmcrate;
-    }
-
-    public void setMcmcrate(Long mcmcrate) {
-        this.mcmcrate = mcmcrate;
-    }
-
     public Long getSyncrate() {
         return syncrate;
     }
@@ -98,7 +88,7 @@ public class ScheduleConfiguration {
 
 	@Override
 	public String toString() {
-		return "ScheduleConfiguration [chainlength_active=" + chainlength_active + ", mcmcrate=" + mcmcrate
+		return "ScheduleConfiguration [chainlength_active=" + chainlength_active
 				+ ", blockBatchService_active=" + blockBatchService_active + ", blockbatchrate=" + blockbatchrate
 				+ ", syncrate=" + syncrate + ", initSync=" + initSync
 				+ ", microBatch_active=" + microBatch_active + "]";

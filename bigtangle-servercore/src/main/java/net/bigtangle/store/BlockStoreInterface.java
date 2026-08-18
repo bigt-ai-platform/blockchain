@@ -23,7 +23,6 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
 import net.bigtangle.core.BlockEvaluationDisplay;
-import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventCancel;
 import net.bigtangle.core.ContractEventRecord;
@@ -58,11 +57,8 @@ import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.server.data.BatchBlock;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
-import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
-import net.bigtangle.server.data.Rating;
-import net.bigtangle.server.data.TipsQueue;
 
 /**
  * <p>
@@ -186,14 +182,6 @@ public interface BlockStoreInterface {
 
 	TreeSet<BlockWrap> getBlocksToConfirm(long cutoffHeight, long maxHeight) throws BlockStoreException;
 
-	BlockMCMC getMCMC(Sha256Hash hash) throws BlockStoreException;
-
-	List<BlockMCMC> getMCMCDepth(long number) throws BlockStoreException;
-
-	void updateBlockEvaluationWeightAndDepth(List<DepthAndWeight> depthAndWeight) throws BlockStoreException;
-
-	void updateBlockEvaluationRating(List<Rating> ratings) throws BlockStoreException;
-
 	void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
 
 	void updateBlockEvaluationChainlength(Sha256Hash blockhash, long chainlength) throws BlockStoreException;
@@ -201,8 +189,6 @@ public interface BlockStoreInterface {
 	void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException;
 
 	void resetChainlengthSolid(long chainlength) throws BlockStoreException;
-
-	void deleteMCMC(long chainlenght) throws BlockStoreException;
 
 	/* TXOs */
 	void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
@@ -401,13 +387,6 @@ public interface BlockStoreInterface {
 	void deleteBatchBlock(Sha256Hash hash) throws BlockStoreException;
 
 	List<BatchBlock> getBatchBlockList() throws BlockStoreException;
-
-	void insertTipsQueue(TipsQueue tipsQueue) throws BlockStoreException;
-
-	void deleteTipsQueue(Sha256Hash hash) throws BlockStoreException;
-
-	TipsQueue getTipsQueue() throws BlockStoreException;
-	List<TipsQueue> getAllTipsQueue() throws BlockStoreException;
 
 	List<UTXO> getOutputsHistory(String fromaddress, String toaddress, Long starttime, Long endtime)
 			throws BlockStoreException;

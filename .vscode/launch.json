@@ -11,52 +11,21 @@
             "env": {
                 "SERVER_PORT": "8081",
                 "DB_NAME": "layer0",
-                "SERVICE_MINING": "true",
-                "SERVICE_MCMC": "false"
-            }
-        },
-        {
-            "type": "java",
-            "name": "Layer0 MCMCStart",
-            "request": "launch",
-            "mainClass": "net.bigtangle.layer0.mcmc.Layer0MCMCStart",
-            "projectName": "layer0-mcmc",
-            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
-            "env": {
-                "SERVER_PORT": "8082",
-                "DB_NAME": "layer0",
-                "SERVICE_MINING": "false",
-                "SERVICE_MCMC": "true"
+                "SERVICE_MINING": "true"
             }
         },
         {
             "type": "java",
             "name": "Layer1 ServerStart",
             "request": "launch",
-            "mainClass": "net.bigtangle.layer1.server.Layer1ServerStart",
-            "projectName": "layer1-server",
+            "mainClass": "net.bigtangle.l1.order.OrderMatchL1ServerStart",
+            "projectName": "l1-order-server",
             "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
             "env": {
                 "SERVER_PORT": "8083",
                 "DB_NAME": "layer1",
                 "LAYER1_CHAINID": "L1",
-                "SERVICE_MINING": "true",
-                "SERVICE_MCMC": "false"
-            }
-        },
-        {
-            "type": "java",
-            "name": "Layer1 MCMCStart",
-            "request": "launch",
-            "mainClass": "net.bigtangle.layer1.mcmc.Layer1MCMCStart",
-            "projectName": "layer1-mcmc",
-            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED",
-            "env": {
-                "SERVER_PORT": "8084",
-                "DB_NAME": "layer1",
-                "LAYER1_CHAINID": "L1",
-                "SERVICE_MINING": "false",
-                "SERVICE_MCMC": "true"
+                "SERVICE_MINING": "true"
             }
         }
     ],
@@ -64,24 +33,13 @@
         {
             "name": "Layer0 Node",
             "configurations": [
-                "Layer0 ServerStart",
-                "Layer0 MCMCStart"
+                "Layer0 ServerStart"
             ]
         },
         {
             "name": "Layer1 Node",
             "configurations": [
-                "Layer1 ServerStart",
-                "Layer1 MCMCStart"
-            ]
-        },
-        {
-            "name": "All Layer Nodes",
-            "configurations": [
-                "Layer0 ServerStart",
-                "Layer0 MCMCStart",
-                "Layer1 ServerStart",
-                "Layer1 MCMCStart"
+                "Layer1 ServerStart"
             ]
         }
     ]

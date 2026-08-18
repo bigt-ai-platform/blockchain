@@ -16,7 +16,7 @@ public enum TransactionStatus {
 	/** Placed in a block of the DAG. */
 	IN_BLOCK,
 
-	/** Block became fully solid (solid=2), eligible for MCMC. */
+	/** Block became fully solid (solid=2). */
 	SOLID,
 
 	/** Confirmed by a beacon/reward block at a reward chainlength (chain history). */

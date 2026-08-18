@@ -17,8 +17,8 @@ validators/
 
 ## Quickstart
 
-1. Build the images (`helper/deploy.sh` from repo root), then set `SERVER_IMAGE` /
-   `MCMC_IMAGE` in `common.env` (default: `ghcr.io/bigt-ai-platform/layer0-{server,mcmc}`).
+1. Build the images (`helper/deploy.sh` from repo root), then set `SERVER_IMAGE`
+   in `common.env` (default: `ghcr.io/bigt-ai-platform/layer0-server`).
    By default `DOCKER_NETWORK=host` so the DB on localhost stays reachable and the
    node's ports bind directly on the host.
 
@@ -38,25 +38,21 @@ validators/
 
 ## Phased bootstrap (production ordering)
 
-Run the phases **in order across ALL nodes** on each node's own host. The mcmc
-beacon producers MUST NOT start until every validator is staked and active:
-beacon production ramps up as soon as the first validator activates, and later
-stake deposits then land on a moving head and get reorged out (the 4-node
-prodsim regression). Phases:
+Run the phases **in order across ALL nodes** on each node's own host. Beacon
+duties run on the `layer0-server` process itself (`--pos.dutyEnabled=true`),
+so beacon production ramps up as soon as the first validator activates, and
+later stake deposits then land on a moving head and get reorged out (the
+4-node prodsim regression). Phases:
 
 ```bash
-# 1) On EVERY node: create the DB + start layer0-server (no beacons yet).
+# 1) On EVERY node: create the DB + start layer0-server (validator duties on).
 node-<i>/setup.sh server
 
 # 2) On EVERY node: fund (bootstrap mode only) + stake + activate THIS node's
 #    validator, through its own API (getValidators grows 1,2,3,…,N).
 node-<i>/setup.sh stake
 
-# 3) On EVERY node: start the layer0-mcmc beacon producer — only now, with the
-#    full active set agreed everywhere.
-node-<i>/setup.sh mcmc
-
-# 4) From ANY node: cross-node acceptance (validators == N everywhere, beacon
+# 3) From ANY node: cross-node acceptance (validators == N everywhere, beacon
 #    confirmed on every node, chainlengths within one epoch).
 node-<i>/setup.sh verify
 ```
@@ -70,10 +66,8 @@ missing parent and it confirms zero beacons.
 
 - One PostgreSQL database per node (`layer0`, `layer0_1`, …) and one
   `layer0-server` per DB.
-- The validator key must be configured on **both** processes:
-  - `layer0-server` runs with `--pos.dutyEnabled=false` (holds the key for
-    `stakeDeposit` authorization only),
-  - `layer0-mcmc` runs with `--pos.dutyEnabled=true` (proposes/attests).
+- The validator key is configured on each `layer0-server` instance, which runs
+  with `--pos.dutyEnabled=true` (proposes/attests).
 - `stakeDeposit` no longer accepts a `privateKey` field — it signs with the
   server's configured key, so each validator stakes via **its own** node's API.
 - `FUND_MODE=bootstrap` requires `FUND_ENABLED=true` on the server and mints

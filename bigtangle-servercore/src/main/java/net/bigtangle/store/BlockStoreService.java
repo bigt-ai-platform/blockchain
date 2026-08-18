@@ -43,7 +43,6 @@ import net.bigtangle.core.Utils;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.ChainBlockQueue;
-import net.bigtangle.server.data.DepthAndWeight;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.data.SolidityState.State;
@@ -187,12 +186,12 @@ public class BlockStoreService {
 	/*
 	 * updateChainConnected and updateConfirmed can not run in parallel
 	 */
-	public void updateChain(boolean confirmTimebox) throws BlockStoreException {
+public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		updateChainConnected();
 		// PoS mode — block confirmation is handled by Casper finality,
 		// not PoW-style reward-chain confirmation.  Skipping the full
 		// DAG scan in updateConfirmed() avoids a ~50 s bottleneck on
-		// 50 k-block chains and is safe during the MCMC bridge phase.
+		// 50 k-block chains.
 		// updateUnConfirmedDo is likewise skipped inside
 		// updateChainConnected — see the comment there.
 		if (confirmTimebox)
@@ -227,7 +226,7 @@ public class BlockStoreService {
 				// every unconfirmed block) is skipped because block
 				// confirmation is handled by Casper finality, not by
 				// reward chainlengths.  processChainConnected still runs
-				// to connect blocks into the DAG for the MCMC bridge.
+				// to connect blocks into the DAG.
 				processChainConnected(store, false, true);
 				store.deleteLockobject(LOCKID);
 				if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000) {
@@ -594,12 +593,6 @@ public class BlockStoreService {
 			updateTransactionOutputSpendPending(block, blockStore);
 			new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 					.evictTransactionsAndBlockEva(block, blockStore);
-			// Initialize MCMC
-			if (blockStore.getMCMC(block.getHash()) == null) {
-				ArrayList<DepthAndWeight> depthAndWeight = new ArrayList<>();
-				depthAndWeight.add(new DepthAndWeight(block.getHash(), 1, 0));
-				blockStore.updateBlockEvaluationWeightAndDepth(depthAndWeight);
-			}
 		} finally {
 			if (blockStore != null)
 				blockStore.close();

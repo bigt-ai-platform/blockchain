@@ -60,14 +60,13 @@ public class ScheduleAVGPriceService {
 
     @Async
     @Scheduled(cron = "0 0 1 * * ?")
-    public void updatemcmcService() {
+    public void updateDailyAvgPrice() {
         if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
             try {
-                // logger.debug(" Start SchedulemcmcService: ");
                 aVGPriceService.startSingleProcessCalAdd();
 
             } catch (Exception e) {
-                logger.warn("updatemcmcService ", e);
+                logger.warn("updateDailyAvgPrice ", e);
             }
         }
     }

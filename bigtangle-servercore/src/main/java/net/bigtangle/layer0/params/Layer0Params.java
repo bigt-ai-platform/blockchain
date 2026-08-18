@@ -8,7 +8,7 @@ import net.bigtangle.params.MainNetParams;
 /**
  * Layer 0 {@link net.bigtangle.params.NetworkParameters}: the settlement chain
  * that accepts token creation, transfer/payment, reward/mining and the
- * cross-tangle anchor. A Layer 0 node (layer0-server / layer0-mcmc) uses these
+ * cross-tangle anchor. A Layer 0 node (layer0-server) uses these
  * parameters so {@code ServiceBaseCheck.checkBlockBeforeSave} rejects any
  * Layer 1 block type (order / contract). See {@code LAYERING-PLAN.md}.
  *

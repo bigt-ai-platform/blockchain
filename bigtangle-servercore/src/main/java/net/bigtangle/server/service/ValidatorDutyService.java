@@ -56,8 +56,8 @@ public class ValidatorDutyService {
 
     /**
      * Whether this node performs validator duties (propose beacons, attest).
-     * Disabled on the L0 HTTP server in a split-node setup so only the MCMC
-     * (the consensus node) proposes — otherwise two processes sharing the same
+     * Disabled on the L0 HTTP server in a split-node setup so only the
+     * consensus node proposes — otherwise two processes sharing the same
      * validator key both run the slot tick and produce competing beacons,
      * forking the chain and orphaning transaction blocks (payments stuck in
      * BATCHED). The validator key must STAY configured for stakeDeposit auth.

@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Transaction lifecycle status for a user: where the transaction is in the
- * mempool → batch block → block → MCMC solid → beacon-confirmed (chainlength)
+ * mempool → batch block → solid → beacon-confirmed (chainlength)
  * → dropped/re-mempooled lifecycle.
  */
 public class GetTransactionStatusResponse extends AbstractResponse {

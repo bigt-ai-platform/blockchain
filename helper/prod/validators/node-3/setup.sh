@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Node 3 — phased setup: setup.sh <server|stake|mcmc|verify>. Run the
-# phases in order across ALL nodes: server (all) → stake (all) → mcmc (all)
-# → verify. Do NOT start mcmc before every validator is staked+active.
+# Node 3 — phased setup: setup.sh <server|stake|verify>. Run the
+# phases in order across ALL nodes: server (all) → stake (all) → verify.
+# Validator duties (beacon proposals) run on the layer0-server itself.
 set -euo pipefail
 cd "$(dirname "$0")"
 

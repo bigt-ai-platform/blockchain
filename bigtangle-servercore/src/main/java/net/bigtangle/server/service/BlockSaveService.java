@@ -28,7 +28,6 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.BatchBlock;
-import net.bigtangle.server.data.TipsQueue;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 
@@ -92,8 +91,7 @@ public class BlockSaveService {
 
 	/** Permissive variant used by token creation (MultiSignServiceCreate).
 	 *  The block has already passed checkFullTokenSolidity, so strict
-	 *  re-validation in addBlock would reject it for unrelated reasons.
-	 *  Also seeds MCMC weight + TipsQueue so the beacon chain picks it up. */
+	 *  re-validation in addBlock would reject it for unrelated reasons. */
 	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
 		// CROSSTANGLE blocks are cross-chain VALUE messages (peg-in/peg-out,
 		// anchors): they must pass real consensus validation
@@ -105,13 +103,10 @@ public class BlockSaveService {
 		} else {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
-		// Bootstrap solid=MCMC uses, and set weight/depth so MCMC picks it up.
 		// addNonChain → solidifyBlock sets solid=1 for MissingCalculation
-		// state (inherited from prototype predecessors), but MCMC's
-		// getSolidBlockTopologyInInterval filters on solid=2.
+		// state (inherited from prototype predecessors); mark the block fully
+		// solid so downstream chain-derived processing sees it immediately.
 		store.updateBlockEvaluationSolid(block.getHash(), 2);
-		store.updateBlockEvaluationWeightAndDepth(java.util.List.of(
-				new net.bigtangle.server.data.DepthAndWeight(block.getHash(), 1, 1)));
 		// Mark the spent UTXOs as spend-pending so a wallet does not reuse a
 		// fee UTXO already committed to this (as-yet unconfirmed) block —
 		// otherwise two rapid token creations pick the same fee UTXO and
@@ -125,8 +120,7 @@ public class BlockSaveService {
 
 	/** Batch variant: skips transaction re-verification, solidity checks,
 	 *  AND cache operations.  Batch blocks are
-	 *  transient mempool dumps that don't need archival — the PostgreSQL
-	 *  row alone suffices for the MCMC bridge. */
+	 *  transient mempool dumps that don't need archival. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
 		store.setBatchDurability(true);
 		try (AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
@@ -388,11 +382,7 @@ public class BlockSaveService {
 		}
 		BlockStoreInterface store = storeService.getStore();
 		try {
-			TipsQueue tipsQueue = store.getTipsQueue();
-			if (tipsQueue == null) {
-				return 0;
-			}
-			Block proto = networkParameters.getDefaultSerializer().makeBlock(tipsQueue.getBlock());
+			Block proto = cacheBlockPrototypeService.getBlockPrototype(store);
 			// Pre-fetch predecessor blocks once — avoids N redundant DB reads
 			Block predBlock = store.get(proto.getPrevBlockHash());
 			Block predBranchBlock = store.get(proto.getPrevBranchBlockHash());
@@ -408,11 +398,6 @@ public class BlockSaveService {
 				for (int g = 0; g < groups.size(); g++) {
 					final List<Transaction> group = groups.get(g);
 					final BlockStoreInterface s = stores[g];
-					if (g > 0) {
-						store.insertTipsQueue(new TipsQueue(java.util.Arrays.copyOf(
-								proto.getHash().getBytes(), 32),
-								proto.unsafeBitcoinSerialize(), proto.getHeight(), proto.getTimeSeconds()));
-					}
 					futures[g] = CompletableFuture.runAsync(() -> {
 						try {
 							Block b = Block.createBlock(networkParameters,

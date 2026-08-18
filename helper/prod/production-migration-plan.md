@@ -22,7 +22,8 @@ Companion to `prod.md`. Covers the five required steps:
   UTXOs whose `blockHash` = the genesis hash, with per-address values. Gated by
   `FUND_ENABLED` (`server.fundEnabled`).
 - Validator activation: `fund → stakeDeposit(≥32,000,000 BIG) → activateValidator`.
-  Reference impl: `layer0-mcmc/src/test/java/net/bigtangle/mcmc/prodsim/ProdSimBootstrap.java`.
+  Reference impl: `helper/prod/validators/` phased `setup.sh` (server → stake →
+  verify) and the cutover runbook.
 - Seeds: `MainNetParams.dnsSeeds` (one enrtree) + `serverSeeds()` (IP list);
   discovery service lives in the separate `bigt-ai-platform/seeds` repo.
 
@@ -65,11 +66,11 @@ Companion to `prod.md`. Covers the five required steps:
 ## Phase 2 — Start / initialize the PoS chain
 
 1. Build: `mvn package -DskipTests`
-   → `layer0-server-0.6.0-exec.jar`, `layer0-mcmc-0.6.0-exec.jar`.
+   → `layer0-server-0.6.0-exec.jar`.
 2. Node 0 DB + first start (schema creation) exactly as `prod.md` §1–§4:
    - PostgreSQL `layer0`, user `root`.
-   - `layer0-server` with `--server.createtable=true --server.net=Mainnet --server.chain=L0 …`.
-   - `layer0-mcmc` with `--pos.validatorKey=<KEY_0> --server.requester=http://127.0.0.1:8081 …`.
+   - `layer0-server` with `--server.createtable=true --server.net=Mainnet --server.chain=L0
+     --pos.validatorKey=<KEY_0> --pos.dutyEnabled=true --server.requester=http://127.0.0.1:8081 …`.
 3. Confirm genesis created and `getChainNumber` returns 0 (no beacon yet).
 
 ## Phase 3 — Pay from genesis to snapshot addresses
@@ -110,12 +111,13 @@ Generated under `helper/prod/validators/`:
   `VALIDATOR_PUBKEY` (and address) for each validator.
 - `node-<i>/validator.env` — gitignored; holds that node's private seed.
 - `node-<i>/setup.sh <phase>` — phased per-node setup: `server` (create DB + start
-  `layer0-server`), `stake` (fund → `stakeDeposit` → `activateValidator`),
-  `mcmc` (start `layer0-mcmc`), `verify` (cross-node acceptance). Run the phases
-  **in order across ALL nodes**: the mcmc producers must not start until every
-  validator is staked+active (see `validators/README.md` and the cutover
-  runbook). `REQUESTER`/`POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` derive from
-  `SEED_HOSTS` as a full mesh so every node can pull missing beacon parents.
+  `layer0-server`, validator duties on), `stake` (fund → `stakeDeposit` →
+  `activateValidator`), `verify` (cross-node acceptance). Run the phases
+  **in order across ALL nodes**; beacon duties run on the server itself, so the
+  staking window completes before beacons move the head (see
+  `validators/README.md` and the cutover runbook). `REQUESTER` /
+  `POS_GOSSIP_PEERS` / `GOSSIP_SEEDS` derive from `SEED_HOSTS` as a full mesh so
+  every node can pull missing beacon parents.
 
 ## Phase 5 — Seeds / network formation
 

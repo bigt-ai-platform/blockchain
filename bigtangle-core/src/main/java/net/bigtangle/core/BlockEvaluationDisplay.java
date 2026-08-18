@@ -3,7 +3,6 @@ package net.bigtangle.core;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.ProbabilityBlock;
 
 public class BlockEvaluationDisplay extends BlockEvaluation {
@@ -15,18 +14,10 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
      */
     private long latestchainnumber;
 
-    BlockMCMC mcmc;
-
     //calculate ProbabilityBlock
     private BigDecimal totalrating;
-   
-    
-    public void setMcmcWithDefault(BlockMCMC mcmc) {
-        if (mcmc == null) {
-            this.mcmc = BlockMCMC.defaultBlockMCMC(getBlockHash());
-        } else {
-            this.mcmc = mcmc;
-        }
+
+    public void setRatingWithDefault() {
         setNormalizeRating();
     }
 
@@ -76,8 +67,7 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
             totalrating = new BigDecimal(  (100 * (1.0 - attact) ));
             totalrating=   totalrating.setScale(2, RoundingMode.CEILING);
         } else {
-            // 1 - ProbabilityBlock.attackerSuccessProbability(0.3, 1) = 0.37
-            totalrating = new BigDecimal( mcmc.getRating() * 37 / NetworkParameters.NUMBER_RATING_TIPS);
+            totalrating = new BigDecimal( 37 );
             totalrating=     totalrating.setScale(2, RoundingMode.CEILING);
         }
          
@@ -89,14 +79,6 @@ public class BlockEvaluationDisplay extends BlockEvaluation {
 
     public void setLatestchainnumber(long latestchainnumber) {
         this.latestchainnumber = latestchainnumber;
-    }
-
-    public BlockMCMC getMcmc() {
-        return mcmc;
-    }
-
-    public void setMcmc(BlockMCMC mcmc) {
-        this.mcmc = mcmc;
     }
 
     public BigDecimal getTotalrating() {

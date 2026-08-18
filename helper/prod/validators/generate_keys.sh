@@ -4,7 +4,7 @@
 #
 # Usage:  N_VALIDATORS=4 ./generate_keys.sh
 #
-# Uses net.bigtangle.tools.ValidatorKeyTool from the packaged mcmc Docker image.
+# Uses net.bigtangle.tools.ValidatorKeyTool from the packaged layer0-server Docker image.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 source ./common.env
 
 N_VALIDATORS="${N_VALIDATORS:-4}"
-TOOL_IMAGE="${TOOL_IMAGE:-${MCMC_IMAGE}:${IMAGE_TAG}}"
+TOOL_IMAGE="${TOOL_IMAGE:-${SERVER_IMAGE}:${IMAGE_TAG}}"
 
 if ! docker image inspect "${TOOL_IMAGE}" >/dev/null 2>&1; then
     echo "Docker image not found: ${TOOL_IMAGE}  (build with 'helper/deploy.sh' or set TOOL_IMAGE=)" >&2

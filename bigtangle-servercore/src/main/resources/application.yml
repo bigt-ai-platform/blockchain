@@ -37,8 +37,7 @@ db:
 
 service:
   schedule:
-    mcmc: ${SERVICE_MCMC:false}
-    mcmcrate: ${SERVICE_MCMC_RATE:1000}
+    chainlength: ${SERVICE_CHAINLENGTH:false}
     sync: ${SERVICE_SYNC:true}
     syncrate: ${SERVICE_SYNC_RATE:50000}
     blockbatch: ${SERVICE_BLOCKBATCH:false}

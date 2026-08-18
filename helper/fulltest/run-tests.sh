@@ -35,18 +35,6 @@ for port in "${SERVER_PORTS[@]}"; do
   done
 done
 
-info "Waiting for MCMC nodes to be running..."
-MCMC_PORTS=(8084 8085 8086)
-for port in "${MCMC_PORTS[@]}"; do
-  for i in $(seq 1 10); do
-    if docker ps --format '{{.Names}}' | grep -q "l0-mcmc"; then
-      log "mcmc nodes running (server :${port} accessible)"
-      break
-    fi
-    sleep 3
-  done
-done
-
 info "Using Java: $(java -version 2>&1 | head -1)"
 info "Running integration tests..."
 
@@ -57,7 +45,7 @@ cd "$ROOT"
 mvn install -DskipTests -pl bigtangle-core,bigtangle-servercore,bigtangle-bridge -am -q
 
 # Run the standard integration test suite against the Docker network
-mvn test -pl layer0-mcmc -q \
+mvn test -pl layer0-server -q \
   -DDB_HOSTNAME=localhost \
   -DDB_PORT=5432 \
   -DDB_USERNAME=root \

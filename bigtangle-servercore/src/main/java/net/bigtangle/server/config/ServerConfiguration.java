@@ -113,12 +113,6 @@ public class ServerConfiguration {
      * Set to false in production to prevent accidental schema changes.
      */
     private Boolean createtable = true;
-
-    /** 
-     * Alpha parameter for Markov Chain Monte Carlo calculations.
-     * Used in consensus algorithm calculations.
-     */
-    private double alphaMCMC = -0.05;
     
     /** 
      * Whether to enable Kafka stream processing for blockchain events.
@@ -435,24 +429,6 @@ public class ServerConfiguration {
         this.serverurl = serverurl;
     }
 
-   
-  
-    /**
-     * Gets the alpha parameter for Markov Chain Monte Carlo calculations.
-     * @return The current alpha value
-     */
-    public double getAlphaMCMC() {
-        return alphaMCMC;
-    }
-
-    /**
-     * Sets the alpha parameter for Markov Chain Monte Carlo calculations.
-     * @param alphaMCMC The new alpha value to use
-     */
-    public void setAlphaMCMC(double alphaMCMC) {
-        this.alphaMCMC = alphaMCMC;
-    }
-
     /**
      * Checks if Kafka stream processing is enabled for blockchain events.
      * @return true if Kafka stream processing is enabled
@@ -548,7 +524,7 @@ public class ServerConfiguration {
                 + clientversion + ", permissioned=" + permissioned + ", permissionadmin=" + permissionadmin
                 + ", myserverblockOnly=" + myserverblockOnly
                 + ", maxsearchblocks=" + maxsearchblocks  
-                + ", serviceReady=" + serviceReady + ", createtable=" + createtable + ", alphaMCMC=" + alphaMCMC
+                + ", serviceReady=" + serviceReady + ", createtable=" + createtable
                 + ", runKafkaStream=" + runKafkaStream + "]";
     }
 

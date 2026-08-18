@@ -117,23 +117,21 @@ docker compose -f docker-compose-tunnel.yml restart
 The tunnel routes:
 
 - `test.bigtangle.org` → BigTangle server (port 18089)
-- `test-mcmc.bigtangle.org` → BigTangle MCMC (port 18090)
 - `test-minio.bigtangle.org` → MinIO console (port 9001)
 - `test-minio-api.bigtangle.org` → MinIO API (port 9000)
 
 Edit `cloudflared-config.yml` to modify routing.
 
-## With MCMC Support
+## With PoS Beacon Proposals
 
-Use `docker-compose-tunnel-mcmc.yml` for a setup with MCMC (Mining & Consensus) service:
+Use `docker-compose-tunnel.yml` for the single-node test setup:
 
 ```bash
-docker compose -f docker-compose-tunnel-mcmc.yml up -d
+docker compose -f docker-compose-tunnel.yml up -d
 ```
 
 This includes:
-- BigTangle server (SERVICE_MCMC=false)
-- BigTangle MCMC (SERVICE_MCMC=true, connects to server)
+- BigTangle server (PoS validator duties + block batching)
 
 ## Stopping
 

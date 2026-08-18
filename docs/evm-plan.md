@@ -10,7 +10,7 @@ extending the existing `l1-contract` chain, built as a chain-agnostic
 
 | | New `l1-evm` chain | Integrate into `l1-contract` |
 |---|---|---|
-| Consensus infra | Clone server+mcmc modules, new genesis + chain ID, new bridge/validator bootstrap | Reuse the running chain |
+| Consensus infra | Clone the server modules, new genesis + chain ID, new bridge/validator bootstrap | Reuse the running chain |
 | Effort to first EVM tx | High (all boilerplate above) | Low |
 | Isolation | Clean (own block types, state, perf) | Shared with lottery engine |
 | Fits "many L1 chains" vision | Yes | Yes (L1-contract = general contract chain) |
@@ -24,8 +24,7 @@ identical either way.
 
 ## Current architecture (relevant points)
 
-- `l1-contract` chain: `l1-contract-server` (port 8085) + `l1-contract-mcmc`
-  (port 8086). Chain params: `ContractL1Params` (chain id `L1-contract`).
+- `l1-contract` chain: `l1-contract-server` (port 8085). Chain params: `ContractL1Params` (chain id `L1-contract`).
 - Contract execution is deterministic and re-run on every node:
   `ContractEngine` (`l1-contract-server/.../layer1/contract/ContractEngine.java`)
   implements `ContractExecutor` (`bigtangle-servercore/.../handler/ContractExecutor.java`)
@@ -38,8 +37,9 @@ identical either way.
   on every node.
 - Contract event blocks enter the DAG as `BLOCKTYPE_CONTRACT_EVENT` /
   `BLOCKTYPE_CONTRACTEVENT_CANCEL` and are collected via `dagBlockHashesFrom`.
-- The chain is UTXO-based (Bitcoin-style) with MCMC DAG consensus + PoS beacon
-  finality; contract payouts are emitted as UTXO transactions.
+- The chain is UTXO-based (Bitcoin-style) with PoS beacon finality over the DAG
+  (stake-weighted GHOST fork choice + Casper FFG); contract payouts are emitted
+  as UTXO transactions.
 
 ## Consensus constraint (the hard part)
 
@@ -150,15 +150,15 @@ Chain-agnostic library module (like `bigtangle-bridge`), no server.
 ## Phase 6 — Tests ✅ complete
 
 - `bigtangle-evm`: Keccak/Word/interpreter/processor suites (27 tests).
-- `EVMContractEngineTest` (l1-contract-mcmc, PostgreSQL): deploys an EVM
+- `EVMContractEngineTest` (l1-contract-server, PostgreSQL): deploys an EVM
   contract token, submits deploy + call blocks through the real pipeline, runs
   the engine and verifies deployed code, storage writes, EVM balances and
   deterministic state roots across repeated executions.
 
 ## Phase 7 — dedicated `l1-evm` chain ✅ complete
 
-- New modules `l1-evm-server` (port 8093) and `l1-evm-mcmc` (port 8094) reuse
-  the L1-contract implementation (EVM engine, RPC, services, MCMC) with
+- New module `l1-evm-server` (port 8093) reuses the L1-contract implementation
+  (EVM engine, RPC, services) with
   `EVML1Params`/`EVML1TestParams` (chain ID `EVM`, EVM block types +
   token creation). README and parent POM updated.
 

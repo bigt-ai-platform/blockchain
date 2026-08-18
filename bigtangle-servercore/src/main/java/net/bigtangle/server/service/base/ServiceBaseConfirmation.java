@@ -87,7 +87,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private static final long NoConflict = -10;
 	private static final long ConflictWithConfirmed = -5;
 
-	// Per-MCMC-cycle cache for conflict checks: UTXO key → result.
+	// Per-cycle cache for conflict checks: UTXO key → result.
 	// Avoids re-checking the same 50k UTXOs across multiple eligibility calls.
 	private static final ThreadLocal<Map<String, Long>> conflictCache =
 			ThreadLocal.withInitial(HashMap::new);

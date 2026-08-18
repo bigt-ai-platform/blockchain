@@ -93,8 +93,8 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		allApprovedNewBlocks.add(getBlockWrap(newChainlengthBlock.getHash(), store));
 
 		// If anything is already spent, remove those blocks and continue
-		// with the rest.  This handles the case where MCMC creates reward
-		// blocks faster than UpdateChain processes them — the second reward
+		// with the rest.  This handles the case where reward blocks are
+		// created faster than UpdateChain processes them — the second reward
 		// block may reference blocks already confirmed by the first.
 		if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
 			allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getChainlength() > 0);

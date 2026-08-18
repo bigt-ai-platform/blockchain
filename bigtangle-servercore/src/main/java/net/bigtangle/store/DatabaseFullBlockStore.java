@@ -67,7 +67,6 @@ import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.Contractresult;
 import net.bigtangle.server.data.LockObject;
 import net.bigtangle.server.data.Orderresult;
-import net.bigtangle.server.data.TipsQueue;
 /**
  * <p>
  * A generic full block store for a relational database. This generic class
@@ -1155,68 +1154,6 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 			throw new BlockStoreException(ex);
 		}
 
-	}
-
-	@Override
-	public void insertTipsQueue(TipsQueue tipsQueue) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(INSERT_TIPSQUEUE_SQL)) {
-			preparedStatement.setBytes(1, tipsQueue.getHash());
-			preparedStatement.setBytes(2, tipsQueue.getBlock());
-			preparedStatement.setLong(3, tipsQueue.getHeight());
-			preparedStatement.setLong(4, tipsQueue.getInserttime());
-			preparedStatement.executeUpdate();
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-
-	}
-
-	@Override
-	public void deleteTipsQueue(Sha256Hash hash) throws BlockStoreException {
-
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(DELETE_TIPSQUEUE_SQL)) {
-			preparedStatement.setBytes(1, hash.getBytes());
-			preparedStatement.executeUpdate();
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-
-	}
-
-	@Override
-	public TipsQueue getTipsQueue() throws BlockStoreException {
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_TIPSQUEUE_SQL);
-			 ResultSet resultSet = preparedStatement.executeQuery()) {
-			if (resultSet.next()) {
-				byte[] hash = resultSet.getBytes(1);
-				byte[] block = resultSet.getBytes(2);
-				long height = resultSet.getLong(3);
-				long inserttime = resultSet.getLong(4);
-				return new TipsQueue(hash, block, height, inserttime);
-			}
-			return null;
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
-	}
-
-	@Override
-	public List<TipsQueue> getAllTipsQueue() throws BlockStoreException {
-		List<TipsQueue> result = new ArrayList<>();
-		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_ALL_TIPSQUEUE_SQL);
-			 ResultSet rs = preparedStatement.executeQuery()) {
-			while (rs.next()) {
-				byte[] hash = rs.getBytes(1);
-				byte[] block = rs.getBytes(2);
-				long height = rs.getLong(3);
-				long inserttime = rs.getLong(4);
-				result.add(new TipsQueue(hash, block, height, inserttime));
-			}
-			return result;
-		} catch (SQLException e) {
-			throw new BlockStoreException(e);
-		}
 	}
 
 	@Override

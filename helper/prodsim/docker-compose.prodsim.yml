@@ -24,7 +24,6 @@ x-common-server: &common-server
     DB_PORT: 5432
     DB_USERNAME: root
     DB_PASSWORD: test1234
-    SERVICE_MCMC: "true"
     SERVICE_SYNC: "true"
     SERVICE_INITSYNC: "true"
     SYNCBLOCKS: 1000
@@ -48,29 +47,6 @@ x-common-server: &common-server
     # node derives the same funded genesis and stake blocks apply cross-node —
     # fundAddresses bootstrap UTXOs do not propagate and cannot converge.
     BIGTANGLE_GENESIS_CSV: /genesis/GenesisOutput.csv
-
-x-common-mcmc: &common-mcmc
-  image: ghcr.io/bigt-ai-platform/layer0-mcmc:latest
-  networks: [prodsim-net]
-  environment: &mcmc-base-env
-    SERVER_NET: Test
-    DBTYPE: postgresql
-    DB_PORT: 5432
-    DB_USERNAME: root
-    DB_PASSWORD: test1234
-    SERVICE_MCMC: "true"
-    SERVICE_SYNC: "true"
-    SERVICE_INITSYNC: "true"
-    SYNCBLOCKS: 1000
-    CREATETABLE: "false"
-    FUND_ENABLED: "true"
-    RUNKAFKASTREAM: "false"
-    POS_SLOT_INTERVAL_MS: 2000
-    SERVICE_BLOCKBATCH: "true"
-    SERVICE_BLOCKBATCH_RATE: 5000
-    SERVICE_SCHEDULE_MICROBATCH: "true"
-    POS_GOSSIP_PEERS: "prodsim-svr-0:8081,prodsim-svr-1:8082,prodsim-svr-2:8083,prodsim-svr-3:8084"
-    GOSSIP_PEERS: "prodsim-svr-0:9093,prodsim-svr-1:9093,prodsim-svr-2:9093,prodsim-svr-3:9093"
 
 services:
 
@@ -96,20 +72,6 @@ services:
     depends_on:
       postgres-l0-0: { condition: service_healthy }
 
-  l0-mcmc-0:
-    <<: *common-mcmc
-    container_name: prodsim-mcmc-0
-    ports: ["28085:8085"]
-    environment:
-      <<: *mcmc-base-env
-      SERVER_PORT: 8085
-      REQUESTER: "http://prodsim-svr-0:8081,http://prodsim-svr-1:8082,http://prodsim-svr-2:8083,http://prodsim-svr-3:8084"
-      DB_HOSTNAME: postgres-l0-0
-      DB_NAME: layer0
-      POS_VALIDATOR_KEY: "821d95e8b04cd2b6edcf663881734915501e92d5d377308b522a5a6725243870404fee8dc9d8bdc015386e353d5206be982bb67c4bb4f7f5fb1afb0ac7dea38b"
-    depends_on:
-      postgres-l0-0: { condition: service_healthy }
-      l0-server-0: { condition: service_started }
 
   # ─── Node 1 ────────────────────────────────────────────────────────
 
@@ -137,20 +99,6 @@ services:
       postgres-l0-1: { condition: service_healthy }
       l0-server-0: { condition: service_started }
 
-  l0-mcmc-1:
-    <<: *common-mcmc
-    container_name: prodsim-mcmc-1
-    ports: ["28086:8086"]
-    environment:
-      <<: *mcmc-base-env
-      SERVER_PORT: 8086
-      REQUESTER: "http://prodsim-svr-0:8081,http://prodsim-svr-1:8082,http://prodsim-svr-2:8083,http://prodsim-svr-3:8084"
-      DB_HOSTNAME: postgres-l0-1
-      DB_NAME: layer0
-      POS_VALIDATOR_KEY: "e2df872ffa069716425675cc2732e41a6bce2831c274ab9799fee43282252aac09f204dcb3e9066baf405995ee7c8701cc91facafdc22346523057981d8d3cd2"
-    depends_on:
-      postgres-l0-1: { condition: service_healthy }
-      l0-server-1: { condition: service_started }
 
   # ─── Node 2 ────────────────────────────────────────────────────────
 
@@ -178,20 +126,6 @@ services:
       postgres-l0-2: { condition: service_healthy }
       l0-server-0: { condition: service_started }
 
-  l0-mcmc-2:
-    <<: *common-mcmc
-    container_name: prodsim-mcmc-2
-    ports: ["28087:8087"]
-    environment:
-      <<: *mcmc-base-env
-      SERVER_PORT: 8087
-      REQUESTER: "http://prodsim-svr-0:8081,http://prodsim-svr-1:8082,http://prodsim-svr-2:8083,http://prodsim-svr-3:8084"
-      DB_HOSTNAME: postgres-l0-2
-      DB_NAME: layer0
-      POS_VALIDATOR_KEY: "6fe520f3d3f3a2e4b2442198d9a5535bd4a0f67a51055e7c77735bb06264acb565dd64217603f279cc60507afd7a06520deed1a450d3694d676f942c927cbc75"
-    depends_on:
-      postgres-l0-2: { condition: service_healthy }
-      l0-server-2: { condition: service_started }
 
   # ─── Node 3 ────────────────────────────────────────────────────────
 
@@ -219,17 +153,3 @@ services:
       postgres-l0-3: { condition: service_healthy }
       l0-server-0: { condition: service_started }
 
-  l0-mcmc-3:
-    <<: *common-mcmc
-    container_name: prodsim-mcmc-3
-    ports: ["28088:8088"]
-    environment:
-      <<: *mcmc-base-env
-      SERVER_PORT: 8088
-      REQUESTER: "http://prodsim-svr-0:8081,http://prodsim-svr-1:8082,http://prodsim-svr-2:8083,http://prodsim-svr-3:8084"
-      DB_HOSTNAME: postgres-l0-3
-      DB_NAME: layer0
-      POS_VALIDATOR_KEY: "9ae978305852ab8b2406ab56d4cdc50fb7c9c8e62b17d97515c18c69eb0e4722d773d36ad1fa9b1c38a132c389fd4d4dcdf8eb40422da76322a90e34d200103e"
-    depends_on:
-      postgres-l0-3: { condition: service_healthy }
-      l0-server-3: { condition: service_started }

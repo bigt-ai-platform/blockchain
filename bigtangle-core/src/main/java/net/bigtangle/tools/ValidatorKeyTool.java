@@ -21,7 +21,7 @@ import net.bigtangle.params.NetworkParameters;
  * </pre>
  *
  * Run from a packaged exec jar, e.g.
- * {@code java -cp layer0-mcmc-0.6.0-exec.jar net.bigtangle.tools.ValidatorKeyTool generate}.
+ * {@code java -cp layer0-server-0.6.0-exec.jar net.bigtangle.tools.ValidatorKeyTool generate}.
  */
 public class ValidatorKeyTool {
 

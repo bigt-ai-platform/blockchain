@@ -17,22 +17,16 @@ import java.util.HashSet;
 public class BlockWrap {
 	protected Block block;
 	protected BlockEvaluation blockEvaluation;
-	protected BlockMCMC mcmc;
 	protected NetworkParameters params;
 
 	protected BlockWrap() {
 		super();
 	}
 
-	public BlockWrap(Block block, BlockEvaluation blockEvaluation, BlockMCMC mcmc, NetworkParameters params) {
+	public BlockWrap(Block block, BlockEvaluation blockEvaluation, NetworkParameters params) {
 		super();
 		this.block = block;
 		this.blockEvaluation = blockEvaluation;
-		if (mcmc == null)
-			this.mcmc = BlockMCMC.defaultBlockMCMC(blockEvaluation.getBlockHash());
-		else {
-			this.mcmc = mcmc;
-		}
 		this.params = params;
 	}
 
@@ -42,10 +36,6 @@ public class BlockWrap {
 
 	public BlockEvaluation getBlockEvaluation() {
 		return blockEvaluation;
-	}
-
-	public void setMcmc(BlockMCMC mcmc) {
-		this.mcmc = mcmc;
 	}
 
 	public NetworkParameters getParams() {
@@ -63,7 +53,7 @@ public class BlockWrap {
 
 	@Override
 	public String toString() {
-		return block.toString() + " \n" + blockEvaluation.toString() + " \n" + mcmc.toString() + " \n";
+		return block.toString() + " \n" + blockEvaluation.toString() + " \n";
 	}
 
 	@Override

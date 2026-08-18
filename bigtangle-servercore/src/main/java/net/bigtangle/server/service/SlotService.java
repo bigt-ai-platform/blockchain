@@ -52,9 +52,6 @@ public class SlotService {
     private NetworkParameters networkParameters;
 
     @Autowired
-    private CacheBlockPrototypeService cacheBlockPrototypeService;
-
-    @Autowired
     private EpochRewardService epochRewardService;
 
     @Autowired
@@ -452,20 +449,18 @@ public class SlotService {
 
         List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
 
-        // Use the MCMC-validated tip pair (prototype) so the referenced DAG
-        // blocks carry a proper block evaluation. Fall back to the ghost
-        // fork-choice if the prototype is unavailable.
+        // Reference the two current GHOST fork-choice tips so the DAG blocks they
+        // approve carry the head the attestations vote for.
         Block trunk;
         Block branch;
         try {
-            Block prototype = cacheBlockPrototypeService.getBlockPrototype(store);
-            trunk = store.get(prototype.getPrevBlockHash());
-            branch = store.get(prototype.getPrevBranchBlockHash());
-        } catch (Exception e) {
             List<Sha256Hash> tips = ghostService.getTwoTips(store);
             if (tips.isEmpty()) return null;
             trunk = store.get(tips.get(0));
             branch = tips.size() > 1 ? store.get(tips.get(1)) : trunk;
+        } catch (Exception e) {
+            log.debug("Fork-choice tip selection failed: {}", e.getMessage());
+            return null;
         }
         if (trunk == null || branch == null) return null;
 

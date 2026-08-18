@@ -154,15 +154,6 @@ public abstract class NetworkParameters {
 		return true;
 	}
 
-	// MCMC settings
-	public static final int CONFIRMATION_UPPER_THRESHOLD_PERCENT = 51;
-	public static final int CONFIRMATION_LOWER_THRESHOLD_PERCENT = 45;
-	public static final int NUMBER_RATING_TIPS = 10;
-	public static final int CONFIRMATION_UPPER_THRESHOLD = CONFIRMATION_UPPER_THRESHOLD_PERCENT * NUMBER_RATING_TIPS
-			/ 100;
-	public static final int CONFIRMATION_LOWER_THRESHOLD = CONFIRMATION_LOWER_THRESHOLD_PERCENT * NUMBER_RATING_TIPS
-			/ 100;
-
 	// Token ID for System Coin
 	public static final String BIGTANGLE_TOKENID_STRING = "bc";
 	public static final byte[] BIGTANGLE_TOKENID = HEX.decode(BIGTANGLE_TOKENID_STRING);
@@ -232,9 +223,10 @@ public abstract class NetworkParameters {
 	public static final int TARGET_MAX_BLOCKS_IN_REWARD = 5000;
 	public static final int MAX_REWARD_BLOCK_SIZE = MAX_DEFAULT_BLOCK_SIZE + TARGET_MAX_BLOCKS_IN_REWARD * 200;
 
-	// MCMC horizon: look back up to this many confirmed reward blocks
+	// Reward-chain lookback: walk up to this many confirmed reward blocks
 	public static final int CHAINLENGTH_CUTOFF = 40;
-	// MCMC forward horizon: look ahead up to this many blocks above confirmed reward
+	// Reward-chain lookahead: max height above the confirmed reward for
+	// confirmation/solidification scans
 	public static final int FORWARD_BLOCK_HORIZON = TARGET_MAX_BLOCKS_IN_REWARD / 4;
 
 	protected NetworkParameters() {

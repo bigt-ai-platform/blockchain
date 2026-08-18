@@ -55,10 +55,10 @@ Beacon 1 -------- Beacon 2 -------- Beacon 3
 
 - Le **DAG** gère le débit des transactions. Parce que de nombreux blocs peuvent être
   créés en même temps, le réseau a besoin d'un moyen de décider à quels blocs
-  existants un nouveau bloc doit se connecter. Bigtangle résout cela en utilisant une
-  recherche aléatoire parmi les blocs récents. La recherche favorise naturellement
-  les branches bien connectées tout en permettant aux chemins alternatifs de se développer.
-  (Cette technique s'appelle Markov Chain Monte Carlo, ou MCMC.)
+  existants un nouveau bloc doit se connecter. Bigtangle résout cela avec la règle
+  GHOST pondérée par l'enjeu : les nouveaux blocs s'attachent au bloc enfant portant
+  le plus grand poids d'enjeu accumulé, de sorte que la branche la plus lourde
+  gagne tandis que les chemins alternatifs peuvent encore se développer.
 
 - La **chaîne phare** fournit la finalité. Toutes les 12 secondes, un validateur
   choisi par un processus aléatoire impartial produit un bloc phare qui confirme
@@ -248,7 +248,7 @@ fonds existants.
 | Métrique | Bigtangle | Solana | Ethereum L1 | Visa |
 |----------|-----------|--------|-------------|------|
 | Registre | DAG + beacon chain | Single chain | Single chain | Centralisé |
-| Consensus | MCMC + Casper FFG | PoH + Tower BFT | Gasper | Autorité |
+| Consensus | GHOST + Casper FFG | PoH + Tower BFT | Gasper | Autorité |
 | Temps de slot | 12s | 400ms | 12s | — |
 | Finalité | ~12,8 min* | ~12,8s | ~6,4 min | Instantané |
 | Tx/s de pointe | ~4 873 | ~50 000* | ~30 | 24 000 |
@@ -297,7 +297,6 @@ post-quantique dans une architecture unifiée.
 | Module | Port | DB par défaut | Rôle |
 |--------|------|---------------|------|
 | `layer0-server` | 8081 | `info_l0` | Nœud complet L0 |
-| `layer0-mcmc` | 8082 | — | Consensus L0 |
 | `l1-order-server` | 8083 | `info_order` | Correspondance d'ordres L1 |
 | `l1-payment-server` | 8091 | `info_payment` | Paiement L1 |
 | `l1-pai-server` | 8087 | `info_pai` | Fournisseur d'IA L1 |

@@ -35,7 +35,7 @@ the test suite never crosses it, so the deterministic chain-read code
    `POS_BEACON_SLOTDATA_ACTIVATION` from a system property/env with the default
    `1024` (e.g. `net.bigtangle.pos.attestationActivation`), so a test can lower it
    to a small value (64–128). Keep the constant as the production default.
-2. Add `OnChainAttestationIT` (layer0-mcmc) that:
+2. Add `OnChainAttestationIT` (bigtangle-servercore) that:
    - sets the activation height low (e.g. 64),
    - drives a beacon chain with `SlotData` + embedded BLS attestations across the
      height (reuse `proposeBeaconBlock` / a helper),
@@ -46,10 +46,9 @@ the test suite never crosses it, so the deterministic chain-read code
    unsigned attestation rejected).
 
 ### Acceptance
-- `helper/testall.sh "PoSTest,OnChainAttestationIT"` green, with the chain-read
+- `helper/testall.sh "PosConsensusHardeningTest"` green, with the chain-read
   path actually executed (assert on embedded-attestation-driven justification).
-- Covered by `PoSTest.testJustificationViaChainRead`,
-  `PoSTest.testOnChainAttestationReadsEmbeddedAttestations`.
+- Covered by the chain-read cases in `PosConsensusHardeningTest`.
 
 ---
 
@@ -60,20 +59,18 @@ choice all changed; single-node tests don't prove multi-node convergence.
 
 ### Changes
 
-1. Re-enable and run the remote harness (`layer0-mcmc/.../remote/`,
-   `RemoteEpochRewardTests`, `ProdSimBootstrap`/`ProdSimVerification`) against
-   this build.
-2. Drive `helper/prod/validators/` (4 nodes) and assert:
+1. Drive `helper/prod/validators/` (4 nodes, one `layer0-server` per node with
+   `--pos.dutyEnabled=true`) and assert:
    - every node's `getValidators` returns the same active set,
    - `getChainHeight` converges,
    - finality advances (justified/finalized epochs increase) on all nodes.
-3. Fix any divergence found (most likely candidate: the save-order/confirm-order
+2. Fix any divergence found (most likely candidate: the save-order/confirm-order
    interaction around stake/attestation application).
 
 ### Acceptance
 - 4-node convergence runs clean; finality advances on every node.
-- Genesis-funded 4-node prodsim (`ProdSimBootstrap` + `ProdSimVerification`)
-  and `RemoteEpochRewardTests` are green.
+- The stake-before-beacons bootstrap ordering (`setup.sh` server → stake →
+  verify) is green and deterministic.
 
 ---
 
@@ -109,10 +106,11 @@ choice all changed; single-node tests don't prove multi-node convergence.
 2. Per-validator bootstrap: `helper/prod/validators/generate_keys.sh` →
    `setup.sh <phase>`, `FUND_MODE=genesis`. ✅ REVIEWED + FIXED for production:
    the per-node scripts are now a PHASED bootstrap (`setup.sh server` →
-   `stake` → `mcmc` → `verify` run across all nodes) so the mcmc producers
-   start only after every validator is staked+active — the old `run_all`
-   started mcmc before staking, which reorgs the later stake deposits out (the
-   prodsim regression). `REQUESTER`/`POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` derive
+   `stake` → `verify` run across all nodes); beacon duties run on
+   `layer0-server` (validator duties on), and the staking window completes
+   while the chain is still near genesis — the old `run_all` started beacons
+   before staking, which reorgs the later stake deposits out (the prodsim
+   regression). `REQUESTER`/`POS_GOSSIP_PEERS`/`GOSSIP_SEEDS` derive
    from `SEED_HOSTS` as a FULL mesh (a node pulls missing beacon parents only
    from its requester; a self-only requester on the bootstrap node confirms zero
    beacons), `balance_big` parses the base64 tokenid, and `setup.sh verify`
@@ -120,7 +118,7 @@ choice all changed; single-node tests don't prove multi-node convergence.
 3. Cutover procedure: freeze legacy writes → build → coordinated deploy behind
    `POS_BEACON_SLOTDATA_ACTIVATION` → verify `getChainHeight` + `getValidators`
    converge → enable TLS → confirm `FUND_ENABLED=false`. ✅ documented in
-   `helper/prod/cutover-runbook.md` (phased stake-all-before-mcmc, fork height
+   `helper/prod/cutover-runbook.md` (phased stake-before-beacons, fork height
    1024 / `net.bigtangle.pos.attestationActivation`, TLS, fund-disable checks,
    rollback path). ⏳ staging execution still pending.
 4. Document the fork activation height and rollback path. ✅ in
@@ -142,9 +140,8 @@ choice all changed; single-node tests don't prove multi-node convergence.
    the moving chain tip while the epoch is live — so the same-target-epoch
    double-vote slashing form (b) AND the surround-vote form are DISABLED (they
    falsely slashed honest validators in the prodsim; see
-   `plan/pos-remaining-impl.md`). Both are the documented path to re-enable once
-   attestations target a stable past boundary. Tests: PoSTest, remote
-   convergence (`RemoteEpochRewardTests`) green.
+`plan/pos-remaining-impl.md`). Both are the documented path to re-enable once
+    attestations target a stable past boundary. Tests: PoS suite green.
 3. **DoS surface** — DONE. The per-slot proposer path
    (`CasperService.getAttestationsForSlot`) no longer loads the whole
    `pos_state("attestation")` map: new prefix-scoped store read
@@ -152,8 +149,8 @@ choice all changed; single-node tests don't prove multi-node convergence.
    stays O(attestations of the slot). Attestation keys are zero-padded
    (`att_<slot>_`, CasperService.attestationKey) so lexicographic order == slot
    order, and the epoch prune drops the stale range in ONE statement
-   (`deletePosStateByServiceKeyRange`) instead of a per-key scan. Verified by
-   PoSTest (57 tests green).
+(`deletePosStateByServiceKeyRange`) instead of a per-key scan. Verified by
+    PosConsensusHardeningTest.
 
 ### Acceptance
 - Skew tolerance and domain consistency tests added. ✅ both.
@@ -173,34 +170,30 @@ choice all changed; single-node tests don't prove multi-node convergence.
 Remaining launch blockers:
 1. **Phase 4 end-to-end staging cutover** — execute `cutover-runbook.md` in
    staging once (TLS, rollback drill, `FUND_ENABLED=false` verification).
-2. **Prodsim bootstrap** — ✅ REDESIGNED + VERIFIED: `helper/prodsim/run.sh`
-   now (a) wipes stale compose volumes at start (a leftover volume caused
-   "Cannot spend a bonded stake output"), and (b) starts ONLY the DBs + API
-   servers, stakes all 4 validators while the chain is still at genesis, and
-   only THEN starts the mcmc beacon producers. The 4-node bootstrap is now
-   deterministic: active set grows 1→2→3→4 and converges on every node with no
-   stake-block reorgs. (See `ProdSimBootstrap` fail-loud retries.)
+2. **Bootstrap ordering** — ✅ REDESIGNED + VERIFIED: `helper/prod/validators/`
+   (`setup.sh` server → stake → verify) now (a) starts the DB + the
+   `layer0-server` per node, stakes all 4 validators while the chain is still
+   near genesis, and (b) starts beacon duties only after every validator is
+   staked+active (duties run on the server with `--pos.dutyEnabled=true`). The
+   4-node bootstrap is now deterministic: active set grows 1→2→3→4 and
+   converges on every node with no stake-block reorgs.
 3. **False slashing of honest validators** — ✅ FIXED (a real consensus
    regression the prodsim exposed): the same-target-epoch double-vote form (b)
    AND the surround-vote form falsely slashed honest validators because
    attestations target the CURRENT wall-clock epoch boundary (the moving chain
    tip). Both are disabled; see `plan/pos-remaining-impl.md` for the re-enable
    path (stable past chain-epoch targets).
-4. **4-node beacon convergence** — ⏳ PARTIAL. The prodsim happy-path
-   verification is GREEN: bootstrap deterministic (active set 1→2→3→4, no
-   reorgs), all 4 validators propose/attest without being slashed, the beacon
-   chain propagates to every node (full requester mesh; the bootstrap node had
-   NO requester, so it confirmed zero beacons) and advances, rewards distribute.
-   `ProdSimVerification` passes all 5 checks (healthy, confirmed-chainlength
-   convergence within one epoch, validators active, beacon progress, rewards).
-   Remaining: under the aggressive 2s-slot / independent-DB topology the
-   CONFIRMED chainlength converges only loosely (nodes lag by several slots) and
-   the two live-network attack checks (`ProdSimAttackVerification`) are
-   unreliable on the node-local-funding topology (a `fundAddresses` UTXO never
-   confirms network-wide, so the mempool double-spend window and the 
-   invalid-signature test behave unlike a normal confirmed UTXO). Tight
-   multi-node convergence (genesis-registered validators, or a production
-   seed/topology with 12s slots) remains the tracked launch item — not a
-   consensus regression.
+4. **4-node beacon convergence** — ⏳ PARTIAL. The 4-validator happy-path
+    verification is GREEN: bootstrap deterministic (active set 1→2→3→4, no
+    reorgs), all 4 validators propose/attest without being slashed, the beacon
+    chain propagates to every node (full requester mesh; the bootstrap node had
+    NO requester, so it confirmed zero beacons) and advances, rewards distribute.
+    `setup.sh verify` passes all checks (validators active everywhere, confirmed
+    chainlengths converge within one epoch, beacon progress, rewards).
+    Remaining: under an aggressive 2s-slot / independent-DB topology the
+    CONFIRMED chainlength converges only loosely (nodes lag by several slots).
+    Tight multi-node convergence (genesis-registered validators, or a production
+    seed/topology with 12s slots) remains the tracked launch item — not a
+    consensus regression.
 
 All consensus changes are `[BREAKING]` and must land together before cutover.

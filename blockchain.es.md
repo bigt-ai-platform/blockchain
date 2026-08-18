@@ -55,10 +55,10 @@ Beacon 1 -------- Beacon 2 -------- Beacon 3
 
 - El **DAG** maneja el rendimiento de transacciones. Debido a que muchos bloques pueden
   crearse al mismo tiempo, la red necesita una forma de decidir a qué bloques
-  existentes debe conectarse un nuevo bloque. Bigtangle resuelve esto usando una
-  búsqueda aleatorizada a través de bloques recientes. La búsqueda favorece naturalmente
-  las ramas bien conectadas mientras aún permite que crezcan caminos alternativos.
-  (Esta técnica se llama Monte Carlo de Cadena de Markov, o MCMC.)
+  existentes debe conectarse un nuevo bloque. Bigtangle lo resuelve con la regla
+  GHOST ponderada por participación: los bloques nuevos se unen al bloque hijo
+  con el mayor peso de participación acumulado, de modo que la rama más pesada
+  gana mientras que los caminos alternativos aún pueden crecer.
 
 - La **cadena faro** proporciona finalidad. Cada 12 segundos, un validador
   elegido por un proceso aleatorio imparcial produce un bloque faro que confirma
@@ -248,7 +248,7 @@ existentes.
 | Métrica | Bigtangle | Solana | Ethereum L1 | Visa |
 |--------|-----------|--------|-------------|------|
 | Libro contable | DAG + cadena faro | Cadena única | Cadena única | Centralizado |
-| Consenso | MCMC + Casper FFG | PoH + Tower BFT | Gasper | Autoridad |
+| Consenso | GHOST + Casper FFG | PoH + Tower BFT | Gasper | Autoridad |
 | Tiempo de ranura | 12s | 400ms | 12s | — |
 | Finalidad | ~12.8 min* | ~12.8s | ~6.4 min | Instantánea |
 | Pico tx/s | ~4,873 | ~50,000* | ~30 | 24,000 |
@@ -297,7 +297,6 @@ dentro de una arquitectura unificada.
 | Módulo | Puerto | BD predeterminada | Rol |
 |--------|------|------------|------|
 | `layer0-server` | 8081 | `info_l0` | Nodo completo L0 |
-| `layer0-mcmc` | 8082 | — | Consenso L0 |
 | `l1-order-server` | 8083 | `info_order` | Emparejamiento de órdenes L1 |
 | `l1-payment-server` | 8091 | `info_payment` | Pago L1 |
 | `l1-pai-server` | 8087 | `info_pai` | Proveedor de IA L1 |

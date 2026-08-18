@@ -460,7 +460,7 @@ public class BridgeService {
      * </ul>
      *
      * <p>Residual (N3-residual): the L0 "confirmed" flag on a vault UTXO is
-     * ENDPOINT-CLAIMED (L0's MCMC confirmation, not Casper finality). The
+     * ENDPOINT-CLAIMED (L0's reward-chain confirmation, not Casper finality). The
      * fabrication vectors above are closed (hash commitment, vault-payment
      * binding, declared chain id); binding the mint to an L0-FINALIZED anchor
      * or a confirmation-depth threshold is left open as a known limitation.

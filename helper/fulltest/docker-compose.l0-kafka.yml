@@ -63,7 +63,6 @@ services:
       DB_PASSWORD: test1234
       DBTYPE: postgresql
       SERVICE_MINING: "false"
-      SERVICE_MCMC: "true"
       SERVICE_SYNC: "true"
       SERVICE_INITSYNC: "true"
       CREATETABLE: "true"
@@ -90,7 +89,6 @@ services:
       DB_PASSWORD: test1234
       DBTYPE: postgresql
       SERVICE_MINING: "false"
-      SERVICE_MCMC: "true"
       SERVICE_SYNC: "true"
       SERVICE_INITSYNC: "true"
       CREATETABLE: "false"
@@ -99,60 +97,4 @@ services:
     depends_on:
       postgres-l0-1: { condition: service_healthy }
 
-  l0-mcmc-0:
-    image: ghcr.io/bigt-ai-platform/test
-    container_name: l0-mcmc-0
-    networks: [l0-test-net]
-    ports:
-      - "8084:8084"
-    environment:
-      APP_MODULE: layer0-mcmc
-      SERVER_PORT: 8084
-      SERVER_NET: Test
-      REQUESTER: http://l0-svr-0:8081
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      DB_HOSTNAME: postgres-l0-0
-      DB_PORT: 5432
-      DB_NAME: layer0
-      DB_USERNAME: root
-      DB_PASSWORD: test1234
-      DBTYPE: postgresql
-      SERVICE_MINING: "true"
-      SERVICE_MINING_RATE: 50000
-      SERVICE_MCMC: "true"
-      SERVICE_INITSYNC: "true"
-      SERVICE_SYNC: "true"
-      CREATETABLE: "false"
-      BOOT_STRAP_SERVERS: kafka:9092
-      TOPIC_OUT_NAME: bigtangle
-    depends_on:
-      l0-server-0: { condition: service_started }
 
-  l0-mcmc-1:
-    image: ghcr.io/bigt-ai-platform/test
-    container_name: l0-mcmc-1
-    networks: [l0-test-net]
-    ports:
-      - "8085:8085"
-    environment:
-      APP_MODULE: layer0-mcmc
-      SERVER_PORT: 8085
-      SERVER_NET: Test
-      REQUESTER: http://l0-svr-1:8082
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      DB_HOSTNAME: postgres-l0-1
-      DB_PORT: 5432
-      DB_NAME: layer0
-      DB_USERNAME: root
-      DB_PASSWORD: test1234
-      DBTYPE: postgresql
-      SERVICE_MINING: "true"
-      SERVICE_MINING_RATE: 50000
-      SERVICE_MCMC: "true"
-      SERVICE_INITSYNC: "true"
-      SERVICE_SYNC: "true"
-      CREATETABLE: "false"
-      BOOT_STRAP_SERVERS: kafka:9092
-      TOPIC_OUT_NAME: bigtangle
-    depends_on:
-      l0-server-1: { condition: service_started }

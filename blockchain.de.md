@@ -57,9 +57,9 @@ Beacon 1 -------- Beacon 2 -------- Beacon 3
 - Der **DAG** bewältigt den Transaktionsdurchsatz. Da viele Blöcke gleichzeitig
   erstellt werden können, benötigt das Netzwerk eine Möglichkeit zu entscheiden,
   mit welchen bestehenden Blöcken ein neuer Block verbunden werden soll. Bigtangle
-  löst dies durch eine randomisierte Suche durch aktuelle Blöcke. Die Suche
-  begünstigt auf natürliche Weise gut verbundene Zweige, während alternative Pfade
-  weiter wachsen können. (Diese Technik heißt Markov Chain Monte Carlo, kurz MCMC.)
+  löst dies mit der stake-gewichteten GHOST-Regel: Neue Blöcke hängen sich an
+  den Kind-Block mit dem größten akkumulierten Stake-Gewicht, sodass der
+  schwerste Zweig gewinnt, während alternative Pfade weiter wachsen können.
 
 - Die **Beacon Chain** sorgt für Finalität. Alle 12 Sekunden erzeugt ein Validator,
   der durch einen unvoreingenommenen Zufallsprozess ausgewählt wird, einen
@@ -256,7 +256,7 @@ vorhandene Guthaben ungültig zu machen.
 | Metrik | Bigtangle | Solana | Ethereum L1 | Visa |
 |--------|-----------|--------|-------------|------|
 | Ledger | DAG + Beacon Chain | Single Chain | Single Chain | Zentralisiert |
-| Konsens | MCMC + Casper FFG | PoH + Tower BFT | Gasper | Autorität |
+| Konsens | GHOST + Casper FFG | PoH + Tower BFT | Gasper | Autorität |
 | Slot-Zeit | 12s | 400ms | 12s | — |
 | Finalität | ~12,8 Min.* | ~12,8s | ~6,4 Min. | Sofort |
 | Spitzen-Tx/s | ~4.873 | ~50.000* | ~30 | 24.000 |
@@ -305,7 +305,6 @@ Post-Quanten-Sicherheit innerhalb einer einheitlichen Architektur.
 | Modul | Port | Standard-DB | Rolle |
 |--------|------|------------|------|
 | `layer0-server` | 8081 | `info_l0` | L0-Vollknoten |
-| `layer0-mcmc` | 8082 | — | L0-Konsens |
 | `l1-order-server` | 8083 | `info_order` | L1-Order-Matching |
 | `l1-payment-server` | 8091 | `info_payment` | L1-Zahlungen |
 | `l1-pai-server` | 8087 | `info_pai` | L1-AI-Provider |

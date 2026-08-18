@@ -52,7 +52,7 @@ DB_ARGS="-DDB_HOSTNAME=localhost -DB_PORT=$PG_PORT -DB_USERNAME=root -DB_PASSWOR
 
 echo "=== Building modules ==="
 mvn install -DskipTests -q -f "$ROOT/pom.xml" -am \
-  -pl l1-pai-server,l1-pai-mcmc,l1-contract-server,l1-contract-mcmc 2>&1 | tail -1
+  -pl l1-pai-server,l1-contract-server,l1-order-server 2>&1 | tail -1
 echo "=== Modules built ==="
 
 EXIT_CODE=0
@@ -60,18 +60,18 @@ EXIT_CODE=0
 echo "=== Running PAI tests ==="
 PAI_OK=false
 for attempt in 1 2 3; do
-    mvn test -pl l1-pai-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+    mvn test -pl l1-pai-server -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
       -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_pai && { PAI_OK=true; break; }
     echo "PAI tests attempt $attempt failed, retrying..."
 done
 [ "$PAI_OK" != "true" ] && { echo "PAI tests FAILED after 3 attempts"; EXIT_CODE=1; }
 
 echo "=== Running Contract tests ==="
-mvn test -pl l1-contract-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+mvn test -pl l1-contract-server -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
   -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_contract || { echo "Contract tests FAILED"; EXIT_CODE=1; }
 
 echo "=== Running Order tests ==="
-mvn test -pl l1-order-mcmc -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
+mvn test -pl l1-order-server -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" \
   -Dsurefire.failIfNoSpecifiedTests=false $DB_ARGS -DDB_NAME=info_order || { echo "Order tests FAILED"; EXIT_CODE=1; }
 
 if [ "$EXIT_CODE" -eq 0 ]; then

@@ -1,7 +1,5 @@
 SELECT * FROM blocks WHERE chainlength < 0 ORDER BY height DESC;
 
-SELECT * FROM mcmc;
-
 SELECT * FROM contractevent;
 
 SELECT * 
@@ -93,25 +91,6 @@ ORDER BY spenderblockhash, collectinghash;
 SELECT *
 FROM contractevent
 ORDER BY collectinghash, blockhash;
-
-SELECT *
-FROM contractresult b
-JOIN mcmc m
-  ON m.hash = b.blockhash;
-
-SELECT *
-FROM blocks b
-JOIN mcmc m
-  ON m.hash = b.hash
-WHERE b.chainlength < 0;
-
-SELECT *
-FROM contractresult a
-JOIN blocks b
-  ON a.blockhash = b.hash
-JOIN mcmc m
-  ON m.hash = b.hash
-WHERE b.chainlength IS NOT NULL;
 
 SELECT *
 FROM orders
@@ -208,18 +187,7 @@ FROM orders
 WHERE spent = 0
   AND confirmed = 1;
 
-SELECT * FROM mcmc;
-
 SELECT * FROM orderresult;
-
-SELECT *
-FROM blocks
-JOIN mcmc
-  ON blocks.hash = mcmc.hash
-WHERE solid = 2
-  AND chainlength = -1
-  AND confirmed = false
-  AND mcmc.rating >= 5;
 
 SELECT *
 FROM info.blocks
@@ -251,22 +219,6 @@ SELECT * FROM blocks WHERE chainlength < 0;
 SELECT * FROM blocks WHERE chainlength > 0;
 
 SELECT MAX(height) FROM blocks;
-
-SELECT COUNT(*)
-FROM blocks
-JOIN mcmc
-  ON blocks.hash = mcmc.hash
-WHERE solid = 2
-  AND chainlength = -1
-  AND confirmed = false;
-
-SELECT *
-FROM blocks
-JOIN mcmc
-  ON blocks.hash = mcmc.hash
-WHERE solid = 2
-  AND chainlength = -1
-  AND confirmed = false;
 
 SELECT *
 FROM blocks

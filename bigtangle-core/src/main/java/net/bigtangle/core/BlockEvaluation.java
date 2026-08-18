@@ -34,7 +34,7 @@ public class BlockEvaluation implements Serializable {
 	// 2: solid
 	private long solid;
 
-	// If true, this block is confirmed by mcmc and chainlength
+	// If true, this block is confirmed by the reward chainlength
 	private boolean confirmed;
 
 	public BlockEvaluation() {

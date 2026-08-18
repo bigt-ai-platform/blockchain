@@ -48,15 +48,4 @@ public class JsonMapperTest {
     	System.out.println(coin);
     }
 
-    @Test
-    public void testJsonBlockMCMC() throws Exception {
-        BlockMCMC byteListResp =   BlockMCMC.defaultBlockMCMC(Sha256Hash.ZERO_HASH) ;
-
-        String jsonStr = Json.jsonmapper().writeValueAsString(byteListResp);
-
-        System.out.println(jsonStr);
-        Json.jsonmapper().readValue(jsonStr, ByteListResp.class);
-
-    }
-
 }

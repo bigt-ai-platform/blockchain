@@ -12,8 +12,8 @@ fork gate is a *chainlength* gate, not a hot fork of a live chain.
 
 ## 0. Pre-flight checks
 
-- [ ] `mvn package -DskipTests` builds `layer0-server-0.6.0-exec.jar` +
-      `layer0-mcmc-0.6.0-exec.jar` (or the Docker images via `helper/deploy.sh`).
+- [ ] `mvn package -DskipTests` builds `layer0-server-0.6.0-exec.jar`
+      (or the Docker image via `helper/deploy.sh`).
 - [ ] Snapshot reconciled: `SUM(coinvalue)` of open BIG outputs == `10^17`
       (verified by `helper/prod/genesis.sh`).
 - [ ] Validator keys generated (`helper/prod/validators/generate_keys.sh`),
@@ -27,19 +27,19 @@ fork gate is a *chainlength* gate, not a hot fork of a live chain.
 
 ## 1. Genesis bootstrap (chain epoch 0 window)
 
-1. Start **only** the `layer0-server` processes (one per node, unique DB/ports,
-   `--pos.dutyEnabled=false`, `--pos.validatorKey=<key_i>`, `--server.createtable=true`).
-   Do **not** start the mcmc beacon producers yet.
+1. Start the `layer0-server` processes (one per node, unique DB/ports,
+   `--pos.dutyEnabled=true`, `--pos.validatorKey=<key_i>`, `--server.createtable=true`).
+   Validator duties run on the server itself, so beacons start as soon as the
+   first validator is active — complete the staking window (§2) promptly.
 2. Confirm each node: `getChainNumber` == `0` and the genesis hash is identical
    on every node (same genesis distribution ⇒ same genesis block).
 
-> Why servers-only first: beacon production ramps up as soon as the first
-> validator is active. If the mcmc proposers were up, later `stakeDeposit`s land
-> on a moving head and the stake blocks get reorged out during bootstrap (the
-> four nodes stake on diverging chains and never converge on one active set).
-> Staking all validators while the chain is still at genesis makes bootstrap
-> deterministic. This is exactly what the 4-node prodsim
-> (`helper/prodsim/run.sh`) does and is verified green.
+> Why the staking window matters: beacon production ramps up as soon as the
+> first validator is active. If beacons run before every node has staked, later
+> `stakeDeposit`s land on a moving head and the stake blocks get reorged out
+> during bootstrap (the four nodes stake on diverging chains and never converge
+> on one active set). Staking all validators while the chain is still near
+> genesis makes bootstrap deterministic.
 
 ## 2. Coordinated validator bootstrap
 
@@ -48,9 +48,10 @@ production version of the verified prodsim ordering:
 
 ```bash
 # On EVERY node, in order:
-node-<i>/setup.sh server    # 1) create DB + start layer0-server (no beacons yet)
+node-<i>/setup.sh server    # 1) create DB + start layer0-server (validator duties on)
 node-<i>/setup.sh stake     # 2) fund(genesis→skip)/stake/activate THIS node's validator
-node-<i>/setup.sh mcmc      # 3) ONLY after ALL validators are staked+active
+# 3) only after ALL validators are staked+active, from any node:
+node-<i>/setup.sh verify    #    cross-node acceptance (validators == N everywhere)
 ```
 
 `setup.sh stake` submits `stakeDeposit`/`activateValidator` to the node's **own**
@@ -64,17 +65,16 @@ curl -X POST http://<node-i>:8081/activateValidator -H 'Content-Type: applicatio
 ```
 
 Checkpoint per node: `getValidators` grows 1 → 2 → 3 → … → N, and after the last
-validator every node reports the **same** active set (N). Only start the mcmc
-producers once the set has converged on every node — starting them earlier
-reorgs the later stake deposits out (the prodsim regression).
+validator every node reports the **same** active set (N).
 
-## 3. Start beacon production
+## 3. Beacon production
 
-1. Start the `layer0-mcmc` processes on every node (`--pos.dutyEnabled=true`,
-   `--server.requester=<full requester mesh>`, `--pos.gossipPeers=<all server
-   host:ports>`, `--gossip.peers=<gossip mesh>`, `--server.createtable=false`).
-   The scripts derive the full requester/gossip mesh from `SEED_HOSTS` — a
-   bootstrap node with no (or self-only) requester confirms zero beacons.
+1. The `layer0-server` processes already run with `--pos.dutyEnabled=true`, so
+   once staking is complete each node proposes in its selected slots and attests
+   (`--server.requester=<full requester mesh>`, `--pos.gossipPeers=<all server
+   host:ports>`, `--gossip.peers=<gossip mesh>`). The scripts derive the full
+   requester/gossip mesh from `SEED_HOSTS` — a bootstrap node with no (or
+   self-only) requester confirms zero beacons.
 2. Confirm the first beacon confirms: `getChainNumber` advances past 0 and
    `getValidators` stays N on every node.
 3. Run at least 2–3 epochs (≈ 20 min at 12 s slots) before the activation height
@@ -102,7 +102,7 @@ POS_BEACON_SLOTDATA_ACTIVATION = 1024   (chainlength)
 ```
 
 Override only for testing: `-Dnet.bigtangle.pos.attestationActivation=<height>`
-(system property; both server and mcmc processes must use the **same** value, or
+(system property; every node must use the **same** value, or
 the gate must be identical on every node). Production uses the default 1024.
 
 - Below the height: votes are read from the gossip view (pre-fork fallback).
@@ -143,7 +143,7 @@ curl -X POST http://127.0.0.1:8081/getChainNumber -H 'Content-Type: application/
 curl -X POST http://127.0.0.1:8081/getValidators -H 'Content-Type: application/json' -d '{}'
 
 # 4. Finality advances (justified/finalized epochs increase) — check logs:
-docker logs -f node-0-mcmc | grep -iE "justif|final"
+docker logs -f node-0-server | grep -iE "justif|final"
 ```
 
 ## 7. Post-cutover audit
@@ -193,15 +193,15 @@ If a defect is found **after** the activation height:
 |--------|-------|
 | `getChainNumber` stops advancing on any node | `prod.md` §9 / logs |
 | Validator sets differ across nodes | `getValidators` |
-| Beacon proposals for the same slot from >1 node (fork) | mcmc logs / slashing |
+| Beacon proposals for the same slot from >1 node (fork) | server logs / slashing |
 | `SUM(coinvalue)` drift from `10^17` | audit SQL |
 
 ---
 
 ## Verification tooling (already green)
 
-- 4-node convergence: `helper/prodsim/run.sh` — bootstrap redesign verified
-  (stake-all-before-mcmc), finality/health checks in `ProdSimVerification`.
-- Single-DB remote harness: `layer0-mcmc/.../remote/remote.sh`
-  (`RemoteEpochRewardTests`, `RemoteOrderTests`, `RemoteTokenTests`).
-- PoS suite: `helper/testall.sh "PoSTest,StakeIT,ValidatorDutyTest,SlotTickServiceTest,RewardServiceTest"`.
+- Phased 4-node bootstrap: `helper/prod/validators/` (`setup.sh` phases
+  server → stake → verify) verified against the stake-before-beacons
+  bootstrap regression; finality/health checks in the `verify` phase.
+- PoS suite: `bash helper/testall.sh` (bigtangle-core + bigtangle-servercore,
+  incl. `PosConsensusHardeningTest` and `MempoolServiceTest`).

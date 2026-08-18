@@ -13,24 +13,7 @@
                 "SERVER_NET": "Mainnet",
                 "SERVER_PORT": "8081",
                 "DB_NAME": "layer0",
-                "SERVICE_MINING": "true",
-                "SERVICE_MCMC": "false"
-            }
-        },
-        {
-            "type": "java",
-            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
-            "name": "layer0-mcmc",
-            "request": "launch",
-            "mainClass": "net.bigtangle.layer0.mcmc.Layer0MCMCStart",
-            "projectName": "layer0-mcmc",
-            "env": {
-                "REQUESTER": "https://bigtangle.de:8088",
-                "SERVER_NET": "Mainnet",
-                "SERVER_PORT": "8082",
-                "DB_NAME": "layer0",
-                "SERVICE_MINING": "false",
-                "SERVICE_MCMC": "true"
+                "SERVICE_MINING": "true"
             }
         },
         {
@@ -38,48 +21,26 @@
             "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
             "name": "layer1-server",
             "request": "launch",
-            "mainClass": "net.bigtangle.layer1.server.Layer1ServerStart",
-            "projectName": "layer1-server",
+            "mainClass": "net.bigtangle.l1.order.OrderMatchL1ServerStart",
+            "projectName": "l1-order-server",
             "env": {
                 "REQUESTER": "https://bigtangle.de:8088",
                 "SERVER_NET": "Mainnet",
                 "SERVER_PORT": "8083",
                 "DB_NAME": "layer1",
                 "LAYER1_CHAINID": "L1",
-                "SERVICE_MINING": "true",
-                "SERVICE_MCMC": "false"
-            }
-        },
-        {
-            "type": "java",
-            "vmArgs": "--add-exports java.base/sun.nio.ch=ALL-UNNAMED -Xmx14g",
-            "name": "layer1-mcmc",
-            "request": "launch",
-            "mainClass": "net.bigtangle.layer1.mcmc.Layer1MCMCStart",
-            "projectName": "layer1-mcmc",
-            "env": {
-                "REQUESTER": "https://bigtangle.de:8088",
-                "SERVER_NET": "Mainnet",
-                "SERVER_PORT": "8084",
-                "DB_NAME": "layer1",
-                "LAYER1_CHAINID": "L1",
-                "SERVICE_MINING": "false",
-                "SERVICE_MCMC": "true"
+                "SERVICE_MINING": "true"
             }
         }
     ],
     "compounds": [
         {
             "name": "layer0-node",
-            "configurations": ["layer0-server", "layer0-mcmc"]
+            "configurations": ["layer0-server"]
         },
         {
             "name": "layer1-node",
-            "configurations": ["layer1-server", "layer1-mcmc"]
-        },
-        {
-            "name": "all-layer-nodes",
-            "configurations": ["layer0-server", "layer0-mcmc", "layer1-server", "layer1-mcmc"]
+            "configurations": ["layer1-server"]
         }
     ]
 }

@@ -27,7 +27,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluation;
-import net.bigtangle.core.BlockMCMC;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.ContractEventRecord;
@@ -298,9 +297,8 @@ public abstract class ServiceBase {
 				v = jsonmapper.readValue(be, BlockEvaluation.class);
 			if (v == null)
 				v = BlockEvaluation.buildInitial(block);
-			byte[] blockMCMC = cacheBlockService.getBlockMCMC(blockhash, store);
 
-			return new BlockWrap(block, v, jsonmapper.readValue(blockMCMC, BlockMCMC.class), networkParameters);
+			return new BlockWrap(block, v, networkParameters);
 		} catch (Exception e) {
 			throw new BlockStoreException(e);
 		}
@@ -308,8 +306,7 @@ public abstract class ServiceBase {
 
 	public BlockWrap initBlockWrap(Block block ) throws BlockStoreException {
 
-		return new BlockWrap(block, BlockEvaluation.buildInitial(block), BlockMCMC.defaultBlockMCMC(block.getHash()),
-				networkParameters);
+		return new BlockWrap(block, BlockEvaluation.buildInitial(block), networkParameters);
 
 	}
 
@@ -379,7 +376,7 @@ public abstract class ServiceBase {
 		// chainlength 0), not from UtilGeneseBlock.createGenesis(networkParameters):
 		// the latter reconstructs the genesis from process-local config (the
 		// genesis CSV), which can DIFFER between the API server and a shared-DB
-		// MCMC process — a mismatched genesis hash then makes the walk NPE on
+		// process — a mismatched genesis hash then makes the walk NPE on
 		// the coinbase parse. The stored genesis is identical on every process
 		// sharing the DB.
 		TXReward genesisReward = store.getRewardConfirmedAtHeight(0);

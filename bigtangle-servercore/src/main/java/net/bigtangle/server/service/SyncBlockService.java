@@ -342,7 +342,6 @@ public class SyncBlockService {
 
 	/*
 	 * switch chain select * from txreward where confirmed=1 chainlength with my
-	 * blockhash with remote ;
 	 */
 	public static class MaxConfirmedReward {
 		String server;
@@ -350,7 +349,6 @@ public class SyncBlockService {
 	}
 
 	public void syncChain(Long chainlength, boolean initsync, BlockStoreInterface store) throws BlockStoreException {
-		// mcmcService.cleanupNonSolidMissingBlocks();
 		String[] re = serverConfiguration.getRequester().split(",");
 		MaxConfirmedReward aMaxConfirmedReward = new MaxConfirmedReward();
 		TXReward my = cacheBlockService.getMaxConfirmedReward(store);
@@ -386,7 +384,6 @@ public class SyncBlockService {
 	 * sync the remote data that not in chain
 	 */
 	public void syncNonChained(BlockStoreInterface store) throws BlockStoreException {
-		// mcmcService.cleanupNonSolidMissingBlocks();
 		String[] re = serverConfiguration.getRequester().split(",");
 		for (String s : re) {
 			if (s != null && !"".equals(s)) {

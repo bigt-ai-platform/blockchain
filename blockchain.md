@@ -55,10 +55,10 @@ Beacon 1 -------- Beacon 2 -------- Beacon 3
 
 - The **DAG** handles transaction throughput. Because many blocks can be
   created at the same time, the network needs a way to decide which existing
-  blocks a new block should connect to. Bigtangle solves this using a
-  randomized search through recent blocks. The search naturally favors
-  well-connected branches while still allowing alternative paths to grow.
-  (This technique is called Markov Chain Monte Carlo, or MCMC.)
+  blocks a new block should connect to. Bigtangle solves this with the
+  stake-weighted GHOST rule: new blocks attach to the child block carrying
+  the greatest accumulated stake weight, so the heaviest branch wins while
+  alternative paths are still allowed to grow.
 
 - The **beacon chain** provides finality. Every 12 seconds, a validator
   chosen by an unbiased random process produces a beacon block that confirms
@@ -251,7 +251,7 @@ funds.
 | Metric             | Bigtangle          | Solana              | Ethereum L1    | Visa        |
 | ------------------ | ------------------ | ------------------- | -------------- | ----------- |
 | Ledger             | DAG + beacon chain | Single chain        | Single chain   | Centralized |
-| Consensus          | MCMC + Casper FFG  | PoH + Tower BFT     | Gasper         | Authority   |
+| Consensus          | GHOST + Casper FFG | PoH + Tower BFT     | Gasper         | Authority   |
 | Slot time          | 12s                | 400ms               | 12s            | —           |
 | Finality           | ~12.8 min\*        | ~12.8s              | ~6.4 min       | Instant     |
 | Peak tx/s          | ~100,000           | ~50,000\*           | ~30            | 24,000      |

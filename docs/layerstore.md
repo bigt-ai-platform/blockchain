@@ -69,7 +69,7 @@ blocks in `PostgreSQLFullBlockStore`:
 
 | Area | Tables | Representative methods |
 |---|---|---|
-| Chain/DAG | `blocks`, `mcmc`, `chainblockqueue`, `lockobject`, `tipsqueue`, `myserverblocks`, `batchblock` | `get/getBlockWrap/put`, `existBlock`, `blocksFromChainLength`, `getBlocksInChainlengthInterval`, `getSolidBlockTopologyInInterval`, `getApproverBlockHashes`, `getNotInvalidApproverBlocks`, `getMCMC`, `updateBlockEvaluation*`, `insertTipsQueue`, `selectChainblockqueue`, `insert/deleteChainBlockQueue`, `insertBatchBlock`, `getBatchBlockList` |
+| Chain/DAG | `blocks`, `chainblockqueue`, `lockobject`, `myserverblocks`, `batchblock` | `get/getBlockWrap/put`, `existBlock`, `blocksFromChainLength`, `getBlocksInChainlengthInterval`, `getSolidBlockTopologyInInterval`, `getApproverBlockHashes`, `getNotInvalidApproverBlocks`, `updateBlockEvaluation*`, `selectChainblockqueue`, `insert/deleteChainBlockQueue`, `insertBatchBlock`, `getBatchBlockList` |
 | UTXO / outputs | `outputs`, `outputsmulti` | `getTransactionOutput(s)`, `getOpenAllOutputs`, `getOpenTransactionOutputs`, `getAllAvailableUTXOsSorted`, `getOutputsHistory`, `getOutputConfirmation`, `getTransactionOutputSpender`, `getTransactionSpentBlock`, `updateTransactionOutputConfirmed/Spent/SpendPending`, `updateAllTransactionOutputsConfirmed(Batch)`, `prunedHistoryUTXO` |
 | Reward chain | `txreward` | `insertReward`, `getRewardSpent/Spender/PrevBlockHash/Confirmed/ConfirmedAtHeight/ChainLength`, `getAllConfirmedReward`, `getMaxConfirmedReward`, `blocksNotChainlengthFromHeigth`, `resetChainlengthSolid` |
 | Tokens | `tokens` | `insertToken`, `getTokenID`, `getTokenByBlockHash`, `getTokenAnyConfirmed`, `getTokensList`, `getTokenTypeList`, `getTokenSpent/Prevblockhash/IssuingConfirmedBlock`, `getTokennameAndDomain`, `getTokensByDomainname`, `getTokenAmountMap`, `updateTokenConfirmed/Spent`, `getCalMaxTokenIndex` |
@@ -97,9 +97,9 @@ blocks in `PostgreSQLFullBlockStore`:
 
 ### Inferred per-layer call sites (from `grep store.<method>(`)
 
-- **Layer 0** (`layer0-server`, `layer0-mcmc`): only Core methods (chain, UTXO, token,
-  multisig, PoS/stake, anchor/vault, tips/MCMC). No `getOrder`, no `insertContractEvent`.
-- **L1-order** (`l1-order-server`, `l1-order-mcmc`): Core + Order methods
+- **Layer 0** (`layer0-server`): only Core methods (chain, UTXO, token,
+  multisig, PoS/stake, anchor/vault). No `getOrder`, no `insertContractEvent`.
+- **L1-order** (`l1-order-server`): Core + Order methods
   (`getOrder`, `getAllOpenOrdersSorted`, `insertOrder`, `getLastMatchingEvents`,
   `batchAddAvgPrice`, `getOrderCancelByOrderBlockHash`, `getTimeBetweenMatchingEvents`,
   price/ticker).
@@ -182,7 +182,7 @@ union interface. Options (pick one):
 - **B (full): split the service layer per layer too** — move `ServiceBaseOrder` into
   `l1-order-server`, the confirmation/connect order-result hooks into
   `l1-order-server`, contract hooks into `l1-contract-server`, etc. This is the
-  long-term goal but is a large refactor touching the MCMC/consensus paths.
+  long-term goal but is a large refactor touching the consensus paths.
 
 Recommend **A now, B later**: A removes the schema/method bloat and lets each layer
 own its DDL; B is tracked as a follow-up.
@@ -201,7 +201,7 @@ own its DDL; B is tracked as a follow-up.
 | 6 | `l1-contract-server/store/ContractFullBlockStore(Postgres/MySQL)` | New; contract methods + contract DDL |
 | 7 | `StoreService` / `DBStoreConfiguration` / `BeforeStartup` (per layer) | Instantiate the layer's concrete store |
 | 8 | `layer0-server` | `PostgreSQLFullBlockStore` → Core concrete (no behavior change) |
-| 9 | tests (`layer0-mcmc`, `l1-order-mcmc`, `l1-contract-mcmc`) | Point at the layer store; add a test asserting L0 DB has **no** `orders`/`contractevent` tables and L1-order has **no** `contractevent` table |
+| 9 | tests (`bigtangle-servercore`, `l1-order-server`, `l1-contract-server`) | Point at the layer store; add a test asserting L0 DB has **no** `orders`/`contractevent` tables and L1-order has **no** `contractevent` table |
 
 ---
 
@@ -304,7 +304,7 @@ classes) remains Phase B; the interface is still union-wide for services.
 ### Known test-suite caveat
 
 The L0 integration suite has a pre-existing scheduler-vs-`resetStore()` race (the
-500ms MCMC scheduler can query `lockobject` while a test drops/recreates tables),
+update scheduler can query `lockobject` while a test drops/recreates tables),
 which intermittently surfaces in reorg/consensus tests. It is timing-dependent and
 unrelated to this change; the suite was confirmed green on multiple consecutive
 runs with the feature in place.

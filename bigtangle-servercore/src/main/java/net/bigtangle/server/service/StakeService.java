@@ -235,7 +235,7 @@ public class StakeService {
         }
 
         // Build the STAKE block on a known-valid block (the max confirmed
-        // reward) rather than the MCMC prototype, whose predecessor tips may
+        // reward) rather than a prototype whose predecessor tips may
         // not be persisted yet (NoBlockException on saveBlock).
         TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
         Block head = store.get(maxConfirmedReward.getBlockHash());

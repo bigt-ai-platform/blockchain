@@ -158,7 +158,7 @@ Broken / missing (the actual work):
 ```
 mvn -q compile
 mvn test -pl bigtangle-core -am -q
-mvn test -pl layer0-mcmc -am -q
+mvn test -pl bigtangle-servercore -am -q
 bash helper/testall.sh
 ```
 

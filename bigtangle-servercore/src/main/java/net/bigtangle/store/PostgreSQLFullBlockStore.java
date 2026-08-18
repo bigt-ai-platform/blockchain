@@ -53,17 +53,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + ") ";
 
     
-    private static final String CREATE_MCMC_TABLE = "CREATE TABLE mcmc (\n" 
-            + "    hash BYTEA NOT NULL,\n" 
-            //dynamic data
-            //MCMC rating,depth,cumulativeweight
-            + "    rating bigint NOT NULL,\n"
-            + "    depth bigint NOT NULL,\n" 
-            + "    cumulativeweight bigint NOT NULL,\n"
-            + "    CONSTRAINT mcmc_pk PRIMARY KEY (hash) \n" 
-            + ") ";
-    
- 
     private static final String CREATE_OUTPUT_TABLE = "CREATE TABLE outputs (\n" 
             + "    blockhash BYTEA NOT NULL,\n" 
             + "    hash BYTEA NOT NULL,\n"
@@ -447,12 +436,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
             + "    lockobjectid varchar(255) NOT NULL,\n"  
             + "    locktime bigint NOT NULL,\n"
             + "    CONSTRAINT lockobject_pk PRIMARY KEY (lockobjectid)  \n" + ") \n";
-        private static final String CREATE_TIPSQUEUE_TABLE = "CREATE TABLE tipsqueue (\n" 
-            + "    hash BYTEA NOT NULL,\n" 
-            + "    block BYTEA NOT NULL,\n" 
-            + "    height bigint NOT NULL,\n " 
-            + "    inserttime bigint NOT NULL,\n"
-            + "    CONSTRAINT tipsqueue_pk PRIMARY KEY (hash)  \n" + ") \n";
 
     private static final String CREATE_ANCHOR_TABLE = "CREATE TABLE IF NOT EXISTS anchor (\n"
             + "    chainId varchar(255) NOT NULL,\n"
@@ -553,7 +536,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MYSERVERBLOCKS_TABLE);
         sqlStatements.add(CREATE_SETTINGS_TABLE);
  
-        sqlStatements.add(CREATE_MCMC_TABLE); 
         sqlStatements.add(CREATE_MATCHING_LAST_TABLE);
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
         sqlStatements.add(CREATE_ANCHOR_TABLE);
@@ -581,7 +563,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_LOCKOBJECT_TABLE);
         sqlStatements.add(CREATE_MATCHINGDAILY_TABLE);
         sqlStatements.add(CREATE_ACCOUNT_TABLE);
-        sqlStatements.add(CREATE_TIPSQUEUE_TABLE);
         return sqlStatements;
     }
 

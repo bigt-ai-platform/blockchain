@@ -52,17 +52,6 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
             + ") ENGINE=InnoDB ";
 
     
-    private static final String CREATE_MCMC_TABLE = "CREATE TABLE mcmc (\n" 
-            + "    hash binary(32) NOT NULL,\n" 
-            //dynamic data
-            //MCMC rating,depth,cumulativeweight
-            + "    rating bigint NOT NULL,\n"
-            + "    depth bigint NOT NULL,\n" 
-            + "    cumulativeweight bigint NOT NULL,\n"
-            + "    CONSTRAINT mcmc_pk PRIMARY KEY (hash) \n" 
-            + ") ENGINE=InnoDB ";
-    
- 
     private static final String CREATE_OUTPUT_TABLE = "CREATE TABLE outputs (\n" 
             + "    blockhash binary(32) NOT NULL,\n" 
             + "    hash binary(32) NOT NULL,\n"
@@ -496,7 +485,6 @@ public class MySQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_MYSERVERBLOCKS_TABLE);
         sqlStatements.add(CREATE_SETTINGS_TABLE);
  
-        sqlStatements.add(CREATE_MCMC_TABLE); 
         sqlStatements.add(CREATE_MATCHING_LAST_TABLE);
         sqlStatements.add(CREATE_MATCHING_LAST_DAY_TABLE);
         sqlStatements.add(CREATE_ANCHOR_TABLE);

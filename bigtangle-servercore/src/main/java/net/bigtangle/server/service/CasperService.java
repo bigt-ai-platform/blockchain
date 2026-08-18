@@ -763,8 +763,8 @@ public class CasperService {
     /**
      * Chain-read lookback (slots) for on-chain embedded attestations: 10 epochs
      * covers the inactivity window (8) plus the 2-epoch reward lookback. Must be
-     * longer than the MCMC horizon — the attestation read needs to reach further
-     * back than {@code CHAINLENGTH_CUTOFF}.
+     * longer than the reward-chain horizon — the attestation read needs to reach
+     * further back than {@code CHAINLENGTH_CUTOFF}.
      */
     public static final int ATTESTATION_LOOKBACK_SLOTS = 320;
 

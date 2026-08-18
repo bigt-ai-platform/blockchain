@@ -2,11 +2,11 @@
 
 ## Confirmation
 
-Confirmation is handled **solely by MCMC**, not by the block save path. When a block is saved via `saveBlock` or `saveBlockPermissive`, UTXOs are created with `confirmed=false`. MCMC's reward block processing calls `updateAllTransactionOutputsConfirmed(true)` to mark them spendable.
+Confirmation is handled **by the beacon/reward chain**, not by the block save path. When a block is saved via `saveBlock` or `saveBlockPermissive`, UTXOs are created with `confirmed=false`. Processing a reward block that references the block calls `updateAllTransactionOutputsConfirmed(true)` to mark them spendable.
 
 ### Key principle
 
-`calculateAllSpendCandidates` filters on `confirmed=true`. Unconfirmed UTXOs are invisible to wallet operations until MCMC processes a reward block that references the block and confirms its outputs.
+`calculateAllSpendCandidates` filters on `confirmed=true`. Unconfirmed UTXOs are invisible to wallet operations until a reward block that references the block confirms its outputs.
 
 ### Code
 
@@ -20,7 +20,7 @@ UTXO newOut = new UTXO(..., false, false, false, ...);
 if (output.isSpent() || !output.isConfirmed())
     continue;
 
-// MCMC confirms them via reward chain
+// The reward chain confirms them
 // ServiceBaseConfirmation.confirmBlockTransactionWithType
 blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
 ```
@@ -47,7 +47,7 @@ Reward blocks form a chain where each points to the previous via `prevRewardHash
 
 1. **hasSpentInputs with checkChainlength=true**: If a block was already confirmed by chainlength N, it cannot be referenced by chainlength N+1. The verification removes already-confirmed blocks rather than throwing.
 
-2. **MCMC creates reward blocks faster than UpdateChain processes them**. The queue builds up; each reward block references only unprocessed blocks. Already-confirmed blocks are skipped.
+2. **Reward blocks are created faster than UpdateChain processes them**. The queue builds up; each reward block references only unprocessed blocks. Already-confirmed blocks are skipped.
 
 ### Code
 
@@ -83,7 +83,7 @@ Set in `ServiceBase.solidifyBlock`:
 - `Invalid` → `solid=-1`
 - conflict: `updateChainlengthConflicts` sets `solid=-chainlength` for a block that spends something a confirmed chainlength block already spent
 
-Only `solid=2` blocks are visible to MCMC (`getSolidBlockTopologyInInterval` filters `solid=2`) and eligible for tip selection/confirmation. Blocks with `solid<0` (conflict) stay out of the DAG approval process until the conflicting chainlength is reverted.
+Only `solid=2` blocks are visible to the topology/tip-selection queries (`getSolidBlockTopologyInInterval` filters `solid=2`) and eligible for confirmation. Blocks with `solid<0` (conflict) stay out of the DAG approval process until the conflicting chainlength is reverted.
 
 ## saveBlockPermissive
 
@@ -92,14 +92,14 @@ Used by `MultiSignServiceCreate.signTokenAndSaveBlock` for token creation blocks
 ### What it does
 
 1. `addNonChain(block, true, store, true, true)` — stores block with lenient validation (allows unsolid, allows missing predecessors, batch mode)
-2. Sets `solid=2`, `weight=1`, `depth=1` — required because MCMC's `getSolidBlockTopologyInInterval` filters on `solid=2`, and weight/depth make the block a valid tip candidate
+2. Sets `solid=2`, `weight=1`, `depth=1` — required because the topology query filters on `solid=2`, and weight/depth make the block a valid tip candidate
 3. `accumulateBlockFees` + `broadcastBlock`
 
 ### What it does NOT do
 
-- **No immediate UTXO confirmation** — MCMC handles this via reward blocks
-- **No TipsQueue insertion** — MCMC inserts its own prototypes via `calcNewBlockPrototype`
-- **No connectTypeSpecificUTXOs** — handled by MCMC's solidify path
+- **No immediate UTXO confirmation** — the reward chain handles this via reward blocks
+- **No prototype/tips insertion** — the block prototype is built by `CacheBlockPrototypeService` from the GHOST tip selection
+- **No connectTypeSpecificUTXOs** — handled by the reward-chain solidify path
 
 ### Why solid=2 and weight/depth are needed
 
@@ -109,20 +109,23 @@ final String SELECT_SOLID_BLOCK_TOPOLOGY_INTERVAL_SQL =
     "SELECT ... FROM blocks WHERE height > ? AND height <= ? AND solid = 2";
 ```
 
-Without `solid=2`, MCMC cannot find the block. Without `weight=1`/`depth=1`, the block has no MCMC weight and won't be selected as a tip by `TipsService.getValidatedBlockPair`.
+Without `solid=2`, the topology query cannot find the block. Without `weight=1`/`depth=1`, the block has no weight and won't be selected as a tip by the GHOST two-tip selection.
 
-## MCMCService
+## Slot tick, tip selection and block prototype
 
-The `layer0-mcmc` module's MCMC service runs scheduled updates that:
+In PoS mode the consensus services live in `bigtangle-servercore`:
 
-1. **updateWeightAndDepth** — processes blocks with `solid=2` in the height interval, builds approver graph, sets weight/depth
-2. **updateRating** — runs MCMC random walks from entry points to rank tips
-3. **calcNewBlockPrototype** — creates a new tip from the best pair, inserts into TipsQueue
-4. **RewardService.createReward** — creates a BEACON reward block with `collectedBlocks` from `dagBlockHashesFrom`
+1. **Slot tick** — `SlotService`/`SlotTickService` advance at each slot and
+   `CasperService` applies attestations/checkpoints at epoch boundaries.
+2. **Tip selection** — `GhostService.getTwoTips(store)` picks the trunk and
+   branch by stake-weighted GHOST from the solid blocks in the topology query.
+3. **Block prototype** — `CacheBlockPrototypeService.getBlockPrototype(store)`
+   builds a new block over `Block.createBlock(networkParameters, trunk, branch)`.
+4. **RewardService.createReward** — creates a BEACON reward block with
+   `collectedBlocks` from `dagBlockHashesFrom`.
 
-### NPE fix
-
-`subUpdateRating` accessed `approvers.get(currentBlock.getBlockHash())` without null check, which threw when a block was already processed (approvers entry removed). Fixed by guarding all `approvers.get()` calls with null checks.
+Beacon/reward blocks are produced by `ValidatorDutyService.performDuty()` for
+the slot-selected proposer and confirmed by `ServiceVerifyReward`/Casper FFG.
 
 ## UpdateChainService
 
@@ -186,11 +189,11 @@ saveBlockPermissive
   └─ accumulateBlockFees + broadcastBlock
        │
        ▼
-  MCMC next update cycle
+  Tip selection (GHOST) + prototype
        │
-       ├─ updateWeightAndDepth → discovers solid=2 blocks
-       ├─ updateRating → MCMC walk from entry points
-       ├─ calcNewBlockPrototype → new tip prototype
+       ├─ getSolidBlockTopologyInInterval → solid=2 blocks
+       ├─ GhostService.getTwoTips → trunk/branch
+       ├─ CacheBlockPrototypeService → new tip prototype
        │
        ▼
   RewardService.createReward
@@ -268,20 +271,16 @@ Example lifecycle for a payment/order: `MEMPOOL` → `BATCHED` → `IN_BLOCK` �
 
 ## Test Dependencies
 
-### Remote test (`remote.sh`)
+### Remote test (`remote.sh` deleted)
 - Docker PostgreSQL on port 5432
 - `layer0-server` (HTTP, port 8089)
-- `layer0-mcmc` (MCMC, port 8091)
 - `l1-order-server` (L1 order API, port 8086)
-- All started with `initsync=true`, `mcmc=true`, `blockbatch=true`, `microbatch=true`
+- All started with `initsync=true`, `chainlength=true`, `blockbatch=true`, `microbatch=true`
 
 ### Run tests
 ```sh
-# Unit tests
+# Unit + PoS consensus + mempool tests (no DB)
 bash helper/testall.sh
-
-# Remote integration tests
-bash layer0-mcmc/src/test/java/net/bigtangle/mcmc/remote/remote.sh
 ```
 
 ## Post-Quantum Signature Design
@@ -453,7 +452,7 @@ benchmark key store.
 
 ## Test-suite performance work
 
-`testall.sh` runs `bigtangle-core` tests (no DB) then `layer0-mcmc` integration tests (PostgreSQL, single surefire fork). Original runtime was ~11:17 with a surefire fork timeout failure (600 s).
+`testall.sh` runs `bigtangle-core` tests (no DB) then `bigtangle-servercore` PoS consensus + mempool tests. Original runtime was ~11:17 with a surefire fork timeout failure (600 s).
 
 ### Bottleneck (historical)
 
@@ -463,8 +462,8 @@ CPU profiling (Java Flight Recorder) showed **88-97% of CPU in SLH-DSA signing**
 
 1. **`PQKey.createNew()` is ML-DSA-only by default** — since the chain's root-of-trust (genesis/domain) is now ML-DSA-87 only, `createNew()` always returns an ML-DSA-only key. Dual keys are created explicitly via `fromSeeds` / a 128-hex `fromPrivateKeyHex` and only sign SLH-DSA once the dual suite is active at the block height. The former `-Dnet.bigtangle.pq.mldsaOnlyDefault` test flag is obsolete. Dual-key SLH-DSA coverage is preserved by the dedicated crypto tests and `SuiteActivationTest`.
 2. **Signature memoization in `BcPQSignatureProvider`** — ML-DSA and SLH-DSA are deterministic (same key+message ⇒ same signature), so results are cached by `(privateKey, message)`. Bounded Guava caches.
-3. **`layer0-mcmc/pom.xml` property-driven argLine** — the surefire `<argLine>` was hard-coded to `-Xmx2g`, which *overrode* `testall.sh`'s `-DargLine`. It is now `${bigtangle.mcmc.argLine}` with an identical default, so the JVM flags reach the fork (this also fixed the root cause of earlier parallel-fork failures).
-4. **`testall.sh`** — sets `-Dbigtangle.mcmc.argLine` for the fork (the obsolete `-Dnet.bigtangle.pq.mldsaOnlyDefault` flag was removed; `DUAL_H=<height>` optionally runs the suite in post-activation mode).
+3. **Property-driven argLine** — a hard-coded surefire `<argLine>` previously overrode `-DargLine`; it is now property-driven with an identical default so the JVM flags reach the fork. The PoS-era `helper/testall.sh` passes the JVM flags via `-DargLine` directly.
+4. **`testall.sh`** — the obsolete `-Dnet.bigtangle.pq.mldsaOnlyDefault` flag was removed; `DUAL_H=<height>` optionally runs the suite in post-activation mode.
 5. **`pom.xml` fork timeout** — `forkedProcessTimeoutInSeconds` raised 600 → 1500 s (the suite legitimately needs ~6-11 min under PQ crypto).
 6. **`ValidatorService2Test`** — 12 token-owner keys switched from `wallet.walletKeys().get(0)` (dual genesis) to `PQKey.createNew()` (ML-DSA-only).
 
@@ -484,7 +483,7 @@ All layer0 tests + core crypto tests pass. Dual-key SLH-DSA coverage is retained
 The layer0 suite is now dominated by `DoubleSpentAttackTest`, which submits up to
 `ATTACK_COUNT` (default **200**, was 1000) double-spend transactions and
 token-creation blocks. The token-creation attack is the single largest cost — each
-iteration does an HTTP `submitTransaction` plus an MCMC prototype calculation, and the
+iteration does an HTTP `submitTransaction` plus a block prototype calculation, and the
 cost grows as state accumulates across the suite. Scale it with
 `ATTACK_COUNT=1000 bash helper/testall.sh` (or `-Dnet.bigtangle.attackCount=1000`).
 At the default 200 the attack test takes ~52 s in-suite (was ~290 s at 1000).

@@ -16,6 +16,6 @@ import net.bigtangle.store.BlockStoreInterface;
  */
 public interface OrderMatchingSupport extends ContractConnectSupport {
 
-	/** Fetch a block + evaluation + MCMC wrapped. Mirrors {@code ServiceBase.getBlockWrap}. */
+	/** Fetch a block + evaluation wrapped. Mirrors {@code ServiceBase.getBlockWrap}. */
 	BlockWrap getBlockWrap(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException;
 }

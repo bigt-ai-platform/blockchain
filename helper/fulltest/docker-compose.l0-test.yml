@@ -83,8 +83,6 @@ services:
       DB_PASSWORD: test1234
       DBTYPE: postgresql
       SERVICE_MINING: "false"
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
       SERVICE_MICROBATCH: "true"
       SERVICE_BLOCKBATCH: "true"
       SERVICE_SCHEDULE_UPCHAINRATE: 1000
@@ -114,8 +112,6 @@ services:
       DB_PASSWORD: test1234
       DBTYPE: postgresql
       SERVICE_MINING: "false"
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
       SERVICE_MICROBATCH: "true"
       SERVICE_BLOCKBATCH: "true"
       SERVICE_SCHEDULE_UPCHAINRATE: 1000
@@ -145,8 +141,6 @@ services:
       DB_PASSWORD: test1234
       DBTYPE: postgresql
       SERVICE_MINING: "false"
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
       SERVICE_MICROBATCH: "true"
       SERVICE_BLOCKBATCH: "true"
       SERVICE_SCHEDULE_UPCHAINRATE: 1000
@@ -158,104 +152,5 @@ services:
     depends_on:
       postgres-l0-2: { condition: service_healthy }
 
-  l0-mcmc-0:
-    image: ghcr.io/bigt-ai-platform/layer0-mcmc
-    container_name: l0-mcmc-0
-    networks: [l0-test-net]
-    ports:
-      - "8084:8084"
-    environment:
-      APP_MODULE: layer0-mcmc
-      SERVER_PORT: 8084
-      SERVER_NET: Test
-      REQUESTER: http://l0-svr-0:8081
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      DB_HOSTNAME: postgres-l0-0
-      DB_PORT: 5432
-      DB_NAME: layer0
-      DB_USERNAME: root
-      DB_PASSWORD: test1234
-      DBTYPE: postgresql
-      SERVICE_MINING: "true"
-      SERVICE_MINING_RATE: 50000
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
-      SERVICE_MICROBATCH: "true"
-      SERVICE_BLOCKBATCH: "true"
-      SERVICE_SCHEDULE_UPCHAINRATE: 1000
-      SERVICE_INITSYNC: "true"
-      SERVICE_SYNC: "true"
-      SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
-      CREATETABLE: "false"
-    depends_on:
-      l0-server-0: { condition: service_started }
-      postgres-l0-0: { condition: service_healthy }
 
-  l0-mcmc-1:
-    image: ghcr.io/bigt-ai-platform/layer0-mcmc
-    container_name: l0-mcmc-1
-    networks: [l0-test-net]
-    ports:
-      - "8085:8085"
-    environment:
-      APP_MODULE: layer0-mcmc
-      SERVER_PORT: 8085
-      SERVER_NET: Test
-      REQUESTER: http://l0-svr-1:8082
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      DB_HOSTNAME: postgres-l0-1
-      DB_PORT: 5432
-      DB_NAME: layer0
-      DB_USERNAME: root
-      DB_PASSWORD: test1234
-      DBTYPE: postgresql
-      SERVICE_MINING: "true"
-      SERVICE_MINING_RATE: 50000
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
-      SERVICE_MICROBATCH: "true"
-      SERVICE_BLOCKBATCH: "true"
-      SERVICE_SCHEDULE_UPCHAINRATE: 1000
-      SERVICE_INITSYNC: "true"
-      SERVICE_SYNC: "true"
-      SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
-      CREATETABLE: "false"
-    depends_on:
-      l0-server-1: { condition: service_started }
-      postgres-l0-1: { condition: service_healthy }
 
-  l0-mcmc-2:
-    image: ghcr.io/bigt-ai-platform/layer0-mcmc
-    container_name: l0-mcmc-2
-    networks: [l0-test-net]
-    ports:
-      - "8086:8086"
-    environment:
-      APP_MODULE: layer0-mcmc
-      SERVER_PORT: 8086
-      SERVER_NET: Test
-      REQUESTER: http://l0-svr-2:8083
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      DB_HOSTNAME: postgres-l0-2
-      DB_PORT: 5432
-      DB_NAME: layer0
-      DB_USERNAME: root
-      DB_PASSWORD: test1234
-      DBTYPE: postgresql
-      SERVICE_MINING: "true"
-      SERVICE_MINING_RATE: 50000
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
-      SERVICE_MICROBATCH: "true"
-      SERVICE_BLOCKBATCH: "true"
-      SERVICE_SCHEDULE_UPCHAINRATE: 1000
-      SERVICE_INITSYNC: "true"
-      SERVICE_SYNC: "true"
-      SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
-      CREATETABLE: "false"
-    depends_on:
-      l0-server-2: { condition: service_started }
-      postgres-l0-2: { condition: service_healthy }

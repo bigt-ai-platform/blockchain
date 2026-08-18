@@ -74,8 +74,7 @@ services:
       SERVER_REQUESTER: http://test-bigtangle:18089
       REQUESTER: http://test-bigtangle:18089
 
-      SERVICE_MCMC: "false"
-      SERVICE_SCHEDULE_MCMC: "false"
+      SERVICE_CHAINLENGTH: "false"
       SERVER_RUN_KAFKA_STREAM: "false"
       SERVER_NET: Test
       SSL: "false"
@@ -83,45 +82,6 @@ services:
       - test-bigtangle-postgres
       - minio
 
-    restart: always
-
-  test-bigtangle-mcmc:
-    build:
-      context: ..
-      dockerfile: helper/bigtangle-mcmc/Dockerfile
-    image: bigtangle-mcmc:local
-    container_name: test-bigtangle-mcmc
-    hostname: test-bigtangle-mcmc
-    networks:
-      - bigtangle-bridged-network
-    ports:
-      - "18090:8088"
-    environment:
-      JAVA_OPTS: "-Ddebug -Xmx2048m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
-      DB_PASSWORD: test1234
-      DB_USER: root
-      DB_PORT: 5432
-      SERVER_PORT: 8088
-      DB_NAME: info
-      DB_HOSTNAME: test-bigtangle-postgres
-      MINIO_URL: http://minio:9000
-      MINIO_ACCESSKEY: minioadmin
-      MINIO_SECRETKEY: minioadminpassword
-      MINIO_BUCKETNAME: testbigtangle
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      SERVER_NET: Test
-      SSL: "false"
-      SERVICE_MCMC: "true"
-      SERVICE_MCMC_RATE: 1000
-      SERVICE_SCHEDULE_MCMC: "true"
-      SERVER_SERVERURL: "http://test-bigtangle:18089"
-      SERVICE_MINING_RATE: 36000
-      SERVICE_MINING: "true"
-      SERVER_RUN_KAFKA_STREAM: "false"
-    depends_on:
-      - test-bigtangle-postgres
-      - minio
-      - test-bigtangle
     restart: always
 
   cloudflared:
@@ -134,5 +94,5 @@ services:
     command: ["cloudflared", "tunnel", "run"]
     restart: always
     volumes:
-      - /home/jcui/git/server/helper/cloudflared-config-mcmc.yml:/etc/cloudflared/config.yml:ro
+      - /home/jcui/git/server/helper/cloudflared-config.yml:/etc/cloudflared/config.yml:ro
       - /home/jcui/git/server/helper/credentials.json:/etc/cloudflared/credentials.json

@@ -78,7 +78,7 @@ session without expiry. A stolen session cookie grants permanent access.
 
 `submitTransaction` accepts transactions into the mempool with no signature
 validation or double-spend check at ingress. Validation happens later in the
-MCMC pipeline.
+consensus/confirmation pipeline.
 
 **Mitigation:**
 - Already handled downstream by `ServiceBaseConfirmation` conflict detection

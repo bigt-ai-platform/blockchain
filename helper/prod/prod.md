@@ -5,15 +5,13 @@ Copyright 2018 Inasset GmbH.
 ## Architecture
 
 ```
-PostgreSQL ← layer0-server (API / P2P sync) ← requester (peer node)
-                   ↕ (same DB)
-              layer0-mcmc (PoS consensus / MCMC / reward)
+PostgreSQL ← layer0-server (API / P2P sync / PoS beacon duties) ← requester (peer node)
 ```
 
-Two processes share the same database: `layer0-server` handles API requests and
-block sync; `layer0-mcmc` runs the MCMC scheduler, the proof-of-stake slot
-ticker, reward distribution and epoch finality. Consensus is **proof-of-stake**
-— there is no proof-of-work mining.
+One process per node: `layer0-server` handles API requests, block sync, the
+proof-of-stake slot ticker, beacon proposals/attestations, reward distribution
+and epoch finality. Consensus is **proof-of-stake** — there is no proof-of-work
+mining.
 
 ## Consensus: Proof-of-Stake
 
@@ -34,7 +32,7 @@ ticker, reward distribution and epoch finality. Consensus is **proof-of-stake**
 ## Node topology (many nodes)
 
 Each validator node is one independent triple: **1 PostgreSQL + 1 layer0-server
-+ 1 layer0-mcmc**, each with its own ports and its own database. Nodes stay in
++ 1 stake generator**, each with its own ports and its own database. Nodes stay in
 sync through three channels:
 
 | Channel | Config | Purpose |
@@ -54,11 +52,9 @@ share the same database.
 
 | Service | Lock ID |
 |---------|---------|
-| `MCMCService` | `net.bigtangle.mcmc.service.MCMCService` |
-| `RewardService` | `net.bigtangle.mcmc.service.RewardService` |
 | `SyncBlockService` | `net.bigtangle.server.service.SyncBlockService` |
 | `BlockStoreService` | `net.bigtangle.store.BlockStoreService` |
-| `AVGPriceService` | `net.bigtangle.l1.order.service.AVGPriceService` |
+| `AVGPriceService` | `net.bigtangle.layer1.service.AVGPriceService` |
 
 The protocol: `selectLockobject(LOCKID)` → if free, `insertLockobject` and
 proceed; if stale (locktime expired), delete and re-acquire; if active, skip;
@@ -99,7 +95,6 @@ mvn package -DskipTests
 
 Produces (version 0.6.0):
 - `layer0-server/target/layer0-server-0.6.0-exec.jar`
-- `layer0-mcmc/target/layer0-mcmc-0.6.0-exec.jar`
 
 (Or build the Docker images with `helper/deploy.sh`.)
 
@@ -125,7 +120,7 @@ VALIDATOR_PUBKEY=...
 
 ## 4. Start the first node
 
-### layer0-server (API + P2P sync) — creates the schema on first start
+### layer0-server (API + P2P sync + PoS beacon duties) — creates the schema on first start
 
 ```bash
 java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
@@ -134,36 +129,19 @@ java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
   --db.username=root --db.password=test1234 --db.dbtype=postgresql \
   --server.createtable=true \
-  --service.schedule.mcmc=true --service.schedule.blockbatch=true \
+  --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
   --server.runKafkaStream=false \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=false \
+  --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=true \
   --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
 ```
 
 (`--server.chain=L0` runs the shared Layer-0 chain; leave it unset for the
 network default. `--server.net=Mainnet` selects the mainnet `NetworkParameters`,
 whose genesis is fixed at chain launch. The server must set
-`--pos.validatorKey` so `stakeDeposit` can sign, and `--pos.dutyEnabled=false`
-so only the mcmc process proposes/attests.)
-
-### layer0-mcmc (PoS consensus) — no schema creation
-
-```bash
-java -Xmx2048m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
-  -jar layer0-mcmc/target/layer0-mcmc-0.6.0-exec.jar \
-  --server.port=8091 --server.net=Mainnet \
-  --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 --db.dbtype=postgresql \
-  --server.requester=http://127.0.0.1:8081 \
-  --server.createtable=false \
-  --server.runKafkaStream=false \
-  --service.schedule.mcmc=true --service.schedule.blockbatch=true \
-  --service.schedule.microbatch=true \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_0> \
-  --pos.dutyEnabled=true \
-  --peer.udpPort=30309 --peer.tcpPort=30310 --gossip.port=9097
-```
+`--pos.validatorKey` so `stakeDeposit` can sign, and `--pos.dutyEnabled=true`
+so it proposes/attests — validator duties run on the `layer0-server` itself
+in PoS mode.)
 
 ## 5. Fund, stake and activate validators
 
@@ -203,23 +181,16 @@ Repeat §4 for nodes 1..N-1 with, per node:
 - `--pos.gossipPeers="<node0 host:port>,<node1 host:port>,…"` on every node so
   attestations/slashing proofs reach the validator set.
 
-Example for node 1 (ports derive from node 0: server 8081+1, mcmc 8091+1,
-peer/gossip 30307/30308/9095 + 2·1, etc. — see `helper/prod/validators/`):
+Example for node 1 (ports derive from node 0: server 8081+1, peer/gossip
+30307/30308/9095 + 2·1, etc. — see `helper/prod/validators/`):
 
 ```bash
 java ... -jar layer0-server-0.6.0-exec.jar \
   --server.port=8082 ... --db.dbName=layer0_1 \
   --server.requester=http://<node0>:8081 --server.createtable=true \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_1> --pos.dutyEnabled=false \
+  --pos.validatorKey=<POS_VALIDATOR_KEY_1> --pos.dutyEnabled=true \
   --peer.udpPort=30309 --peer.tcpPort=30310 --gossip.port=9097 \
   --pos.gossipPeers="<node0 host>:8081,<node1 host>:8082"
-
-java ... -jar layer0-mcmc-0.6.0-exec.jar \
-  --server.port=8092 ... --db.dbName=layer0_1 \
-  --server.requester=http://<node0>:8081 \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_1> --pos.dutyEnabled=true \
-  --pos.gossipPeers="<node0 host>:8081,<node1 host>:8082" \
-  --peer.udpPort=30311 --peer.tcpPort=30312 --gossip.port=9099
 ```
 
 The network converges: every node syncs the same DAG, sees the same activated
@@ -227,8 +198,8 @@ validator set, and only the slot-selected proposer mints each beacon block.
 
 ## 7. Docker deployment
 
-Build images (`helper/deploy.sh`) then, per node, run a postgres + server +
-mcmc container. The `layer0-*` images run `java -jar app.jar`, so pass the same
+Build images (`helper/deploy.sh`) then, per node, run a postgres + server
+container. The `layer0-server` image runs `java -jar app.jar`, so pass the same
 CLI flags as §4 (override the entrypoint to run `java`). Use `--network host`
 so the DB on `localhost` stays reachable and the node's ports bind directly on
 the host. Example for node 0:
@@ -246,37 +217,21 @@ docker run -d --name l0-server --network host \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
   --db.username=root --db.password=test1234 --db.dbtype=postgresql \
   --server.createtable=true \
-  --service.schedule.mcmc=true --service.schedule.blockbatch=true \
+  --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
   --server.runKafkaStream=false \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=false \
-  --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
-
-docker run -d --name l0-mcmc --network host \
-  --entrypoint java ghcr.io/bigt-ai-platform/layer0-mcmc \
-  -Xmx2048m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
-  --add-exports java.base/java.lang=ALL-UNNAMED -jar /app/app.jar \
-  --server.port=8091 --server.net=Mainnet \
-  --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 --db.dbtype=postgresql \
-  --server.requester=http://127.0.0.1:8081 \
-  --server.createtable=false \
-  --server.runKafkaStream=false \
-  --service.schedule.mcmc=true --service.schedule.blockbatch=true \
-  --service.schedule.microbatch=true \
   --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=true \
-  --peer.udpPort=30309 --peer.tcpPort=30310 --gossip.port=9097
+  --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
 ```
 
 Repeat for the remaining nodes with unique ports/DBs and `--pos.gossipPeers`.
 The per-validator `helper/prod/validators/` scripts automate exactly this
-(container names `node-<i>-server` / `node-<i>-mcmc`, `--network host`, CLI
-flags).
+(container names `node-<i>-server`, `--network host`, CLI flags).
 
 The image entrypoint is `java ... -jar app.jar`, so configuration can also be
 passed as environment variables via Spring relaxed binding (e.g. `SERVER_PORT`,
-`SERVER_REQUESTER`, `DB_DBNAME`, `SERVICE_SCHEDULE_MCMC`). The CLI flags above
-mirror §4 and are the recommended form.
+`SERVER_REQUESTER`, `DB_DBNAME`, `SERVICE_SCHEDULE_CHAINLENGTH`). The CLI flags
+above mirror §4 and are the recommended form.
 
 ## 8. Config reference
 
@@ -288,7 +243,7 @@ mirror §4 and are the recommended form.
 | `server.requester` | Peer node URL for DAG sync | `https://peer.bigtangle.org:8088` |
 | `server.createtable` | Auto-create schema (`true` server only, first start) | `false` |
 | `db.hostname` / `db.port` / `db.dbName` / `db.username` / `db.password` / `db.dbtype` | PostgreSQL connection | `localhost / 5432 / layer0 / root / … / postgresql` |
-| `service.schedule.mcmc` / `service.schedule.mcmcrate` | MCMC consensus scheduler + rate | `true / 500` |
+| `service.schedule.chainlength` / `service.schedule.syncrate` | Chain-length update scheduler + sync rate | `true / 50000` |
 | `service.schedule.blockbatch` / `service.schedule.blockbatchrate` | Batch block service + rate | `true / 50000` |
 | `service.schedule.syncrate` | Block sync rate | `50000` |
 | `service.schedule.initsync` | Sync on startup | `true` |
@@ -296,7 +251,7 @@ mirror §4 and are the recommended form.
 | `server.runKafkaStream` | Kafka stream processing (unused in this deployment; leave off) | `false` |
 | `server.fundEnabled` | Enable the coin-minting `fundAddresses` endpoint (**test/bootstrap only**; must stay `false` on Mainnet) | `false` |
 | `pos.validatorKey` | Validator private seed (64 or 128 hex) | `…` |
-| `pos.dutyEnabled` | This process proposes/attests (`false` on the server, `true` on mcmc) | `true` |
+| `pos.dutyEnabled` | This process proposes/attests (validator duties run on `layer0-server`) | `true` |
 | `pos.slotIntervalMs` | Slot duration | `12000` |
 | `pos.gossipPeers` | Comma-separated `host:port` attestation mesh | `10.0.0.1:8081,10.0.0.2:8081` |
 | `peer.udpPort` / `peer.tcpPort` / `gossip.port` | P2P gossip ports (unique per node) | `30307 / 30308 / 9095` |
@@ -312,7 +267,7 @@ curl -X POST http://localhost:8081/getChainNumber -H 'Content-Type: application/
 curl -X POST http://localhost:8081/getValidators -H 'Content-Type: application/json' -d '{}'
 
 # PoS beacon progression
-docker logs -f l0-mcmc
+docker logs -f l0-server
 ```
 
 ## Security notes
@@ -335,5 +290,6 @@ docker logs -f l0-mcmc
 - The seed discovery service lives in a separate repo:
   [bigt-ai-platform/seeds](https://github.com/bigt-ai-platform/seeds).
 - A single-validator testnet bootstrap is scripted in
-  `layer0-mcmc/src/test/java/net/bigtangle/mcmc/remote/remote.sh`
-  (PostgreSQL + `fundAddresses` → `stakeDeposit` → `activateValidator`).
+  `helper/prod/validators/` (`generate_keys.sh`, `node-<i>/setup.sh` phases
+  server → stake → verify: PostgreSQL + `fundAddresses` → `stakeDeposit` →
+  `activateValidator`).

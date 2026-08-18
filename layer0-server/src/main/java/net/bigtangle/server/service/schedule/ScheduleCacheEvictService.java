@@ -15,12 +15,11 @@ import net.bigtangle.server.service.CacheBlockService;
 /**
  * Periodically invalidates the local in-memory block/output caches.
  *
- * The HTTP server and the MCMC process share the same database but run in
- * separate JVMs with separate in-memory caches. When the MCMC confirms a
- * block (e.g. a token creation or order block), it only evicts its own JVM's
- * caches; the HTTP server would keep serving stale confirmed-outputs data.
- * This scheduled full eviction keeps the HTTP-facing caches in sync with the
- * shared database at the cost of a cheap re-read.
+ * In a split-node setup separate JVMs with separate in-memory caches share the
+ * same database. A writing process only evicts its own JVM's caches; the HTTP
+ * server would keep serving stale confirmed-outputs data. This scheduled full
+ * eviction keeps the HTTP-facing caches in sync with the shared database at
+ * the cost of a cheap re-read.
  */
 @Component
 @EnableAsync

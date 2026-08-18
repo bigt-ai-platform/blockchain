@@ -12,11 +12,6 @@ SERVER_PEER_UDP="${SERVER_PEER_UDP:-$((30307 + NODE_INDEX * 2))}"
 SERVER_PEER_TCP="${SERVER_PEER_TCP:-$((30308 + NODE_INDEX * 2))}"
 SERVER_GOSSIP="${SERVER_GOSSIP:-$((9095 + NODE_INDEX * 2))}"
 
-MCMC_PORT="${MCMC_PORT:-$((8091 + NODE_INDEX))}"
-MCMC_PEER_UDP="${MCMC_PEER_UDP:-$((30309 + NODE_INDEX * 2))}"
-MCMC_PEER_TCP="${MCMC_PEER_TCP:-$((30310 + NODE_INDEX * 2))}"
-MCMC_GOSSIP="${MCMC_GOSSIP:-$((9097 + NODE_INDEX * 2))}"
-
 if [ "$NODE_INDEX" = "0" ]; then DB_NAME="${DB_NAME:-layer0}"; else DB_NAME="${DB_NAME:-layer0_${NODE_INDEX}}"; fi
 API_BASE="http://${NODE_HOST}:${SERVER_PORT}"
 
@@ -99,30 +94,12 @@ start_server() {
         --server.runKafkaStream=false \
         --server.fundEnabled="${FUND_ENABLED:-false}" \
         --server.requester="${REQUESTER}" \
-        --service.schedule.mcmc=true --service.schedule.blockbatch=true \
+        --service.schedule.chainlength=true --service.schedule.blockbatch=true \
         --service.schedule.microbatch=true --service.schedule.initsync=true \
         --peer.udpPort="${SERVER_PEER_UDP}" --peer.tcpPort="${SERVER_PEER_TCP}" --gossip.port="${SERVER_GOSSIP}" \
         --gossip.peers="${GOSSIP_SEEDS}" \
-        --pos.validatorKey="${POS_VALIDATOR_KEY}" --pos.dutyEnabled=false \
-        --pos.gossipPeers="${POS_GOSSIP_PEERS}"
-}
-
-start_mcmc() {
-    log "starting layer0-mcmc on :${MCMC_PORT} (db=${DB_NAME})"
-    docker_run "node-${NODE_INDEX}-mcmc" "${MCMC_IMAGE}:${IMAGE_TAG}" \
-        ${JAVA_OPTS_MCMC} -jar /app/app.jar \
-        --server.port="${MCMC_PORT}" --server.address="${NODE_HOST}" --server.net="${SERVER_NET}" \
-        --db.hostname="${DB_HOSTNAME}" --db.port="${DB_PORT}" --db.dbName="${DB_NAME}" \
-        --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" --db.dbtype="${DBTYPE}" \
-        --server.requester="${REQUESTER}" \
-        --server.createtable=false \
-        --server.runKafkaStream=false \
-        --service.schedule.mcmc=true --service.schedule.blockbatch=true \
-        --service.schedule.microbatch=true \
         --pos.validatorKey="${POS_VALIDATOR_KEY}" --pos.dutyEnabled=true \
-        --pos.gossipPeers="${POS_GOSSIP_PEERS}" \
-        --gossip.peers="${GOSSIP_SEEDS}" \
-        --peer.udpPort="${MCMC_PEER_UDP}" --peer.tcpPort="${MCMC_PEER_TCP}" --gossip.port="${MCMC_GOSSIP}"
+        --pos.gossipPeers="${POS_GOSSIP_PEERS}"
 }
 
 # ---- API helpers -----------------------------------------------------------
@@ -186,11 +163,10 @@ activate_validator() {
 }
 
 # ---- Phased bootstrap (production ordering) --------------------------------
-# The mcmc beacon producers MUST NOT start until every validator is staked and
-# active. If they start earlier, beacon production ramps up as soon as the first
-# validator activates and the later stake deposits land on a moving head and get
-# reorged out (the 4-node prodsim regression). Operators run the phases in order
-# across ALL nodes:  server → stake → mcmc → verify.
+# Validator duties (beacon proposals) run ON the layer0-server itself in PoS
+# mode, so beacon production ramps up as soon as the first validator enables
+# duties. Operators run the phases in order across ALL nodes:
+# server → stake → verify.
 phase_server() {
     db_setup
     start_server
@@ -207,11 +183,6 @@ phase_stake() {
     activate_validator
     sleep 3
     log "staked + activated ${VALIDATOR_PUBKEY}"
-}
-
-phase_mcmc() {
-    start_mcmc
-    log "mcmc up"
 }
 
 # Cross-node acceptance: every node reports the full active set (nothing
@@ -239,12 +210,11 @@ verify_network() {
     log "OK: ${expected} validators active on all nodes; confirmed chainlength ${mincl}..${maxcl}"
 }
 
-run_phase() { # $1 = server | stake | mcmc | verify
+run_phase() { # $1 = server | stake | verify
     case "$1" in
         server) phase_server ;;
         stake)  phase_stake ;;
-        mcmc)   phase_mcmc ;;
         verify) verify_network ;;
-        *) echo "usage: setup.sh <server|stake|mcmc|verify>" >&2; return 2 ;;
+        *) echo "usage: setup.sh <server|stake|verify>" >&2; return 2 ;;
     esac
 }
