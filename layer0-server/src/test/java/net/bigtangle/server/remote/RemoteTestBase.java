@@ -40,6 +40,7 @@ import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.crypto.pq.PQConstants;
 import net.bigtangle.exception.InsufficientMoneyException;
+import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.params.TestParams;
@@ -78,7 +79,11 @@ public abstract class RemoteTestBase {
 	public static String genesisPub = pqKeyHex((byte) 0x01);
 	public static String yuanTokenPub = pqKeyHex((byte) 0x03);
 
-	public NetworkParameters networkParameters = TestParams.get();
+	// Select params to match the server under test: local harness = Test,
+	// deployed prod (Mainnet) = pass -Dnet.params=main (see prodtest.sh).
+	public NetworkParameters networkParameters = "main".equalsIgnoreCase(System.getProperty("net.params", "test"))
+			? MainNetParams.get()
+			: TestParams.get();
 
 	@BeforeEach
 	public void setUp() throws Exception {
