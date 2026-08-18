@@ -96,6 +96,9 @@ public class SyncBlockService {
 	// Resolved lazily to avoid store/service cycles involving CasperService.
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+	// Resolved lazily to avoid store/service cycles involving GhostService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.GhostService> ghostServiceProvider;
 	 
 
 	// default start sync of chain and non chain data
@@ -458,6 +461,10 @@ public class SyncBlockService {
 		TXReward aTXReward;
 		// Remote's advertised Casper finality (hex hash), null when absent.
 		String finalizedBlockHash;
+		// Accumulated LMD-GHOST fork-choice weight of the remote's head. Higher
+		// wins: the chain with the most validator attestation weight is canonical
+		// in PoS, regardless of raw length.
+		long forkChoiceWeight = Long.MIN_VALUE;
 	}
 
 	public void syncChain(Long chainlength, boolean initsync, BlockStoreInterface store) throws BlockStoreException {
@@ -471,6 +478,12 @@ public class SyncBlockService {
 				my = my1;
 		}
 		log.debug(" my chain length " + my.getChainLength() + " remote " + re[0]);
+		// PoS fork choice: the canonical chain is the LMD-GHOST head
+		// (attestation-weighted from the highest justified checkpoint), NOT the
+		// longest chain. Rank remotes by the fork-choice weight of their
+		// advertised head so a node syncing from a longer but minority fork
+		// (1/3 of validators) prefers the majority chain instead of forever
+		// pulling its own minority fork. Longest-chain remains the tie-break.
 		for (String s : re) {
 			try {
 				if (s != null && !"".equals(s)) {
@@ -482,14 +495,20 @@ public class SyncBlockService {
 						continue;
 					}
 					TXReward aTXReward = aTXRewardResponse.getTxReward();
+					long remoteWeight = remoteForkChoiceWeight(aTXReward.getBlockHash(), store);
 					if (aMaxConfirmedReward.aTXReward == null) {
 						aMaxConfirmedReward.server = s.trim();
 						aMaxConfirmedReward.aTXReward = aTXReward;
 						aMaxConfirmedReward.finalizedBlockHash = aTXRewardResponse.getFinalizedBlockHash();
-					} else if (aTXReward.getChainLength() > aMaxConfirmedReward.aTXReward.getChainLength()) {
+						aMaxConfirmedReward.forkChoiceWeight = remoteWeight;
+					} else if (remoteWeight > aMaxConfirmedReward.forkChoiceWeight
+							|| (remoteWeight == aMaxConfirmedReward.forkChoiceWeight
+									&& aTXReward.getChainLength() > aMaxConfirmedReward.aTXReward
+											.getChainLength())) {
 						aMaxConfirmedReward.server = s.trim();
 						aMaxConfirmedReward.aTXReward = aTXReward;
 						aMaxConfirmedReward.finalizedBlockHash = aTXRewardResponse.getFinalizedBlockHash();
+						aMaxConfirmedReward.forkChoiceWeight = remoteWeight;
 					}
 				}
 			} catch (Exception e) {
@@ -517,9 +536,69 @@ public class SyncBlockService {
 	 * can PROVE the remote's finalized block (known in our store) is not our own
 	 * finalized checkpoint — an unknown or absent remote finality is allowed and
 	 * left to the connect-side guard.
+	 */	/**
+	 * PoS fork-choice weight of a remote's advertised head: the accumulated
+	 * LMD-GHOST attestation weight of its subtree. A head on the majority chain
+	 * carries most of the validator weight, so ranking remotes by this prefers
+	 * the canonical chain over a longer but minority (1/3) fork. Falls back to 0
+	 * when the head is unknown locally or GHOST state is unavailable, restoring
+	 * the previous longest-chain behaviour.
 	 */
-	private boolean finalityConflicts(String server, GetTXRewardResponse remote, BlockStoreInterface store) {
-		String remoteFinalizedHex = remote.getFinalizedBlockHash();
+	private long remoteForkChoiceWeight(Sha256Hash remoteHead, BlockStoreInterface store) {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return 0;
+		}
+		try {
+			java.util.Map<Sha256Hash, Long> weights = ghost.getForkChoiceVotes();
+			if (weights == null) {
+				return 0;
+			}
+			// Accumulate the remote head's subtree weight (mirrors
+			// GhostService.executeGhost). The fork-choice weight map is shared
+			// across nodes via gossiped attestations, so this is a peer's
+			// position in the canonical fork choice.
+			java.util.Map<Sha256Hash, Long> memo = new java.util.HashMap<>();
+			java.util.Set<Sha256Hash> inProgress = new java.util.HashSet<>();
+			return subtreeWeightOf(remoteHead, weights, memo, inProgress, store, 0);
+		} catch (Exception e) {
+			log.debug("remoteForkChoiceWeight failed for {}: {}", remoteHead, e.getMessage());
+			return 0;
+		}
+	}
+
+	/**
+	 * Accumulated attestation weight of the subtree rooted at {@code hash},
+	 * mirroring GhostService.subtreeWeight so the sync target ranks by the same
+	 * LMD-GHOST weight the fork choice uses.
+	 */
+	private long subtreeWeightOf(Sha256Hash hash, java.util.Map<Sha256Hash, Long> weights,
+			java.util.Map<Sha256Hash, Long> memo, java.util.Set<Sha256Hash> inProgress,
+			BlockStoreInterface store, int depth) {
+		if (hash == null || depth >= net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+			return 0;
+		}
+		Long cached = memo.get(hash);
+		if (cached != null) {
+			return cached;
+		}
+		if (!inProgress.add(hash)) {
+			return 0;
+		}
+		long sum = weights.getOrDefault(hash, 0L);
+		try {
+			for (Sha256Hash child : store.getRewardChainChildren(hash)) {
+				sum += subtreeWeightOf(child, weights, memo, inProgress, store, depth + 1);
+			}
+		} catch (Exception e) {
+			log.debug("subtreeWeightOf failed for {}: {}", hash, e.getMessage());
+		}
+		inProgress.remove(hash);
+		memo.put(hash, sum);
+		return sum;
+	}
+
+	private boolean finalityConflicts(String server, GetTXRewardResponse remote, BlockStoreInterface store) {		String remoteFinalizedHex = remote.getFinalizedBlockHash();
 		if (remoteFinalizedHex == null || remoteFinalizedHex.isEmpty()) {
 			return false;
 		}
@@ -668,11 +747,19 @@ public class SyncBlockService {
 		boolean longer = remoteLength > myLength;
 		boolean equalFork = remoteLength == myLength
 				&& !aMaxConfirmedReward.aTXReward.getBlockHash().equals(my.getBlockHash());
-		if (longer || equalFork) {
+		// PoS: also fetch a SHORTER remote chain when it wins the GHOST fork
+		// choice (more accumulated attestation weight = canonical in PoS). The
+		// remote's whole chain (down to the shared fork point) is pulled by
+		// requestBlocks + requestMissingReferenced so the reorg can complete.
+		boolean ghostPreferred = !longer && !equalFork
+				&& aMaxConfirmedReward.forkChoiceWeight > myForkChoiceWeight(my.getBlockHash(), store);
+		if (longer || equalFork || ghostPreferred) {
 
-			log.debug(" start sync remote ChainLength: " + myLength + " to: " + remoteLength);
+			log.debug(" start sync remote ChainLength: " + myLength + " to: " + remoteLength
+					+ " ghostPreferred=" + ghostPreferred);
 
-			for (long i = myLength; i <= remoteLength; i += serverConfiguration.getSyncblocks()) {
+			for (long i = Math.min(myLength, remoteLength); i <= Math.max(myLength, remoteLength); i += serverConfiguration
+					.getSyncblocks()) {
 				Stopwatch watch = Stopwatch.createStarted();
 				requestBlocks(i, i + serverConfiguration.getSyncblocks() - 1, aMaxConfirmedReward.server, store);
 				if (initsync) {
@@ -687,6 +774,25 @@ public class SyncBlockService {
 
 		}
 		// log.debug(" finish sync " + aMaxConfirmedReward.server + " ");
+	}
+
+	/** Local LMD-GHOST subtree weight of a block, mirroring GhostService. */
+	private long myForkChoiceWeight(Sha256Hash blockHash, BlockStoreInterface store) {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return 0;
+		}
+		try {
+			java.util.Map<Sha256Hash, Long> weights = ghost.getForkChoiceVotes();
+			if (weights == null) {
+				return 0;
+			}
+			java.util.Map<Sha256Hash, Long> memo = new java.util.HashMap<>();
+			java.util.Set<Sha256Hash> inProgress = new java.util.HashSet<>();
+			return subtreeWeightOf(blockHash, weights, memo, inProgress, store, 0);
+		} catch (Exception e) {
+			return 0;
+		}
 	}
 
  
