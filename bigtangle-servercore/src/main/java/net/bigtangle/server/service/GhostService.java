@@ -172,6 +172,14 @@ public class GhostService {
             weights = forkChoiceVotes;
         }
         weights = applyProposerBoost(weights, store);
+        // LMD-GHOST walks by ACCUMULATED subtree weight: a validator voting for
+        // a deep head implicitly supports every ancestor on its branch, so the
+        // weight of a child is the sum of all votes in its subtree. Comparing
+        // only direct per-block votes would tie-break arbitrarily at the fork
+        // point (votes sit on the tip, not on a1/b1) and could pick the wrong
+        // branch. Memoize the accumulation for the duration of this walk.
+        Map<Sha256Hash, Long> accumulated = new HashMap<>();
+        Set<Sha256Hash> accumulating = new HashSet<>();
         Sha256Hash head = root;
         while (true) {
             List<Sha256Hash> children = getChildren(head, store);
@@ -181,8 +189,13 @@ public class GhostService {
             Sha256Hash bestChild = null;
             long bestWeight = -1;
 
-            for (Sha256Hash child : children) {
-                long weight = weights.getOrDefault(child, 0L);
+            // Deterministic tie-break (by hash, descending) so every node
+            // selects the SAME GHOST head on equal-weight forks — required for
+            // cross-node convergence (getBlocksByPrevHash has no ORDER BY).
+            List<Sha256Hash> sorted = new ArrayList<>(children);
+            sorted.sort(java.util.Comparator.comparing(Sha256Hash::toString).reversed());
+            for (Sha256Hash child : sorted) {
+                long weight = subtreeWeight(child, weights, accumulated, accumulating, store, 0);
                 if (weight > bestWeight) {
                     bestWeight = weight;
                     bestChild = child;
@@ -193,6 +206,35 @@ public class GhostService {
             head = bestChild;
         }
         return head;
+    }
+
+    /**
+     * Accumulated attestation weight of the subtree rooted at {@code hash}:
+     * the direct vote weight of {@code hash} plus the accumulated weight of
+     * every reward-chain descendant. Bounded by
+     * {@link net.bigtangle.server.service.CasperService#ATTESTATION_LOOKBACK_SLOTS}
+     * so a vote deep on a long branch still counts toward every ancestor.
+     */
+    private long subtreeWeight(Sha256Hash hash, Map<Sha256Hash, Long> weights,
+            Map<Sha256Hash, Long> memo, Set<Sha256Hash> inProgress, BlockStoreInterface store, int depth)
+            throws Exception {
+        if (hash == null || depth >= net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+            return 0;
+        }
+        Long cached = memo.get(hash);
+        if (cached != null) {
+            return cached;
+        }
+        if (!inProgress.add(hash)) {
+            return 0; // cycle guard
+        }
+        long sum = weights.getOrDefault(hash, 0L);
+        for (Sha256Hash child : getChildren(hash, store)) {
+            sum += subtreeWeight(child, weights, memo, inProgress, store, depth + 1);
+        }
+        inProgress.remove(hash);
+        memo.put(hash, sum);
+        return sum;
     }
 
     /**
@@ -345,7 +387,12 @@ public class GhostService {
     }
 
     private List<Sha256Hash> getChildren(Sha256Hash hash, BlockStoreInterface store) throws Exception {
-        return store.getBlocksByPrevHash(hash);
+        // LMD-GHOST over the REWARD CHAIN: children are the beacons whose reward
+        // parent (txreward.prevblockhash) is this block. A beacon's DAG
+        // prevblockhash points at its trunk/branch tips, NOT its reward ancestor,
+        // so walking the DAG would select a DAG tip as the "head" and the
+        // producer would build on a non-reward block.
+        return store.getRewardChainChildren(hash);
     }
 
     private void collectSubtree(Sha256Hash root, Set<Sha256Hash> out, BlockStoreInterface store) throws Exception {

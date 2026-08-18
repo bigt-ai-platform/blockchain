@@ -431,6 +431,24 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public List<Sha256Hash> getRewardChainChildren(Sha256Hash hash) throws BlockStoreException {
+		List<Sha256Hash> result = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT blockhash FROM txreward WHERE prevblockhash = ? AND blockhash <> ? ORDER BY blockhash DESC")) {
+			s.setBytes(1, hash.getBytes());
+			s.setBytes(2, hash.getBytes());
+			try (ResultSet rs = s.executeQuery()) {
+				while (rs.next()) {
+					result.add(Sha256Hash.wrap(rs.getBytes(1)));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+		return result;
+	}
+
+	@Override
 	public long getRewardChainLength(Sha256Hash blockHash) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(SELECT_TX_REWARD_CHAINLENGTH_SQL)) {

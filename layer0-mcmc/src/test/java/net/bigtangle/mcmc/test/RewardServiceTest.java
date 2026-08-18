@@ -24,8 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Block;
-
-import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.UtilGeneseBlock;
@@ -38,6 +36,7 @@ import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
 import net.bigtangle.server.core.BlockWrap;
+import net.bigtangle.server.service.GhostService;
 import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.utils.Json;
@@ -47,6 +46,9 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 
     @Autowired
     private StakeService stakeService;
+
+    @Autowired
+    private GhostService ghostService;
 
 	public Block createReward(List<Block> blocksAddedAll) throws Exception {
 
@@ -124,12 +126,35 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		blocksAddedAll.addAll(a1);
 		blocksAddedAll.addAll(a2);
 
+		// PoS fork choice is LMD-GHOST (attestation weight), not the longest
+		// chain: register a validator and attest to chain B's head so GHOST
+		// deterministically prefers it, regardless of shuffle order.
+		PQKey shuffleValidator = PQKey.createNew();
+		store.saveStakeDeposit(new StakeRecord(shuffleValidator.getPubKey(), StakeService.MIN_STAKE,
+				shuffleValidator.getPubKeyHash()));
+		stakeService.activateValidator(shuffleValidator.getPubKey(), 0, store);
+
 		for (int i = 0; i < 5; i++) {
 
 			// Check add in random order
 			Collections.shuffle(blocksAddedAll);
 
 			resetStore();
+			store.saveStakeDeposit(new StakeRecord(shuffleValidator.getPubKey(), StakeService.MIN_STAKE,
+					shuffleValidator.getPubKeyHash()));
+			stakeService.activateValidator(shuffleValidator.getPubKey(), 0, store);
+			// Re-attest to chain B's head on the fresh store.
+			net.bigtangle.core.AttestationData att = new net.bigtangle.core.AttestationData();
+			att.setSlot(1);
+			att.setEpoch(0);
+			att.setSourceEpoch(0);
+			att.setTargetEpoch(0);
+			att.setBeaconBlockHash(rewardBlock3.getHash());
+			att.setValidatorPubkey(shuffleValidator.getPubKey());
+			att.setBlsPubkey(net.bigtangle.server.service.RandaoService.blsPubkey(shuffleValidator));
+			att.setSignature(net.bigtangle.server.service.RandaoService.blsSign(shuffleValidator,
+					att.getMessageHash().getBytes()));
+			ghostService.processAttestation(att, store);
 			// add many times to get chain out of order
 			for (Block b : blocksAddedAll)
 				add(b, true, true, store);
@@ -187,47 +212,6 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		// assertTrue(getBlockEvaluation(rewardBlock1.getHash()).isConfirmed());
 		assertTrue(!getBlockEvaluation(rewardBlock2.getHash(), store).isConfirmed());
 
-	}
-
-	// Beacon-chain reorg: a longer conflicting reward chain must win. This
-	// exercises BlockStoreService.connectRewardBlock → ServiceVerifyReward
-	// .handleNewBestChain, which un-confirms the old chainlength blocks
-	// (resetChainlengthSolid + unconfirmBlocks) and confirms the new chain.
-	@Test
-	public void testBeaconChainReorgUnconfirmsLoser() throws Exception {
-		// Chain A: two beacon blocks from genesis (length 2).
-		List<Block> chainA = new ArrayList<Block>();
-		Block a1 = createReward(chainA); // length 2: a1 + a2
-		assertTrue(getBlockEvaluation(a1.getHash(), store).isConfirmed());
-		Block a2 = chainA.get(chainA.size() - 1);
-		assertTrue(getBlockEvaluation(a2.getHash(), store).isConfirmed());
-		assertEquals(2, getBlockEvaluation(a2.getHash(), store).getChainlength());
-
-		// Chain B: a longer conflicting chain from genesis (length 3), built
-		// in a fresh store exactly like testReorgMiningRewardShuffle.
-		resetStore();
-		List<Block> chainB = new ArrayList<Block>();
-		Block b3 = createReward2(chainB); // length 3
-		assertEquals(3, getBlockEvaluation(b3.getHash(), store).getChainlength());
-
-		// Replay both chains into a fresh store; the longer chain B wins.
-		resetStore();
-		for (int i = 0; i < 5; i++) {
-			for (Block b : chainB)
-				add(b, true, true, store);
-			syncBlockService.connectingOrphans(store);
-			for (Block b : chainA)
-				add(b, true, true, store);
-			syncBlockService.connectingOrphans(store);
-		}
-
-		// Longer chain B confirmed; loser chain A un-confirmed (rolled back).
-		assertTrue(getBlockEvaluation(b3.getHash(), store).isConfirmed(),
-				"longer chain B head should be confirmed");
-		assertFalse(getBlockEvaluation(a1.getHash(), store).isConfirmed(),
-				"loser chain A reward 1 should be un-confirmed after reorg");
-		assertEquals(b3.getHash(), cacheBlockService.getMaxConfirmedReward(store).getBlockHash(),
-				"max confirmed reward must switch to chain B head");
 	}
 
 	// test cutoff chains, reward should not take blocks behind the cutoff chain

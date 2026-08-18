@@ -422,6 +422,11 @@ public class MempoolService {
         return pendingTxns.size();
     }
 
+    /** Non-destructive snapshot of all pending transactions. */
+    public List<Transaction> getPending() {
+        return new ArrayList<>(pendingTxns);
+    }
+
     public int getTotalSubmitted() {
         return totalSubmitted.get();
     }

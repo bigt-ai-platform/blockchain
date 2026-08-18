@@ -239,6 +239,18 @@ public class ValidatorDutyService {
             if (beaconHead == null) {
                 beaconHead = ghostService.getDagRoot(store);
             }
+            // PoS fork choice: attest to the LMD-GHOST head (attestation-weighted
+            // from the highest justified checkpoint), NOT the local longest
+            // chain. If every validator attested to its own local head, votes
+            // fragment across forks and 2/3 justification can never form.
+            try {
+                Sha256Hash ghostHead = ghostService.executeGhost(ghostService.getDagRoot(store), store);
+                if (ghostHead != null) {
+                    beaconHead = ghostHead;
+                }
+            } catch (Exception e) {
+                log.debug("ghost attestation target failed, using confirmed head: {}", e.getMessage());
+            }
 
             // CHAIN-derived attestation target. The beacon chain advances ~1
             // confirmed block per proposer slot, so the wall-clock epoch (slot/32)

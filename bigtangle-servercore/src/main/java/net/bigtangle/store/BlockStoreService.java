@@ -100,6 +100,9 @@ public class BlockStoreService {
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SlotService> slotServiceProvider;
 
 	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.GhostService> ghostServiceProvider;
+
+	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SyncBlockService> syncBlockServiceProvider;
 
 	// Test-only escape hatch: some test harnesses deliberately seed token blocks
@@ -487,8 +490,15 @@ public class BlockStoreService {
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
-			boolean haveNewBestChain = serviceVerifyReward.getRewardInfo(block).getChainlength() > serviceVerifyReward
-					.getRewardInfo(head).getChainlength();
+			// PoS fork choice: the canonical chain is the LMD-GHOST head
+			// (attestation-weighted) from the highest justified checkpoint, NOT
+			// the longest chain. A competing fork wins only when its tip is the
+			// GHOST winner — raw chain length is meaningless in PoS.
+			// Connect the block FIRST so the GHOST walk can see it as a child
+			// (store.put happens in connect; executeGhost reads the blocks
+			// table via getBlocksByPrevHash).
+			connect(block, solidityState, store);
+			boolean haveNewBestChain = ghostWinsForkChoice(block, store);
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			// FINALITY: a reorg may only replace the head if the winning chain
@@ -532,13 +542,63 @@ public class BlockStoreService {
 			}
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
-				connect(block, solidityState, store);
 				serviceVerifyReward.handleNewBestChain(block, store);
 			} else {
 				// parallel chain, save as unconfirmed
-				connect(block, solidityState, store);
 			}
 
+		}
+	}
+
+	/**
+	 * PoS fork choice: does the incoming beacon's chain win the LMD-GHOST
+	 * attestation-weight vote? The GHOST head is the tip with the most
+	 * accumulated validator attestation weight, walked from the highest
+	 * justified checkpoint (never genesis once a checkpoint exists). A competing
+	 * fork wins only when its head IS the GHOST winner. Falls back to the
+	 * longest-chain rule when GHOST state is unavailable (no attestation
+	 * service), which keeps pre-PoS / test behavior intact.
+	 */
+	private boolean ghostWinsForkChoice(Block block, BlockStoreInterface store) throws BlockStoreException {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return block.getLastMiningRewardBlock() > store
+					.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()).getLastMiningRewardBlock();
+		}
+		try {
+			Sha256Hash root = ghost.getDagRoot(store);
+			Sha256Hash ghostHead = ghost.executeGhost(root, store);
+			if (ghostHead == null) {
+				return false;
+			}
+			// Only the block that IS the GHOST head triggers a reorg. A block
+			// that is merely an ANCESTOR of the GHOST head must NOT reorg: it
+			// will be adopted when the head itself connects (handleNewBestChain
+			// treats its argument as the new TIP, so reorging to an ancestor
+			// would crash getPartialChain's "higher and lower are reversed"
+			// guard). The tip is connected later and fires the reorg then.
+			if (!ghostHead.equals(block.getHash())) {
+				return false;
+			}
+			// A re-add of a block that is already an ancestor of the current
+			// confirmed head must not reorg either: findSplit(block, head)
+			// returns the block itself and getPartialChain(block, block)
+			// violates "higher and lower are reversed". Only a block that is
+			// NOT yet part of the best chain can be a new best.
+			Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
+			if (head != null && head.getHash().equals(block.getHash())) {
+				return false;
+			}
+			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+			if (head != null && casper != null
+					&& casper.descendsFrom(head.getHash(), block.getHash(), store)) {
+				return false;
+			}
+			return true;
+		} catch (Exception e) {
+			log.debug("ghost fork choice failed, fall back to longest chain: {}", e.getMessage());
+			return block.getLastMiningRewardBlock() > store
+					.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()).getLastMiningRewardBlock();
 		}
 	}
 
