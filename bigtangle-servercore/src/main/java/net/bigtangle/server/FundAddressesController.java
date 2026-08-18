@@ -98,7 +98,11 @@ public class FundAddressesController {
             utxos.add(utxo);
         }
         BlockStoreInterface store = storeService.getStore();
-        store.addUnspentTransactionOutput(utxos);
+        try {
+            store.addUnspentTransactionOutput(utxos);
+        } finally {
+            store.close();
+        }
         log.warn("fundAddresses: minted {} confirmed UTXO(s) (test/bootstrap only)", utxos.size());
         return OkResponse.create();
     }
