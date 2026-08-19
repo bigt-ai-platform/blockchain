@@ -36,6 +36,7 @@ BATCH_SIZE="${BATCH_SIZE:-250}"
 AMOUNT="${AMOUNT:-40000}"
 PAY="${PAY:-25000}"
 CONFIRM_TIMEOUT="${CONFIRM_TIMEOUT:-900}"
+REQUIRE_CONFIRM=true
 DO_BUILD=true
 
 usage() {
@@ -52,7 +53,8 @@ Options:
   -a, --amount N         satoshis funded per wallet (default: 40000)
   -p, --pay N            satoshis paid per tx (default: 25000)
       --confirm-timeout S  seconds to wait for confirmation (default: 900)
-      --no-build         skip the maven dependency install on the mesh host
+      --no-confirm         do not require any tx to confirm (max-submit-TPS runs)
+      --no-build           skip the maven dependency install on the mesh host
   -h, --help             this help
 
 Env: SSH_USER, S2001_HOST, CUI_HOST, JUMP_HOST, CHECK_HOST, BUILD_DIR, SSH_OPTS,
@@ -70,6 +72,7 @@ while [[ $# -gt 0 ]]; do
         -a|--amount)           AMOUNT="$2"; shift 2 ;;
         -p|--pay)              PAY="$2"; shift 2 ;;
         --confirm-timeout)     CONFIRM_TIMEOUT="$2"; shift 2 ;;
+        --no-confirm)          REQUIRE_CONFIRM=false; shift ;;
         --no-build)            DO_BUILD=false; shift ;;
         -h|--help)             usage ;;
         *) echo "Unknown option: $1"; usage ;;
@@ -129,7 +132,7 @@ if [ "$DO_BUILD" = true ]; then
 fi
 
 info "running MaxTpsBenchmarkProd on ${CHECK_HOST}"
-MVN_ARGS="-Dprod.seed=${SEED} -Dchain.tx=${TX} -Dchain.clients=${CLIENTS} -Dchain.batchSize=${BATCH_SIZE} -Dchain.amount=${AMOUNT} -Dchain.pay=${PAY} -Dchain.confirmTimeoutSec=${CONFIRM_TIMEOUT} -DfailIfNoTests=false"
+MVN_ARGS="-Dprod.seed=${SEED} -Dchain.tx=${TX} -Dchain.clients=${CLIENTS} -Dchain.batchSize=${BATCH_SIZE} -Dchain.amount=${AMOUNT} -Dchain.pay=${PAY} -Dchain.confirmTimeoutSec=${CONFIRM_TIMEOUT} -Dchain.requireConfirm=${REQUIRE_CONFIRM} -DfailIfNoTests=false"
 set +e
 remote "$CHECK_HOST" "export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64; export PATH=\$JAVA_HOME/bin:\$PATH; cd '${BUILD_DIR}' && mvn test -pl layer0-mcmc -Dtest='${TEST_CLASS}' ${MVN_ARGS} 2>&1" | tee /tmp/prodbench.out
 MVN_EXIT=${PIPESTATUS[0]}
@@ -146,10 +149,19 @@ if [ -z "$results" ]; then
 fi
 echo "$results"
 confirmed=$(echo "$results" | grep -oP 'confirmed \K[0-9]+' | head -1)
+submitted=$(echo "$results" | grep -oP 'submitted \K[0-9]+' | head -1)
 submitTps=$(echo "$results" | grep -oP 'Submit TPS:\s+\K[0-9.]+' | head -1)
 confirmTps=$(echo "$results" | grep -oP 'Confirm TPS:\s+\K[0-9.]+' | head -1)
-if [ -n "$confirmed" ] && [ "$confirmed" -gt 0 ]; then
-    log "Benchmark passed — ${confirmed}/${TX} confirmed, submit TPS ${submitTps:-0} tx/s, confirm TPS ${confirmTps:-0} tx/s"
+if [ "${REQUIRE_CONFIRM}" = true ]; then
+    if [ -n "$confirmed" ] && [ "$confirmed" -gt 0 ]; then
+        log "Benchmark passed — ${confirmed}/${TX} confirmed, submit TPS ${submitTps:-0} tx/s, confirm TPS ${confirmTps:-0} tx/s"
+    else
+        fail "No confirmed transactions (submit TPS ${submitTps:-0} tx/s)"
+    fi
 else
-    fail "No confirmed transactions (submit TPS ${submitTps:-0} tx/s)"
+    if [ -n "$submitted" ] && [ "$submitted" -gt 0 ]; then
+        log "Benchmark done — ${submitted}/${TX} submitted, submit TPS ${submitTps:-0} tx/s, confirmed ${confirmed:-0}"
+    else
+        fail "No transactions submitted"
+    fi
 fi

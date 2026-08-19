@@ -88,7 +88,7 @@ public abstract class BaseDispatcherController implements DisposableBean {
 	private static final Logger logger = LoggerFactory.getLogger(BaseDispatcherController.class);
 
 	private ExecutorService requestExecutor = Executors.newFixedThreadPool(
-			Math.max(4, Runtime.getRuntime().availableProcessors() * 2));
+			Math.max(32, Runtime.getRuntime().availableProcessors() * 8));
 
 	@Autowired
 	protected NetworkParameters networkParameters;
