@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,7 +30,9 @@ import com.google.common.base.Stopwatch;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.BlockStoreException;
@@ -38,12 +42,15 @@ import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
+import net.bigtangle.response.GetTransactionListResponse;
 import net.bigtangle.response.GetTXRewardListResponse;
 import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.data.LockObject;
+import net.bigtangle.server.data.TransactionStatus;
+import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceVerifyReward;
 import net.bigtangle.store.BlockStoreInterface;
@@ -84,6 +91,14 @@ public class SyncBlockService {
 	protected CacheBlockService cacheBlockService;
 	@Autowired
 	private StoreService storeService;
+	@Autowired
+	private MempoolService mempoolService;
+	// Resolved lazily to avoid store/service cycles involving CasperService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+	// Resolved lazily to avoid store/service cycles involving GhostService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.GhostService> ghostServiceProvider;
 	 
 
 	// default start sync of chain and non chain data
@@ -147,6 +162,8 @@ public class SyncBlockService {
 				Stopwatch watch = Stopwatch.createStarted();
 				connectingOrphans(store);
 				syncChain(-1L, false, store);
+				requestMissingReferenced(store);
+				syncMempool(store);
 				syncNonChained(store);
 				store.deleteLockobject(LOCKID);
 				// if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
@@ -172,6 +189,7 @@ public class SyncBlockService {
 			cleanupChainBlockQueue(store);
 			store.deleteAllLockobject();
 			syncChain(-1l, true, store);
+			requestMissingReferenced(store);
 			blockgraph.updateChain();
 			log.debug(" end startInit: ");
 		} finally {
@@ -285,12 +303,12 @@ public class SyncBlockService {
 			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] response = OkHttp3Util.postString(s.trim() + "/" + ReqCmd.blocksFromNonChainHeight,
-				Json.jsonmapper().writeValueAsString(requestParam));
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
 		requestParam.put("cutoffHeight", store.get(confirmedAtHeightReward.getBlockHash()).getHeight() + "");
+		byte[] response = OkHttp3Util.postString(s.trim() + "/" + ReqCmd.blocksFromNonChainHeight,
+				Json.jsonmapper().writeValueAsString(requestParam));
 		GetBlockListResponse blockbytelist = Json.jsonmapper().readValue(response, GetBlockListResponse.class);
 		log.debug("block size: " + blockbytelist.getBlockbytelist().size() + " at server: " + s);
 		List<Block> sortedBlocks = new ArrayList<Block>();
@@ -307,16 +325,110 @@ public class SyncBlockService {
 
 	}
 
-	public TXReward getMaxConfirmedReward(String server) throws JsonProcessingException, IOException {
+	/*
+	 * The reward chain references its predecessor by prevRewardHash and the
+	 * RewardInfo.getBlocks() set. When a beacon is queued but its referenced
+	 * blocks are not yet local (a fork, or a node that fell behind), nothing
+	 * actively fetched those blocks: processChainConnected only retries the
+	 * queue in place and connectingOrphans only covers orphan=true entries.
+	 * Walk every queued beacon and fetch each missing referenced block by hash
+	 * from the requester mesh, so a lagging node can actually catch up to the
+	 * canonical chain instead of retrying forever.
+	 */
+	public void requestMissingReferenced(BlockStoreInterface store) throws BlockStoreException {
+		List<ChainBlockQueue> cbs = store.selectChainblockqueue(false, serverConfiguration.getSyncblocks());
+		if (cbs == null || cbs.isEmpty()) {
+			return;
+		}
+		// Hashes of the blocks on the LOCAL CONFIRMED reward chain. A fetched
+		// block that merely exists in the store (present but unconnected) is
+		// NOT a valid anchor: the walk below must fetch every missing ancestor
+		// all the way down to the confirmed chain (or genesis), otherwise the
+		// gap left in the middle keeps the queued beacon unsolid forever.
+		Set<Sha256Hash> confirmed = new HashSet<>();
+		Sha256Hash cur = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+		int guard = 0;
+		while (cur != null && confirmed.add(cur) && guard++ < 100000) {
+			Block b = store.get(cur);
+			if (b == null) {
+				break;
+			}
+			if (b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+				break;
+			}
+			try {
+				RewardInfo ri = new RewardInfo().parseChecked(b.getTransactions().get(0).getData());
+				cur = ri.getPrevRewardHash();
+			} catch (Exception e) {
+				break;
+			}
+		}
+		Set<Sha256Hash> requested = new HashSet<>();
+		for (ChainBlockQueue cb : cbs) {
+			Block block = networkParameters.getDefaultSerializer().makeBlock(cb.getBlock());
+			if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+				continue;
+			}
+			try {
+				RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
+				// Fetch the prevRewardHash chain back to the confirmed chain.
+				// A block that merely exists in the store (fetched but not yet
+				// connected) is NOT a valid anchor — keep walking and fetch its
+				// ancestors too, otherwise the gap below it stays missing and
+				// the queued beacon remains unsolid forever.
+				Sha256Hash prev = ri.getPrevRewardHash();
+				guard = 0;
+				while (prev != null && requested.add(prev) && guard++ < 10000) {
+					if (confirmed.contains(prev)) {
+						break;
+					}
+					Block local = blockService.getBlock(prev, store);
+					if (local != null) {
+						prev = rewardParent(local);
+						continue;
+					}
+					byte[] data = requestBlock(prev, store);
+					if (data == null) {
+						break;
+					}
+					Block prevBlock = networkParameters.getDefaultSerializer().makeBlock(data);
+					prev = rewardParent(prevBlock);
+				}
+				// Fetch each DAG block referenced by the beacon's approved set.
+				for (Sha256Hash h : ri.getBlocks()) {
+					if (requested.add(h) && blockService.getBlock(h, store) == null) {
+						requestBlock(h, store);
+					}
+				}
+			} catch (Exception e) {
+				log.debug("requestMissingReferenced {} : {}", block.getHash(), e.getMessage());
+			}
+		}
+	}
+
+	private Sha256Hash rewardParent(Block b) {
+		if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+			return null;
+		}
+		try {
+			return new RewardInfo().parseChecked(b.getTransactions().get(0).getData()).getPrevRewardHash();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	public GetTXRewardResponse getMaxConfirmedRewardResponse(String server) throws JsonProcessingException, IOException {
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
 
 		byte[] response = OkHttp3Util.postString(server.trim() + "/" + ReqCmd.getChainNumber,
 				Json.jsonmapper().writeValueAsString(requestParam));
-		GetTXRewardResponse aTXRewardResponse = Json.jsonmapper().readValue(response, GetTXRewardResponse.class);
 
-		return aTXRewardResponse.getTxReward();
+		return Json.jsonmapper().readValue(response, GetTXRewardResponse.class);
 
+	}
+	public TXReward getMaxConfirmedReward(String server) throws JsonProcessingException, IOException {
+		return getMaxConfirmedRewardResponse(server).getTxReward();
 	}
 
 	public List<TXReward> getAllConfirmedReward(String s) throws JsonProcessingException, IOException {
@@ -346,6 +458,12 @@ public class SyncBlockService {
 	public static class MaxConfirmedReward {
 		String server;
 		TXReward aTXReward;
+		// Remote's advertised Casper finality (hex hash), null when absent.
+		String finalizedBlockHash;
+		// Accumulated LMD-GHOST fork-choice weight of the remote's head. Higher
+		// wins: the chain with the most validator attestation weight is canonical
+		// in PoS, regardless of raw length.
+		long forkChoiceWeight = Long.MIN_VALUE;
 	}
 
 	public void syncChain(Long chainlength, boolean initsync, BlockStoreInterface store) throws BlockStoreException {
@@ -358,26 +476,163 @@ public class SyncBlockService {
 				my = my1;
 		}
 		log.debug(" my chain length " + my.getChainLength() + " remote " + re[0]);
+		// PoS fork choice: the canonical chain is the LMD-GHOST head
+		// (attestation-weighted from the highest justified checkpoint), NOT the
+		// longest chain. Rank remotes by the fork-choice weight of their
+		// advertised head so a node syncing from a longer but minority fork
+		// (1/3 of validators) prefers the majority chain instead of forever
+		// pulling its own minority fork. Longest-chain remains the tie-break.
 		for (String s : re) {
 			try {
 				if (s != null && !"".equals(s)) {
-					TXReward aTXReward = getMaxConfirmedReward(s.trim());
+					GetTXRewardResponse aTXRewardResponse = getMaxConfirmedRewardResponse(s.trim());
+					if (aTXRewardResponse == null || aTXRewardResponse.getTxReward() == null) {
+						continue;
+					}
+					if (finalityConflicts(s.trim(), aTXRewardResponse, store)) {
+						continue;
+					}
+					TXReward aTXReward = aTXRewardResponse.getTxReward();
+					long remoteWeight = remoteForkChoiceWeight(aTXReward.getBlockHash(), store);
 					if (aMaxConfirmedReward.aTXReward == null) {
 						aMaxConfirmedReward.server = s.trim();
 						aMaxConfirmedReward.aTXReward = aTXReward;
-					} else {
-						if (aTXReward.getChainLength() > aMaxConfirmedReward.aTXReward.getChainLength()) {
-							aMaxConfirmedReward.server = s.trim();
-							aMaxConfirmedReward.aTXReward = aTXReward;
-						}
+						aMaxConfirmedReward.finalizedBlockHash = aTXRewardResponse.getFinalizedBlockHash();
+						aMaxConfirmedReward.forkChoiceWeight = remoteWeight;
+					} else if (remoteWeight > aMaxConfirmedReward.forkChoiceWeight
+							|| (remoteWeight == aMaxConfirmedReward.forkChoiceWeight
+									&& aTXReward.getChainLength() > aMaxConfirmedReward.aTXReward
+											.getChainLength())) {
+						aMaxConfirmedReward.server = s.trim();
+						aMaxConfirmedReward.aTXReward = aTXReward;
+						aMaxConfirmedReward.finalizedBlockHash = aTXRewardResponse.getFinalizedBlockHash();
+						aMaxConfirmedReward.forkChoiceWeight = remoteWeight;
 					}
-					syncMaxConfirmedReward(aMaxConfirmedReward, my, initsync, store);
 				}
 			} catch (Exception e) {
 				log.debug("", e);
 			}
 		}
+		// Sync only from the server with the longest known chain (or an
+		// equal-length competing fork) so a single download pass covers the whole
+		// gap instead of restarting from the beginning for every server.
+		if (aMaxConfirmedReward.server != null) {
+			try {
+				syncMaxConfirmedReward(aMaxConfirmedReward, my, initsync, store);
+			} catch (Exception e) {
+				log.debug("", e);
+			}
+		}
 
+	}
+
+	/**
+	 * A remote that has finalized a DIFFERENT checkpoint than ours cannot be
+	 * synced from: every one of its chains would be refused by
+	 * connectRewardBlock (which never reorgs finalized history), so we would
+	 * download the whole fork and never converge. The skip only fires when we
+	 * can PROVE the remote's finalized block (known in our store) is not our own
+	 * finalized checkpoint — an unknown or absent remote finality is allowed and
+	 * left to the connect-side guard.
+	 */	/**
+	 * PoS fork-choice weight of a remote's advertised head: the accumulated
+	 * LMD-GHOST attestation weight of its subtree. A head on the majority chain
+	 * carries most of the validator weight, so ranking remotes by this prefers
+	 * the canonical chain over a longer but minority (1/3) fork. Falls back to 0
+	 * when the head is unknown locally or GHOST state is unavailable, restoring
+	 * the previous longest-chain behaviour.
+	 */
+	private long remoteForkChoiceWeight(Sha256Hash remoteHead, BlockStoreInterface store) {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return 0;
+		}
+		try {
+			java.util.Map<Sha256Hash, Long> weights = ghost.getForkChoiceVotes();
+			if (weights == null) {
+				return 0;
+			}
+			// Accumulate the remote head's subtree weight (mirrors
+			// GhostService.executeGhost). The fork-choice weight map is shared
+			// across nodes via gossiped attestations, so this is a peer's
+			// position in the canonical fork choice.
+			java.util.Map<Sha256Hash, Long> memo = new java.util.HashMap<>();
+			java.util.Set<Sha256Hash> inProgress = new java.util.HashSet<>();
+			return subtreeWeightOf(remoteHead, weights, memo, inProgress, store, 0);
+		} catch (Exception e) {
+			log.debug("remoteForkChoiceWeight failed for {}: {}", remoteHead, e.getMessage());
+			return 0;
+		}
+	}
+
+	/**
+	 * Accumulated attestation weight of the subtree rooted at {@code hash},
+	 * mirroring GhostService.subtreeWeight so the sync target ranks by the same
+	 * LMD-GHOST weight the fork choice uses.
+	 */
+	private long subtreeWeightOf(Sha256Hash hash, java.util.Map<Sha256Hash, Long> weights,
+			java.util.Map<Sha256Hash, Long> memo, java.util.Set<Sha256Hash> inProgress,
+			BlockStoreInterface store, int depth) {
+		if (hash == null || depth >= net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+			return 0;
+		}
+		Long cached = memo.get(hash);
+		if (cached != null) {
+			return cached;
+		}
+		if (!inProgress.add(hash)) {
+			return 0;
+		}
+		long sum = weights.getOrDefault(hash, 0L);
+		try {
+			for (Sha256Hash child : store.getRewardChainChildren(hash)) {
+				sum += subtreeWeightOf(child, weights, memo, inProgress, store, depth + 1);
+			}
+		} catch (Exception e) {
+			log.debug("subtreeWeightOf failed for {}: {}", hash, e.getMessage());
+		}
+		inProgress.remove(hash);
+		memo.put(hash, sum);
+		return sum;
+	}
+
+	private boolean finalityConflicts(String server, GetTXRewardResponse remote, BlockStoreInterface store) {		String remoteFinalizedHex = remote.getFinalizedBlockHash();
+		if (remoteFinalizedHex == null || remoteFinalizedHex.isEmpty()) {
+			return false;
+		}
+		net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+		if (casper == null) {
+			return false;
+		}
+		net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+		if (finalized == null) {
+			return false;
+		}
+		Sha256Hash remoteFinalized;
+		try {
+			remoteFinalized = Sha256Hash.wrap(Utils.HEX.decode(remoteFinalizedHex));
+		} catch (Exception e) {
+			log.debug("invalid remote finalized hash from {}: {}", server, remoteFinalizedHex);
+			return false;
+		}
+		if (remoteFinalized.equals(finalized.getBlockHash())) {
+			return false;
+		}
+		// Different finalized checkpoint: skip only if the remote's finalized
+		// block is actually present in our store (so it is provably a
+		// conflicting-finality branch, not merely a node ahead of us).
+		boolean knownLocally;
+		try {
+			knownLocally = blockService.getBlock(remoteFinalized, store) != null;
+		} catch (Exception e) {
+			knownLocally = false;
+		}
+		if (!knownLocally) {
+			return false;
+		}
+		log.info("Skip sync from {}: remote finalized {} conflicts with local finalized {}",
+				server, remoteFinalized, finalized.getBlockHash());
+		return true;
 	}
 
 	/*
@@ -397,6 +652,75 @@ public class SyncBlockService {
 	}
 
 	/*
+	 * Fetch the pending transactions of the remote servers and submit them into
+	 * the local mempool so all nodes converge on the same pending set even
+	 * without a gossip mesh. Rejected or already-known transactions are skipped
+	 * (submitTransaction enforces the full mempool verification).
+	 */
+	public void syncMempool(BlockStoreInterface store) {
+		String[] re = serverConfiguration.getRequester().split(",");
+		for (String s : re) {
+			if (s != null && !"".equals(s)) {
+				try {
+					requestMempool(s.trim(), store);
+				} catch (Exception e) {
+					log.debug("syncMempool {} ", s, e);
+				}
+			}
+		}
+	}
+
+	public void requestMempool(String server, BlockStoreInterface store) throws IOException {
+		HashMap<String, String> requestParam = new HashMap<>();
+		byte[] response = OkHttp3Util.postString(server.trim() + "/" + ReqCmd.getPendingTransactions,
+				Json.jsonmapper().writeValueAsString(requestParam));
+		GetTransactionListResponse txlist = Json.jsonmapper().readValue(response, GetTransactionListResponse.class);
+		if (txlist == null || txlist.getTransactionlist() == null) {
+			return;
+		}
+		for (byte[] data : txlist.getTransactionlist()) {
+			try {
+				Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(data);
+				if (tx.isCoinBase() || inLocalBlock(tx, store)) {
+					continue;
+				}
+				mempoolService.submitTransaction(tx);
+				try {
+					TransactionStatusRecord.mark(store, tx, TransactionStatus.MEMPOOL, null, null, networkParameters);
+				} catch (Exception e) {
+					log.debug("mempool sync status mark failed for {}: {}", tx.getHash(), e.getMessage());
+				}
+				log.debug("mempool sync from {} accepted {}", server, tx.getHash());
+			} catch (Exception e) {
+				// already pending, conflicting, or invalid — skip
+				log.debug("mempool sync from {} skip: {}", server, e.getMessage());
+			}
+		}
+	}
+
+	/** True when the tx hash is already recorded in a local block. */
+	private boolean inLocalBlock(Transaction tx, BlockStoreInterface store) {
+		try {
+			TransactionStatusRecord record = store.getTransactionStatus(tx.getHash());
+			if (record == null || record.getStatus() == null) {
+				return false;
+			}
+			switch (record.getStatus()) {
+			case BATCHED:
+			case IN_BLOCK:
+			case SOLID:
+			case CONFIRMED:
+				return true;
+			default:
+				return false;
+			}
+		} catch (Exception e) {
+			log.debug("mempool sync status check failed for {}: {}", tx.getHash(), e.getMessage());
+			return false;
+		}
+	}
+
+	/*
 	 * check difference to remote servers and does sync. ask the remote
 	 * getMaxConfirmedReward to compare the my getMaxConfirmedReward if the remote
 	 * has length > my length, then find the get the list of confirmed chains data.
@@ -410,13 +734,29 @@ public class SyncBlockService {
 		log.debug("  remote chain length  " + aMaxConfirmedReward.aTXReward.getChainLength() + " server: "
 				+ aMaxConfirmedReward.server + " my chain length " + my.getChainLength());
 
-		if (aMaxConfirmedReward.aTXReward.getChainLength() > my.getChainLength()) {
+		long remoteLength = aMaxConfirmedReward.aTXReward.getChainLength();
+		long myLength = my.getChainLength();
+		// Longer chain, or an equal-length competing fork with a different head.
+		// Equal-length forks must also be fetched: once the remote extends its
+		// fork the parent blocks are already local, so a reorg to the longest
+		// chain can complete in one pass instead of stalling on orphan
+		// re-requests.
+		boolean longer = remoteLength > myLength;
+		boolean equalFork = remoteLength == myLength
+				&& !aMaxConfirmedReward.aTXReward.getBlockHash().equals(my.getBlockHash());
+		// PoS: also fetch a SHORTER remote chain when it wins the GHOST fork
+		// choice (more accumulated attestation weight = canonical in PoS). The
+		// remote's whole chain (down to the shared fork point) is pulled by
+		// requestBlocks + requestMissingReferenced so the reorg can complete.
+		boolean ghostPreferred = !longer && !equalFork
+				&& aMaxConfirmedReward.forkChoiceWeight > myForkChoiceWeight(my.getBlockHash(), store);
+		if (longer || equalFork || ghostPreferred) {
 
-			log.debug(" start sync remote ChainLength: " + my.getChainLength() + " to: "
-					+ aMaxConfirmedReward.aTXReward.getChainLength());
+			log.debug(" start sync remote ChainLength: " + myLength + " to: " + remoteLength
+					+ " ghostPreferred=" + ghostPreferred);
 
-			for (long i = my.getChainLength(); i <= aMaxConfirmedReward.aTXReward
-					.getChainLength(); i += serverConfiguration.getSyncblocks()) {
+			for (long i = Math.min(myLength, remoteLength); i <= Math.max(myLength, remoteLength); i += serverConfiguration
+					.getSyncblocks()) {
 				Stopwatch watch = Stopwatch.createStarted();
 				requestBlocks(i, i + serverConfiguration.getSyncblocks() - 1, aMaxConfirmedReward.server, store);
 				if (initsync) {
@@ -433,19 +773,37 @@ public class SyncBlockService {
 		// log.debug(" finish sync " + aMaxConfirmedReward.server + " ");
 	}
 
+	/** Local LMD-GHOST subtree weight of a block, mirroring GhostService. */
+	private long myForkChoiceWeight(Sha256Hash blockHash, BlockStoreInterface store) {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return 0;
+		}
+		try {
+			java.util.Map<Sha256Hash, Long> weights = ghost.getForkChoiceVotes();
+			if (weights == null) {
+				return 0;
+			}
+			java.util.Map<Sha256Hash, Long> memo = new java.util.HashMap<>();
+			java.util.Set<Sha256Hash> inProgress = new java.util.HashSet<>();
+			return subtreeWeightOf(blockHash, weights, memo, inProgress, store, 0);
+		} catch (Exception e) {
+			return 0;
+		}
+	}
+
  
 	public static class SortbyBlock implements Comparator<Block> {
 
 		public int compare(Block a, Block b) {
-			return a.getHeight() >= b.getHeight() ? 1 : -1;
+			return Long.compare(a.getHeight(), b.getHeight());
 		}
 	}
 
 	public static class SortbyChain implements Comparator<TXReward> {
-		// Used for sorting in ascending order of
-		// roll number
+		// Used for sorting in ascending order of chain length
 		public int compare(TXReward a, TXReward b) {
-			return a.getChainLength() <= b.getChainLength() ? 1 : -1;
+			return Long.compare(a.getChainLength(), b.getChainLength());
 		}
 	}
 

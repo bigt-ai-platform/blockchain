@@ -574,6 +574,23 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case getPendingTransactions: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Json.jsonmapper().readValue(reqStr, Map.class);
+				// Serve the local mempool so peers can converge on the same set
+				// of pending transactions even without a gossip mesh. Coinbase
+				// txs are never shared (they are reward-chain internal).
+				List<byte[]> serialized = new ArrayList<>();
+				for (Transaction tx : mempoolService.getPending()) {
+					if (tx.isCoinBase()) {
+						continue;
+					}
+					serialized.add(tx.bitcoinSerialize());
+				}
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.GetTransactionListResponse.create(serialized), watch, reqCmd);
+			}
+				break;
 			case findRetryBlocks: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);

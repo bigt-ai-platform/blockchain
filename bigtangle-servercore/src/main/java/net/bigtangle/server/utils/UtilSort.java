@@ -15,7 +15,7 @@ public class UtilSort {
 	public static  class SortbyUTXO implements Comparator<UTXO> {
 
 		public int compare(UTXO a, UTXO b) {
-			return a.getTime() >= b.getTime() ? -1 : 1;
+			return Long.compare(b.getTime(), a.getTime());
 		}
 	}
 

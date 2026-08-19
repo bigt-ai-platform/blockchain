@@ -98,6 +98,12 @@ public class BlockStoreService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SlotService> slotServiceProvider;
 
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.GhostService> ghostServiceProvider;
+
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SyncBlockService> syncBlockServiceProvider;
+
 	// Test-only escape hatch: some test harnesses deliberately seed token blocks
 	// onto an L1 chain whose production params exclude TOKEN_CREATION. The
 	// allow-set gate below is the real production enforcement; this switch lets
@@ -310,7 +316,11 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			// The beacon references DAG blocks this node has not synced yet
 			// (multi-node gossip lag). Dropping it would fork the chain: keep it
 			// in the ChainBlockQueue and retry on the next tick, by which time
-			// the referenced blocks will usually have arrived.
+			// the referenced blocks will usually have arrived. The periodic
+			// SyncBlockService.connectingOrphans/syncChain pass re-requests any
+			// still-missing parents outside the DB batch, so no network call is
+			// made here (a nested write on a poisoned transaction would abort the
+			// connection and stall the node).
 			log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}", e.getMessage());
 		} catch (Exception e) {
 			deleteChainQueue(chainBlockQueue, store);
@@ -343,11 +353,17 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					cacheBlockService, jsonmapper).checkChainSolidity(block, true, store);
 
 			if (solidityState.isDirectlyMissing()) {
-				log.debug("Block isDirectlyMissing. saveChainConnected stop to save.{}", block);
-				// sync the lastest chain from remote start from the -2 rewards
-				// syncBlockService.startSingleProcess(block.getLastMiningRewardBlock()
-				// - 2, false);
-				return;
+				// The beacon's reward-chain parent (prevRewardHash) or a referenced
+				// DAG block has not been synced yet (multi-node gossip/sync lag).
+				// Previously this returned normally, so the queue wrapper deleted
+				// the beacon from ChainBlockQueue forever — a node that fell behind
+				// the proposer could never rejoin the canonical chain, permanently
+				// forking the network. Throw MissingDependencyException instead so
+				// the queue wrapper keeps the beacon queued, requests the missing
+				// parent from a peer, and retries on the next tick.
+				log.debug("Beacon isDirectlyMissing, deferring for sync: {}", block.getHash());
+				throw new MissingDependencyException(
+						"beacon parent/reference not synced yet: " + block.getHash());
 			}
 
 			if (solidityState.isFailState()) {
@@ -473,8 +489,15 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
-			boolean haveNewBestChain = serviceVerifyReward.getRewardInfo(block).getChainlength() > serviceVerifyReward
-					.getRewardInfo(head).getChainlength();
+			// PoS fork choice: the canonical chain is the LMD-GHOST head
+			// (attestation-weighted) from the highest justified checkpoint, NOT
+			// the longest chain. A competing fork wins only when its tip is the
+			// GHOST winner — raw chain length is meaningless in PoS.
+			// Connect the block FIRST so the GHOST walk can see it as a child
+			// (store.put happens in connect; executeGhost reads the blocks
+			// table via getBlocksByPrevHash).
+			connect(block, solidityState, store);
+			boolean haveNewBestChain = ghostWinsForkChoice(block, store);
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			// FINALITY: a reorg may only replace the head if the winning chain
@@ -518,13 +541,63 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			}
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
-				connect(block, solidityState, store);
 				serviceVerifyReward.handleNewBestChain(block, store);
 			} else {
 				// parallel chain, save as unconfirmed
-				connect(block, solidityState, store);
 			}
 
+		}
+	}
+
+	/**
+	 * PoS fork choice: does the incoming beacon's chain win the LMD-GHOST
+	 * attestation-weight vote? The GHOST head is the tip with the most
+	 * accumulated validator attestation weight, walked from the highest
+	 * justified checkpoint (never genesis once a checkpoint exists). A competing
+	 * fork wins only when its head IS the GHOST winner. Falls back to the
+	 * longest-chain rule when GHOST state is unavailable (no attestation
+	 * service), which keeps pre-PoS / test behavior intact.
+	 */
+	private boolean ghostWinsForkChoice(Block block, BlockStoreInterface store) throws BlockStoreException {
+		net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+		if (ghost == null) {
+			return block.getLastMiningRewardBlock() > store
+					.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()).getLastMiningRewardBlock();
+		}
+		try {
+			Sha256Hash root = ghost.getDagRoot(store);
+			Sha256Hash ghostHead = ghost.executeGhost(root, store);
+			if (ghostHead == null) {
+				return false;
+			}
+			// Only the block that IS the GHOST head triggers a reorg. A block
+			// that is merely an ANCESTOR of the GHOST head must NOT reorg: it
+			// will be adopted when the head itself connects (handleNewBestChain
+			// treats its argument as the new TIP, so reorging to an ancestor
+			// would crash getPartialChain's "higher and lower are reversed"
+			// guard). The tip is connected later and fires the reorg then.
+			if (!ghostHead.equals(block.getHash())) {
+				return false;
+			}
+			// A re-add of a block that is already an ancestor of the current
+			// confirmed head must not reorg either: findSplit(block, head)
+			// returns the block itself and getPartialChain(block, block)
+			// violates "higher and lower are reversed". Only a block that is
+			// NOT yet part of the best chain can be a new best.
+			Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
+			if (head != null && head.getHash().equals(block.getHash())) {
+				return false;
+			}
+			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+			if (head != null && casper != null
+					&& casper.descendsFrom(head.getHash(), block.getHash(), store)) {
+				return false;
+			}
+			return true;
+		} catch (Exception e) {
+			log.debug("ghost fork choice failed, fall back to longest chain: {}", e.getMessage());
+			return block.getLastMiningRewardBlock() > store
+					.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash()).getLastMiningRewardBlock();
 		}
 	}
 

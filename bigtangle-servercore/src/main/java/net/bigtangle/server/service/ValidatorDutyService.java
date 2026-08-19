@@ -239,10 +239,33 @@ public class ValidatorDutyService {
             if (beaconHead == null) {
                 beaconHead = ghostService.getDagRoot(store);
             }
+            // PoS fork choice: attest to the LMD-GHOST head (attestation-weighted
+            // from the highest justified checkpoint), NOT the local longest
+            // chain. If every validator attested to its own local head, votes
+            // fragment across forks and 2/3 justification can never form.
+            try {
+                Sha256Hash ghostHead = ghostService.executeGhost(ghostService.getDagRoot(store), store);
+                if (ghostHead != null) {
+                    beaconHead = ghostHead;
+                }
+            } catch (Exception e) {
+                log.debug("ghost attestation target failed, using confirmed head: {}", e.getMessage());
+            }
+
+            // CHAIN-derived attestation target. The beacon chain advances ~1
+            // confirmed block per proposer slot, so the wall-clock epoch (slot/32)
+            // runs FAR ahead of the chain epoch (confirmed chainlength/32) on a
+            // young chain. Targeting the wall-clock epoch makes every node derive
+            // a different (or non-existent) epoch-boundary checkpoint, so
+            // attestations fragment and 2/3 justification never forms. Targeting
+            // the CHAIN epoch (deterministic from confirmed chainlength) makes
+            // all nodes agree on the same checkpoint — the source of convergence.
+            long chainEpoch = SlotService.currentChainEpoch(store);
+            long targetEpoch = Math.max(0, chainEpoch);
 
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
-            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, epoch - 1);
-            Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(epoch, store).getBlockHash();
+            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, targetEpoch - 1);
+            Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(targetEpoch, store).getBlockHash();
 
             // Slashing protection: one attestation per slot; only a
             // byte-identical re-vote is safe after a restart.
@@ -257,7 +280,7 @@ public class ValidatorDutyService {
             att.setSlot(slot);
             att.setEpoch(epoch);
             att.setSourceEpoch(sourceEpoch);
-            att.setTargetEpoch(epoch);
+            att.setTargetEpoch(targetEpoch);
             att.setBeaconBlockHash(beaconHead);
             att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
             att.setTargetCheckpoint(targetCheckpoint);

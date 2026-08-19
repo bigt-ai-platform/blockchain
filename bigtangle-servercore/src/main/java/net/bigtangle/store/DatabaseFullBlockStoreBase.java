@@ -258,9 +258,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_CONTRACTRESULT_PREV_HASH_SQL = SELECT_CONTRACTRESULT + "  WHERE prevblockhash=?   ";
 
 	protected final String SELECT_CONTRACTRESULT_MAX_CHAINLENGTH_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and rewardchainlength >0 order by chainlength desc limit 1 ";
+			+ " WHERE confirmed = true and contracttokenid=?  and spent=false  and rewardchainlength >0 order by chainlength desc, blockhash asc limit 1 ";
 	protected final String SELECT_CONTRACTRESULT_MAX_CONFIRMED_SQL = SELECT_CONTRACTRESULT
-			+ " WHERE confirmed = true and contracttokenid=?   order by chainlength desc limit 1   ";
+			+ " WHERE confirmed = true and contracttokenid=?   order by chainlength desc, blockhash asc limit 1   ";
 	protected final String SELECT_CONTRACTRESULT_LOWER_CONFIRMED_SQL = SELECT_CONTRACTRESULT
 			+ " WHERE rewardchainlength < 0 and  confirmed = true and contracttokenid=? and chainlength <=?   ";
 
@@ -282,13 +282,13 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_ORDERRESULT = "  select blockhash, confirmed, spent, spenderblockhash, "
 			+ " orderresult, prevblockhash, inserttime ,  rewardchainlength, chainlength" + " FROM orderresult ";
 	protected final String SELECT_ORDERRESULT_MAX_CONFIRMED_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true   order by chainlength desc limit 1  ";
+			+ " WHERE confirmed = true   order by chainlength desc, blockhash asc limit 1  ";
 	protected final String SELECT_ORDERRESULT_LOWER_CONFIRMED_SQL = SELECT_ORDERRESULT
 			+ " WHERE confirmed = true and rewardchainlength < 0  and  chainlength  <=?  ";
 	protected final String SELECT_ORDERRESULT_HASH_SQL = SELECT_ORDERRESULT + " WHERE blockhash=?";
 	protected final String SELECT_ORDERRESULT_PREV_HASH_SQL = SELECT_ORDERRESULT + " WHERE prevblockhash=?";
 	protected final String SELECT_ORDER_RESULT_MAX_CHAINLENGTH_SQL = SELECT_ORDERRESULT
-			+ " WHERE confirmed = true and chainlength >0 and spent=false order by chainlength desc limit 1";
+			+ " WHERE confirmed = true and chainlength >0 and spent=false order by chainlength desc, blockhash asc limit 1";
 	protected final String UPDATE_ORDERRESULT_CHAINLENGTH_SQL = getUpdate()
 			+ " orderresult SET rewardchainlength = ?   WHERE blockhash = ?";
 
@@ -382,12 +382,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "  INTO txreward (blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength) VALUES (?, ?, ?, ?, ?, ?)"
 			+ duplicateInsert();
 	protected final String SELECT_TX_REWARD_MAX_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength FROM txreward"
-			+ " WHERE confirmed = true  order by chainlength desc limit 1";
+			+ " WHERE confirmed = true  order by chainlength desc, blockhash asc limit 1";
 	protected final String SELECT_TX_REWARD_CONFIRMED_AT_HEIGHT_REWARD_SQL = "SELECT blockhash, confirmed, spent, spenderblockhash, prevblockhash, chainlength FROM txreward"
-			+ " WHERE confirmed = true AND chainlength=?";
+			+ " WHERE confirmed = true AND chainlength=?  order by blockhash asc limit 1";
 	protected final String SELECT_TX_REWARD_ALL_CONFIRMED_REWARD_SQL = "SELECT blockhash, confirmed, "
 			+ "spent, spenderblockhash, prevblockhash, chainlength FROM txreward "
-			+ "WHERE confirmed = true order by chainlength ";
+			+ "WHERE confirmed = true order by chainlength, blockhash";
 
 	protected final String SELECT_TX_REWARD_CONFIRMED_SQL = "SELECT confirmed " + "FROM txreward WHERE blockhash = ?";
 	protected final String SELECT_TX_REWARD_CHAINLENGTH_SQL = "SELECT chainlength "

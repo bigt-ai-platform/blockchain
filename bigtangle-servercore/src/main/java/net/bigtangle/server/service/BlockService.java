@@ -64,6 +64,10 @@ public class BlockService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.StakeService> stakeServiceProvider;
 
+	// Resolved lazily to break any store/service cycles involving CasperService.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -230,7 +234,24 @@ public class BlockService {
 	}
 	public GetTXRewardResponse getMaxConfirmedReward(BlockStoreInterface store) throws BlockStoreException {
 
-		return GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
+		GetTXRewardResponse response = GetTXRewardResponse.create(cacheBlockService.getMaxConfirmedReward(store));
+		// Advertise the local justified/finalized Casper checkpoints so a sync
+		// peer can prefer the finality-compatible chain instead of blindly
+		// downloading the longest one (which connectRewardBlock would refuse).
+		net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+		if (casper != null) {
+			net.bigtangle.server.service.CasperService.Checkpoint justified = casper.getJustifiedCheckpoint();
+			if (justified != null) {
+				response.setJustifiedBlockHash(justified.getBlockHash().toString());
+				response.setJustifiedEpoch(justified.getEpoch());
+			}
+			net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+			if (finalized != null) {
+				response.setFinalizedBlockHash(finalized.getBlockHash().toString());
+				response.setFinalizedEpoch(finalized.getEpoch());
+			}
+		}
+		return response;
 
 	}
 

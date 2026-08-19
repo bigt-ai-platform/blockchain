@@ -268,6 +268,15 @@ public interface BlockStoreInterface {
 
 	Sha256Hash getRewardPrevBlockHash(Sha256Hash hash) throws BlockStoreException;
 
+	/**
+	 * Reward-chain children of a beacon: every confirmed/unconfirmed beacon whose
+	 * reward parent ({@code txreward.prevblockhash}) equals {@code hash}. The
+	 * LMD-GHOST fork choice for the REWARD CHAIN must walk these links — the DAG
+	 * {@code prevblockhash} of a beacon points at its trunk/branch DAG tips, not
+	 * its reward ancestor.
+	 */
+	List<Sha256Hash> getRewardChainChildren(Sha256Hash hash) throws BlockStoreException;
+
 	/* Token TXOs */
 	void insertToken(Sha256Hash blockhash, Token tokens) throws BlockStoreException;
 

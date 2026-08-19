@@ -77,20 +77,25 @@ public class SlotTickService {
 
                 var store = storeService.getStore();
                 try {
-                    // Beacon block proposal is PoS-driven: only the node whose
-                    // validator key is selected for this slot proposes (see
-                    // ValidatorDutyService.performDuty). Proposing unconditionally
-                    // from every node produces forked beacon chains that corrupt
-                    // the incremental order-matching state.
-                    if (epoch != lastProcessedEpoch) {
-                        // Evaluate the just-COMPLETED epoch: only its attestations
-                        // are complete. Evaluating the current epoch (which has no
-                        // votes yet at its first tick) would never justify anything
-                        // — finality would never advance.
-                        if (epoch > 0) {
-                            slotService.processEpoch(epoch - 1, store);
+                    // Finality is driven by the CHAIN epoch (confirmed
+                    // chainlength / 32), NOT the wall-clock epoch. On a young
+                    // chain the wall-clock epoch runs far ahead of the chain
+                    // (the beacon chain confirms ~1 block per proposer slot), so
+                    // finalizeCheckpoint(wallEpoch) targets an epoch boundary
+                    // that does not exist on-chain and can never justify.
+                    // Driving it from the confirmed chain makes every node
+                    // evaluate the SAME chain epoch and converge on the same
+                    // checkpoint.
+                    long chainEpoch = SlotService.currentChainEpoch(store);
+                    if (chainEpoch != lastProcessedEpoch) {
+                        // Evaluate the just-COMPLETED chain epoch: only its
+                        // attestations are complete. Evaluating the current
+                        // epoch (which has no votes yet at its first tick) would
+                        // never justify anything — finality would never advance.
+                        if (chainEpoch > 0) {
+                            slotService.processEpoch(chainEpoch - 1, store);
                         }
-                        lastProcessedEpoch = epoch;
+                        lastProcessedEpoch = chainEpoch;
                     }
                 } finally {
                     store.close();

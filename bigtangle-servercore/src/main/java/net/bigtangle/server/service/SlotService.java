@@ -469,8 +469,37 @@ public class SlotService {
 
         TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
         Sha256Hash prevRewardHash = maxConfirmedReward.getBlockHash();
-        long chainlength = maxConfirmedReward.getChainLength() + 1;
-
+        // PoS fork choice: the canonical parent is the LMD-GHOST head
+        // (attestation-weighted) from the highest justified checkpoint, NOT the
+        // longest confirmed chain. Every honest proposer must build on the same
+        // GHOST winner, otherwise each node extends its own fork forever and the
+        // network never converges on one chain.
+        try {
+            Sha256Hash ghostHead = ghostService.executeGhost(ghostService.getDagRoot(store), store);
+            if (ghostHead != null) {
+                prevRewardHash = ghostHead;
+            }
+        } catch (Exception e) {
+            log.debug("ghost fork choice failed, building on confirmed head: {}", e.getMessage());
+        }
+        // chainlength from the parent's own RewardInfo (works for unconfirmed
+        // GHOST heads that have no txreward row yet), falling back to the
+        // confirmed-chain length.
+        long chainlength = store.getRewardChainLength(prevRewardHash) + 1;
+        if (chainlength <= 0) {
+            try {
+                Block prevBlock = store.get(prevRewardHash);
+                if (prevBlock != null && prevBlock.getTransactions() != null && !prevBlock.getTransactions().isEmpty()) {
+                    net.bigtangle.core.RewardInfo prevRi = new net.bigtangle.core.RewardInfo()
+                            .parseChecked(prevBlock.getTransactions().get(0).getData());
+                    chainlength = prevRi != null ? prevRi.getChainlength() + 1 : maxConfirmedReward.getChainLength() + 1;
+                } else {
+                    chainlength = maxConfirmedReward.getChainLength() + 1;
+                }
+            } catch (Exception e) {
+                chainlength = maxConfirmedReward.getChainLength() + 1;
+            }
+        }
         RewardInfo rewardInfo = new RewardInfo();
         rewardInfo.setChainlength(chainlength);
         rewardInfo.setPrevRewardHash(prevRewardHash);
