@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.AttestationData;
@@ -67,19 +68,35 @@ public class GhostService {
 
     @PostConstruct
     public void restoreState() {
-        // Idempotent reload: rebuild in-memory state from persisted rows, never
-        // merge into stale maps (so a test/restart reset cannot leak old votes).
-        forkChoiceVotes.clear();
-        latestVoteBeacons.clear();
-        latestVoteWeights.clear();
-        equivocatingValidators.clear();
+        reloadForkChoiceFromStore();
+    }
+
+    /**
+     * Keeps the in-memory fork-choice vote view in sync with the persisted
+     * attestation votes. Attestations arriving via the gossip mesh are processed
+     * by the layer0-server process (submitAttestation endpoint); the layer0-mcmc
+     * process — the one that runs GHOST fork choice and proposes — has no such
+     * endpoint and would otherwise only ever see ITS OWN validator's vote in
+     * memory. That blinds each mcmc to every peer's vote below the on-chain
+     * activation height: each node builds on its own fork and attests its own
+     * head, so the network never converges. The DB is the shared source of truth
+     * (every process writes votes there), so periodically re-deriving the maps
+     * from it restores the "fork-choice weight shared via gossiped attestations"
+     * invariant across processes.
+     */
+    @Scheduled(fixedDelayString = "${pos.forkChoiceSyncMs:5000}")
+    public void reloadForkChoiceFromStore() {
         try {
             BlockStoreInterface store = storeService.getStore();
             try {
                 Map<Sha256Hash, Long> saved = store.getSummedAttestationVotes();
-                forkChoiceVotes.putAll(saved);
-                // Restore each validator's latest vote so a future vote retracts
-                // the correct previous weight (in-memory and persisted LMD agree).
+                forkChoiceVotes.clear();
+                equivocatingValidators.clear();
+                if (saved != null) {
+                    forkChoiceVotes.putAll(saved);
+                }
+                latestVoteBeacons.clear();
+                latestVoteWeights.clear();
                 for (net.bigtangle.store.BlockStoreInterface.LatestVote v : store.getLatestAttestationVotes()) {
                     String pk = net.bigtangle.core.Utils.HEX.encode(v.pubkey);
                     latestVoteBeacons.put(pk, v.blockHash);
@@ -89,7 +106,7 @@ public class GhostService {
                 store.close();
             }
         } catch (Exception e) {
-            log.trace("No prior fork-choice state to restore", e);
+            log.trace("No prior fork-choice state to reload", e);
         }
     }
 
@@ -389,7 +406,11 @@ public class GhostService {
     }
 
     public List<AttestationData> collectAttestations(long slot, BlockStoreInterface store) throws Exception {
-        return store.getAttestationsForSlot(slot);
+        // Read the FULL signed attestations persisted for the slot (pos_state
+        // service='attestation'). store.getAttestationsForSlot reads the LMD
+        // attestation_votes table, which only keeps {beaconHash, pubkey, slot} —
+        // no signature — so votes read back from there fail verifySignature.
+        return casperService.getAttestationsForSlot(slot, store);
     }
 
     private List<Sha256Hash> getChildren(Sha256Hash hash, BlockStoreInterface store) throws Exception {

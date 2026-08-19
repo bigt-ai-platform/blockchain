@@ -5,12 +5,14 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +47,11 @@ public class GossipProtocol implements DisposableBean {
     private static final int MAGIC = 0x42474C31;
     private static final int MSG_BLOCK = 1;
     private static final int MSG_TRANSACTION = 2;
+    /** Per-peer outbound frame queue cap. Frames are dropped (best-effort gossip)
+     *  when a slow peer cannot keep up, instead of blocking the submit path. */
+    private static final int GOSSIP_QUEUE_CAPACITY = 100_000;
+    /** Max frames coalesced into a single socket write before one flush. */
+    private static final int GOSSIP_BATCH_MAX = 512;
     @Autowired
     private NetworkParameters networkParameters;
 
@@ -59,7 +66,9 @@ public class GossipProtocol implements DisposableBean {
 
     private final ExecutorService listenerPool = Executors.newCachedThreadPool();
     private final ExecutorService connectPool = Executors.newCachedThreadPool();
+    private final ExecutorService senderPool = Executors.newCachedThreadPool();
     private final Map<String, Socket> peers = new ConcurrentHashMap<>();
+    private final Map<String, BlockingQueue<byte[]>> sendQueues = new ConcurrentHashMap<>();
     private volatile boolean running;
 
     @PostConstruct
@@ -75,7 +84,7 @@ public class GossipProtocol implements DisposableBean {
             while (running) {
                 Socket sock = server.accept();
                 String addr = sock.getInetAddress().getHostAddress();
-                peers.put(addr, sock);
+                registerPeer(addr, sock);
                 listenerPool.submit(() -> handleConnection(sock));
             }
         } catch (Exception e) {
@@ -179,11 +188,51 @@ public class GossipProtocol implements DisposableBean {
     private void connectTo(String host, int port) {
         try {
             Socket sock = new Socket(host, port);
-            peers.put(host, sock);
+            registerPeer(host, sock);
             listenerPool.submit(() -> handleConnection(sock));
             log.info("Connected to gossip peer: {}:{}", host, port);
         } catch (Exception e) {
             log.debug("Failed to connect to {}:{} - {}", host, port, e.getMessage());
+        }
+    }
+
+    /** Registers a peer socket and starts its dedicated async sender thread.
+     *  Broadcasts only enqueue frames here; all socket I/O happens on the
+     *  sender, so the submit path never blocks on a slow peer. */
+    private void registerPeer(String key, Socket sock) {
+        BlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(GOSSIP_QUEUE_CAPACITY);
+        peers.put(key, sock);
+        sendQueues.put(key, queue);
+        senderPool.submit(() -> senderLoop(key, sock, queue));
+    }
+
+    /** Single-writer drain loop per peer: coalesces up to GOSSIP_BATCH_MAX
+     *  frames into one write + one flush, and removes the peer on failure. */
+    private void senderLoop(String key, Socket sock, BlockingQueue<byte[]> queue) {
+        try (DataOutputStream out = new DataOutputStream(sock.getOutputStream())) {
+            while (running && !sock.isClosed()) {
+                byte[] frame = queue.poll(1, TimeUnit.SECONDS);
+                if (frame == null) {
+                    continue;
+                }
+                out.write(frame);
+                int sent = 1;
+                while (sent < GOSSIP_BATCH_MAX) {
+                    frame = queue.poll();
+                    if (frame == null) {
+                        break;
+                    }
+                    out.write(frame);
+                    sent++;
+                }
+                out.flush();
+            }
+        } catch (Exception e) {
+            log.debug("Gossip send to {} failed: {}", key, e.getMessage());
+        } finally {
+            peers.remove(key);
+            sendQueues.remove(key);
+            try { sock.close(); } catch (Exception ignore) { }
         }
     }
 
@@ -198,17 +247,11 @@ public class GossipProtocol implements DisposableBean {
 
     private void broadcast(int type, byte[] data) {
         byte[] frame = frame(type, data);
-        List<String> dead = new ArrayList<>();
-        for (Map.Entry<String, Socket> e : peers.entrySet()) {
-            try {
-                DataOutputStream out = new DataOutputStream(e.getValue().getOutputStream());
-                out.write(frame);
-                out.flush();
-            } catch (Exception ex) {
-                dead.add(e.getKey());
+        for (Map.Entry<String, BlockingQueue<byte[]>> e : sendQueues.entrySet()) {
+            if (!e.getValue().offer(frame)) {
+                log.debug("Gossip queue full for {}: dropping frame", e.getKey());
             }
         }
-        dead.forEach(peers::remove);
     }
 
     private byte[] frame(int type, byte[] data) {
@@ -243,7 +286,9 @@ public class GossipProtocol implements DisposableBean {
             try { s.close(); } catch (Exception e) {}
         }
         peers.clear();
+        sendQueues.clear();
         listenerPool.shutdownNow();
         connectPool.shutdownNow();
+        senderPool.shutdownNow();
     }
 }

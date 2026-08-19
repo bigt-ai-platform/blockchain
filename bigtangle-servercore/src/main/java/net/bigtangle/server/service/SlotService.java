@@ -447,8 +447,6 @@ public class SlotService {
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
 
-        List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
-
         // Reference the two current GHOST fork-choice tips so the DAG blocks they
         // approve carry the head the attestations vote for.
         Block trunk;
@@ -529,6 +527,10 @@ public class SlotService {
                     prevChainLength, ordertypes, true, true, epochStart, store);
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
                     prevChainLength, ordertypes, true, true, epochStart, store);
+            // Reference EVERY eligible unconfirmed block above the cutoff (not
+            // just the trunk/branch tip paths), so sibling batch blocks from all
+            // producers are confirmed instead of orphaned forever.
+            serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
             if (epochStart) {
                 java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
                 blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));
@@ -600,7 +602,13 @@ public class SlotService {
 
         blockSaveService.saveBlock(beaconBlock, store);
 
-        casperService.processSlot(slot, beaconBlock.getHash(), attestations, store);
+        // Register the full signed attestations embedded in this beacon (the
+        // same list the proposer committed) so remote validators' votes enter
+        // the local GHOST fork-choice weight — the attestation_votes-table
+        // read-back carries no signature and would be rejected as
+        // unauthenticated, leaving each node's GHOST blind to every other
+        // validator's vote and permanently forking the beacon chain.
+        casperService.processSlot(slot, beaconBlock.getHash(), includedAttestations, store);
 
         log.info("Beacon block proposed at slot {} by validator {} (epoch {}, chainlength {})",
                 slot, proposerIdx, epoch, chainlength);

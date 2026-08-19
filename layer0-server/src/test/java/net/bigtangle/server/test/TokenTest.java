@@ -244,6 +244,10 @@ public class TokenTest extends AbstractIntegrationTest {
 		}
 		w.signTransaction(tx, null);
 		w.submitTransaction(tx);
+		// The transfer block must carry a BC fee (checkFee per block): submit the
+		// token-owner's fee transaction alongside, exactly like the wallet's
+		// payToList does.
+		w.submitTransaction(w.feeTransaction(null));
 		Block predecessor = tipsService.getValidatedBlockPair(store).getLeft().getBlock();
 		Block b = drainMempoolAndCreateBlock(predecessor, predecessor);
 		makeRewardBlock(b);

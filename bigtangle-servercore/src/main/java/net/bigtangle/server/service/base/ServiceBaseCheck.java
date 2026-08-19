@@ -272,7 +272,15 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					}
 				}
 
-				if (!isCoinBase && !mintTx) {
+				// STAKE deposit inputs are signed with the validator's
+				// post-quantum (PQ) key, which by construction cannot satisfy a
+				// standard P2PKH prevout (the founder's funding output). They are
+				// validated authoritatively by checkStakeDepositSolidity (BLS
+				// key + proof of possession + bonded-output binding) which runs
+				// right after this generic check, so skip the generic script
+				// verifier here — otherwise every STAKE block fails solidity and
+				// its reference in a peer beacon blocks that beacon's confirm.
+				if (!isCoinBase && !mintTx && block.getBlockType() != BlockType.BLOCKTYPE_STAKE) {
 					FutureTask<VerificationException> future = new FutureTask<VerificationException>(
 							new Verifier(tx, prevOutScripts, verifyFlags));
 					scriptVerificationExecutor.execute(future);
