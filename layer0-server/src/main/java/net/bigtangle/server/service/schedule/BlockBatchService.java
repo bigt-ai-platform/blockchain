@@ -51,9 +51,21 @@ public class BlockBatchService {
         if (!scheduleConfiguration.isMicroBatch_active() || !serverConfiguration.checkService()) {
             return;
         }
-        if (mempoolService.size() == 0) {
+        int size = mempoolService.size();
+        if (size == 0) {
             return;
         }
+        long now = System.currentTimeMillis();
+        // Accumulate txs into FEWER, LARGER batch blocks instead of creating a
+        // tiny DAG block per 100 ms tick. A huge DAG of 1-10 tx blocks chokes
+        // the beacon's block-reference walk (dagBlockHashesFrom) and confirmation
+        // collapses under load. Drain when the mempool reaches minBatchTx OR the
+        // oldest pending tx has waited maxBatchAgeMs (so a low trickle still
+        // batches within one slot). Tune via batch.minTx / batch.maxBatchAgeMs.
+        if (size < minBatchTx && (now - lastDrain) < maxBatchAgeMs) {
+            return;
+        }
+        lastDrain = now;
         try {
             int batched = blockSaveService.batchBlocksFromMempool();
             if (batched > 0) {
@@ -63,6 +75,12 @@ public class BlockBatchService {
             logger.debug("Micro-batch error", e);
         }
     }
+
+    /** Min mempool size before the micro-batch drains it into a block. */
+    private static final int minBatchTx = Integer.getInteger("batch.minTx", 500);
+    /** Max age of the oldest pending tx before the micro-batch force-drains. */
+    private static final long maxBatchAgeMs = Long.getLong("batch.maxBatchAgeMs", 2000);
+    private volatile long lastDrain = System.currentTimeMillis();
 
     protected final ReentrantLock lock = Threading.lock("BlockBatchService");
 

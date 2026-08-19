@@ -532,6 +532,10 @@ public class SlotService {
                     prevChainLength, ordertypes, true, true, epochStart, store);
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
                     prevChainLength, ordertypes, true, true, epochStart, store);
+            // Reference EVERY eligible unconfirmed block above the cutoff (not
+            // just the trunk/branch tip paths), so sibling batch blocks from all
+            // producers are confirmed instead of orphaned forever.
+            serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
             if (epochStart) {
                 java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
                 blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));

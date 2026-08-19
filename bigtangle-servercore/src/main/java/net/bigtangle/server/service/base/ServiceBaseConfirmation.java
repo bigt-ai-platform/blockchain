@@ -247,6 +247,51 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	}
 
+	/**
+	 * Adds EVERY eligible UNCONFIRMED, solid block above the reward cutoff to
+	 * {@code blocks} — not only the trunk/branch tip paths that
+	 * {@link #dagBlockHashesFrom} walks. Batch blocks created in parallel by
+	 * different producers are DAG siblings (same parents, different hashes); the
+	 * tip walk never reaches them, so without this pass they stay unconfirmed
+	 * forever and confirmation throughput collapses under multi-producer load.
+	 * Each candidate is conflict-checked against the already-collected set (the
+	 * same gate as the tip walk), so double-spends stay rejected.
+	 */
+	public void addAllUnconfirmedBlocks(Set<BlockWrap> blocks, long cutoffheight, List<BlockType> blocktypes,
+			boolean checkChainlength, BlockStoreInterface store) throws BlockStoreException {
+		if (!Boolean.parseBoolean(System.getProperty("pos.referenceAllBlocks", "true"))) {
+			return;
+		}
+		for (byte[] blockBytes : store.blocksFromNonChainHeigth(cutoffheight)) {
+			Block block = networkParameters.getDefaultSerializer().makeBlock(blockBytes);
+			Sha256Hash hash = block.getHash();
+			boolean exists = false;
+			for (BlockWrap bw : blocks) {
+				if (bw.getBlock().getHash().equals(hash)) {
+					exists = true;
+					break;
+				}
+			}
+			if (exists) {
+				continue;
+			}
+			BlockWrap wrap = getBlockWrap(hash, store);
+			if (wrap == null) {
+				continue;
+			}
+			if (!matchType(wrap, blocktypes)) {
+				continue;
+			}
+			boolean checked = checkSpentAndConflict(blocks, wrap, checkChainlength, store);
+			if (checkChainlength) {
+				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
+			}
+			if (checked) {
+				blocks.add(wrap);
+			}
+		}
+	}
+
 	private boolean checkBlockReferenced(BlockWrap block, Set<BlockWrap> blocks) {
 		for (BlockWrap b : blocks) {
 			if (getReferencedBlockHashes(b.getBlock()).stream().anyMatch(p -> p.equals(block.getBlockHash()))) {

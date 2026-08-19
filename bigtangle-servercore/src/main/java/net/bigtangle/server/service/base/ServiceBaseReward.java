@@ -44,6 +44,10 @@ public class ServiceBaseReward extends ServiceVerifyReward {
 				true, store);
 		serviceBase.dagBlockHashesFrom(blocks, prevTrunk, cutoffheight, prevChainLength, ordertypes, true, true,
 				store);
+		// Keep the reward block set identical to the proposer's prototype
+		// (SlotService.calcNewBlockPrototype): reference every eligible
+		// unconfirmed block above the cutoff, not only the tip paths.
+		serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
 		return calcRewardInfo(false, prevTrunk, prevBranch, prevRewardHash, currentTime,
 				serviceBase.getHashSet(blocks), store);
 	}
