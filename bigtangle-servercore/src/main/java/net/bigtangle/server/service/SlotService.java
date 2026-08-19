@@ -450,8 +450,6 @@ public class SlotService {
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
 
-        List<AttestationData> attestations = ghostService.collectAttestations(slot, store);
-
         // Use the MCMC-validated tip pair (prototype) so the referenced DAG
         // blocks carry a proper block evaluation. Fall back to the ghost
         // fork-choice if the prototype is unavailable.
@@ -605,7 +603,13 @@ public class SlotService {
 
         blockSaveService.saveBlock(beaconBlock, store);
 
-        casperService.processSlot(slot, beaconBlock.getHash(), attestations, store);
+        // Register the full signed attestations embedded in this beacon (the
+        // same list the proposer committed) so remote validators' votes enter
+        // the local GHOST fork-choice weight — the attestation_votes-table
+        // read-back carries no signature and would be rejected as
+        // unauthenticated, leaving each node's GHOST blind to every other
+        // validator's vote and permanently forking the beacon chain.
+        casperService.processSlot(slot, beaconBlock.getHash(), includedAttestations, store);
 
         log.info("Beacon block proposed at slot {} by validator {} (epoch {}, chainlength {})",
                 slot, proposerIdx, epoch, chainlength);

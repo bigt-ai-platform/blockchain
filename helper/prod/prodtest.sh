@@ -37,7 +37,7 @@ S2001_HOST="${S2001_HOST:-10.8.0.1}"   # node-0 + node-1 (mesh; reached via jump
 CUI_HOST="${CUI_HOST:-192.168.178.53}"  # node-2 (LAN, ssh directly)
 # Jump host to reach S2001_HOST from the driver box. Set JUMP_HOST="" when the
 # script runs on a mesh host (no proxy needed).
-JUMP_HOST="${JUMP_HOST:-root@192.168.178.53}"
+JUMP_HOST="${JUMP_HOST-root@192.168.178.53}"
 # Host used for all HTTP checks (must reach the whole 10.8.0.x mesh).
 CHECK_HOST="${CHECK_HOST:-$CUI_HOST}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/bigtangle-prod}"
