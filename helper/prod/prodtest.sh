@@ -119,6 +119,15 @@ ssh_transport() { # $1=host -> prints the ssh command (with jump opts if needed)
     fi
 }
 
+scp_transport() { # $1=host -> scp-compatible options (no leading "ssh" token)
+    local host="$1"
+    if [ "$host" = "$S2001_HOST" ] && [ -n "${JUMP_HOST:-}" ]; then
+        echo "-o StrictHostKeyChecking=accept-new -J ${JUMP_HOST} $SSH_OPTS"
+    else
+        echo "-o StrictHostKeyChecking=accept-new $SSH_OPTS"
+    fi
+}
+
 remote() { # $1=host  rest=remote command string
     local host="$1"; shift
     # shellcheck disable=SC2086
@@ -210,7 +219,7 @@ sync_validators() { # $1=host
         rsync -az --delete -e "$(ssh_transport "$host")" "$VALIDATORS_DIR/" "${SSH_USER}@${host}:${REMOTE_DIR}/"
     else
         # shellcheck disable=SC2086
-        scp -r $(ssh_transport "$host") -r "$VALIDATORS_DIR/." "${SSH_USER}@${host}:${REMOTE_DIR}/"
+        scp -r $(scp_transport "$host") "$VALIDATORS_DIR/." "${SSH_USER}@${host}:${REMOTE_DIR}/"
     fi
     # Point the remote at the freshly built images. One sed per variable keeps
     # the remote command free of nested quoting.
