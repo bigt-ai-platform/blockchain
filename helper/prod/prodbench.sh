@@ -16,8 +16,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TEST_SOURCE="$ROOT/layer0-mcmc/src/test/java/net/bigtangle/mcmc/test/benchmark/MaxTpsBenchmarkProd.java"
-TEST_CLASS="net.bigtangle.mcmc.test.benchmark.MaxTpsBenchmarkProd#testProdRealtime"
+TEST_SOURCE="$ROOT/bigtangle-servercore/src/test/java/net/bigtangle/server/benchmark/MaxTpsBenchmarkProd.java"
+TEST_CLASS="net.bigtangle.server.benchmark.MaxTpsBenchmarkProd#testProdRealtime"
 
 # ---- Config (override via env, same conventions as prodtest.sh) ------------
 SSH_USER="${SSH_USER:-root}"
@@ -119,7 +119,7 @@ info "checking ${SSH_USER}@${CHECK_HOST}"
 remote "$CHECK_HOST" "true" || fail "cannot reach ${SSH_USER}@${CHECK_HOST}"
 
 info "syncing benchmark test -> ${SSH_USER}@${CHECK_HOST}:${BUILD_DIR}"
-REMOTE_TEST="$BUILD_DIR/layer0-mcmc/src/test/java/net/bigtangle/mcmc/test/benchmark/MaxTpsBenchmarkProd.java"
+REMOTE_TEST="$BUILD_DIR/bigtangle-servercore/src/test/java/net/bigtangle/server/benchmark/MaxTpsBenchmarkProd.java"
 remote "$CHECK_HOST" "mkdir -p '$(dirname "$REMOTE_TEST")'"
 # shellcheck disable=SC2086
 scp $(scp_transport "$CHECK_HOST") "$TEST_SOURCE" "${SSH_USER}@${CHECK_HOST}:${REMOTE_TEST}"
@@ -134,12 +134,12 @@ fi
 info "running MaxTpsBenchmarkProd on ${CHECK_HOST}"
 MVN_ARGS="-Dprod.seed=${SEED} -Dchain.tx=${TX} -Dchain.clients=${CLIENTS} -Dchain.batchSize=${BATCH_SIZE} -Dchain.amount=${AMOUNT} -Dchain.pay=${PAY} -Dchain.confirmTimeoutSec=${CONFIRM_TIMEOUT} -Dchain.requireConfirm=${REQUIRE_CONFIRM} -DfailIfNoTests=false"
 set +e
-remote "$CHECK_HOST" "export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64; export PATH=\$JAVA_HOME/bin:\$PATH; cd '${BUILD_DIR}' && mvn test -pl layer0-mcmc -Dtest='${TEST_CLASS}' ${MVN_ARGS} 2>&1" | tee /tmp/prodbench.out
+remote "$CHECK_HOST" "export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64; export PATH=\$JAVA_HOME/bin:\$PATH; cd '${BUILD_DIR}' && mvn test -pl bigtangle-servercore -Dtest='${TEST_CLASS}' ${MVN_ARGS} 2>&1" | tee /tmp/prodbench.out
 MVN_EXIT=${PIPESTATUS[0]}
 set -e
 
 # ---- Parse results from surefire report --------------------------------------
-REPORT="$BUILD_DIR/layer0-mcmc/target/surefire-reports/net.bigtangle.mcmc.test.benchmark.MaxTpsBenchmarkProd-output.txt"
+REPORT="$BUILD_DIR/bigtangle-servercore/target/surefire-reports/net.bigtangle.server.benchmark.MaxTpsBenchmarkProd-output.txt"
 header "Results"
 results=$(remote "$CHECK_HOST" "grep -E 'Total tx:|Submit wall:|Confirm wall:|Submit TPS:|Confirm TPS:|Confirm p50:|Confirm p95:|Confirm p99:' '$REPORT'" 2>/dev/null || true)
 if [ -z "$results" ]; then

@@ -45,6 +45,9 @@ public class GhostService {
     // between two forks (the "balancing attack, LMD edition").
     private final java.util.Set<String> equivocatingValidators = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    // @Lazy breaks the GhostService <-> StakeService <-> BlockSaveService
+    // cycle (stakeService is only touched at runtime, never at startup).
+    @Lazy
     @Autowired
     private StakeService stakeService;
 
