@@ -67,6 +67,12 @@ public class GhostService {
 
     @PostConstruct
     public void restoreState() {
+        // Idempotent reload: rebuild in-memory state from persisted rows, never
+        // merge into stale maps (so a test/restart reset cannot leak old votes).
+        forkChoiceVotes.clear();
+        latestVoteBeacons.clear();
+        latestVoteWeights.clear();
+        equivocatingValidators.clear();
         try {
             BlockStoreInterface store = storeService.getStore();
             try {
