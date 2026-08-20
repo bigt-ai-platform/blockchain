@@ -68,15 +68,21 @@ public class StakeService {
         return Math.max(MIN_PER_EPOCH_CHURN_LIMIT, activeCount / CHURN_LIMIT_QUOTIENT);
     }
     /**
-     * Graded slash (Ethereum's minimum penalty): 1/32 of the bond is
+     * Graded slash (Ethereum's minimum penalty): 1/16 of the bond is
      * confiscated — 1/512 of that (the "slashed" amount) goes to the
      * whistleblower who proposed the proof, the rest is burned. The remaining
-     * 31/32 is minted back to the slashed validator as a reorg-aware refund
+     * 15/16 is minted back to the slashed validator as a reorg-aware refund
      * UTXO (see {@link #mintSlashingRefund}). Enabled by the refund-mint
      * lifecycle wired in alongside {@link #applySlashingBlock} /
      * {@link #applySlashingConfirmed} / {@link #revertSlashingBlock}.
+     *
+     * <p>Raised from 1/32 to 1/16 (divisor 32 -> 16): a 1/32 bond hit is a
+     * rounding error for a coordinated validator that can attempt a mass
+     * double-spend, so the equivocation penalty must be economically fatal
+     * rather than cosmetic. Consensus constant — every node must run the same
+     * value.
      */
-    public static final int SLASH_PENALTY_DIVISOR = 32;
+    public static final int SLASH_PENALTY_DIVISOR = 16;
     /** Whistleblower share of the slashed penalty (Ethereum's WHISTLEBLOWER_REWARD_QUOTIENT). */
     public static final int WHISTLEBLOWER_REWARD_DIVISOR = 512;
     /** Synthetic output index for the store-level slashing refund UTXO mint. */
