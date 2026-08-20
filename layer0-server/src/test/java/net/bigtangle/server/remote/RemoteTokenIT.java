@@ -174,7 +174,12 @@ public class RemoteTokenIT extends RemoteTestBase {
 		makeRewardBlock();
 		log.info("Paid 1000 {} tokens to recipient", tokenName);
 
-		Thread.sleep(6000);
+		// Wait for the payment to CONFIRM: the spent supply outpoint is no
+		// longer listed as spendable (pending-spent outpoints are excluded by
+		// the server), so the wallet's remaining token balance lives in the
+		// payment's CHANGE output, which only becomes spendable once the tx is
+		// confirmed by a beacon block.
+		waitForTokenUtxos(issuer, tokenId);
 		List<FreeStandingTransactionOutput> after = wallet.calculateAllSpendCandidates(null, false);
 		long tokenUtxoCount = after.stream()
 				.filter(co -> java.util.Arrays.equals(tokenidBuf, co.getUTXO().getTokenidBuf()))

@@ -25,6 +25,7 @@ import net.bigtangle.core.Address;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.exception.AddressFormatException;
@@ -50,6 +51,8 @@ public class OutputService {
 	private NetworkParameters networkParameters;
 	@Autowired
 	protected CacheBlockService cacheBlockService;
+	@Autowired
+	private net.bigtangle.server.service.MempoolService mempoolService;
 
 	public AbstractResponse getAccountBalanceInfo(Set<byte[]> pubKeyHashs, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -161,9 +164,23 @@ public class OutputService {
 		List<UTXO> outputs = new ArrayList<>();
 		List<TransactionOutput> transactionOutputs = this.calculateAllSpendCandidatesFromUTXOProvider(pubKeyHashs,
 				store);
+		// Do not present an outpoint as spendable when it is already consumed
+		// by a PENDING mempool transaction: a wallet that builds several
+		// payments back-to-back must select a different UTXO each time instead
+		// of re-submitting the same one (which the mempool guard rejects as a
+		// double-spend).
+		Set<TransactionOutPoint> spentPending = mempoolService.getSpentOutpoints();
+		Set<String> spentPendingKeys = new HashSet<>(spentPending.size() * 2);
+		for (TransactionOutPoint op : spentPending) {
+			spentPendingKeys.add(op.getTxHash().toString() + ":" + op.getIndex());
+		}
 		for (TransactionOutput transactionOutput : transactionOutputs) {
 			FreeStandingTransactionOutput freeStandingTransactionOutput = (FreeStandingTransactionOutput) transactionOutput;
-			outputs.add(freeStandingTransactionOutput.getUTXO());
+			UTXO utxo = freeStandingTransactionOutput.getUTXO();
+			if (spentPendingKeys.contains(utxo.getTxHash().toString() + ":" + utxo.getIndex())) {
+				continue;
+			}
+			outputs.add(utxo);
 		}
 		return GetOutputsResponse.create(outputs, getTokename(outputs, store));
 	}

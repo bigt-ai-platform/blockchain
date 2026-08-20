@@ -23,6 +23,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.TokenType;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TransactionOutput;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.wallet.FreeStandingTransactionOutput;
@@ -109,17 +110,45 @@ public class RemoteFromAddressIT extends RemoteTestBase {
 		PQKey key2 = PQKey.createNew();
 		userkeys.add(key2);
 
-		// PQ-aware payment: payToList() only accepts legacy base58 Address, but
-		// these are PQ keys — use the Key overload of Wallet.pay() (the primary
-		// EC/PQ migration path) once per recipient.
+		// PQ-aware payment: the minted yuan supply is a SINGLE token UTXO, so
+		// two back-to-back single-output payments would re-select the same
+		// outpoint for the second spend. The mempool double-spend guard (and
+		// the server, which no longer lists a pending-spent outpoint as
+		// spendable) now correctly reject that. Build ONE tx that pays both
+		// recipients from the token UTXO in a single spend instead.
 		String memo = "pay to user";
 		byte[] yuanToken = Utils.HEX.decode(yuanTokenPub);
-		yuanWallet.pay(null, key, Coin.valueOf(100, yuanToken), memo);
-		yuanWallet.pay(null, key2, Coin.valueOf(100, yuanToken), memo);
+		List<FreeStandingTransactionOutput> coinList = yuanWallet.calculateAllSpendCandidates(null, false);
+		List<FreeStandingTransactionOutput> tokenUtxos = new ArrayList<>();
+		for (FreeStandingTransactionOutput co : coinList) {
+			if (java.util.Arrays.equals(yuanToken, co.getUTXO().getTokenidBuf())) {
+				tokenUtxos.add(co);
+			}
+		}
+		if (tokenUtxos.isEmpty()) {
+			throw new net.bigtangle.exception.InsufficientMoneyException(
+					new Coin(100, yuanToken) + " token outputs size= 0");
+		}
+		Transaction tx = new Transaction(networkParameters);
+		tx.setVersion(net.bigtangle.crypto.pq.PQConstants.TX_PQ_VERSION);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, Coin.valueOf(100, yuanToken), key));
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, Coin.valueOf(100, yuanToken), key2));
+		FreeStandingTransactionOutput co = tokenUtxos.get(0);
+		Coin total = co.getValue();
+		Coin change = total.subtract(Coin.valueOf(200, yuanToken));
+		if (change.isNegative()) {
+			throw new net.bigtangle.exception.InsufficientMoneyException(new Coin(200, yuanToken) + " insufficient");
+		}
+		tx.addInput(co.getUTXO().getBlockHash(), co);
+		tx.getInputs().get(tx.getInputs().size() - 1).getOutpoint().connectedOutput = co;
+		PQKey walletKey = yuanWallet.walletKeys(null).get(0);
+		tx.addOutput(TransactionOutput.fromCoinKey(networkParameters, tx, change, walletKey));
+		yuanWallet.signTransaction(tx, null);
+		yuanWallet.submitTransaction(tx);
 
+		// fee=1000 each; each payBigTo now selects a DIFFERENT genesis BIG
+		// outpoint (the server excludes the first spend's outpoint).
 		payBigTo(key, Coin.FEE_DEFAULT.getValue(), null);
-
-		// fee=1000
 		payBigTo(key2, Coin.FEE_DEFAULT.getValue(), null);
 
 		return userkeys;
