@@ -254,25 +254,28 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * different producers are DAG siblings (same parents, different hashes); the
 	 * tip walk never reaches them, so without this pass they stay unconfirmed
 	 * forever and confirmation throughput collapses under multi-producer load.
-	 * Each candidate is conflict-checked against the already-collected set (the
-	 * same gate as the tip walk), so double-spends stay rejected.
+	 *
+	 * <p>Each candidate is conflict-checked with a SINGLETON set (only its own
+	 * inputs against the DB), not against the cumulative collection. Mempool
+	 * validation already enforces distinct inputs per pending tx, so sibling
+	 * batch blocks cannot double-spend each other; spent-by-confirmed conflicts
+	 * are still caught by {@code checkSpentByOther}. This keeps the pass O(total
+	 * inputs) instead of O(n²) — the reference collection runs on EVERY beacon
+	 * slot, so the quadratic version dominates beacon latency under load.
 	 */
 	public void addAllUnconfirmedBlocks(Set<BlockWrap> blocks, long cutoffheight, List<BlockType> blocktypes,
 			boolean checkChainlength, BlockStoreInterface store) throws BlockStoreException {
 		if (!Boolean.parseBoolean(System.getProperty("pos.referenceAllBlocks", "true"))) {
 			return;
 		}
+		Set<Sha256Hash> existing = new HashSet<>();
+		for (BlockWrap bw : blocks) {
+			existing.add(bw.getBlock().getHash());
+		}
 		for (byte[] blockBytes : store.blocksFromNonChainHeigth(cutoffheight)) {
 			Block block = networkParameters.getDefaultSerializer().makeBlock(blockBytes);
 			Sha256Hash hash = block.getHash();
-			boolean exists = false;
-			for (BlockWrap bw : blocks) {
-				if (bw.getBlock().getHash().equals(hash)) {
-					exists = true;
-					break;
-				}
-			}
-			if (exists) {
+			if (existing.contains(hash)) {
 				continue;
 			}
 			BlockWrap wrap = getBlockWrap(hash, store);
@@ -282,12 +285,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (!matchType(wrap, blocktypes)) {
 				continue;
 			}
-			boolean checked = checkSpentAndConflict(blocks, wrap, checkChainlength, store);
+			boolean checked = checkSpentAndConflict(new HashSet<>(), wrap, checkChainlength, store);
 			if (checkChainlength) {
 				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
 			}
 			if (checked) {
 				blocks.add(wrap);
+				existing.add(hash);
 			}
 		}
 	}
