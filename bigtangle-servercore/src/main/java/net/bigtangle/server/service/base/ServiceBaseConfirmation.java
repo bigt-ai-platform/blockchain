@@ -1713,6 +1713,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	}
 
 	public void checkSum(BlockStoreInterface blockStore) {
+		// Debug-only audit: a full open-output/order/contract scan per call is
+		// wasted on every beacon confirm. Only run when trace-level diagnostics
+		// are requested.
+		if (!logger.isDebugEnabled()) {
+			return;
+		}
 		try {
 			TokensumsMap map = checkToken(blockStore);
 			Map<String, Tokensums> r11 = map.getTokensumsMap();
