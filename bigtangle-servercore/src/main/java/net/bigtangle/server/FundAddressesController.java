@@ -77,7 +77,16 @@ public class FundAddressesController {
             String pubkeyHex = (String) entry.get("pubkey");
             UTXO utxo = new UTXO();
             utxo.setHash(genesisHash);
-            utxo.setIndex(startIndex + i);
+            // Optional per-entry "index" override lets the bootstrap fund
+            // DIFFERENT validators at DIFFERENT outpoints. Without it every
+            // node's first fundAddresses call lands on (genesis, 1e9) — the
+            // resulting STAKE blocks spend the SAME outpoint, so a beacon that
+            // references them all is rejected as conflicting and the chain
+            // stalls at chainlength 0 on a fresh bootstrap.
+            long index = entry.containsKey("index")
+                    ? ((Number) entry.get("index")).longValue()
+                    : startIndex + i;
+            utxo.setIndex(index);
             utxo.setValue(new Coin(value, NetworkParameters.BIGTANGLE_TOKENID));
             utxo.setAddress(addrStr);
             if (pubkeyHex != null) {

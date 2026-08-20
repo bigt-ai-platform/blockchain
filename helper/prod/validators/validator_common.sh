@@ -149,8 +149,13 @@ fund_validator() {
         return 0
     fi
     log "funding validator via fundAddresses (${FUND_AMOUNT} satoshis)"
+    # Unique per-node fund index so each validator's STAKE block spends a
+    # DIFFERENT genesis outpoint. Without it every node's first fundAddresses
+    # call mints at (genesis, 1e9) and a beacon referencing all three STAKE
+    # blocks is rejected as conflicting (chain stalls at chainlength 0).
+    local fund_index=$((1000000000 + NODE_INDEX))
     http_post "/fundAddresses" \
-        "{\"addresses\":[{\"address\":\"validator\",\"value\":${FUND_AMOUNT},\"pubkey\":\"${VALIDATOR_PUBKEY}\"}]}"
+        "{\"addresses\":[{\"address\":\"validator\",\"value\":${FUND_AMOUNT},\"pubkey\":\"${VALIDATOR_PUBKEY}\",\"index\":${fund_index}}]}"
 }
 
 stake_validator() {
