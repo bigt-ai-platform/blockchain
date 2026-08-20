@@ -1030,7 +1030,19 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		} catch (SQLException ex) {
 			throw new BlockStoreException(ex);
 		}
+	}
 
+	@Override
+	public long countSpentOutputs(Sha256Hash txHash) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT count(*) FROM outputs WHERE hash = ? AND spent = true")) {
+			s.setBytes(1, txHash.getBytes());
+			ResultSet results = s.executeQuery();
+			results.next();
+			return results.getLong(1);
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
 	}
 
 	@Override

@@ -114,6 +114,8 @@ public interface BlockStoreInterface {
 
 	boolean getOutputConfirmation(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException;
 
+	long countSpentOutputs(Sha256Hash txHash) throws BlockStoreException;
+
 	/**
 	 * Gets a {@link net.bigtangle.core.UTXO} with the given hash and index, or null
 	 * if none is found

@@ -29,6 +29,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
@@ -259,34 +260,23 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 			assertTrue(ok > 0, "No transactions were submitted to the node");
 		}
 
-		// ---- 6. Poll until all CONFIRMED (authoritative: the DB status table).
-		// Confirmation on PoS is reorg-prone (a batch block built on a sibling
-		// beacon that loses the fork gets un-confirmed), so we track the PEAK
-		// confirmed count and the time it was reached — the meaningful sustained
-		// throughput — alongside the final (possibly reorged) count.
-		Set<String> tracked = new HashSet<>(txHashes);
+		// ---- 6. Poll until all CONFIRMED. Each transfer spends exactly one of
+		// the fund UTXOs (all outputs of genesis tx[0]), and that UTXO is marked
+		// spent only at confirmation — so the count of spent fund UTXOs is the
+		// confirmed count. This is authoritative, reorg-aware (unconfirm flips
+		// spent back to false), and avoids writing/reading the transactionstatus
+		// table on the confirm critical path.
+		Sha256Hash fundTxHash = genesis.getTransactions().get(0).getHash();
 		int confirmed = 0;
 		int peakConfirmed = 0;
 		long peakReachedMs = 0;
-		List<Long> latenciesMs = new ArrayList<>();
-		List<Long> peakLatenciesMs = new ArrayList<>();
 		long confirmDeadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
 		while (System.currentTimeMillis() < confirmDeadline) {
 			Thread.sleep(1000);
-			confirmed = 0;
-			latenciesMs.clear();
-			for (net.bigtangle.server.data.TransactionStatusRecord r : store
-					.getTransactionStatusesByStatus(net.bigtangle.server.data.TransactionStatus.CONFIRMED)) {
-				String h = r.getTxHash().toString();
-				if (tracked.contains(h)) {
-					confirmed++;
-					latenciesMs.add(Math.max(0, r.getUpdatedTime() - r.getCreatedTime()));
-				}
-			}
+			confirmed = (int) store.countSpentOutputs(fundTxHash);
 			if (confirmed > peakConfirmed) {
 				peakConfirmed = confirmed;
 				peakReachedMs = (System.nanoTime() - submitWallStart) / 1_000_000;
-				peakLatenciesMs = new ArrayList<>(latenciesMs);
 			}
 			log.info("  confirmed {}/{} (chainLength {}, peak {})", confirmed, ok,
 					cacheBlockService.getMaxConfirmedReward(store).getChainLength(), peakConfirmed);
@@ -311,9 +301,6 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		log.info("CONFIRMED TPS:   {} tx/s (final {}/{})", String.format("%.1f", confirmTps), confirmed, ok);
 		log.info("PEAK SUSTAINED:  {} tx/s ({} confirmed in {} ms)", String.format("%.1f", peakTps), peakConfirmed,
 				peakReachedMs);
-		log.info("Confirm p50:     {} ms", percentile(peakLatenciesMs, 50));
-		log.info("Confirm p95:     {} ms", percentile(peakLatenciesMs, 95));
-		log.info("Confirm p99:     {} ms", percentile(peakLatenciesMs, 99));
 		log.info("==============================================");
 
 		assertTrue(peakConfirmed > 0, "No transaction confirmed within the timeout");

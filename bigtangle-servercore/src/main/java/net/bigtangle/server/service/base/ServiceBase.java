@@ -597,41 +597,6 @@ public abstract class ServiceBase {
 			cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 
-	// When a confirm batch runs, per-block CONFIRMED status writes are deferred
-	// into this thread-local accumulator so the whole batch can be written with
-	// ONE chunked upsert instead of one multi-row INSERT per block.
-	protected static final ThreadLocal<Boolean> BATCH_CONFIRM_STATUS = ThreadLocal.withInitial(() -> false);
-	protected static final ThreadLocal<java.util.List<Block>> BATCHED_STATUS_BLOCKS = ThreadLocal
-			.withInitial(java.util.ArrayList::new);
-
-	/** Best-effort: record CONFIRMED status (chain history) at a reward chainlength. */
-	protected void markConfirmedStatus(Block block, long chainlength, BlockStoreInterface blockStore) {
-		try {
-			if (BATCH_CONFIRM_STATUS.get()) {
-				BATCHED_STATUS_BLOCKS.get().add(block);
-				return;
-			}
-			net.bigtangle.server.data.TransactionStatusRecord.markBlock(blockStore, block,
-					net.bigtangle.server.data.TransactionStatus.CONFIRMED, chainlength, networkParameters);
-		} catch (Exception e) {
-			// status tracking is best-effort
-		}
-	}
-
-	/** Flushes the deferred CONFIRMED status records of a confirm batch in a single chunked upsert. */
-	protected static void writeBatchedConfirmStatus(BlockStoreInterface blockStore, long chainlength,
-			NetworkParameters params) throws BlockStoreException {
-		java.util.List<net.bigtangle.server.data.TransactionStatusRecord> all = new java.util.ArrayList<>();
-		for (Block b : BATCHED_STATUS_BLOCKS.get()) {
-			all.addAll(net.bigtangle.server.data.TransactionStatusRecord.collectBlock(b,
-					net.bigtangle.server.data.TransactionStatus.CONFIRMED, chainlength, params));
-		}
-		BATCHED_STATUS_BLOCKS.get().clear();
-		if (!all.isEmpty()) {
-			blockStore.upsertTransactionStatuses(all);
-		}
-	}
-
 	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
 		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight).thenComparing(Block::getHash);
 		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
