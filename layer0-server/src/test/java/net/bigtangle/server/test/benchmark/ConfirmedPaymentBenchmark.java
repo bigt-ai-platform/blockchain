@@ -75,7 +75,7 @@ import net.bigtangle.wallet.Wallet;
 				"server.fundEnabled=true", "spring.main.allow-circular-references=true",
 				"service.schedule.chainlength=true", "service.schedule.blockbatch=true",
 				"service.schedule.microbatch=true", "service.schedule.upchainrate=1000",
-				"pos.slotIntervalMs=1000" })
+				"pos.slotIntervalMs=12000" })
 public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 
 	private static final Logger log = LoggerFactory.getLogger(ConfirmedPaymentBenchmark.class);
@@ -109,6 +109,13 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		store.saveStakeDeposit(stake);
 		stakeService.activateValidator(validatorKey.getPubKey(), 0, store);
 		validatorDutyService.setValidatorKey(validatorKey);
+		// The duty state (last proposed/attested slot) is restored from the DB at
+		// Spring context boot — BEFORE the per-run reset — so it still holds the
+		// previous run's slot numbers. With a different slot interval those are
+		// on a different numbering scale (e.g. a prior 1s-slot run leaves ~254M
+		// while a 12s-slot run sits ~21M), which makes mayPropose() reject every
+		// slot. Reload the (now-empty) state so this run proposes from scratch.
+		validatorDutyService.restoreDutyState();
 
 		// ---- 2. Wait for the beacon pipeline to produce + confirm blocks.
 		long deadline = System.currentTimeMillis() + 60_000;
