@@ -465,6 +465,10 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     // Some indexes to speed up stuff
     private static final String CREATE_OUTPUTS_BRIN_INDEX = "CREATE INDEX outputs_blockhash_brin_idx ON outputs USING brin(blockhash) WITH (pages_per_range=32) ";
     private static final String CREATE_OUTPUTS_ADDRESS_MULTI_INDEX = "CREATE INDEX outputs_hash_index_toaddress_idx ON outputs (hash, outputindex, toaddress) ";
+    // Matches the batched outpoint lookup predicate
+    // (outputs.hash, outputs.outputindex, outputs.blockhash) IN (...), so the
+    // conflict prefetch and confirm reads use the index instead of a seq scan.
+    private static final String CREATE_OUTPUTS_HASH_INDEX = "CREATE INDEX IF NOT EXISTS outputs_hash_blockhash_idx ON outputs (hash, outputindex, blockhash) ";
     private static final String CREATE_OUTPUTS_TOADDRESS_INDEX = "CREATE INDEX outputs_toaddress_idx ON outputs (toaddress) ";
     
     private static final String CREATE_PREVBRANCH_HASH_INDEX = "CREATE INDEX blocks_prevbranchblockhash_idx ON blocks (prevbranchblockhash) ";
@@ -604,6 +608,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         List<String> sqlStatements = new ArrayList<String>();
         sqlStatements.add(CREATE_OUTPUTS_BRIN_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_ADDRESS_MULTI_INDEX); 
+        sqlStatements.add(CREATE_OUTPUTS_HASH_INDEX); 
         sqlStatements.add(CREATE_BLOCKS_HEIGHT_INDEX);
         sqlStatements.add(CREATE_BLOCKS_SOLID_HEIGHT_INDEX);
         sqlStatements.add(CREATE_OUTPUTS_TOADDRESS_INDEX);

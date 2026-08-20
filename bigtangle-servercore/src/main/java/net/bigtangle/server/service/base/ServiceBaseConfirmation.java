@@ -2004,14 +2004,25 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// The confirm loop issues a handful of large statements per block; each
 		// is committed separately (shared single connection, autocommit). Relax
 		// synchronous_commit for the loop exactly like the micro-batch path does,
-		// so the writes don't fsync per statement.
+		// so the writes don't fsync per statement. CONFIRMED status writes are
+		// deferred per block and flushed once for the whole batch.
 		store.setBatchDurability(true);
+		boolean wasBatch = ServiceBase.BATCH_CONFIRM_STATUS.get();
+		ServiceBase.BATCH_CONFIRM_STATUS.set(true);
 		try {
 			for (BlockWrap approvedBlock : arrayList) {
 				confirm(approvedBlock, traversedConfirms, chainlength, true, store);
 
 			}
+			try {
+				writeBatchedConfirmStatus(store, chainlength, networkParameters);
+			} catch (Exception e) {
+				// status tracking is best-effort
+				logger.debug("batched confirm status write failed", e);
+			}
 		} finally {
+			ServiceBase.BATCH_CONFIRM_STATUS.set(wasBatch);
+			ServiceBase.BATCHED_STATUS_BLOCKS.get().clear();
 			store.setBatchDurability(false);
 		}
 		checkSum(store);

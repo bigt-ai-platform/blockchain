@@ -54,16 +54,17 @@ public class TransactionStatusRecord implements java.io.Serializable {
 	}
 
 	/**
-	 * Writes the given status for every non-coinbase user transaction in a
-	 * block. Coinbase/reward transactions are skipped.
+	 * Builds the status record for every non-coinbase user transaction in a
+	 * block WITHOUT writing, so callers can batch many blocks into a single
+	 * chunked upsert. Coinbase/reward transactions are skipped.
 	 */
-	public static void markBlock(BlockStoreInterface store, Block block, TransactionStatus status,
-			Long chainlength, NetworkParameters params) throws net.bigtangle.exception.BlockStoreException {
+	public static java.util.List<TransactionStatusRecord> collectBlock(Block block, TransactionStatus status,
+			Long chainlength, NetworkParameters params) {
+		java.util.List<TransactionStatusRecord> records = new java.util.ArrayList<>();
 		if (block == null || block.getTransactions() == null) {
-			return;
+			return records;
 		}
 		long now = System.currentTimeMillis();
-		List<TransactionStatusRecord> records = new java.util.ArrayList<>();
 		for (Transaction tx : block.getTransactions()) {
 			if (tx.isCoinBase() || tx.getInputs() == null || tx.getInputs().isEmpty()) {
 				continue;
@@ -71,6 +72,16 @@ public class TransactionStatusRecord implements java.io.Serializable {
 			records.add(new TransactionStatusRecord(tx.getHash(), status, block.getHash(), chainlength,
 					deriveAddress(tx, params), now, now));
 		}
+		return records;
+	}
+
+	/**
+	 * Writes the given status for every non-coinbase user transaction in a
+	 * block. Coinbase/reward transactions are skipped.
+	 */
+	public static void markBlock(BlockStoreInterface store, Block block, TransactionStatus status,
+			Long chainlength, NetworkParameters params) throws net.bigtangle.exception.BlockStoreException {
+		java.util.List<TransactionStatusRecord> records = collectBlock(block, status, chainlength, params);
 		if (!records.isEmpty()) {
 			store.upsertTransactionStatuses(records);
 		}
