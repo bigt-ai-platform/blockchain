@@ -607,7 +607,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     protected List<String> getCreateIndexesSQL1() {
         List<String> sqlStatements = new ArrayList<String>();
         sqlStatements.add(CREATE_OUTPUTS_BRIN_INDEX);
-        sqlStatements.add(CREATE_OUTPUTS_ADDRESS_MULTI_INDEX); 
         sqlStatements.add(CREATE_OUTPUTS_HASH_INDEX); 
         sqlStatements.add(CREATE_BLOCKS_HEIGHT_INDEX);
         sqlStatements.add(CREATE_BLOCKS_SOLID_HEIGHT_INDEX);
