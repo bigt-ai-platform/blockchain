@@ -1919,17 +1919,30 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	public void evictTransactionsAndBlockEva(Block block, BlockStoreInterface blockStore) throws BlockStoreException {
 
+		// Large batches: clearing both caches once is far cheaper than the
+		// thousands of per-key Spring @CacheEvict proxy calls (each proxies,
+		// evaluates SpEL, and does a cache-manager lookup). Correctness is
+		// identical — eviction only invalidates stale API-facing reads.
+		if (block.getTransactions().size() > 500) {
+			cacheBlockService.evictAccountBalance();
+			cacheBlockService.evictOutputs();
+			cacheBlockService.evictBlockEvaluation(block.getHash());
+			return;
+		}
+
+		// Small blocks: targeted per-address eviction keeps the hot cache warm.
+		java.util.Set<String> addresses = new java.util.HashSet<>();
 		for (final Transaction tx : block.getTransactions()) {
 			boolean isCoinBase = tx.isCoinBase();
 			for (TransactionOutput out : tx.getOutputs()) {
 				Script script = getScript(out.getScriptBytes());
-				String fromAddress = fromAddress(tx, isCoinBase);
-				cacheBlockService.evictAccountBalance(getScriptAddress(script), blockStore);
-				cacheBlockService.evictAccountBalance(fromAddress, blockStore);
-				cacheBlockService.evictOutputs(getScriptAddress(script), blockStore);
-				cacheBlockService.evictOutputs(fromAddress, blockStore);
+				addresses.add(getScriptAddress(script));
+				addresses.add(fromAddress(tx, isCoinBase));
 			}
-
+		}
+		for (String address : addresses) {
+			cacheBlockService.evictAccountBalance(address, blockStore);
+			cacheBlockService.evictOutputs(address, blockStore);
 		}
 		cacheBlockService.evictBlockEvaluation(block.getHash());
 	}

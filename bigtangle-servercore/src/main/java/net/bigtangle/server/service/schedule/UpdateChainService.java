@@ -29,7 +29,7 @@ public class UpdateChainService {
     @Autowired
     private ScheduleConfiguration scheduleConfiguration;
 
-    @Async("posExecutor")
+    @Async("posChainExecutor")
     @Scheduled(fixedDelayString = "${service.schedule.upchainrate:10000}")
     public void updateChain() {
         if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {

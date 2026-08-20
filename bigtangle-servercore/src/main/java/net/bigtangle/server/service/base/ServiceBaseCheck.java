@@ -139,6 +139,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// the DB in the second pass. Keys are "blockHash:txHash:index".
 		Map<String, UTXO> utxoCache = new HashMap<>();
 		List<TransactionOutPoint> allInputTx = new ArrayList<>();
+		java.util.Set<TransactionOutPoint> allInputTxSet = new java.util.HashSet<>();
 		// Bonded stake outputs are unspendable until a withdrawal mechanism
 		// exists; cache per-block so each input is checked once.
 		java.util.Set<String> checkedBondedOutputs = new java.util.HashSet<>();
@@ -146,14 +147,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			if (!tx.isCoinBase()) {
 				for (int index = 0; index < tx.getInputs().size(); index++) {
 					TransactionInput in = tx.getInputs().get(index);
-					String cacheKey = in.getOutpoint().getBlockHash() + ":"
-							+ in.getOutpoint().getTxHash() + ":" + in.getOutpoint().getIndex();
-					UTXO prevOut = store.getTransactionOutput(in.getOutpoint().getBlockHash(),
-							in.getOutpoint().getTxHash(), in.getOutpoint().getIndex());
-					if (prevOut == null) {
-						return SolidityState.from(in.getOutpoint(), true);
+					if (!allInputTxSet.add(in.getOutpoint())) {
+						throw new InvalidTransactionException(
+								"input outputpoint is not unique " + in.getOutpoint().toString());
 					}
-					utxoCache.put(cacheKey, prevOut);
+					allInputTx.add(in.getOutpoint());
 					String bondKey = in.getOutpoint().getBlockHash().toString()
 							+ ":" + in.getOutpoint().getTxHash().toString();
 					if (in.getOutpoint().getIndex() == 0 && checkedBondedOutputs.add(bondKey)) {
@@ -168,17 +166,23 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 							throw e;
 						}
 					}
-					if (checkUnique(allInputTx, in.getOutpoint())) {
-						throw new InvalidTransactionException(
-								"input outputpoint is not unique " + in.getOutpoint().toString());
-					}
-					allInputTx.add(in.getOutpoint());
 				}
 				if (checkBurnedFromAddress(tx, block.getLastMiningRewardBlock())) {
 					throw new InvalidTransactionException("Burned Address");
 				}
 			}
 
+		}
+		// Batch-fetch every referenced input UTXO in a few round trips instead
+		// of one query per input — a 5000-tx block would otherwise issue 5000
+		// sequential reads and dominate the beacon-connect (confirm) path.
+		java.util.Map<TransactionOutPoint, UTXO> batchFetched = store.getTransactionOutputs(allInputTx);
+		for (TransactionOutPoint op : allInputTx) {
+			UTXO prevOut = batchFetched.get(op);
+			if (prevOut == null) {
+				return SolidityState.from(op, true);
+			}
+			utxoCache.put(op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex(), prevOut);
 		}
 
 		// Transaction validation
