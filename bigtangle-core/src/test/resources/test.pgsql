@@ -517,6 +517,5 @@ WHERE chainlength = 446310;
 
 SELECT * FROM userdata;
 
-ALTER USER 'root' IDENTIFIED WITH mysql_native_password BY 'test1234';
-FLUSH PRIVILEGES;
-USE info;
+\connect info;
+ALTER ROLE root WITH PASSWORD 'test1234';

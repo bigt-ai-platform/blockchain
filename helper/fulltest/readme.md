@@ -170,7 +170,6 @@ All configuration is via environment variables (defined in `layer0-server/src/ma
 | `SERVERMODE` | Fullnode | Node mode |
 | `CHECKPOINT` | -1 | Checkpoint interval (-1 = disabled) |
 | `SYNCBLOCKS` | 1000 | Blocks per sync batch |
-| `DBTYPE` | postgresql | Database type (`postgresql` or `mysql`) |
 | `DB_HOSTNAME` | localhost | Database host |
 | `DB_PORT` | 5432 | Database port |
 | `DB_NAME` | layer0 | Database name |

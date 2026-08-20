@@ -7,7 +7,7 @@ All layers share a single monolith in `bigtangle-servercore`:
 - `BlockStoreInterface` (658 lines) — the full contract (220+ methods)
 - `DatabaseFullBlockStoreBase` (2,489 lines) — shared SQL/DDL + ~74 public methods
 - `DatabaseFullBlockStore` (3,853 lines) — ~180 public methods mixing **every** domain
-- `PostgreSQLFullBlockStore` (650) / `MySQLFullBlockStore` (586) — concrete DDL + dialect
+- `PostgreSQLFullBlockStore` — concrete DDL + dialect
 
 Every layer boots the same store and creates **every table**, even tables its chain
 never uses. Examples of the waste:
@@ -38,18 +38,18 @@ L1 domain, so `layer0-server` no longer implements/creates order or contract tab
 bigtangle-servercore  (shared, layer-agnostic)
 ├── store/BlockStoreInterface           (core contract — see below)
 ├── store/CoreFullBlockStore            (from DatabaseFullBlockStoreBase)
-└── store/CoreFullBlockStorePostgres/MySQL   (from PostgreSQL/MySQLFullBlockStore)
+└── store/CoreFullBlockStorePostgres   (from PostgreSQLFullBlockStore)
 
 l1-order-server                          (order domain)
 ├── store/OrderFullBlockStore           extends CoreFullBlockStore
 │        adds orders/ordercancel/orderresult/matching*/paymultisign*/account/price
-├── store/OrderFullBlockStorePostgres/MySQL   extends Core...Postgres
+├── store/OrderFullBlockStorePostgres   extends Core...Postgres
 └── DDL for order tables only
 
 l1-contract-server                       (contract domain)
 ├── store/ContractFullBlockStore        extends CoreFullBlockStore
 │        adds contractevent/contracteventcancel/contractresult/evm_receipt
-└── store/ContractFullBlockStorePostgres/MySQL
+└── store/ContractFullBlockStorePostgres
 
 (bridge-only tables — anchor/vault — stay on the L0 store where the L0AnchorHandler
  lives, or move to a dedicated CrossChainFullBlockStore if bridge ever detaches)
@@ -134,8 +134,8 @@ blocks in `PostgreSQLFullBlockStore`:
    the base, domain DDL contributed by subclass hooks:
    `protected List<String> getDomainCreateTablesSQL() { return List.of(); }` and
    same for indexes, appended in `create()`/`updateDatabse()`.
-4. Keep the DB-dialect split: `CoreFullBlockStore` stays abstract; the Postgres/MySQL
-   concrete classes extend it and provide core DDL + dialect (`afterSelect`,
+4. Keep the DB-dialect split: `CoreFullBlockStore` stays abstract; the Postgres
+   concrete class extends it and provides core DDL + dialect (`afterSelect`,
    `duplicateInsert`, error-code mapping, `getCreateTablesSQL1/2` → core only).
 
 ### Step 3 — Extract `OrderFullBlockStore` (in `l1-order-server`)
@@ -143,13 +143,13 @@ blocks in `PostgreSQLFullBlockStore`:
 1. New `OrderFullBlockStore extends CoreFullBlockStore` implementing the order-domain
    methods, **moved verbatim** from `DatabaseFullBlockStore` (orders, ordercancel,
    orderresult, matching*, paymultisign*, price/ticker, `prunedClosedOrders`).
-2. New `OrderFullBlockStorePostgres` / `OrderFullBlockStoreMySQL` providing only the
+2. New `OrderFullBlockStorePostgres` providing only the
    order DDL (`getDomainCreateTablesSQL()` → order tables + their indexes).
 3. `OrderFullBlockStore` may also **override** core methods where order logic needs
    to hook in (e.g. order-result chainlength updates already called from
    `ServiceBaseConfirmation`). Keep overrides minimal and documented.
 4. `StoreService` in `l1-order-server` (or its `DBStoreConfiguration`/`BeforeStartup`)
-   instantiates `OrderFullBlockStorePostgres/MySQL`.
+   instantiates `OrderFullBlockStorePostgres`.
 
 ### Step 4 — Extract `ContractFullBlockStore` (in `l1-contract-server`)
 
@@ -163,10 +163,10 @@ Once L0/L1-order/L1-contract all use the new classes:
 
 1. Delete `DatabaseFullBlockStore` + `DatabaseFullBlockStoreBase` from
    `bigtangle-servercore` (or keep as deprecated aliases for one release).
-2. `PostgreSQLFullBlockStore`/`MySQLFullBlockStore` → renamed to the Core concrete
-   classes (used by `layer0-server`).
-3. Remove the now-unreachable order/contract table DDL from the core Postgres/MySQL
-   classes.
+2. `PostgreSQLFullBlockStore` → renamed to the Core concrete
+   class (used by `layer0-server`).
+3. Remove the now-unreachable order/contract table DDL from the core Postgres
+   class.
 
 ### Step 6 — Service layer (biggest risk)
 
@@ -196,9 +196,9 @@ own its DDL; B is tracked as a follow-up.
 | 1 | `BlockStoreInterface` | Split into `CoreBlockStore` + `OrderBlockStore extends Core` + `ContractBlockStore extends Core` (compiler-enforced inventory) |
 | 2 | `DatabaseFullBlockStoreBase` → `CoreFullBlockStore` | Keep core only; add `getDomainCreateTablesSQL/IndexesSQL` hooks; delete order/contract methods + SQL |
 | 3 | `DatabaseFullBlockStore` | Delete; order methods → l1-order, contract methods → l1-contract |
-| 4 | `PostgreSQL/MySQLFullBlockStore` | → Core concrete; drop order/contract DDL |
-| 5 | `l1-order-server/store/OrderFullBlockStore(Postgres/MySQL)` | New; order methods + order DDL |
-| 6 | `l1-contract-server/store/ContractFullBlockStore(Postgres/MySQL)` | New; contract methods + contract DDL |
+| 4 | `PostgreSQLFullBlockStore` | → Core concrete; drop order/contract DDL |
+| 5 | `l1-order-server/store/OrderFullBlockStorePostgres` | New; order methods + order DDL |
+| 6 | `l1-contract-server/store/ContractFullBlockStorePostgres` | New; contract methods + contract DDL |
 | 7 | `StoreService` / `DBStoreConfiguration` / `BeforeStartup` (per layer) | Instantiate the layer's concrete store |
 | 8 | `layer0-server` | `PostgreSQLFullBlockStore` → Core concrete (no behavior change) |
 | 9 | tests (`bigtangle-servercore`, `l1-order-server`, `l1-contract-server`) | Point at the layer store; add a test asserting L0 DB has **no** `orders`/`contractevent` tables and L1-order has **no** `contractevent` table |
@@ -254,13 +254,11 @@ union-wide (services keep using `BlockStoreInterface`).
 2. **`DatabaseFullBlockStoreBase`** — holds the store domain (`setStoreDomain`) and
    exposes it via `getStoreDomain()`.
 3. **Per-layer concrete stores**:
-   - `bigtangle-servercore` — `CorePostgreSQLFullBlockStore` / `CoreMySQLFullBlockStore`
-     (domain `CORE`, used by `layer0-server`).
-   - `l1-order-server` — `OrderPostgreSQLFullBlockStore` / `OrderMySQLFullBlockStore`
-     (domain `ORDER`).
-   - `l1-contract-server` — `ContractPostgreSQLFullBlockStore` /
-     `ContractMySQLFullBlockStore` (domain `CONTRACT`).
-4. **DDL gating in `PostgreSQL/MySQLFullBlockStore`** — `getCreateTablesSQL2()` only
+   - `bigtangle-servercore` — `CorePostgreSQLFullBlockStore` (domain `CORE`, used by
+     `layer0-server`).
+   - `l1-order-server` — `OrderPostgreSQLFullBlockStore` (domain `ORDER`).
+   - `l1-contract-server` — `ContractPostgreSQLFullBlockStore` (domain `CONTRACT`).
+4. **DDL gating in `PostgreSQLFullBlockStore`** — `getCreateTablesSQL2()` only
    creates the **contract/EVM tables** (`contractevent`, `contracteventcancel`,
    `contractresult`, `evm_receipt`) when `hasContractDomain()`; the contract indexes
    are likewise gated. This is the table-level win: **Layer 0 / L1-order no longer

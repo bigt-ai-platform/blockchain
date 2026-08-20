@@ -127,7 +127,7 @@ java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   -jar layer0-server/target/layer0-server-0.6.0-exec.jar \
   --server.port=8081 --server.net=Mainnet --server.chain=L0 \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 --db.dbtype=postgresql \
+  --db.username=root --db.password=test1234 \
   --server.createtable=true \
   --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
@@ -215,7 +215,7 @@ docker run -d --name l0-server --network host \
   --add-exports java.base/java.lang=ALL-UNNAMED -jar /app/app.jar \
   --server.port=8081 --server.net=Mainnet --server.chain=L0 \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 --db.dbtype=postgresql \
+  --db.username=root --db.password=test1234 \
   --server.createtable=true \
   --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
@@ -242,7 +242,7 @@ above mirror §4 and are the recommended form.
 | `server.chain` | Chain id; `L0` for the shared Layer-0 chain | `L0` |
 | `server.requester` | Peer node URL for DAG sync | `https://peer.bigtangle.org:8088` |
 | `server.createtable` | Auto-create schema (`true` server only, first start) | `false` |
-| `db.hostname` / `db.port` / `db.dbName` / `db.username` / `db.password` / `db.dbtype` | PostgreSQL connection | `localhost / 5432 / layer0 / root / … / postgresql` |
+| `db.hostname` / `db.port` / `db.dbName` / `db.username` / `db.password`  | PostgreSQL connection | `localhost / 5432 / layer0 / root / … / postgresql` |
 | `service.schedule.chainlength` / `service.schedule.syncrate` | Chain-length update scheduler + sync rate | `true / 50000` |
 | `service.schedule.blockbatch` / `service.schedule.blockbatchrate` | Batch block service + rate | `true / 50000` |
 | `service.schedule.syncrate` | Block sync rate | `50000` |

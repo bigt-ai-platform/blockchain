@@ -157,7 +157,7 @@ public class ServerConfiguration {
      * Hostname for the Docker database container.
      * Used when dockerCreateDBHost is true.
      */
-    private String dockerDBHost="mysql-test";
+    private String dockerDBHost="bigtangle-postgres";
     
     /** 
      * Data directory path for Docker database container.

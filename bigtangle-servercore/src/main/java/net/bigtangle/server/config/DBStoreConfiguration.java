@@ -21,16 +21,12 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
 
 @Configuration
 public class DBStoreConfiguration {
 
 	private static final Logger logger = LoggerFactory.getLogger(DBStoreConfiguration.class);
-
-	@Value("${db.dbtype:mysql}")
-	private String dbtype;
 
 	@Value("${db.hostname:localhost}")
 	private String hostname;
@@ -44,7 +40,7 @@ public class DBStoreConfiguration {
 	@Value("${db.password:test1234}")
 	private String password;
 
-	@Value("${db.port:3306}")
+	@Value("${db.port:5432}")
 	private String port;
 
 	@Autowired
@@ -54,13 +50,7 @@ public class DBStoreConfiguration {
 
 	@Bean
 	public DataSource dataSource() throws BlockStoreException, IOException, InterruptedException, ExecutionException {
-		if ("mysql".equals(dbtype)) {
-			return dataSourceMysql();
-		}
-		if ("postgresql".equals(dbtype)) {
-			return dataSourcePostgresql();
-		}
-		return dataSourceMysql();
+		return dataSourcePostgresql();
 	}
 
 	public DataSource dataSourcePostgresql()
@@ -87,37 +77,6 @@ public class DBStoreConfiguration {
 		logger.debug(config.getJdbcUrl());
 		return new HikariDataSource(config);
 
-	}
-
-	public DataSource dataSourceMysql()
-			throws BlockStoreException, IOException, InterruptedException, ExecutionException {
-		// createDatabase();
-
-		HikariConfig config = new HikariConfig();
-
-		config.setJdbcUrl(MySQLFullBlockStore.DATABASE_CONNECTION_URL_PREFIX + hostname + ":" + port + "/" + dbName
-				+ "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC");
-		config.setUsername(username);
-		config.setPassword(password);
-		config.addDataSourceProperty("cachePrepStmts", "true");
-		config.addDataSourceProperty("prepStmtCacheSize", "250");
-		config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-		config.addDataSourceProperty("useServerPrepStmts", "true");
-		config.addDataSourceProperty("cacheResultSetMetadata", "true");
-		config.addDataSourceProperty("cacheServerConfiguration", "true");
-		config.setMaximumPoolSize(100);
-		config.setLeakDetectionThreshold(300000);
-		logger.debug(config.getJdbcUrl());
-		return new HikariDataSource(config);
-
-	}
-
-	public String getDbtype() {
-		return dbtype;
-	}
-
-	public void setDbtype(String dbtype) {
-		this.dbtype = dbtype;
 	}
 
 	public String getHostname() {

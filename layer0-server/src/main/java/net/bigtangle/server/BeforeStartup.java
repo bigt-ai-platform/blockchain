@@ -13,10 +13,8 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.store.CoreMySQLFullBlockStore;
 import net.bigtangle.store.CorePostgreSQLFullBlockStore;
 
 @Component
@@ -31,12 +29,7 @@ public class BeforeStartup {
 
 		// set false in test
 		if (serverConfiguration.getCreatetable()) {
-			BlockStoreInterface store;
-			if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-				store = new CoreMySQLFullBlockStore(networkParameters, dataSource.getConnection());
-			} else {
-				store = new CorePostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
-			}
+			BlockStoreInterface store = new CorePostgreSQLFullBlockStore(networkParameters, dataSource.getConnection());
 			try {
 				store.create();
 				// update tables to new version after initial setup
@@ -54,7 +47,5 @@ public class BeforeStartup {
 	NetworkParameters networkParameters;
 	@Autowired
 	protected transient DataSource dataSource;
-	@Autowired
-	protected transient DBStoreConfiguration dbStoreConfiguration;
 
 }

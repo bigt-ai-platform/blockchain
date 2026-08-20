@@ -24,7 +24,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
 
     private static final String DUPLICATE_KEY_ERROR_CODE = "23505";
  
-    public static final String DATABASE_CONNECTION_URL_PREFIX = "jdbc:postgresql://"; // "jdbc:log4jdbc:mysql://";
+    public static final String DATABASE_CONNECTION_URL_PREFIX = "jdbc:postgresql://";
 
     // create table SQL
     private static final String CREATE_SETTINGS_TABLE = "CREATE TABLE settings (\n" 

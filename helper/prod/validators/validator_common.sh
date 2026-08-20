@@ -90,7 +90,7 @@ start_server() {
         --server.net="${SERVER_NET}" --server.chain="${SERVER_CHAIN}" \
         --store.domain="${STORE_DOMAIN}" \
         --db.hostname="${DB_HOSTNAME}" --db.port="${DB_PORT}" --db.dbName="${DB_NAME}" \
-        --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" --db.dbtype="${DBTYPE}" \
+        --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" \
         --server.createtable="${createtable}" \
         --server.runKafkaStream=false \
         --server.fundEnabled="${FUND_ENABLED:-false}" \

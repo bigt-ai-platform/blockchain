@@ -9,11 +9,9 @@ import org.springframework.stereotype.Service;
 
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
-import net.bigtangle.server.config.DBStoreConfiguration;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreInterface.StoreDomain;
 import net.bigtangle.store.DatabaseFullBlockStoreBase;
-import net.bigtangle.store.MySQLFullBlockStore;
 import net.bigtangle.store.PostgreSQLFullBlockStore;
 
 @Service
@@ -24,9 +22,6 @@ public class StoreService {
 
     @Autowired
     protected NetworkParameters networkParameters;
-
-    @Autowired
-    protected transient DBStoreConfiguration dbStoreConfiguration;
 
     /** Layer domain this node is provisioned for (core / order / contract / all). */
     @Value("${store.domain:all}")
@@ -48,12 +43,7 @@ public class StoreService {
                 c.rollback();
                 c.setAutoCommit(true);
             }
-            BlockStoreInterface store;
-            if ("mysql".equals(dbStoreConfiguration.getDbtype())) {
-                store = new MySQLFullBlockStore(networkParameters, c);
-            } else {
-                store = new PostgreSQLFullBlockStore(networkParameters, c);
-            }
+            BlockStoreInterface store = new PostgreSQLFullBlockStore(networkParameters, c);
             if (domain != StoreDomain.ALL && store instanceof DatabaseFullBlockStoreBase base) {
                 base.setStoreDomain(domain);
             }

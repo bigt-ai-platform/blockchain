@@ -25,7 +25,6 @@
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<org.slf4j-version>2.0.16</org.slf4j-version>
-		<mysql-version>8.0.33</mysql-version>
 		<jackson.version>2.18.3</jackson.version>
 		<org.springframework.boot.version>3.4.5</org.springframework.boot.version>
 		<kafka.version>3.9.0</kafka.version>

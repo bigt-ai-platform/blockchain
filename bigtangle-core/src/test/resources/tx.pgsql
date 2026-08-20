@@ -179,6 +179,5 @@ select count(*) from outputs where confirmed=1 and spent=0 and tokenid = "03bed6
  
 select * from userdata;
 
- ALTER USER 'root' IDENTIFIED WITH mysql_native_password BY 'test1234';
-flush privileges;
-use info;
+ \connect info;
+ALTER ROLE root WITH PASSWORD 'test1234';

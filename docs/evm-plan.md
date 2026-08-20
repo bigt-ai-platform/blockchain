@@ -110,7 +110,7 @@ Chain-agnostic library module (like `bigtangle-bridge`), no server.
   `EVMStateCodec` (sorted accounts/storage) and persisted inside the
   `ContractExecutionResult.extraData` blob (the `contractresult` table), so
   every node re-derives the same state and the state root is the consensus
-  output. A `evm_receipt` table (`evm_receipt` DDL in PostgreSQL/MySQL stores)
+  output. A `evm_receipt` table (`evm_receipt` DDL in the Postgres store)
   persists one receipt per EVM transaction block for RPC.
 
 ## Phase 3 — Block types + encoding ✅ complete

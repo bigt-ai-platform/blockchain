@@ -13,7 +13,7 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.kafka.AbstractStreamHandler;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.store.BlockStoreInterface;
-import net.bigtangle.store.MySQLFullBlockStore;
+import net.bigtangle.store.PostgreSQLFullBlockStore;
 
 public abstract class LifecycleBasisController {
     private static final Logger log = LoggerFactory.getLogger(LifecycleBasisController.class);
@@ -104,7 +104,7 @@ public abstract class LifecycleBasisController {
 
     private BlockStoreInterface findStore() throws BeansException, BlockStoreException, SQLException {
         
-        MySQLFullBlockStore store = new MySQLFullBlockStore( appContext.getBean(NetworkParameters.class),  
+        PostgreSQLFullBlockStore store = new PostgreSQLFullBlockStore( appContext.getBean(NetworkParameters.class),  
                 appContext.getBean(DataSource.class).getConnection());
       
         return store;
