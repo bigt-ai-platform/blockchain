@@ -96,13 +96,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		conflictCache.get().clear();
 	}
 
-	// Batch mode: when set, per-block "UPDATE outputs SET confirmed" is
-	// deferred into BATCHED_OUTPUT_BLOCKS so the whole confirm batch issues ONE
-	// batched UPDATE instead of one statement per block.
-	private static final ThreadLocal<Boolean> BATCH_OUTPUT_CONFIRM = ThreadLocal.withInitial(() -> false);
-	private static final ThreadLocal<java.util.List<Sha256Hash>> BATCHED_OUTPUT_BLOCKS = ThreadLocal
-			.withInitial(java.util.ArrayList::new);
-
 	public ServiceBaseConfirmation(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
 		super(serverConfiguration, networkParameters, cacheBlockService, jsonmapper);
@@ -1411,13 +1404,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
  			}
  		}
 
- 		if (BATCH_OUTPUT_CONFIRM.get()) {
- 			BATCHED_OUTPUT_BLOCKS.get().add(block.getBlock().getHash());
- 		} else {
- 			blockStore.updateAllTransactionOutputsConfirmed(block.getBlock().getHash(), confirmation);
- 		}
-		if (confirmation) {
-			markConfirmedStatus(block.getBlock(), chainlength, blockStore);
+ 		if (confirmation) {
+ 			markConfirmedStatus(block.getBlock(), chainlength, blockStore);
 		}
  		if (confirmation) {
  			confirmBlockTransactionSpentBatch(block.getBlock(), blockStore);
@@ -1817,10 +1805,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void confirmTransaction(Block block, boolean confirm, Transaction tx, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
-		// Set own outputs confirmation
-		for (TransactionOutput out : tx.getOutputs()) {
-			blockStore.updateTransactionOutputConfirmed(block.getHash(), tx.getHash(), out.getIndex(), confirm);
-		}
 		// Set previous outputs as spent
 		for (TransactionInput in : tx.getInputs()) {
 			if (!tx.isCoinBase()) {
@@ -1950,7 +1934,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void confirmVirtualCoinbaseTransaction(Block block, boolean confirmation, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 
-		blockStore.updateAllTransactionOutputsConfirmed(block.getHash(), confirmation);
+		// Output confirmation is derived from the block's confirmed state
+		// (blocks.confirmed) on read — no per-output write is needed.
 	}
 
 	/**
@@ -2033,10 +2018,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		store.setBatchDurability(true);
 		boolean wasBatch = ServiceBase.BATCH_CONFIRM_STATUS.get();
 		ServiceBase.BATCH_CONFIRM_STATUS.set(true);
-		boolean wasOutBatch = BATCH_OUTPUT_CONFIRM.get();
-		BATCH_OUTPUT_CONFIRM.set(true);
 		try {
-			BATCHED_OUTPUT_BLOCKS.get().clear();
 			for (BlockWrap approvedBlock : arrayList) {
 				confirm(approvedBlock, traversedConfirms, chainlength, true, store);
 
@@ -2047,12 +2029,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				// status tracking is best-effort
 				logger.debug("batched confirm status write failed", e);
 			}
-			if (!BATCHED_OUTPUT_BLOCKS.get().isEmpty()) {
-				store.updateAllTransactionOutputsConfirmedBatch(BATCHED_OUTPUT_BLOCKS.get(), true);
-			}
 		} finally {
-			BATCHED_OUTPUT_BLOCKS.get().clear();
-			BATCH_OUTPUT_CONFIRM.set(wasOutBatch);
 			ServiceBase.BATCH_CONFIRM_STATUS.set(wasBatch);
 			ServiceBase.BATCHED_STATUS_BLOCKS.get().clear();
 			store.setBatchDurability(false);

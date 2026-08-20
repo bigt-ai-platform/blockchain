@@ -1016,7 +1016,6 @@ public class StakeService {
                     && !minted.getSpenderBlockHash().equals(Sha256Hash.ZERO_HASH)) {
                 continue; // genuinely spent — do not resurrect
             }
-            store.updateTransactionOutputConfirmed(block.getHash(), mintHash, idx, true);
             store.updateTransactionOutputSpent(block.getHash(), mintHash, idx, false, null);
         }
     }
@@ -1026,7 +1025,6 @@ public class StakeService {
      *  claimed). A later re-confirmation re-mints via applySlashingConfirmed. */
     private void cancelSlashingMints(Block block, BlockStoreInterface store) throws Exception {
         for (long idx : new long[] { SLASHING_REFUND_OUTPUT_INDEX, SLASHING_REPORTER_OUTPUT_INDEX }) {
-            store.updateTransactionOutputConfirmed(block.getHash(), slashingMintTxHash(block), idx, false);
             store.updateTransactionOutputSpent(block.getHash(), slashingMintTxHash(block), idx, true,
                     Sha256Hash.ZERO_HASH);
         }

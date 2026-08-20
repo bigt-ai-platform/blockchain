@@ -158,34 +158,36 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " coinbase, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,time, spendpendingtime, minimumsign)"
 			+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)" + duplicateInsert();
 
+	protected final String OUTPUTS_CONFIRMED = "(SELECT b.confirmed FROM blocks b WHERE b.hash = outputs.blockhash)";
+
 	protected final String SELECT_OUTPUTS_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress,"
-			+ " addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, "
+			+ " addresstargetable, blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, "
 			+ "spendpending , spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND outputindex = ? AND blockhash = ? ";
 
-	protected final String SELECT_OUTPUTS_SPENTBLOCK_SQL = "SELECT " + " spent, confirmed, "
+	protected final String SELECT_OUTPUTS_SPENTBLOCK_SQL = "SELECT " + " spent, " + OUTPUTS_CONFIRMED + " AS confirmed, "
 			+ " spenderblockhash FROM outputs WHERE hash = ? AND outputindex = ? AND blockhash = ? ";
 
 	protected final String SELECT_TRANSACTION_OUTPUTS_SQL_BASE = "SELECT " + "outputs.hash, coinvalue, scriptbytes, "
 			+ " outputs.outputindex, coinbase, " + "  outputs.toaddress  as  toaddress,"
 			+ " outputsmulti.toaddress  as multitoaddress, " + "  addresstargetable, blockhash, tokenid, "
-			+ " fromaddress, memo, spent, confirmed, "
+			+ " fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, "
 			+ "spendpending,spendpendingtime,  minimumsign, time , spenderblockhash "
 			+ " FROM outputs LEFT JOIN outputsmulti " + " ON outputs.hash = outputsmulti.hash"
 			+ " AND outputs.outputindex = outputsmulti.outputindex ";
 
 	protected final String SELECT_OPEN_TRANSACTION_OUTPUTS_SQL = SELECT_TRANSACTION_OUTPUTS_SQL_BASE
-			+ " WHERE  confirmed=true and spent= false and outputs.toaddress = ? " + " OR outputsmulti.toaddress = ?";
+			+ " WHERE  " + OUTPUTS_CONFIRMED + " = true and spent= false and outputs.toaddress = ? " + " OR outputsmulti.toaddress = ?";
 
 	protected final String SELECT_OPEN_TRANSACTION_OUTPUTS_TOKEN_SQL = "SELECT " + " outputs.hash, coinvalue, "
 			+ " scriptbytes, outputs.outputindex, coinbase, outputs.toaddress as toaddress , addresstargetable,"
-			+ " blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time , spenderblockhash"
+			+ " blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending, spendpendingtime, minimumsign, time , spenderblockhash"
 			+ " , outputsmulti.toaddress  as multitoaddress" + " FROM outputs LEFT JOIN outputsmulti "
 			+ " ON outputs.hash = outputsmulti.hash AND outputs.outputindex = outputsmulti.outputindex "
 			+ " WHERE   (outputs.toaddress = ? " + " OR outputsmulti.toaddress = ?) " + " AND tokenid = ?";
 	public final String SELECT_ALL_OUTPUTS_TOKEN_SQL = "SELECT " + " outputs.hash, coinvalue, "
 			+ " scriptbytes, outputs.outputindex, coinbase, outputs.toaddress, addresstargetable,"
-			+ " blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime , minimumsign, time , spenderblockhash"
-			+ " FROM outputs  WHERE  confirmed=true and spent= false and tokenid = ?";
+			+ " blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending, spendpendingtime , minimumsign, time , spenderblockhash"
+			+ " FROM outputs  WHERE  " + OUTPUTS_CONFIRMED + " = true and spent= false and tokenid = ?";
 
 	// Tables exist SQL.
 	protected final String SELECT_CHECK_TABLES_EXIST_SQL = "SELECT * FROM settings WHERE 1 = 2";
@@ -461,8 +463,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " FROM orders WHERE confirmed=true AND spent=false ";
 
 	protected final String SELECT_AVAILABLE_UTXOS_SORTED_SQL = "SELECT coinvalue, scriptbytes, coinbase, toaddress, "
-			+ "addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending,spendpendingtime, minimumsign, time, hash, outputindex, spenderblockhash "
-			+ " FROM outputs WHERE confirmed=true AND spent=false ORDER BY hash, outputindex";
+			+ "addresstargetable, blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending,spendpendingtime, minimumsign, time, hash, outputindex, spenderblockhash "
+			+ " FROM outputs WHERE " + OUTPUTS_CONFIRMED + " = true AND spent=false ORDER BY hash, outputindex";
 
 	protected final String SELECT_ORDERCANCEL_SQL = "SELECT blockhash, orderblockhash, confirmed, spent, spenderblockhash,time"
 			+ " FROM ordercancel WHERE 1 = 1";
@@ -1016,12 +1018,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	@Override
 	public boolean getOutputConfirmation(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException {
 
-		try (PreparedStatement s = getConnection().prepareStatement(
-				"SELECT  confirmed " + "FROM outputs WHERE hash = ? AND outputindex = ? AND blockhash = ? ")) {
-			s.setBytes(1, hash.getBytes());
-			// index is actually an unsigned int
-			s.setLong(2, index);
-			s.setBytes(3, blockHash.getBytes());
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT  confirmed " + "FROM blocks WHERE hash = ? ")) {
+			s.setBytes(1, blockHash.getBytes());
 			ResultSet results = s.executeQuery();
 			if (!results.next()) {
 				return false;
@@ -1080,7 +1079,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		Map<Long, UTXO> result = new HashMap<>();
 		if (indices.isEmpty()) return result;
 		StringBuilder sql = new StringBuilder(
-				"SELECT outputindex, coinvalue, scriptbytes, coinbase, toaddress, addresstargetable, blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND blockhash = ? AND outputindex IN (");
+				"SELECT outputindex, coinvalue, scriptbytes, coinbase, toaddress, addresstargetable, blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash FROM outputs WHERE hash = ? AND blockhash = ? AND outputindex IN (");
 		Iterator<Long> iter = indices.iterator();
 		while (iter.hasNext()) {
 			iter.next();
@@ -1137,7 +1136,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			byKey.put(outpointKey(op), op);
 		}
 		StringBuilder sql = new StringBuilder(
-				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, NULL as multitoaddress FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
+				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, NULL as multitoaddress FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
 		Iterator<TransactionOutPoint> iter = distinct.iterator();
 		while (iter.hasNext()) {
 			iter.next();

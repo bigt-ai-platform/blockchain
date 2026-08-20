@@ -615,7 +615,6 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
         sqlStatements.add(CREATE_PREVTRUNK_HASH_INDEX);
 
         sqlStatements.add(CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX);
-        sqlStatements.add(CREATE_BLOCKS_CHAINLENGTH_INDEX);
         sqlStatements.add(CREATE_TXREARD_CHAINLENGTH_INDEX);
 
         return sqlStatements;
