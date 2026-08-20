@@ -410,11 +410,48 @@ public class MempoolService {
     }
 
     private void removeOutpoints(Transaction tx) {
+        // Keep the spentOutpoints guard after the tx drains into a batch block.
+        // Releasing it at drain time opens a double-spend window: the legit tx's
+        // input is no longer chain-spent (not yet confirmed), so an attacker can
+        // submit a conflicting tx that passes the mempool check and lands in a
+        // second batch block — which then deadlocks beacon confirmation (a
+        // beacon referencing both is rejected) or, worse, confirms the wrong
+        // spend. The guard stays until the block confirms (the outpoint becomes
+        // chain-spent and the chain enforces it) or the node restarts (clear).
         Set<TransactionOutPoint> outpoints = txOutpoints.remove(tx);
-        if (outpoints != null) {
-            for (TransactionOutPoint outpoint : outpoints) {
-                spentOutpoints.remove(outpoint, tx);
+    }
+
+    /**
+     * Releases the double-spend guard for outpoints whose spend is already
+     * chain-committed (UTXO marked spent in the store = confirmed) or that no
+     * longer exist. Bounds {@link #spentOutpoints} growth and frees guards for
+     * confirmed spends; guards for still-unconfirmed (drained, not yet
+     * confirmed) spends are retained to keep the double-spend window closed.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
+    public void pruneSpentOutpoints() {
+        if (spentOutpoints.isEmpty()) {
+            return;
+        }
+        try {
+            net.bigtangle.store.BlockStoreInterface store = storeService.getStore();
+            try {
+                for (Map.Entry<TransactionOutPoint, Transaction> e : new ArrayList<>(spentOutpoints.entrySet())) {
+                    TransactionOutPoint op = e.getKey();
+                    try {
+                        net.bigtangle.core.UTXO u = store.getTransactionOutput(op.getBlockHash(), op.getTxHash(),
+                                op.getIndex());
+                        if (u == null || u.isSpent()) {
+                            spentOutpoints.remove(op, e.getValue());
+                        }
+                    } catch (Exception ignore) {
+                        // keep the guard on lookup error (fail-closed)
+                    }
+                }
+            } finally {
+                store.close();
             }
+        } catch (Exception ignore) {
         }
     }
 
