@@ -285,7 +285,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (!matchType(wrap, blocktypes)) {
 				continue;
 			}
-			boolean checked = checkSpentAndConflict(new HashSet<>(), wrap, checkChainlength, store);
+			// Cumulative conflict check: sibling batch blocks must not carry
+			// mutually-conflicting inputs into the beacon's reference set
+			// (verifyRewardChainConfirmReferenced rejects the beacon if two
+			// referenced blocks spend the same outpoint — e.g. bootstrap-funded
+			// validators sharing the genesis-1e9 fund index). The cumulative
+			// gate excludes the conflicting block; a singleton check would
+			// reference all of them and stall confirmation.
+			boolean checked = checkSpentAndConflict(blocks, wrap, checkChainlength, store);
 			if (checkChainlength) {
 				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
 			}
