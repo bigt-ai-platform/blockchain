@@ -588,34 +588,43 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		if (valid.isEmpty()) {
 			return;
 		}
-		StringBuilder sql = new StringBuilder(128 + valid.size() * 70);
-		sql.append("INSERT INTO transactionstatus (txhash, status, blockhash, chainlength, address, createdtime, updatedtime) VALUES ");
-		for (int i = 0; i < valid.size(); i++) {
-			if (i > 0) {
-				sql.append(", ");
-			}
-			sql.append("(?, ?, ?, ?, ?, ?, ?)");
-		}
-		sql.append(getBatchUpsertStatusSuffix());
-		try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
-			int idx = 1;
-			for (net.bigtangle.server.data.TransactionStatusRecord r : valid) {
-				ps.setBytes(idx++, r.getTxHash().getBytes());
-				ps.setString(idx++, r.getStatus().name());
-				ps.setBytes(idx++, r.getBlockHash() == null ? null : r.getBlockHash().getBytes());
-				if (r.getChainlength() != null) {
-					ps.setLong(idx++, r.getChainlength());
-				} else {
-					ps.setNull(idx++, java.sql.Types.BIGINT);
+		// Chunk so a single multi-row INSERT stays far below PostgreSQL's
+		// 65,535-parameter limit (7 params per row). A block can hold thousands
+		// of transactions (large benchmark batches); one unbounded INSERT
+		// exceeds the limit and the whole status write is silently dropped.
+		final int CHUNK = 5000;
+		for (int off = 0; off < valid.size(); off += CHUNK) {
+			java.util.List<net.bigtangle.server.data.TransactionStatusRecord> chunk = valid.subList(off,
+					Math.min(valid.size(), off + CHUNK));
+			StringBuilder sql = new StringBuilder(128 + chunk.size() * 70);
+			sql.append("INSERT INTO transactionstatus (txhash, status, blockhash, chainlength, address, createdtime, updatedtime) VALUES ");
+			for (int i = 0; i < chunk.size(); i++) {
+				if (i > 0) {
+					sql.append(", ");
 				}
-				ps.setString(idx++, r.getAddress());
-				ps.setLong(idx++, r.getCreatedTime());
-				ps.setLong(idx++, r.getUpdatedTime());
+				sql.append("(?, ?, ?, ?, ?, ?, ?)");
 			}
-			ps.executeUpdate();
-		} catch (SQLException e) {
-			if (!getDuplicateKeyErrorCode().equals(e.getSQLState())) {
-				throw new BlockStoreException(e);
+			sql.append(getBatchUpsertStatusSuffix());
+			try (PreparedStatement ps = getConnection().prepareStatement(sql.toString())) {
+				int idx = 1;
+				for (net.bigtangle.server.data.TransactionStatusRecord r : chunk) {
+					ps.setBytes(idx++, r.getTxHash().getBytes());
+					ps.setString(idx++, r.getStatus().name());
+					ps.setBytes(idx++, r.getBlockHash() == null ? null : r.getBlockHash().getBytes());
+					if (r.getChainlength() != null) {
+						ps.setLong(idx++, r.getChainlength());
+					} else {
+						ps.setNull(idx++, java.sql.Types.BIGINT);
+					}
+					ps.setString(idx++, r.getAddress());
+					ps.setLong(idx++, r.getCreatedTime());
+					ps.setLong(idx++, r.getUpdatedTime());
+				}
+				ps.executeUpdate();
+			} catch (SQLException e) {
+				if (!getDuplicateKeyErrorCode().equals(e.getSQLState())) {
+					throw new BlockStoreException(e);
+				}
 			}
 		}
 	}

@@ -1137,7 +1137,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			byKey.put(outpointKey(op), op);
 		}
 		StringBuilder sql = new StringBuilder(
-				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, outputsmulti.toaddress as multitoaddress FROM outputs LEFT JOIN outputsmulti ON outputs.hash = outputsmulti.hash AND outputs.outputindex = outputsmulti.outputindex WHERE (outputs.hash, outputs.blockhash, outputs.outputindex) IN (");
+				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, NULL as multitoaddress FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
 		Iterator<TransactionOutPoint> iter = distinct.iterator();
 		while (iter.hasNext()) {
 			iter.next();
@@ -1150,8 +1150,8 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			int param = 1;
 			for (TransactionOutPoint op : distinct) {
 				s.setBytes(param++, op.getTxHash().getBytes());
-				s.setBytes(param++, op.getBlockHash().getBytes());
 				s.setLong(param++, op.getIndex());
+				s.setBytes(param++, op.getBlockHash().getBytes());
 			}
 			ResultSet rs = s.executeQuery();
 			while (rs.next()) {

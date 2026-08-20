@@ -376,25 +376,29 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// The per-thread cache turns the repeated full-set walks in the
 		// reference collection / connect paths into O(candidates) DB work per
 		// beacon instead of O(setSize * candidates).
+		boolean result = false;
 		try {
 			prefetchTransactionOutputConflicts(allApprovedNewBlocks, checkChainlength, store);
-		} catch (BlockStoreException e) {
-			logger.debug("prefetch conflict cache failed", e);
-		}
-		return allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
-				.anyMatch(c -> {
-					try {
-						long m = hasConflictDependencyChainlength(c, checkChainlength, store);
-						boolean re = hasConflictDependency(m, checkChainlength );
-						if (re){
-							logger.debug("hasSpentInputs {}", c.getBlock().getBlock().toString());
-						store.updateBlockEvaluationChainlength(c.getBlock().getBlock().getHash(), -1*m);
+			result = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
+					.anyMatch(c -> {
+						try {
+							long m = hasConflictDependencyChainlength(c, checkChainlength, store);
+							boolean re = hasConflictDependency(m, checkChainlength );
+							if (re){
+								logger.debug("hasSpentInputs {}", c.getBlock().getBlock().toString());
+							store.updateBlockEvaluationChainlength(c.getBlock().getBlock().getHash(), -1*m);
+							}
+								return re;
+						} catch (BlockStoreException e) {
+
+							logger.debug("hasSpentInputs exception", e);
+							return true;
 						}
-							return re;
-					} catch (BlockStoreException e) {
-						return true;
-					}
-				});
+					});
+		} catch (Exception e) {
+			logger.debug("hasSpentInputs outer", e);
+		}
+		return result;
 	}
 
 	/**
@@ -1874,12 +1878,6 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		}
 		if (!prevBlockHashes.isEmpty()) {
 			blockStore.updateTransactionOutputSpentBatch(prevBlockHashes, prevTxHashes, indexes, block.getHash());
-			for (int i = 0; i < prevBlockHashes.size(); i++) {
-					UTXO prevOut = blockStore.getTransactionOutput(prevBlockHashes.get(i),
-							prevTxHashes.get(i), indexes.get(i));
-					if (prevOut != null)
-						cacheBlockService.evictTransactionOutput(prevOut, blockStore);
-			}
 		}
 	}
 
@@ -1997,9 +1995,18 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			Collection<BlockWrap> blocks, HashSet<Sha256Hash> traversedConfirms) throws BlockStoreException {
 		ArrayList<BlockWrap> arrayList = new ArrayList<>(blocks);
 		arrayList.sort(Comparator.comparingLong((BlockWrap w) -> w.getBlock().getHeight()));
-		for (BlockWrap approvedBlock : arrayList) {
-			confirm(approvedBlock, traversedConfirms, chainlength, true, store);
-	 
+		// The confirm loop issues a handful of large statements per block; each
+		// is committed separately (shared single connection, autocommit). Relax
+		// synchronous_commit for the loop exactly like the micro-batch path does,
+		// so the writes don't fsync per statement.
+		store.setBatchDurability(true);
+		try {
+			for (BlockWrap approvedBlock : arrayList) {
+				confirm(approvedBlock, traversedConfirms, chainlength, true, store);
+
+			}
+		} finally {
+			store.setBatchDurability(false);
 		}
 		checkSum(store);
 	}
