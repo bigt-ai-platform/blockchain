@@ -507,6 +507,10 @@ public class SlotService {
             // service's block collection.
             ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
                     cacheBlockService, jsonmapper);
+            // Per-cycle conflict cache: a beacon must not reuse conflict results
+            // from a previous slot on this thread once the confirmed state moved
+            // on. The reference collection fills it incrementally per candidate.
+            net.bigtangle.server.service.base.ServiceBaseConfirmation.clearConflictCache();
             long prevChainLength = store.getRewardChainLength(prevRewardHash);
             long cutoffheight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
             Set<net.bigtangle.server.core.BlockWrap> blocks = new HashSet<>();

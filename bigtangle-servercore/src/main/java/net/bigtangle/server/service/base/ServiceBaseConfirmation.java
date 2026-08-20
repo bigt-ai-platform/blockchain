@@ -371,6 +371,16 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	public boolean hasSpentInputs(Set<BlockWrap> allApprovedNewBlocks, boolean checkChainlength,
 			BlockStoreInterface store) {
+		// Resolve every not-yet-cached TXOUT conflict candidate in a single
+		// batched DB query instead of one round-trip per candidate per call.
+		// The per-thread cache turns the repeated full-set walks in the
+		// reference collection / connect paths into O(candidates) DB work per
+		// beacon instead of O(setSize * candidates).
+		try {
+			prefetchTransactionOutputConflicts(allApprovedNewBlocks, checkChainlength, store);
+		} catch (BlockStoreException e) {
+			logger.debug("prefetch conflict cache failed", e);
+		}
 		return allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
 				.anyMatch(c -> {
 					try {
@@ -385,6 +395,112 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						return true;
 					}
 				});
+	}
+
+	/**
+	 * Warms the per-thread {@link #conflictCache} for every TXOUT conflict
+	 * candidate of {@code blocks} with one batched UTXO query. Candidates that
+	 * the current thread already resolved are left untouched, so repeated calls
+	 * on a growing set only fetch the newly-added candidates.
+	 */
+	private void prefetchTransactionOutputConflicts(Set<BlockWrap> blocks, boolean checkChainlength,
+			BlockStoreInterface store) throws BlockStoreException {
+		Map<String, Long> cache = conflictCache.get();
+		Set<TransactionOutPoint> outpoints = new HashSet<>();
+		Map<TransactionOutPoint, BlockWrap> firstClaimant = new HashMap<>();
+		for (BlockWrap bw : blocks) {
+			for (ConflictCandidate c : bw.toConflictCandidates()) {
+				if (c.getConflictPoint().getType() == ConflictPoint.ConflictType.TXOUT) {
+					TransactionOutPoint op = c.getConflictPoint().getConnectedOutpoint();
+					String key = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
+					if (!cache.containsKey(key)) {
+						outpoints.add(op);
+						firstClaimant.putIfAbsent(op, bw);
+					}
+				}
+			}
+		}
+		if (outpoints.isEmpty()) {
+			return;
+		}
+		Map<TransactionOutPoint, UTXO> utxos = store.getTransactionOutputs(outpoints);
+		Set<Sha256Hash> spenderHashes = new HashSet<>();
+		for (UTXO u : utxos.values()) {
+			if (u.getSpenderBlockHash() != null) {
+				spenderHashes.add(u.getSpenderBlockHash());
+			}
+		}
+		Map<Sha256Hash, BlockWrap> spenderWraps = new HashMap<>();
+		if (!spenderHashes.isEmpty()) {
+			List<Sha256Hash> spenderList = new ArrayList<>(spenderHashes);
+			for (int i = 0; i < spenderList.size(); i += 1500) {
+				List<Sha256Hash> sub = spenderList.subList(i, Math.min(spenderList.size(), i + 1500));
+				for (BlockWrap w : store.getBlockWraps(sub)) {
+					spenderWraps.put(w.getBlockHash(), w);
+				}
+			}
+		}
+		for (Map.Entry<TransactionOutPoint, UTXO> e : utxos.entrySet()) {
+			TransactionOutPoint op = e.getKey();
+			String key = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
+			if (cache.containsKey(key)) {
+				continue;
+			}
+			BlockWrap claimant = firstClaimant.get(op);
+			cache.put(key, claimant == null ? NoConflict
+					: spentByOther(claimant, e.getValue(), spenderWraps, checkChainlength));
+		}
+		// Outpoints with no outputs row: replicate checkUTXOSpent's fallback
+		// (load the creating block and solidify it). Only reached for outputs
+		// whose creating block is not yet saved.
+		for (TransactionOutPoint op : outpoints) {
+			String key = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
+			if (cache.containsKey(key)) {
+				continue;
+			}
+			BlockWrap claimant = firstClaimant.get(op);
+			if (claimant == null) {
+				cache.put(key, NoConflict);
+				continue;
+			}
+			for (ConflictCandidate c : claimant.toConflictCandidates()) {
+				if (c.getConflictPoint().getType() == ConflictPoint.ConflictType.TXOUT
+						&& op.equals(c.getConflictPoint().getConnectedOutpoint())) {
+					cache.put(key, checkUTXOSpent(c, checkChainlength, store));
+					break;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Mirrors {@link #checkUTXOSpent}'s non-null branch plus
+	 * {@link #checkSpentByOther} against a batched-fetched UTXO row, so the
+	 * prefetch resolves the same {@code long} result the per-candidate path
+	 * would compute without extra DB round-trips.
+	 */
+	private long spentByOther(BlockWrap claimant, UTXO utxo, Map<Sha256Hash, BlockWrap> spenderWraps,
+			boolean checkChainlength) {
+		Sha256Hash spender = utxo.getSpenderBlockHash();
+		if (claimant.getBlockHash().equals(spender)) {
+			if (utxo.isConfirmed())
+				return NoConflict;
+		} else if (spender != null) {
+			BlockWrap conflictBlock = spenderWraps.get(spender);
+			if (conflictBlock == null)
+				return NoConflict;
+			if (checkChainlength) {
+				if (conflictBlock.getBlockEvaluation().getChainlength() > 0) {
+					return conflictBlock.getBlockEvaluation().getChainlength();
+				}
+			} else {
+				if (conflictBlock.getBlockEvaluation().getChainlength() > 0)
+					return conflictBlock.getBlockEvaluation().getChainlength();
+				if (conflictBlock.getBlockEvaluation().isConfirmed())
+					return ConflictWithConfirmed;
+			}
+		}
+		return NoConflict;
 	}
 
 	/**

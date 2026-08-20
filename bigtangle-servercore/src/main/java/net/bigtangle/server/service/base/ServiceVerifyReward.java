@@ -97,6 +97,10 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
 
+		// Per-cycle conflict cache: drop entries from a previous beacon's connect
+		// so the batched prefetch re-reads the current confirmed state.
+		clearConflictCache();
+
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
 		for (Sha256Hash hash : referrencedBlocks) {

@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -46,6 +47,7 @@ import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
 import net.bigtangle.core.TokenKeyValues;
 import net.bigtangle.core.TransactionOutput;
+import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Utils;
@@ -65,6 +67,10 @@ import net.bigtangle.server.core.BlockWrap;
 public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface {
 
 	private static final String LIMIT_500 = " limit 500 ";
+
+	// 3 params per outpoint keeps a batched IN query far below PostgreSQL's
+	// 65,535-parameter ceiling.
+	private static final int BATCH_CHUNK_SIZE = 1500;
 
 	protected static final Logger log = LoggerFactory.getLogger(DatabaseFullBlockStoreBase.class);
 
@@ -491,8 +497,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	@Override
 	public void setBatchDurability(boolean asyncCommit) throws BlockStoreException {
-		// synchronous_commit is PostgreSQL-only; MySQL uses a different
-		// durability model and is left as-is (no-op).
+		// synchronous_commit is PostgreSQL-only; other drivers are left as-is (no-op).
 		if (!(conn instanceof org.postgresql.PGConnection)) {
 			return;
 		}
@@ -1099,6 +1104,76 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			throw new BlockStoreException(ex);
 		}
 		return result;
+	}
+
+	@Override
+	public Map<TransactionOutPoint, UTXO> getTransactionOutputs(Collection<TransactionOutPoint> outpoints)
+			throws BlockStoreException {
+		Map<TransactionOutPoint, UTXO> result = new HashMap<>();
+		if (outpoints.isEmpty())
+			return result;
+		// De-duplicate: the same outpoint may be spent by several blocks.
+		LinkedHashSet<TransactionOutPoint> distinct = new LinkedHashSet<>(outpoints);
+		// Chunk to stay far below PostgreSQL's 65,535-parameter limit: 3 params
+		// per outpoint -> 1500 outpoints per chunk.
+		List<TransactionOutPoint> chunk = new ArrayList<>(BATCH_CHUNK_SIZE);
+		for (TransactionOutPoint op : distinct) {
+			chunk.add(op);
+			if (chunk.size() == BATCH_CHUNK_SIZE) {
+				batchGetTransactionOutputs(chunk, result);
+				chunk = new ArrayList<>(BATCH_CHUNK_SIZE);
+			}
+		}
+		if (!chunk.isEmpty()) {
+			batchGetTransactionOutputs(chunk, result);
+		}
+		return result;
+	}
+
+	private void batchGetTransactionOutputs(List<TransactionOutPoint> distinct, Map<TransactionOutPoint, UTXO> result)
+			throws BlockStoreException {
+		Map<String, TransactionOutPoint> byKey = new HashMap<>();
+		for (TransactionOutPoint op : distinct) {
+			byKey.put(outpointKey(op), op);
+		}
+		StringBuilder sql = new StringBuilder(
+				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, outputsmulti.toaddress as multitoaddress FROM outputs LEFT JOIN outputsmulti ON outputs.hash = outputsmulti.hash AND outputs.outputindex = outputsmulti.outputindex WHERE (outputs.hash, outputs.blockhash, outputs.outputindex) IN (");
+		Iterator<TransactionOutPoint> iter = distinct.iterator();
+		while (iter.hasNext()) {
+			iter.next();
+			sql.append("(?, ?, ?)");
+			if (iter.hasNext())
+				sql.append(", ");
+		}
+		sql.append(")");
+		try (PreparedStatement s = getConnection().prepareStatement(sql.toString())) {
+			int param = 1;
+			for (TransactionOutPoint op : distinct) {
+				s.setBytes(param++, op.getTxHash().getBytes());
+				s.setBytes(param++, op.getBlockHash().getBytes());
+				s.setLong(param++, op.getIndex());
+			}
+			ResultSet rs = s.executeQuery();
+			while (rs.next()) {
+				long idx = rs.getLong("outputindex");
+				Sha256Hash blockHash = Sha256Hash.wrap(rs.getBytes("blockhash"));
+				Sha256Hash txHash = Sha256Hash.wrap(rs.getBytes("hash"));
+				TransactionOutPoint op = byKey.get(outpointKey(txHash, blockHash, idx));
+				if (op != null) {
+					result.put(op, setUTXO(txHash, idx, rs));
+				}
+			}
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	private static String outpointKey(TransactionOutPoint op) {
+		return outpointKey(op.getTxHash(), op.getBlockHash(), op.getIndex());
+	}
+
+	private static String outpointKey(Sha256Hash txHash, Sha256Hash blockHash, long index) {
+		return Utils.HEX.encode(txHash.getBytes()) + ":" + Utils.HEX.encode(blockHash.getBytes()) + ":" + index;
 	}
 
 	protected SpentBlockData setSpentBlock(Sha256Hash blockHash, ResultSet results) throws SQLException {

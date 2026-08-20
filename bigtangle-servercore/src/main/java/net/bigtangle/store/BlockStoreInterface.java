@@ -43,6 +43,7 @@ import net.bigtangle.core.StakeRecord;
 
 import net.bigtangle.core.TXReward;
 import net.bigtangle.core.Token;
+import net.bigtangle.core.TransactionOutPoint;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.UserData;
 import net.bigtangle.exception.BlockStoreException;
@@ -120,6 +121,13 @@ public interface BlockStoreInterface {
 	UTXO getTransactionOutput(Sha256Hash blockHash, Sha256Hash txHash, long index) throws BlockStoreException;
 
 	Map<Long, UTXO> getTransactionOutputs(Sha256Hash blockHash, Sha256Hash hash, Collection<Long> indices) throws BlockStoreException;
+
+	/**
+	 * Fetches the {@link net.bigtangle.core.UTXO} rows for many outpoints in a
+	 * single batched query. Outpoints with no row (output never created, or
+	 * created by a block not yet saved) are absent from the returned map.
+	 */
+	Map<TransactionOutPoint, UTXO> getTransactionOutputs(Collection<TransactionOutPoint> outpoints) throws BlockStoreException;
 
 	/**
 	 * Adds a {@link net.bigtangle.core.UTXO} to the list of unspent
