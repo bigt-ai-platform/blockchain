@@ -18,7 +18,31 @@ import net.bigtangle.store.PostgreSQLFullBlockStore;
 public class StoreService {
 
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("dataSource")
     protected DataSource dataSource;
+
+    /**
+     * Dedicated pool for the consensus path (slot tick / beacon proposal /
+     * block connection / confirmation). Threads that run consensus duty set
+     * this thread-local context so every {@link #getStore()} call on that
+     * thread draws a connection from the dedicated pool instead of the
+     * submit/API pool, which can be exhausted under load.
+     */
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("posDataSource")
+    protected DataSource posDataSource;
+
+    private static final ThreadLocal<Boolean> POS_CONTEXT = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /** Marks the current thread as a consensus-duty thread. */
+    public static void enterPosContext() {
+        POS_CONTEXT.set(Boolean.TRUE);
+    }
+
+    /** Clears the consensus-duty marker for the current thread. */
+    public static void exitPosContext() {
+        POS_CONTEXT.set(Boolean.FALSE);
+    }
 
     @Autowired
     protected NetworkParameters networkParameters;
@@ -30,7 +54,8 @@ public class StoreService {
     public BlockStoreInterface getStore() throws BlockStoreException {
         try {
             StoreDomain domain = parseDomain();
-            java.sql.Connection c = dataSource.getConnection();
+            DataSource source = POS_CONTEXT.get() ? posDataSource : dataSource;
+            java.sql.Connection c = source.getConnection();
             // A pooled connection can be returned mid-transaction if a batch
             // write was not properly finalized (autocommit=false + open
             // transaction). Queries on such a connection then see a STALE

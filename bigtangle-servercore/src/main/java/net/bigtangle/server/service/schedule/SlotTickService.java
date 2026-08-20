@@ -49,13 +49,14 @@ public class SlotTickService {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong consecutiveFailures = new AtomicLong(0);
 
-    @Async
+    @Async("posExecutor")
     @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
     public void tick() {
         if (!running.compareAndSet(false, true)) {
             log.trace("Slot tick already running; skipping");
             return;
         }
+        StoreService.enterPosContext();
         try {
             if (!scheduleConfiguration.isChainlength_active() || !serverConfiguration.checkService()) {
                 return;
@@ -114,6 +115,7 @@ public class SlotTickService {
                 }
             }
         } finally {
+            StoreService.exitPosContext();
             running.set(false);
         }
     }

@@ -50,10 +50,24 @@ public class DBStoreConfiguration {
 
 	@Bean
 	public DataSource dataSource() throws BlockStoreException, IOException, InterruptedException, ExecutionException {
-		return dataSourcePostgresql();
+		return dataSourcePostgresql(50, 5);
 	}
 
-	public DataSource dataSourcePostgresql()
+	/**
+	 * Dedicated, smaller connection pool for the CONSENSUS path (slot tick,
+	 * beacon proposal/attestation, block connection, confirmation). The main
+	 * {@link #dataSource()} pool is shared by the submit/API burst and can be
+	 * exhausted under load, which would stall the slot tick and let the node
+	 * propose late on a stale head — forking the chain. Giving the consensus
+	 * path its own pool guarantees it never waits for a connection behind the
+	 * burst.
+	 */
+	@Bean
+	public DataSource posDataSource() throws BlockStoreException, IOException, InterruptedException, ExecutionException {
+		return dataSourcePostgresql(8, 2);
+	}
+
+	public DataSource dataSourcePostgresql(int maximumPoolSize, int minimumIdle)
 			throws BlockStoreException, IOException, InterruptedException, ExecutionException {
 
 		HikariConfig config = new HikariConfig();
@@ -63,8 +77,8 @@ public class DBStoreConfiguration {
 		config.setUsername(username);
 		config.setPassword(password);
 		config.setDriverClassName("org.postgresql.Driver"); // explicitly set driver
-		config.setMaximumPoolSize(50);
-		config.setMinimumIdle(5);
+		config.setMaximumPoolSize(maximumPoolSize);
+		config.setMinimumIdle(minimumIdle);
 		config.setConnectionTimeout(30000);
 		config.setIdleTimeout(60000);
 		config.setMaxLifetime(1800000);

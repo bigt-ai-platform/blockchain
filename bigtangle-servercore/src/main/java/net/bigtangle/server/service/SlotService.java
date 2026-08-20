@@ -48,6 +48,18 @@ public class SlotService {
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SLOT_DURATION_MS;
 
+    /**
+     * Fraction of the slot window a beacon proposal may consume before the
+     * expensive full reference collection (addAllUnconfirmedBlocks) is skipped.
+     * Under submit load a slow DB can push a proposal past its window; a late
+     * beacon built on a stale head forks the chain and resets confirmation for
+     * everyone. Skipping the extra reference sweep keeps the proposal on time —
+     * the DAG-tip walk still references the recent blocks, and the skipped
+     * siblings are referenced by the next beacon.
+     */
+    @org.springframework.beans.factory.annotation.Value("${pos.proposalDeadlineFraction:0.6}")
+    private double proposalDeadlineFraction = 0.6;
+
     @Autowired
     private NetworkParameters networkParameters;
 
@@ -527,6 +539,13 @@ public class SlotService {
             // referenced it), so it collects already-confirmed blocks too and then
             // subtracts the blocks a previous epoch-start beacon already rewarded.
             boolean epochStart = getSlotInEpoch(slot) == 0;
+            long refStartMs = System.currentTimeMillis();
+            // Wall-clock deadline for this proposal: the first proposalDeadlineFraction
+            // of the slot window. Past it we drop the expensive full sweep so the
+            // beacon still gets out on time instead of forking the chain.
+            long deadlineMs = slotIntervalMs > 0
+                    ? (long) (slotIntervalMs * Math.min(Math.max(proposalDeadlineFraction, 0.05), 0.95))
+                    : SLOT_DURATION_MS / 2;
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(trunk.getHash(), store), cutoffheight,
                     prevChainLength, ordertypes, true, true, epochStart, store);
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
@@ -534,7 +553,14 @@ public class SlotService {
             // Reference EVERY eligible unconfirmed block above the cutoff (not
             // just the trunk/branch tip paths), so sibling batch blocks from all
             // producers are confirmed instead of orphaned forever.
-            serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
+            long refElapsedMs = System.currentTimeMillis() - refStartMs;
+            if (refElapsedMs < deadlineMs) {
+                serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
+            } else {
+                log.warn(
+                        "Beacon proposal reference sweep over deadline ({}ms >= {}ms) at slot {}; skipping addAllUnconfirmedBlocks",
+                        refElapsedMs, deadlineMs, slot);
+            }
             if (epochStart) {
                 java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
                 blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));

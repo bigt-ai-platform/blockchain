@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
+import net.bigtangle.server.service.StoreService;
 import net.bigtangle.store.BlockStoreService;
 
 @Component
@@ -28,14 +29,20 @@ public class UpdateChainService {
     @Autowired
     private ScheduleConfiguration scheduleConfiguration;
 
-    @Async
+    @Async("posExecutor")
     @Scheduled(fixedDelayString = "${service.schedule.upchainrate:10000}")
     public void updateChain() {
         if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
+            // Consensus duty: draw connections from the dedicated pos pool so
+            // the block-connection pipeline is never starved by the submit
+            // burst (a stale head would make the node propose/attest on a fork).
+            StoreService.enterPosContext();
             try {
                 blockGraph.updateChain();
             } catch (Exception e) {
                 logger.warn("updateConfirmService ", e);
+            } finally {
+                StoreService.exitPosContext();
             }
         }
     }
