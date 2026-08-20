@@ -102,8 +102,15 @@ public class BlockService {
 	}
 
 	public void batchBlock(Block block, BlockStoreInterface store) throws BlockStoreException {
-		store.insertBatchBlock(block);
+		// Validate + guard the block's transactions BEFORE creating the
+		// batchblock row. The old order (insert then submit) left a row behind
+		// when submit rejected a double-spend tx; the batch pipeline then
+		// materialised a conflicting block whose spends deadlocked beacon
+		// confirmation (a beacon referencing both the legit and the double-spend
+		// block is rejected) and stalled the chain. Rejecting here keeps the
+		// block from ever reaching the DAG.
 		mempoolService.submit(block);
+		store.insertBatchBlock(block);
 	}
 
 	public void batchBlockToMempool(Block block) {
