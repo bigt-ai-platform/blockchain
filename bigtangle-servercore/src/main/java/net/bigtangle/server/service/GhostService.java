@@ -45,6 +45,15 @@ public class GhostService {
     // between two forks (the "balancing attack, LMD edition").
     private final java.util.Set<String> equivocatingValidators = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    // Chain-read fork-choice weights are a pure function of the CONFIRMED chain
+    // tip, so they are memoized per tip hash: executeGhost runs several times
+    // per slot (propose + getTwoTips + attest duty) and each uncached run walks
+    // ATTESTATION_LOOKBACK_SLOTS confirmed blocks. The cache key is the tip, so
+    // any newly confirmed beacon invalidates it naturally.
+    private final Object chainVotesLock = new Object();
+    private Sha256Hash chainVotesTip;
+    private Map<Sha256Hash, Long> chainVotesCache = java.util.Collections.emptyMap();
+
     // @Lazy breaks the GhostService <-> StakeService <-> BlockSaveService
     // cycle (stakeService is only touched at runtime, never at startup).
     @Lazy
@@ -94,7 +103,16 @@ public class GhostService {
             try {
                 Map<Sha256Hash, Long> saved = store.getSummedAttestationVotes();
                 forkChoiceVotes.clear();
-                equivocatingValidators.clear();
+                // NOTE: equivocatingValidators is deliberately NOT cleared
+                // here. Marks come from authenticated double-vote evidence
+                // (like the slot-sighting registry) and must survive the
+                // periodic reload — clearing them every cycle would let an
+                // equivocating validator regain fork-choice weight between
+                // reloads. Also drop the memoized chain-read weights so they
+                // are rebuilt under the current mark set.
+                synchronized (chainVotesLock) {
+                    chainVotesTip = null;
+                }
                 if (saved != null) {
                     forkChoiceVotes.putAll(saved);
                 }
@@ -166,6 +184,10 @@ public class GhostService {
     public void markEquivocating(byte[] pubkey) {
         String pk = net.bigtangle.core.Utils.HEX.encode(pubkey);
         if (equivocatingValidators.add(pk)) {
+            // Rebuild the memoized chain-read weights without this validator.
+            synchronized (chainVotesLock) {
+                chainVotesTip = null;
+            }
             Sha256Hash prevBeacon = latestVoteBeacons.remove(pk);
             long prevWeight = latestVoteWeights.getOrDefault(pk, 0L);
             latestVoteWeights.remove(pk);
@@ -267,9 +289,36 @@ public class GhostService {
      * Deterministic LMD-GHOST head-vote weight derived from the ON-CHAIN
      * embedded attestations: each validator's LATEST embedded head vote (by
      * slot) contributes its effective stake to the voted block. Empty when the
-     * confirmed chain carries no embedded attestations (pre-fork).
+     * confirmed chain carries no embedded attestations (pre-fork). Memoized per
+     * confirmed tip (see the cache fields above).
      */
     private Map<Sha256Hash, Long> chainForkChoiceVotes(BlockStoreInterface store) {
+        Sha256Hash tipHash = null;
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            tipHash = tip != null ? tip.getBlockHash() : null;
+        } catch (Exception e) {
+            log.debug("Failed to read confirmed tip for fork-choice votes", e);
+            return deriveChainForkChoiceVotes(store);
+        }
+        if (tipHash == null) {
+            return new HashMap<>();
+        }
+        synchronized (chainVotesLock) {
+            if (tipHash.equals(chainVotesTip)) {
+                return chainVotesCache;
+            }
+        }
+        Map<Sha256Hash, Long> fresh = deriveChainForkChoiceVotes(store);
+        synchronized (chainVotesLock) {
+            chainVotesTip = tipHash;
+            chainVotesCache = fresh;
+        }
+        return fresh;
+    }
+
+    /** The uncached chain walk behind {@link #chainForkChoiceVotes}. */
+    private Map<Sha256Hash, Long> deriveChainForkChoiceVotes(BlockStoreInterface store) {
         Map<String, AttestationData> latestHead = new HashMap<>();
         try {
             TXReward tip = store.getMaxConfirmedReward();

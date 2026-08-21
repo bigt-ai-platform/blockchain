@@ -47,11 +47,12 @@ public class PosConsensusHardeningTest {
 
     @Test
     public void sameTargetEpochDifferentTargetRootIsNotDoubleVote() {
-        // Form (b) is DISABLED: attestations target the CURRENT wall-clock epoch,
-        // whose boundary is the moving chain tip while the epoch is live, so two
-        // honest attestations within one epoch legitimately differ in target and
-        // must NOT be slashable (see SlashingService.isDoubleVote). Form (b) may
-        // only be re-enabled once attestations target a stable past boundary.
+        // Form (b) is DISABLED: attestation targets are chain-derived, but
+        // during the first confirmed position of each epoch the boundary is
+        // not yet derivable and the transient target is node-local — two
+        // honest attestations in that window legitimately differ in target and
+        // must NOT be slashable (see SlashingService.isDoubleVote). Form (b)
+        // may only be re-enabled once the target is stable for the whole epoch.
         AttestationData a = att(33, 0, 1, h(1), h(1));
         AttestationData b = att(40, 0, 1, h(2), h(2));
         assertFalse(SlashingService.isDoubleVote(a, b));

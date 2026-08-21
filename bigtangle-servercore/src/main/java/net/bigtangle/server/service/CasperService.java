@@ -88,6 +88,11 @@ public class CasperService {
     private final ConcurrentHashMap<String, ConcurrentHashMap<Long, Sha256Hash>> epochVoteTargets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentHashMap<Long, Sha256Hash>> epochVoteSources = new ConcurrentHashMap<>();
 
+    // Pubkeys this node has already proposed a SLASHING block for (per restart).
+    // Guards against re-proposing on every duplicate delivery of an
+    // equivocating vote pair.
+    private final Set<String> slashingReported = ConcurrentHashMap.newKeySet();
+
     @Autowired
     private GhostService ghostService;
 
@@ -297,7 +302,16 @@ public class CasperService {
         Sha256Hash boundaryHash = epochBoundaryHash(epoch, store);
         if (boundaryHash == null) {
             // Boundary not derivable yet: return a transient checkpoint that is
-            // NOT cached, so it cannot poison future lookups.
+            // NOT cached, so it cannot poison future lookups. The transient
+            // target is DETERMINISTIC wherever possible: the previous epoch's
+            // cached chain-derived checkpoint (identical on every synced node)
+            // instead of this node's confirmed head, which is node-local and
+            // would fragment attestation targets during the first confirmed
+            // position of each epoch.
+            Checkpoint prev = epoch > 0 ? checkpoints.get(epoch - 1) : null;
+            if (prev != null && prev.blockHash != null) {
+                return new Checkpoint(prev.blockHash, epoch);
+            }
             Checkpoint transientCp = new Checkpoint(confirmedHeadOrGenesis(store), epoch);
             if (epoch == 0) {
                 transientCp.justified = true;
@@ -532,17 +546,18 @@ public class CasperService {
         }
         String vkey = Utils.HEX.encode(att.getValidatorPubkey());
 
-        // Authenticate the attestation before it influences any state.
-        if (!verifyAttestation(att)) {
-            log.warn("Rejecting unauthenticated attestation from pubkey={} slot={}", vkey, att.getSlot());
+        // Cheap rejection FIRST: unknown/slashed/not-yet-active pubkeys are
+        // dropped before any expensive work, so the endpoint cannot be spammed
+        // with random-key garbage that forces a PQ/BLS signature verification
+        // per request (DoS cost bound).
+        if (stakeService.getEffectiveStake(att.getValidatorPubkey(), store) <= 0) {
+            log.warn("Rejecting attestation from non-validator pubkey={} slot={}", vkey, att.getSlot());
             return;
         }
 
-        // Only active validators can attest; unknown/slashed pubkeys are
-        // rejected BEFORE touching any vote/slashing/gossip state, so the
-        // endpoint cannot cause unbounded memory or DB growth.
-        if (stakeService.getEffectiveStake(att.getValidatorPubkey(), store) <= 0) {
-            log.warn("Rejecting attestation from non-validator pubkey={} slot={}", vkey, att.getSlot());
+        // Authenticate the attestation before it influences any state.
+        if (!verifyAttestation(att)) {
+            log.warn("Rejecting unauthenticated attestation from pubkey={} slot={}", vkey, att.getSlot());
             return;
         }
 
@@ -579,7 +594,16 @@ public class CasperService {
             log.warn("Slashing: slashable vote by pubkey={} slot={}", vkey, att.getSlot());
             // Discard the equivocating validator from fork choice (PR #2845).
             ghostService.markEquivocating(att.getValidatorPubkey());
-            stakeService.submitSlashing(evidence, att, store);
+            // Propose the slashing block ONCE per equivocating pubkey: every
+            // node that observes both conflicting votes would otherwise build
+            // its own SLASHING block on its local head, forking the reward
+            // chain N ways per event. Application is idempotent either way;
+            // this only avoids the duplicate-proposal noise.
+            if (slashingReported.add(vkey)) {
+                stakeService.submitSlashing(evidence, att, store);
+            } else {
+                log.debug("Slashing evidence for pubkey={} already reported", vkey);
+            }
             return;
         }
 
@@ -999,6 +1023,12 @@ public class CasperService {
         ensureCheckpoint(epoch - 1, store);
         Checkpoint parent = checkpoints.get(epoch - 1);
 
+        // One chain-read inclusion set per evaluation: justification and both
+        // finalization rules read the same confirmed tip, so the 320-slot walk
+        // must not repeat per vote sum.
+        Map<String, AttestationData> included = onChainAttestationActive(store)
+                ? collectIncludedAttestations(store) : null;
+
         BigInteger totalStake = leakedTotalStake(store, epoch);
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
             return;
@@ -1012,7 +1042,7 @@ public class CasperService {
                 // source, so an advancing justified checkpoint cannot orphan
                 // pending votes. Counting is per (validator, target-epoch):
                 // later votes in newer epochs never erase this epoch's votes.
-                BigInteger votedStake = votedStakeFor(target, null, store);
+                BigInteger votedStake = votedStakeFor(target, null, store, included);
                 if (votedStake.compareTo(twoThirds) >= 0
                         && canSwitchJustification(target, justifySource, store)) {
                     target.justified = true;
@@ -1041,7 +1071,7 @@ public class CasperService {
             pruneEpochVotes(target.epoch);
         }
         if (target.justified && parent != null && parent.justified && !parent.finalized) {
-            BigInteger link = votedStakeFor(target, parent.blockHash, store);
+            BigInteger link = votedStakeFor(target, parent.blockHash, store, included);
             if (link.compareTo(twoThirds) >= 0) {
                 parent.finalized = true;
                 log.info("Checkpoint FINALIZED via consecutive-epoch link: epoch={}, block={}",
@@ -1111,11 +1141,17 @@ public class CasperService {
      * counts from ANY justified source; when non-null only votes with exactly
      * that source count (used for the consecutive-epoch supermajority link that
      * finalizes the parent).
+     *
+     * <p>{@code included} is a precomputed chain-read inclusion set (from
+     * {@link #collectIncludedAttestations}); callers that evaluate several
+     * vote sums against the same confirmed tip pass it once so the 320-slot
+     * chain walk runs a single time per evaluation. {@code null} = compute it.
      */
     private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
-            BlockStoreInterface store) throws Exception {
+            BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
         if (onChainAttestationActive(store)) {
-            return votedStakeFromChain(target, requiredSource, store, collectIncludedAttestations(store));
+            Map<String, AttestationData> inc = included != null ? included : collectIncludedAttestations(store);
+            return votedStakeFromChain(target, requiredSource, store, inc);
         }
         return votedStakeFromGossip(target, requiredSource, store);
     }

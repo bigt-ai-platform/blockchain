@@ -183,17 +183,15 @@ public class SlashingService {
      * Ethereum's slashable double-vote forms:
      * <p>(a) same slot, two different heads (beacon block hashes), and
      * <p>(b) same target epoch, two different target checkpoints.
-     * <p>Form (b) is DISABLED: it requires the attestation target to be
-     * deterministic for the whole epoch, which only holds for a boundary the
-     * chain has already crossed. Attestations currently target the CURRENT
-     * wall-clock epoch, whose boundary (epochBoundaryHash — the last confirmed
-     * beacon below the epoch boundary) is the moving chain tip while the epoch
-     * is live, so an honest validator attesting twice within one epoch legitimately
-     * produces two different targets and would be falsely slashed (reproduced in
-     * the 4-node prodsim: all four honest validators slashed within seconds).
-     * Form (b) may only be re-enabled once attestations target a STABLE past
-     * boundary (e.g. the epoch-two-behind chain-epoch checkpoint used by the
-     * selection snapshot / reward lookback).
+     * <p>Form (b) is DISABLED. Attestation targets ARE chain-derived today
+     * ({@code currentChainEpoch} + {@code ensureCheckpoint}), but during the
+     * FIRST confirmed position of each epoch the boundary is not yet derivable
+     * and the transient target is node-local — two honest validators attesting
+     * in that window legitimately produce different targets and would be
+     * falsely slashed (reproduced in the 4-node prodsim: all four honest
+     * validators slashed within seconds). Form (b) may only be re-enabled once
+     * the attestation target is stable for the WHOLE epoch on every node (e.g.
+     * a fixed past-boundary discipline), together with the surround-vote form.
      */
     public static boolean isDoubleVote(AttestationData a, AttestationData b) {
         if (a == null || b == null) {

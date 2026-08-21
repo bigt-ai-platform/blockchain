@@ -464,6 +464,41 @@ public class PoSTest extends AbstractIntegrationTest {
         casperService.processSlot(0, Sha256Hash.ZERO_HASH, List.of(), store);
     }
 
+    /**
+     * The transient checkpoint (epoch boundary not yet derivable) must be
+     * DETERMINISTIC across nodes: it falls back to the previous epoch's cached
+     * chain-derived checkpoint, never to this node's confirmed head. Otherwise
+     * honest validators attesting during the first confirmed position of an
+     * epoch produce node-local targets that fragment justification — and would
+     * be slashable if the same-target-epoch double-vote form is ever
+     * re-enabled.
+     */
+    @Test
+    public void testTransientCheckpointPrefersPreviousEpochBoundary() throws Exception {
+        // High epochs no other test in the shared Spring context touches.
+        long baseEpoch = 4_000_000L;
+        Sha256Hash boundary = Sha256Hash.of("boundary-transient-test".getBytes());
+        CasperService.Checkpoint prev = casperService.ensureCheckpoint(baseEpoch, boundary);
+
+        // The next epoch's boundary is not derivable on this young chain
+        // (tip chainlength << epoch*32): the transient checkpoint must reuse
+        // the previous epoch's cached boundary hash.
+        CasperService.Checkpoint transientNext = casperService.ensureCheckpoint(baseEpoch + 1, store);
+        assertEquals(prev.getBlockHash(), transientNext.getBlockHash(),
+                "transient target must be the previous epoch's cached boundary");
+
+        // Deterministic across evaluations (a second node deriving the same
+        // way reaches the identical target).
+        CasperService.Checkpoint again = casperService.ensureCheckpoint(baseEpoch + 1, store);
+        assertEquals(transientNext.getBlockHash(), again.getBlockHash(),
+                "transient target must not drift between evaluations");
+
+        // Without a cached previous epoch there is nothing deterministic to
+        // fall back to; the transient must still be produced, never null.
+        assertNotNull(casperService.ensureCheckpoint(baseEpoch + 2, store),
+                "transient fallback always yields a checkpoint");
+    }
+
     @Test
     public void testCasperProcessVote() throws Exception {
         long slot = slotService.getCurrentSlot();
