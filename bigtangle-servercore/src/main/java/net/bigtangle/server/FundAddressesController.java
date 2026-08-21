@@ -154,7 +154,17 @@ public class FundAddressesController {
                 log.warn("store close failed", e);
             }
         }
-        long base = Math.max(persisted, FUND_UTXO_INDEX.get());
+        // Migration: pre-persistence deployments minted with only the
+        // in-memory counter (base 1e9), which grew unbounded across restarts;
+        // its high-water mark was lost, so a fresh JVM rewinds onto those
+        // already-spent outpoints (observed as OP_EQUALVERIFY failures).
+        // Guard: never hand out indices below wall-clock seconds — strictly
+        // above any legacy value. After the first such seed the persisted
+        // mark stays ahead of the clock and this is a no-op.
+        long base = Math.max(Math.max(persisted, FUND_UTXO_INDEX.get()), System.currentTimeMillis());
+        if (base > persisted + count && persisted > 0) {
+            log.warn("faucet index jumped forward to avoid stale range: {} -> {}", persisted, base);
+        }
         long next = base + count;
         FUND_UTXO_INDEX.set(next);
         return base;
