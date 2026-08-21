@@ -39,7 +39,15 @@ public class OkHttp3Util {
     private static final Logger logger = LoggerFactory.getLogger(OkHttp3Util.class);
 
     public static long timeoutMinute = 45;
+    /**
+     * Short timeout for CONSENSUS-PATH calls (gossip of attestations/beacons).
+     * A stalled peer must fail fast: these calls run on the single duty
+     * executor, so blocking here for minutes freezes slot ticks and stalls
+     * finality mesh-wide.
+     */
+    public static long gossipTimeoutSec = 5;
     private static OkHttpClient client = null;
+    private static OkHttpClient gossipClient = null;
     public static String pubkey;
     public static String signHex;
     public static String contentHex;
@@ -167,7 +175,64 @@ public class OkHttp3Util {
 
     }
 
+    /**
+     * Client for consensus-path gossip with short timeouts: fail fast on a
+     * stalled peer instead of blocking the duty thread.
+     */
+    public static OkHttpClient getGossipClient() {
+        if (gossipClient == null)
+            gossipClient = getUnsafeOkHttpClient(gossipTimeoutSec, TimeUnit.SECONDS);
+        return gossipClient;
+    }
+
+    /**
+     * Gossip post: like {@link #post(String, byte[])} but bounded by
+     * {@link #gossipTimeoutSec}. Failures are expected and must be handled by
+     * the caller (best-effort broadcast).
+     */
+    public static byte[] postGossip(String url, byte[] b) throws IOException {
+        logger.debug("gossip start:  {}", url);
+        OkHttpClient gclient = getGossipClient();
+        RequestBody body = RequestBody.create(MediaType.parse("application/octet-stream"), b);
+        Request request = new Request.Builder().url(url).post(body).build();
+        Response response = gclient.newCall(request).execute();
+        try {
+            if (!response.isSuccessful()) {
+                throw new RuntimeException("Server:" + url + "  HTTP  Error: " + response);
+            }
+            byte[] resp = response.body().bytes();
+            checkResponse(resp, url);
+            return resp;
+        } finally {
+            response.close();
+            response.body().close();
+        }
+    }
+
+    /**
+     * Gossip post with failover across {@code url}s (first success wins),
+     * each attempt bounded by {@link #gossipTimeoutSec}.
+     */
+    public static byte[] postGossip(String[] urls, byte[] b) throws IOException {
+        return postGossip(urls, b, 0);
+    }
+
+    private static byte[] postGossip(String[] urls, byte[] b, int number) throws IOException {
+        if (number < urls.length) {
+            try {
+                return postGossip(urls[number], b);
+            } catch (IOException | RuntimeException e) {
+                return postGossip(urls, b, number + 1);
+            }
+        }
+        throw new RuntimeException("all servers are failed:  " + Arrays.toString(urls));
+    }
+
     public static OkHttpClient getUnsafeOkHttpClient() {
+        return getUnsafeOkHttpClient(timeoutMinute, TimeUnit.MINUTES);
+    }
+
+    public static OkHttpClient getUnsafeOkHttpClient(long timeout, TimeUnit unit) {
         try {
 
             X509TrustManager tr = new X509TrustManager() {
@@ -198,9 +263,9 @@ public class OkHttp3Util {
                         public boolean verify(String hostname, SSLSession session) {
                             return true;
                         }
-                    }).connectTimeout(timeoutMinute, TimeUnit.MINUTES).writeTimeout(timeoutMinute, TimeUnit.MINUTES)
+                    }).connectTimeout(timeout, unit).writeTimeout(timeout, unit)
                     .addInterceptor(new BasicAuthInterceptor(pubkey, signHex, contentHex))
-                    .readTimeout(timeoutMinute, TimeUnit.MINUTES).build();
+                    .readTimeout(timeout, unit).build();
             return client;
         } catch (Exception e) {
             throw new RuntimeException(e);

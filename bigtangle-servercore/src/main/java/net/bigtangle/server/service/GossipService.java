@@ -54,7 +54,9 @@ public class GossipService {
             if (p.isEmpty()) continue;
             try {
                 String url = "http://" + p + "/" + path;
-                OkHttp3Util.post(url, body);
+                // Short-timeout gossip: a stalled peer must never block the
+                // duty thread (slot ticks) — skip it and move on.
+                OkHttp3Util.postGossip(url, body);
             } catch (Exception e) {
                 log.debug("gossip to {} failed: {}", p, e.getMessage());
             }

@@ -300,14 +300,23 @@ public class ValidatorDutyService {
 
             // Best-effort loopback broadcast: the vote is already processed
             // locally (processVote also gossips) — a post failure must never
-            // fail the duty.
+            // fail the duty. requester may be a comma-separated list; post to
+            // each candidate with the SHORT gossip timeout so a stalled node
+            // cannot block the duty thread (45-min default would).
             try {
                 String requester = serverConfiguration.getRequester();
-                String contextRoot = requester != null && !requester.isEmpty() ? requester
-                        : "http://localhost:" + serverConfiguration.getPort() + "/";
-                if (!contextRoot.endsWith("/")) contextRoot += "/";
-                OkHttp3Util.post(contextRoot + ReqCmd.submitAttestation.name(),
-                        Json.jsonmapper().writeValueAsBytes(att));
+                String[] urls;
+                if (requester != null && !requester.trim().isEmpty()) {
+                    urls = java.util.Arrays.stream(requester.split(",")).map(String::trim).filter(s -> !s.isEmpty())
+                            .toArray(String[]::new);
+                } else {
+                    urls = new String[] { "http://localhost:" + serverConfiguration.getPort() };
+                }
+                for (int i = 0; i < urls.length; i++) {
+                    urls[i] = urls[i].endsWith("/") ? urls[i] + ReqCmd.submitAttestation.name()
+                            : urls[i] + "/" + ReqCmd.submitAttestation.name();
+                }
+                OkHttp3Util.postGossip(urls, Json.jsonmapper().writeValueAsBytes(att));
             } catch (Exception e) {
                 log.debug("Loopback attestation post failed: {}", e.getMessage());
             }
