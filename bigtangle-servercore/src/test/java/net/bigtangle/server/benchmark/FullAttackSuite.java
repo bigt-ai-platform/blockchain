@@ -97,7 +97,7 @@ public class FullAttackSuite {
         return Math.max(1, (int) Math.round(full * SCALE));
     }
 
-    private static List<UTXO> fundAndFetch(List<PQKey> keys, long amount) throws Exception {
+    private static Map<String, UTXO> fundAndFetchByAddress(List<PQKey> keys, long amount) throws Exception {
         List<Map<String, Object>> entries = new ArrayList<>();
         for (PQKey k : keys) {
             Map<String, Object> e = new HashMap<>();
@@ -115,15 +115,22 @@ public class FullAttackSuite {
         GetOutputsResponse gor = Json.jsonmapper().readValue(
                 OkHttp3Util.postString(base + "getOutputs", Json.jsonmapper().writeValueAsString(hashes)),
                 GetOutputsResponse.class);
-        List<UTXO> out = new ArrayList<>();
+        // KEYED by address: getOutputs makes NO ordering guarantee, so a
+        // positional list silently pairs wallets with FOREIGN UTXOs (their
+        // scriptSig then fails verification at submit).
+        Map<String, UTXO> byAddr = new HashMap<>();
         if (gor.getOutputs() != null) {
             for (UTXO u : gor.getOutputs()) {
                 if (u.getValue() != null && u.getValue().getValue().longValue() == amount && u.getAddress() != null) {
-                    out.add(u);
+                    byAddr.put(u.getAddress(), u);
                 }
             }
         }
-        return out;
+        return byAddr;
+    }
+
+    private static UTXO utxoFor(Map<String, UTXO> byAddr, PQKey wallet) {
+        return byAddr.get(Address.fromHash160(params, wallet.getPubKeyHash()).toBase58());
     }
 
     private static Transaction pay(PQKey from, UTXO utxo, String toAddr, long amount, String note)
@@ -227,14 +234,14 @@ public class FullAttackSuite {
         for (int i = 0; i < pairs; i++) {
             wallets.add(PQKey.createNew());
         }
-        List<UTXO> utxos = fundAndFetch(wallets, 30000);
+        Map<String, UTXO> utxos = fundAndFetchByAddress(wallets, 30000);
         assertTrue(utxos.size() > 0, "V1: funding failed");
 
         int legitSubmitted = 0;
         int dsRejectedAtSubmit = 0;
         List<Transaction> legitTxs = new ArrayList<>();
         for (int i = 0; i < pairs; i++) {
-            UTXO u = utxos.size() > i ? utxos.get(i) : null;
+            UTXO u = utxoFor(utxos, wallets.get(i));
             if (u == null) {
                 continue;
             }
@@ -287,11 +294,8 @@ public class FullAttackSuite {
         for (int i = 0; i < pairs + control; i++) {
             wallets.add(PQKey.createNew());
         }
-        List<UTXO> utxos = fundAndFetch(wallets, 30000);
-        Map<String, UTXO> byAddr = new HashMap<>();
-        for (UTXO u : utxos) {
-            byAddr.put(u.getAddress(), u);
-        }
+        Map<String, UTXO> utxos = fundAndFetchByAddress(wallets, 30000);
+        Map<String, UTXO> byAddr = utxos;
 
         // The CONFLICT is the attack: the LEGITIMATE payment enters the mempool
         // first, then a CRAFTED BLOCK re-spends the SAME UTXO for the attacker.
@@ -377,16 +381,16 @@ public class FullAttackSuite {
         String merchantAddr = Address.fromHash160(params, PQKey.createNew().getPubKeyHash()).toBase58();
         String attackerAddr = Address.fromHash160(params, attacker.getPubKeyHash()).toBase58();
         List<PQKey> one = new ArrayList<>(List.of(victim));
-        List<UTXO> utxos = fundAndFetch(one, 30000);
+        Map<String, UTXO> utxos = fundAndFetchByAddress(one, 30000);
         assertTrue(utxos.size() > 0, "V3: funding failed");
         // The injected blocks all carry a CONFLICTING spend of this UTXO (the
         // legitimate spend enters the mempool first). A block that merely
         // carries a valid single spend SHOULD confirm — that proves nothing.
         // Only a double-spend smuggled through an invalid block would be a
         // breach.
-        Transaction legitTx = pay(victim, utxos.get(0), merchantAddr, 20000, "v3-legit");
+        Transaction legitTx = pay(victim, utxoFor(utxos, victim), merchantAddr, 20000, "v3-legit");
         assertTrue(submitTx(legitTx), "V3: legit mempool spend refused");
-        Transaction dsTx = pay(victim, utxos.get(0), attackerAddr, 20000, "v3-double-spend");
+        Transaction dsTx = pay(victim, utxoFor(utxos, victim), attackerAddr, 20000, "v3-double-spend");
 
         int rejected = 0;
         int acceptedAtEdge = 0;
