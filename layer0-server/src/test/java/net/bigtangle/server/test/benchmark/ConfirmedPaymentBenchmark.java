@@ -61,7 +61,9 @@ import net.bigtangle.wallet.Wallet;
  * <pre>
  * mvn test -pl layer0-server \
  *   -Dtest=ConfirmedPaymentBenchmark \
- *   -Dbench.tx=10000 -Dbench.clients=20 -Dbench.batch=250
+ *   -Dbench.tx=10000 -Dbench.clients=20 -Dbench.batch=250 \
+ *   -Dbatch.minTx=3000 -Dbatch.maxBatchAgeMs=1500 \
+ *   -Dperf.confirmLogMinTx=50 -Dperf.connectLogMinRefs=10 -Dperf.sweepLogMinBlocks=10
  * </pre>
  *
  * <p>Tunables (system properties): {@code bench.tx} (total payments, default
@@ -69,6 +71,15 @@ import net.bigtangle.wallet.Wallet;
  * {@code bench.batch} (tx per submit call, default 250), {@code bench.pay}
  * (pay per tx, default 10000), {@code bench.fund} (fund per wallet, default
  * 20000), {@code bench.confirmTimeoutSec} (default 300).
+ *
+ * <p>Confirmation-path diagnostics (log lines per beacon):
+ * {@code perf.sweepLogMinBlocks} (proposal reference sweep log threshold,
+ * default 50), {@code perf.connectLogMinRefs} (beacon-connect breakdown
+ * threshold, default 20), {@code perf.confirmLogMinTx} (confirmBlocksSorted
+ * spent-write breakdown threshold, default 100). Batching: {@code batch.minTx}
+ * (mempool size before a micro-batch drains, default 2000) and
+ * {@code batch.maxBatchAgeMs} (force-drain age, default 2000) — larger
+ * {@code batch.minTx} yields fewer, larger batch blocks per slot.
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0ServerStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,

@@ -77,7 +77,7 @@ public class BlockBatchService {
     }
 
     /** Min mempool size before the micro-batch drains it into a block. */
-    private static final int minBatchTx = Integer.getInteger("batch.minTx", 500);
+    private static final int minBatchTx = Integer.getInteger("batch.minTx", 2000);
     /** Max age of the oldest pending tx before the micro-batch force-drains. */
     private static final long maxBatchAgeMs = Long.getLong("batch.maxBatchAgeMs", 2000);
     private volatile long lastDrain = System.currentTimeMillis();

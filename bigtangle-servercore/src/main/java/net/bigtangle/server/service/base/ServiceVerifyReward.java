@@ -23,6 +23,7 @@ import net.bigtangle.core.MemoInfo;
 import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.core.TXReward;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.core.BlockWrap;
@@ -55,19 +56,28 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceVerifyReward.class);
 
+	/** Log the per-beacon connect breakdown when a beacon references this many blocks. */
+	private static final int PERF_CONNECT_LOG_MIN_REFS = Integer.getInteger("perf.connectLogMinRefs", 20);
+
 	public void verifyRewardChainConfirmReferenced(Block newChainlengthBlock, BlockStoreInterface store)
 			throws BlockStoreException {
+
+		long perfStart = System.currentTimeMillis();
+		long perfRequirementsMs = 0, perfSolidifyMs = 0, perfConflictMs = 0, perfSolidifyBlockMs = 0;
 
 		RewardInfo currRewardInfo = new RewardInfo().parseChecked(newChainlengthBlock.getTransactions().get(0).getData());
 		Set<Sha256Hash> referrencedBlocks = currRewardInfo.getBlocks();
 		long cutoffHeight = getRewardCutoffHeight(currRewardInfo.getPrevRewardHash(), store);
 
 		// Check all referenced blocks have their requirements
+		long t = System.currentTimeMillis();
 		SolidityState solidityState = checkReferencedBlockRequirements(newChainlengthBlock, cutoffHeight, store);
 		if (solidityState.notSuccessState())
 			throw new VerificationException(" checkReferencedBlockRequirements is failed: " + solidityState);
+		perfRequirementsMs = System.currentTimeMillis() - t;
 
 		// Solidify referenced blocks
+		t = System.currentTimeMillis();
 		solidifyBlocks(currRewardInfo, store);
 
 		// Sanity check: No reward blocks are approved
@@ -76,6 +86,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// Check: At this point, predecessors must be solid
 		solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
 				.checkSolidity(newChainlengthBlock, false, store, false);
+		perfSolidifyMs = System.currentTimeMillis() - t;
 
 		if (solidityState.notSuccessState()) {
 			// A missing predecessor means the beacon's DAG parents (prevBlockHash
@@ -97,9 +108,13 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
 
-		// Per-cycle conflict cache: drop entries from a previous beacon's connect
-		// so the batched prefetch re-reads the current confirmed state.
-		clearConflictCache();
+		// Reuse the proposal's conflict resolutions when the confirmed head is
+		// unchanged (same token) so the batched prefetch does not re-read the
+		// ~50k UTXOs; a moved confirmed head yields a different token and a
+		// fresh resolution.
+		TXReward confirmed = cacheBlockService.getMaxConfirmedReward(store);
+		String conflictCacheToken = confirmed.getBlockHash() + ":" + confirmed.getChainLength();
+		loadConflictCache(conflictCacheToken);
 
 		// Find conflicts in the dependency set
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
@@ -114,10 +129,12 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// with the rest.  This handles the case where reward blocks are
 		// created faster than UpdateChain processes them — the second reward
 		// block may reference blocks already confirmed by the first.
+		t = System.currentTimeMillis();
 		if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
 			allApprovedNewBlocks.removeIf(bw -> bw.getBlockEvaluation().getChainlength() > 0);
 			if (allApprovedNewBlocks.size() <= 1) return;
 		}
+		perfConflictMs = System.currentTimeMillis() - t;
 		// If any conflicts exist between the current set of
 		// blocks, no-go
 		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
@@ -130,9 +147,20 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		// Otherwise, all predecessors exist and were at least
 		// solid > 0, so we should be able to confirm everything
+		t = System.currentTimeMillis();
 		solidifyBlock(newChainlengthBlock, solidityState, true, store);
+		perfSolidifyBlockMs = System.currentTimeMillis() - t;
 
 		confirmBlocksSorted(store, chainlength, allApprovedNewBlocks, new HashSet<>());
+
+		int referenced = currRewardInfo.getBlocks() == null ? 0 : currRewardInfo.getBlocks().size();
+		if (referenced >= PERF_CONNECT_LOG_MIN_REFS) {
+			logger.info(
+					"beacon connect: refs={} chainlength={} requirements={}ms solidify={}ms conflict={}ms "
+							+ "solidifyBlock={}ms total={}ms",
+					referenced, chainlength, perfRequirementsMs, perfSolidifyMs, perfConflictMs, perfSolidifyBlockMs,
+					System.currentTimeMillis() - perfStart);
+		}
 
 	}
 

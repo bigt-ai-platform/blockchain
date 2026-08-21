@@ -25,6 +25,7 @@ import net.bigtangle.server.service.base.handler.BlockTypeHandler;
 import net.bigtangle.server.service.base.handler.SolidityContext;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
+import net.bigtangle.server.service.base.ServiceBaseConfirmation;
 
 /**
  * Layer-1 consensus validation for CROSSTANGLE blocks. On an L1 chain every
@@ -125,8 +126,8 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
      */
     @Override
     public void confirm(SolidityContext ctx) throws BlockStoreException {
-        ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-        ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
+        ServiceBaseConfirmation.queueBlockEvaluation(ctx.blockHash(), ctx.chainlength(), ctx.confirmation(),
+                ctx.store());
         for (Transaction tx : ctx.block().getTransactions()) {
             String lock = issuanceLock(tx);
             if (lock == null) {

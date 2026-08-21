@@ -4,13 +4,14 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.handler.BlockTypeHandler;
 import net.bigtangle.server.service.base.handler.SolidityContext;
+import net.bigtangle.server.service.base.ServiceBaseConfirmation;
 
 public class ContractEventCancelHandler implements BlockTypeHandler {
 
 	@Override
 	public void confirm(SolidityContext ctx) throws BlockStoreException {
-		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
+		ServiceBaseConfirmation.queueBlockEvaluation(ctx.blockHash(), ctx.chainlength(), ctx.confirmation(),
+				ctx.store());
 	}
 
 	@Override

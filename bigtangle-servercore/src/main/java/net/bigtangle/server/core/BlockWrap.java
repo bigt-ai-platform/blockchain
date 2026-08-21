@@ -19,6 +19,9 @@ public class BlockWrap {
 	protected BlockEvaluation blockEvaluation;
 	protected NetworkParameters params;
 
+	/** Lazy cache of {@link #toConflictCandidates()} (block is immutable once loaded). */
+	protected volatile HashSet<ConflictCandidate> conflictCandidatesCache;
+
 	protected BlockWrap() {
 		super();
 	}
@@ -66,6 +69,10 @@ public class BlockWrap {
 	}
 
 	public HashSet<ConflictCandidate> toConflictCandidates() {
+		HashSet<ConflictCandidate> cached = conflictCandidatesCache;
+		if (cached != null) {
+			return cached;
+		}
 		HashSet<ConflictCandidate> blockConflicts = new HashSet<>();
 
 		// Dynamic conflicts: conflicting transaction outpoints
@@ -75,6 +82,7 @@ public class BlockWrap {
 
 		addTypeSpecificConflictCandidates(blockConflicts);
 
+		conflictCandidatesCache = blockConflicts;
 		return blockConflicts;
 	}
 

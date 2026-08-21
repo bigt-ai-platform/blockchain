@@ -193,6 +193,8 @@ public interface BlockStoreInterface {
 	TreeSet<BlockWrap> getBlocksToConfirm(long cutoffHeight, long maxHeight) throws BlockStoreException;
 
 	void updateBlockEvaluationConfirmed(Sha256Hash blockhash, boolean confirmed) throws BlockStoreException;
+	void updateBlockEvaluationConfirmedBatch(List<Sha256Hash> blockHashes, List<Long> chainlengths)
+			throws BlockStoreException;
 
 	void updateBlockEvaluationChainlength(Sha256Hash blockhash, long chainlength) throws BlockStoreException;
 
@@ -205,6 +207,10 @@ public interface BlockStoreInterface {
 			@Nullable Sha256Hash spenderBlockHash) throws BlockStoreException;
 	void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
 			List<Long> indexes, Sha256Hash spenderBlockHash) throws BlockStoreException;
+	void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
+			List<Long> indexes, List<Sha256Hash> spenderBlockHashes) throws BlockStoreException;
+	Map<TransactionOutPoint, OutputSpentStatus> getOutputSpentStatus(Collection<TransactionOutPoint> outpoints)
+			throws BlockStoreException;
 	void updateTransactionOutputConfirmed(Sha256Hash blockHash, Sha256Hash txHash, long index, boolean b)
 			throws BlockStoreException;
 
@@ -717,6 +723,10 @@ public interface BlockStoreInterface {
 		CONTRACT,
 		/** All domains (legacy full store). */
 		ALL
+	}
+
+	/** Lean spent-status snapshot of an output, used by conflict resolution. */
+	record OutputSpentStatus(boolean confirmed, Sha256Hash spenderBlockHash) {
 	}
 
 }

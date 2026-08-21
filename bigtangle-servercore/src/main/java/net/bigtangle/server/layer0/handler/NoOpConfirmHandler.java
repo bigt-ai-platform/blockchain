@@ -1,6 +1,7 @@
 package net.bigtangle.server.layer0.handler;
 
 import net.bigtangle.exception.BlockStoreException;
+import net.bigtangle.server.service.base.ServiceBaseConfirmation;
 import net.bigtangle.server.service.base.handler.BlockTypeHandler;
 import net.bigtangle.server.service.base.handler.SolidityContext;
 
@@ -15,7 +16,8 @@ public class NoOpConfirmHandler implements BlockTypeHandler {
 
 	@Override
 	public void confirm(SolidityContext ctx) throws BlockStoreException {
-		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
+		// Batched with the rest of the confirm cycle's block-evaluation writes.
+		ServiceBaseConfirmation.queueBlockEvaluation(ctx.blockHash(), ctx.chainlength(), ctx.confirmation(),
+				ctx.store());
 	}
 }

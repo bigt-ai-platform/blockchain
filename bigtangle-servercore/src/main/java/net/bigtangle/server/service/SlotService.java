@@ -44,6 +44,17 @@ public class SlotService {
     public static final long SLOTS_PER_EPOCH = 32L;
     public static final long EPOCH_DURATION_MS = SLOT_DURATION_MS * SLOTS_PER_EPOCH;
 
+    /** Log the beacon propose sweep when it collects at least this many references. */
+    private static final int PERF_SWEEP_LOG_MIN_BLOCKS = Integer.getInteger("perf.sweepLogMinBlocks", 50);
+
+    /**
+     * Blocks referenced by the most recent (possibly still unconfirmed) beacon.
+     * Passed to the next sweep as a skip set: re-running the O(tx) conflict
+     * resolution on already-referenced blocks every slot dominates beacon
+     * latency under batch load, and the connect re-validates the full set anyway.
+     */
+    private java.util.Set<Sha256Hash> lastBeaconRefs = new java.util.HashSet<>();
+
     /** Configurable slot-tick interval (pos.slotIntervalMs); the EPOCH length is fixed at 32 slots. */
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SLOT_DURATION_MS;
@@ -522,6 +533,11 @@ public class SlotService {
             // Per-cycle conflict cache: a beacon must not reuse conflict results
             // from a previous slot on this thread once the confirmed state moved
             // on. The reference collection fills it incrementally per candidate.
+            // The token binds this cycle's results to the confirmed head so the
+            // paired connect reuses them (same token) instead of re-reading the
+            // UTXO set; a moved confirmed head yields a different token and a
+            // fresh resolution.
+            String conflictCacheToken = maxConfirmedReward.getBlockHash() + ":" + maxConfirmedReward.getChainLength();
             net.bigtangle.server.service.base.ServiceBaseConfirmation.clearConflictCache();
             long prevChainLength = store.getRewardChainLength(prevRewardHash);
             long cutoffheight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
@@ -546,26 +562,42 @@ public class SlotService {
             long deadlineMs = slotIntervalMs > 0
                     ? (long) (slotIntervalMs * Math.min(Math.max(proposalDeadlineFraction, 0.05), 0.95))
                     : SLOT_DURATION_MS / 2;
+            long trunkStart = System.currentTimeMillis();
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(trunk.getHash(), store), cutoffheight,
                     prevChainLength, ordertypes, true, true, epochStart, store);
+            long trunkMs = System.currentTimeMillis() - trunkStart;
+            long branchStart = System.currentTimeMillis();
             serviceBase.dagBlockHashesFrom(blocks, serviceBase.getBlockWrap(branch.getHash(), store), cutoffheight,
                     prevChainLength, ordertypes, true, true, epochStart, store);
+            long branchMs = System.currentTimeMillis() - branchStart;
             // Reference EVERY eligible unconfirmed block above the cutoff (not
             // just the trunk/branch tip paths), so sibling batch blocks from all
             // producers are confirmed instead of orphaned forever.
             long refElapsedMs = System.currentTimeMillis() - refStartMs;
+            long allUnconfirmedMs = 0;
             if (refElapsedMs < deadlineMs) {
-                serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store);
+                long allStart = System.currentTimeMillis();
+                serviceBase.addAllUnconfirmedBlocks(blocks, cutoffheight, ordertypes, true, store, lastBeaconRefs);
+                allUnconfirmedMs = System.currentTimeMillis() - allStart;
             } else {
                 log.warn(
                         "Beacon proposal reference sweep over deadline ({}ms >= {}ms) at slot {}; skipping addAllUnconfirmedBlocks",
                         refElapsedMs, deadlineMs, slot);
             }
+            long sweepMs = System.currentTimeMillis() - refStartMs;
+            if (blocks.size() >= PERF_SWEEP_LOG_MIN_BLOCKS || sweepMs > 2000) {
+                log.info("Beacon propose slot={} refs={} sweep={}ms trunk={}ms branch={}ms allUnconfirmed={}ms "
+                        + "addAllUnconfirmed={}", slot, blocks.size(), sweepMs, trunkMs, branchMs, allUnconfirmedMs,
+                        refElapsedMs < deadlineMs);
+            }
+            // Publish this cycle's conflict resolutions for the connect to reuse.
+            net.bigtangle.server.service.base.ServiceBaseConfirmation.publishConflictCache(conflictCacheToken);
             if (epochStart) {
                 java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
                 blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));
             }
             rewardInfo.setBlocks(serviceBase.getHashSet(blocks));
+            lastBeaconRefs = new java.util.HashSet<>(rewardInfo.getBlocks());
         } catch (Exception e) {
             log.debug("Beacon block reference collection failed, using empty set: {}", e.getMessage());
             rewardInfo.setBlocks(new HashSet<>());

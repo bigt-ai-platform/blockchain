@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -79,6 +80,7 @@ import net.bigtangle.server.service.CacheBlockService;
  
  
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.store.BlockStoreInterface.OutputSpentStatus;
 
 public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
@@ -92,8 +94,143 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private static final ThreadLocal<Map<String, Long>> conflictCache =
 			ThreadLocal.withInitial(HashMap::new);
 
+	/**
+	 * Conflict-check results shared between the propose and connect of the SAME
+	 * beacon: the proposal (posExecutor thread) resolves each TXOUT conflict
+	 * against the confirmed state, publishes a snapshot, and the connect
+	 * (posChainExecutor thread) reuses it instead of re-reading ~50k UTXOs.
+	 * Keyed by the confirmed-head token so results are NEVER reused once the
+	 * confirmed state moved — a different token simply misses the cache.
+	 */
+	private static final ConcurrentHashMap<String, Map<String, Long>> sharedConflictCaches =
+			new ConcurrentHashMap<>();
+	private static final int MAX_SHARED_CONFLICT_CACHE_GENERATIONS = 8;
+
+	/** Fresh per-thread conflict cache (block-save checks, standalone cycles). */
 	public static void clearConflictCache() {
-		conflictCache.get().clear();
+		conflictCache.set(new HashMap<>());
+	}
+
+	/**
+	 * Publishes the current thread's conflict results under {@code token} so the
+	 * paired connect can reuse them without re-reading the UTXO set.
+	 */
+	public static void publishConflictCache(String token) {
+		if (token == null || conflictCache.get().isEmpty()) {
+			return;
+		}
+		if (sharedConflictCaches.size() >= MAX_SHARED_CONFLICT_CACHE_GENERATIONS
+				&& !sharedConflictCaches.containsKey(token)) {
+			String evict = sharedConflictCaches.keySet().iterator().next();
+			sharedConflictCaches.remove(evict);
+		}
+		sharedConflictCaches.put(token, new HashMap<>(conflictCache.get()));
+	}
+
+	/**
+	 * Loads a published conflict cache (if any) for {@code token} into the current
+	 * thread; otherwise starts a fresh per-thread map.
+	 */
+	public static void loadConflictCache(String token) {
+		Map<String, Long> shared = token == null ? null : sharedConflictCaches.get(token);
+		conflictCache.set(shared == null ? new HashMap<>() : new HashMap<>(shared));
+	}
+
+	// Per-confirm-cycle DB timing (spent-batch writes). Accumulated per thread so
+	// the breakdown survives the private confirm() call chain; reset at the start
+	// of confirmBlocksSorted and logged once per cycle. [0]=rows, [1]=ms, [2]=calls.
+	private static final ThreadLocal<long[]> confirmSpentStats =
+			ThreadLocal.withInitial(() -> new long[3]);
+
+	/**
+	 * One spent-output write queued during the confirm loop. Rows are collected
+	 * across ALL blocks of a confirm cycle and flushed in a SINGLE batched UPDATE
+	 * (one round-trip) instead of one executeBatch per block, then reset.
+	 */
+	private static final ThreadLocal<List<SpentRow>> pendingSpentRows = ThreadLocal.withInitial(ArrayList::new);
+
+	// Per-confirm-cycle block-evaluation writes (confirmed + chainlength), flushed
+	// as ONE batched UPDATE per cycle instead of 2 UPDATEs per block.
+	private static final ThreadLocal<List<Object[]>> pendingBlockEval = ThreadLocal.withInitial(ArrayList::new);
+	private static final ThreadLocal<long[]> confirmBlockEvalStats = ThreadLocal.withInitial(() -> new long[3]);
+
+	/**
+	 * Queues a block-evaluation (confirmed/chainlength) write for the current
+	 * confirm cycle; the batch is flushed by {@link #confirmBlocksSorted}. The
+	 * unconfirm path (confirmation=false) writes through immediately so it is
+	 * never left pending.
+	 */
+	public static void queueBlockEvaluation(Sha256Hash blockhash, long chainlength, boolean confirmation,
+			BlockStoreInterface store) throws BlockStoreException {
+		if (!confirmation) {
+			store.updateBlockEvaluationConfirmed(blockhash, false);
+			store.updateBlockEvaluationChainlength(blockhash, chainlength);
+			return;
+		}
+		pendingBlockEval.get().add(new Object[] { blockhash, chainlength });
+	}
+
+	private void flushBlockEvaluationBatch(BlockStoreInterface store) throws BlockStoreException {
+		List<Object[]> rows = pendingBlockEval.get();
+		if (rows.isEmpty()) {
+			return;
+		}
+		int n = rows.size();
+		List<Sha256Hash> hashes = new ArrayList<>(n);
+		List<Long> chainlengths = new ArrayList<>(n);
+		for (Object[] r : rows) {
+			hashes.add((Sha256Hash) r[0]);
+			chainlengths.add((Long) r[1]);
+		}
+		long startMs = System.currentTimeMillis();
+		store.updateBlockEvaluationConfirmedBatch(hashes, chainlengths);
+		long[] s = confirmBlockEvalStats.get();
+		s[0] += n;
+		s[1] += System.currentTimeMillis() - startMs;
+		s[2] += 1;
+		rows.clear();
+	}
+
+	private static final class SpentRow {
+		final Sha256Hash blockHash;
+		final Sha256Hash txHash;
+		final long index;
+		final Sha256Hash spender;
+
+		SpentRow(Sha256Hash blockHash, Sha256Hash txHash, long index, Sha256Hash spender) {
+			this.blockHash = blockHash;
+			this.txHash = txHash;
+			this.index = index;
+			this.spender = spender;
+		}
+	}
+
+	/** Log the confirm breakdown when a cycle confirms at least this many tx. */
+	private static final int PERF_CONFIRM_LOG_MIN_TX = Integer.getInteger("perf.confirmLogMinTx", 100);
+
+	/** Log the unconfirmed-block sweep when it scans at least this many candidates. */
+	private static final int PERF_SWEEP_LOG_MIN_SCANNED = Integer.getInteger("perf.sweepLogMinScanned", 2);
+
+	/** Sweep conflict-breakdown accumulator: [prefetch, candidateLoop, grouping]. */
+	private static final ThreadLocal<long[]> sweepConflictBreakdown = ThreadLocal.withInitial(() -> new long[3]);
+
+	private static void resetConfirmSpentStats() {
+		long[] s = confirmSpentStats.get();
+		s[0] = 0;
+		s[1] = 0;
+		s[2] = 0;
+	}
+
+	private static void logConfirmPerf(int blocks, int totalTx, long loopMs, long spentRows, long spentMs,
+			long spentCalls, long evalRows, long evalMs) {
+		if (totalTx < PERF_CONFIRM_LOG_MIN_TX) {
+			return;
+		}
+		logger.info(
+				"confirmBlocksSorted: blocks={} tx={} loop={}ms spentRows={} spentMs={}ms spentCalls={} "
+						+ "blockEvalRows={} blockEvalMs={}ms otherPerTxMs={}",
+				blocks, totalTx, loopMs, spentRows, spentMs, spentCalls, evalRows, evalMs,
+				totalTx > 0 ? Math.max(0, (loopMs - spentMs) / (double) totalTx) : 0);
 	}
 
 	public ServiceBaseConfirmation(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
@@ -265,17 +402,52 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 */
 	public void addAllUnconfirmedBlocks(Set<BlockWrap> blocks, long cutoffheight, List<BlockType> blocktypes,
 			boolean checkChainlength, BlockStoreInterface store) throws BlockStoreException {
+		addAllUnconfirmedBlocks(blocks, cutoffheight, blocktypes, checkChainlength, store, null);
+	}
+
+	/**
+	 * Collects every eligible unconfirmed solid block above the reward cutoff.
+	 *
+	 * <p>{@code alreadyReferenced} lists blocks referenced by a recent (still
+	 * unconfirmed) beacon. Re-checking them against the DB every slot is wasted
+	 * work — the connect of any beacon that references them re-validates the full
+	 * reference set ({@code verifyRewardChainConfirmReferenced} → {@code
+	 * hasSpentInputs}), so skipping the propose-time conflict re-check is safe;
+	 * a skipped block that is never confirmed is simply picked up again by the
+	 * next sweep that no longer sees it in the skip set.
+	 */
+	public void addAllUnconfirmedBlocks(Set<BlockWrap> blocks, long cutoffheight, List<BlockType> blocktypes,
+			boolean checkChainlength, BlockStoreInterface store, Set<Sha256Hash> alreadyReferenced)
+			throws BlockStoreException {
 		if (!Boolean.parseBoolean(System.getProperty("pos.referenceAllBlocks", "true"))) {
 			return;
 		}
+		long perfStart = System.currentTimeMillis();
+		long queryMs = 0, loadMs = 0, conflictMs = 0;
+		int scanned = 0, skipped = 0;
+		long[] conflictBreakdown = sweepConflictBreakdown.get();
+		conflictBreakdown[0] = 0;
+		conflictBreakdown[1] = 0;
+		conflictBreakdown[2] = 0;
 		Set<Sha256Hash> existing = new HashSet<>();
 		for (BlockWrap bw : blocks) {
 			existing.add(bw.getBlock().getHash());
 		}
-		for (byte[] blockBytes : store.blocksFromNonChainHeigth(cutoffheight)) {
+		long t = System.currentTimeMillis();
+		List<byte[]> candidates = store.blocksFromNonChainHeigth(cutoffheight);
+		queryMs = System.currentTimeMillis() - t;
+		for (byte[] blockBytes : candidates) {
+			scanned++;
+			t = System.currentTimeMillis();
 			Block block = networkParameters.getDefaultSerializer().makeBlock(blockBytes);
 			Sha256Hash hash = block.getHash();
 			if (existing.contains(hash)) {
+				continue;
+			}
+			// Already referenced by a recent (unconfirmed) beacon: no need to
+			// re-run the expensive conflict resolution on it this slot.
+			if (alreadyReferenced != null && alreadyReferenced.contains(hash)) {
+				skipped++;
 				continue;
 			}
 			BlockWrap wrap = getBlockWrap(hash, store);
@@ -285,6 +457,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (!matchType(wrap, blocktypes)) {
 				continue;
 			}
+			loadMs += System.currentTimeMillis() - t;
+			t = System.currentTimeMillis();
 			// Cumulative conflict check: sibling batch blocks must not carry
 			// mutually-conflicting inputs into the beacon's reference set
 			// (verifyRewardChainConfirmReferenced rejects the beacon if two
@@ -293,6 +467,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// gate excludes the conflicting block; a singleton check would
 			// reference all of them and stall confirmation.
 			boolean checked = checkSpentAndConflict(blocks, wrap, checkChainlength, store);
+			conflictMs += System.currentTimeMillis() - t;
 			if (checkChainlength) {
 				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
 			}
@@ -300,6 +475,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				blocks.add(wrap);
 				existing.add(hash);
 			}
+		}
+		long perfMs = System.currentTimeMillis() - perfStart;
+		if (scanned >= PERF_SWEEP_LOG_MIN_SCANNED || perfMs > 1000) {
+			logger.info(
+					"addAllUnconfirmedBlocks: scanned={} refs={} skipped={} query={}ms load={}ms conflict={}ms "
+							+ "prefetch={}ms loop={}ms grouping={}ms total={}ms",
+					scanned, blocks.size(), skipped, queryMs, loadMs, conflictMs, conflictBreakdown[0],
+					conflictBreakdown[1], conflictBreakdown[2], perfMs);
 		}
 	}
 
@@ -362,9 +545,12 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 		}
 
+		long[] breakdown = sweepConflictBreakdown.get();
+		long t = System.currentTimeMillis();
 		boolean anyCandidateConflicts = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates)
 				.flatMap(Collection::stream).collect(Collectors.groupingBy(ConflictCandidate::getConflictPoint))
 				.values().stream().anyMatch(l -> l.size() > 1);
+		breakdown[2] += System.currentTimeMillis() - t;
 		return !anyCandidateConflicts;
 
 	}
@@ -376,9 +562,13 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// The per-thread cache turns the repeated full-set walks in the
 		// reference collection / connect paths into O(candidates) DB work per
 		// beacon instead of O(setSize * candidates).
+		long[] breakdown = sweepConflictBreakdown.get();
 		boolean result = false;
+		long prefetchStart = System.currentTimeMillis();
 		try {
 			prefetchTransactionOutputConflicts(allApprovedNewBlocks, checkChainlength, store);
+			breakdown[0] += System.currentTimeMillis() - prefetchStart;
+			long loopStart = System.currentTimeMillis();
 			result = allApprovedNewBlocks.stream().map(BlockWrap::toConflictCandidates).flatMap(Collection::stream)
 					.anyMatch(c -> {
 						try {
@@ -395,6 +585,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							return true;
 						}
 					});
+			breakdown[1] += System.currentTimeMillis() - loopStart;
 		} catch (Exception e) {
 			logger.debug("hasSpentInputs outer", e);
 		}
@@ -410,6 +601,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private void prefetchTransactionOutputConflicts(Set<BlockWrap> blocks, boolean checkChainlength,
 			BlockStoreInterface store) throws BlockStoreException {
 		Map<String, Long> cache = conflictCache.get();
+		long collectStart = System.currentTimeMillis();
 		Set<TransactionOutPoint> outpoints = new HashSet<>();
 		Map<TransactionOutPoint, BlockWrap> firstClaimant = new HashMap<>();
 		for (BlockWrap bw : blocks) {
@@ -424,14 +616,20 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				}
 			}
 		}
+		long collectMs = System.currentTimeMillis() - collectStart;
 		if (outpoints.isEmpty()) {
 			return;
 		}
-		Map<TransactionOutPoint, UTXO> utxos = store.getTransactionOutputs(outpoints);
+		long dbStart = System.currentTimeMillis();
+		// Lean read: conflict resolution only needs spent/confirmed/spenderblockhash
+		// per outpoint, not the full output row (scriptbytes, memo, ...).
+		Map<TransactionOutPoint, OutputSpentStatus> utxos = store.getOutputSpentStatus(outpoints);
+		long dbMs = System.currentTimeMillis() - dbStart;
+		long fillStart = System.currentTimeMillis();
 		Set<Sha256Hash> spenderHashes = new HashSet<>();
-		for (UTXO u : utxos.values()) {
-			if (u.getSpenderBlockHash() != null) {
-				spenderHashes.add(u.getSpenderBlockHash());
+		for (OutputSpentStatus u : utxos.values()) {
+			if (u.spenderBlockHash() != null) {
+				spenderHashes.add(u.spenderBlockHash());
 			}
 		}
 		Map<Sha256Hash, BlockWrap> spenderWraps = new HashMap<>();
@@ -444,7 +642,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				}
 			}
 		}
-		for (Map.Entry<TransactionOutPoint, UTXO> e : utxos.entrySet()) {
+		for (Map.Entry<TransactionOutPoint, OutputSpentStatus> e : utxos.entrySet()) {
 			TransactionOutPoint op = e.getKey();
 			String key = "TXOUT:" + op.getBlockHash() + ":" + op.getTxHash() + ":" + op.getIndex();
 			if (cache.containsKey(key)) {
@@ -454,6 +652,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			cache.put(key, claimant == null ? NoConflict
 					: spentByOther(claimant, e.getValue(), spenderWraps, checkChainlength));
 		}
+		long fillMs = System.currentTimeMillis() - fillStart;
+		long fallbackStart = System.currentTimeMillis();
+		int fallbackCount = 0;
 		// Outpoints with no outputs row: replicate checkUTXOSpent's fallback
 		// (load the creating block and solidify it). Only reached for outputs
 		// whose creating block is not yet saved.
@@ -471,9 +672,15 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				if (c.getConflictPoint().getType() == ConflictPoint.ConflictType.TXOUT
 						&& op.equals(c.getConflictPoint().getConnectedOutpoint())) {
 					cache.put(key, checkUTXOSpent(c, checkChainlength, store));
+					fallbackCount++;
 					break;
 				}
 			}
+		}
+		long fallbackMs = System.currentTimeMillis() - fallbackStart;
+		if (outpoints.size() >= 1000) {
+			logger.info("prefetch: newOutpoints={} collect={}ms db={}ms fill={}ms fallback={}ms ({} rows)",
+					outpoints.size(), collectMs, dbMs, fillMs, fallbackMs, fallbackCount);
 		}
 	}
 
@@ -483,11 +690,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * prefetch resolves the same {@code long} result the per-candidate path
 	 * would compute without extra DB round-trips.
 	 */
-	private long spentByOther(BlockWrap claimant, UTXO utxo, Map<Sha256Hash, BlockWrap> spenderWraps,
+	private long spentByOther(BlockWrap claimant, OutputSpentStatus utxo, Map<Sha256Hash, BlockWrap> spenderWraps,
 			boolean checkChainlength) {
-		Sha256Hash spender = utxo.getSpenderBlockHash();
+		Sha256Hash spender = utxo.spenderBlockHash();
 		if (claimant.getBlockHash().equals(spender)) {
-			if (utxo.isConfirmed())
+			if (utxo.confirmed())
 				return NoConflict;
 		} else if (spender != null) {
 			BlockWrap conflictBlock = spenderWraps.get(spender);
@@ -1860,23 +2067,42 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	private void confirmBlockTransactionSpentBatch(Block block, BlockStoreInterface blockStore)
 			throws BlockStoreException {
-		List<Sha256Hash> prevBlockHashes = new ArrayList<>();
-		List<Sha256Hash> prevTxHashes = new ArrayList<>();
-		List<Long> indexes = new ArrayList<>();
+		// Queue every spent row of every tx in the block; rows are flushed in a
+		// SINGLE batched UPDATE per confirm cycle (flushConfirmSpentBatch in
+		// confirmBlocksSorted) instead of one executeBatch per block.
+		List<SpentRow> pending = pendingSpentRows.get();
 		for (Transaction tx : block.getTransactions()) {
 			if (tx.isCoinBase()) continue;
 			for (TransactionInput in : tx.getInputs()) {
-				Sha256Hash b = in.getOutpoint().getBlockHash();
-				Sha256Hash h = in.getOutpoint().getTxHash();
-				long idx = in.getOutpoint().getIndex();
-				prevBlockHashes.add(b);
-				prevTxHashes.add(h);
-				indexes.add(idx);
+				pending.add(new SpentRow(in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
+						in.getOutpoint().getIndex(), block.getHash()));
 			}
 		}
-		if (!prevBlockHashes.isEmpty()) {
-			blockStore.updateTransactionOutputSpentBatch(prevBlockHashes, prevTxHashes, indexes, block.getHash());
+	}
+
+	private void flushConfirmSpentBatch(List<SpentRow> pending, BlockStoreInterface blockStore)
+			throws BlockStoreException {
+		if (pending.isEmpty()) {
+			return;
 		}
+		int rows = pending.size();
+		List<Sha256Hash> blockHashes = new ArrayList<>(rows);
+		List<Sha256Hash> txHashes = new ArrayList<>(rows);
+		List<Long> indexes = new ArrayList<>(rows);
+		List<Sha256Hash> spenders = new ArrayList<>(rows);
+		for (SpentRow r : pending) {
+			blockHashes.add(r.blockHash);
+			txHashes.add(r.txHash);
+			indexes.add(r.index);
+			spenders.add(r.spender);
+		}
+		long startMs = System.currentTimeMillis();
+		blockStore.updateTransactionOutputSpentBatch(blockHashes, txHashes, indexes, spenders);
+		long[] s = confirmSpentStats.get();
+		s[0] += rows;
+		s[1] += System.currentTimeMillis() - startMs;
+		s[2] += 1;
+		pending.clear();
 	}
 
 	private boolean checkSpentChainlength(UTXO prevOut, Block block, BlockStoreInterface store)
@@ -1967,8 +2193,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 
 	private void updateBlockConfirmOnly(Sha256Hash blockhash, long chainlength, boolean confirmation,
 			BlockStoreInterface store) throws BlockStoreException {
-		store.updateBlockEvaluationConfirmed(blockhash, confirmation);
-		store.updateBlockEvaluationChainlength(blockhash, chainlength);
+		queueBlockEvaluation(blockhash, chainlength, confirmation, store);
 	}
 
 	public void unconfirm(BlockWrap blockWrap, HashSet<Sha256Hash> traversedBlockHashes, long chainlength,
@@ -2011,15 +2236,49 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		// is committed separately (shared single connection, autocommit). Relax
 		// synchronous_commit for the loop exactly like the micro-batch path does,
 		// so the writes don't fsync per statement.
-		store.setBatchDurability(true);
+		resetConfirmSpentStats();
+		List<SpentRow> pending = pendingSpentRows.get();
+		pending.clear();
+		List<Object[]> pendingEval = pendingBlockEval.get();
+		pendingEval.clear();
+		long[] evalStats = confirmBlockEvalStats.get();
+		evalStats[0] = 0;
+		evalStats[1] = 0;
+		evalStats[2] = 0;
+		long loopStartMs = System.currentTimeMillis();
+		int totalTx = 0;
+		long loopMs;
 		try {
-			for (BlockWrap approvedBlock : arrayList) {
-				confirm(approvedBlock, traversedConfirms, chainlength, true, store);
+			store.setBatchDurability(true);
+			try {
+				for (BlockWrap approvedBlock : arrayList) {
+					if (approvedBlock.getBlock().getTransactions() != null) {
+						totalTx += approvedBlock.getBlock().getTransactions().size();
+					}
+					confirm(approvedBlock, traversedConfirms, chainlength, true, store);
 
+				}
+			} finally {
+				// Flush the coalesced spent + block-evaluation writes while
+				// synchronous_commit is still relaxed, then restore durability.
+				// Even on a mid-cycle exception the collected rows are written,
+				// so confirmed block state is not left half-applied.
+				try {
+					flushBlockEvaluationBatch(store);
+				} finally {
+					flushConfirmSpentBatch(pending, store);
+				}
+				store.setBatchDurability(false);
 			}
+			loopMs = System.currentTimeMillis() - loopStartMs;
 		} finally {
-			store.setBatchDurability(false);
+			// Safety net: never leak a stale pending list into the next cycle
+			// (a flush that throws before draining leaves rows behind).
+			pending.clear();
+			pendingBlockEval.get().clear();
 		}
+		long[] s = confirmSpentStats.get();
+		logConfirmPerf(arrayList.size(), totalTx, loopMs, s[0], s[1], s[2], evalStats[0], evalStats[1]);
 		checkSum(store);
 	}
 

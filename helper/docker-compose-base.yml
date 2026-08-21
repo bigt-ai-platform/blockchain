@@ -15,7 +15,17 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: test1234
       POSTGRES_DB: info
-    command: postgres -c max_connections=200
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=1GB
+      -c wal_buffers=16MB
+      -c max_wal_size=4GB
+      -c wal_compression=lz4
+      -c checkpoint_timeout=15min
+      -c checkpoint_completion_target=0.9
+      -c maintenance_work_mem=256MB
+      -c effective_io_concurrency=4
     volumes:
       - /data/vm/test-bigtangle-postgres/var/lib/postgresql/data:/var/lib/postgresql/data
     healthcheck:

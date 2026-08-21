@@ -366,6 +366,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_BLOCKEVALUATION_CONFIRMED_SQL = getUpdate()
 			+ " blocks SET confirmed = ? WHERE hash = ?";
 
+	protected final String UPDATE_BLOCKEVALUATION_CONFIRMED_CHAINLENGTH_SQL = getUpdate()
+			+ " blocks SET confirmed = ?, chainlength = ?, chainlengthlastupdate = ? WHERE hash = ?";
+
 	protected final String UPDATE_BLOCKEVALUATION_SOLID_SQL = getUpdate() + " blocks SET solid = ? WHERE hash = ?";
 	protected final String RESET_CHAINLENGTH_SOLID_SQL = getUpdate() + " blocks SET solid = 0 WHERE chainlength = ?";
 
@@ -1141,6 +1144,71 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		return result;
 	}
 
+	@Override
+	public Map<TransactionOutPoint, OutputSpentStatus> getOutputSpentStatus(Collection<TransactionOutPoint> outpoints)
+			throws BlockStoreException {
+		Map<TransactionOutPoint, OutputSpentStatus> result = new HashMap<>();
+		if (outpoints.isEmpty()) {
+			return result;
+		}
+		LinkedHashSet<TransactionOutPoint> distinct = new LinkedHashSet<>(outpoints);
+		List<TransactionOutPoint> chunk = new ArrayList<>(BATCH_CHUNK_SIZE);
+		for (TransactionOutPoint op : distinct) {
+			chunk.add(op);
+			if (chunk.size() == BATCH_CHUNK_SIZE) {
+				batchGetOutputSpentStatus(chunk, result);
+				chunk = new ArrayList<>(BATCH_CHUNK_SIZE);
+			}
+		}
+		if (!chunk.isEmpty()) {
+			batchGetOutputSpentStatus(chunk, result);
+		}
+		return result;
+	}
+
+	private void batchGetOutputSpentStatus(List<TransactionOutPoint> distinct,
+			Map<TransactionOutPoint, OutputSpentStatus> result) throws BlockStoreException {
+		Map<String, TransactionOutPoint> byKey = new HashMap<>();
+		for (TransactionOutPoint op : distinct) {
+			byKey.put(outpointKey(op), op);
+		}
+		// Lean row: conflict resolution only needs spent/confirmed/spenderblockhash
+		// (SELECT_OUTPUTS_SPENTBLOCK_SQL shape), not the full output row.
+		StringBuilder sql = new StringBuilder("SELECT outputs.hash, outputs.outputindex, outputs.blockhash, "
+				+ " outputs.spent, " + OUTPUTS_CONFIRMED + " AS confirmed, outputs.spenderblockhash "
+				+ " FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
+		Iterator<TransactionOutPoint> iter = distinct.iterator();
+		while (iter.hasNext()) {
+			iter.next();
+			sql.append("(?, ?, ?)");
+			if (iter.hasNext())
+				sql.append(", ");
+		}
+		sql.append(")");
+		try (PreparedStatement s = getConnection().prepareStatement(sql.toString())) {
+			int param = 1;
+			for (TransactionOutPoint op : distinct) {
+				s.setBytes(param++, op.getTxHash().getBytes());
+				s.setLong(param++, op.getIndex());
+				s.setBytes(param++, op.getBlockHash().getBytes());
+			}
+			ResultSet rs = s.executeQuery();
+			while (rs.next()) {
+				long idx = rs.getLong("outputindex");
+				Sha256Hash blockHash = Sha256Hash.wrap(rs.getBytes("blockhash"));
+				Sha256Hash txHash = Sha256Hash.wrap(rs.getBytes("hash"));
+				TransactionOutPoint op = byKey.get(outpointKey(txHash, blockHash, idx));
+				if (op != null) {
+					Sha256Hash spender = rs.getBytes("spenderblockhash") == null ? null
+							: Sha256Hash.wrap(rs.getBytes("spenderblockhash"));
+					result.put(op, new OutputSpentStatus(rs.getBoolean("confirmed"), spender));
+				}
+			}
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
 	private void batchGetTransactionOutputs(List<TransactionOutPoint> distinct, Map<TransactionOutPoint, UTXO> result)
 			throws BlockStoreException {
 		Map<String, TransactionOutPoint> byKey = new HashMap<>();
@@ -1820,6 +1888,24 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
+	public void updateBlockEvaluationConfirmedBatch(List<Sha256Hash> blockHashes, List<Long> chainlengths)
+			throws BlockStoreException {
+		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_CONFIRMED_CHAINLENGTH_SQL)) {
+			long now = System.currentTimeMillis();
+			for (int i = 0; i < blockHashes.size(); i++) {
+				s.setBoolean(1, true);
+				s.setLong(2, chainlengths.get(i));
+				s.setLong(3, now);
+				s.setBytes(4, blockHashes.get(i).getBytes());
+				s.addBatch();
+			}
+			s.executeBatch();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public void updateBlockEvaluationSolid(Sha256Hash blockhash, long solid) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(UPDATE_BLOCKEVALUATION_SOLID_SQL)) {
@@ -1892,10 +1978,20 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	@Override
 	public void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
 			List<Long> indexes, Sha256Hash spenderBlockHash) throws BlockStoreException {
+		List<Sha256Hash> spenderBlockHashes = new ArrayList<>(prevBlockHashes.size());
+		for (int i = 0; i < prevBlockHashes.size(); i++) {
+			spenderBlockHashes.add(spenderBlockHash);
+		}
+		updateTransactionOutputSpentBatch(prevBlockHashes, prevTxHashes, indexes, spenderBlockHashes);
+	}
+
+	@Override
+	public void updateTransactionOutputSpentBatch(List<Sha256Hash> prevBlockHashes, List<Sha256Hash> prevTxHashes,
+			List<Long> indexes, List<Sha256Hash> spenderBlockHashes) throws BlockStoreException {
 		try (PreparedStatement s = getConnection().prepareStatement(UPDATE_OUTPUTS_SPENT_SQL)) {
 			for (int i = 0; i < prevBlockHashes.size(); i++) {
 				s.setBoolean(1, true);
-				s.setBytes(2, spenderBlockHash.getBytes());
+				s.setBytes(2, spenderBlockHashes.get(i).getBytes());
 				s.setBytes(3, prevTxHashes.get(i).getBytes());
 				s.setLong(4, indexes.get(i));
 				s.setBytes(5, prevBlockHashes.get(i).getBytes());

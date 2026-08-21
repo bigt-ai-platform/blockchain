@@ -15,7 +15,7 @@ public class UserDataHandler implements BlockTypeHandler {
 		if (w != null) {
 			base.confirmVOSOrUserData(w, ctx.confirmation(), ctx.store());
 		}
-		ctx.store().updateBlockEvaluationConfirmed(ctx.blockHash(), ctx.confirmation());
-		ctx.store().updateBlockEvaluationChainlength(ctx.blockHash(), ctx.chainlength());
+		ServiceBaseConfirmation.queueBlockEvaluation(ctx.blockHash(), ctx.chainlength(), ctx.confirmation(),
+				ctx.store());
 	}
 }
