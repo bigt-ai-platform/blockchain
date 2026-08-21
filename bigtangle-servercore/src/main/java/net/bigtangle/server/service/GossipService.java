@@ -22,6 +22,21 @@ public class GossipService {
     @Value("${pos.gossipPeers:}")
     private String gossipPeers;
 
+    /**
+     * Dedicated worker pool for best-effort gossip. Broadcast MUST NOT run on
+     * the caller (duty/slot-tick) thread: even short per-peer timeouts let one
+     * congested peer consume the whole slot budget and stall finality. Workers
+     * are daemons; overflow discards the OLDEST pending send — losing a
+     * periodic attestation beats blocking consensus.
+     */
+    private static final java.util.concurrent.ThreadPoolExecutor GOSSIP_POOL = new java.util.concurrent.ThreadPoolExecutor(
+            2, 4, 60L, java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.LinkedBlockingQueue<>(64),
+            r -> {
+                Thread t = new Thread(r, "gossip");
+                t.setDaemon(true);
+                return t;
+            }, new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+
     public void broadcastAttestation(AttestationData att) {
         String path = ReqCmd.submitAttestation.name();
         byte[] body = toBytes(att);
@@ -52,13 +67,17 @@ public class GossipService {
         for (String peer : gossipPeers.split(",")) {
             String p = peer.trim();
             if (p.isEmpty()) continue;
+            String url = "http://" + p + "/" + path;
             try {
-                String url = "http://" + p + "/" + path;
-                // Short-timeout gossip: a stalled peer must never block the
-                // duty thread (slot ticks) — skip it and move on.
-                OkHttp3Util.postGossip(url, body);
+                GOSSIP_POOL.execute(() -> {
+                    try {
+                        OkHttp3Util.postGossip(url, body);
+                    } catch (Exception e) {
+                        log.debug("gossip to {} failed: {}", p, e.getMessage());
+                    }
+                });
             } catch (Exception e) {
-                log.debug("gossip to {} failed: {}", p, e.getMessage());
+                log.debug("gossip to {} dropped (pool saturated)", p);
             }
         }
     }
