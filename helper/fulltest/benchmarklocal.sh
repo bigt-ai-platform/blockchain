@@ -68,7 +68,7 @@ for jh in "${JAVA_HOME:-}" /opt/jdk25 /usr/lib/jvm/java-25-openjdk-amd64 \
     fi
 done
 command -v java >/dev/null || fail "no JDK 25 found (set JAVA_HOME)"
-java -version 2>&1 | head -1 | grep -q 'version 25' || fail "JDK 25 required, got: $(java -version 2>&1 | head -1)"
+java -version 2>&1 | head -1 | grep -q '"25\.' || fail "JDK 25 required, got: $(java -version 2>&1 | head -1)"
 
 header "Local single-server benchmark :: ${TX} tx, ${CLIENTS} clients, batch ${BATCH}, slot ${SLOT_MS}ms"
 info "java: $("$JAVA_HOME/bin/java" -version 2>&1 | head -1)"
