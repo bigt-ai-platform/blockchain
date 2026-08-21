@@ -3,12 +3,10 @@ package net.bigtangle.kafka;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.Future;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.slf4j.Logger;
@@ -100,9 +98,16 @@ public class KafkaMessageProducer implements DisposableBean {
         if (!enabled) return false;
         try {
             ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, data);
-            Future<RecordMetadata> future = producer.send(record);
-            RecordMetadata meta = future.get();
-            log.trace("Sent to topic={} partition={} offset={}", meta.topic(), meta.partition(), meta.offset());
+            // Fire-and-forget: the producer's IO thread owns delivery (acks=all,
+            // retries=3).  Blocking the caller here serialized every tx ingest
+            // behind a broker round-trip.
+            producer.send(record, (meta, err) -> {
+                if (err != null) {
+                    log.warn("Kafka async send failed topic={} key={}", topic, key, err);
+                } else {
+                    log.trace("Sent to topic={} partition={} offset={}", meta.topic(), meta.partition(), meta.offset());
+                }
+            });
             return true;
         } catch (Exception e) {
             log.warn("Kafka send failed topic={} key={}", topic, key, e);

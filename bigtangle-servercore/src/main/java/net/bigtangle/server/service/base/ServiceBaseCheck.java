@@ -190,9 +190,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			LinkedList<UTXO> txOutsSpent = new LinkedList<UTXO>();
 			long sigOps = 0;
 
-			if (scriptVerificationExecutor.isShutdown())
-				scriptVerificationExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-
 			List<Future<VerificationException>> listScriptVerificationResults = new ArrayList<Future<VerificationException>>(
 					block.getTransactions().size());
 
@@ -315,8 +312,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			logger.trace("", e);
 			return SolidityState.getFailState();
-		} finally {
-			scriptVerificationExecutor.shutdownNow();
 		}
 
 		return SolidityState.getSuccessState();
@@ -2290,7 +2285,6 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 
 		} catch (VerificationException e) {
-			scriptVerificationExecutor.shutdownNow();
 			if (throwExceptions) {
 				logger.info("", e);
 				throw e;
@@ -2860,7 +2854,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	}
 
-	ExecutorService scriptVerificationExecutor = Executors.newFixedThreadPool(
+	/**
+	 * Shared across all ServiceBaseCheck instances (they are created per call):
+	 * a fixed pool that lives for the JVM lifetime instead of being torn down
+	 * and recreated on every block solidity check.
+	 */
+	private static final ExecutorService scriptVerificationExecutor = Executors.newFixedThreadPool(
 			Runtime.getRuntime().availableProcessors(), new ContextPropagatingThreadFactory("Script verification"));
 
 	/**

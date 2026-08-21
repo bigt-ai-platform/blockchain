@@ -117,7 +117,11 @@ class PQScriptUtilsTest {
         SignatureBundle sb = new SignatureBundle(List.of(
                 new SignatureBundle.Entry(PQConstants.ALG_ML_DSA_87, mlSig)));
 
-        assertFalse(PQScriptUtils.verifyPQ(prefixedPubkey, sb.serialize(), baseHash));
+        // Strict (dual suite active): a dual key without its SLH-DSA sig fails.
+        assertFalse(PQScriptUtils.verifyPQ(prefixedPubkey, sb.serialize(), baseHash, true));
+        // Relaxed (ML-DSA-only phase): the same bundle passes; a provided bad
+        // SLH-DSA sig would still fail in both phases.
+        assertTrue(PQScriptUtils.verifyPQ(prefixedPubkey, sb.serialize(), baseHash, false));
     }
 
     @Test

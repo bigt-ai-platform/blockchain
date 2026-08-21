@@ -45,6 +45,12 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
             mldsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
     private final Cache<ByteArrayWrapper, SLHDSAPrivateKeyParameters>
             slhdsaPrivCache = CacheBuilder.newBuilder().maximumSize(1000).build();
+    // Parsed public keys: rebuilding MLDSAPublicKeyParameters deserializes
+    // ~2.5 KB of vectors on every verify; hot keys are memoized instead.
+    private final Cache<ByteArrayWrapper, MLDSAPublicKeyParameters>
+            mldsaPubCache = CacheBuilder.newBuilder().maximumSize(10_000).build();
+    private final Cache<ByteArrayWrapper, SLHDSAPublicKeyParameters>
+            slhdsaPubCache = CacheBuilder.newBuilder().maximumSize(10_000).build();
     // ML-DSA and SLH-DSA are deterministic: the same (private key, message)
     // always yields the same signature, so results can be safely memoized.
     private final Cache<SignKey, byte[]> mldsaSigCache = CacheBuilder.newBuilder().maximumSize(2048).build();
@@ -134,7 +140,8 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
     private boolean verifyMLDSA(byte[] publicKey, byte[] message, byte[] signature) {
         try {
             MLDSAParameters params = MLDSAParameters.ml_dsa_87;
-            MLDSAPublicKeyParameters pub = new MLDSAPublicKeyParameters(params, publicKey);
+            MLDSAPublicKeyParameters pub = mldsaPubCache.get(new ByteArrayWrapper(publicKey),
+                    () -> new MLDSAPublicKeyParameters(params, publicKey));
             MLDSASigner signer = new MLDSASigner();
             signer.init(false, pub);
             signer.update(message, 0, message.length);
@@ -185,7 +192,8 @@ public final class BcPQSignatureProvider implements PQSignatureProvider {
     private boolean verifySLHDSA(byte[] publicKey, byte[] message, byte[] signature) {
         try {
             SLHDSAParameters params = SLHDSAParameters.sha2_256s;
-            SLHDSAPublicKeyParameters pub = new SLHDSAPublicKeyParameters(params, publicKey);
+            SLHDSAPublicKeyParameters pub = slhdsaPubCache.get(new ByteArrayWrapper(publicKey),
+                    () -> new SLHDSAPublicKeyParameters(params, publicKey));
             SLHDSASigner signer = new SLHDSASigner();
             signer.init(false, pub);
             return signer.verifySignature(message, signature);

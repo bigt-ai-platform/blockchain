@@ -3,9 +3,13 @@ package net.bigtangle.crypto.pq;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 import net.bigtangle.core.Sha256Hash;
 
@@ -31,6 +35,16 @@ public final class PQScriptUtils {
 
     /** The shared provider used by script verification. */
     private static volatile PQSignatureProvider provider;
+
+    /**
+     * Successful PQ verifications memoized by (pubkey, signature, sighash).
+     * Mirrors Bitcoin's signature cache: the same input is verified once at
+     * mempool ingest and must not pay full ML-DSA/SLH-DSA cost again at block
+     * solidity check.  Only successes are cached (failures stay cheap to
+     * re-evaluate and cannot be poisoned by timing).
+     */
+    private static final Cache<VerifyKey, Boolean> verifyCache = CacheBuilder.newBuilder()
+            .maximumSize(100_000).build();
 
     /** Lazy init to avoid classloading order issues. */
     private static PQSignatureProvider provider() {
@@ -91,6 +105,17 @@ public final class PQScriptUtils {
     /* ── Verification ──────────────────────────────────────────────────── */
 
     /**
+     * True when transaction-level signatures must carry SLH-DSA in addition to
+     * ML-DSA-87.  Follows the same governance as the proposer path: the dual
+     * suite is required only once {@value PQConstants#DUAL_ACTIVATION_PROPERTY}
+     * activates it; by default (unset) the chain runs the ML-DSA-only phase and
+     * dual keys are verified with whatever signatures they actually carry.
+     */
+    public static boolean slhDsaRequiredForTx() {
+        return PQConstants.dualActivationHeightFromProperty() >= 0;
+    }
+
+    /**
      * Verify a PQ signature against a pubkey.
      *
      * <p>Applies TX-level domain separator for replay protection, then
@@ -99,9 +124,44 @@ public final class PQScriptUtils {
      * @param prefixedPubkey pubkey from script stack (with 0x05 prefix)
      * @param sigBytes       raw SignatureBundle from script stack
      * @param baseSighash    the base transaction sighash (before domain separation)
-     * @return true iff both ML-DSA and SLH-DSA verify independently
+     * @return true iff ML-DSA verifies and SLH-DSA is satisfied per suite policy
      */
     public static boolean verifyPQ(byte[] prefixedPubkey, byte[] sigBytes, Sha256Hash baseSighash) {
+        return verifyPQ(prefixedPubkey, sigBytes, baseSighash, slhDsaRequiredForTx());
+    }
+
+    /**
+     * Verify a PQ signature with an explicit dual-suite requirement
+     * (same semantics as {@link #verifyProposerSignature}).
+     *
+     * <p>ML-DSA-87 is always required.  When the key bundle carries an SLH-DSA
+     * entry, a provided SLH-DSA signature is always verified; a missing one is
+     * only tolerated while {@code requireSlhDsa} is false.  Successful results
+     * are memoized — repeat verification of the same input (mempool pass, then
+     * block solidity pass) is a cache hit instead of a second ~2 ms verify.
+     *
+     * @param requireSlhDsa true iff the dual suite is active for tx signatures
+     * @return true iff the required signatures verify
+     */
+    public static boolean verifyPQ(byte[] prefixedPubkey, byte[] sigBytes, Sha256Hash baseSighash,
+            boolean requireSlhDsa) {
+        VerifyKey key = new VerifyKey(prefixedPubkey, sigBytes, baseSighash.getBytes(), requireSlhDsa);
+        Boolean cached = verifyCache.getIfPresent(key);
+        if (cached != null) return cached;
+        boolean ok = doVerifyPQ(prefixedPubkey, sigBytes, baseSighash, requireSlhDsa);
+        if (ok) {
+            try {
+                // Concurrent duplicate computes are fine: result is deterministic.
+                verifyCache.get(key, () -> true);
+            } catch (ExecutionException ignored) {
+                // Never fails for this loader; fall through.
+            }
+        }
+        return ok;
+    }
+
+    private static boolean doVerifyPQ(byte[] prefixedPubkey, byte[] sigBytes, Sha256Hash baseSighash,
+            boolean requireSlhDsa) {
         try {
             KeyBundle keyBundle = extractKeyBundle(prefixedPubkey);
             SignatureBundle sigBundle = SignatureBundle.deserialize(sigBytes);
@@ -119,15 +179,19 @@ public final class PQScriptUtils {
             if (!p.verify(PQConstants.ALG_ML_DSA_87, mlKey.publicKey(), mlMsg, mlSig.signature()))
                 return false;
 
-            // SLH-DSA-SHA2-256s (required if the key bundle has an SLH-DSA entry;
-            // absent for ML-DSA-only keys)
+            // SLH-DSA-SHA2-256s (required iff the dual suite is active and the
+            // key bundle has an SLH-DSA entry).  A present signature is always
+            // checked, so providing a bad one never passes in any phase.
             KeyBundle.Entry slhKey = keyBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
-            SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
             if (slhKey != null) {
-                if (slhSig == null) return false;
-                byte[] slhMsg = domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
-                if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
-                    return false;
+                SignatureBundle.Entry slhSig = sigBundle.getEntry(PQConstants.ALG_SLH_DSA_SHA2_256S);
+                if (slhSig == null) {
+                    if (requireSlhDsa) return false;
+                } else {
+                    byte[] slhMsg = domainSeparatedHash(txHash, PQConstants.SLHDSA_SIG_DOMAIN);
+                    if (!p.verify(PQConstants.ALG_SLH_DSA_SHA2_256S, slhKey.publicKey(), slhMsg, slhSig.signature()))
+                        return false;
+                }
             }
 
             return true;
@@ -196,5 +260,38 @@ public final class PQScriptUtils {
     @Deprecated
     public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash) {
         return verifyProposerSignature(keyBundle, sigBundle, signingHash, true);
+    }
+
+    /* ── Verify cache key ──────────────────────────────────────────────── */
+
+    /** Immutable cache key covering every input of a PQ verification. */
+    private static final class VerifyKey {
+        final byte[] pubkey;
+        final byte[] signature;
+        final byte[] sighash;
+        final boolean requireSlhDsa;
+        final int hash;
+
+        VerifyKey(byte[] pubkey, byte[] signature, byte[] sighash, boolean requireSlhDsa) {
+            this.pubkey = pubkey;
+            this.signature = signature;
+            this.sighash = sighash;
+            this.requireSlhDsa = requireSlhDsa;
+            int h = 31 * Arrays.hashCode(pubkey) + Arrays.hashCode(signature);
+            h = 31 * h + Arrays.hashCode(sighash);
+            this.hash = 31 * h + (requireSlhDsa ? 1 : 0);
+        }
+
+        @Override public boolean equals(Object o) {
+            if (!(o instanceof VerifyKey)) return false;
+            VerifyKey other = (VerifyKey) o;
+            return hash == other.hash
+                    && requireSlhDsa == other.requireSlhDsa
+                    && Arrays.equals(pubkey, other.pubkey)
+                    && Arrays.equals(signature, other.signature)
+                    && Arrays.equals(sighash, other.sighash);
+        }
+
+        @Override public int hashCode() { return hash; }
     }
 }

@@ -166,7 +166,11 @@ public class PQKey implements Key {
     public byte[] getSLHDSAPrivateKey() { return slhDsaPrivateKey; }
 
     public SignatureBundle sign(Sha256Hash input) {
-        return sign(input, true);
+        // Follow the same suite governance as verification: while the dual
+        // suite is inactive (net.bigtangle.pq.dualActivationHeight unset),
+        // ML-DSA-only signatures are produced and accepted; SLH-DSA adds
+        // ~2 ms verify + ~8 KB per input for no protocol benefit pre-activation.
+        return sign(input, PQScriptUtils.slhDsaRequiredForTx());
     }
 
     /**
