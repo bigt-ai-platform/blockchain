@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
+import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.RewardInfo;
@@ -373,7 +374,8 @@ public class SlotService {
      * the proposer and every validator derive the same expected payout from
      * chain state instead of trusting a declaration.
      */
-    public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store) throws Exception {        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
+    public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store,
+            NetworkParameters params) throws Exception {        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
         if (block == null || block.getTransactions() == null) {
             return surplus;
         }
@@ -398,10 +400,27 @@ public class SlotService {
                             in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
                             in.getOutpoint().getIndex());
                     if (utxo == null) {
-                        // An unresolvable input must PROPAGATE (fail closed),
-                        // never contribute zero — otherwise nodes with different
-                        // UTXO availability would compute different fee totals
-                        // and disagree on the same beacon.
+                        // A fundAddresses/bootstrap UTXO of a FOREIGN chain
+                        // lives under that chain's genesis outpoint. When the
+                        // input's containing block is a known INITIAL block
+                        // that is NOT this chain's own genesis, the input
+                        // belongs to the foreign chain: its fees can never
+                        // resolve here, so skip it instead of failing the
+                        // epoch-fee computation. Deterministic: every node on
+                        // this chain classifies the same outpoint identically.
+                        Sha256Hash inBlockHash = in.getOutpoint().getBlockHash();
+                        Block inBlock = inBlockHash == null ? null : store.get(inBlockHash);
+                        boolean foreignRoot = inBlock != null
+                                && inBlock.getBlockType() == BlockType.BLOCKTYPE_INITIAL
+                                && !inBlockHash.equals(UtilGeneseBlock.createGenesis(params).getHash());
+                        if (foreignRoot) {
+                            continue;
+                        }
+                        // An unresolvable input of a LOCALLY known block must
+                        // PROPAGATE (fail closed), never contribute zero —
+                        // otherwise nodes with different UTXO availability
+                        // would compute different fee totals and disagree on
+                        // the same beacon.
                         throw new net.bigtangle.exception.BlockStoreException(
                                 "Cannot resolve input UTXO for fee computation: " + in.getOutpoint());
                     }
@@ -618,7 +637,7 @@ public class SlotService {
             for (Sha256Hash h : rewardInfo.getBlocks()) {
                 Block referenced = store.get(h);
                 if (referenced != null) {
-                    epochFeePool = epochFeePool.add(computeFeeSurplus(referenced, store));
+                    epochFeePool = epochFeePool.add(computeFeeSurplus(referenced, store, networkParameters));
                 }
             }
             if (epochFeePool.compareTo(java.math.BigInteger.ZERO) > 0) {

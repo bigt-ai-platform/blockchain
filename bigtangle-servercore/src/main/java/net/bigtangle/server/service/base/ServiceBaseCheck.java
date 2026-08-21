@@ -1670,7 +1670,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						}
 					try {
 						expectedFromBlocks = expectedFromBlocks.add(
-								net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store));
+								net.bigtangle.server.service.SlotService.computeFeeSurplus(referenced, store, networkParameters));
 					} catch (BlockStoreException e) {
 						// Missing input UTXO — the node is behind; defer.
 						return SolidityState.fromReferenced(h, true);

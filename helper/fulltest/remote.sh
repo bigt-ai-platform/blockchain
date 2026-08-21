@@ -508,9 +508,19 @@ fi
 # Fund the L1 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can pay
 # fees / create tokens directly on the L1-order chain.
 if [ -n "$L1_GENESIS_PUBKEY" ]; then
+    # Many distinct confirmed UTXOs (one per entry) so consecutive order
+    # tests can each spend a fresh confirmed BIG source; a single UTXO would
+    # leave only unconfirmed change after the first spend and a rerun would
+    # fail with InsufficientMoneyException (mirrors the L0 genesis funding).
+    L1_GENESIS_FUND_UTXOS="${L1_GENESIS_FUND_UTXOS:-8}"
+    L1_GENESIS_ENTRIES=""
+    for i in $(seq 1 "$L1_GENESIS_FUND_UTXOS"); do
+        L1_GENESIS_ENTRIES="${L1_GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L1_GENESIS_PUBKEY\"},"
+    done
+    L1_GENESIS_ENTRIES="[${L1_GENESIS_ENTRIES%,}]"
     if post_ok "$L1_BASE/fundAddresses" \
-        "{\"addresses\":[{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L1_GENESIS_PUBKEY\"}]}"; then
-        echo "L1 genesis wallet funded"
+        "{\"addresses\":$L1_GENESIS_ENTRIES}"; then
+        echo "L1 genesis wallet funded ($L1_GENESIS_FUND_UTXOS UTXOs)"
     else
         echo "L1 genesis funding failed"
     fi

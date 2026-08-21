@@ -163,6 +163,20 @@ public class BlockStoreService {
 	 */
 	public void addFromSync(Block block, boolean allowUnsolid, BlockStoreInterface store) throws BlockStoreException {
 		checkAllowedBlockType(block);
+		if (block.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+			// A BLOCKTYPE_INITIAL block is a chain root: it is created locally
+			// at store init (createNewStore) without verification, and by
+			// definition it carries THE coinbase that verifyTransactions
+			// rejects (BLOCKTYPE_INITIAL disallows coinbase). A syncing peer
+			// may need a FOREIGN chain's root as a referenced predecessor
+			// (cross-chain anchors), so accept any INITIAL block from sync
+			// unverified and store it like the bootstrap path does.
+			store.put(block);
+			store.updateBlockEvaluationChainlength(block.getHash(), 0);
+			store.updateBlockEvaluationSolid(block.getHash(), 2);
+			store.updateBlockEvaluationConfirmed(block.getHash(), true);
+			return;
+		}
 		if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 			addChain(block, store);
 		} else {
