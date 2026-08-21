@@ -2,7 +2,9 @@ package net.bigtangle.server.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -252,5 +254,39 @@ public class PosConsensusHardeningTest {
         c.setValidatorPubkey(key.getPubKey());
         c.setBlsPubkey(RandaoService.blsPubkey(key));
         assertFalse(c.verifySignature(), "an unsigned attestation must not verify");
+    }
+
+    // ---- Per-beacon attestation cap: bounded beacon size ----
+
+    @Test
+    public void attestationCapKeepsNewestAndIsDeterministic() {
+        int cap = CasperService.MAX_ATTESTATIONS_PER_BEACON;
+        List<AttestationData> many = new ArrayList<>();
+        for (int i = 0; i < cap + 50; i++) {
+            // Slots ascend with i; pubkey hex descends so the tie-break is
+            // exercised within the same slot.
+            AttestationData a = att(i, 0, i / 32, h(i), h(i));
+            a.setValidatorPubkey(new byte[] {(byte) (cap - i), 1});
+            many.add(a);
+        }
+
+        List<AttestationData> capped = CasperService.capAttestations(many);
+        assertEquals(cap, capped.size(), "cap bounds the embedded set");
+        long minSlot = capped.stream().mapToLong(AttestationData::getSlot).min().orElse(-1);
+        assertEquals(50, minSlot, "the NEWEST slots are kept, oldest dropped");
+
+        // Deterministic regardless of input order (the commitment root must
+        // always match the embedded set).
+        java.util.Collections.reverse(many);
+        assertEquals(CasperService.computeAttestationRoot(capped),
+                CasperService.computeAttestationRoot(CasperService.capAttestations(many)),
+                "capped selection must be order-independent");
+    }
+
+    @Test
+    public void attestationCapBelowLimitIsIdentity() {
+        List<AttestationData> few = List.of(att(1, 0, 0, h(1), h(1)), att(2, 0, 0, h(2), h(2)));
+        assertSame(few, CasperService.capAttestations(few), "under the cap the list passes through");
+        assertNull(CasperService.capAttestations(null));
     }
 }

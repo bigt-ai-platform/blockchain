@@ -151,6 +151,33 @@ choice all changed; single-node tests don't prove multi-node convergence.
    order, and the epoch prune drops the stale range in ONE statement
 (`deletePosStateByServiceKeyRange`) instead of a per-key scan. Verified by
     PosConsensusHardeningTest.
+4. **Hardening pass (post-review)** — DONE.
+   - Attestation spam cost bound: `processVote` rejects non-validator pubkeys
+     BEFORE signature verification (no per-request PQ/BLS verify for garbage).
+   - Duplicate slashing proposals suppressed (one SLASHING block per
+     equivocating pubkey per node, not one per duplicate delivery).
+   - Chain-read inclusion set memoized per confirmed tip (`includedAttestations`)
+     — finality, leak and rewards share one walk instead of three; GhostService
+     fork-choice weights memoized the same way.
+   - Transient checkpoints (epoch boundary not yet derivable) fall back to the
+     previous epoch's cached chain-derived checkpoint instead of the node-local
+     head — attestation targets stay deterministic across nodes in every slot.
+   - Equivocation discard is sticky across the periodic fork-choice reload.
+   - Per-beacon embedded-attestation cap (`MAX_ATTESTATIONS_PER_BEACON`,
+     newest-first deterministic selection) bounds beacon size until BLS
+     aggregation lands.
+   - Inactivity-leak revert is prefix-scoped (loads only this boundary's rows).
+   - **COLLATION BUG (critical, fixed)**: `getPosStateByServicePrefix` used a
+     `key >= prefix AND key < prefix || U+FFFF` range, which silently returns
+     ZERO rows under glibc/ICU collations (PostgreSQL `en_US.utf8`: unassigned
+     codepoints sort before ASCII). This broke the proposer's attestation
+     inclusion read (`getAttestationsForSlot`) — post-fork beacons would embed
+     NO attestations, starving chain-read finality/rewards/leak in production —
+     and the leak-revert read. The single-test suites missed it because
+     chain-read tests embed attestations into blocks directly and the LMD-vote
+     table has its own store getter. Fixed with collation-free `LIKE ...
+     ESCAPE '\'` prefix matching (probe verified: predicate false for rows that
+     literally start with the prefix).
 
 ### Acceptance
 - Skew tolerance and domain consistency tests added. ✅ both.

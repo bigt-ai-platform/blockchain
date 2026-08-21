@@ -3864,25 +3864,38 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	/**
-	 * Upper bound for an exact-prefix range scan: every string that starts with
-	 * the prefix compares less than {@code prefix + "\uffff"} (max BMP
-	 * codepoint), so {@code key >= prefix AND key < prefix + "\uffff"} selects
-	 * exactly the keys with that prefix. The pos_state keys are ASCII (service
-	 * names, digits, pubkey hex), so collation order is irrelevant here.
+	 * Escapes {@code s} for a LIKE pattern with {@code ESCAPE '\'} so '%', '_'
+	 * and the escape character match literally. pos_state keys contain '_'
+	 * heavily (att_<slot>_<pubkey>, pre_<hash>_<pubkey>).
 	 */
-	private static String prefixUpperBound(String keyPrefix) {
-		return keyPrefix + "\uffff";
+	private static String escapeLikePattern(String s) {
+		StringBuilder sb = new StringBuilder(s.length() + 8);
+		for (int i = 0; i < s.length(); i++) {
+			char ch = s.charAt(i);
+			if (ch == '\\' || ch == '%' || ch == '_') {
+				sb.append('\\');
+			}
+			sb.append(ch);
+		}
+		return sb.toString();
 	}
 
+	/**
+	 * Exact-prefix read. Implemented with LIKE (character-by-character, no
+	 * collation weights) instead of a <code>key &gt;= prefix AND key &lt;
+	 * prefix + "\uffff"</code> range: under glibc/ICU collations (e.g.
+	 * PostgreSQL en_US.utf8) unassigned codepoints such as U+FFFF sort BEFORE
+	 * ASCII letters/digits, so the synthetic upper bound excluded every row and
+	 * prefix reads silently returned nothing.
+	 */
 	@Override
 	public Map<String, byte[]> getPosStateByServicePrefix(String service, String keyPrefix)
 			throws BlockStoreException {
 		Map<String, byte[]> result = new HashMap<>();
 		try (PreparedStatement s = getConnection().prepareStatement(
-				"SELECT key, value FROM pos_state WHERE service = ? AND key >= ? AND key < ?")) {
+				"SELECT key, value FROM pos_state WHERE service = ? AND key LIKE ? ESCAPE '\\'")) {
 			s.setString(1, service);
-			s.setString(2, keyPrefix);
-			s.setString(3, prefixUpperBound(keyPrefix));
+			s.setString(2, escapeLikePattern(keyPrefix) + "%");
 			try (ResultSet rs = s.executeQuery()) {
 				while (rs.next()) {
 					result.put(rs.getString("key"), rs.getBytes("value"));

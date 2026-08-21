@@ -150,6 +150,8 @@ public class CasperService {
         latestVoteTargets.clear();
         epochVoteTargets.clear();
         epochVoteSources.clear();
+        includedCacheTip = null;
+        includedCache = java.util.Collections.emptyMap();
         try {
             BlockStoreInterface store = storeService.getStore();
             try {
@@ -747,6 +749,26 @@ public class CasperService {
         return "att_" + String.format("%020d", slot) + "_" + Utils.HEX.encode(validatorPubkey);
     }
 
+    /**
+     * Upper bound on attestations a proposer embeds in one beacon. Bounds beacon
+     * size (each attestation is a signed JSON payload) until BLS aggregation
+     * lands; with one vote per validator per slot it only binds above ~1k
+     * validators. Selection is deterministic (newest slots first, pubkey
+     * tie-break) so the commitment root always matches the embedded set.
+     */
+    public static final int MAX_ATTESTATIONS_PER_BEACON = 1024;
+
+    /** The newest {@link #MAX_ATTESTATIONS_PER_BEACON} attestations, deterministically selected. */
+    static List<AttestationData> capAttestations(List<AttestationData> attestations) {
+        if (attestations == null || attestations.size() <= MAX_ATTESTATIONS_PER_BEACON) {
+            return attestations;
+        }
+        List<AttestationData> sorted = new ArrayList<>(attestations);
+        sorted.sort(Comparator.comparingLong(AttestationData::getSlot)
+                .thenComparing(a -> Utils.HEX.encode(a.getValidatorPubkey())));
+        return new ArrayList<>(sorted.subList(sorted.size() - MAX_ATTESTATIONS_PER_BEACON, sorted.size()));
+    }
+
     /** Persists the full (signed) attestation so it can be committed into the beacon. */
     private void persistFullAttestation(AttestationData att, BlockStoreInterface store) {
         try {
@@ -955,10 +977,10 @@ public class CasperService {
                 return;
             }
             String prefix = "pre_" + boundaryBeacon.getHashAsString() + "_";
-            for (Map.Entry<String, byte[]> e : store.getPosStateByService(LEAK_SERVICE).entrySet()) {
-                if (!e.getKey().startsWith(prefix)) {
-                    continue;
-                }
+            // Prefix-scoped read: only THIS boundary beacon's pre-leak rows are
+            // loaded, not the whole leak namespace (every other boundary's
+            // records stay untouched on disk).
+            for (Map.Entry<String, byte[]> e : store.getPosStateByServicePrefix(LEAK_SERVICE, prefix).entrySet()) {
                 byte[] pubkey = Utils.HEX.decode(e.getKey().substring(prefix.length()));
                 BigInteger pre = new BigInteger(e.getValue());
                 StakeRecord v = store.getStakeDeposit(pubkey);
@@ -987,7 +1009,7 @@ public class CasperService {
             return null;
         }
         Set<String> voters = new HashSet<>();
-        for (AttestationData att : collectIncludedAttestations(store).values()) {
+        for (AttestationData att : includedAttestations(store).values()) {
             if (att.getTargetEpoch() == epoch) {
                 voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
             }
@@ -1025,9 +1047,10 @@ public class CasperService {
 
         // One chain-read inclusion set per evaluation: justification and both
         // finalization rules read the same confirmed tip, so the 320-slot walk
-        // must not repeat per vote sum.
+        // must not repeat per vote sum (memoized per tip — see
+        // {@link #includedAttestations}).
         Map<String, AttestationData> included = onChainAttestationActive(store)
-                ? collectIncludedAttestations(store) : null;
+                ? includedAttestations(store) : null;
 
         BigInteger totalStake = leakedTotalStake(store, epoch);
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
@@ -1150,10 +1173,47 @@ public class CasperService {
     private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
         if (onChainAttestationActive(store)) {
-            Map<String, AttestationData> inc = included != null ? included : collectIncludedAttestations(store);
+            Map<String, AttestationData> inc = included != null ? included : includedAttestations(store);
             return votedStakeFromChain(target, requiredSource, store, inc);
         }
         return votedStakeFromGossip(target, requiredSource, store);
+    }
+
+    // Memoized chain-read inclusion set, keyed by the confirmed tip hash. The
+    // walk is a pure function of the confirmed chain (identical tip hash ⇒
+    // identical ancestry ⇒ identical result), so one memoized walk per tip
+    // serves every consumer in a confirm batch: finality vote sums, the
+    // inactivity-leak voter set and the epoch-reward split each used to repeat
+    // the ATTESTATION_LOOKBACK_SLOTS block walk independently.
+    private static final Object INCLUDED_CACHE_LOCK = new Object();
+    private static volatile Sha256Hash includedCacheTip;
+    private static volatile Map<String, AttestationData> includedCache = java.util.Collections.emptyMap();
+
+    /**
+     * {@link #collectIncludedAttestations} memoized per confirmed tip. Racy
+     * recomputation is harmless (pure function), so reads stay lock-free.
+     */
+    static Map<String, AttestationData> includedAttestations(BlockStoreInterface store) {
+        Sha256Hash tip;
+        try {
+            TXReward t = store.getMaxConfirmedReward();
+            tip = t != null ? t.getBlockHash() : null;
+        } catch (Exception e) {
+            return collectIncludedAttestations(store);
+        }
+        if (tip == null) {
+            return new HashMap<>();
+        }
+        Map<String, AttestationData> cached = includedCache;
+        if (tip.equals(includedCacheTip) && cached != null) {
+            return cached;
+        }
+        Map<String, AttestationData> fresh = collectIncludedAttestations(store);
+        synchronized (INCLUDED_CACHE_LOCK) {
+            includedCacheTip = tip;
+            includedCache = fresh;
+        }
+        return fresh;
     }
 
     /**
