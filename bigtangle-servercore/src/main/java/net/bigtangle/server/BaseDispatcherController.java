@@ -316,11 +316,7 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				if (record == null) {
 					response = GetTransactionStatusResponse.createEmpty(txHashHex);
 				} else {
-					response = GetTransactionStatusResponse.create(record.getTxHash().toString(),
-							record.getStatus().name(),
-							record.getBlockHash() == null ? null : record.getBlockHash().toString(),
-							record.getChainlength(), record.getAddress(), record.getCreatedTime(),
-							record.getUpdatedTime());
+					response = transactionStatusResponse(record, store);
 				}
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
@@ -339,9 +335,7 @@ public abstract class BaseDispatcherController implements DisposableBean {
 						.getTransactionStatusesByAddress(address);
 				List<GetTransactionStatusResponse> items = new ArrayList<>();
 				for (net.bigtangle.server.data.TransactionStatusRecord r : records) {
-					items.add(GetTransactionStatusResponse.create(r.getTxHash().toString(), r.getStatus().name(),
-							r.getBlockHash() == null ? null : r.getBlockHash().toString(), r.getChainlength(),
-							r.getAddress(), r.getCreatedTime(), r.getUpdatedTime()));
+					items.add(transactionStatusResponse(r, store));
 				}
 				this.outPrintJSONString(httpServletResponse,
 						GetTransactionStatusResponse.GetTransactionsStatusResponse.create(items), watch, reqCmd);
@@ -839,5 +833,29 @@ public abstract class BaseDispatcherController implements DisposableBean {
 		} catch (Exception e) {
 			// status tracking is best-effort
 		}
+	}
+
+	/**
+	 * Serves a transaction status. CONFIRMED is derived on read from the
+	 * block's confirmed flag (the confirm path no longer writes it, see
+	 * a8fda429b) so clients polling for CONFIRMED still observe finality.
+	 */
+	private GetTransactionStatusResponse transactionStatusResponse(
+			net.bigtangle.server.data.TransactionStatusRecord record, BlockStoreInterface store) {
+		net.bigtangle.server.data.TransactionStatus status = record.getStatus();
+		Sha256Hash blockHash = record.getBlockHash();
+		if (blockHash != null && status != net.bigtangle.server.data.TransactionStatus.CONFIRMED
+				&& status != net.bigtangle.server.data.TransactionStatus.DROPPED) {
+			try {
+				if (store.isBlockConfirmed(blockHash)) {
+					status = net.bigtangle.server.data.TransactionStatus.CONFIRMED;
+				}
+			} catch (Exception e) {
+				logger.debug("confirm-status derivation failed for {}: {}", record.getTxHash(), e.getMessage());
+			}
+		}
+		return GetTransactionStatusResponse.create(record.getTxHash().toString(), status.name(),
+				blockHash == null ? null : blockHash.toString(), record.getChainlength(), record.getAddress(),
+				record.getCreatedTime(), record.getUpdatedTime());
 	}
 }

@@ -1036,6 +1036,18 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
+	public boolean isBlockConfirmed(Sha256Hash blockHash) throws BlockStoreException {
+		try (PreparedStatement s = getConnection()
+				.prepareStatement("SELECT confirmed " + "FROM blocks WHERE hash = ? ")) {
+			s.setBytes(1, blockHash.getBytes());
+			ResultSet results = s.executeQuery();
+			return results.next() && results.getBoolean("confirmed");
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	@Override
 	public long countSpentOutputs(Sha256Hash txHash) throws BlockStoreException {
 		try (PreparedStatement s = getConnection()
 				.prepareStatement("SELECT count(*) FROM outputs WHERE hash = ? AND spent = true")) {
@@ -1538,19 +1550,42 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	@Override
 	public List<UTXO> getOpenTransactionOutputs(List<Address> addresses) throws UTXOProviderException {
+		if (addresses == null || addresses.isEmpty()) {
+			return new ArrayList<>();
+		}
 		PreparedStatement s = null;
 		List<UTXO> outputs = new ArrayList<>();
 		try {
+			// Single query for all addresses instead of one round-trip per
+			// address (a 5k-address getOutputs previously issued 5k queries on
+			// the shared connection and took minutes). Note the corrected
+			// grouping: the multitoaddress branch must ALSO require
+			// confirmed/spent (the old "? OR ?" form ignored both).
+			StringBuilder sql = new StringBuilder(SELECT_TRANSACTION_OUTPUTS_SQL_BASE);
+			sql.append(" WHERE ").append(OUTPUTS_CONFIRMED).append(" = true and spent = false and ( outputs.toaddress IN (");
+			for (int i = 0; i < addresses.size(); i++) {
+				sql.append("?,");
+			}
+			sql.setLength(sql.length() - 1);
+			sql.append(") OR outputsmulti.toaddress IN (");
+			for (int i = 0; i < addresses.size(); i++) {
+				sql.append("?,");
+			}
+			sql.setLength(sql.length() - 1);
+			sql.append(") )");
 
-			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_SQL);
+			s = getConnection().prepareStatement(sql.toString());
+			int idx = 1;
 			for (Address address : addresses) {
-				s.setString(1, address.toString());
-				s.setString(2, address.toString());
-				ResultSet results = s.executeQuery();
-				while (results.next()) {
-					outputs.add(setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"),
-							results));
-				}
+				s.setString(idx++, address.toString());
+			}
+			for (Address address : addresses) {
+				s.setString(idx++, address.toString());
+			}
+			ResultSet results = s.executeQuery();
+			while (results.next()) {
+				outputs.add(setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"),
+						results));
 			}
 			return outputs;
 		} catch (SQLException ex) {

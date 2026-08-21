@@ -124,19 +124,17 @@ public class OutputService {
 
 	private List<UTXO> getStoredOutputsFromUTXOProvider(Set<byte[]> pubKeyHashs, BlockStoreInterface store)
 			throws UTXOProviderException, IOException {
-		List<UTXO> list = new ArrayList<>();
-		for (byte[] key : pubKeyHashs) {
-			Address address =   Address.fromHash160(networkParameters, key);
-			String addrStr = address.toString();
-			List<UTXO> found = getOpenTransactionOutputs(addrStr, store);
-			if (found.isEmpty()) {
-				logger.warn("getStoredOutputs: no outputs for address={} pkh={}", addrStr,
-						net.bigtangle.core.Utils.HEX.encode(key));
-			}
-			list.addAll(found);
+		if (pubKeyHashs.isEmpty()) {
+			return new ArrayList<>();
 		}
-
-		return list;
+		// One batched query for all addresses instead of one query per address
+		// (a 5k-address getOutputs previously issued 5k sequential queries on
+		// the shared JDBC connection and hung for minutes).
+		List<Address> addresses = new ArrayList<>(pubKeyHashs.size());
+		for (byte[] key : pubKeyHashs) {
+			addresses.add(Address.fromHash160(networkParameters, key));
+		}
+		return store.getOpenTransactionOutputs(addresses);
 	}
 
 	public List<UTXO> getOpenTransactionOutputs(String address, BlockStoreInterface store)

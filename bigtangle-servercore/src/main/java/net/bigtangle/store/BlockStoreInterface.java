@@ -114,6 +114,9 @@ public interface BlockStoreInterface {
 
 	boolean getOutputConfirmation(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException;
 
+	/** True when the given block is marked confirmed (blocks.confirmed). */
+	boolean isBlockConfirmed(Sha256Hash blockHash) throws BlockStoreException;
+
 	long countSpentOutputs(Sha256Hash txHash) throws BlockStoreException;
 
 	/**

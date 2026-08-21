@@ -630,9 +630,55 @@ public class SyncBlockService {
 		if (!knownLocally) {
 			return false;
 		}
+		// Same-branch reconciliation: when the remote's finalized checkpoint is
+		// an ancestor or a descendant of ours (both blocks on one reward chain),
+		// the remote is merely ahead/behind on OUR chain — never a competing
+		// finality. Skipping such a peer was the root cause of the recurring
+		// "one node runs ahead, the others refuse to sync and stay stuck"
+		// divergence: the lagging node saw the leader's NEWER finalized
+		// checkpoint, treated it as a conflict, and refused the very chain it
+		// needed. Only a true SIBLING fork (neither checkpoints on the other's
+		// branch) is a real finality conflict.
+		try {
+			if (finalityOnSameBranch(remoteFinalized, finalized.getBlockHash(), store)) {
+				return false;
+			}
+		} catch (Exception e) {
+			log.debug("finality ancestry walk failed for {}: {}", server, e.getMessage());
+		}
 		log.info("Skip sync from {}: remote finalized {} conflicts with local finalized {}",
 				server, remoteFinalized, finalized.getBlockHash());
 		return true;
+	}
+
+	/** Max reward-chain steps to prove a finalized checkpoint is on our branch. */
+	private static final int FINALITY_ANCESTRY_WALK_LIMIT = 100000;
+
+	/**
+	 * True when {@code a} is an ancestor-or-self of {@code b} on the reward
+	 * chain (walking {@code b}'s prev-block links reaches {@code a}).
+	 */
+	private boolean isRewardAncestor(Sha256Hash a, Sha256Hash b, BlockStoreInterface store) throws Exception {
+		Sha256Hash cur = b;
+		for (int i = 0; i < FINALITY_ANCESTRY_WALK_LIMIT; i++) {
+			if (cur == null) {
+				return false;
+			}
+			if (cur.equals(a)) {
+				return true;
+			}
+			Block next = blockService.getBlock(cur, store);
+			if (next == null || next.getPrevBlockHash() == null) {
+				return false;
+			}
+			cur = next.getPrevBlockHash();
+		}
+		return false;
+	}
+
+	/** True when the two finalized checkpoints lie on the same reward chain. */
+	private boolean finalityOnSameBranch(Sha256Hash a, Sha256Hash b, BlockStoreInterface store) throws Exception {
+		return isRewardAncestor(a, b, store) || isRewardAncestor(b, a, store);
 	}
 
 	/*
