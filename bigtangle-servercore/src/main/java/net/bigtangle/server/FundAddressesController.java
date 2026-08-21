@@ -55,6 +55,9 @@ public class FundAddressesController {
     private static final String FAUCET_STATE_SERVICE = "faucet";
     private static final String FAUCET_INDEX_KEY = "utxo_index";
 
+    /** Highest faucet index that survives 32-bit outpoint serialization. */
+    private static final long INT_SAFE_MAX = Integer.MAX_VALUE - 1_000_000L;
+
     @Autowired
     private NetworkParameters networkParameters;
     @Autowired
@@ -136,6 +139,11 @@ public class FundAddressesController {
      * Next faucet index block of {@code count} entries: the maximum of the
      * in-memory counter and the persisted high-water mark, so restarts can
      * never rewind onto already-spent outpoints.
+     *
+     * <p>Indices MUST stay within unsigned-32-bit range: TransactionOutPoint
+     * serializes the index as an int, so a larger value wraps modulo 2^32 and
+     * the mempool then looks up an outpoint that does not exist (observed as
+     * "UTXO not found" for truncated indices). Never seed from wall-clock.
      */
     private long nextFaucetIndex(int count) throws BlockStoreException {
         long persisted = 0;
@@ -154,18 +162,13 @@ public class FundAddressesController {
                 log.warn("store close failed", e);
             }
         }
-        // Migration: pre-persistence deployments minted with only the
-        // in-memory counter (base 1e9), which grew unbounded across restarts;
-        // its high-water mark was lost, so a fresh JVM rewinds onto those
-        // already-spent outpoints (observed as OP_EQUALVERIFY failures).
-        // Guard: never hand out indices below wall-clock seconds — strictly
-        // above any legacy value. After the first such seed the persisted
-        // mark stays ahead of the clock and this is a no-op.
-        long base = Math.max(Math.max(persisted, FUND_UTXO_INDEX.get()), System.currentTimeMillis());
-        if (base > persisted + count && persisted > 0) {
-            log.warn("faucet index jumped forward to avoid stale range: {} -> {}", persisted, base);
-        }
+        long base = Math.max(Math.min(persisted, INT_SAFE_MAX), Math.min(FUND_UTXO_INDEX.get(), INT_SAFE_MAX));
         long next = base + count;
+        if (next >= Integer.MAX_VALUE) {
+            throw new BlockStoreException("faucet index exhausted (next=" + next
+                    + " would overflow the 32-bit outpoint index); reset pos_state faucet/"
+                    + FAUCET_INDEX_KEY + " to reseed");
+        }
         FUND_UTXO_INDEX.set(next);
         return base;
     }
