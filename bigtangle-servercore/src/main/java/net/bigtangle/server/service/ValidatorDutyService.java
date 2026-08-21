@@ -182,13 +182,14 @@ public class ValidatorDutyService {
             return;
         }
         long slot = slotService.getCurrentSlot();
-        // The slot tick may run several times per slot (pos.slotIntervalMs
-        // can be shorter than SLOT_DURATION_MS). Proposing/attesting more than
-        // once per slot creates multiple beacons for the same slot, which the
-        // slashing detector treats as a double vote. Perform duty once per slot.
-        // lastDutySlot is set AFTER the duty ran: a failed duty may be retried
-        // within the slot — the persisted slashing-protection records make any
-        // retry safe.
+        // The slot tick may run several times per slot (the tick period can be
+        // shorter than pos.slotIntervalMs). Proposing/attesting more than once
+        // per slot creates multiple beacons for the same slot, which the
+        // slashing detector treats as a double vote. Perform duty once per
+        // slot. This guard runs BEFORE any DB access so fast tick rates are
+        // cheap. lastDutySlot is set AFTER the duty ran: a failed duty may be
+        // retried within the slot — the persisted slashing-protection records
+        // make any retry safe.
         if (slot == lastDutySlot) {
             return;
         }

@@ -234,15 +234,36 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				java.io.DataInputStream dis = new java.io.DataInputStream(
 						new java.io.ByteArrayInputStream(bodyByte));
 				int count = 0;
+				List<Transaction> batch = new ArrayList<>();
 				while (dis.available() > 0) {
 					int len = dis.readInt();
 					byte[] txBytes = new byte[len];
 					dis.readFully(txBytes);
-					Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(txBytes);
-					mempoolService.submitTransaction(tx);
-					recordMempoolStatus(tx, store);
-					blockSaveService.broadcastTransaction(tx);
+					batch.add(networkParameters.getDefaultSerializer().makeTransaction(txBytes));
 					count++;
+				}
+				// ONE shared store for the whole batch: UTXO verification reads
+				// go through a single pooled connection instead of an
+				// open/close cycle per transaction.
+				mempoolService.submitTransactions(batch, store);
+				// MEMPOOL status is best-effort bookkeeping; collecting the
+				// records and flushing them with ONE batched upsert keeps a
+				// DB round-trip off the per-tx ingest critical path (a 250-tx
+				// batch previously issued 250 synchronous upserts).
+				java.util.List<TransactionStatusRecord> mempoolStatuses = new ArrayList<>();
+				for (Transaction tx : batch) {
+					mempoolStatuses.add(new TransactionStatusRecord(
+							tx.getHash(), TransactionStatus.MEMPOOL, null, null,
+							TransactionStatusRecord.deriveAddress(tx, networkParameters),
+							System.currentTimeMillis(), System.currentTimeMillis()));
+					blockSaveService.broadcastTransaction(tx);
+				}
+				try {
+					if (!mempoolStatuses.isEmpty()) {
+						store.upsertTransactionStatuses(mempoolStatuses);
+					}
+				} catch (Exception e) {
+					// status tracking is best-effort
 				}
 				GetStringResponse resp = new GetStringResponse();
 				resp.setMessage(String.valueOf(count));

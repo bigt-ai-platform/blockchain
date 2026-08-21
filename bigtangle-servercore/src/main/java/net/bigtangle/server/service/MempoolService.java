@@ -76,6 +76,23 @@ public class MempoolService {
 
     public void submitTransaction(Transaction tx) {
         checkAndAdd(tx);
+        addToPending(tx);
+    }
+
+    /**
+     * Batch submit with a SHARED store: UTXO verification needs a DB read per
+     * input, and opening/closing a pooled store per transaction adds hundreds
+     * of checkouts to every large submit call. The caller owns the store
+     * lifecycle; each tx is still fully verified and conflict-checked.
+     */
+    public void submitTransactions(List<Transaction> txs, BlockStoreInterface store) {
+        for (Transaction tx : txs) {
+            checkAndAdd(tx, store);
+            addToPending(tx);
+        }
+    }
+
+    private void addToPending(Transaction tx) {
         BlockType blockType = getTransactionType(tx);
         ConcurrentLinkedQueue<Transaction> typeQueue = pendingTxnsByType
                 .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
@@ -113,6 +130,44 @@ public class MempoolService {
     }
 
     private void checkAndAdd(Transaction tx) {
+        // No store opened here: transactions without spendable inputs (e.g.
+        // orders) never need one, so the open stays lazy inside
+        // {@link #verifyTransaction(Transaction)}.
+        checkMempoolConflicts(tx);
+        verifyTransaction(tx);
+        finishCheckAndAdd(tx);
+    }
+
+    private void checkAndAdd(Transaction tx, BlockStoreInterface sharedStore) {
+        checkMempoolConflicts(tx);
+        verifyTransaction(tx, sharedStore);
+        finishCheckAndAdd(tx);
+    }
+
+    /**
+     * Mempool double-spend guard: an outpoint already pending in the mempool
+     * cannot be spent again until the first spend confirms (and is then
+     * rejected by the confirmed-UTXO state) or is dropped.
+     */
+    private void checkMempoolConflicts(Transaction tx) {
+        List<TransactionInput> inputs = tx.getInputs();
+        if (inputs == null) {
+            return;
+        }
+        for (TransactionInput in : inputs) {
+            TransactionOutPoint outpoint = in.getOutpoint();
+            if (outpoint == null || outpoint.isCoinBase()) {
+                continue;
+            }
+            if (spentOutpoints.containsKey(outpoint)) {
+                throw new VerificationException.ConflictPossibleException(
+                        "Mempool double-spend: outpoint " + outpoint + " already spent by pending tx");
+            }
+        }
+    }
+
+    /** Records the accepted tx's outpoints in the mempool conflict maps. */
+    private void finishCheckAndAdd(Transaction tx) {
         List<TransactionInput> inputs = tx.getInputs();
         Set<TransactionOutPoint> outpoints = new HashSet<>();
         if (inputs != null) {
@@ -121,19 +176,9 @@ public class MempoolService {
                 if (outpoint == null || outpoint.isCoinBase()) {
                     continue;
                 }
-                if (spentOutpoints.containsKey(outpoint)) {
-                    throw new VerificationException.ConflictPossibleException(
-                            "Mempool double-spend: outpoint " + outpoint + " already spent by pending tx");
-                }
                 outpoints.add(outpoint);
             }
         }
-        // Complete full validation (structural, UTXO existence, value
-        // conservation, fee, script and type-specific data) so every
-        // transaction accepted into the mempool is solid when batched into a
-        // block — an invalid tx must be rejected at submission, not produce a
-        // silently-invalid (solid=-1) block later.
-        verifyTransaction(tx);
         for (TransactionOutPoint outpoint : outpoints) {
             spentOutpoints.put(outpoint, tx);
         }
@@ -143,6 +188,43 @@ public class MempoolService {
     }
 
     private void verifyTransaction(Transaction tx) {
+        // Lazy store open: transactions without spendable inputs (orders,
+        // coinbase-like) never touch the DB, so no store is opened for them.
+        if (!hasSpendableInput(tx)) {
+            verifyTransaction(tx, null);
+            return;
+        }
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+        } catch (Exception e) {
+            throw new VerificationException("Mempool: cannot open store for verification");
+        }
+        try {
+            verifyTransaction(tx, store);
+        } finally {
+            try {
+                store.close();
+            } catch (Exception e) {
+                log.warn("Error closing store in mempool verification", e);
+            }
+        }
+    }
+
+    private static boolean hasSpendableInput(Transaction tx) {
+        List<TransactionInput> inputs = tx.getInputs();
+        if (inputs == null) {
+            return false;
+        }
+        for (TransactionInput in : inputs) {
+            if (in.getOutpoint() != null && !in.getOutpoint().isCoinBase()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void verifyTransaction(Transaction tx, BlockStoreInterface sharedStore) {
         tx.verify();
         // Coinbase-like transactions mint value by protocol design; their value
         // conservation is validated by the reward solidity checks, not here.
@@ -168,56 +250,34 @@ public class MempoolService {
         }
 
         // Fetch and verify each spendable (non-coinbase) input against its UTXO.
-        boolean hasSpendableInput = false;
-        if (inputs != null) {
-            for (TransactionInput in : inputs) {
-                if (in.getOutpoint() != null && !in.getOutpoint().isCoinBase()) {
-                    hasSpendableInput = true;
-                    break;
+        if (hasSpendableInput(tx)) {
+            for (int index = 0; index < inputs.size(); index++) {
+                TransactionInput in = inputs.get(index);
+                TransactionOutPoint outpoint = in.getOutpoint();
+                if (outpoint == null || outpoint.isCoinBase()) {
+                    continue;
                 }
-            }
-        }
-        if (hasSpendableInput) {
-            BlockStoreInterface store;
-            try {
-                store = storeService.getStore();
-            } catch (Exception e) {
-                throw new VerificationException("Mempool: cannot open store for verification");
-            }
-            try {
-                for (int index = 0; index < inputs.size(); index++) {
-                    TransactionInput in = inputs.get(index);
-                    TransactionOutPoint outpoint = in.getOutpoint();
-                    if (outpoint == null || outpoint.isCoinBase()) {
-                        continue;
-                    }
-                    UTXO utxo = store.getTransactionOutput(outpoint.getBlockHash(),
-                            outpoint.getTxHash(), outpoint.getIndex());
-                    if (utxo == null) {
-                        throw new VerificationException("Mempool: UTXO not found for " + outpoint);
-                    }
-                    String tokenKey = Utils.HEX.encode(utxo.getValue().getTokenid());
-                    if (valueIn.containsKey(tokenKey)) {
-                        valueIn.put(tokenKey, valueIn.get(tokenKey).add(utxo.getValue()));
-                    } else {
-                        valueIn.put(tokenKey, utxo.getValue());
-                    }
-                    Script scriptPubKey = utxo.getScript();
-                    if (scriptPubKey == null) {
-                        throw new VerificationException("Mempool: no scriptPubKey for UTXO " + outpoint);
-                    }
-                    in.getScriptSig().correctlySpends(tx, index, scriptPubKey, Script.ALL_VERIFY_FLAGS);
-                }
-            } catch (VerificationException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new VerificationException("Mempool transaction verification failed: " + e.getMessage());
-            } finally {
+                UTXO utxo;
                 try {
-                    store.close();
-                } catch (Exception e) {
-                    log.warn("Error closing store in mempool verification", e);
+                    utxo = sharedStore.getTransactionOutput(outpoint.getBlockHash(),
+                            outpoint.getTxHash(), outpoint.getIndex());
+                } catch (net.bigtangle.exception.BlockStoreException e) {
+                    throw new VerificationException("Mempool: UTXO lookup failed for " + outpoint, e);
                 }
+                if (utxo == null) {
+                    throw new VerificationException("Mempool: UTXO not found for " + outpoint);
+                }
+                String tokenKey = Utils.HEX.encode(utxo.getValue().getTokenid());
+                if (valueIn.containsKey(tokenKey)) {
+                    valueIn.put(tokenKey, valueIn.get(tokenKey).add(utxo.getValue()));
+                } else {
+                    valueIn.put(tokenKey, utxo.getValue());
+                }
+                Script scriptPubKey = utxo.getScript();
+                if (scriptPubKey == null) {
+                    throw new VerificationException("Mempool: no scriptPubKey for UTXO " + outpoint);
+                }
+                in.getScriptSig().correctlySpends(tx, index, scriptPubKey, Script.ALL_VERIFY_FLAGS);
             }
         }
 

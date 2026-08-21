@@ -47,10 +47,25 @@ public class SlotTickService {
 
     /** Guards against concurrent ticks (the scheduled task can overlap). */
     private final AtomicBoolean running = new AtomicBoolean(false);
+    /** Guards against concurrent epoch ticks. */
+    private final AtomicBoolean epochRunning = new AtomicBoolean(false);
     private final AtomicLong consecutiveFailures = new AtomicLong(0);
+    private final AtomicLong epochConsecutiveFailures = new AtomicLong(0);
 
+    // Duty tick and epoch tick are SEPARATE schedules on separate executors:
+    // epoch finality (Casper vote evaluation over the whole attestation
+    // lookback, pruning) can run for seconds at an epoch boundary, and while it
+    // hogs the duty thread the next slot's proposal is lost (observed as 20-33s
+    // beacon gaps under load). Proposing/attesting is wall-clock bound and must
+    // never wait behind chain bookkeeping.
+    //
+    // The duty tick runs FASTER than the slot interval and relies on
+    // ValidatorDutyService.performDuty's once-per-slot guard (lastDutySlot) for
+    // dedup, so a tick that overruns or is rejected cannot skip a whole slot —
+    // the next wakeup retries within the same slot. The guard exits before any
+    // DB access, so the extra wakeups are nearly free.
     @Async("posExecutor")
-    @Scheduled(fixedDelayString = "${pos.slotIntervalMs:12000}")
+    @Scheduled(fixedDelayString = "${pos.slotTickRateMs:1000}")
     public void tick() {
         if (!running.compareAndSet(false, true)) {
             log.trace("Slot tick already running; skipping");
@@ -73,35 +88,6 @@ public class SlotTickService {
             }
 
             try {
-                long slot = slotService.getCurrentSlot();
-                long epoch = slotService.getEpochForSlot(slot);
-
-                var store = storeService.getStore();
-                try {
-                    // Finality is driven by the CHAIN epoch (confirmed
-                    // chainlength / 32), NOT the wall-clock epoch. On a young
-                    // chain the wall-clock epoch runs far ahead of the chain
-                    // (the beacon chain confirms ~1 block per proposer slot), so
-                    // finalizeCheckpoint(wallEpoch) targets an epoch boundary
-                    // that does not exist on-chain and can never justify.
-                    // Driving it from the confirmed chain makes every node
-                    // evaluate the SAME chain epoch and converge on the same
-                    // checkpoint.
-                    long chainEpoch = SlotService.currentChainEpoch(store);
-                    if (chainEpoch != lastProcessedEpoch) {
-                        // Evaluate the just-COMPLETED chain epoch: only its
-                        // attestations are complete. Evaluating the current
-                        // epoch (which has no votes yet at its first tick) would
-                        // never justify anything — finality would never advance.
-                        if (chainEpoch > 0) {
-                            slotService.processEpoch(chainEpoch - 1, store);
-                        }
-                        lastProcessedEpoch = chainEpoch;
-                    }
-                } finally {
-                    store.close();
-                }
-
                 validatorDutyService.performDuty();
                 consecutiveFailures.set(0);
             } catch (Throwable t) {
@@ -117,6 +103,67 @@ public class SlotTickService {
         } finally {
             StoreService.exitPosContext();
             running.set(false);
+        }
+    }
+
+    /**
+     * Epoch finality tick: drives Casper checkpoint justification/finalization
+     * and pos_state pruning from the CONFIRMED chain. Chain-derived and
+     * idempotent, so a slow cycle costs nothing but latency — it must simply
+     * never run on the duty thread.
+     */
+    @Async("posChainExecutor")
+    @Scheduled(fixedDelayString = "${pos.epochTickRateMs:5000}")
+    public void epochTick() {
+        if (!epochRunning.compareAndSet(false, true)) {
+            return;
+        }
+        StoreService.enterPosContext();
+        try {
+            if (!scheduleConfiguration.isChainlength_active() || !serverConfiguration.checkService()) {
+                return;
+            }
+            if (epochConsecutiveFailures.get() >= FAILURE_BACKOFF_LIMIT) {
+                if (epochConsecutiveFailures.get() >= FAILURE_BACKOFF_LIMIT + FAILURE_BACKOFF_TICKS) {
+                    epochConsecutiveFailures.set(0);
+                } else {
+                    return;
+                }
+            }
+            var store = storeService.getStore();
+            try {
+                // Finality is driven by the CHAIN epoch (confirmed
+                // chainlength / 32), NOT the wall-clock epoch. On a young
+                // chain the wall-clock epoch runs far ahead of the chain
+                // (the beacon chain confirms ~1 block per proposer slot), so
+                // finalizeCheckpoint(wallEpoch) targets an epoch boundary
+                // that does not exist on-chain and can never justify.
+                // Driving it from the confirmed chain makes every node
+                // evaluate the SAME chain epoch and converge on the same
+                // checkpoint.
+                long chainEpoch = SlotService.currentChainEpoch(store);
+                if (chainEpoch != lastProcessedEpoch) {
+                    // Evaluate the just-COMPLETED chain epoch: only its
+                    // attestations are complete. Evaluating the current
+                    // epoch (which has no votes yet at its first tick) would
+                    // never justify anything — finality would never advance.
+                    if (chainEpoch > 0) {
+                        slotService.processEpoch(chainEpoch - 1, store);
+                    }
+                    lastProcessedEpoch = chainEpoch;
+                }
+                epochConsecutiveFailures.set(0);
+            } catch (Throwable t) {
+                long failures = epochConsecutiveFailures.incrementAndGet();
+                log.warn("Epoch tick error (consecutive failures={})", failures, t);
+            } finally {
+                store.close();
+            }
+        } catch (Throwable t) {
+            log.warn("Epoch tick setup error", t);
+        } finally {
+            StoreService.exitPosContext();
+            epochRunning.set(false);
         }
     }
 }

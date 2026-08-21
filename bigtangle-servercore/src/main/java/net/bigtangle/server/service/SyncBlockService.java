@@ -646,9 +646,113 @@ public class SyncBlockService {
 		} catch (Exception e) {
 			log.debug("finality ancestry walk failed for {}: {}", server, e.getMessage());
 		}
+		// True SIBLING fork: both finalized checkpoints are known locally and
+		// neither lies on the other's branch. Skipping sync forever (the old
+		// behaviour) strands a node that ends up on a minority fork: it can
+		// neither pull the majority chain nor reorg onto it (connectRewardBlock
+		// refuses chains that do not descend from OUR finalized checkpoint).
+		// Observed live on the 3-node prod mesh: one validator confirmed a
+		// private branch for 60+ chainlengths while the other two agreed.
+		// Heal instead: when the remote head is meaningfully LONGER than ours,
+		// the remote branch carries the majority weight — revert our local
+		// checkpoints above the common ancestor so the finality/justified
+		// reorg guards accept the majority chain, then let sync proceed.
+		if (tryReconcileSiblingFork(server, remoteFinalized, finalized, remote, store)) {
+			return false;
+		}
 		log.info("Skip sync from {}: remote finalized {} conflicts with local finalized {}",
 				server, remoteFinalized, finalized.getBlockHash());
 		return true;
+	}
+
+	/**
+	 * Chainlength lead the remote must have before we unwind a conflicting
+	 * local finality. A minority fork grows slower than the majority chain, so
+	 * a small margin is strong majority evidence; too small and a brief
+	 * partition could flip a healthy node. Tune via {@code pos.finalityReconcileMargin}.
+	 */
+	private static final long FINALITY_RECONCILE_MARGIN = Long.getLong("pos.finalityReconcileMargin", 4);
+
+	/**
+	 * Attempts to heal a true sibling-fork finality conflict by adopting the
+	 * majority (longer) chain. Returns true when reconciliation was performed,
+	 * i.e. local checkpoints above the common ancestor were reverted and sync
+	 * from the conflicting peer may now proceed.
+	 *
+	 * <p>This deliberately reverts a LOCAL finalized checkpoint — under Casper
+	 * that is a safety violation, but two conflicting finalized checkpoints
+	 * mean the violation has ALREADY occurred network-wide; the alternatives
+	 * are a permanent partition or an operator-triggered reset. Strongly
+	 * gated: only fires when the remote head leads by
+	 * {@link #FINALITY_RECONCILE_MARGIN} chainlengths, and only rewinds to the
+	 * common ancestor (never touches history below it).
+	 */
+	private boolean tryReconcileSiblingFork(String server, Sha256Hash remoteFinalized,
+			net.bigtangle.server.service.CasperService.Checkpoint localFinalized, GetTXRewardResponse remote,
+			BlockStoreInterface store) {
+		try {
+			TXReward myTip = store.getMaxConfirmedReward();
+			long myChainlength = myTip != null ? myTip.getChainLength() : 0;
+			long remoteHeadChainlength = remote.getTxReward() != null ? remote.getTxReward().getChainLength() : 0;
+			if (remoteHeadChainlength <= myChainlength + FINALITY_RECONCILE_MARGIN) {
+				return false;
+			}
+			Sha256Hash ancestor = commonRewardAncestor(remoteFinalized, localFinalized.getBlockHash(), store);
+			if (ancestor == null) {
+				log.info("Finality reconcile skipped: no common ancestor of {} and {} in local store",
+						remoteFinalized, localFinalized.getBlockHash());
+				return false;
+			}
+			long ancestorChainlength = store.getRewardChainLength(ancestor);
+			long ancestorEpoch = Math.max(0, ancestorChainlength / SlotService.SLOTS_PER_EPOCH);
+			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+			if (casper == null) {
+				return false;
+			}
+			// Drop cached AND persisted checkpoints above the ancestor so
+			// connectRewardBlock's finalized/justified descent guards accept
+			// the majority chain. Checkpoints at/below the ancestor stay —
+			// both branches descend from them, so they remain valid.
+			casper.invalidateCheckpointsFrom(ancestorEpoch + 1, store);
+			log.warn("FINALITY RECONCILE (safety violation healed): peer {} head cl {} vs local cl {} with "
+					+ "conflicting finalized checkpoints; reverted local checkpoints above epoch {} "
+					+ "(common ancestor {} @ cl {}) to adopt the majority chain",
+					server, remoteHeadChainlength, myChainlength, ancestorEpoch, ancestor, ancestorChainlength);
+			return true;
+		} catch (Exception e) {
+			log.warn("Finality reconciliation failed for {}: {}", server, e.getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Deepest common ancestor of two reward-chain blocks on the fork they
+	 * share. Walks {@code a}'s prev links into a set, then walks {@code b}
+	 * until it hits that set. Both blocks must already exist locally (the
+	 * caller only gets here after the knownLocally probe).
+	 */
+	private Sha256Hash commonRewardAncestor(Sha256Hash a, Sha256Hash b, BlockStoreInterface store) throws Exception {
+		java.util.Set<Sha256Hash> seen = new java.util.HashSet<>();
+		Sha256Hash cur = a;
+		for (int i = 0; i < FINALITY_ANCESTRY_WALK_LIMIT && cur != null && seen.add(cur); i++) {
+			Block blk = blockService.getBlock(cur, store);
+			if (blk == null) {
+				break;
+			}
+			cur = blk.getPrevBlockHash();
+		}
+		cur = b;
+		for (int i = 0; i < FINALITY_ANCESTRY_WALK_LIMIT && cur != null; i++) {
+			if (seen.contains(cur)) {
+				return cur;
+			}
+			Block blk = blockService.getBlock(cur, store);
+			if (blk == null) {
+				return null;
+			}
+			cur = blk.getPrevBlockHash();
+		}
+		return null;
 	}
 
 	/** Max reward-chain steps to prove a finalized checkpoint is on our branch. */
