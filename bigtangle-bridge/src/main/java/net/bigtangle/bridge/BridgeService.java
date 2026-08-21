@@ -1,5 +1,6 @@
 package net.bigtangle.bridge;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -225,6 +226,19 @@ public class BridgeService {
             throw new IllegalArgumentException("peg-in output must pay the vault address");
         }
 
+        // 1:1 lock: the vault output must be worth EXACTLY the input it spends
+        // (same amount AND same token). L0 consensus already enforces per-token
+        // conservation, but recording the vault on the output rather than the
+        // input closes the edge case where a malformed peg-in would create a
+        // VaultRecord that diverges from the actual locked UTXO — on peg-out the
+        // release is all-or-nothing (R5), so a record inflated above the real
+        // output would permanently strand the collateral, and a record deflated
+        // below it would let the release under-deliver.
+        if (!tx.getOutput(0).getValue().equals(utxo.getValue())) {
+            throw new IllegalArgumentException(
+                    "peg-in output value must equal the input value (1:1 lock, same amount and token)");
+        }
+
         // Replay guard: a source UTXO can only be locked once.
         if (vaultExists(store, utxo.getBlockHash(), utxo.getIndex())) {
             logger.warn("Peg-in UTXO {}:{} already locked, skipping", utxo.getBlockHash(), utxo.getIndex());
@@ -258,8 +272,8 @@ public class BridgeService {
 
         VaultRecord vaultRecord = new VaultRecord(l1ChainId,
                 utxo.getBlockHash(), utxo.getIndex(), b.getHash(),
-                utxo.getValue().getValue().longValue(),
-                Utils.HEX.encode(utxo.getValue().getTokenid()),
+                tx.getOutput(0).getValue().getValue().longValue(),
+                Utils.HEX.encode(tx.getOutput(0).getValue().getTokenid()),
                 l1BeneficiaryAddress, false);
         store.saveVaultUTXO(vaultRecord);
 
@@ -328,6 +342,15 @@ public class BridgeService {
         if (anchor == null) {
             return;
         }
+        // L0-side freeze: a disabled chain is frozen even for burns that were
+        // confirmed BEFORE the freeze (the retry loop keeps re-attempting them).
+        // While disabled, no collateral leaves L0 for that chain, so the vault
+        // can later be recovered to the original depositors.
+        if (anchorConfiguration.isChainDisabled(anchor.getChainId())) {
+            logger.warn("Chain {} is disabled on L0; ignoring peg-out burn {} height {}",
+                    anchor.getChainId(), anchor.getBurnJson(), anchor.getL1Height());
+            return;
+        }
         if (!anchor.isConfirmed()) {
             logger.warn("Peg-out requires confirmed anchor, chain {} height {}",
                     anchor.getChainId(), anchor.getL1Height());
@@ -364,6 +387,22 @@ public class BridgeService {
         if (!burn.getTokenIdHex().equals(vault.getTokenIdHex())) {
             logger.warn("Peg-out burn token {} does not match vault token {}",
                     burn.getTokenIdHex(), vault.getTokenIdHex());
+            return;
+        }
+
+        // FLOW INVARIANT (per token, per L1 chain): cumulative L1->L0 (released)
+        // must NEVER exceed cumulative L0->L1 (locked). A release may only draw
+        // from the value still locked on L0 for this (chain, token) — the sum of
+        // UNSPENT vaults. The per-vault all-or-nothing rule already makes each
+        // release equal to one lock, so this is an explicit hard backstop: it
+        // keeps the "peg-out <= peg-in" invariant enforced in the code, not just
+        // by convention, and stays effective if a future change introduces
+        // partial or fungible releases.
+        BigInteger stillLocked = sumUnspentVaultValue(anchor.getChainId(), burn.getTokenIdHex(), store);
+        if (BigInteger.valueOf(burn.getAmount()).compareTo(stillLocked) > 0) {
+            logger.warn("Peg-out {} amount {} exceeds the still-locked {} of token {} on chain {}; "
+                    + "L1->L0 would exceed L0->L1, rejecting", burn.getVaultRef(), burn.getAmount(),
+                    stillLocked, burn.getTokenIdHex(), anchor.getChainId());
             return;
         }
 
@@ -420,6 +459,22 @@ public class BridgeService {
         logger.info("Peg-out: released {} to {} for vault {} (burn from anchor {}:{})",
                 amount.toString(), burn.getRecipient(), burn.getVaultRef(),
                 anchor.getChainId(), anchor.getL1Height());
+    }
+
+    /**
+     * Sum of the UNSPENT vault value for (chainId, tokenId) — the collateral
+     * still locked on L0 (the "L0 -> L1" inflow that has not yet been withdrawn).
+     * Peg-outs (the "L1 -> L0" outflow) may never exceed this per token.
+     */
+    private BigInteger sumUnspentVaultValue(String chainId, String tokenIdHex, BlockStoreInterface store)
+            throws Exception {
+        BigInteger sum = BigInteger.ZERO;
+        for (VaultRecord v : store.getVaultUTXOsByChainId(chainId, false)) {
+            if (tokenIdHex.equals(v.getTokenIdHex())) {
+                sum = sum.add(BigInteger.valueOf(v.getAmount()));
+            }
+        }
+        return sum;
     }
 
     private VaultRecord findVault(String chainId, String vaultRef, BlockStoreInterface store) throws Exception {
@@ -592,10 +647,18 @@ public class BridgeService {
 
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName(L1CrosstangleHandler.ISSUE_WRAPPED_TOKEN_DATA_CLASS);
+        // The issuance declares the EXACT L0 lock it backs (chain id, outpoint,
+        // amount, token, beneficiary) — the L1 consensus rule
+        // (L1CrosstangleHandler.validateIssuance) requires the single mint output
+        // to match this declaration 1:1, so an unbacked or oversized wrapped
+        // mint can never reach the chain.
         tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of(
                 "chainId", networkParameters.getChainId(),
                 "lockBlockHash", lockBlockHash.toString(),
-                "lockIndex", lockIndex)));
+                "lockIndex", lockIndex,
+                L1CrosstangleHandler.LOCK_AMOUNT_KEY, amount.getValue().longValue(),
+                L1CrosstangleHandler.LOCK_TOKEN_ID_KEY, Utils.HEX.encode(amount.getTokenid()),
+                L1CrosstangleHandler.LOCK_BENEFICIARY_KEY, address.toBase58())));
         tx.addOutput(amount, address);
         // The signature covers the outputs (amount + recipient), the declared
         // chain id and the L0 lock reference — tx.getHash() excludes the

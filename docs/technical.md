@@ -499,3 +499,142 @@ The remaining SLH-DSA (~93% of TokenTest CPU) was tied to the **dual genesis/dom
 An intermediate attempt to fund an ML-DSA-only spend key in `setUp` made no improvement (change outputs still routed back to the genesis key) and was reverted.
 
 The cost was removed at the source by the **suite-activation governance change** (see *Governance* above): the genesis/domain root is now ML-DSA-87 only, so all genesis-coinbase spends and domain multisig operations sign with the fast lattice scheme. The SLH-DSA backstop remains available and is re-armed at a chosen chain height `H` via `-Dnet.bigtangle.pq.dualActivationHeight=H`.
+
+## Bridge: cross-layer peg (L0 ↔ L1)
+
+The bridge module (`bigtangle-bridge`) implements a bidirectional, 1:1 collateral
+peg between the permissionless Layer 0 settlement chain and any L1 application
+chain. The trust model is deliberately asymmetric:
+
+- **L0 is permissionless** — anyone can lock collateral, run a node, or settle.
+- **L1 can be any permission system** — a permissionless PoS chain, a
+  permissioned/consortium chain, or a single-operator chain. L0 never inspects
+  L1's internals.
+
+Every security-relevant check runs on L0 against **L0's own records** (vaults,
+peg-in/peg-out ledger, per-token flows) or against **L0 configuration** (per-chain
+anchor signers, freeze list, vault keys). No rule assumes L1's internal honesty or
+its permission model.
+
+### The invariant
+
+For every token `T` and every L1 chain `C`:
+
+```
+wrapped supply on C(T)  ==  locked L0 collateral on C(T)
+```
+
+which decomposes into the rules below. Breaking it would let the round trip mint
+or destroy value.
+
+### Peg-in (L0 → L1) — `BridgeService.processPegIn`
+
+A signed transaction spends exactly one L0 UTXO and pays the vault script. Guards:
+
+- exactly one input and one output; the output must pay the configured vault
+  script (legacy P2PKH or M-of-N P2SH),
+- **1:1 lock**: the output value must equal the input value, same amount **and**
+  same token (`Coin.equals`), so a `VaultRecord` can never diverge from the actual
+  locked output — a divergent record would strand or under-deliver on peg-out
+  (R5 is all-or-nothing),
+- **ownership proof**: the input `scriptSig` must correctly spend the source
+  UTXO's scriptPubKey, so only the owner can lock it,
+- the L1 beneficiary and destination chain id travel in the signed transaction
+  data (covered by the input signature), and the vault is keyed on the **source
+  outpoint** (`utxoBlockHash : utxoIndex`), making it replay-safe.
+
+### Wrapped issuance (on L1) — `L1CrosstangleHandler`
+
+`processPegInFromL0` polls L0 for the vault key's balances, hash-verifies the
+locking block, binds the UTXO to that block's transaction, verifies the lock pays
+the vault for the same value, and requires the lock to declare **this** chain as
+its L1 destination. Only then does it mint wrapped tokens 1:1.
+
+L1 consensus (`validateIssuance`) authenticates the mint and binds it to its lock:
+
+- the mint must be a **zero-input** transaction carrying a signature by the
+  chain's dedicated **issuance key** (never the L0 vault key, R4),
+- it must declare this chain's id,
+- **lock-backed binding**: the data must declare `lockAmount`, `lockTokenId` and
+  `lockBeneficiary`, and the **single** output must match them exactly — amount,
+  token id and recipient. A mint can never be oversized, cross-token, or
+  redirected away from the lock's beneficiary. This closes the "L1 prints wrapped
+  BIG out of thin air" vector at L1 consensus (deterministic on the block data),
+- a lock may be issued **once**: `checkPreConfirm` rejects a second issuance of
+  the same `chainId:lockBlockHash:lockIndex` from a chain-derived issued-lock
+  table, so a replay cannot inflate the wrapped supply.
+
+### Peg-out (L1 → L0) — `BridgeService.processPegOut`
+
+A release happens only when a **confirmed** anchor carries a signature-quorum,
+SPV-verified burn. Guards, in order:
+
+- the anchor must be confirmed and embed a well-formed burn (validated by
+  `AnchorService.validateAnchor` before the record exists),
+- the burn must reference an **unspent** vault for the anchor's chain
+  (`findVault` only reads unspent vaults); an already-released vault is skipped,
+- **all-or-nothing (R5)**: the burn amount must equal the vault amount exactly —
+  a partial burn would strand the remainder (the vault is marked spent, the
+  change UTXO would have no unspent `VaultRecord`),
+- **no cross-token migration**: the burn token must equal the vault token, so a
+  burn in a foreign token can never move the locked collateral,
+- **per-token flow invariant**: the release amount may never exceed the sum of
+  unspent vaults for `(chain, token)` — cumulative L1→L0 (released) can never
+  exceed cumulative L0→L1 (locked). Enforced with `BigInteger` so the sums cannot
+  overflow. The per-vault rule already makes each release equal to one lock; this
+  is an explicit hard backstop that stays effective if partial/fungible releases
+  are ever introduced,
+- the release transaction must be signed by the L0 vault key (legacy) or M-of-N
+  vault keys (P2SH) via `signVaultRelease`, and the vault is marked spent exactly
+  once — a replayed burn cannot release it twice.
+
+### Anchor authentication — `AnchorService.validateAnchor`
+
+- signature **quorum** against the per-chain registry `anchor.chainPubKeys`
+  (`M` of `N` distinct authorized signers; per-chain entries override the global
+  key), so one compromised global key cannot forge anchors for a chain with its
+  own entry,
+- **SPV proof** binding the anchored head hash to the committed confirmed root,
+- `eventId` must equal `chainId:height`, and the burn must be well-formed
+  (positive amount, valid recipient address, non-empty token id, `vaultRef`
+  containing `:`),
+- **freeze check**: anchors from a chain in `anchor.disabledChains` are rejected
+  outright.
+
+### Freeze and recovery (untrusted / broken L1)
+
+Because L1 may be any permission system, the halt control is purely L0-side:
+
+- `anchor.disabledChains` freezes a chain: L0 **rejects all new anchors** from it
+  (`validateAnchor`) and **ignores every peg-out burn** from it
+  (`processPegOut`), including burns confirmed before the freeze (the retry loop
+  keeps re-attempting them).
+- While frozen, the vault collateral stays locked on L0. Recovery is done from
+  L0's own peg-in records (`VaultRecord.ownerAddress`): the collateral can be
+  returned to the **original depositors**, then a fresh L1 is bootstrapped with
+  new keys; its wrapped tokens are backed by fresh peg-ins. L0 cannot migrate
+  wrapped balances to the new chain (no L1 state on L0), which is why recovery
+  targets depositors, not holders.
+- The ultimate backstop is **vault custody**: releases require the L0 vault keys
+  (M-of-N), so even a forged anchor cannot move collateral without the L0
+  keepers co-signing.
+
+### Attack tests
+
+`BridgeServiceTest` and `L1CrosstangleHandlerTest` pin the rules above:
+
+- `testRoundTripConservesValueExactly` — a full lock→release cycle is net-neutral
+  (same amount, same token out as in),
+- `testPegOutRejectsCrossTokenBurn` / `testFictiveTokenBurnIsHarmlessNoOp` — a
+  burn in a foreign or non-existent token releases nothing, and L1 keeps
+  functioning,
+- `testPegOutReplayCannotDoubleRelease` — a vault is released exactly once,
+- `testPegOutRejectsMismatchedBurnAmount` / `testPegOutRejectsPartialBurn` —
+  over- and partial burns are rejected (R5),
+- `testPerTokenPegOutNeverExceedsPegIn` — for BIG and a custom token, cumulative
+  released ≤ cumulative locked at every step,
+- `testFrozenChainFreezesPegOut` — a frozen chain's anchors are rejected and its
+  previously-confirmed burns are ignored,
+- `testRejectsUnbackedWrappedBIGMint` and the `testRejectsIssuanceMismatching*`
+  family — L1 consensus rejects unbacked or divergent issuance,
+- `testReplayIssuanceRejectedAtConfirmation` — a lock is minted at most once.

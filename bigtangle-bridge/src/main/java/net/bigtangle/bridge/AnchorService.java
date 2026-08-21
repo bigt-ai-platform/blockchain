@@ -216,6 +216,13 @@ public class AnchorService {
         if (anchor.getChainId() == null || anchor.getChainId().isEmpty()) {
             throw new BlockStoreException("Anchor chainId is null or empty");
         }
+        // L0-side freeze: anchors from a disabled chain are rejected outright, so
+        // a compromised/buggy L1 can neither confirm new burns nor have them
+        // settled. Recovery is handled by L0 (collateral returns to depositors).
+        if (anchorConfiguration.isChainDisabled(anchor.getChainId())) {
+            throw new BlockStoreException("Anchor chain " + anchor.getChainId()
+                    + " is disabled on L0; rejecting anchor");
+        }
         if (anchor.getL1Height() < 0) {
             throw new BlockStoreException("Anchor l1Height must be non-negative");
         }

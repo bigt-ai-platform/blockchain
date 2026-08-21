@@ -6,6 +6,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
@@ -20,6 +21,7 @@ import net.bigtangle.crypto.pq.PQScriptUtils;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.script.Script;
+import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.data.SolidityState;
 import net.bigtangle.server.service.base.handler.BlockTypeHandler;
 import net.bigtangle.server.service.base.handler.SolidityContext;
@@ -52,6 +54,11 @@ import net.bigtangle.server.service.base.ServiceBaseConfirmation;
 public class L1CrosstangleHandler implements BlockTypeHandler {
 
     public static final String ISSUE_WRAPPED_TOKEN_DATA_CLASS = "IssueWrappedToken";
+
+    /** Data keys carried by a wrapped issuance (the mint MUST match them exactly). */
+    public static final String LOCK_AMOUNT_KEY = "lockAmount";
+    public static final String LOCK_TOKEN_ID_KEY = "lockTokenId";
+    public static final String LOCK_BENEFICIARY_KEY = "lockBeneficiary";
 
     /** Chain-derived issued-lock table (pos_state): a lock may be issued at most once. */
     private static final String ISSUED_LOCK_SERVICE = "pos";
@@ -165,6 +172,16 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
      * transaction hash (which covers the outputs, the declared chain id and the
      * L0 lock reference). Data-only messages (no outputs) are not a mint and
      * pass.
+     *
+     * <p>LOCK-BACKED BINDING: a mint must declare the EXACT L0 vault lock it
+     * claims to back ({@code lockAmount}, {@code lockTokenId},
+     * {@code lockBeneficiary}) and the (single) output must match that declared
+     * lock in amount, token id AND recipient. This is deterministic on the block
+     * data (the declaration is signature-covered), so every node enforces it:
+     * an issuance can never mint more, in a different token, or to a different
+     * address than the lock it names — the mint is bound 1:1 to a specific L0
+     * vault lock. It is the L1 consensus side of the invariant
+     * {@code wrapped supply == locked L0 collateral}.
      */
     private void validateIssuance(Transaction tx) throws Exception {
         if (tx.getOutputs() == null || tx.getOutputs().isEmpty()) {
@@ -196,6 +213,41 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
         if (!PQScriptUtils.verifyPQ(issuanceKey.getPublicKeyBytes(), signature, tx.getHash())) {
             throw new BlockStoreException(
                     "L1 CROSSTANGLE issuance signature does not verify under the chain's issuance key");
+        }
+
+        // LOCK-BACKED BINDING: a mint must declare the exact L0 lock it backs and
+        // pay that lock's beneficiary with EXACTLY the lock's amount and token.
+        // Without this, an issuance-key holder could mint wrapped BIG out of thin
+        // air (a fabricated or oversized lock reference) and then burn it to drain
+        // a real BIG vault on L0.
+        Object lockAmount = data.get(LOCK_AMOUNT_KEY);
+        Object lockTokenId = data.get(LOCK_TOKEN_ID_KEY);
+        Object lockBeneficiary = data.get(LOCK_BENEFICIARY_KEY);
+        if (lockAmount == null || lockTokenId == null || lockBeneficiary == null) {
+            throw new BlockStoreException(
+                    "L1 CROSSTANGLE issuance must declare lockAmount, lockTokenId and lockBeneficiary "
+                            + "(the L0 vault lock it claims to back)");
+        }
+        if (tx.getOutputs().size() != 1) {
+            throw new BlockStoreException(
+                    "L1 CROSSTANGLE issuance must have exactly one output (the lock-backed mint)");
+        }
+        TransactionOutput out = tx.getOutput(0);
+        long declaredAmount = ((Number) lockAmount).longValue();
+        if (out.getValue().getValue().compareTo(java.math.BigInteger.valueOf(declaredAmount)) != 0) {
+            throw new BlockStoreException("L1 CROSSTANGLE issuance mint amount " + out.getValue().getValue()
+                    + " does not match the declared lock amount " + declaredAmount);
+        }
+        if (!Utils.HEX.encode(out.getValue().getTokenid()).equals(lockTokenId.toString())) {
+            throw new BlockStoreException("L1 CROSSTANGLE issuance mints token "
+                    + Utils.HEX.encode(out.getValue().getTokenid()) + " but the lock holds " + lockTokenId);
+        }
+        Script beneficiaryScript = ScriptBuilder.createOutputScript(
+                Address.fromBase58(networkParameters, lockBeneficiary.toString()));
+        if (!java.util.Arrays.equals(beneficiaryScript.getProgram(), out.getScriptPubKey().getProgram())) {
+            throw new BlockStoreException(
+                    "L1 CROSSTANGLE issuance mint recipient does not match the declared lock beneficiary "
+                            + lockBeneficiary);
         }
     }
 

@@ -27,6 +27,16 @@ public class AnchorConfiguration {
      */
     private java.util.Map<String, java.util.List<String>> chainPubKeys = new java.util.HashMap<>();
 
+    /**
+     * L0-side freeze list ({@code anchor.disabledChains}): chain ids whose
+     * anchors L0 must reject. This is the halt/recovery control for a
+     * compromised or buggy L1 — while a chain is disabled, L0 accepts NO new
+     * anchor from it and ignores every (even previously confirmed) peg-out burn,
+     * so the vault collateral on L0 is protected and can later be returned to
+     * the original depositors (L0 keeps the peg-in records).
+     */
+    private java.util.Set<String> disabledChains = new java.util.HashSet<>();
+
     public int getPostInterval() {
         return postInterval;
     }
@@ -122,5 +132,18 @@ public class AnchorConfiguration {
 
     public void setChainSignersRequired(int chainSignersRequired) {
         this.chainSignersRequired = Math.max(1, chainSignersRequired);
+    }
+
+    public java.util.Set<String> getDisabledChains() {
+        return disabledChains;
+    }
+
+    public void setDisabledChains(java.util.Set<String> disabledChains) {
+        this.disabledChains = disabledChains != null ? disabledChains : new java.util.HashSet<>();
+    }
+
+    /** True when L0 has frozen {@code chainId} (its anchors and peg-outs are ignored). */
+    public boolean isChainDisabled(String chainId) {
+        return chainId != null && disabledChains.contains(chainId);
     }
 }

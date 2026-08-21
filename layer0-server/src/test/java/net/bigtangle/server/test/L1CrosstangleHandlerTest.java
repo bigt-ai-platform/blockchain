@@ -73,13 +73,34 @@ public class L1CrosstangleHandlerTest extends AbstractIntegrationTest {
     }
 
     private Transaction signedIssuance(PQKey signKey, String chainId) throws Exception {
+        return signedIssuance(signKey, chainId, addressOf(PQKey.createNew()), 1000);
+    }
+
+    /**
+     * Builds a LOCK-BACKED issuance: the data declares the exact L0 vault lock
+     * (amount, token, beneficiary) that the single output claims to back, and
+     * the output matches it 1:1. This is the shape the consensus rule
+     * ({@code L1CrosstangleHandler.validateIssuance}) requires.
+     */
+    private Transaction signedIssuance(PQKey signKey, String chainId, Address beneficiary, long amount)
+            throws Exception {
+        return buildIssuance(signKey, chainId, amount, Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID),
+                beneficiary.toBase58(), Coin.valueOf(amount, NetworkParameters.BIGTANGLE_TOKENID), beneficiary);
+    }
+
+    /** Flexible issuance builder so attack tests can diverge the declared lock from the mint. */
+    private Transaction buildIssuance(PQKey signKey, String chainId, long lockAmount, String lockTokenHex,
+            String lockBeneficiary, Coin mintAmount, Address mintAddress) throws Exception {
         Transaction tx = new Transaction(networkParameters);
         tx.setDataClassName(L1CrosstangleHandler.ISSUE_WRAPPED_TOKEN_DATA_CLASS);
         tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of(
                 "chainId", chainId,
                 "lockBlockHash", "aa",
-                "lockIndex", 0)));
-        tx.addOutput(Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID), addressOf(PQKey.createNew()));
+                "lockIndex", 0,
+                L1CrosstangleHandler.LOCK_AMOUNT_KEY, lockAmount,
+                L1CrosstangleHandler.LOCK_TOKEN_ID_KEY, lockTokenHex,
+                L1CrosstangleHandler.LOCK_BENEFICIARY_KEY, lockBeneficiary)));
+        tx.addOutput(mintAmount, mintAddress);
         tx.setDataSignature(signKey.sign(tx.getHash()).serialize());
         return tx;
     }
@@ -110,6 +131,119 @@ public class L1CrosstangleHandlerTest extends AbstractIntegrationTest {
         SolidityState state = check(crosstangleBlock(tx));
         assertEquals(SolidityState.State.Success, state.getState(),
                 "an issuance-key-signed issuance for this chain must be accepted");
+    }
+
+    /**
+     * ATTACK: can an L1 chain mint NEW (wrapped) BIG that is not backed by any
+     * real L0 vault lock, then burn it to withdraw real BIG from L0?
+     *
+     * <p>Today the mint output is bound 1:1 to the lock it declares
+     * ({@code L1CrosstangleHandler.validateIssuance}): a wrapped mint must carry
+     * the lock's amount, token id and beneficiary, and the single output must
+     * match them exactly. So the attack variants below are all REJECTED by L1
+     * consensus:
+     * <ul>
+     * <li>minting wrapped BIG without declaring any backing lock,</li>
+     * <li>declaring a lock of 1000 but minting 1,000,000,000,</li>
+     * <li>declaring one token but minting another,</li>
+     * <li>declaring one beneficiary but paying another,</li>
+     * <li>minting to several outputs.</li>
+     * </ul>
+     *
+     * <p>Residual (documented in {@link #testSelfConsistentFabricatedLockAccepted}):
+     * L1 consensus cannot verify that a declared lock EXISTS on L0 — that check
+     * lives in the honest polling path ({@code processPegInFromL0}), so a fully
+     * compromised issuance key can still declare a self-consistent fabricated
+     * lock. Closing that requires an L0→L1 lock proof channel.
+     */
+    @Test
+    public void testRejectsUnbackedWrappedBIGMint() throws Exception {
+        // Attack: mint 1,000,000,000 wrapped BIG (the REAL BIG id) declaring NO
+        // backing lock (no lockAmount/lockTokenId/lockBeneficiary in the data).
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(L1CrosstangleHandler.ISSUE_WRAPPED_TOKEN_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of(
+                "chainId", networkParameters.getChainId(),
+                "lockBlockHash", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "lockIndex", 999L)));
+        tx.addOutput(Coin.valueOf(1_000_000_000L, NetworkParameters.BIGTANGLE_TOKENID),
+                addressOf(PQKey.createNew()));
+        tx.setDataSignature(issuanceKey.sign(tx.getHash()).serialize());
+
+        assertTrue(check(crosstangleBlock(tx)).isFailState(),
+                "an issuance that does not declare a backing L0 lock must be rejected");
+    }
+
+    @Test
+    public void testRejectsIssuanceMismatchingLockAmount() throws Exception {
+        Address beneficiary = addressOf(PQKey.createNew());
+        // Declare a lock worth 1000, but mint 1,000,000,000 wrapped BIG.
+        Transaction tx = buildIssuance(issuanceKey, networkParameters.getChainId(), 1000L,
+                Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID), beneficiary.toBase58(),
+                Coin.valueOf(1_000_000_000L, NetworkParameters.BIGTANGLE_TOKENID), beneficiary);
+        assertTrue(check(crosstangleBlock(tx)).isFailState(),
+                "an issuance minting more than its declared lock must be rejected");
+    }
+
+    @Test
+    public void testRejectsIssuanceMismatchingLockToken() throws Exception {
+        Address beneficiary = addressOf(PQKey.createNew());
+        // Declare a foreign token as the backing lock, but mint BIG.
+        Transaction tx = buildIssuance(issuanceKey, networkParameters.getChainId(), 1000L,
+                Utils.HEX.encode(PQKey.createNew().getPubKey()), beneficiary.toBase58(),
+                Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID), beneficiary);
+        assertTrue(check(crosstangleBlock(tx)).isFailState(),
+                "an issuance minting a different token than its declared lock must be rejected");
+    }
+
+    @Test
+    public void testRejectsIssuanceMismatchingBeneficiary() throws Exception {
+        Address declared = addressOf(PQKey.createNew());
+        // Declare lock beneficiary A, but pay the mint to B.
+        Transaction tx = buildIssuance(issuanceKey, networkParameters.getChainId(), 1000L,
+                Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID), declared.toBase58(),
+                Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID), addressOf(PQKey.createNew()));
+        assertTrue(check(crosstangleBlock(tx)).isFailState(),
+                "an issuance minting to someone other than the declared lock beneficiary must be rejected");
+    }
+
+    @Test
+    public void testRejectsIssuanceWithMultipleOutputs() throws Exception {
+        Address beneficiary = addressOf(PQKey.createNew());
+        Transaction tx = new Transaction(networkParameters);
+        tx.setDataClassName(L1CrosstangleHandler.ISSUE_WRAPPED_TOKEN_DATA_CLASS);
+        tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of(
+                "chainId", networkParameters.getChainId(),
+                "lockBlockHash", "aa",
+                "lockIndex", 0,
+                L1CrosstangleHandler.LOCK_AMOUNT_KEY, 2000L,
+                L1CrosstangleHandler.LOCK_TOKEN_ID_KEY,
+                        Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID),
+                L1CrosstangleHandler.LOCK_BENEFICIARY_KEY, beneficiary.toBase58())));
+        tx.addOutput(Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID), beneficiary);
+        tx.addOutput(Coin.valueOf(1000, NetworkParameters.BIGTANGLE_TOKENID), addressOf(PQKey.createNew()));
+        tx.setDataSignature(issuanceKey.sign(tx.getHash()).serialize());
+
+        assertTrue(check(crosstangleBlock(tx)).isFailState(),
+                "an issuance must have exactly one lock-backed output");
+    }
+
+    /**
+     * Residual trust gap (documented, not a bug): a SELF-CONSISTENT issuance that
+     * declares a fabricated lock (one that does not exist on L0) still passes L1
+     * consensus, because L1 has no L0→L1 lock proof channel — the existence check
+     * lives in the honest polling path ({@code processPegInFromL0}). Only a
+     * compromised issuance-key holder could produce this; normal L1 token
+     * creation derives ids from pubkeys, and the L0 peg-out still requires the
+     * burn's token/amount to match a real, unspent vault.
+     */
+    @Test
+    public void testSelfConsistentFabricatedLockAccepted() throws Exception {
+        // Lock reference "aa:0" never existed on L0, but the mint is internally
+        // consistent (amount/token/beneficiary match), so checkFull accepts it.
+        Transaction tx = signedIssuance(issuanceKey, networkParameters.getChainId());
+        assertEquals(SolidityState.State.Success, check(crosstangleBlock(tx)).getState(),
+                "self-consistent issuance is accepted (L1 cannot verify L0 lock existence)");
     }
 
     @Test

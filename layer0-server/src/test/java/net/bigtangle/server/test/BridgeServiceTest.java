@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -86,6 +87,8 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         bridgeConfiguration.setVaultM(1);
         // Reset any per-chain registry left by a previous test.
         anchorConfiguration.setChainPubKeys(new java.util.HashMap<>());
+        // Reset any L0-side freeze left by a previous test.
+        anchorConfiguration.setDisabledChains(new java.util.HashSet<>());
     }
 
     @Test
@@ -204,9 +207,114 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
 
         bridgeService.processPegIn(tx, store);
 
-        List<VaultRecord> vaults = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
-        assertEquals(1, vaults.size(), "peg-in must create exactly one vault");
-        return vaults.get(0);
+        // The vault is keyed on the SOURCE outpoint, so find it that way —
+        // getVaultUTXOsByChainId does not guarantee insertion order.
+        return vaultBySource(source.getBlockHash(), source.getIndex());
+    }
+
+    /**
+     * Generalized peg-in: locks a given (ANY-token) UTXO {@code source} into the
+     * vault and returns the newly created vault record. Used to prove the flow
+     * invariant holds per token, not just for BIG.
+     */
+    private VaultRecord pegInUtxo(PQKey userKey, UTXO source, String beneficiary) throws Exception {
+        Address vault = Address.fromHash160(networkParameters, Utils.sha256hash160(vaultKey.getPubKey()));
+        Transaction tx = new Transaction(networkParameters);
+        tx.setVersion(net.bigtangle.crypto.pq.PQConstants.TX_PQ_VERSION);
+        tx.setToAddressInSubtangle(Address.fromBase58(networkParameters, beneficiary).getHash160());
+        tx.setDataClassName("PegInInfo");
+        tx.setData(Json.jsonmapper().writeValueAsBytes(java.util.Map.of("chainId", L1_CHAIN_ID)));
+        FreeStandingTransactionOutput co = new FreeStandingTransactionOutput(networkParameters, source);
+        tx.addInput(source.getBlockHash(), co);
+        tx.getInputs().get(0).getOutpoint().connectedOutput = co;
+        tx.addOutput(source.getValue(), vault);
+        Sha256Hash sighash = tx.hashForSignature(0, source.getScript().getProgram(),
+                Transaction.SigHash.ALL, false);
+        tx.getInputs().get(0).setScriptSig(
+                net.bigtangle.script.ScriptBuilder.createInputScriptForPQ(userKey.sign(sighash), userKey));
+        bridgeService.processPegIn(tx, store);
+
+        return vaultBySource(source.getBlockHash(), source.getIndex());
+    }
+
+    /** The (unspent) vault record keyed on the given source UTXO outpoint. */
+    private VaultRecord vaultBySource(Sha256Hash sourceBlockHash, long sourceIndex) throws Exception {
+        for (VaultRecord v : store.getVaultUTXOsByChainId(L1_CHAIN_ID, false)) {
+            if (v.getUtxoBlockHash().equals(sourceBlockHash) && v.getUtxoIndex() == sourceIndex) {
+                return v;
+            }
+        }
+        fail("peg-in must create a vault for source " + sourceBlockHash + ":" + sourceIndex);
+        return null;
+    }
+
+    /** Sum of the vault records for (chain, token) matching the given spent flags. */
+    private BigInteger vaultSum(String tokenIdHex, boolean spent) throws Exception {
+        BigInteger sum = BigInteger.ZERO;
+        for (VaultRecord v : store.getVaultUTXOsByChainId(L1_CHAIN_ID, spent)) {
+            if (tokenIdHex.equals(v.getTokenIdHex())) {
+                sum = sum.add(BigInteger.valueOf(v.getAmount()));
+            }
+        }
+        return sum;
+    }
+
+    /**
+     * ROUND-TRIP FLOW INVARIANT (per token): cumulative L1->L0 (peg-out /
+     * released) must NEVER exceed cumulative L0->L1 (peg-in / locked). The test
+     * drives several full round trips for BIG and one for a custom token, and
+     * asserts at every step that {@code released(token) <= locked(token)} — no
+     * token can be withdrawn more than it was deposited.
+     */
+    @Test
+    public void testPerTokenPegOutNeverExceedsPegIn() throws Exception {
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        String bigHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+
+        // Three BIG deposits (L0 -> L1).
+        VaultRecord v1 = createRealVault(testKey, recipient, 100000);
+        VaultRecord v2 = createRealVault(testKey, recipient, 200000);
+        VaultRecord v3 = createRealVault(testKey, recipient, 300000);
+
+        // One custom-token deposit (L0 -> L1): the invariant is per-token.
+        List<Block> added = new ArrayList<>();
+        makeTestToken(testKey, added);
+        UTXO customSource = null;
+        for (UTXO u : getBalance(false, List.of(testKey))) {
+            if (u.getValue().getValue().signum() > 0
+                    && !java.util.Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, u.getValue().getTokenid())) {
+                customSource = u;
+                break;
+            }
+        }
+        assertNotNull(customSource, "testKey must hold the custom token UTXO after makeTestToken");
+        VaultRecord cv = pegInUtxo(testKey, customSource, recipient);
+        String customHex = Utils.HEX.encode(customSource.getValue().getTokenid());
+
+        // After the deposits: everything locked, nothing released.
+        BigInteger bigLocked = BigInteger.valueOf(v1.getAmount() + v2.getAmount() + v3.getAmount());
+        assertEquals(bigLocked, vaultSum(bigHex, false).add(vaultSum(bigHex, true)),
+                "BIG locked == sum of all BIG vaults");
+        assertEquals(BigInteger.ZERO, vaultSum(bigHex, true), "no BIG released yet");
+        assertEquals(BigInteger.valueOf(cv.getAmount()),
+                vaultSum(customHex, false).add(vaultSum(customHex, true)), "custom token locked");
+        assertEquals(BigInteger.ZERO, vaultSum(customHex, true), "no custom token released yet");
+
+        // Withdraw two of the three BIG deposits (L1 -> L0).
+        confirmBurnAndPegOut(v1, recipient, 90);
+        confirmBurnAndPegOut(v2, recipient, 91);
+
+        BigInteger bigReleased = BigInteger.valueOf(v1.getAmount() + v2.getAmount());
+        assertEquals(bigReleased, vaultSum(bigHex, true));
+        assertTrue(bigReleased.compareTo(bigLocked) < 0,
+                "BIG released must be strictly below BIG locked while a deposit is outstanding");
+        assertEquals(BigInteger.ZERO, vaultSum(customHex, true),
+                "withdrawing BIG must not touch the custom token's flow");
+
+        // Withdraw the last BIG deposit: released == locked (balanced round trip).
+        confirmBurnAndPegOut(v3, recipient, 92);
+        assertEquals(bigLocked, vaultSum(bigHex, true),
+                "BIG round trip must end exactly balanced: released == locked");
     }
 
     @Test
@@ -250,6 +358,247 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         List<VaultRecord> spent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, true);
         assertEquals(1, spent.size());
         assertTrue(spent.get(0).isSpent());
+    }
+
+    /**
+     * Resolves the ACTUAL vault output created by the peg-in CROSSTANGLE block
+     * (the output the release must spend). Reading it straight from the store
+     * (not the VaultRecord) lets the attack tests assert on the real locked
+     * value/token and on the spender once the release happened.
+     */
+    private UTXO resolveVaultOutput(VaultRecord vault) throws Exception {
+        Sha256Hash pegInBlockHash = vault.getPegInBlockHash() != null
+                ? vault.getPegInBlockHash() : vault.getUtxoBlockHash();
+        Block pegInBlock = store.get(pegInBlockHash);
+        assertNotNull(pegInBlock, "peg-in block must exist");
+        assertFalse(pegInBlock.getTransactions().isEmpty(), "peg-in block must carry the lock tx");
+        Sha256Hash vaultTxHash = pegInBlock.getTransactions().get(0).getHash();
+        UTXO utxo = store.getTransactionOutput(pegInBlockHash, vaultTxHash, 0);
+        assertNotNull(utxo, "vault output must exist in the store");
+        return utxo;
+    }
+
+    /**
+     * ROUND-TRIP INVARIANT: L0 lock (peg-in) followed by the L1 burn / L0
+     * release (peg-out) must be NET-NEUTRAL — the exact amount and token that
+     * went into the vault must come out, no more (inflation) and no less
+     * (destruction). The wrapped supply on L1 is 1:1 backed by these vault
+     * locks, so any divergence here would mint or burn value.
+     */
+    @Test
+    public void testRoundTripConservesValueExactly() throws Exception {
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+        long locked = vault.getAmount();
+        String tokenIdHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+
+        // Leg 1 (L0 -> L1): the vault output holds EXACTLY the recorded amount
+        // and token — the L1 wrapped mint is 1:1 on this, so no over-issue.
+        UTXO vaultOut = resolveVaultOutput(vault);
+        assertEquals(BigInteger.valueOf(locked), vaultOut.getValue().getValue(),
+                "peg-in must lock exactly the recorded amount (1:1, no inflation)");
+        assertEquals(tokenIdHex, Utils.HEX.encode(vaultOut.getValue().getTokenid()),
+                "peg-in must lock the SAME token id (no cross-token substitution)");
+
+        // Leg 2 (L1 -> L0): burn + release. A reward block confirms the release
+        // CROSSTANGLE block so the vault output is marked spent on-chain.
+        confirmBurnAndPegOut(vault, recipient, 70);
+        makeRewardBlock();
+
+        // The vault output is spent exactly once, by the release tx.
+        UTXO spent = resolveVaultOutput(vault);
+        assertTrue(spent.isSpent(), "peg-out must spend the vault output");
+        assertNotNull(spent.getSpenderBlockHash(), "release block must be recorded");
+        Transaction releaseTx = store.get(spent.getSpenderBlockHash()).getTransactions().get(0);
+
+        // The release pays the recipient EXACTLY the locked value, same token.
+        assertEquals(1, releaseTx.getOutputs().size(),
+                "release must pay a single output (all-or-nothing, R5)");
+        assertEquals(BigInteger.valueOf(locked), releaseTx.getOutput(0).getValue().getValue(),
+                "round trip must return exactly the locked value (nothing created or destroyed)");
+        assertEquals(tokenIdHex, Utils.HEX.encode(releaseTx.getOutput(0).getValue().getTokenid()),
+                "round trip must return the SAME token id");
+    }
+
+    /**
+     * ATTACK: the L1 burn names a DIFFERENT token id than the vault actually
+     * holds. If L0 honoured it, an attacker could convert the locked BIG
+     * collateral into a release denominated in any other token — moving value
+     * that was never backed (using more tokens than were locked).
+     */
+    @Test
+    public void testPegOutRejectsCrossTokenBurn() throws Exception {
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        // A valid signed + SPV-verified anchor, but the burn's token differs
+        // from the vault's actual token.
+        String foreignTokenHex = Utils.HEX.encode(PQKey.createNew().getPubKey());
+        assertFalse(foreignTokenHex.equals(vault.getTokenIdHex()),
+                "test setup must use a genuinely foreign token id");
+
+        long height = 75;
+        Sha256Hash head = Sha256Hash.wrap(String.format("%064x", height));
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount(), foreignTokenHex);
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":" + height,
+                head, height, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, height, true);
+
+        bridgeService.processPegOut(store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, height), store);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size(),
+                "a cross-token burn must NOT release the vault");
+        assertFalse(unspent.get(0).isSpent(),
+                "the locked collateral must stay locked (no cross-token value migration)");
+    }
+
+    /**
+     * ATTACK: L1 sends a burn for a FICTIVE token — a token id that was never
+     * locked on L0, pointing at a vault that does not exist. This must be a
+     * harmless no-op on L0: nothing is released, the real vaults stay locked,
+     * and — crucially — L1 is NOT dead: a subsequent legitimate peg-out for the
+     * same chain still works.
+     */
+    @Test
+    public void testFictiveTokenBurnIsHarmlessNoOp() throws Exception {
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        String bigHex = Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID);
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        long height = 95;
+        Sha256Hash head = Sha256Hash.wrap(String.format("%064x", height));
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        // A burn in a token that has no vault on L0, referencing a vault outpoint
+        // that does not exist.
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                Sha256Hash.of("fictive".getBytes()).toString() + ":7", recipient,
+                vault.getAmount(), Utils.HEX.encode(PQKey.createNew().getPubKey()));
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":" + height,
+                head, height, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, height, true);
+
+        bridgeService.processPegOut(store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, height), store);
+
+        // Harmless no-op: the real vault is untouched, no BIG was released.
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size(), "fictive-token burn must not release anything");
+        assertFalse(unspent.get(0).isSpent(), "the real vault must stay locked");
+        assertEquals(BigInteger.ZERO, vaultSum(bigHex, true), "no BIG released by the fictive burn");
+
+        // L1 is NOT dead: a legitimate peg-out right after still succeeds.
+        confirmBurnAndPegOut(vault, recipient, 96);
+        assertEquals(BigInteger.valueOf(vault.getAmount()), vaultSum(bigHex, true),
+                "L1 keeps functioning after a rejected fictive-token burn");
+    }
+
+    /**
+     * SOLUTION FOR AN UNTRUSTED / BROKEN L1 (L0-side freeze): when an L1 chain
+     * misbehaves (attack or software error), L0 can put it in
+     * {@code anchor.disabledChains}. While frozen:
+     * <ul>
+     * <li>L0 rejects ALL new anchors from that chain (they cannot even be
+     *     recorded), so no fresh burn can be settled;</li>
+     * <li>L0 ignores even a burn that was confirmed BEFORE the freeze (the retry
+     *     loop keeps re-attempting it), so no collateral leaves for that chain.</li>
+     * </ul>
+     * The vault stays locked on L0, which lets the collateral later be recovered
+     * to the ORIGINAL depositors (L0 keeps the peg-in records) before the L1
+     * chain is rebuilt. This is the "halt" half of "freeze then recreate L1".
+     */
+    @Test
+    public void testFrozenChainFreezesPegOut() throws Exception {
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        // Freeze the chain on L0.
+        anchorConfiguration.setDisabledChains(java.util.Set.of(L1_CHAIN_ID));
+        assertTrue(anchorConfiguration.isChainDisabled(L1_CHAIN_ID));
+
+        // (1) New anchors from a frozen chain are rejected outright.
+        LayerAnchor minimal = new LayerAnchor(L1_CHAIN_ID, Sha256Hash.ZERO_HASH, 0, null, null, null);
+        assertThrows(Exception.class, () -> anchorService.validateAndSaveAnchor(minimal, Sha256Hash.ZERO_HASH, store),
+                "anchors from a frozen chain must be rejected by L0");
+
+        // (2) Even a burn confirmed BEFORE the freeze is never honored.
+        AnchorRecord preFreezeBurn = new AnchorRecord();
+        preFreezeBurn.setChainId(L1_CHAIN_ID);
+        preFreezeBurn.setL1RewardHeadHash(Sha256Hash.ZERO_HASH);
+        preFreezeBurn.setL1Height(1);
+        preFreezeBurn.setBlockHash(Sha256Hash.ZERO_HASH);
+        preFreezeBurn.setConfirmed(true);
+        preFreezeBurn.setBurnJson(new LayerAnchor.AnchorBurn(
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount(), Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID)).toJson());
+        store.saveAnchor(preFreezeBurn);
+
+        bridgeService.processPegOut(preFreezeBurn, store);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size(), "a frozen chain must never release a vault");
+        assertFalse(unspent.get(0).isSpent(),
+                "the collateral of a frozen chain must stay locked on L0 (ready for recovery)");
+    }
+
+    /**
+     * ATTACK: two independent CONFIRMED anchors (different L1 heights) both
+     * carry a valid burn for the SAME vault — a replay of the peg-out leg. The
+     * first release spends the collateral; the second must be a no-op, or the
+     * attacker would withdraw the same collateral twice (minting tokens from
+     * nothing).
+     */
+    @Test
+    public void testPegOutReplayCannotDoubleRelease() throws Exception {
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        // First release, then a reward block so the release CROSSTANGLE block
+        // confirms and the vault output is marked spent on-chain.
+        confirmBurnAndPegOut(vault, recipient, 80);
+        makeRewardBlock();
+        // Replay: a SECOND confirmed anchor for the SAME vault must be a no-op.
+        confirmBurnAndPegOut(vault, recipient, 81);
+
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertTrue(unspent.isEmpty(), "no unspent vault may remain after the first release");
+        List<VaultRecord> spent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, true);
+        assertEquals(1, spent.size(), "a vault must be released EXACTLY once");
+        assertTrue(spent.get(0).isSpent());
+
+        // The recipient received the release exactly once.
+        UTXO spentOut = resolveVaultOutput(vault);
+        assertTrue(spentOut.isSpent());
+        assertNotNull(spentOut.getSpenderBlockHash());
+        Transaction releaseTx = store.get(spentOut.getSpenderBlockHash()).getTransactions().get(0);
+        assertEquals(1, releaseTx.getOutputs().size());
+        assertEquals(BigInteger.valueOf(vault.getAmount()), releaseTx.getOutput(0).getValue().getValue(),
+                "the recipient must receive the locked value exactly once, never twice");
     }
 
     @Test
