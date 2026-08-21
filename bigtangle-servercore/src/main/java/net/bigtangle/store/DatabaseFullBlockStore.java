@@ -3833,8 +3833,11 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 
 	@Override
 	public byte[] getPosState(String service, String key) throws BlockStoreException {
+		// Legacy rows written by older md5 schemes keep their original
+		// service_key_md5, so an upsert cannot reach them and duplicates per
+		// (service, key) can exist. Latest row wins.
 		try (PreparedStatement s = getConnection()
-				.prepareStatement("SELECT value FROM pos_state WHERE service = ? AND key = ?")) {
+				.prepareStatement("SELECT value FROM pos_state WHERE service = ? AND key = ? ORDER BY id DESC LIMIT 1")) {
 			s.setString(1, service);
 			s.setString(2, key);
 			try (ResultSet rs = s.executeQuery()) {
