@@ -557,7 +557,10 @@ public class SlotService {
             // UTXO set; a moved confirmed head yields a different token and a
             // fresh resolution.
             String conflictCacheToken = maxConfirmedReward.getBlockHash() + ":" + maxConfirmedReward.getChainLength();
-            net.bigtangle.server.service.base.ServiceBaseConfirmation.clearConflictCache();
+            // Keep this thread's conflict resolutions while the confirmed head
+            // is unchanged (see retainConflictCache) instead of re-resolving
+            // every unconfirmed outpoint against the DB each slot.
+            net.bigtangle.server.service.base.ServiceBaseConfirmation.retainConflictCache(conflictCacheToken);
             long prevChainLength = store.getRewardChainLength(prevRewardHash);
             long cutoffheight = serviceBase.getRewardCutoffHeight(prevRewardHash, store);
             Set<net.bigtangle.server.core.BlockWrap> blocks = new HashSet<>();

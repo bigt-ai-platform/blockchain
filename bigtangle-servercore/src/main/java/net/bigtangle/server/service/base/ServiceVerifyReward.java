@@ -154,12 +154,13 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		confirmBlocksSorted(store, chainlength, allApprovedNewBlocks, new HashSet<>());
 
 		int referenced = currRewardInfo.getBlocks() == null ? 0 : currRewardInfo.getBlocks().size();
-		if (referenced >= PERF_CONNECT_LOG_MIN_REFS) {
+		long totalMs = System.currentTimeMillis() - perfStart;
+		if (referenced >= PERF_CONNECT_LOG_MIN_REFS || totalMs > 1000) {
 			logger.info(
 					"beacon connect: refs={} chainlength={} requirements={}ms solidify={}ms conflict={}ms "
 							+ "solidifyBlock={}ms total={}ms",
 					referenced, chainlength, perfRequirementsMs, perfSolidifyMs, perfConflictMs, perfSolidifyBlockMs,
-					System.currentTimeMillis() - perfStart);
+					totalMs);
 		}
 
 	}

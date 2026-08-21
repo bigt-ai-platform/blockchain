@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -109,6 +110,26 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	/** Fresh per-thread conflict cache (block-save checks, standalone cycles). */
 	public static void clearConflictCache() {
 		conflictCache.set(new HashMap<>());
+		conflictCacheToken.set(null);
+	}
+
+	private static final ThreadLocal<String> conflictCacheToken = ThreadLocal.withInitial(() -> null);
+
+	/**
+	 * Keeps the current thread's conflict cache iff it was built for
+	 * {@code token} (the confirmed-head marker); otherwise starts fresh.
+	 *
+	 * <p>TXOUT spent/spender rows only change at confirm/unconfirm — both move
+	 * the confirmed head and therefore the token — so resolutions gathered
+	 * while proposing under one head stay valid for later slots under the SAME
+	 * head. Without this, every slot re-resolves the whole unconfirmed UTXO
+	 * set against the database even when nothing changed.
+	 */
+	public static void retainConflictCache(String token) {
+		if (token == null || !token.equals(conflictCacheToken.get())) {
+			conflictCache.set(new HashMap<>());
+			conflictCacheToken.set(token);
+		}
 	}
 
 	/**
@@ -434,13 +455,24 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			existing.add(bw.getBlock().getHash());
 		}
 		long t = System.currentTimeMillis();
-		List<byte[]> candidates = store.blocksFromNonChainHeigth(cutoffheight);
+		// Hash-only scan: the sweep previously pulled and deserialized every
+		// unconfirmed block's FULL bytes just to read its hash, then re-fetched
+		// it again in getBlockWrap. Identities only — bodies load per candidate.
+		List<Sha256Hash> candidates = store.hashesFromNonChainHeigth(cutoffheight);
 		queryMs = System.currentTimeMillis() - t;
-		for (byte[] blockBytes : candidates) {
+		// Incremental conflict-point index: the cumulative gate below used to
+		// re-stream EVERY accumulated block's conflict candidates for EACH new
+		// candidate (O(n²) — 12s of loop time at ~10k tx). A point-count map
+		// gives the same accept/reject outcome in O(candidates).
+		Map<ConflictPoint, Integer> pointIndex = new HashMap<>();
+		for (BlockWrap bw : blocks) {
+			for (ConflictCandidate c : bw.toConflictCandidates()) {
+				pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
+			}
+		}
+		for (Sha256Hash hash : candidates) {
 			scanned++;
 			t = System.currentTimeMillis();
-			Block block = networkParameters.getDefaultSerializer().makeBlock(blockBytes);
-			Sha256Hash hash = block.getHash();
 			if (existing.contains(hash)) {
 				continue;
 			}
@@ -450,7 +482,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				skipped++;
 				continue;
 			}
-			BlockWrap wrap = getBlockWrap(hash, store);
+			BlockWrap wrap = getCachedBlockWrap(hash, store);
 			if (wrap == null) {
 				continue;
 			}
@@ -466,7 +498,17 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			// validators sharing the genesis-1e9 fund index). The cumulative
 			// gate excludes the conflicting block; a singleton check would
 			// reference all of them and stall confirmation.
-			boolean checked = checkSpentAndConflict(blocks, wrap, checkChainlength, store);
+			java.util.Set<ConflictCandidate> candPoints = wrap.toConflictCandidates();
+			boolean duplicatePoint = candPoints.stream()
+					.anyMatch(c -> pointIndex.getOrDefault(c.getConflictPoint(), 0) > 0);
+			boolean checked;
+			if (duplicatePoint) {
+				checked = false;
+			} else {
+				// Chain-spent check for this candidate's own points only —
+				// resolutions come from the (retained) conflict cache.
+				checked = !hasSpentInputs(java.util.Collections.singleton(wrap), checkChainlength, store);
+			}
 			conflictMs += System.currentTimeMillis() - t;
 			if (checkChainlength) {
 				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
@@ -474,6 +516,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (checked) {
 				blocks.add(wrap);
 				existing.add(hash);
+				for (ConflictCandidate c : candPoints) {
+					pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
+				}
 			}
 		}
 		long perfMs = System.currentTimeMillis() - perfStart;
@@ -483,6 +528,62 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							+ "prefetch={}ms loop={}ms grouping={}ms total={}ms",
 					scanned, blocks.size(), skipped, queryMs, loadMs, conflictMs, conflictBreakdown[0],
 					conflictBreakdown[1], conflictBreakdown[2], perfMs);
+		}
+	}
+
+	/**
+	 * Sweep-scoped parsed-block memo: saved block bytes are immutable, but the
+	 * sweep re-deserialized every still-unconfirmed batch block on EVERY slot
+	 * (~330 ms CPU per 2000-tx PQ block). Scoped to this sweep path only —
+	 * Block instances are NOT safe to share across all getBlockWrap callers
+	 * (PoSTest#testDutyProtectionAcrossRestart fails with a global memo).
+	 * Evaluation is still fetched fresh per call.
+	 */
+	private static final Map<Sha256Hash, Block> PARSED_BLOCK_CACHE = new ConcurrentHashMap<>();
+	private static final int PARSED_BLOCK_CACHE_MAX = 1024;
+
+	/**
+	 * Registers a just-built block so the next sweep skips re-parsing it (the
+	 * save path already holds the parsed instance; discarding it forced the
+	 * sweep to pay the deserialize again on first encounter).
+	 */
+	public static void cacheParsedBlock(Block block) {
+		if (block == null || block.getHash() == null) {
+			return;
+		}
+		if (PARSED_BLOCK_CACHE.size() >= PARSED_BLOCK_CACHE_MAX) {
+			PARSED_BLOCK_CACHE.clear();
+		}
+		PARSED_BLOCK_CACHE.put(block.getHash(), block);
+	}
+
+	private BlockWrap getCachedBlockWrap(Sha256Hash hash, BlockStoreInterface store) throws BlockStoreException {
+		try {
+			Block block = PARSED_BLOCK_CACHE.get(hash);
+			if (block == null) {
+				BlockWrap fresh = getBlockWrap(hash, store);
+				if (fresh == null) {
+					return null;
+				}
+				if (PARSED_BLOCK_CACHE.size() >= PARSED_BLOCK_CACHE_MAX) {
+					PARSED_BLOCK_CACHE.clear();
+				}
+				PARSED_BLOCK_CACHE.put(hash, fresh.getBlock());
+				return fresh;
+			}
+			BlockEvaluation v = null;
+			byte[] be = cacheBlockService.getBlockEvaluation(hash, store);
+			if (be != null) {
+				v = jsonmapper.readValue(be, BlockEvaluation.class);
+			}
+			if (v == null) {
+				v = BlockEvaluation.buildInitial(block);
+			}
+			return new BlockWrap(block, v, networkParameters);
+		} catch (BlockStoreException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new BlockStoreException(e);
 		}
 	}
 
@@ -1969,7 +2070,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			Sha256Hash tokenPrevblockhash3 = blockStore.getTokenPrevblockhash(block.getBlock().getHash());
 			if (tokenPrevblockhash3 != null) {
 				SpentBlockData s = blockStore.getTokenSpent(tokenPrevblockhash3);
-				if (block.getBlock().getHash().equals(s.getSpenderBlockHash()))
+				// The spent row may be absent (never written or already
+				// cleared); nothing to roll back then.
+				if (s != null && block.getBlock().getHash().equals(s.getSpenderBlockHash()))
 					blockStore.updateTokenSpent(tokenPrevblockhash3, false, null);
 			}
 
@@ -1996,6 +2099,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 		confirmTransaction(block, confirm, blockStore);
 		evictTransactionsAndBlockEva(block, blockStore);
 	}
+
 
 	private void confirmTransaction(Block block, boolean confirm, BlockStoreInterface blockStore)
 			throws BlockStoreException {

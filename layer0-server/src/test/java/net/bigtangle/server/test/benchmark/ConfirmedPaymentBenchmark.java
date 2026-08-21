@@ -87,7 +87,11 @@ import net.bigtangle.wallet.Wallet;
 				"server.fundEnabled=true", "spring.main.allow-circular-references=true",
 				"service.schedule.chainlength=true", "service.schedule.blockbatch=true",
 				"service.schedule.microbatch=true", "service.schedule.upchainrate=1000",
-				"pos.slotIntervalMs=12000" })
+				// pos.slotIntervalMs intentionally NOT pinned here: it resolves
+				// from application.yml (${POS_SLOT_INTERVAL_MS:12000}) so a run
+				// can override the slot cadence via -DPOS_SLOT_INTERVAL_MS=...
+				// without recompiling (max-TPS exploration).
+				})
 public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 
 	private static final Logger log = LoggerFactory.getLogger(ConfirmedPaymentBenchmark.class);

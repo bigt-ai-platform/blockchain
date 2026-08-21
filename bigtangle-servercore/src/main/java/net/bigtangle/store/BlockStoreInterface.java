@@ -110,6 +110,21 @@ public interface BlockStoreInterface {
 
 	List<UTXO> getOpenTransactionOutputs(List<Address> addresses) throws UTXOProviderException;
 
+	/**
+	 * Same as {@link #getOpenTransactionOutputs(String)} but additionally resolves
+	 * the multisig display address via a join with {@code outputsmulti}. Only
+	 * needed for user-facing output display — the balance/spend paths match on
+	 * {@code outputs.toaddress} alone and should use the plain variant.
+	 */
+	default List<UTXO> getOpenTransactionOutputsWithMultiSig(String address) throws UTXOProviderException {
+		return getOpenTransactionOutputs(address);
+	}
+
+	/** Batched-address variant of {@link #getOpenTransactionOutputsWithMultiSig(String)}. */
+	default List<UTXO> getOpenTransactionOutputsWithMultiSig(List<Address> addresses) throws UTXOProviderException {
+		return getOpenTransactionOutputs(addresses);
+	}
+
 	List<UTXO> getOpenAllOutputs(String tokenid) throws UTXOProviderException;
 
 	boolean getOutputConfirmation(Sha256Hash blockHash, Sha256Hash hash, long index) throws BlockStoreException;
@@ -348,6 +363,15 @@ public interface BlockStoreInterface {
 	List<byte[]> blocksFromChainLength(long start, long end) throws BlockStoreException;
 
 	List<byte[]> blocksFromNonChainHeigth(long heigth) throws BlockStoreException;
+
+	/**
+	 * Hashes of all non-chain blocks above {@code heigth} — the lean variant of
+	 * {@link #blocksFromNonChainHeigth(long)} for sweeps that only need
+	 * identities and fetch block bodies per candidate on demand. Avoids
+	 * transferring and deserializing every unconfirmed block's full bytes each
+	 * beacon slot.
+	 */
+	List<Sha256Hash> hashesFromNonChainHeigth(long heigth) throws BlockStoreException;
 
 	void updateMultiSignBlockBitcoinSerialize(String tokenid, long tokenindex, byte[] bytes) throws BlockStoreException;
 

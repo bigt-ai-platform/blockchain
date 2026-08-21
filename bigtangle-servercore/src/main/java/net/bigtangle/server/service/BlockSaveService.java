@@ -78,7 +78,7 @@ public class BlockSaveService {
 	protected RandaoService randaoService;
 	private static final Logger logger = LoggerFactory.getLogger(BlockSaveService.class);
 
-	public static int BATCH_TX_PER_BLOCK = 50000; // adjustable for testing
+	public static int BATCH_TX_PER_BLOCK = Integer.getInteger("batch.txPerBlock", 2000); // adjustable for testing
 	public static int BATCH_PARALLELISM = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
 	private static final ExecutorService parallelBatchPool = Executors.newFixedThreadPool(BATCH_PARALLELISM);
 
@@ -132,6 +132,9 @@ public class BlockSaveService {
 		// before assembly — record that so beacon connect skips the redundant
 		// per-tx re-verification pass.
 		cacheBlockService.markTxValidated(block.getHash());
+		// Hand the parsed instance to the beacon sweep's memo so the next slot
+		// does not re-deserialize this block from its stored bytes.
+		net.bigtangle.server.service.base.ServiceBaseConfirmation.cacheParsedBlock(block);
 		accumulateBlockFees(block, store);
 		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
 		notifyCrosstangle(block, store);

@@ -346,10 +346,12 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			throws VerificationException, BlockStoreException {
 		try {
 			store.beginDatabaseBatchWrite();
+			long phaseStart = System.currentTimeMillis();
 
 			// Check the block is formally valid
 			block.verifyHeader();
 			block.verifyTransactions();
+			long verifyMs = System.currentTimeMillis() - phaseStart;
 
 			// Solidify referenced blocks
 			RewardInfo currRewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
@@ -363,8 +365,10 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				// the missing referenced blocks have synced.
 				throw e;
 			}
+			long solidifyMs = System.currentTimeMillis() - phaseStart - verifyMs;
 			SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters,
 					cacheBlockService, jsonmapper).checkChainSolidity(block, true, store);
+			long checkMs = System.currentTimeMillis() - phaseStart - verifyMs - solidifyMs;
 
 			if (solidityState.isDirectlyMissing()) {
 				// The beacon's reward-chain parent (prevRewardHash) or a referenced
@@ -394,6 +398,11 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			}
 			connectRewardBlock(block, solidityState, store);
 			store.commitDatabaseBatchWrite();
+			long totalMs = System.currentTimeMillis() - phaseStart;
+			if (totalMs > 1000) {
+				log.info("saveChainConnected phases: verify={}ms solidify={}ms check={}ms connect={}ms total={}ms",
+						verifyMs, solidifyMs, checkMs, totalMs - verifyMs - solidifyMs - checkMs, totalMs);
+			}
 		} catch (Exception e) {
 			store.abortDatabaseBatchWrite();
 			cacheBlockService.evictBlock(block, store);
@@ -502,9 +511,17 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper, mempoolService);
+		long cbStart = System.currentTimeMillis();
 		if (serviceVerifyReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
+			long connectMs = System.currentTimeMillis() - cbStart;
 			serviceVerifyReward.verifyRewardChainConfirmReferenced(block, store);
+			long verifyRefMs = System.currentTimeMillis() - cbStart - connectMs;
+			if (connectMs + verifyRefMs > 1000) {
+				log.info("extendHead breakdown: connect={}ms verifyReferenced={}ms {}", connectMs, verifyRefMs,
+						block.getHash());
+			}
+			logConnectPhase("extendHead", block, cbStart);
 		} else {
 			// This block connects to somewhere other than the top of the best
 			// known chain. We treat these differently.
@@ -516,7 +533,9 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			// (store.put happens in connect; executeGhost reads the blocks
 			// table via getBlocksByPrevHash).
 			connect(block, solidityState, store);
+			long ghostStart = System.currentTimeMillis();
 			boolean haveNewBestChain = ghostWinsForkChoice(block, store);
+			logConnectPhase("connect+ghost", block, cbStart);
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			// FINALITY: a reorg may only replace the head if the winning chain
@@ -565,6 +584,13 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				// parallel chain, save as unconfirmed
 			}
 
+		}
+	}
+
+	private void logConnectPhase(String phase, Block block, long startMs) {
+		long ms = System.currentTimeMillis() - startMs;
+		if (ms > 1000) {
+			log.info("connectRewardBlock[{}] {}ms {}", phase, ms, block.getHash());
 		}
 	}
 

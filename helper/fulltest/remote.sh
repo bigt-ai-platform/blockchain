@@ -234,8 +234,14 @@ if [ ! -d "$M2_REPO" ] && [ -d /root/.m2/repository ]; then
 fi
 req_pubkey() {
     local seed="$1"
+    # Pick the NEWEST matching jar: find's arbitrary order can yield ancient
+    # versions (e.g. guava-10.0.1 lacks com.google.common.io.BaseEncoding).
+    local slf4j guava bcprov
+    slf4j="$(find "$M2_REPO" -name 'slf4j-api-*.jar' ! -name '*-sources*' ! -name '*-javadoc*' | sort -V | tail -1)"
+    guava="$(find "$M2_REPO" -name 'guava-*.jar' ! -name '*-sources*' ! -name '*-javadoc*' | sort -V | tail -1)"
+    bcprov="$(find "$M2_REPO" -name 'bcprov-jdk18on-*.jar' ! -name '*-sources*' ! -name '*-javadoc*' | sort -V | tail -1)"
     "$JAVA_HOME/bin/java" -cp \
-        "$ROOT/bigtangle-core/target/classes:$(find "$M2_REPO" -name 'slf4j-api-*.jar' | head -1):$(find "$M2_REPO" -name 'guava-*.jar' | head -1):$(find "$M2_REPO" -name 'bcprov-jdk18on-*.jar' | head -1)" \
+        "$ROOT/bigtangle-core/target/classes:$slf4j:$guava:$bcprov" \
         net.bigtangle.tools.ValidatorKeyTool pubkey "$seed" 2>/dev/null | grep '^VALIDATOR_PUBKEY=' | cut -d= -f2
 }
 if [ -z "$L0_VALIDATOR_PUBKEY" ]; then
@@ -255,6 +261,13 @@ fi
 # pre-fund it at genesis like the genesis wallet.
 if [ -z "$L0_YUAN_PUBKEY" ]; then
     L0_YUAN_PUBKEY="$(req_pubkey "$(printf '03%.0s' {1..32})" || true)"
+fi
+# The L1-order chain's genesis wallet uses the SAME ML-DSA-87 seed 0x01 as the
+# L0 genesis wallet. Without deriving it here the Step 7c funding block below
+# is skipped (its [ -n "$L1_GENESIS_PUBKEY" ] guard), leaving the L1 genesis
+# wallet unfunded and order tests failing with InsufficientMoneyException.
+if [ -z "$L1_GENESIS_PUBKEY" ]; then
+    L1_GENESIS_PUBKEY="$(req_pubkey "$(printf '01%.0s' {1..32})" || true)"
 fi
 echo "L0 validator pubkey: ${L0_VALIDATOR_PUBKEY:0:24}... (${#L0_VALIDATOR_PUBKEY} hex)"
 echo "L1 validator pubkey: ${L1_VALIDATOR_PUBKEY:0:24}... (${#L1_VALIDATOR_PUBKEY} hex)"

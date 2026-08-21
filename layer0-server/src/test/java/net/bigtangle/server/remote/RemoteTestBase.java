@@ -261,6 +261,24 @@ public abstract class RemoteTestBase {
 		return getBalance(withZero, keys);
 	}
 
+	/**
+	 * Polls until {@code key} has a confirmed spendable BC UTXO (getBalances
+	 * returns only confirmed outputs), so sequential pays do not race on the
+	 * wallet's single confirmed UTXO.
+	 */
+	protected void waitForConfirmedBc(PQKey key) throws Exception {
+		for (int i = 0; i < 60; i++) {
+			for (UTXO u : getBalance(false, key)) {
+				if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, u.getValue().getTokenid())
+						&& u.getValue().getValue().signum() > 0) {
+					return;
+				}
+			}
+			Thread.sleep(2000);
+		}
+		log.warn("waitForConfirmedBc: no confirmed BC UTXO for {} after timeout", key.toAddress(networkParameters));
+	}
+
 	public void buy(List<Block> blocksAddedAll) throws Exception {
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();

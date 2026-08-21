@@ -175,8 +175,24 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " FROM outputs LEFT JOIN outputsmulti " + " ON outputs.hash = outputsmulti.hash"
 			+ " AND outputs.outputindex = outputsmulti.outputindex ";
 
+	/**
+	 * Lean base without the {@code outputsmulti} join: the multisig display
+	 * address is only needed by user-facing output listing
+	 * ({@link #getOpenTransactionOutputsWithMultiSig}); every balance/spend path
+	 * matches on {@code outputs.toaddress} alone, so paying for the join there
+	 * is wasted query time on the hot path.
+	 */
+	protected final String SELECT_TRANSACTION_OUTPUTS_SQL_BASE_NO_MULTI = "SELECT " + "outputs.hash, coinvalue, "
+			+ " scriptbytes, outputs.outputindex, coinbase, outputs.toaddress as toaddress, addresstargetable,"
+			+ " blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, "
+			+ "spendpending, spendpendingtime, minimumsign, time , spenderblockhash"
+			+ " FROM outputs ";
+
 	protected final String SELECT_OPEN_TRANSACTION_OUTPUTS_SQL = SELECT_TRANSACTION_OUTPUTS_SQL_BASE
 			+ " WHERE  " + OUTPUTS_CONFIRMED + " = true and spent= false and outputs.toaddress = ? " + " OR outputsmulti.toaddress = ?";
+
+	protected final String SELECT_OPEN_TRANSACTION_OUTPUTS_NO_MULTI_SQL = SELECT_TRANSACTION_OUTPUTS_SQL_BASE_NO_MULTI
+			+ " WHERE  " + OUTPUTS_CONFIRMED + " = true and spent= false and outputs.toaddress = ?";
 
 	protected final String SELECT_OPEN_TRANSACTION_OUTPUTS_TOKEN_SQL = "SELECT " + " outputs.hash, coinvalue, "
 			+ " scriptbytes, outputs.outputindex, coinbase, outputs.toaddress as toaddress , addresstargetable,"
@@ -210,6 +226,9 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ " FROM blocks WHERE height > ? AND height <= ? AND solid = 2 ";
 
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash, block "
+			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
+
+	protected final String SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
@@ -970,6 +989,21 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		return re;
 	}
 
+	@Override
+	public List<Sha256Hash> hashesFromNonChainHeigth(long heigth) throws BlockStoreException {
+		List<Sha256Hash> re = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL)) {
+			s.setLong(1, heigth);
+			ResultSet results = s.executeQuery();
+			while (results.next()) {
+				re.add(Sha256Hash.wrap(results.getBytes("hash")));
+			}
+			return re;
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
 	private boolean verifyHeader(Block block) {
 		try {
 			block.verifyHeader();
@@ -1181,31 +1215,37 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private void batchGetOutputSpentStatus(List<TransactionOutPoint> distinct,
 			Map<TransactionOutPoint, OutputSpentStatus> result) throws BlockStoreException {
 		Map<String, TransactionOutPoint> byKey = new HashMap<>();
+		int n = distinct.size();
+		String[] txHex = new String[n];
+		Object[] idxArr = new Object[n];
+		String[] blkHex = new String[n];
+		int i = 0;
 		for (TransactionOutPoint op : distinct) {
 			byKey.put(outpointKey(op), op);
+			txHex[i] = Utils.HEX.encode(op.getTxHash().getBytes());
+			idxArr[i] = op.getIndex();
+			blkHex[i] = Utils.HEX.encode(op.getBlockHash().getBytes());
+			i++;
 		}
-		// Lean row: conflict resolution only needs spent/confirmed/spenderblockhash
-		// (SELECT_OUTPUTS_SPENTBLOCK_SQL shape), not the full output row.
-		StringBuilder sql = new StringBuilder("SELECT outputs.hash, outputs.outputindex, outputs.blockhash, "
-				+ " outputs.spent, " + OUTPUTS_CONFIRMED + " AS confirmed, outputs.spenderblockhash "
-				+ " FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
-		Iterator<TransactionOutPoint> iter = distinct.iterator();
-		while (iter.hasNext()) {
-			iter.next();
-			sql.append("(?, ?, ?)");
-			if (iter.hasNext())
-				sql.append(", ");
-		}
-		sql.append(")");
-		try (PreparedStatement s = getConnection().prepareStatement(sql.toString())) {
-			int param = 1;
-			for (TransactionOutPoint op : distinct) {
-				s.setBytes(param++, op.getTxHash().getBytes());
-				s.setLong(param++, op.getIndex());
-				s.setBytes(param++, op.getBlockHash().getBytes());
-			}
+		// Outpoint probe via unnest-array join. A row-value "(a,b,c) IN ((..),..)"
+		// with thousands of tuples costs the planner ~600ms per statement even
+		// on an idle database (planning dominates); the array join plans in ms
+		// and executes ~10x faster overall.
+		String sql = "SELECT o.hash AS hash, o.outputindex AS outputindex, o.blockhash AS blockhash, "
+				+ "o.spent AS spent, b.confirmed AS confirmed, o.spenderblockhash AS spenderblockhash "
+				+ "FROM outputs o JOIN (SELECT decode(t.h,'hex') h, t.i i, decode(t.b,'hex') b "
+				+ "FROM unnest(?::text[], ?::bigint[], ?::text[]) AS t(h,i,b)) u "
+				+ "ON o.hash=u.h AND o.outputindex=u.i AND o.blockhash=u.b "
+				+ "LEFT JOIN blocks b ON b.hash=o.blockhash";
+		try (PreparedStatement s = getConnection().prepareStatement(sql)) {
+			s.setArray(1, getConnection().createArrayOf("text", txHex));
+			s.setArray(2, getConnection().createArrayOf("bigint", idxArr));
+			s.setArray(3, getConnection().createArrayOf("text", blkHex));
+			long execStart = System.currentTimeMillis();
 			ResultSet rs = s.executeQuery();
+			int rows = 0;
 			while (rs.next()) {
+				rows++;
 				long idx = rs.getLong("outputindex");
 				Sha256Hash blockHash = Sha256Hash.wrap(rs.getBytes("blockhash"));
 				Sha256Hash txHash = Sha256Hash.wrap(rs.getBytes("hash"));
@@ -1216,6 +1256,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 					result.put(op, new OutputSpentStatus(rs.getBoolean("confirmed"), spender));
 				}
 			}
+			long ms = System.currentTimeMillis() - execStart;
+			if (ms > 500 || n >= 1000) {
+				log.info("batchGetOutputSpentStatus: n={} rows={} execute={}ms", n, rows, ms);
+			}
 		} catch (SQLException e) {
 			throw new BlockStoreException(e);
 		}
@@ -1224,26 +1268,30 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	private void batchGetTransactionOutputs(List<TransactionOutPoint> distinct, Map<TransactionOutPoint, UTXO> result)
 			throws BlockStoreException {
 		Map<String, TransactionOutPoint> byKey = new HashMap<>();
+		int n = distinct.size();
+		String[] txHex = new String[n];
+		Object[] idxArr = new Object[n];
+		String[] blkHex = new String[n];
+		int i = 0;
 		for (TransactionOutPoint op : distinct) {
 			byKey.put(outpointKey(op), op);
+			txHex[i] = Utils.HEX.encode(op.getTxHash().getBytes());
+			idxArr[i] = op.getIndex();
+			blkHex[i] = Utils.HEX.encode(op.getBlockHash().getBytes());
+			i++;
 		}
-		StringBuilder sql = new StringBuilder(
-				"SELECT outputs.hash, outputs.outputindex, coinvalue, scriptbytes, coinbase, outputs.toaddress, addresstargetable, outputs.blockhash, tokenid, fromaddress, memo, spent, " + OUTPUTS_CONFIRMED + " AS confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, NULL as multitoaddress FROM outputs WHERE (outputs.hash, outputs.outputindex, outputs.blockhash) IN (");
-		Iterator<TransactionOutPoint> iter = distinct.iterator();
-		while (iter.hasNext()) {
-			iter.next();
-			sql.append("(?, ?, ?)");
-			if (iter.hasNext())
-				sql.append(", ");
-		}
-		sql.append(")");
-		try (PreparedStatement s = getConnection().prepareStatement(sql.toString())) {
-			int param = 1;
-			for (TransactionOutPoint op : distinct) {
-				s.setBytes(param++, op.getTxHash().getBytes());
-				s.setLong(param++, op.getIndex());
-				s.setBytes(param++, op.getBlockHash().getBytes());
-			}
+		// unnest-array join — see batchGetOutputSpentStatus for why not row-value IN.
+		String sql = "SELECT o.hash AS hash, o.outputindex AS outputindex, coinvalue, scriptbytes, coinbase, "
+				+ "o.toaddress AS toaddress, addresstargetable, o.blockhash AS blockhash, tokenid, fromaddress, memo, spent, "
+				+ "b.confirmed AS confirmed, spendpending, spendpendingtime, minimumsign, time, spenderblockhash, NULL as multitoaddress "
+				+ "FROM outputs o JOIN (SELECT decode(t.h,'hex') h, t.i i, decode(t.b,'hex') b "
+				+ "FROM unnest(?::text[], ?::bigint[], ?::text[]) AS t(h,i,b)) u "
+				+ "ON o.hash=u.h AND o.outputindex=u.i AND o.blockhash=u.b "
+				+ "LEFT JOIN blocks b ON b.hash=o.blockhash";
+		try (PreparedStatement s = getConnection().prepareStatement(sql)) {
+			s.setArray(1, getConnection().createArrayOf("text", txHex));
+			s.setArray(2, getConnection().createArrayOf("bigint", idxArr));
+			s.setArray(3, getConnection().createArrayOf("text", blkHex));
 			ResultSet rs = s.executeQuery();
 			while (rs.next()) {
 				long idx = rs.getLong("outputindex");
@@ -1277,6 +1325,17 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	private UTXO setUTXO(Sha256Hash hash, long index, ResultSet results) throws SQLException {
+		return setUTXO(hash, index, results, true);
+	}
+
+	/**
+	 * @param withMultiAddress when false the result set has no
+	 *        {@code multitoaddress} column (lean no-join queries); a
+	 *        {@code minimumsign > 1} output keeps its raw toaddress and callers
+	 *        needing the multisig display address must use the
+	 *        {@code ...WithMultiSig} queries.
+	 */
+	private UTXO setUTXO(Sha256Hash hash, long index, ResultSet results, boolean withMultiAddress) throws SQLException {
 		// Parse it.
 		Coin coinvalue = new Coin(new BigInteger(results.getBytes("coinvalue")), results.getString("tokenid"));
 		byte[] scriptBytes = results.getBytes("scriptbytes");
@@ -1295,7 +1354,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		String tokenid = results.getString("tokenid");
 		long minimumsign = results.getLong("minimumsign");
 		long time = results.getLong("time");
-		if (minimumsign > 1) {
+		if (withMultiAddress && minimumsign > 1) {
 			address = results.getString("multitoaddress");
 		}
 		return new UTXO(hash, index, coinvalue, coinbase, new Script(scriptBytes), address, blockhash, fromaddress,
@@ -1558,9 +1617,56 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		try {
 			// Single query for all addresses instead of one round-trip per
 			// address (a 5k-address getOutputs previously issued 5k queries on
-			// the shared connection and took minutes). Note the corrected
-			// grouping: the multitoaddress branch must ALSO require
-			// confirmed/spent (the old "? OR ?" form ignored both).
+			// the shared connection and took minutes). No outputsmulti join:
+			// spend-candidate resolution matches outputs.toaddress only —
+			// multisig display needs getOpenTransactionOutputsWithMultiSig.
+			StringBuilder sql = new StringBuilder(SELECT_TRANSACTION_OUTPUTS_SQL_BASE_NO_MULTI);
+			sql.append(" WHERE ").append(OUTPUTS_CONFIRMED).append(" = true and spent = false and outputs.toaddress IN (");
+			for (int i = 0; i < addresses.size(); i++) {
+				sql.append("?,");
+			}
+			sql.setLength(sql.length() - 1);
+			sql.append(")");
+
+			s = getConnection().prepareStatement(sql.toString());
+			int idx = 1;
+			for (Address address : addresses) {
+				s.setString(idx++, address.toString());
+			}
+			ResultSet results = s.executeQuery();
+			while (results.next()) {
+				outputs.add(setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"),
+						results, false));
+			}
+			return outputs;
+		} catch (SQLException ex) {
+			throw new UTXOProviderException(ex);
+		} finally {
+			if (s != null)
+				try {
+					s.close();
+				} catch (SQLException e) {
+					//
+				}
+		}
+	}
+
+	/**
+	 * Multisig display variant: joins {@code outputsmulti} so a
+	 * {@code minimumsign > 1} output reports its multi address, matching an
+	 * output owned via either its raw or its multisig toaddress. Slower than
+	 * {@link #getOpenTransactionOutputs(List)} — user-facing output display only.
+	 */
+	@Override
+	public List<UTXO> getOpenTransactionOutputsWithMultiSig(List<Address> addresses) throws UTXOProviderException {
+		if (addresses == null || addresses.isEmpty()) {
+			return new ArrayList<>();
+		}
+		PreparedStatement s = null;
+		List<UTXO> outputs = new ArrayList<>();
+		try {
+			// Single query for all addresses; the multitoaddress branch must ALSO
+			// require confirmed/spent (the old "? OR ?" form ignored both).
 			StringBuilder sql = new StringBuilder(SELECT_TRANSACTION_OUTPUTS_SQL_BASE);
 			sql.append(" WHERE ").append(OUTPUTS_CONFIRMED).append(" = true and spent = false and ( outputs.toaddress IN (");
 			for (int i = 0; i < addresses.size(); i++) {
@@ -1606,19 +1712,50 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		List<UTXO> outputs = new ArrayList<>();
 		try {
 
+			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_NO_MULTI_SQL);
+
+			s.setString(1, address);
+			ResultSet results = s.executeQuery();
+			int cnt = 0;
+			while (results.next()) {
+				cnt++;
+				outputs.add(setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"),
+						results, false));
+			}
+			if (cnt == 0) {
+				log.warn("getOpenTransactionOutputs: 0 rows for address={}", address);
+			}
+			return outputs;
+		} catch (SQLException ex) {
+			throw new UTXOProviderException(ex);
+		} finally {
+			if (s != null)
+				try {
+					s.close();
+				} catch (SQLException e) {
+					//
+				}
+		}
+	}
+
+	/**
+	 * Multisig display variant of {@link #getOpenTransactionOutputs(String)}
+	 * (see {@link #getOpenTransactionOutputsWithMultiSig(List)}).
+	 */
+	@Override
+	public List<UTXO> getOpenTransactionOutputsWithMultiSig(String address) throws UTXOProviderException {
+		PreparedStatement s = null;
+		List<UTXO> outputs = new ArrayList<>();
+		try {
+
 			s = getConnection().prepareStatement(SELECT_OPEN_TRANSACTION_OUTPUTS_SQL);
 
 			s.setString(1, address);
 			s.setString(2, address);
 			ResultSet results = s.executeQuery();
-			int cnt = 0;
 			while (results.next()) {
-				cnt++;
-				outputs.add(
-						setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"), results));
-			}
-			if (cnt == 0) {
-				log.warn("getOpenTransactionOutputs: 0 rows for address={}", address);
+				outputs.add(setUTXO(Sha256Hash.wrap(results.getBytes("hash")), results.getLong("outputindex"),
+						results));
 			}
 			return outputs;
 		} catch (SQLException ex) {

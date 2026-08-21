@@ -26,12 +26,18 @@ public class PosExecutorConfiguration {
         executor.setCorePoolSize(1);
         executor.setMaxPoolSize(1);
         // Synchronous handoff: the slot tick must start immediately on its own
-        // dedicated thread. If a previous tick is still running, the new one is
-        // rejected rather than queued behind it — two slots can never run
-        // concurrently, and queuing would only delay the next slot.
-        executor.setQueueCapacity(0);
+        // dedicated thread. If a previous tick is still running, one tick is
+        // parked in the queue and any FURTHER ticks replace it (latest-wins):
+        // two slots can never run concurrently, but a long proposal can no
+        // longer drop every subsequent slot — the newest tick always survives.
+        executor.setQueueCapacity(1);
         executor.setRejectedExecutionHandler((r, e) -> {
-            log.warn("posExecutor rejected a slot tick (previous tick still running)");
+            // Queue full: drop the STALE queued tick (its once-per-slot duty
+            // guard makes re-running it pointless) and keep the newest.
+            e.getQueue().poll();
+            if (!e.getQueue().offer(r)) {
+                log.warn("posExecutor dropped a slot tick (previous tick still running)");
+            }
         });
         executor.setThreadFactory(new ThreadFactory() {
             private final AtomicInteger counter = new AtomicInteger(0);

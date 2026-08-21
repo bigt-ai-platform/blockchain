@@ -65,6 +65,13 @@ public class BlockBatchService {
         if (size < minBatchTx && (now - lastDrain) < maxBatchAgeMs) {
             return;
         }
+        // One drain at a time: each batchBlocksFromMempool run validates and
+        // writes multi-thousand-tx blocks; overlapping 100ms ticks stack those
+        // multi-second jobs on the DB exactly when ingest already saturates it
+        // (observed as 10s mempool->block lag and a whole slot lost).
+        if (!lock.tryLock()) {
+            return;
+        }
         lastDrain = now;
         try {
             int batched = blockSaveService.batchBlocksFromMempool();
@@ -73,6 +80,8 @@ public class BlockBatchService {
             }
         } catch (Exception e) {
             logger.debug("Micro-batch error", e);
+        } finally {
+            lock.unlock();
         }
     }
 
