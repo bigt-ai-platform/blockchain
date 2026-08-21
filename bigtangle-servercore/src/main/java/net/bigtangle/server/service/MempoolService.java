@@ -59,10 +59,31 @@ public class MempoolService {
 
     private final ConcurrentHashMap<Transaction, Set<TransactionOutPoint>> txOutpoints = new ConcurrentHashMap<>();
 
+    /**
+     * Current mempool occupancy. Tracked explicitly: {@code Queue.size()} is
+     * O(n) on ConcurrentLinkedQueue and this counter also backs the admission
+     * cap ({@code server.mempoolMaxTx}).
+     */
+    private final AtomicInteger mempoolSize = new AtomicInteger(0);
+
+    @Autowired
+    private net.bigtangle.server.config.ServerConfiguration serverConfiguration;
+
+    private void checkCapacity() {
+        if (serverConfiguration == null) {
+            return;
+        }
+        int max = serverConfiguration.getMempoolMaxTx();
+        if (max > 0 && mempoolSize.get() >= max) {
+            throw new VerificationException.MempoolFullException(mempoolSize.get(), max);
+        }
+    }
+
     public void submit(Block block) {
         BlockType blockType = block.getBlockType();
         List<Transaction> txs = block.getTransactions();
         if (txs != null) {
+            checkCapacity();
             ConcurrentLinkedQueue<Transaction> typeQueue = pendingTxnsByType
                     .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
             for (Transaction tx : txs) {
@@ -70,11 +91,13 @@ public class MempoolService {
                 pendingTxns.add(tx);
                 typeQueue.add(tx);
             }
+            mempoolSize.addAndGet(txs.size());
             totalSubmitted.addAndGet(txs.size());
         }
     }
 
     public void submitTransaction(Transaction tx) {
+        checkCapacity();
         checkAndAdd(tx);
         addToPending(tx);
     }
@@ -87,6 +110,7 @@ public class MempoolService {
      */
     public void submitTransactions(List<Transaction> txs, BlockStoreInterface store) {
         for (Transaction tx : txs) {
+            checkCapacity();
             checkAndAdd(tx, store);
             addToPending(tx);
         }
@@ -98,6 +122,7 @@ public class MempoolService {
                 .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
         pendingTxns.add(tx);
         typeQueue.add(tx);
+        mempoolSize.incrementAndGet();
         totalSubmitted.incrementAndGet();
     }
 
@@ -447,6 +472,7 @@ public class MempoolService {
         for (ConcurrentLinkedQueue<Transaction> queue : pendingTxnsByType.values()) {
             queue.clear();
         }
+        mempoolSize.set(0);
         return batch;
     }
 
@@ -466,6 +492,7 @@ public class MempoolService {
                 result.put(entry.getKey(), batch);
             }
         }
+        mempoolSize.set(0);
         return result;
     }
 
@@ -516,7 +543,7 @@ public class MempoolService {
     }
 
     public int size() {
-        return pendingTxns.size();
+        return mempoolSize.get();
     }
 
     /** Non-destructive snapshot of all pending transactions. */
@@ -533,6 +560,7 @@ public class MempoolService {
         pendingTxnsByType.clear();
         spentOutpoints.clear();
         txOutpoints.clear();
+        mempoolSize.set(0);
     }
 
     public Set<TransactionOutPoint> getSpentOutpoints() {

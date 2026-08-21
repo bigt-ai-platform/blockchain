@@ -53,6 +53,34 @@ public class CacheBlockService {
 	private static final Logger logger = LoggerFactory.getLogger(CacheBlockService.class);
 	@Autowired
 	protected ObjectMapper jsonmapper;
+
+	/**
+	 * Block hashes whose every transaction THIS node has fully verified
+	 * (mempool ingest for locally assembled batch blocks, full solidity check
+	 * for peer blocks).  Beacon connect consults this to skip the redundant
+	 * per-tx re-verification pass — the O(txs) work that otherwise re-runs on
+	 * every slot until a block is confirmed and dominates the confirm path
+	 * under load.  Purely local validation bookkeeping (like the signature
+	 * cache): acceptance decisions are unchanged, only deduplicated.
+	 *
+	 * <p>In-memory by design: after a restart the pending backlog is
+	 * re-verified once, then marked again.
+	 */
+	private final java.util.Set<Sha256Hash> txValidatedBlocks = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	private static final int TX_VALIDATED_MAX_ENTRIES = 100_000;
+
+	public void markTxValidated(Sha256Hash blockHash) {
+		if (txValidatedBlocks.size() >= TX_VALIDATED_MAX_ENTRIES) {
+			txValidatedBlocks.clear();
+		}
+		txValidatedBlocks.add(blockHash);
+	}
+
+	public boolean isTxValidated(Sha256Hash blockHash) {
+		return txValidatedBlocks.contains(blockHash);
+	}
+
 	/**
 	 * Retrieves a block's serialized data from cache if available, otherwise loads from database.
 	 * 

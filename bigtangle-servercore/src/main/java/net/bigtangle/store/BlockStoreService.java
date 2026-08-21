@@ -483,6 +483,11 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		} finally {
 			blockStore.defaultDatabaseBatchWrite();
 		}
+		if (!batch && SolidityState.State.Success.equals(solidityState.getState())) {
+			// Full solidity check (incl. every tx) passed on this node — record
+			// it so beacon connect skips the redundant re-verification.
+			cacheBlockService.markTxValidated(block.getHash());
+		}
 
 		return true;
 	}

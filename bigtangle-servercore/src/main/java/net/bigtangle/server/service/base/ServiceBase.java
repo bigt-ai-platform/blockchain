@@ -615,6 +615,17 @@ public abstract class ServiceBase {
 		if (eval != null && eval.getSolid() == 2) {
 			return;
 		}
+		// Every tx was already fully verified on this node (mempool ingest for
+		// local batch blocks, full solidity check at peer-block ingest): skip
+		// the redundant O(txs) re-verification and go straight to the
+		// solidify side effects (UTXO connect, type-specific handlers).
+		if (eval != null && eval.getSolid() >= 0
+				&& cacheBlockService.isTxValidated(block.getHash())
+				&& store.get(block.getPrevBlockHash()) != null
+				&& store.get(block.getPrevBranchBlockHash()) != null) {
+			solidifyBlock(block, SolidityState.getSuccessState(), false, store);
+			return;
+		}
 		SolidityState solidityState = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper).checkSolidity(block, false, store, false);
 		if (SolidityState.State.MissingPredecessor.equals(solidityState.getState())) {

@@ -43,7 +43,7 @@ public final class PQScriptUtils {
      * solidity check.  Only successes are cached (failures stay cheap to
      * re-evaluate and cannot be poisoned by timing).
      */
-    private static final Cache<VerifyKey, Boolean> verifyCache = CacheBuilder.newBuilder()
+    private static final Cache<Sha256Hash, Boolean> verifyCache = CacheBuilder.newBuilder()
             .maximumSize(100_000).build();
 
     /** Lazy init to avoid classloading order issues. */
@@ -145,14 +145,25 @@ public final class PQScriptUtils {
      */
     public static boolean verifyPQ(byte[] prefixedPubkey, byte[] sigBytes, Sha256Hash baseSighash,
             boolean requireSlhDsa) {
-        VerifyKey key = new VerifyKey(prefixedPubkey, sigBytes, baseSighash.getBytes(), requireSlhDsa);
-        Boolean cached = verifyCache.getIfPresent(key);
+        // Key on a digest, not the raw arrays: an ML-DSA-87 pubkey+sig pair is
+        // ~7 KB, so 100k raw-array entries would pin ~700 MB of heap.
+        byte[] keyMaterial = new byte[1 + prefixedPubkey.length + sigBytes.length + baseSighash.getBytes().length];
+        keyMaterial[0] = requireSlhDsa ? (byte) 1 : (byte) 0;
+        int off = 1;
+        System.arraycopy(prefixedPubkey, 0, keyMaterial, off, prefixedPubkey.length);
+        off += prefixedPubkey.length;
+        System.arraycopy(sigBytes, 0, keyMaterial, off, sigBytes.length);
+        off += sigBytes.length;
+        System.arraycopy(baseSighash.getBytes(), 0, keyMaterial, off, baseSighash.getBytes().length);
+        Sha256Hash digestKey = Sha256Hash.of(keyMaterial);
+
+        Boolean cached = verifyCache.getIfPresent(digestKey);
         if (cached != null) return cached;
         boolean ok = doVerifyPQ(prefixedPubkey, sigBytes, baseSighash, requireSlhDsa);
         if (ok) {
             try {
                 // Concurrent duplicate computes are fine: result is deterministic.
-                verifyCache.get(key, () -> true);
+                verifyCache.get(digestKey, () -> true);
             } catch (ExecutionException ignored) {
                 // Never fails for this loader; fall through.
             }
@@ -260,38 +271,5 @@ public final class PQScriptUtils {
     @Deprecated
     public static boolean verifyProposerSignature(KeyBundle keyBundle, SignatureBundle sigBundle, byte[] signingHash) {
         return verifyProposerSignature(keyBundle, sigBundle, signingHash, true);
-    }
-
-    /* ── Verify cache key ──────────────────────────────────────────────── */
-
-    /** Immutable cache key covering every input of a PQ verification. */
-    private static final class VerifyKey {
-        final byte[] pubkey;
-        final byte[] signature;
-        final byte[] sighash;
-        final boolean requireSlhDsa;
-        final int hash;
-
-        VerifyKey(byte[] pubkey, byte[] signature, byte[] sighash, boolean requireSlhDsa) {
-            this.pubkey = pubkey;
-            this.signature = signature;
-            this.sighash = sighash;
-            this.requireSlhDsa = requireSlhDsa;
-            int h = 31 * Arrays.hashCode(pubkey) + Arrays.hashCode(signature);
-            h = 31 * h + Arrays.hashCode(sighash);
-            this.hash = 31 * h + (requireSlhDsa ? 1 : 0);
-        }
-
-        @Override public boolean equals(Object o) {
-            if (!(o instanceof VerifyKey)) return false;
-            VerifyKey other = (VerifyKey) o;
-            return hash == other.hash
-                    && requireSlhDsa == other.requireSlhDsa
-                    && Arrays.equals(pubkey, other.pubkey)
-                    && Arrays.equals(signature, other.signature)
-                    && Arrays.equals(sighash, other.sighash);
-        }
-
-        @Override public int hashCode() { return hash; }
     }
 }

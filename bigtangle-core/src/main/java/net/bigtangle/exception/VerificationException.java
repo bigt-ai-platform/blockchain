@@ -254,6 +254,18 @@ public class VerificationException extends RuntimeException {
             super(msg);
         }
     }
+
+    /**
+     * Mempool admission control: the node's mempool is at capacity
+     * ({@code server.mempoolMaxTx}).  The submission is rejected instead of
+     * queued so sustained overload sheds load at the edge rather than
+     * collapsing the confirm path.
+     */
+    public static class MempoolFullException extends VerificationException {
+        public MempoolFullException(long size, long max) {
+            super("Mempool full: " + size + " pending tx (max " + max + "), retry later");
+        }
+    }
     public static class OrderImpossibleException extends VerificationException {
         public OrderImpossibleException(String msg) {
             super(msg);

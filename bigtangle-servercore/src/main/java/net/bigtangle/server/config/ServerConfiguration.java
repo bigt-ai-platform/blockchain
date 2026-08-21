@@ -121,6 +121,16 @@ public class ServerConfiguration {
     private Boolean runKafkaStream = false;
 
     /**
+     * Maximum number of transactions admitted to the mempool.  When the
+     * mempool is at capacity, new submissions are rejected with
+     * {@code MempoolFullException} instead of being queued: an unbounded
+     * backlog makes every beacon-connect cycle slower (validation work scales
+     * with the unconfirmed set) and collapses throughput under sustained
+     * overload.  Shedding load at the edge keeps the confirm path bounded.
+     */
+    private int mempoolMaxTx = 50_000;
+
+    /**
      * Whether proof-of-work is required for new blocks.
      * Disable on test networks for higher throughput.
      */
@@ -443,6 +453,14 @@ public class ServerConfiguration {
      */
     public void setRunKafkaStream(Boolean runKafkaStream) {
         this.runKafkaStream = runKafkaStream;
+    }
+
+    public int getMempoolMaxTx() {
+        return mempoolMaxTx;
+    }
+
+    public void setMempoolMaxTx(int mempoolMaxTx) {
+        this.mempoolMaxTx = mempoolMaxTx;
     }
 
     /**

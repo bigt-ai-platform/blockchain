@@ -179,10 +179,20 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			if (block.getBlock().getHeight() < cutoffHeight)
 				throw new VerificationException("Referenced blocks are below cutoff height.");
 
+			if (cacheBlockService.isTxValidated(hash)) {
+				// Every input of this block was resolved against a local UTXO
+				// when the tx was verified on this node, so its source blocks
+				// existed here and are never pruned while unconfirmed. Skip
+				// the per-required-hash walk — it used to deserialize every
+				// ancestor block and dominated beacon connect under load.
+				continue;
+			}
+
 			Set<Sha256Hash> requiredBlocks = getAllRequiredBlockHashes(block.getBlock());
 			for (Sha256Hash reqHash : requiredBlocks) {
-				BlockWrap req = getBlockWrap(reqHash, store);
-				if (req == null)
+				// Existence check only: loading the full block here
+				// deserialized megabytes per required hash for no benefit.
+				if (store.getBlockEvaluationsByhashs(reqHash) == null)
 					return SolidityState.from(reqHash, true);
 			}
 		}

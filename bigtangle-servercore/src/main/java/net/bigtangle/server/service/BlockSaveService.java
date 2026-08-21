@@ -128,6 +128,10 @@ public class BlockSaveService {
 			blockgraph.addNonChain(block, true, store, true, true);
 		}
 		store.setBatchDurability(false);
+		// Every tx in a batch block passed mempool verification on this node
+		// before assembly — record that so beacon connect skips the redundant
+		// per-tx re-verification pass.
+		cacheBlockService.markTxValidated(block.getHash());
 		accumulateBlockFees(block, store);
 		markStatus(block, net.bigtangle.server.data.TransactionStatus.BATCHED, store);
 		notifyCrosstangle(block, store);
