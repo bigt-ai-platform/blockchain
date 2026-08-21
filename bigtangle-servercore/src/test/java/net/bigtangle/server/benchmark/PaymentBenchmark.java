@@ -21,6 +21,7 @@ import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Utils;
 import net.bigtangle.layer0.params.Layer0TestParams;
+import net.bigtangle.params.MainNetParams;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
@@ -52,7 +53,8 @@ public class PaymentBenchmark {
         int clients = Integer.parseInt(System.getProperty("benchmark.clients", "30"));
         int paymentsPerClient = Integer.parseInt(System.getProperty("benchmark.payments", "2000"));
 
-        NetworkParameters params = new Layer0TestParams();
+        NetworkParameters params = "main".equals(System.getProperty("benchmark.net", "test"))
+                ? MainNetParams.get() : new Layer0TestParams();
         log.info("Server: {}", serverUrl);
 
         List<PQKey> clientKeys = new ArrayList<>();

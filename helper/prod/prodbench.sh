@@ -138,12 +138,13 @@ remote "$CHECK_HOST" "export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64; expor
 MVN_EXIT=${PIPESTATUS[0]}
 set -e
 
-# ---- Parse results from surefire report --------------------------------------
-REPORT="$BUILD_DIR/bigtangle-servercore/target/surefire-reports/net.bigtangle.server.benchmark.MaxTpsBenchmarkProd-output.txt"
+# ---- Parse results from teed maven output -------------------------------------
+# (surefire -output.txt is only written when redirectTestOutputToFile is enabled,
+#  so the metrics are read from the local tee of the maven stdout instead)
 header "Results"
-results=$(remote "$CHECK_HOST" "grep -E 'Total tx:|Submit wall:|Confirm wall:|Submit TPS:|Confirm TPS:|Confirm p50:|Confirm p95:|Confirm p99:' '$REPORT'" 2>/dev/null || true)
+results=$(grep -E 'Total tx:|Submit wall:|Confirm wall:|Submit TPS:|Confirm TPS:|Confirm p50:|Confirm p95:|Confirm p99:' /tmp/prodbench.out 2>/dev/null || true)
 if [ -z "$results" ]; then
-    echo -e "${RED}No benchmark metrics found in surefire output.${NC}"
+    echo -e "${RED}No benchmark metrics found in maven output.${NC}"
     grep -iE "FAILURE|ERROR|BUILD FAILURE" /tmp/prodbench.out | tail -8 || true
     exit 1
 fi
