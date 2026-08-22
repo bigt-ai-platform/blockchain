@@ -297,6 +297,14 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			log.info("selectChainblockqueue with size  {}", cbs.size());
 			// check only do add if there is longer chain as saved in database
 			TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
+			// Queue hygiene: entries at or below the confirmed tip can never
+			// extend it — they are dead weight that would otherwise clog the
+			// queue forever (observed as a 4k-row livelock once one low-cl row
+			// topped the ordered select). Drop them instead of re-selecting.
+			cbs.removeIf(cb -> cb.getChainlength() <= maxConfirmedReward.getChainLength());
+			if (cbs.isEmpty()) {
+				return;
+			}
 			ChainBlockQueue maxFromQuery = cbs.get(cbs.size() - 1);
 			if (!updatelowchain && maxConfirmedReward.getChainLength() > maxFromQuery.getChainlength()) {
 				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery, maxConfirmedReward);
