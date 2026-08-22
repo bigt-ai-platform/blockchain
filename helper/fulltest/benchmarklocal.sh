@@ -159,7 +159,7 @@ MVN_ARGS=(-Dtest=ConfirmedPaymentBenchmark -Dbench.tx="${TX}" -Dbench.clients="$
 -Dbench.batch="${BATCH}" -Dbatch.minTx="${MIN_TX}" -Dbatch.maxBatchAgeMs="${MAX_AGE}" \
 -Dpos.slotIntervalMs="${SLOT_MS}" -Ddb.dbName="${DB_NAME}" -Ddb.port="${DB_PORT}" \
 "-DargLine=-Xmx${HEAP} --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED" \
--DfailIfNoTests=false)
+-DforkedProcessTimeoutInSeconds=0 -DfailIfNoTests=false)
 
 header "Running ConfirmedPaymentBenchmark (logging to ${OUT})"
 set +e

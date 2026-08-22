@@ -591,9 +591,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private static final Map<Sha256Hash, Block> PARSED_BLOCK_CACHE = new ConcurrentHashMap<>();
 	// Bound by MEMORY, not ambition: a parsed 2000-tx PQ batch block is
 	// ~15-20MB live, so even 1024 entries would pin ~20GB. The memo only has
-	// to bridge from save to the NEXT sweep (<1 slot); 64 entries cover every
-	// block drained within one cycle at batch.minTx=50000 (25 blocks).
-	private static final int PARSED_BLOCK_CACHE_MAX = 64;
+	// to bridge from save to the NEXT sweep (<1 slot); 32 entries cover one
+	// drain window (batch.minTx=50000 drains ~25 blocks) with headroom.
+	private static final int PARSED_BLOCK_CACHE_MAX = 32;
 
 	/**
 	 * Registers a just-built block so the next sweep skips re-parsing it (the

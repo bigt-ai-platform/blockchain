@@ -19,6 +19,9 @@
 	<packaging>pom</packaging>
 	<version>0.6.0</version>
 	<properties>
+		<!-- Overridable via -DargLine=... (e.g. benchmark heap sizing); the
+		     surefire argLine below appends the mandatory add-exports. -->
+		<argLine></argLine>
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
 		<maven.compiler.parameters>true</maven.compiler.parameters>
@@ -134,7 +137,7 @@
 					</excludes>
 					<properties>
 					</properties>
-					<argLine>--add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED</argLine>
+					<argLine>${argLine} --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED</argLine>
 					<forkedProcessTimeoutInSeconds>1500</forkedProcessTimeoutInSeconds>
 				</configuration>
 			</plugin>
