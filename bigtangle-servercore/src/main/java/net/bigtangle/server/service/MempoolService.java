@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.script.Script;
 import net.bigtangle.core.ContractEventInfo;
@@ -55,7 +56,15 @@ public class MempoolService {
 
     private final AtomicInteger totalSubmitted = new AtomicInteger(0);
 
-    private final ConcurrentHashMap<TransactionOutPoint, Transaction> spentOutpoints = new ConcurrentHashMap<>();
+    /**
+     * Double-spend guard: outpoint -> hash of the pending tx spending it.
+     * The VALUE is only a compare-token for guarded removal (each outpoint is
+     * claimed exactly once — {@link #checkMempoolConflicts} rejects a second
+     * spend), so storing the 32-byte hash instead of the full parsed
+     * Transaction avoids pinning every submitted-but-unconfirmed tx in memory
+     * (~2 GB at 200k outstanding txs).
+     */
+    private final ConcurrentHashMap<TransactionOutPoint, Sha256Hash> spentOutpoints = new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<Transaction, Set<TransactionOutPoint>> txOutpoints = new ConcurrentHashMap<>();
 
@@ -205,7 +214,7 @@ public class MempoolService {
             }
         }
         for (TransactionOutPoint outpoint : outpoints) {
-            spentOutpoints.put(outpoint, tx);
+            spentOutpoints.put(outpoint, tx.getHash());
         }
         if (!outpoints.isEmpty()) {
             txOutpoints.put(tx, outpoints);
@@ -523,7 +532,7 @@ public class MempoolService {
         try {
             net.bigtangle.store.BlockStoreInterface store = storeService.getStore();
             try {
-                for (Map.Entry<TransactionOutPoint, Transaction> e : new ArrayList<>(spentOutpoints.entrySet())) {
+                for (Map.Entry<TransactionOutPoint, Sha256Hash> e : new ArrayList<>(spentOutpoints.entrySet())) {
                     TransactionOutPoint op = e.getKey();
                     try {
                         net.bigtangle.core.UTXO u = store.getTransactionOutput(op.getBlockHash(), op.getTxHash(),

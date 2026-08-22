@@ -437,12 +437,61 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * a skipped block that is never confirmed is simply picked up again by the
 	 * next sweep that no longer sees it in the skip set.
 	 */
+	/**
+	 * Bounded-retry rehabilitation for orphaned blocks marked invalid
+	 * (solid = -1). A block that fails ONE re-validation during a reorg window
+	 * would otherwise be excluded from every future reference sweep by the
+	 * {@code solid > -1} filter (SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL)
+	 * and starve forever even though its content is valid — observed as token
+	 * creations that never confirm when submitted into a volatile slot window.
+	 *
+	 * <p>Resetting solid to 0 re-offers the block to the next beacon; a
+	 * genuinely bad block simply fails again and burns its bounded budget
+	 * ({@value #INVALID_RETRY_LIMIT} attempts), after which it stays dead.
+	 * Double-spends are not resurrected: the sweep re-checks
+	 * {@code hasSpentInputs} for every candidate regardless of solid.
+	 */
+	protected final java.util.concurrent.ConcurrentHashMap<Sha256Hash, Integer> invalidRetryCounts = new java.util.concurrent.ConcurrentHashMap<>();
+	static final int INVALID_RETRY_LIMIT = Integer.getInteger("pos.invalidRetryLimit", 20);
+
+	public void rehabilitateInvalidBlocks(BlockStoreInterface store, long cutoffheight) {
+		if (!Boolean.parseBoolean(System.getProperty("pos.invalidBlockRetry", "true"))) {
+			return;
+		}
+		try {
+			List<Sha256Hash> hashes = store.invalidNonChainHashes(cutoffheight, 200);
+			if (hashes.isEmpty()) {
+				return;
+			}
+			int reset = 0;
+			for (Sha256Hash hash : hashes) {
+				int attempts = invalidRetryCounts.merge(hash, 1, Integer::sum);
+				if (attempts <= INVALID_RETRY_LIMIT) {
+					store.updateBlockEvaluationSolid(hash, 0);
+					cacheBlockService.evictBlockEvaluation(hash);
+					reset++;
+				}
+			}
+			if (reset > 0) {
+				logger.info("rehabilitateInvalidBlocks: reset {} invalid non-chain block(s) above cutoff {}",
+						reset, cutoffheight);
+			}
+			if (invalidRetryCounts.size() > 50_000) {
+				// Bound memory; stale entries only matter while blocks are unconfirmed.
+				invalidRetryCounts.clear();
+			}
+		} catch (Exception e) {
+			logger.debug("rehabilitateInvalidBlocks failed", e);
+		}
+	}
+
 	public void addAllUnconfirmedBlocks(Set<BlockWrap> blocks, long cutoffheight, List<BlockType> blocktypes,
 			boolean checkChainlength, BlockStoreInterface store, Set<Sha256Hash> alreadyReferenced)
 			throws BlockStoreException {
 		if (!Boolean.parseBoolean(System.getProperty("pos.referenceAllBlocks", "true"))) {
 			return;
 		}
+		rehabilitateInvalidBlocks(store, cutoffheight);
 		long perfStart = System.currentTimeMillis();
 		long queryMs = 0, loadMs = 0, conflictMs = 0;
 		int scanned = 0, skipped = 0;
@@ -540,7 +589,11 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	 * Evaluation is still fetched fresh per call.
 	 */
 	private static final Map<Sha256Hash, Block> PARSED_BLOCK_CACHE = new ConcurrentHashMap<>();
-	private static final int PARSED_BLOCK_CACHE_MAX = 1024;
+	// Bound by MEMORY, not ambition: a parsed 2000-tx PQ batch block is
+	// ~15-20MB live, so even 1024 entries would pin ~20GB. The memo only has
+	// to bridge from save to the NEXT sweep (<1 slot); 64 entries cover every
+	// block drained within one cycle at batch.minTx=50000 (25 blocks).
+	private static final int PARSED_BLOCK_CACHE_MAX = 64;
 
 	/**
 	 * Registers a just-built block so the next sweep skips re-parsing it (the

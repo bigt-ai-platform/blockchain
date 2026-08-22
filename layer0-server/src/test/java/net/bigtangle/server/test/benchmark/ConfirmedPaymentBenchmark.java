@@ -134,7 +134,10 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		validatorDutyService.restoreDutyState();
 
 		// ---- 2. Wait for the beacon pipeline to produce + confirm blocks.
-		long deadline = System.currentTimeMillis() + 60_000;
+		// Scale the wait with the configured slot interval: reaching
+		// chainLength>=2 takes ~2 slots, and a 60s-slot run needs ~2 minutes.
+		long slotIntervalMs = Long.getLong("pos.slotIntervalMs", 12_000L);
+		long deadline = System.currentTimeMillis() + Math.max(60_000, 3 * slotIntervalMs);
 		long chainLength = 0;
 		while (System.currentTimeMillis() < deadline) {
 			chainLength = cacheBlockService.getMaxConfirmedReward(store).getChainLength();
@@ -148,15 +151,20 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		log.info("Beacon pipeline live: chainLength={}", chainLength);
 
 		// ---- 3. Fund one wallet per tx with a CONFIRMED spendable BC UTXO.
+		// Memory model: keep only the 32-byte ML-DSA SEED per wallet (~6 MB
+		// total). A materialized PQKey holds the fully-expanded ~25KB private
+		// key, so 200k live keys would need ~6GB of heap; keys are re-derived
+		// on demand during the build phase instead.
 		Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-		List<PQKey> walletKeys = new ArrayList<>();
-		for (int i = 0; i < totalTx; i++) {
-			walletKeys.add(PQKey.createNew());
-		}
-		PQKey recipient = PQKey.createNew();
-		String recvAddr = Address.fromHash160(networkParameters, recipient.getPubKeyHash()).toBase58();
+		byte[][] walletSeeds = new byte[totalTx][];
+		String[] walletAddrs = new String[totalTx];
 		long fundIndex = 1_000_000_000L;
-		for (PQKey k : walletKeys) {
+		List<UTXO> fundBatch = new ArrayList<>(5000);
+		for (int i = 0; i < totalTx; i++) {
+			PQKey k = PQKey.createNew();
+			walletSeeds[i] = Utils.HEX.decode(k.getPrivateKeySeedAsHex());
+			String addr = Address.fromHash160(networkParameters, k.getPubKeyHash()).toBase58();
+			walletAddrs[i] = addr;
 			UTXO utxo = new UTXO();
 			utxo.setHash(genesis.getTransactions().get(0).getHash());
 			utxo.setIndex(fundIndex++);
@@ -165,16 +173,25 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 			utxo.setCoinbase(true);
 			utxo.setScript(ScriptBuilder.createOutputScript(
 					Address.fromHash160(networkParameters, k.getPubKeyHash())));
-			utxo.setAddress(Address.fromHash160(networkParameters, k.getPubKeyHash()).toBase58());
+			utxo.setAddress(addr);
 			utxo.setBlockHash(genesis.getHash());
 			utxo.setTokenid(NetworkParameters.BIGTANGLE_TOKENID_STRING);
 			utxo.setConfirmed(true);
 			utxo.setSpent(false);
-			store.addUnspentTransactionOutput(new ArrayList<>(List.of(utxo)));
+			fundBatch.add(utxo);
+			if (fundBatch.size() >= 5000) {
+				store.addUnspentTransactionOutput(fundBatch);
+				fundBatch.clear();
+			}
 		}
-		log.info("Funded {} wallets with {} BC each", walletKeys.size(), fundAmount);
+		if (!fundBatch.isEmpty()) {
+			store.addUnspentTransactionOutput(fundBatch);
+		}
+		log.info("Funded {} wallets with {} BC each", totalTx, fundAmount);
 
 		// ---- 4. Pre-build + sign all transactions (client CPU, not timed).
+		PQKey recipient = PQKey.createNew();
+		String recvAddr = Address.fromHash160(networkParameters, recipient.getPubKeyHash()).toBase58();
 		int txPerClient = Math.max(1, totalTx / clients);
 		Transaction[] allTxs = new Transaction[totalTx];
 		AtomicInteger built = new AtomicInteger(0);
@@ -190,7 +207,7 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 						if (idx >= totalTx) {
 							break;
 						}
-						PQKey wk = walletKeys.get(idx);
+						PQKey wk = PQKey.fromMLDSA(walletSeeds[idx]);
 						UTXO utxo = new UTXO();
 						utxo.setHash(genesis.getTransactions().get(0).getHash());
 						utxo.setIndex(1_000_000_000L + idx);
@@ -220,7 +237,7 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 				}
 			}, buildPool);
 		}
-		CompletableFuture.allOf(buildFutures).get(10, TimeUnit.MINUTES);
+		CompletableFuture.allOf(buildFutures).get(30, TimeUnit.MINUTES);
 		buildPool.shutdownNow();
 		log.info("Pre-built {}/{} transactions", built.get(), totalTx);
 
@@ -265,7 +282,9 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 				}
 			}, pool);
 		}
-		CompletableFuture.allOf(futures).get(10, TimeUnit.MINUTES);
+		// Submit wall scales with load: 200k txs under backlog pressure can
+		// legitimately take longer than a fixed 10-minute window.
+		CompletableFuture.allOf(futures).get(Math.max(10, totalTx / 200), TimeUnit.MINUTES);
 		pool.shutdownNow();
 		long submitWallMs = (System.nanoTime() - submitWallStart) / 1_000_000;
 		int ok = submitted.get();
