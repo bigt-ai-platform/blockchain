@@ -8,6 +8,7 @@ import com.google.common.base.Stopwatch;
 
 import jakarta.servlet.http.HttpServletResponse;
 import net.bigtangle.core.Address;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UTXO;
 import net.bigtangle.core.Utils;
 import net.bigtangle.core.PQKey;
@@ -55,9 +56,45 @@ public class DispatcherController extends BaseDispatcherController {
 		return "Bigtangle Social L1";
 	}
 
+	/**
+	 * Social-record ingestion: submitted transactions carrying a social.v1
+	 * MemoInfo payload are validated (schema v2) and converted to typed
+	 * UserData transactions (dataclassname="social.v1", data=record JSON).
+	 * This is the consensus-side gate; group membership state checks belong
+	 * in the confirmation handler as the social store matures.
+	 */
+	private void promoteSocialRecord(Transaction tx) throws Exception {
+		String memo = tx.getMemo();
+		if (memo == null || !memo.contains("social.v1")) return;
+		Map<String, Object> memoMap = Json.jsonmapper().readValue(memo, Map.class);
+		Object kvObj = memoMap.get("kv");
+		if (!(kvObj instanceof List)) throw new IllegalArgumentException("malformed social memo");
+		for (Object o : (List<?>) kvObj) {
+			@SuppressWarnings("unchecked")
+			Map<String, Object> kv = (Map<String, Object>) o;
+			if (!"social.v1".equals(kv.get("key"))) continue;
+			String recordJson = String.valueOf(kv.get("value"));
+			Map<String, Object> rec = Json.jsonmapper().readValue(recordJson, Map.class);
+			if (!String.valueOf(rec.get("type")).startsWith("social."))
+				throw new IllegalArgumentException("unknown social type");
+			if (rec.get("from") == null || rec.get("to") == null)
+				throw new IllegalArgumentException("from/to required");
+			tx.setMemo(null);
+			tx.setDataClassName(net.bigtangle.core.DataClassName.SocialRecord.name());
+			tx.setData(recordJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			return;
+		}
+	}
+
 	@Override
 	protected boolean handleLayerSpecific(ReqCmd reqCmd, byte[] bodyByte, HttpServletResponse httpServletResponse,
 			Stopwatch watch, BlockStoreInterface store, String reqCmdName) throws Exception {
+		if (reqCmd == ReqCmd.submitTransaction) {
+			Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
+			promoteSocialRecord(tx);
+			// re-serialize the (possibly promoted) tx for base handling
+			bodyByte = tx.bitcoinSerialize();
+		}
 		switch (reqCmd) {
 		case stakeDeposit: {
 			String reqStr = new String(bodyByte, java.nio.charset.StandardCharsets.UTF_8);
