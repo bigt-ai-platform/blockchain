@@ -52,7 +52,7 @@ public class DispatcherController extends BaseDispatcherController {
 
 	@Override
 	protected String getChainName() {
-		return "Bigtangle Payment L1";
+		return "Bigtangle Social L1";
 	}
 
 	@Override

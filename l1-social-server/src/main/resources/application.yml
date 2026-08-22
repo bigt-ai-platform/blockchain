@@ -1,0 +1,62 @@
+server:
+  port: ${SERVER_PORT:8091}
+  net: ${SERVER_NET:Test}
+  requester: ${REQUESTER:}
+  serverversion: ${SERVERVERSION:0.5.0}
+  clientversion: ${CLIENTVERSION:0.5.0}
+  ssl:
+    enabled: ${SSL:false}
+    key-store: ${KEYSTORE:src/main/resources/ca.pkcs12}
+    key-store-password: ${KEYSTOREPW:changeit}
+    keyStoreType: ${KEYSTORETYPE:PKCS12}
+  permissioned: ${PERMISSIONED:false}
+  permissionadmin: ${PERMISSIONADMIN:mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG}
+  myserverblockOnly: ${MYSERVERBLOCKONLY:false}
+  fundEnabled: ${FUND_ENABLED:false}
+  runKafkaStream: ${RUNKAFKASTREAM:true}
+  createtable: ${CREATETABLE:true}
+  checkpoint: ${CHECKPOINT:-1}
+  servermode: ${SERVERMODE:Fullnode}
+  deniedIPlist: ${DENIEDIPLIST:}
+  ipcheck: ${IPCHECK:false}
+  allowIPlist: ${ALLOWIPLIST:}
+  syncblocks: ${SYNCBLOCKS:1000}
+
+db:
+  hostname: ${DB_HOSTNAME:localhost}
+  port: ${DB_PORT:5432}
+  dbName: ${DB_NAME:payment}
+  username: ${DB_USERNAME:root}
+  password: ${DB_PASSWORD:test1234}
+
+service:
+  schedule:
+    chainlength: ${SERVICE_CHAINLENGTH:false}
+    microbatch: ${SERVICE_MICROBATCH:true}
+    blockbatch: ${SERVICE_BLOCKBATCH:false}
+    sync: ${SERVICE_SYNC:true}
+    syncrate: ${SERVICE_SYNC_RATE:50000}
+    blockbatchrate: ${SERVICE_BLOCKBATCH_RATE:50000}
+    initsync: ${SERVICE_INITSYNC:true}
+
+kafka:
+  bootstrapServers: ${BOOT_STRAP_SERVERS:}
+  topicOutName: ${TOPIC_OUT_NAME:bigtangle}
+  consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
+
+management:
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    prometheus:
+      enabled: true
+
+pos:
+  validatorKey: ${POS_VALIDATOR_KEY:}
+  slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}

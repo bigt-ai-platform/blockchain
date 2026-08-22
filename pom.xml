@@ -46,6 +46,7 @@
 		<module>l1-pai-server</module>
 		<module>l1-nft-server</module>
 		<module>l1-payment-server</module>
+		<module>l1-social-server</module>
 
 	</modules>
 	<dependencies>
