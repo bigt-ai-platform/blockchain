@@ -152,3 +152,14 @@ Relevant tunables: `-Dbench.tx` / `-Dbench.clients` / `-Dbench.batch`
 `-Dpos.slotIntervalMs` (slot cadence), `server.mempoolMaxTx` (mempool
 admission cap), `net.bigtangle.pq.dualActivationHeight` (re-enables mandatory
 SLH-DSA).
+
+## Future direction: server-side token assembly
+
+Token creation currently requires wallets to assemble a `TOKEN_CREATION`
+block skeleton (tip positions via `getTips`, re-parented by the server at
+`signToken`). End-state option: wallets submit only a signed token request
+payload and the node assembles the block itself once multi-signatures are
+complete — deleting wallet-side block handling entirely. Deferred: the
+multi-signature gate would move in front of batch assembly, which needs
+careful failure semantics so an insufficiently-signed request cannot reject
+an unrelated batch block.

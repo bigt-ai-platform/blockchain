@@ -521,7 +521,7 @@ public class Wallet extends WalletBase {
 						Json.jsonmapper().writeValueAsString(requestParam)),
 				HashMap.class);
 		@SuppressWarnings("unchecked")
-		HashMap<String, Object> tips = Json.jsonmapper().readValue((String) resp.get("data"), HashMap.class);
+		HashMap<String, Object> tips = Json.jsonmapper().readValue((String) resp.get("text"), HashMap.class);
 		Sha256Hash prev = Sha256Hash.wrap((String) tips.get("prevBlockHash"));
 		Sha256Hash branch = Sha256Hash.wrap((String) tips.get("prevBranchBlockHash"));
 		long lastMiningRewardBlock = ((Number) tips.get("lastMiningRewardBlock")).longValue();

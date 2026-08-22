@@ -205,6 +205,14 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				return;
 			}
 			switch (reqCmd0000) {
+			case getTip: {
+				// Legacy full-block tip — used by bigtangle-ts Wallet.getTip()
+				// and the benchmark suite. Returns the rolling block prototype
+				// as {"dataHex": ...} for OkHttp3Util.postAndGetBlock.
+				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
+				this.outPointBinaryArray(httpServletResponse, rollingBlock.bitcoinSerialize(), reqCmd);
+			}
+				break;
 			case getTips: {
 				// Lightweight tip positions for client-side block assembly.
 				// Replaces the old getTip full-block prototype: clients build
