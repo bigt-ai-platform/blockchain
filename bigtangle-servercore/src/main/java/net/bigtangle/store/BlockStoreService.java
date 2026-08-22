@@ -310,12 +310,10 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery, maxConfirmedReward);
 				return;
 			}
-			// Ordered by chainlength ASC: reward-chain parents are monotonic in
-			// cl, so once an entry is missing its dependency every later entry
-			// depends on it too. Early-break instead of churning through
-			// hundreds of doomed entries per tick (a lagging node logged 985
-			// MissingDependency warnings per cycle, starving its own catch-up).
-			boolean missingDependency = false;
+			// NOTE: do NOT break on MissingDependency — sibling fork blocks can
+			// share a chainlength while only some are canonical, so later
+			// entries may still connect. Skip-and-keep queued for retry.
+			int deferred = 0;
 			for (ChainBlockQueue chainBlockQueue : cbs) {
 				try {
 					Block block = networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock());
@@ -332,10 +330,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					// The beacon references DAG blocks this node has not synced
 					// yet. Dropping it would fork the chain: keep it queued and
 					// let SyncBlockService request the missing parents.
-					log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}",
-							e.getMessage());
-					missingDependency = true;
-					break;
+					deferred++;
 				} catch (Exception e) {
 					deleteChainQueue(chainBlockQueue, store);
 					if (throwException) {
@@ -344,8 +339,9 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
 				}
 			}
-			if (missingDependency) {
-				log.info("chain-connect deferred at first unsynced parent; {} queue entries remain", cbs.size());
+			if (deferred > 0) {
+				log.info("chain-connect deferred {} of {} queue entries awaiting referenced blocks", deferred,
+						cbs.size());
 			}
 			log.info("saveChainConnected time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
