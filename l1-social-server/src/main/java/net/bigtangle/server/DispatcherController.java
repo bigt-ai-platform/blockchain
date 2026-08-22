@@ -63,7 +63,7 @@ public class DispatcherController extends BaseDispatcherController {
 	 * This is the consensus-side gate; group membership state checks belong
 	 * in the confirmation handler as the social store matures.
 	 */
-	private void promoteSocialRecord(Transaction tx) throws Exception {
+	private void promoteSocialRecord(Transaction tx, BlockStoreInterface store) throws Exception {
 		String memo = tx.getMemo();
 		if (memo == null || !memo.contains("social.v1")) return;
 		Map<String, Object> memoMap = Json.jsonmapper().readValue(memo, Map.class);
@@ -91,7 +91,7 @@ public class DispatcherController extends BaseDispatcherController {
 			Stopwatch watch, BlockStoreInterface store, String reqCmdName) throws Exception {
 		if (reqCmd == ReqCmd.submitTransaction) {
 			Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
-			promoteSocialRecord(tx);
+			promoteSocialRecord(tx, store);
 			// re-serialize the (possibly promoted) tx for base handling
 			bodyByte = tx.bitcoinSerialize();
 		}
