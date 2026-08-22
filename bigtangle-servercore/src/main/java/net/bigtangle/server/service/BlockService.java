@@ -142,10 +142,12 @@ public class BlockService {
 	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, BlockStoreInterface store)
 			throws BlockStoreException {
 
-		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
-		long my = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.getCurrentCutoffHeight(maxConfirmedReward, store);
-		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(Math.max(cutoffHeight, my)));
+		// Serve from the REQUESTER's cutoff, not ours: a lagging node asks for
+		// everything above its own confirmed tip. Math.max with this node's
+		// head-derived cutoff excluded exactly the range the requester was
+		// missing, making bulk repair impossible (it always returned 0 blocks
+		// to any node behind the proposer).
+		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(cutoffHeight));
 	}
 
 	/*

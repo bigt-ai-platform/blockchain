@@ -228,6 +228,11 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash, block "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
+	/** Bulk repair sweep: all non-beacon blocks above the cutoff, connected or not. */
+	protected final String SELECT_NONCHAIN_BLOCKS_FROM_HEIGHT_SQL = "SELECT hash, block "
+			+ "FROM blocks WHERE height >= ? AND solid > -1 "
+			+ "AND blocktype <> 'BLOCKTYPE_BEACON' order by height desc ";
+
 	protected final String SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
@@ -985,7 +990,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public List<byte[]> blocksFromNonChainHeigth(long heigth) {
 		List<byte[]> re = new ArrayList<>();
 
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_BLOCKS_FROM_AND_NOT_CHAINLENGTH_SQL)) {
+		// Bulk repair for a lagging node: serve every non-beacon block above
+		// its cutoff, CONNECTED or not. The previous chainlength = -1 filter
+		// made this endpoint useless on healthy peers (they have no unconnected
+		// blocks left), so a node behind the mesh could never pull the
+		// referenced transfer blocks its queued beacons depend on.
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_NONCHAIN_BLOCKS_FROM_HEIGHT_SQL)) {
 			s.setLong(1, heigth);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
