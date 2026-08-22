@@ -167,15 +167,42 @@ public class MempoolService {
         // No store opened here: transactions without spendable inputs (e.g.
         // orders) never need one, so the open stays lazy inside
         // {@link #verifyTransaction(Transaction)}.
+        if (isDuplicateResubmission(tx)) {
+            return;
+        }
         checkMempoolConflicts(tx);
         verifyTransaction(tx);
         finishCheckAndAdd(tx);
     }
 
     private void checkAndAdd(Transaction tx, BlockStoreInterface sharedStore) {
+        if (isDuplicateResubmission(tx)) {
+            return;
+        }
         checkMempoolConflicts(tx);
         verifyTransaction(tx, sharedStore);
         finishCheckAndAdd(tx);
+    }
+
+    /**
+     * Txid idempotency: clients legitimately retry submissions whose response
+     * timed out, and input-less transactions (orders, userdata) have no
+     * outpoint guard, so a retried copy otherwise passes every check again and
+     * gets included MULTIPLE times in batch blocks. Observed as one ORDER_OPEN
+     * block containing the same sell order three times — the matcher executes
+     * one copy and the duplicates keep getOrders non-empty forever.
+     */
+    private final java.util.Set<Sha256Hash> seenTxIds = java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<>());
+
+    private boolean isDuplicateResubmission(Transaction tx) {
+        boolean fresh = seenTxIds.add(tx.getHash());
+        if (seenTxIds.size() > 100_000) {
+            // Bounded memory; entries only matter until their batch confirms.
+            seenTxIds.clear();
+            seenTxIds.add(tx.getHash());
+        }
+        return !fresh;
     }
 
     /**
@@ -486,22 +513,41 @@ public class MempoolService {
     }
 
     public Map<BlockType, List<Transaction>> drainAllByType() {
+        return drainAllByType(Integer.MAX_VALUE);
+    }
+
+    /**
+     * Drains at most {@code maxTotal} transactions (across all type queues).
+     * Callers loop until it returns empty: this bounds peak memory to one
+     * chunk instead of materializing the whole backlog as parsed objects
+     * (O(chunk), not O(backlog) — the difference between a 100MB and a 1GB+
+     * drain spike at batch.minTx=50000).
+     */
+    public Map<BlockType, List<Transaction>> drainAllByType(int maxTotal) {
         Map<BlockType, List<Transaction>> result = new EnumMap<>(BlockType.class);
-        for (Transaction tx : pendingTxns) {
-            removeOutpoints(tx);
-        }
-        pendingTxns.clear();
+        java.util.Set<Transaction> drained = java.util.Collections
+                .newSetFromMap(new java.util.IdentityHashMap<>());
+        int total = 0;
         for (Map.Entry<BlockType, ConcurrentLinkedQueue<Transaction>> entry : pendingTxnsByType.entrySet()) {
+            if (total >= maxTotal) {
+                break;
+            }
             List<Transaction> batch = new ArrayList<>();
             Transaction tx;
-            while ((tx = entry.getValue().poll()) != null) {
+            while (total < maxTotal && (tx = entry.getValue().poll()) != null) {
+                removeOutpoints(tx);
                 batch.add(tx);
+                drained.add(tx);
+                total++;
             }
             if (!batch.isEmpty()) {
                 result.put(entry.getKey(), batch);
             }
         }
-        mempoolSize.set(0);
+        if (!drained.isEmpty()) {
+            pendingTxns.removeIf(drained::contains);
+            mempoolSize.addAndGet(-drained.size());
+        }
         return result;
     }
 

@@ -93,6 +93,11 @@ public class BlockSaveService {
 	 *  The block has already passed checkFullTokenSolidity, so strict
 	 *  re-validation in addBlock would reject it for unrelated reasons. */
 	public void saveBlockPermissive(Block block, BlockStoreInterface store) throws Exception {
+		// Same stale-hash guard as saveBatchBlock: token creations and other
+		// client-built blocks reach persistence through this path, and a tx
+		// hash cached before later mutations bakes a wrong merkle root into
+		// the stored bytes (peers then reject the block on sync forever).
+		block.invalidateTransactionHashes();
 		// CROSSTANGLE blocks are cross-chain VALUE messages (peg-in/peg-out,
 		// anchors): they must pass real consensus validation
 		// (L0AnchorHandler.checkFull verifies scriptSig ownership, value
@@ -362,16 +367,27 @@ public class BlockSaveService {
 	}
 
 	public int batchBlocksFromMempool() throws Exception {
-		Map<BlockType, List<Transaction>> txnsByType = mempoolService.drainAllByType();
-		if (txnsByType.isEmpty()) {
-			return 0;
-		}
+		// Drain in bounded windows: peak memory is one window of parsed txs
+		// (~4 groups x 2000), not the whole backlog. A 50000-tx backlog drains
+		// as ~7 windows instead of one multi-GB materialization.
+		final int chunk = BATCH_TX_PER_BLOCK * 4;
 		int totalBatched = 0;
-		for (List<Transaction> txns : txnsByType.values()) {
-			totalBatched += batchTransactionGroup(txns);
-		}
-		if (feeService != null) {
-			feeService.updateBaseFee(totalBatched);
+		while (true) {
+			Map<BlockType, List<Transaction>> txnsByType = mempoolService.drainAllByType(chunk);
+			if (txnsByType.isEmpty()) {
+				break;
+			}
+			int window = 0;
+			for (List<Transaction> txns : txnsByType.values()) {
+				totalBatched += batchTransactionGroup(txns);
+				window += txns.size();
+			}
+			if (feeService != null) {
+				feeService.updateBaseFee(totalBatched);
+			}
+			if (window < chunk) {
+				break;
+			}
 		}
 		return totalBatched;
 	}
