@@ -321,25 +321,47 @@ public class SyncBlockService {
 	public void requestNonĆhainBlocks(String s, BlockStoreInterface store)
 			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
 
-		HashMap<String, String> requestParam = new HashMap<String, String>();
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
-		requestParam.put("cutoffHeight", store.get(confirmedAtHeightReward.getBlockHash()).getHeight() + "");
-		byte[] response = OkHttp3Util.postString(s.trim() + "/" + ReqCmd.blocksFromNonChainHeight,
-				Json.jsonmapper().writeValueAsString(requestParam));
-		GetBlockListResponse blockbytelist = Json.jsonmapper().readValue(response, GetBlockListResponse.class);
-		log.debug("block size: " + blockbytelist.getBlockbytelist().size() + " at server: " + s);
-		List<Block> sortedBlocks = new ArrayList<Block>();
-		for (byte[] data : blockbytelist.getBlockbytelist()) {
-			sortedBlocks.add(networkParameters.getDefaultSerializer().makeBlock(data));
-		}
-		Collections.sort(sortedBlocks, new SortbyBlock());
-		for (Block block : sortedBlocks) {
-			// no genesis block and no spend pending set
-			if (block.getHeight() > 0) {
-				blockgraph.addBlock(block, true, store);
+		long cutoffHeight = store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
+
+		// Paged bulk repair: one response per page (ascending height). A full
+		// catch-up can span hundreds of MB of JSON — a single unbounded
+		// response exceeded Jackson's string limits and silently killed the
+		// whole non-chain sync, permanently stalling lagging nodes. The page
+		// walk resumes from the highest height seen until exhausted.
+		final int PAGE_LIMIT = 300;
+		final int MAX_PAGES = 500;
+		long maxHeight = Long.MAX_VALUE;
+		for (int page = 0; page < MAX_PAGES; page++) {
+			HashMap<String, String> requestParam = new HashMap<String, String>();
+			requestParam.put("cutoffHeight", cutoffHeight + "");
+			requestParam.put("maxHeight", String.valueOf(maxHeight));
+			requestParam.put("limit", PAGE_LIMIT + "");
+			byte[] response = OkHttp3Util.postString(s.trim() + "/" + ReqCmd.blocksFromNonChainHeight,
+					Json.jsonmapper().writeValueAsString(requestParam));
+			GetBlockListResponse blockbytelist = Json.jsonmapper().readValue(response, GetBlockListResponse.class);
+			log.info("non-chain sync page {} size {} from {}", page + 1, blockbytelist.getBlockbytelist().size(), s);
+			if (blockbytelist.getBlockbytelist().isEmpty()) {
+				break;
 			}
+			List<Block> sortedBlocks = new ArrayList<Block>();
+			for (byte[] data : blockbytelist.getBlockbytelist()) {
+				sortedBlocks.add(networkParameters.getDefaultSerializer().makeBlock(data));
+			}
+			Collections.sort(sortedBlocks, new SortbyBlock());
+			for (Block block : sortedBlocks) {
+				// no genesis block and no spend pending set
+				if (block.getHeight() > 0) {
+					blockgraph.addBlock(block, true, store);
+				}
+			}
+			long lowest = sortedBlocks.get(0).getHeight();
+			if (lowest >= maxHeight) {
+				break; // no progress possible
+			}
+			maxHeight = lowest - 1;
 		}
 
 	}

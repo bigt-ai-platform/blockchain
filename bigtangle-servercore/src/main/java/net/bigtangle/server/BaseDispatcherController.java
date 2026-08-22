@@ -435,7 +435,13 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
 				long cutoffHeight = Long.parseLong(
 						request.get("cutoffHeight") == null ? "1" : (String) request.get("cutoffHeight"));
-				GetBlockListResponse response = this.blockService.blocksFromNonChainHeigth(cutoffHeight, store);
+				long maxHeight = Long.parseLong(
+						request.get("maxHeight") == null ? String.valueOf(Long.MAX_VALUE)
+								: (String) request.get("maxHeight"));
+				int limit = Integer.parseInt(
+						request.get("limit") == null ? "500" : (String) request.get("limit"));
+				GetBlockListResponse response = this.blockService
+						.blocksFromNonChainHeigth(cutoffHeight, maxHeight, limit, store);
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;

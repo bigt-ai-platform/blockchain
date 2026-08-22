@@ -364,6 +364,9 @@ public interface BlockStoreInterface {
 
 	List<byte[]> blocksFromNonChainHeigth(long heigth) throws BlockStoreException;
 
+	/** Paged bulk repair sweep: non-beacon blocks in [minHeight, maxHeight], at most {@code limit} rows. */
+	List<byte[]> blocksFromNonChainHeigth(long minHeight, long maxHeight, int limit) throws BlockStoreException;
+
 	/**
 	 * Hashes of all non-chain blocks above {@code heigth} — the lean variant of
 	 * {@link #blocksFromNonChainHeigth(long)} for sweeps that only need

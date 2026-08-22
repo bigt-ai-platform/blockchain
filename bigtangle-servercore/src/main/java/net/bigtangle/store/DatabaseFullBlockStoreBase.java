@@ -233,6 +233,15 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "FROM blocks WHERE height >= ? AND solid > -1 "
 			+ "AND blocktype <> 'BLOCKTYPE_BEACON' order by height desc ";
 
+	/**
+	 * Paged variant of the bulk repair sweep: ascending by height within
+	 * [minHeight, maxHeight], at most {@code limit} rows per page, so a full
+	 * catch-up never produces a single response that overflows JSON limits.
+	 */
+	protected final String SELECT_NONCHAIN_BLOCKS_PAGE_SQL = "SELECT hash, block "
+			+ "FROM blocks WHERE height >= ? AND height <= ? AND solid > -1 "
+			+ "AND blocktype <> 'BLOCKTYPE_BEACON' order by height asc limit ?";
+
 	protected final String SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
@@ -988,15 +997,23 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 	@Override
 	public List<byte[]> blocksFromNonChainHeigth(long heigth) {
+		return blocksFromNonChainHeigth(heigth, Long.MAX_VALUE, Integer.MAX_VALUE);
+	}
+
+	@Override
+	public List<byte[]> blocksFromNonChainHeigth(long heigth, long maxHeight, int limit) {
 		List<byte[]> re = new ArrayList<>();
 
 		// Bulk repair for a lagging node: serve every non-beacon block above
 		// its cutoff, CONNECTED or not. The previous chainlength = -1 filter
 		// made this endpoint useless on healthy peers (they have no unconnected
 		// blocks left), so a node behind the mesh could never pull the
-		// referenced transfer blocks its queued beacons depend on.
-		try (PreparedStatement s = getConnection().prepareStatement(SELECT_NONCHAIN_BLOCKS_FROM_HEIGHT_SQL)) {
+		// referenced transfer blocks its queued beacons depend on. Paged so a
+		// full catch-up never overflows JSON string limits in one response.
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_NONCHAIN_BLOCKS_PAGE_SQL)) {
 			s.setLong(1, heigth);
+			s.setLong(2, maxHeight);
+			s.setInt(3, limit);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
 				re.add(results.getBytes("block"));

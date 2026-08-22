@@ -139,15 +139,16 @@ public class BlockService {
 		return GetBlockListResponse.create(store.blocksFromChainLength(start, end));
 	}
 
-	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, BlockStoreInterface store)
-			throws BlockStoreException {
+	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, long maxHeight, int limit,
+			BlockStoreInterface store) throws BlockStoreException {
 
 		// Serve from the REQUESTER's cutoff, not ours: a lagging node asks for
 		// everything above its own confirmed tip. Math.max with this node's
 		// head-derived cutoff excluded exactly the range the requester was
 		// missing, making bulk repair impossible (it always returned 0 blocks
-		// to any node behind the proposer).
-		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(cutoffHeight));
+		// to any node behind the proposer). Paged by maxHeight/limit so one
+		// response never overflows JSON string limits.
+		return GetBlockListResponse.create(store.blocksFromNonChainHeigth(cutoffHeight, maxHeight, limit));
 	}
 
 	/*
