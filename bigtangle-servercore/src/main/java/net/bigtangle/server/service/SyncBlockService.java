@@ -169,11 +169,18 @@ public class SyncBlockService {
 			}
 			if (canrun) {
 				Stopwatch watch = Stopwatch.createStarted();
+				// Bulk repair FIRST: pull every non-chain block above our tip
+				// in pages before the expensive reactive walks. When far
+				// behind, the reactive per-reference fetches could never
+				// converge (each 500+ beacon × N refs round-trip took minutes
+				// while the mesh kept producing), and this bulk pass ran last
+				// — effectively never. With transfers present locally, the
+				// passes below connect queued beacons immediately.
+				syncNonChained(store);
 				connectingOrphans(store);
 				syncChain(-1L, false, store);
 				requestMissingReferenced(store);
 				syncMempool(store);
-				syncNonChained(store);
 				store.deleteLockobject(LOCKID);
 				// if (watch.elapsed(TimeUnit.MILLISECONDS) > 1000)
 				log.info("sync time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
