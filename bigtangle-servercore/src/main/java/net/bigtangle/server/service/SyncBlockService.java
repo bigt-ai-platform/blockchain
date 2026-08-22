@@ -254,11 +254,18 @@ public class SyncBlockService {
 	public byte[] requestBlock(Sha256Hash hash, BlockStoreInterface store) {
 		// block from network peers
 		// log.debug("requestBlock" + hash.toString());
+		// Never HTTP-ask ourselves: the caller already checked the local
+		// store, and a self-request queues behind this node's busy Tomcat
+		// workers (~1 s under repair load) for a block we just said we do
+		// not have. Only remote peers can help here. Peers are matched by
+		// port — unique per node in the mesh.
+		String ownPort = ":" + serverConfiguration.getPort();
 		String[] re = serverConfiguration.getRequester().split(",");
 		List<String> badserver = new ArrayList<>();
 		byte[] data = null;
 		for (String s : re) {
-			if (s != null && !s.trim().isEmpty() && !badserver(badserver, s)) {
+			s = s == null ? null : s.trim();
+			if (s != null && !s.isEmpty() && !s.endsWith(ownPort) && !badserver(badserver, s)) {
 				HashMap<String, String> requestParam = new HashMap<String, String>();
 				requestParam.put("hashHex", Utils.HEX.encode(hash.getBytes()));
 				try {
