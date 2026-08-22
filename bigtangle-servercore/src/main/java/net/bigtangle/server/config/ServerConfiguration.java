@@ -158,24 +158,6 @@ public class ServerConfiguration {
   
 
     /** 
-     * Whether to automatically create a Docker container for the database host.
-     * Set to false when using external database services.
-     */
-    private Boolean dockerCreateDBHost = true;
-    
-    /** 
-     * Hostname for the Docker database container.
-     * Used when dockerCreateDBHost is true.
-     */
-    private String dockerDBHost="bigtangle-postgres";
-    
-    /** 
-     * Data directory path for Docker database container.
-     * Stores persistent database files.
-     */
-    private String dockerDBHostData="/data/vm/"+dockerDBHost;
-    
-    /** 
      * Network timeout in minutes for peer-to-peer communication.
      * Prevents stalled connections from consuming resources.
      */
@@ -512,14 +494,6 @@ public class ServerConfiguration {
         this.syncblocks = syncblocks;
     } 
  
-    public String getDockerDBHost() {
-        return dockerDBHost;
-    }
-
-    public void setDockerDBHost(String dockerDBHost) {
-        this.dockerDBHost = dockerDBHost;
-    }
-
     public List<String> getAllowIPlist() {
         return allowIPlist;
     }
@@ -599,24 +573,5 @@ public class ServerConfiguration {
     }
 
 
-
-    public Boolean getDockerCreateDBHost() {
-        return dockerCreateDBHost;
-    }
-
-
-    public void setDockerCreateDBHost(Boolean dockerCreateDBHost) {
-        this.dockerCreateDBHost = dockerCreateDBHost;
-    }
-
-
-    public String getDockerDBHostData() {
-        return dockerDBHostData;
-    }
-
-
-    public void setDockerDBHostData(String dockerDBHostData) {
-        this.dockerDBHostData = dockerDBHostData;
-    }
 
 }
