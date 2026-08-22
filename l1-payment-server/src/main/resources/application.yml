@@ -21,8 +21,6 @@ server:
   ipcheck: ${IPCHECK:false}
   allowIPlist: ${ALLOWIPLIST:}
   syncblocks: ${SYNCBLOCKS:1000}
-  dockerCreateDBHost: ${DOCKERCREATEDBHOST:false}
-  dockerDBHost: ${DOCKERDBHOST:bigtangle-postgres}
 
 db:
   hostname: ${DB_HOSTNAME:localhost}
@@ -38,7 +36,6 @@ service:
     blockbatch: ${SERVICE_BLOCKBATCH:false}
     sync: ${SERVICE_SYNC:true}
     syncrate: ${SERVICE_SYNC_RATE:50000}
-    blockbatch: ${SERVICE_BLOCKBATCH:false}
     blockbatchrate: ${SERVICE_BLOCKBATCH_RATE:50000}
     initsync: ${SERVICE_INITSYNC:true}
 

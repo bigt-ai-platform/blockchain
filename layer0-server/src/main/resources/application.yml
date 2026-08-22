@@ -21,8 +21,6 @@ server:
   ipcheck: ${IPCHECK:false}
   allowIPlist: ${ALLOWIPLIST:}
   syncblocks: ${SYNCBLOCKS:1000}
-  dockerCreateDBHost: ${DOCKERCREATEDBHOST:false}
-  dockerDBHost: ${DOCKERDBHOST:bigtangle-postgres}
 
 db:
   hostname: ${DB_HOSTNAME:localhost}
