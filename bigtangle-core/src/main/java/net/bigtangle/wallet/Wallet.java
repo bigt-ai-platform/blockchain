@@ -520,6 +520,12 @@ public class Wallet extends WalletBase {
 				OkHttp3Util.postString(getServerURL() + ReqCmd.getTips.name(),
 						Json.jsonmapper().writeValueAsString(requestParam)),
 				HashMap.class);
+		if (resp.get("text") == null) {
+			// Diagnostic: an error/limit body has no text field — surface what
+			// actually came back instead of an opaque NPE downstream.
+			throw new IllegalStateException(
+					"getTips response missing 'text', keys=" + resp.keySet() + " url=" + getServerURL());
+		}
 		@SuppressWarnings("unchecked")
 		HashMap<String, Object> tips = Json.jsonmapper().readValue((String) resp.get("text"), HashMap.class);
 		Sha256Hash prev = Sha256Hash.wrap((String) tips.get("prevBlockHash"));
