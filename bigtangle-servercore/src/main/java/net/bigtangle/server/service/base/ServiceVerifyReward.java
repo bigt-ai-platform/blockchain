@@ -116,9 +116,17 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		String conflictCacheToken = confirmed.getBlockHash() + ":" + confirmed.getChainLength();
 		loadConflictCache(conflictCacheToken);
 
-		// Find conflicts in the dependency set
+		// Find conflicts in the dependency set.
+		// Bounded per cycle: parse/confirm at most MAX_CONFIRM_PER_CYCLE
+		// referenced blocks (oldest first). Under sustained overload the
+		// unconfirmed backlog — and therefore each beacon's reference list —
+		// grows without limit; materializing ALL referenced blocks as parsed
+		// objects here made peak memory O(lag) and OOM'd the node. Skipped
+		// blocks are simply confirmed by a LATER beacon: every new proposal
+		// sweeps all still-unconfirmed blocks into its own reference set
+		// (SlotService.addAllUnconfirmedBlocks), so nothing is orphaned.
 		HashSet<BlockWrap> allApprovedNewBlocks = new HashSet<>();
-		for (Sha256Hash hash : referrencedBlocks) {
+		for (Sha256Hash hash : oldestReferencedBlocks(referrencedBlocks, MAX_CONFIRM_PER_CYCLE, store)) {
 			BlockWrap blockWrap = getBlockWrap(hash, store);
 			allApprovedNewBlocks.add(blockWrap);
 		}
@@ -163,6 +171,32 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 					totalMs);
 		}
 
+	}
+
+	/** Max referenced blocks parsed+confirmed per beacon-connect cycle. */
+	private static final int MAX_CONFIRM_PER_CYCLE = 40;
+
+	/**
+	 * Oldest-first subset of the referenced blocks, bounded to
+	 * {@code limit} entries. Ordering uses only evaluation rows (cheap);
+	 * blocks with unknown height sort last. Bounds confirm-path memory to
+	 * O(limit) parsed blocks regardless of how far confirmation lags.
+	 */
+	private java.util.List<Sha256Hash> oldestReferencedBlocks(java.util.Set<Sha256Hash> refs, int limit,
+			BlockStoreInterface store) throws BlockStoreException {
+		if (refs.size() <= limit) {
+			return new java.util.ArrayList<>(refs);
+		}
+		java.util.List<Sha256Hash> ordered = new java.util.ArrayList<>(refs);
+		ordered.sort(java.util.Comparator.comparingLong((Sha256Hash h) -> {
+			try {
+				net.bigtangle.core.BlockEvaluation e = store.getBlockEvaluationsByhashs(h);
+				return e == null ? Long.MAX_VALUE : e.getInsertTime();
+			} catch (net.bigtangle.exception.BlockStoreException ex) {
+				return Long.MAX_VALUE;
+			}
+		}));
+		return ordered.subList(0, limit);
 	}
 
 	/*

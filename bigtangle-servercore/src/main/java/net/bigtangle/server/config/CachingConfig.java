@@ -29,11 +29,14 @@ public class CachingConfig {
         // blocksCache holds every cached block's serialized bytes (~12MB per
         // 2000-tx batch block). Unbounded, it grows with total chain traffic
         // and exhausts the heap under sustained load; eviction only costs a
-        // DB re-read (read-through cache), so bound it by free heap.
+        // DB re-read (read-through cache), so bound it by ENTRY COUNT —
+        // FREE_HEAP_SIZE thresholds fire only once the heap is nearly gone,
+        // which is too late under GC pressure. One drain window emits <=25
+        // blocks and a slot confirms them; 40 entries (~480MB) covers that.
         MapConfig blocksCacheConfig = new MapConfig().setName("blocksCache")
                 .setEvictionConfig(new EvictionConfig()
-                        .setSize(512)
-                        .setMaxSizePolicy(MaxSizePolicy.FREE_HEAP_SIZE)
+                        .setSize(40)
+                        .setMaxSizePolicy(MaxSizePolicy.PER_NODE)
                         .setEvictionPolicy(EvictionPolicy.LRU));
         int instanceNum = INSTANCE_COUNTER.incrementAndGet();
         config.setInstanceName("hazelcast-instance-" + instanceNum)

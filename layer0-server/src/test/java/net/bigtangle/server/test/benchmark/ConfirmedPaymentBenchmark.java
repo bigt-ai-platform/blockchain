@@ -193,15 +193,24 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		PQKey recipient = PQKey.createNew();
 		String recvAddr = Address.fromHash160(networkParameters, recipient.getPubKeyHash()).toBase58();
 		int txPerClient = Math.max(1, totalTx / clients);
-		Transaction[] allTxs = new Transaction[totalTx];
+
+		// ---- 4+5. STREAMING build + timed parallel submit.
+		// Each client thread signs its slice just-in-time: peak heap is one
+		// in-flight batch per thread (~250 txs), NOT all 200k pre-signed
+		// transactions (~1.5GB). Signing (~0.3ms ML-DSA) is negligible vs the
+		// HTTP round-trip, so this does not distort the measured submit TPS.
+		AtomicInteger submitted = new AtomicInteger(0);
 		AtomicInteger built = new AtomicInteger(0);
-		ExecutorService buildPool = Executors.newFixedThreadPool(clients);
+		ConcurrentLinkedQueue<String> txHashes = new ConcurrentLinkedQueue<>();
+		ExecutorService pool = Executors.newFixedThreadPool(clients);
 		@SuppressWarnings("unchecked")
-		CompletableFuture<Void>[] buildFutures = new CompletableFuture[clients];
+		CompletableFuture<Void>[] futures = new CompletableFuture[clients];
+		long submitWallStart = System.nanoTime();
 		for (int c = 0; c < clients; c++) {
 			int startIdx = c * txPerClient;
-			buildFutures[c] = CompletableFuture.runAsync(() -> {
+			futures[c] = CompletableFuture.runAsync(() -> {
 				try {
+					List<Transaction> txs = new ArrayList<>();
 					for (int i = 0; i < txPerClient; i++) {
 						int idx = startIdx + i;
 						if (idx >= totalTx) {
@@ -227,41 +236,10 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 						pay.put(recvAddr, BigInteger.valueOf(payAmount));
 						Transaction tx = w.payToListTransaction(null, pay, NetworkParameters.BIGTANGLE_TOKENID,
 								"bench", List.of(coin));
-						if (tx != null) {
-							allTxs[idx] = tx;
-							built.incrementAndGet();
-						}
-					}
-				} catch (Exception e) {
-					log.error("Build client failed", e);
-				}
-			}, buildPool);
-		}
-		CompletableFuture.allOf(buildFutures).get(30, TimeUnit.MINUTES);
-		buildPool.shutdownNow();
-		log.info("Pre-built {}/{} transactions", built.get(), totalTx);
-
-		// ---- 5. Timed parallel submit.
-		AtomicInteger submitted = new AtomicInteger(0);
-		ConcurrentLinkedQueue<String> txHashes = new ConcurrentLinkedQueue<>();
-		ExecutorService pool = Executors.newFixedThreadPool(clients);
-		@SuppressWarnings("unchecked")
-		CompletableFuture<Void>[] futures = new CompletableFuture[clients];
-		long submitWallStart = System.nanoTime();
-		for (int c = 0; c < clients; c++) {
-			int startIdx = c * txPerClient;
-			futures[c] = CompletableFuture.runAsync(() -> {
-				try {
-					List<Transaction> txs = new ArrayList<>();
-					for (int i = 0; i < txPerClient; i++) {
-						int idx = startIdx + i;
-						if (idx >= totalTx) {
-							break;
-						}
-						Transaction tx = allTxs[idx];
 						if (tx == null) {
 							continue;
 						}
+						built.incrementAndGet();
 						txs.add(tx);
 						if (txs.size() == batchSize) {
 							submitted.addAndGet(submitBatch(txs));
@@ -304,7 +282,8 @@ public class ConfirmedPaymentBenchmark extends AbstractIntegrationTest {
 		int confirmed = 0;
 		int peakConfirmed = 0;
 		long peakReachedMs = 0;
-		long confirmDeadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
+		long confirmDeadline = System.currentTimeMillis()
+				+ Math.max(confirmTimeoutSec, totalTx / 200L) * 1000L;
 		while (System.currentTimeMillis() < confirmDeadline) {
 			Thread.sleep(1000);
 			confirmed = (int) store.countSpentOutputs(fundTxHash);
