@@ -72,6 +72,11 @@ public class KafkaMessageProducer implements DisposableBean {
         return send(kafkaConfiguration.getTransactionTopic(), txHash, data);
     }
 
+    /** Attestations flow through Kafka so votes are never dropped under load. */
+    public boolean sendAttestation(String validatorKeyHex, byte[] data) {
+        return send(kafkaConfiguration.getAttestationTopic(), validatorKeyHex, data);
+    }
+
     private boolean send(String topic, String key, byte[] data) {
         if (producer == null && !ensureProducer()) {
             return false; // still no brokers discovered

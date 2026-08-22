@@ -34,6 +34,9 @@ public class ValidatorDutyService {
     private CasperService casperService;
 
     @Autowired
+    private net.bigtangle.kafka.KafkaMessageProducer kafkaMessageProducer;
+
+    @Autowired
     private GhostService ghostService;
 
     @Autowired
@@ -297,6 +300,16 @@ public class ValidatorDutyService {
             att.setSignature(sig);
 
             casperService.processVote(att, store);
+
+            // Durable vote propagation: publish to the attestations topic so
+            // every validator consumes this vote even when gossip HTTP is
+            // lossy under load (the root cause of quorum starvation).
+            try {
+                kafkaMessageProducer.sendAttestation(Utils.HEX.encode(att.getValidatorPubkey()),
+                        Json.jsonmapper().writeValueAsBytes(att));
+            } catch (Exception e) {
+                log.debug("Kafka attestation publish failed: {}", e.getMessage());
+            }
 
             // Best-effort loopback broadcast: the vote is already processed
             // locally (processVote also gossips) — a post failure must never

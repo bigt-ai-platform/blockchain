@@ -11,6 +11,7 @@ public class KafkaConfiguration {
     private String consumerIdSuffix;
     private String blockTopic = "bigtangle-blocks";
     private String transactionTopic = "bigtangle-transactions";
+    private String attestationTopic = "bigtangle-attestations";
 
     public String getBootstrapServers() {
         return bootstrapServers;
@@ -42,6 +43,14 @@ public class KafkaConfiguration {
 
     public void setTransactionTopic(String transactionTopic) {
         this.transactionTopic = transactionTopic;
+    }
+
+    public String getAttestationTopic() {
+        return attestationTopic;
+    }
+
+    public void setAttestationTopic(String attestationTopic) {
+        this.attestationTopic = attestationTopic;
     }
 
     @Override
