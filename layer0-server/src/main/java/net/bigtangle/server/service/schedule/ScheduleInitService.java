@@ -38,10 +38,32 @@ public class ScheduleInitService extends AbstractScheduleInitService {
     public void syncService() {
         if (scheduleConfiguration.isInitSync()) {
             initializeService();
-            if (serverConfiguration.getRunKafkaStream()) {
-                blockStreamHandler.runStream();
-                transactionStreamHandler.runStream();
-            }
+        }
+    }
+
+    private volatile boolean streamsStarted = false;
+
+    /**
+     * Kafka stream consumers start RETRYING instead of one-shot: the previous
+     * single-shot starter died with the boot-time init-sync exception and
+     * never retried, leaving nodes silently without a consumer for their
+     * whole lifetime (observed as confirmation stalls while a benchmark burst
+     * ran). A short retry loop tolerates brokers/peers that are not ready at
+     * T+5s.
+     */
+    @Scheduled(initialDelay = 15000, fixedDelay = 30000, timeUnit = TimeUnit.MILLISECONDS)
+    public void startKafkaStreams() {
+        if (streamsStarted || !serverConfiguration.getRunKafkaStream()
+                || !scheduleConfiguration.isInitSync()) {
+            return;
+        }
+        try {
+            blockStreamHandler.runStream();
+            transactionStreamHandler.runStream();
+            streamsStarted = true;
+            logger.info("Kafka stream consumers started");
+        } catch (Exception e) {
+            logger.warn("Kafka stream start failed, will retry: {}", e.getMessage());
         }
     }
 }
