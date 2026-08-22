@@ -310,44 +310,46 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				log.info("not longest chain in  selectChainblockqueue {}  < {}", maxFromQuery, maxConfirmedReward);
 				return;
 			}
+			// Ordered by chainlength ASC: reward-chain parents are monotonic in
+			// cl, so once an entry is missing its dependency every later entry
+			// depends on it too. Early-break instead of churning through
+			// hundreds of doomed entries per tick (a lagging node logged 985
+			// MissingDependency warnings per cycle, starving its own catch-up).
+			boolean missingDependency = false;
 			for (ChainBlockQueue chainBlockQueue : cbs) {
-				if (throwException) {
-					saveChainConnected(chainBlockQueue, store);
-				} else {
-					try {
-						saveChainConnected(chainBlockQueue, store);
-					} catch (Exception e) {
-						log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
+				try {
+					Block block = networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock());
+					// Idempotence: gossip/sync re-delivers blocks this node
+					// already stored. Skip re-verification entirely.
+					if (store.get(block.getHash()) != null) {
+						deleteChainQueue(chainBlockQueue, store);
+						continue;
 					}
+					saveChainConnected(block, store);
+					deleteChainQueue(chainBlockQueue, store);
+				} catch (net.bigtangle.exception.VerificationException.InfeasiblePrototypeException
+						| net.bigtangle.exception.VerificationException.MissingDependencyException e) {
+					// The beacon references DAG blocks this node has not synced
+					// yet. Dropping it would fork the chain: keep it queued and
+					// let SyncBlockService request the missing parents.
+					log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}",
+							e.getMessage());
+					missingDependency = true;
+					break;
+				} catch (Exception e) {
+					deleteChainQueue(chainBlockQueue, store);
+					if (throwException) {
+						throw e;
+					}
+					log.info("saveChainConnected failed   {}", chainBlockQueue.toString(), e);
 				}
-
+			}
+			if (missingDependency) {
+				log.info("chain-connect deferred at first unsynced parent; {} queue entries remain", cbs.size());
 			}
 			log.info("saveChainConnected time {} ms.", watch.elapsed(TimeUnit.MILLISECONDS));
 		}
 
-	}
-
-	private void saveChainConnected(ChainBlockQueue chainBlockQueue, BlockStoreInterface store)
-			throws VerificationException, BlockStoreException {
-		Block block = networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock());
-		try {
-			saveChainConnected(block, store);
-			deleteChainQueue(chainBlockQueue, store);
-		} catch (net.bigtangle.exception.VerificationException.InfeasiblePrototypeException
-				| net.bigtangle.exception.VerificationException.MissingDependencyException e) {
-			// The beacon references DAG blocks this node has not synced yet
-			// (multi-node gossip lag). Dropping it would fork the chain: keep it
-			// in the ChainBlockQueue and retry on the next tick, by which time
-			// the referenced blocks will usually have arrived. The periodic
-			// SyncBlockService.connectingOrphans/syncChain pass re-requests any
-			// still-missing parents outside the DB batch, so no network call is
-			// made here (a nested write on a poisoned transaction would abort the
-			// connection and stall the node).
-			log.warn("Beacon references unsynced blocks, keeping in queue for retry: {}", e.getMessage());
-		} catch (Exception e) {
-			deleteChainQueue(chainBlockQueue, store);
-			throw e;
-		}
 	}
 
 	private void saveChainConnected(Block block, BlockStoreInterface store)

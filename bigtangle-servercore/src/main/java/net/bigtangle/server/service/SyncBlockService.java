@@ -116,30 +116,38 @@ public class SyncBlockService {
 		}
 	}
 
+	/**
+	 * Persistent sync worker: a sync cycle that overruns its schedule is
+	 * allowed to FINISH. Cancelling/interrupting it mid-flight (the previous
+	 * submit+get(timeout)+cancel(true)+shutdownNow pattern) killed the in-
+	 * progress block fetch exactly when it reached the slow WAN peer — the
+	 * only peer holding the missing blocks — so a lagging node could never
+	 * download from it and fell permanently behind (observed as
+	 * InterruptedIOException "interrupted" on every getBlockByHash to the far
+	 * node). Overlap is prevented by the flag instead of interruption.
+	 */
+	private final java.util.concurrent.atomic.AtomicBoolean syncRunning = new java.util.concurrent.atomic.AtomicBoolean(
+			false);
+	private final ExecutorService syncExecutor = Executors.newSingleThreadExecutor(r -> {
+		Thread t = new Thread(r, "sync-worker");
+		t.setDaemon(true);
+		return t;
+	});
+
 	public void startSingleProcess(Long chainlength, boolean nonchain) throws BlockStoreException {
-		// ExecutorService executor = Executors.newSingleThreadExecutor();
-
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-
-		@SuppressWarnings({ "unchecked", "rawtypes" })
-		final Future<String> handler = executor.submit(new Callable() {
-			@Override
-			public String call() throws Exception {
+		if (!syncRunning.compareAndSet(false, true)) {
+			log.debug(" sync already running, skipping tick ");
+			return;
+		}
+		syncExecutor.submit(() -> {
+			try {
 				startSingleProcessDo(chainlength, nonchain);
-				return "finish";
+			} catch (Exception e) {
+				log.debug(" sync error ", e);
+			} finally {
+				syncRunning.set(false);
 			}
 		});
-		try {
-			handler.get(scheduleConfiguration.getSyncrate() * 2, TimeUnit.MILLISECONDS);
-		} catch (TimeoutException e) {
-			log.debug(" sync  Timeout  ");
-			handler.cancel(true);
-		} catch (Exception e) {
-			log.debug(" sync     ", e);
-		} finally {
-			executor.shutdownNow();
-		}
-
 	}
 
 	public void startSingleProcessDo(Long chainlength, boolean nonchain) throws BlockStoreException {
