@@ -24,6 +24,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Address;
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
@@ -151,10 +152,25 @@ public abstract class RemoteTestBase {
 		return w.createToken(key, domainname, increment, token, addresses, key.getPubKey(), new MemoInfo("coinbase"));
 	}
 
+	/**
+	 * Tip positions via the lightweight {@code getTips} command; callers
+	 * assemble their block locally with {@link Block#setBlock7}.
+	 */
 	protected Block fetchTip() throws Exception {
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
-		return networkParameters.getDefaultSerializer().makeBlock(data);
+		HashMap<String, String> requestParam = new HashMap<>();
+		HashMap<String, Object> resp = Json.jsonmapper().readValue(
+				OkHttp3Util.postString(contextRoot + ReqCmd.getTips.name(),
+						Json.jsonmapper().writeValueAsString(requestParam)),
+				HashMap.class);
+		@SuppressWarnings("unchecked")
+		HashMap<String, Object> tips = Json.jsonmapper().readValue((String) resp.get("text"), HashMap.class);
+		Block block = Block.setBlock7(networkParameters,
+				Sha256Hash.wrap((String) tips.get("prevBlockHash")),
+				Sha256Hash.wrap((String) tips.get("prevBranchBlockHash")),
+				BlockType.BLOCKTYPE_TRANSFER.name(), 0,
+				((Number) tips.get("lastMiningRewardBlock")).longValue());
+		block.setHeight(((Number) tips.get("height")).longValue());
+		return block;
 	}
 
 	/**

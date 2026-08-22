@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Contact;
 import net.bigtangle.core.ContactInfo;
@@ -122,9 +123,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         }
 
         HashMap<String, String> requestParam = new HashMap<String, String>();
-        byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-                Json.jsonmapper().writeValueAsString(requestParam));
-        Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+        Block block = fetchTipSkeleton();
         block.setBlockType(BlockType.BLOCKTYPE_USERDATA);
         PQKey outKey = PQKey.createNew();
         Contact contact = new Contact();
@@ -144,5 +143,7 @@ public class UserdataTest extends AbstractIntegrationTest {
         Block dataBlock2 = drainMempoolAndCreateBlock(predecessor2, predecessor2);
 
     }
+
+
 
 }

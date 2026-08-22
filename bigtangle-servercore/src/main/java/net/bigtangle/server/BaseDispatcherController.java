@@ -205,17 +205,25 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				return;
 			}
 			switch (reqCmd0000) {
-			case getTip: {
-				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
+			case getTips: {
+				// Lightweight tip positions for client-side block assembly.
+				// Replaces the old getTip full-block prototype: clients build
+				// their block locally from these hashes; token creation is
+				// re-parented server-side at signToken regardless.
 				if (!userDataService.ipCheck(reqCmd, contentBytes, httprequest)) {
-					// return bomb
-					logger.debug("bomb getDifficultyTarget {} {}", remoteAddr(httprequest), reqCmd);
+					logger.debug("bomb getTips {} {}", remoteAddr(httprequest), reqCmd);
 					errorLimit(httpServletResponse, watch);
 					return;
 				}
-
-				byte[] data = rollingBlock.bitcoinSerialize();
-				this.outPointBinaryArray(httpServletResponse, data, reqCmd);
+				Block rollingBlock = cacheBlockPrototypeService.getBlockPrototype(store);
+				HashMap<String, Object> tips = new HashMap<>();
+				tips.put("prevBlockHash", rollingBlock.getPrevBlockHash().toString());
+				tips.put("prevBranchBlockHash", rollingBlock.getPrevBranchBlockHash().toString());
+				tips.put("height", rollingBlock.getHeight());
+				tips.put("timeSeconds", rollingBlock.getTimeSeconds());
+				tips.put("lastMiningRewardBlock", rollingBlock.getLastMiningRewardBlock());
+				this.outPrintJSONString(httpServletResponse,
+						GetStringResponse.create(Json.jsonmapper().writeValueAsString(tips)), watch, reqCmd);
 			}
 				break;
 			case batchBlock: {

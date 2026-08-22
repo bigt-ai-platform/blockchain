@@ -10,7 +10,7 @@ public enum ReqCmd {
 	// Bridge
 	processPegIn, processPegOut,
 
-	getTip, adjustHeight, findRetryBlocks,
+	getTip, getTips, adjustHeight, findRetryBlocks,
 	// Chain
 	getChainNumber, getAllConfirmedReward, blocksFromChainLength,blocksFromNonChainHeight,
 	// Mempool

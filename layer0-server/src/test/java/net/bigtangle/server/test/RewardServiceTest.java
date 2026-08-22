@@ -24,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.Sha256Hash;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.StakeRecord;
 import net.bigtangle.core.TXReward;
@@ -231,9 +233,11 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 			mcmcService.update(store); 
 			blockGraph.confirmDo(store);
 			HashMap<String, String> requestParam = new HashMap<String, String>();
-			byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-					Json.jsonmapper().writeValueAsString(requestParam));
-			rollingBlock1 = networkParameters.getDefaultSerializer().makeBlock(data);
+			try {
+				rollingBlock1 = fetchTipSkeleton();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
 			try {
 				rollingBlock1.addTransaction(wallet.feeTransaction(null));
 			} catch (Exception e) {
@@ -244,5 +248,7 @@ public class RewardServiceTest extends AbstractIntegrationTest {
 		}
 		return rollingBlock1;
 	}
+
+
 
 }

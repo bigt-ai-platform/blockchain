@@ -507,14 +507,28 @@ public class Wallet extends WalletBase {
 
 	// chops a list into non-view sublists of length L
 
+	/**
+	 * Builds a block skeleton for client-side assembly (token creation etc).
+	 * Parents come from the lightweight {@code getTips} command; the server
+	 * re-parents onto fresh tips at accept time (signToken), so signatures —
+	 * which cover only the transaction — stay valid.
+	 */
+	@SuppressWarnings("unchecked")
 	private Block fetchTipBlock() throws IOException {
-		return params.getDefaultSerializer().makeBlock(getTipData());
-	}
-
-	private byte[] getTipData() throws IOException {
 		HashMap<String, String> requestParam = new HashMap<>();
-		return OkHttp3Util.postAndGetBlock(getServerURL() + ReqCmd.getTip,
-				Json.jsonmapper().writeValueAsString(requestParam));
+		HashMap<String, Object> resp = Json.jsonmapper().readValue(
+				OkHttp3Util.postString(getServerURL() + ReqCmd.getTips.name(),
+						Json.jsonmapper().writeValueAsString(requestParam)),
+				HashMap.class);
+		@SuppressWarnings("unchecked")
+		HashMap<String, Object> tips = Json.jsonmapper().readValue((String) resp.get("data"), HashMap.class);
+		Sha256Hash prev = Sha256Hash.wrap((String) tips.get("prevBlockHash"));
+		Sha256Hash branch = Sha256Hash.wrap((String) tips.get("prevBranchBlockHash"));
+		long lastMiningRewardBlock = ((Number) tips.get("lastMiningRewardBlock")).longValue();
+		Block skeleton = Block.setBlock7(params, prev, branch, BlockType.BLOCKTYPE_TRANSFER.name(), 0,
+				lastMiningRewardBlock);
+		skeleton.setHeight(((Number) tips.get("height")).longValue());
+		return skeleton;
 	}
 	public static <T> List<List<T>> chopped(List<T> list, final int L) {
 		List<List<T>> parts = new ArrayList<>();

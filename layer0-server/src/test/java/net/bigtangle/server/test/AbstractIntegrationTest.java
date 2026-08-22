@@ -479,7 +479,7 @@ public abstract class AbstractIntegrationTest {
 
 	private Block payList(List<Block> addedBlocks, HashMap<String, BigInteger> giveMoneyResult, byte[] tokenid)
 			throws JsonProcessingException, IOException, InsufficientMoneyException, Exception {
-		// Ensure tips queue is populated before wallet operations that need getTip
+		// Ensure tips queue is populated before wallet operations that need tips
 		try {
 			// mcmcService.calcNewBlockPrototype(store);
 		} catch (Exception e) {
@@ -1682,10 +1682,7 @@ public abstract class AbstractIntegrationTest {
 		}
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-
-		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block rollingBlock = fetchTipSkeleton();
 
 		OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), rollingBlock.bitcoinSerialize());
 
@@ -2449,4 +2446,13 @@ public abstract class AbstractIntegrationTest {
 				resultSet.getLong("chainlength"), resultSet.getLong("chainlengthlastupdate"),
 				resultSet.getLong("inserttime"), resultSet.getLong("solid"), resultSet.getBoolean("confirmed"));
 	}
+
+    /**
+     * In-process tip skeleton: same as the old getTip round-trip, but calls
+     * the prototype service directly (no HTTP).
+     */
+    protected Block fetchTipSkeleton() throws Exception {
+        return cacheBlockPrototypeService.getBlockPrototype(store);
+    }
+
 }

@@ -136,19 +136,19 @@ public class MultiSignServiceCreate {
         }
     }
 
+    /**
+     * Always re-parents onto the CURRENT tips: clients build token-creation
+     * blocks locally (possibly with placeholder parents — signatures cover
+     * only the transaction), so the server owns the DAG attachment point.
+     */
     private Block checkBlockPrototype(Block oldBlock, BlockStoreInterface store)
             throws BlockStoreException, NoBlockException {
 
-        int time = 60 * 60 * 8;
-        if (System.currentTimeMillis() / 1000 - oldBlock.getTimeSeconds() > time) {
-            Block block = cacheBlockPrototypeService.getBlockPrototype(store);
-            block.setBlockType(oldBlock.getBlockType());
-            for (Transaction transaction : oldBlock.getTransactions()) {
-                block.addTransaction(transaction);
-            }
-            return block;
-        } else {
-            return oldBlock;
+        Block block = cacheBlockPrototypeService.getBlockPrototype(store);
+        block.setBlockType(oldBlock.getBlockType());
+        for (Transaction transaction : oldBlock.getTransactions()) {
+            block.addTransaction(transaction);
         }
+        return block;
     }
 }

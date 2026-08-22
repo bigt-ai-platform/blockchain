@@ -61,9 +61,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
-		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block block = fetchTipSkeleton();
 		store.insertBatchBlock(block);
 
 		List<BatchBlock> batchBlocks = store.getBatchBlockList();
@@ -98,9 +96,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 			// If update fails, continue anyway
 		}
 
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
-		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block block = fetchTipSkeleton();
 		block.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 		block.addTransaction(transaction);
 		block.addTransaction(wallet.feeTransaction(null));
@@ -111,7 +107,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		HashMap<String, Object> requestParam = new HashMap<String, Object>();
 		requestParam.put("hashHex", Utils.HEX.encode(savedBlock.getHash().getBytes()));
-		data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getBlockByHash.name(),
+		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getBlockByHash.name(),
 				Json.jsonmapper().writeValueAsString(requestParam));
 		block = networkParameters.getDefaultSerializer().makeBlock(data);
 
@@ -140,9 +136,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		}
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block block = fetchTipSkeleton();
 		block.setBlockType(BlockType.BLOCKTYPE_TOKEN_CREATION);
 		block.addCoinbaseTransaction(ecKey.getPubKey(), basecoin, tokenInfo, new MemoInfo("coinbase"));
 
@@ -332,9 +326,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 
 		// get new Block to be used from server
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block rollingBlock = fetchTipSkeleton();
 		rollingBlock.addTransaction(tx);
 
 		byte[] res = OkHttp3Util.post(contextRoot + ReqCmd.batchBlock.name(), rollingBlock.bitcoinSerialize());
@@ -355,10 +347,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		}
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
-		log.info("resp block, hex : " + Utils.HEX.encode(data));
+		Block rollingBlock = fetchTipSkeleton();
 		// get other tokenid from wallet
 		UTXO utxo = null;
 		List<UTXO> ulist = getBalance();
@@ -432,5 +421,7 @@ public class DirectExchangeTest extends AbstractIntegrationTest {
 		// Json.jsonmapper().writeValueAsString(transaction.getTokenInfo()));
 
 	}
+
+
 
 }

@@ -24,6 +24,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.Coin;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.MemoInfo;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
 import net.bigtangle.core.TransactionInput;
@@ -126,9 +127,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		}
 
 		HashMap<String, String> requestParam = new HashMap<String, String>();
-		byte[] data = OkHttp3Util.postAndGetBlock(contextRoot + ReqCmd.getTip.name(),
-				Json.jsonmapper().writeValueAsString(requestParam));
-		Block rollingBlock = networkParameters.getDefaultSerializer().makeBlock(data);
+		Block rollingBlock = fetchTipSkeleton();
 		rollingBlock.addTransaction(transaction0);
 
 
@@ -201,5 +200,7 @@ public class PaymentServiceTest extends AbstractIntegrationTest {
 		payBigTo(to, amount.getValue(), null);
 
 	}
+
+
 
 }
