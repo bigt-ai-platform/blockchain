@@ -122,6 +122,14 @@ public class BlockSaveService {
 	 *  AND cache operations.  Batch blocks are
 	 *  transient mempool dumps that don't need archival. */
 	public void saveBatchBlock(Block block, BlockStoreInterface store) throws Exception {
+		// Guard against stale in-memory tx hash caches: mempool tx objects can
+		// carry a hash computed before later field changes. The merkle root is
+		// written from the cached leaves while a syncing peer recomputes them
+		// from the serialized bytes — producing a block whose root never
+		// verifies anywhere else (observed as a permanent L1 sync stall).
+		// Forcing recalculation here makes creator and verifier agree by
+		// construction.
+		block.invalidateTransactionHashes();
 		store.setBatchDurability(true);
 		try (AutoCloseable cacheFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.skipCacheForBatch();
 		     AutoCloseable copyFlag = net.bigtangle.store.DatabaseFullBlockStoreBase.usePgCopyForBatch()) {

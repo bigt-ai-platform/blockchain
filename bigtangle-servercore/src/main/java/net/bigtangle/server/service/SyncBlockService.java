@@ -39,6 +39,7 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.NoBlockException;
 import net.bigtangle.exception.ProtocolException;
 import net.bigtangle.exception.VerificationException;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBlockListResponse;
@@ -293,7 +294,17 @@ public class SyncBlockService {
 		for (Block block : sortedBlocks) {
 			// no genesis block and no spend pending set
 			if (block.getHeight() > 0) {
-				blockgraph.addFromSync(block, true, store);
+				try {
+					blockgraph.addFromSync(block, true, store);
+				} catch (VerificationException e) {
+					// A single malformed/poisoned remote block must not stall
+					// the whole cross-chain sync forever: skip it and keep
+					// pulling the rest of the chain. The block stays absent
+					// locally; if it is ever needed as a dependency the
+					// regular missing-predecessor handling reports it.
+					log.warn("Skipping unverifiable synced block {} from {}: {}", block.getHash(), s,
+							e.getMessage());
+				}
 			}
 		}
 

@@ -373,6 +373,14 @@ public interface BlockStoreInterface {
 	 */
 	List<Sha256Hash> hashesFromNonChainHeigth(long heigth) throws BlockStoreException;
 
+	/**
+	 * Hashes of unconfirmed non-chain blocks currently marked invalid
+	 * (solid = -1), most recent first. Used by the bounded-retry sweep that
+	 * gives transiently-failed blocks another chance to be referenced by a
+	 * beacon instead of starving forever.
+	 */
+	List<Sha256Hash> invalidNonChainHashes(long cutoffHeight, int limit) throws BlockStoreException;
+
 	void updateMultiSignBlockBitcoinSerialize(String tokenid, long tokenindex, byte[] bytes) throws BlockStoreException;
 
 	List<MultiSignAddress> getMultiSignAddressListByTokenidAndBlockHashHex(String tokenid, Sha256Hash prevblockhash)

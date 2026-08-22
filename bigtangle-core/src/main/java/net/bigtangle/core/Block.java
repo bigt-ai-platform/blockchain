@@ -752,6 +752,24 @@ public class Block extends Message {
 	}
 
 	/**
+	 * Invalidates the cached hash of EVERY transaction in this block and the
+	 * block-level merkle root, forcing recomputation from current field values
+	 * at next serialization. Called by batch-block assembly before persisting:
+	 * mempool tx objects may carry hashes cached before later mutations, which
+	 * otherwise get baked into the merkle tree and make the persisted block
+	 * unverifiable for peers (MerkleRootMismatchException on sync).
+	 */
+	public void invalidateTransactionHashes() {
+		if (transactions != null) {
+			for (Transaction t : transactions) {
+				t.resetHash();
+			}
+		}
+		merkleRoot = null;
+		hash = null;
+	}
+
+	/**
 	 * Returns the version of the block data structure as defined by the Bitcoin
 	 * protocol.
 	 */

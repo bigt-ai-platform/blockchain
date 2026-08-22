@@ -231,6 +231,16 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
 			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
 
+	/**
+	 * Orphaned (non-chain) blocks currently marked invalid. The reference sweep
+	 * excludes these via {@code solid > -1}; this query feeds the bounded-retry
+	 * rehabilitation so a block that failed one re-validation during a reorg
+	 * gets another chance instead of starving forever.
+	 */
+	protected final String SELECT_INVALID_NONCHAIN_HASHES_SQL = "SELECT hash "
+			+ "FROM blocks WHERE chainlength = -1 AND confirmed = false AND solid = -1 AND height >= ? "
+			+ "ORDER BY height DESC LIMIT ?";
+
 	protected final String UPDATE_ORDER_SPENT_SQL = getUpdate() + " orders SET spent = ?, spenderblockhash = ? "
 			+ " WHERE blockhash = ? AND collectinghash = ?";
 
@@ -368,7 +378,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	protected final String UPDATE_SETTINGS_SQL = getUpdate() + " settings SET settingvalue = ? WHERE name = ?";
 
 	protected final String UPDATE_OUTPUTS_SPENT_SQL = getUpdate()
-			+ " outputs SET spent = ?, spenderblockhash = ? WHERE hash = ? AND outputindex= ? AND blockhash = ?";
+			+ " outputs SET spent = ?, spenderblockhash = ?, spendpending = ?, spendpendingtime = ? WHERE hash = ? AND outputindex= ? AND blockhash = ?";
 
 	protected final String UPDATE_OUTPUTS_CONFIRMED_SQL = getUpdate()
 			+ " outputs SET confirmed = ? WHERE hash = ? AND outputindex= ? AND blockhash = ?";
@@ -994,6 +1004,22 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 		List<Sha256Hash> re = new ArrayList<>();
 		try (PreparedStatement s = getConnection().prepareStatement(SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL)) {
 			s.setLong(1, heigth);
+			ResultSet results = s.executeQuery();
+			while (results.next()) {
+				re.add(Sha256Hash.wrap(results.getBytes("hash")));
+			}
+			return re;
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	@Override
+	public List<Sha256Hash> invalidNonChainHashes(long cutoffHeight, int limit) throws BlockStoreException {
+		List<Sha256Hash> re = new ArrayList<>();
+		try (PreparedStatement s = getConnection().prepareStatement(SELECT_INVALID_NONCHAIN_HASHES_SQL)) {
+			s.setLong(1, cutoffHeight);
+			s.setInt(2, limit);
 			ResultSet results = s.executeQuery();
 			while (results.next()) {
 				re.add(Sha256Hash.wrap(results.getBytes("hash")));
@@ -2133,12 +2159,18 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	public void updateTransactionOutputSpent(Sha256Hash prevBlockHash, Sha256Hash prevTxHash, long index, boolean b,
 			@Nullable Sha256Hash spenderBlockHash) throws BlockStoreException {
 
+		// Keep the spend-pending claim in sync with the spent flag: confirming
+		// a spender supersedes the pending claim, and UNconfirming it (reorg)
+		// must RELEASE the claim — otherwise the output stays hidden from
+		// getOutputs forever even though its spending block is gone.
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(UPDATE_OUTPUTS_SPENT_SQL)) {
 			preparedStatement.setBoolean(1, b);
 			preparedStatement.setBytes(2, spenderBlockHash != null ? spenderBlockHash.getBytes() : null);
-			preparedStatement.setBytes(3, prevTxHash.getBytes());
-			preparedStatement.setLong(4, index);
-			preparedStatement.setBytes(5, prevBlockHash.getBytes());
+			preparedStatement.setBoolean(3, !b);
+			preparedStatement.setLong(4, b ? 0 : System.currentTimeMillis());
+			preparedStatement.setBytes(5, prevTxHash.getBytes());
+			preparedStatement.setLong(6, index);
+			preparedStatement.setBytes(7, prevBlockHash.getBytes());
 			// log.debug(preparedStatement.toString());
 			preparedStatement.executeUpdate();
 		} catch (SQLException e) {
@@ -2164,9 +2196,12 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			for (int i = 0; i < prevBlockHashes.size(); i++) {
 				s.setBoolean(1, true);
 				s.setBytes(2, spenderBlockHashes.get(i).getBytes());
-				s.setBytes(3, prevTxHashes.get(i).getBytes());
-				s.setLong(4, indexes.get(i));
-				s.setBytes(5, prevBlockHashes.get(i).getBytes());
+				// confirming supersedes any pending claim
+				s.setBoolean(3, false);
+				s.setLong(4, 0);
+				s.setBytes(5, prevTxHashes.get(i).getBytes());
+				s.setLong(6, indexes.get(i));
+				s.setBytes(7, prevBlockHashes.get(i).getBytes());
 				s.addBatch();
 			}
 			s.executeBatch();

@@ -113,6 +113,13 @@ public class OutputService {
 			for (UTXO output : getStoredOutputsFromUTXOProvider(pubKeyHashs, store)) {
 				if (output.isSpent() || !output.isConfirmed())
 					continue;
+				// A spend-pending claim held by a still-unconfirmed block makes
+				// the outpoint unavailable: handing it out again lets wallets
+				// build conflicting double-spends once the client-side pending
+				// timeout (2 min) expires. Claims are released on unconfirm
+				// (updateTransactionOutputSpent), so this cannot strand funds.
+				if (output.isSpendPending())
+					continue;
 				candidates.add(new FreeStandingTransactionOutput(networkParameters, output));
 
 			}

@@ -332,6 +332,17 @@ public class Transaction extends ChildMessage {
 		this.hash = hash;
 	}
 
+	/**
+	 * Drops the cached tx hash so the next {@link #getHash()} recomputes it
+	 * from the CURRENT field values. Block assembly must call this (directly
+	 * or via {@link Block#invalidateTransactionHashes()}) before serializing:
+	 * a hash cached before later mutations otherwise ends up in the merkle
+	 * tree while verifiers recompute from the persisted bytes.
+	 */
+	public void resetHash() {
+		this.hash = null;
+	}
+
 	public String getHashAsString() {
 		return getHash().toString();
 	}
