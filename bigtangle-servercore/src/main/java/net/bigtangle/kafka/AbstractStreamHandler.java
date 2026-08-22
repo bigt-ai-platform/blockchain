@@ -29,8 +29,52 @@ public abstract class AbstractStreamHandler {
     @Autowired
     protected KafkaSeedDiscovery seedDiscovery;
 
+    @Autowired
+    protected net.bigtangle.server.config.ServerConfiguration serverConfiguration;
+
     protected KafkaStreams streams;
     private static final Logger log = LoggerFactory.getLogger(AbstractStreamHandler.class);
+
+    private volatile boolean started;
+    private final java.util.concurrent.atomic.AtomicBoolean startScheduled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * Self-scheduling bootstrap: starts the retrying starter thread after
+     * bean wiring, gated only by {@code server.runKafkaStream}. Deliberately
+     * independent of the shared @Scheduled infrastructure, whose one-shot
+     * starter died with early-boot failures and left nodes without consumers.
+     */
+    @jakarta.annotation.PostConstruct
+    public void startWhenReady() {
+        if (!serverConfiguration.getRunKafkaStream()) {
+            return;
+        }
+        if (!startScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Thread t = new Thread(() -> {
+            for (int attempt = 1; attempt <= 120 && !started; attempt++) {
+                try {
+                    runStream();
+                    if (streams != null && KafkaStreams.State.RUNNING.equals(streams.state())) {
+                        started = true;
+                        return;
+                    }
+                } catch (Exception e) {
+                    log.warn("stream start attempt {} failed: {}", attempt, e.getMessage());
+                }
+                try {
+                    Thread.sleep(15000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "stream-starter-" + getClass().getSimpleName());
+        t.setDaemon(true);
+        t.start();
+    }
 
     protected abstract String topic();
 
