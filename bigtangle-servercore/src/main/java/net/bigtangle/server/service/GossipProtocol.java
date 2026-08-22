@@ -47,6 +47,8 @@ public class GossipProtocol implements DisposableBean {
     private static final int MAGIC = 0x42474C31;
     private static final int MSG_BLOCK = 1;
     private static final int MSG_TRANSACTION = 2;
+    /** Advertises this node's Kafka bootstrap endpoints so peers can discover brokers without DNS. */
+    private static final int MSG_KAFKA_ADVERT = 3;
     /** Per-peer outbound frame queue cap. Frames are dropped (best-effort gossip)
      *  when a slow peer cannot keep up, instead of blocking the submit path. */
     private static final int GOSSIP_QUEUE_CAPACITY = 100_000;
@@ -63,6 +65,12 @@ public class GossipProtocol implements DisposableBean {
 
     @Autowired
     private net.bigtangle.server.service.MempoolService mempoolService;
+
+    @Autowired
+    private net.bigtangle.kafka.KafkaSeedDiscovery kafkaSeedDiscovery;
+
+    @Autowired
+    private net.bigtangle.kafka.KafkaConfiguration kafkaConfiguration;
 
     private final ExecutorService listenerPool = Executors.newCachedThreadPool();
     private final ExecutorService connectPool = Executors.newCachedThreadPool();
@@ -119,6 +127,18 @@ public class GossipProtocol implements DisposableBean {
                     Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(data);
                     mempoolService.submitTransaction(tx);
                 }
+                case MSG_KAFKA_ADVERT -> {
+                    // Merge the peer's broker endpoints into our live bootstrap
+                    // set — decentralised discovery without DNS.
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> adv = net.bigtangle.utils.Json.jsonmapper()
+                            .readValue(data, java.util.Map.class);
+                    Object brokers = adv.get("brokers");
+                    if (brokers instanceof List<?> list && !list.isEmpty()) {
+                        kafkaSeedDiscovery.addDiscovered(list.toArray(new String[0]));
+                        log.debug("learned Kafka brokers from advert: {}", brokers);
+                    }
+                }
             }
         } catch (Exception e) {
             log.debug("Gossip dispatch error: {}", e.getMessage());
@@ -126,12 +146,32 @@ public class GossipProtocol implements DisposableBean {
     }
 
     private void discoveryLoop() {
+        long lastAdvert = 0;
         while (running) {
             try {
                 discoverPeers();
+                // Re-advertise our Kafka endpoints periodically so peers keep
+                // a fresh broker set even after restarts or link flaps.
+                if (System.currentTimeMillis() - lastAdvert > 60_000) {
+                    advertiseKafka();
+                    lastAdvert = System.currentTimeMillis();
+                }
                 Thread.sleep(30000);
             } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
             catch (Exception e) { log.debug("Discovery error: {}", e.getMessage()); }
+        }
+    }
+
+    /** Broadcast this node's Kafka bootstrap endpoints (config or discovered). */
+    private void advertiseKafka() {
+        String bs = kafkaSeedDiscovery != null ? kafkaSeedDiscovery.bootstrapServers() : null;
+        if (bs == null || bs.isEmpty()) return;
+        try {
+            byte[] payload = net.bigtangle.utils.Json.jsonmapper().writeValueAsBytes(
+                    java.util.Map.of("brokers", java.util.List.of(bs.split(","))));
+            broadcast(MSG_KAFKA_ADVERT, payload);
+        } catch (Exception e) {
+            log.debug("kafka advert failed: {}", e.getMessage());
         }
     }
 

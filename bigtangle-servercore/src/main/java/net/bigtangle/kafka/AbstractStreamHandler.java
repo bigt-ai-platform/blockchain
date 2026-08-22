@@ -26,6 +26,9 @@ public abstract class AbstractStreamHandler {
     @Autowired
     protected net.bigtangle.params.NetworkParameters networkParameters;
 
+    @Autowired
+    protected KafkaSeedDiscovery seedDiscovery;
+
     protected KafkaStreams streams;
     private static final Logger log = LoggerFactory.getLogger(AbstractStreamHandler.class);
 
@@ -71,22 +74,19 @@ public abstract class AbstractStreamHandler {
     }
 
     private String discoverBootstrapServers() {
-        String[] seeds = networkParameters.getDnsSeeds();
-        if (seeds == null || seeds.length == 0) return null;
-        List<String> servers = new ArrayList<>();
-        for (String seed : seeds) {
-            try {
-                List<net.bigtangle.p2p.NodeRecord> records = DnsDiscoveryResolver.resolve(seed);
-                for (net.bigtangle.p2p.NodeRecord r : records) {
-                    String addr = r.getHost() + ":9092";
-                    if (!servers.contains(addr)) servers.add(addr);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to resolve DNS seed for Kafka: {}", e.getMessage());
+        // Delegates to the shared live registry (config + DNS + gossip adverts).
+        String bs = seedDiscovery.bootstrapServers();
+        if (bs == null) {
+            String[] seeds = networkParameters.getDnsSeeds();
+            if (seeds != null && seeds.length > 0 && !dnsWarned) {
+                dnsWarned = true;
+                log.info("No Kafka brokers discovered yet; DNS seeds will be retried by the discovery service");
             }
         }
-        return servers.isEmpty() ? null : String.join(",", servers);
+        return bs;
     }
+
+    private volatile boolean dnsWarned;
 
     @PreDestroy
     public void closeStream() {
