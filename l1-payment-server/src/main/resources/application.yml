@@ -57,3 +57,7 @@ management:
   endpoint:
     prometheus:
       enabled: true
+
+pos:
+  validatorKey: ${POS_VALIDATOR_KEY:}
+  slotIntervalMs: ${POS_SLOT_INTERVAL_MS:12000}

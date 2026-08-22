@@ -1,21 +1,50 @@
 package net.bigtangle.server;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.google.common.base.Stopwatch;
 
 import jakarta.servlet.http.HttpServletResponse;
+import net.bigtangle.core.Address;
+import net.bigtangle.core.UTXO;
+import net.bigtangle.core.Utils;
+import net.bigtangle.core.PQKey;
+import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
+import net.bigtangle.response.AbstractResponse;
+import net.bigtangle.response.ErrorResponse;
+import net.bigtangle.response.OkResponse;
+import net.bigtangle.server.service.StakeService;
+import net.bigtangle.server.service.ValidatorDutyService;
 import net.bigtangle.store.BlockStoreInterface;
+import net.bigtangle.utils.Json;
+
+import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Layer-1 payment node REST API. Shares the common handlers (getTip, saveBlock,
  * getOutputs, ...) with the other L1 layers via {@link BaseDispatcherController}.
+ *
+ * Adds the minimal PoS bootstrap handlers (stakeDeposit / activateValidator /
+ * getValidators) so a local L1-SOCIAL chain can form its own validator set —
+ * same semantics as layer0-server.
  */
 @RestController
 @RequestMapping("/")
 public class DispatcherController extends BaseDispatcherController {
+
+	@Autowired
+	private StakeService stakeService;
+
+	@Autowired
+	private ValidatorDutyService validatorDutyService;
+
+	@Autowired
+	private NetworkParameters networkParameters;
 
 	@Override
 	protected String getChainName() {
@@ -25,6 +54,67 @@ public class DispatcherController extends BaseDispatcherController {
 	@Override
 	protected boolean handleLayerSpecific(ReqCmd reqCmd, byte[] bodyByte, HttpServletResponse httpServletResponse,
 			Stopwatch watch, BlockStoreInterface store, String reqCmdName) throws Exception {
-		return false;
+		switch (reqCmd) {
+		case stakeDeposit: {
+			String reqStr = new String(bodyByte, java.nio.charset.StandardCharsets.UTF_8);
+			Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+			if (request.containsKey("privateKey")) {
+				this.outPrintJSONString(httpServletResponse, ErrorResponse.create(403), watch, reqCmdName);
+				return true;
+			}
+			String pubkeyHex = (String) request.get("pubkey");
+			PQKey configuredKey = validatorDutyService.getValidatorKey();
+			if (configuredKey == null) {
+				this.outPrintJSONString(httpServletResponse, ErrorResponse.create(403), watch, reqCmdName);
+				return true;
+			}
+			if (!Utils.HEX.encode(configuredKey.getPublicKeyBytes()).equals(pubkeyHex)) {
+				this.outPrintJSONString(httpServletResponse, ErrorResponse.create(403), watch, reqCmdName);
+				return true;
+			}
+			PQKey depositKey = configuredKey;
+			String amountStr = (String) request.get("amount");
+			BigInteger amount = new BigInteger(amountStr);
+			Address addr = Address.fromHash160(networkParameters, Utils.sha256hash160(depositKey.getPubKey()));
+			List<UTXO> utxos = store.getOpenTransactionOutputs(addr.toBase58());
+			UTXO selected = null;
+			for (UTXO u : utxos) {
+				if (u.getValue().getValue().compareTo(amount) >= 0
+						&& java.util.Arrays.equals(u.getValue().getTokenid(), NetworkParameters.BIGTANGLE_TOKENID)) {
+					selected = u;
+					break;
+				}
+			}
+			if (selected == null) {
+				this.outPrintJSONString(httpServletResponse, ErrorResponse.create(404), watch, reqCmdName);
+				return true;
+			}
+			stakeService.processDeposit(selected, depositKey.getPubKey(), depositKey, store);
+			this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmdName);
+			return true;
+		}
+		case activateValidator: {
+			String reqStr = new String(bodyByte, java.nio.charset.StandardCharsets.UTF_8);
+			Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+			String pubkeyHex = (String) request.get("pubkey");
+			long epoch = Long.parseLong(request.getOrDefault("epoch", "0").toString());
+			stakeService.activateValidator(Utils.HEX.decode(pubkeyHex), epoch, store);
+			this.outPrintJSONString(httpServletResponse, OkResponse.create(), watch, reqCmdName);
+			return true;
+		}
+		case getValidators: {
+			java.util.List<net.bigtangle.core.StakeRecord> validators = store.getActiveStakeDeposits();
+			Map<String, Object> result = new java.util.HashMap<>();
+			result.put("validators", validators);
+			this.outPrintJSONString(httpServletResponse,
+					net.bigtangle.response.GetStringResponse.create(
+							com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+									.writeValueAsString(result)),
+					watch, reqCmdName);
+			return true;
+		}
+		default:
+			return false;
+		}
 	}
 }
