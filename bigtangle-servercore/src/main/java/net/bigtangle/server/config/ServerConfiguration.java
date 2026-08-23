@@ -106,7 +106,7 @@ public class ServerConfiguration {
      * Service readiness flag. When false, the server will not
      * process requests until initialization is complete.
      */
-    private Boolean serviceReady = false;
+    private volatile Boolean serviceReady = false;
     
     /** 
      * Whether to create database tables on startup.
@@ -203,16 +203,12 @@ public class ServerConfiguration {
      * @return true if service is ready, false if still initializing
      * @throws RuntimeException if interrupted while waiting
      */
-    public synchronized Boolean checkService()  {
-        if (!serviceReady) {
-
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-
-        }
+    public Boolean checkService()  {
+        // Deliberately NOT synchronized and NOT sleeping: this is called by
+        // every scheduled task on every tick. The previous version held the
+        // ServerConfiguration monitor while sleeping 100 ms whenever the
+        // service was initializing, serializing the whole scheduler and
+        // starving the duty thread (proposals stopped mesh-wide).
         return serviceReady;
     }
 
