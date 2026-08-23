@@ -43,6 +43,8 @@ import net.bigtangle.store.BlockStoreInterface;
  */
 @Service
 public class CasperService {
+	/** Votes targeting epochs this far below the chain epoch are stale-state poison. */
+	private static final long ATTEST_MAX_STALE_EPOCHS = 8;
 
     private static final Logger log = LoggerFactory.getLogger(CasperService.class);
 
@@ -581,6 +583,17 @@ public class CasperService {
         if (att.getTargetEpoch() > wallEpoch + 1) {
             log.warn("Rejecting far-future attestation from pubkey={} slot={} (wall epoch {})",
                     vkey, att.getSlot(), wallEpoch);
+            return;
+        }
+
+        // Reject votes anchored to checkpoints hopelessly behind the chain:
+        // they come from validators whose justification state is stale (mass
+        // restart / catch-up) and can never contribute to real quorum — but
+        // silently counting them hides the stall. Visible + excluded.
+        long chainEpochNow = net.bigtangle.server.service.SlotService.currentChainEpoch(store);
+        if (att.getTargetEpoch() < chainEpochNow - ATTEST_MAX_STALE_EPOCHS) {
+            log.warn("Rejecting stale-epoch attestation from pubkey={} slot={} target={} (chain epoch {})",
+                    vkey, att.getSlot(), att.getTargetEpoch(), chainEpochNow);
             return;
         }
 

@@ -27,6 +27,9 @@ public class ValidatorDutyService {
 
     private static final Logger log = LoggerFactory.getLogger(ValidatorDutyService.class);
 
+    /** Max epochs a validator's justified checkpoint may trail the chain epoch before it must abstain. */
+    private static final long ATTEST_MAX_SOURCE_LAG = 8;
+
     @Autowired
     private SlotService slotService;
 
@@ -270,6 +273,19 @@ public class ValidatorDutyService {
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
             long sourceEpoch = justified != null ? justified.epoch : Math.max(0, targetEpoch - 1);
             Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(targetEpoch, store).getBlockHash();
+
+            // ABSTAIN when this validator's justified checkpoint is hopelessly
+            // behind the chain epoch. Voting from dead state poisons quorum
+            // formation for every real checkpoint (observed: sourceEpoch=0 /
+            // targetEpoch=8 votes on a live chain at epoch 663k scattered the
+            // vote set and froze finality mesh-wide). Ethereum semantics: a
+            // validator without a usable source simply skips its slot.
+            if ((justified == null && targetEpoch > 1)
+                    || (justified != null && sourceEpoch < targetEpoch - ATTEST_MAX_SOURCE_LAG)) {
+                log.warn("Abstaining from attestation slot {}: justifiedEpoch={} targetEpoch={} "
+                        + "(catching up — will resume once synced)", slot, sourceEpoch, targetEpoch);
+                return;
+            }
 
             // Slashing protection: one attestation per slot; only a
             // byte-identical re-vote is safe after a restart.
