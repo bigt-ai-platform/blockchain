@@ -21,6 +21,8 @@ import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.ValidatorDutyService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.server.service.CasperService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import net.bigtangle.utils.Json;
 
 import java.math.BigInteger;
@@ -39,6 +41,8 @@ import java.util.Map;
 @RequestMapping("/")
 public class DispatcherController extends BaseDispatcherController {
 
+	private static final Logger log = LoggerFactory.getLogger(DispatcherController.class);
+
 	@Autowired
 	private StakeService stakeService;
 
@@ -50,6 +54,9 @@ public class DispatcherController extends BaseDispatcherController {
 
 	@Autowired
 	private CasperService casperService;
+
+	@Autowired
+	private net.bigtangle.l1.social.SocialGroupStore socialGroupStore;
 
 	@Override
 	protected String getChainName() {
@@ -64,21 +71,46 @@ public class DispatcherController extends BaseDispatcherController {
 	 * in the confirmation handler as the social store matures.
 	 */
 	private void promoteSocialRecord(Transaction tx, BlockStoreInterface store) throws Exception {
-		String memo = tx.getMemo();
-		if (memo == null || !memo.contains("social.v1")) return;
-		Map<String, Object> memoMap = Json.jsonmapper().readValue(memo, Map.class);
-		Object kvObj = memoMap.get("kv");
-		if (!(kvObj instanceof List)) throw new IllegalArgumentException("malformed social memo");
-		for (Object o : (List<?>) kvObj) {
-			@SuppressWarnings("unchecked")
-			Map<String, Object> kv = (Map<String, Object>) o;
-			if (!"social.v1".equals(kv.get("key"))) continue;
-			String recordJson = String.valueOf(kv.get("value"));
+		String recordJson;
+		if ("SocialRecord".equals(tx.getDataClassName()) && tx.getData() != null) {
+			// typed data-class path (preferred)
+			recordJson = new String(tx.getData(), java.nio.charset.StandardCharsets.UTF_8);
+		} else {
+			String memo = tx.getMemo();
+			if (memo == null || !memo.contains("social.v1")) return;
+			Map<String, Object> memoMap = Json.jsonmapper().readValue(memo, Map.class);
+			Object kvObj = memoMap.get("kv");
+			if (!(kvObj instanceof List)) throw new IllegalArgumentException("malformed social memo");
+			recordJson = null;
+			for (Object o : (List<?>) kvObj) {
+				@SuppressWarnings("unchecked")
+				Map<String, Object> kv = (Map<String, Object>) o;
+				if ("social.v1".equals(kv.get("key"))) {
+					recordJson = String.valueOf(kv.get("value"));
+					break;
+				}
+			}
+			if (recordJson == null) return;
+		}
+		{
 			Map<String, Object> rec = Json.jsonmapper().readValue(recordJson, Map.class);
 			if (!String.valueOf(rec.get("type")).startsWith("social."))
 				throw new IllegalArgumentException("unknown social type");
 			if (rec.get("from") == null || rec.get("to") == null)
 				throw new IllegalArgumentException("from/to required");
+			// consensus-side group membership state machine: unauthorized
+			// ops (non-admin kick, invite-only join, last-admin leave, ...)
+			// are rejected here — they never reach the mempool.
+			String type = String.valueOf(rec.get("type"));
+			if (type.startsWith("social.group")) {
+				String err = socialGroupStore.apply(type,
+						String.valueOf(rec.get("from")),
+						String.valueOf(rec.get("to")),
+						(String) rec.get("groupId"),
+						(String) rec.get("policy"));
+				if (err != null) throw new IllegalArgumentException(err);
+			}
+
 			tx.setMemo(null);
 			tx.setDataClassName(net.bigtangle.core.DataClassName.SocialRecord.name());
 			tx.setData(recordJson.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -91,6 +123,9 @@ public class DispatcherController extends BaseDispatcherController {
 			Stopwatch watch, BlockStoreInterface store, String reqCmdName) throws Exception {
 		if (reqCmd == ReqCmd.submitTransaction) {
 			Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bodyByte);
+			log.info("social-submit: dcn={} dataLen={} memo={}",
+					tx.getDataClassName(), tx.getData() == null ? -1 : tx.getData().length,
+					tx.getMemo() == null ? "null" : "present");
 			promoteSocialRecord(tx, store);
 			// re-serialize the (possibly promoted) tx for base handling
 			bodyByte = tx.bitcoinSerialize();
