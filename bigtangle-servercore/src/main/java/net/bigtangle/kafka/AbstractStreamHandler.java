@@ -142,14 +142,12 @@ public abstract class AbstractStreamHandler {
 
     private String getApplicationId() {
         String suffix = kafkaConfiguration.getConsumerIdSuffix();
-        if (suffix == null || suffix.isEmpty()) {
-            // Broadcast semantics: EVERY validator must consume EVERY record
-            // (votes and blocks feed its own fork choice). A shared consumer
-            // group would split the partition across nodes, so default the
-            // group to a per-node identity — the API port is unique per node.
-            suffix = "node" + serverConfiguration.getPort();
-        }
-        return getClass().getCanonicalName() + "_" + suffix;
+        // Broadcast semantics: EVERY validator must consume EVERY record. A
+        // shared suffix across nodes puts them in one consumer group and the
+        // partition is served to only ONE member — peers then starve for votes
+        // and blocks (observed as permanent head divergence). Always append a
+        // per-node identity (API port is unique per node).
+        return getClass().getCanonicalName() + "_" + suffix + "-node" + serverConfiguration.getPort();
     }
 
     public boolean isRunning() {
