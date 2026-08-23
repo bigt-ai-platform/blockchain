@@ -588,6 +588,19 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 		if (valid.isEmpty()) {
 			return;
 		}
+		// Deduplicate by txhash: PostgreSQL rejects an INSERT .. ON CONFLICT
+		// whose VALUES list contains the same key twice ("cannot affect row a
+		// second time"), which aborted the entire status write whenever a
+		// block carried duplicated tx entries (dual-path delivery).
+		java.util.LinkedHashMap<String, net.bigtangle.server.data.TransactionStatusRecord> byTx =
+				new java.util.LinkedHashMap<>(valid.size() * 2);
+		for (net.bigtangle.server.data.TransactionStatusRecord r : valid) {
+			byTx.put(r.getTxHash().toString(), r);
+		}
+		if (byTx.isEmpty()) {
+			return;
+		}
+		valid = new java.util.ArrayList<>(byTx.values());
 		// Chunk so a single multi-row INSERT stays far below PostgreSQL's
 		// 65,535-parameter limit (7 params per row). A block can hold thousands
 		// of transactions (large benchmark batches); one unbounded INSERT
