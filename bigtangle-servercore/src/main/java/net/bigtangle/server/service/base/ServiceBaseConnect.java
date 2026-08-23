@@ -128,8 +128,15 @@ public class ServiceBaseConnect extends ServiceBaseConfirmation
 		if (!allUtxos.isEmpty()) {
 			blockStore.addUnspentTransactionOutput(allUtxos);
 			if (!net.bigtangle.store.DatabaseFullBlockStoreBase.isCacheSkipped()) {
-				for (UTXO u : allUtxos)
-					cacheBlockService.evictTransactionOutput(u, blockStore);
+				// Large batches: one bulk cache clear instead of thousands of
+				// individual evictions (per-UTXO eviction dominated beacon
+				// connect for 2k-tx batch blocks).
+				if (allUtxos.size() > 64) {
+					cacheBlockService.evictAllTransactionOutputs();
+				} else {
+					for (UTXO u : allUtxos)
+						cacheBlockService.evictTransactionOutput(u, blockStore);
+				}
 			}
 		}
 	}

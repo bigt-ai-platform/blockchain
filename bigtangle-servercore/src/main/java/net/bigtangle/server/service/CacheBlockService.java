@@ -326,6 +326,16 @@ public class CacheBlockService {
 
 	}
 
+	/**
+	 * Bulk invalidation for large ingests: a 2k-tx batch block produces
+	 * thousands of UTXOs and the per-UTXO eviction loop dominated beacon
+	 * connect (~65% of solidify time). Clearing the whole utxos cache once is
+	 * conservative (next reads repopulate from the store) and O(1).
+	 */
+	@CacheEvict(value = "utxos", allEntries = true)
+	public void evictAllTransactionOutputs() {
+	}
+
 	@Cacheable(value = "approverHashes", key = "#blockhash")
 	public List<Sha256Hash> getApproverBlockHashes(Sha256Hash blockhash, BlockStoreInterface store)
 			throws BlockStoreException {
