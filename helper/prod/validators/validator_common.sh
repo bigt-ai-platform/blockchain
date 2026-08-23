@@ -28,6 +28,24 @@ for _hp in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
     [ -n "${REQUESTER}" ] && REQUESTER="${REQUESTER},"
     REQUESTER="${REQUESTER}http://${_hp}"
 done
+# Exclude SELF from the requester list: a cold-starting node's own API
+# answers 'service is not ready' until startInit completes, and startInit
+# pulls through the requester endpoints — self-inclusion deadlocks boot.
+REQUESTER="$(echo "${REQUESTER}" | tr ',' '\n' | grep -v "^http://${NODE_HOST}:${SERVER_PORT}$" | paste -sd, -)"
+# Drop requesters that are unreachable right now: a hanging TCP connect
+# stalls the initial chain scan; periodic sync re-tests them later.
+_REQ_OUT=""
+for _u in $(echo "${REQUESTER}" | tr ',' ' '); do
+    _pair="${_u#http://}"
+    if timeout 2 bash -c "</dev/tcp/${_pair%%:*}/${_pair##*:}" 2>/dev/null; then
+        _REQ_OUT="${_REQ_OUT}${_REQ_OUT:+,}${_u}"
+    else
+        # log() is defined further down; this runs during sourcing.
+        echo "[node-${NODE_INDEX}] requester ${_u} unreachable at boot; skipping"
+    fi
+done
+[ -n "$_REQ_OUT" ] && REQUESTER="$_REQ_OUT"
+unset _REQ_OUT _u _pair
 POS_GOSSIP_PEERS="${SEED_HOSTS}"
 
 # Gossip block mesh (host:gossipPort of every node's SERVER gossip listener).
@@ -51,15 +69,25 @@ http_post() { # $1=path  $2=json-body
 }
 
 # ---- Database --------------------------------------------------------------
+PG_CONTAINER="${PG_CONTAINER:-test-bigtangle-postgres}"
+_pg() { # psql wrapper: local client when present, else exec into the DB container
+    if command -v psql >/dev/null 2>&1; then
+        PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" "$@"
+    elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PG_CONTAINER}"; then
+        # The container's own listen port is DB_PORT in this deployment.
+        docker exec "${PG_CONTAINER}" psql -h localhost -p "${DB_PORT}" -U "${DB_USERNAME}" "$@"
+    else
+        echo "no psql client and no container ${PG_CONTAINER}" >&2; return 1
+    fi
+}
 db_setup() {
     log "creating database ${DB_NAME} (if absent)"
     # Connect to the always-present 'postgres' DB to run CREATE DATABASE (psql
     # without -d would try the user-named DB, which does not exist on a fresh
     # postgres image).
-    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" -d postgres \
+    _pg -d postgres \
         -tc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 \
-        || PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOSTNAME}" -p "${DB_PORT}" -U "${DB_USERNAME}" -d postgres \
-             -c "CREATE DATABASE ${DB_NAME};"
+        || _pg -d postgres -c "CREATE DATABASE ${DB_NAME};"
 }
 
 # ---- Processes -------------------------------------------------------------
@@ -83,6 +111,12 @@ start_server() {
     if [ -n "${GENESIS_CSV:-}" ]; then
         genesis_csv_arg=("-Dbigtangle.genesis.csv=${GENESIS_CSV}")
     fi
+    # Kafka stream processing off by default; nodes with KAFKA_BOOTSTRAP set
+    # (e.g. s2001:9092, written by addnode.sh) consume the block stream.
+    local kafka_args=("--server.runKafkaStream=false")
+    if [ -n "${KAFKA_BOOTSTRAP:-}" ]; then
+        kafka_args=("--server.runKafkaStream=true" "--kafka.bootstrapServers=${KAFKA_BOOTSTRAP}")
+    fi
     log "starting layer0-server on :${SERVER_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-server" "${SERVER_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_SERVER} "${genesis_csv_arg[@]}" -jar /app/app.jar \
@@ -92,7 +126,7 @@ start_server() {
         --db.hostname="${DB_HOSTNAME}" --db.port="${DB_PORT}" --db.dbName="${DB_NAME}" \
         --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" \
         --server.createtable="${createtable}" \
-        --server.runKafkaStream=false \
+        "${kafka_args[@]}" \
         --server.fundEnabled="${FUND_ENABLED:-false}" \
         --server.requester="${REQUESTER}" \
         --service.schedule.chainlength=true --service.schedule.blockbatch=true \

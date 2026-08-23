@@ -1,13 +1,10 @@
-/.project
 **/.project
 /build/
 **/target/
-/bin/ 
-/.settings/
+/bin/
 **/.settings/
-bigtangle-docker/.settings/
 **/.classpath
-logs/ 
+logs/
 /.idea/
 *.class
 
@@ -16,13 +13,12 @@ logs/
 helper/testpq.json
 /node_modules/
 /bigtangle-typescript/dist/
-/bigtangle-subtangle/.settings/org.eclipse.core.resources.prefs
-/bigtangle-subtangle/.settings/org.eclipse.jdt.core.prefs
-bigtangle-subtangle/.settings/org.eclipse.jdt.apt.core.prefs
-bigtangle-subtangle/.settings/org.eclipse.m2e.core.prefs
 
 # validator secrets
 validator.env
 # generated L1-order bootstrap validator keys (used by remote.sh)
 .l1validatorpub
 .l1genesispub
+*-server.log
+*-server.cid
+helper/prod/validators/node-*/

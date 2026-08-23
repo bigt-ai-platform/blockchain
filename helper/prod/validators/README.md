@@ -62,6 +62,31 @@ as a FULL mesh: a node pulls missing beacon parents only from its configured
 requester, so a single/self requester stalls the bootstrap node at the first
 missing parent and it confirms zero beacons.
 
+## Adding / leaving nodes on a running system
+
+`helper/prod/addnode.sh` automates the lifecycle against a running prod test
+system:
+
+```bash
+helper/prod/addnode.sh add              # next free index, auto-detected HOST
+helper/prod/addnode.sh add 4 10.8.0.5   # explicit index + host
+helper/prod/addnode.sh status           # validators/chainLength per seed
+helper/prod/addnode.sh leave 4          # signed BLOCKTYPE_EXIT, stop, drop seeds
+helper/prod/addnode.sh rejoin 4         # re-add seeds, restart, re-stake
+```
+
+- `add` generates credentials (`SignExit.java`/`ValidatorKeyTool` run from the
+  local exec jar, docker image fallback), writes `node-<i>/validator.env`
+  (ports `8081+i`, `30307+4i`, `9095+4i`, …), appends the node to
+  `common.env` `SEED_HOSTS`/`GOSSIP_SEEDS`, creates the DB, starts the server,
+  then funds/stakes/activates. Nodes keep `KAFKA_BOOTSTRAP` in their env and
+  start with `--server.runKafkaStream=true --kafka.bootstrapServers=<s2001>`.
+- `leave` signs the voluntary exit locally (`requestValidatorExit`, nonce =
+  confirmed chainLength), waits for the `exiting` flag/removal in
+  `getValidators`, stops the container and removes the seed entries.
+  The stake stays escrowed until the withdrawable epoch; `rejoin` re-stakes
+  once the balance is back.
+
 ## Notes
 
 - One PostgreSQL database per node (`layer0`, `layer0_1`, …) and one
