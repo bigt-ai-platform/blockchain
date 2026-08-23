@@ -239,23 +239,24 @@ verify_network() {
     log "verifying ${expected}-node network across: ${SEED_HOSTS}"
     for hostport in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
         local base="http://${hostport}"
-        local v cl fin
+        local v cl fin flen
         v=$(curl -s -m 5 -X POST "${base}/getValidators" -H 'Content-Type: application/json' -d '{}' \
             | python3 -c 'import sys,json; d=json.load(sys.stdin); v=d.get("text") or d.get("validators"); import json as j; v=j.loads(v) if isinstance(v,str) else v; v=(v or {}).get("validators") if isinstance(v,dict) else v; print(len(v) if v is not None else 0)' 2>/dev/null || echo 0)
-        read -r cl fin finraw <<<"$(curl -s -m 5 -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
+        read -r cl fin flen finraw <<<"$(curl -s -m 5 -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
             | python3 -c '
 import sys, json, hashlib
 try:
     d = json.load(sys.stdin)
 except Exception:
-    print("0 - -"); sys.exit(0)
+    print("0 - - -"); sys.exit(0)
 r = d.get("txReward")
 r = json.loads(r) if isinstance(r, str) else (r or {})
 f = d.get("finalizedBlockHash") or ""
 raw = (f["bytes"] if isinstance(f, dict) else str(f)).strip()
 fin = hashlib.sha256(raw.encode()).hexdigest()[:16] if raw else "-"
-print(r.get("chainLength", 0), fin, raw)' 2>/dev/null || echo "0 - -")"
-        echo "  ${hostport}: validators=${v} chainlength=${cl:-?} finalized=${fin}"
+flen = d.get("finalizedChainLength")
+print(r.get("chainLength", 0), fin, flen if flen is not None else "-", raw)' 2>/dev/null || echo "0 - - -")"
+        echo "  ${hostport}: validators=${v} chainlength=${cl:-?} finalized=${fin}#${flen:-?}"
         [ "${v}" -lt "${expected}" ] && { echo "  FAIL: ${hostport} has ${v}/${expected} validators" >&2; return 1; }
         [ "${cl:-0}" -gt "${maxcl}" ] && maxcl="${cl}"
         [ "${cl:-0}" -lt "${mincl}" ] && mincl="${cl}"
@@ -290,8 +291,10 @@ print(r.get("chainLength", 0), fin, raw)' 2>/dev/null || echo "0 - -")"
                 [ "$peer" = "$hp2" ] && continue
                 body=$(curl -s -m 5 -X POST "http://${peer}/getBlockByHash" \
                     -H 'Content-Type: application/json' -d "{\"hashHex\":\"${hex}\",\"text\":\"true\"}" 2>/dev/null || echo "")
-                # miss is signaled in the body (errorcode 404), HTTP stays 200
-                if echo "$body" | grep -q 'blocktype'; then
+                # miss is signaled in the body (errorcode 404), HTTP stays 200.
+                # 'hash:' appears in every block toString, even INITIAL/genesis
+                # ones which omit the blocktype line.
+                if echo "$body" | grep -q 'hash:'; then
                     probe="found-on:${peer}"
                     break
                 fi

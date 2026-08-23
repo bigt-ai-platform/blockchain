@@ -187,6 +187,12 @@ chainlength_of() { # $1=base-url
         || echo ""
 }
 
+finalized_length_of() { # $1=base-url → node's finalized checkpoint chainlength
+    curl -sf -m 5 -X POST "${1}/getChainNumber" -H 'Content-Type: application/json' -d '{}' 2>/dev/null \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin); f=d.get("finalizedChainLength"); print(f if f is not None else "-")' 2>/dev/null \
+        || echo "-"
+}
+
 validator_state_of() { # $1=base-url $2=pubkey-hex → active|exiting|gone|unreachable
     curl -sf -m 5 -X POST "${1}/getValidators" -H 'Content-Type: application/json' -d '{}' 2>/dev/null \
         | PUBKEY="$2" python3 -c '
@@ -399,14 +405,15 @@ cmd_rejoin() {
 }
 
 cmd_status() {
-    local hp base v cl
+    local hp base v cl fl
     echo "SEED_HOSTS=${SEED_HOSTS}"
     echo "GOSSIP_SEEDS=${GOSSIP_SEEDS}"
     for hp in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
         base="http://${hp}"
         v="$(validators_count_of "$base")"
         cl="$(chainlength_of "$base")"
-        printf '  %-24s validators=%-4s chainLength=%s\n' "${hp}" "${v}" "${cl:-?}"
+        fl="$(finalized_length_of "$base")"
+        printf '  %-24s validators=%-4s chainLength=%-6s finalized=%s\n' "${hp}" "${v}" "${cl:-?}" "${fl:-?}"
     done
     docker ps --format '{{.Names}}  {{.Status}}' 2>/dev/null | grep -E '^node-[0-9]+-server' || true
 }
