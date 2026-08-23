@@ -281,6 +281,11 @@ public class BlockService {
 			if (finalized != null) {
 				response.setFinalizedBlockHash(finalized.getBlockHash().toString());
 				response.setFinalizedEpoch(finalized.getEpoch());
+				try {
+					response.setFinalizedChainLength(store.getRewardChainLength(finalized.getBlockHash()));
+				} catch (Exception e) {
+					logger.debug("finalized chainlength lookup failed: {}", e.getMessage());
+				}
 			}
 		}
 		return response;

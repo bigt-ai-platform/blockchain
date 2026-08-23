@@ -16,6 +16,12 @@ public class GetTXRewardResponse extends AbstractResponse {
     private String finalizedBlockHash;
     private Long justifiedEpoch;
     private Long finalizedEpoch;
+    /**
+     * Reward-chain length of the responding node's finalized checkpoint.
+     * Lets a joining node gate readiness on a FIXED target ("I have executed
+     * through finality") instead of chasing the moving head.
+     */
+    private Long finalizedChainLength;
   
  
 
@@ -67,6 +73,14 @@ public class GetTXRewardResponse extends AbstractResponse {
 
     public void setFinalizedEpoch(Long finalizedEpoch) {
         this.finalizedEpoch = finalizedEpoch;
+    }
+
+    public Long getFinalizedChainLength() {
+        return finalizedChainLength;
+    }
+
+    public void setFinalizedChainLength(Long finalizedChainLength) {
+        this.finalizedChainLength = finalizedChainLength;
     }
  
 }

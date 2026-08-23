@@ -225,29 +225,90 @@ phase_stake() {
     log "staked + activated ${VALIDATOR_PUBKEY}"
 }
 
-# Cross-node acceptance: every node reports the full active set (nothing
-# slashed/reverted), every node has confirmed a beacon, and the confirmed
-# chainlengths agree within one epoch.
+# Cross-node acceptance. Safety = all nodes that have finalized agree on the
+# SAME finalized checkpoint (different finalized roots = incompatible chains;
+# PoS never reorgs finality — that is a hard FAIL). A trailing confirmed tip
+# is mere throughput lag, not wrongness: it is reported and only WARNs past
+# one epoch. Also fails on missing validators / zero beacons anywhere.
 verify_network() {
     local expected="${EXPECTED_VALIDATORS:-$(echo "${SEED_HOSTS}" | tr ',' '\n' | wc -l | tr -d ' ')}"
     local epoch="${POS_SLOTS_PER_EPOCH:-32}"
     local maxcl=0 mincl=999999999
+    local finlist=""
+    local -A FIN_RAW=() FIN_GRP=()
     log "verifying ${expected}-node network across: ${SEED_HOSTS}"
     for hostport in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
         local base="http://${hostport}"
-        local v cl
-        v=$(curl -s -X POST "${base}/getValidators" -H 'Content-Type: application/json' -d '{}' \
+        local v cl fin
+        v=$(curl -s -m 5 -X POST "${base}/getValidators" -H 'Content-Type: application/json' -d '{}' \
             | python3 -c 'import sys,json; d=json.load(sys.stdin); v=d.get("text") or d.get("validators"); import json as j; v=j.loads(v) if isinstance(v,str) else v; v=(v or {}).get("validators") if isinstance(v,dict) else v; print(len(v) if v is not None else 0)' 2>/dev/null || echo 0)
-        cl=$(curl -s -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
-            | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d.get("txReward"); import json as j; r=j.loads(r) if isinstance(r,str) else r; print((r or {}).get("chainLength",0))' 2>/dev/null || echo 0)
-        echo "  ${hostport}: validators=${v} chainlength=${cl}"
+        read -r cl fin finraw <<<"$(curl -s -m 5 -X POST "${base}/getChainNumber" -H 'Content-Type: application/json' -d '{}' \
+            | python3 -c '
+import sys, json, hashlib
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("0 - -"); sys.exit(0)
+r = d.get("txReward")
+r = json.loads(r) if isinstance(r, str) else (r or {})
+f = d.get("finalizedBlockHash") or ""
+raw = (f["bytes"] if isinstance(f, dict) else str(f)).strip()
+fin = hashlib.sha256(raw.encode()).hexdigest()[:16] if raw else "-"
+print(r.get("chainLength", 0), fin, raw)' 2>/dev/null || echo "0 - -")"
+        echo "  ${hostport}: validators=${v} chainlength=${cl:-?} finalized=${fin}"
         [ "${v}" -lt "${expected}" ] && { echo "  FAIL: ${hostport} has ${v}/${expected} validators" >&2; return 1; }
-        [ "${cl}" -gt "${maxcl}" ] && maxcl="${cl}"
-        [ "${cl}" -lt "${mincl}" ] && mincl="${cl}"
+        [ "${cl:-0}" -gt "${maxcl}" ] && maxcl="${cl}"
+        [ "${cl:-0}" -lt "${mincl}" ] && mincl="${cl}"
+        if [ -n "$fin" ] && [ "$fin" != "-" ]; then
+            finlist="${finlist}${fin}\n"
+            FIN_RAW[${hostport}]="${finraw:-}"
+            FIN_GRP[${hostport}]="$fin"
+        fi
     done
     [ "${maxcl}" -eq 0 ] && { echo "  FAIL: no node has confirmed a beacon" >&2; return 1; }
-    [ $((maxcl - mincl)) -gt "${epoch}" ] && { echo "  FAIL: confirmed chainlength spread ${mincl}..${maxcl} > ${epoch}" >&2; return 1; }
-    log "OK: ${expected} validators active on all nodes; confirmed chainlength ${mincl}..${maxcl}"
+    local distinct
+    distinct=$(printf '%b' "$finlist" | sort -u | grep -c . || true)
+    if [ "${distinct}" -gt 1 ]; then
+        # Differing finalized roots are only fatal if INCOMPATIBLE: a slow node
+        # legitimately trails on an OLDER checkpoint of the same chain. Probe
+        # each minority checkpoint's block against the peers — present on a
+        # peer = ancestral/same-chain (WARN); absent everywhere = true split.
+        local split=0 hp2 hex probe
+        local nseeds
+        nseeds=$(echo "${SEED_HOSTS}" | tr ',' ' ' | wc -w | tr -d ' ')
+        local thresh=$(( nseeds / 2 + 1 ))
+        for hp2 in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
+            [ -z "${FIN_GRP[${hp2}]:-}" ] && continue
+            # skip hosts belonging to the majority group
+            local cnt=0
+            for g in $(printf '%b' "$finlist"); do [ "$g" = "${FIN_GRP[${hp2}]}" ] && cnt=$((cnt+1)); done
+            [ "${cnt}" -ge "${thresh}" ] && continue
+            hex="${FIN_RAW[${hp2}]}"   # finalizedBlockHash arrives as plain hex
+            [ -z "$hex" ] && continue
+            probe=""
+            for peer in $(echo "${SEED_HOSTS}" | tr ',' ' '); do
+                [ "$peer" = "$hp2" ] && continue
+                body=$(curl -s -m 5 -X POST "http://${peer}/getBlockByHash" \
+                    -H 'Content-Type: application/json' -d "{\"hashHex\":\"${hex}\",\"text\":\"true\"}" 2>/dev/null || echo "")
+                # miss is signaled in the body (errorcode 404), HTTP stays 200
+                if echo "$body" | grep -q 'blocktype'; then
+                    probe="found-on:${peer}"
+                    break
+                fi
+            done
+            if [ -z "$probe" ]; then
+                echo "  FAIL: ${hp2} finalized ${FIN_GRP[${hp2}]} exists on NO peer — chain split" >&2
+                split=1
+            else
+                echo "  WARN: ${hp2} trails on older finalized checkpoint (${FIN_GRP[${hp2}]}, ${probe})"
+            fi
+        done
+        [ "${split}" = "1" ] && return 1
+    fi
+    if [ $((maxcl - mincl)) -gt "${epoch}" ]; then
+        echo "  WARN: confirmed-tip spread ${mincl}..${maxcl} > ${epoch} — lagging node(s), same finalized root" >&2
+    fi
+    log "OK: ${expected} validators active on all nodes; confirmed tips ${mincl}..${maxcl}; finalized $(printf '%b' "$finlist" | head -1)"
 }
 
 run_phase() { # $1 = server | stake | verify

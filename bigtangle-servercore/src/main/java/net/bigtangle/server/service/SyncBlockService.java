@@ -55,6 +55,7 @@ import net.bigtangle.server.data.TransactionStatus;
 import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.server.service.base.ServiceVerifyReward;
+import net.bigtangle.server.service.base.ServiceBaseCheck;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.store.BlockStoreService;
 import net.bigtangle.utils.Json;
@@ -486,7 +487,7 @@ public class SyncBlockService {
 				log.debug("requestMissingReferenced {} : {}", block.getHash(), e.getMessage());
 			}
 		}
-		ServiceBase serviceBase = new ServiceBase(serverConfiguration, networkParameters, cacheBlockService,
+		ServiceBaseCheck serviceBase = new ServiceBaseCheck(serverConfiguration, networkParameters, cacheBlockService,
 				jsonmapper);
 		while (!expand.isEmpty() && expansions++ < 50000) {
 			Sha256Hash h = expand.pop();
@@ -562,6 +563,45 @@ public class SyncBlockService {
 
 	/** Batch size for getBlocksByHashList chunks (bytes-safe small blocks). */
 	private static final int HASHLIST_CHUNK = 200;
+
+	/** Local confirmed tip's reward-chain length (the readiness position). */
+	public long getLocalConfirmedChainLength(BlockStoreInterface store) throws BlockStoreException {
+		return cacheBlockService.getMaxConfirmedReward(store).getChainLength();
+	}
+
+	/** Fresh store handle for callers coordinating sync/readiness waits. */
+	public BlockStoreInterface getStore() throws BlockStoreException {
+		return storeService.getStore();
+	}
+
+	/**
+	 * Highest FINALIZED reward-chain length advertised by any requester, or -1
+	 * when no requester reports one (old peer, or no finality yet). This is the
+	 * readiness target for a joining node: executing through the peers'
+	 * finalized checkpoint guarantees an identical UTXO state as of that point,
+	 * whereas chasing the moving head may never terminate.
+	 */
+	public long getMaxPeerFinalizedChainLength() {
+		long max = -1;
+		for (String s : serverConfiguration.getRequester().split(",")) {
+			s = s == null ? null : s.trim();
+			if (s == null || s.isEmpty()) {
+				continue;
+			}
+			try {
+				byte[] response = OkHttp3Util.postString(s + "/" + ReqCmd.getChainNumber,
+						Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
+				GetTXRewardResponse r = Json.jsonmapper().readValue(response, GetTXRewardResponse.class);
+				if (r != null && r.getFinalizedChainLength() != null
+						&& r.getFinalizedChainLength() > max) {
+					max = r.getFinalizedChainLength();
+				}
+			} catch (Exception e) {
+				log.debug("peer finalized length {}: {}", s, e.getMessage());
+			}
+		}
+		return max;
+	}
 
 	/**
 	 * Pull the given hashes via the getBlocksByHashList batch endpoint, trying
