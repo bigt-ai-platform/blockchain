@@ -114,7 +114,14 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		// fresh resolution.
 		TXReward confirmed = cacheBlockService.getMaxConfirmedReward(store);
 		String conflictCacheToken = confirmed.getBlockHash() + ":" + confirmed.getChainLength();
+		// Base state from the token-keyed cache, then overlay the proposal
+		// sweep's resolutions (head-independent hand-off): on a healthy chain
+		// the head moves between propose and connect, so the token-keyed cache
+		// misses every slot and a full UTXO re-resolution dominated beacon
+		// connect (300-900ms).
 		loadConflictCache(conflictCacheToken);
+		net.bigtangle.server.service.base.ServiceBaseConfirmation.mergeConflictCache(
+				net.bigtangle.server.service.base.ServiceBaseConfirmation.loadLatestSweep());
 
 		// Find conflicts in the dependency set.
 		// Bounded per cycle: parse/confirm at most MAX_CONFIRM_PER_CYCLE

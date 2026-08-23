@@ -374,8 +374,19 @@ public class SlotService {
      * the proposer and every validator derive the same expected payout from
      * chain state instead of trusting a declaration.
      */
+    private static final java.util.Map<Sha256Hash, java.math.BigInteger> FEE_SURPLUS_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     public static java.math.BigInteger computeFeeSurplus(Block block, BlockStoreInterface store,
-            NetworkParameters params) throws Exception {        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
+            NetworkParameters params) throws Exception {
+        // Fee surplus of a CONNECTED block is immutable: cache per block hash.
+        // Repeated beacon-connect cycles re-walk the same referenced blocks and
+        // re-resolved every input UTXO each time (hundreds of ms per beacon).
+        java.math.BigInteger cached = FEE_SURPLUS_CACHE.get(block.getHash());
+        if (cached != null) {
+            return cached;
+        }
+        java.math.BigInteger surplus = java.math.BigInteger.ZERO;
         if (block == null || block.getTransactions() == null) {
             return surplus;
         }
@@ -435,6 +446,10 @@ public class SlotService {
                 surplus = surplus.add(s);
             }
         }
+        if (FEE_SURPLUS_CACHE.size() > 8192) {
+            FEE_SURPLUS_CACHE.clear();
+        }
+        FEE_SURPLUS_CACHE.put(block.getHash(), surplus);
         return surplus;
     }
 
@@ -614,6 +629,12 @@ public class SlotService {
             }
             // Publish this cycle's conflict resolutions for the connect to reuse.
             net.bigtangle.server.service.base.ServiceBaseConfirmation.publishConflictCache(conflictCacheToken);
+            // Head-independent hand-off: the paired connect may run after the
+            // confirmed head moved (multi-validator meshes), which misses the
+            // token-keyed cache above and forces a full 300-900ms re-scan.
+            net.bigtangle.server.service.base.ServiceBaseConfirmation
+                    .publishLatestSweep(net.bigtangle.server.service.base.ServiceBaseConfirmation
+                            .snapshotConflictCache());
             if (epochStart) {
                 java.util.Set<Sha256Hash> prevRewarded = previousEpochRewarded(prevRewardHash, store);
                 blocks.removeIf(bw -> prevRewarded.contains(bw.getBlock().getHash()));

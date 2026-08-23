@@ -95,6 +95,32 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	private static final ThreadLocal<Map<String, Long>> conflictCache =
 			ThreadLocal.withInitial(HashMap::new);
 
+	// Single-slot hand-off of the proposal sweep's conflict resolutions to the
+	// paired beacon connect. Keyed by head-hash tokens, the connect misses
+	// whenever the confirmed head moved between propose and connect (every
+	// slot on a healthy chain), forcing a full 300-900ms UTXO re-resolution.
+	// Volatile single slot: only one proposal runs at a time per node.
+	private static volatile Map<String, Long> latestSweepConflicts = Map.of();
+
+	/**
+	 * Proposal side: hand the sweep's conflict resolutions to the paired
+	 * beacon connect regardless of confirmed-head movement.
+	 */
+	public static void publishLatestSweep(Map<String, Long> resolutions) {
+		if (resolutions == null) {
+			return;
+		}
+		latestSweepConflicts = new HashMap<>(resolutions);
+	}
+
+	/**
+	 * Connect side: consume the latest proposal sweep's conflict resolutions
+	 * (never null).
+	 */
+	public static Map<String, Long> loadLatestSweep() {
+		return latestSweepConflicts;
+	}
+
 	/**
 	 * Conflict-check results shared between the propose and connect of the SAME
 	 * beacon: the proposal (posExecutor thread) resolves each TXOUT conflict
@@ -155,6 +181,18 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	public static void loadConflictCache(String token) {
 		Map<String, Long> shared = token == null ? null : sharedConflictCaches.get(token);
 		conflictCache.set(shared == null ? new HashMap<>() : new HashMap<>(shared));
+	}
+
+	/** Merges pre-resolved UTXO results into the current thread's cache. */
+	public static void mergeConflictCache(Map<String, Long> entries) {
+		if (entries != null && !entries.isEmpty()) {
+			conflictCache.get().putAll(entries);
+		}
+	}
+
+	/** Current thread's conflict resolutions (proposal sweep output). */
+	public static Map<String, Long> snapshotConflictCache() {
+		return conflictCache.get();
 	}
 
 	// Per-confirm-cycle DB timing (spent-batch writes). Accumulated per thread so

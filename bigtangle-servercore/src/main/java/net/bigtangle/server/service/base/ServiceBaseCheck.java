@@ -107,6 +107,29 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 
 	private static final Logger logger = LoggerFactory.getLogger(ServiceBaseCheck.class);
 
+	// Deterministic per-beacon verification results: a connected beacon's
+	// proposer signature / RANDAO reveal never change, and repeated connects
+	// (queue retries, slot re-processing) re-ran expensive PQ/BLS checks every
+	// time (~150-350 ms combined per beacon). Cache by block hash.
+	private static final java.util.Map<Sha256Hash, Boolean> PROPOSER_SIG_CACHE =
+			new java.util.concurrent.ConcurrentHashMap<>();
+	private static final java.util.Map<Sha256Hash, Boolean> RANDAO_CACHE =
+			new java.util.concurrent.ConcurrentHashMap<>();
+
+	private static boolean cachedCheck(java.util.Map<Sha256Hash, Boolean> cache, Sha256Hash hash,
+			java.util.function.BooleanSupplier verify) {
+		Boolean cached = cache.get(hash);
+		if (cached != null) {
+			return cached;
+		}
+		boolean ok = verify.getAsBoolean();
+		if (cache.size() > 4096) {
+			cache.clear();
+		}
+		cache.put(hash, ok);
+		return ok;
+	}
+
 	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
 		// only reward block and contract can be set coinbase and check by caculation
 		for (final Transaction tx : block.getTransactions()) {
@@ -1438,6 +1461,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	public SolidityState checkFullRewardSolidity(Block block, BlockWrap storedPrev, BlockWrap storedPrevBranch,
 			long height, boolean throwExceptions, BlockStoreInterface store) throws BlockStoreException {
 		List<Transaction> transactions = block.getTransactions();
+		long __rs = 0, __rdStart = 0, __sigMs = 0, __randaoMs = 0, __depMs = 0;
 
 		// A chain-connected reward (BEACON) block always carries a RewardInfo
 		// in its first transaction (SlotService beacon: exactly 1 tx). The
@@ -1484,7 +1508,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// it, anyone could publish a beacon declaring any slot/fee-pool and
 		// mint arbitrary value or confirm arbitrary DAG blocks. Enforced for
 		// EVERY beacon, not only when the beacon mints.
-		if (!verifyProposerSignature(block, store)) {
+		long __rsStart = System.currentTimeMillis();
+		boolean __psok = cachedCheck(PROPOSER_SIG_CACHE, block.getHash(),
+				() -> {
+					try {
+						return verifyProposerSignature(block, store);
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
+		__sigMs = System.currentTimeMillis() - __rsStart;
+		if (!__psok) {
 			if (throwExceptions)
 				throw new BlockStoreException("Beacon is not signed by a valid proposer");
 			return SolidityState.getFailState();
@@ -1495,7 +1529,19 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// bound to a 32-byte commitment. A beacon without a valid reveal/commit
 		// pair is rejected, so a proposer can never fold grindable bytes into the
 		// mix.
-		if (!verifyRandaoReveal(block, store)) {
+		__rdStart = System.currentTimeMillis();
+		final Block __blk = block;
+		final BlockStoreInterface __st = store;
+		boolean __rok = cachedCheck(RANDAO_CACHE, block.getHash(),
+				() -> {
+					try {
+						return verifyRandaoReveal(__blk, __st);
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				});
+		__randaoMs = System.currentTimeMillis() - __rdStart;
+		if (!__rok) {
 			if (throwExceptions)
 				throw new BlockStoreException("Beacon has an invalid or missing RANDAO reveal");
 			return SolidityState.getFailState();
@@ -1506,11 +1552,13 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		// Using the full deposit set avoids false rejection when validators join
 		// or leave between reward computation and validation.
 		try {
+			long __depStart = System.currentTimeMillis();
 			java.util.Set<String> depositorAddresses = new java.util.HashSet<>();
 			for (net.bigtangle.core.StakeRecord v : store.getAllStakeDeposits()) {
 				depositorAddresses.add(net.bigtangle.core.Address
 						.fromHash160(networkParameters, Utils.sha256hash160(v.getPubkey())).toBase58());
 			}
+			__depMs = System.currentTimeMillis() - __depStart;
 			for (int i = 1; i < transactions.size(); i++) {
 				for (TransactionOutput out : transactions.get(i).getOutputs()) {
 					String toAddr = null;
@@ -1537,6 +1585,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			return SolidityState.getFailState();
 		}
 
+		logger.info("rewardSolidity split: sig={}ms randao={}ms dep={}ms", __sigMs, __randaoMs, __depMs);
 		// Check that the tx has correct data
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(transactions.get(0).getData());
 
