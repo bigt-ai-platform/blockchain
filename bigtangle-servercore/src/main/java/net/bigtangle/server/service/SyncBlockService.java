@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -205,6 +206,16 @@ public class SyncBlockService {
 			cleanupChainBlockQueue(store);
 			store.deleteAllLockobject();
 			syncChain(-1l, true, store);
+			// Bulk repair BEFORE the reactive walk (same ordering as
+			// startSingleProcessDo). blocksFromChainLength only serves blocks
+			// already height-assigned on the remote, so referenced transfer
+			// blocks are routinely absent after the chain pull — and
+			// requestMissingReferenced then fetched them one HTTP round-trip
+			// per hash (hours on a cold node while serviceReady stays false).
+			// The paged non-chain pull covers them in bulk; the per-hash walk
+			// below only handles the leftovers.
+			connectingOrphans(store);
+			syncNonChained(store);
 			requestMissingReferenced(store);
 			blockgraph.updateChain();
 			log.debug(" end startInit: ");
@@ -386,9 +397,18 @@ public class SyncBlockService {
 	 * blocks are not yet local (a fork, or a node that fell behind), nothing
 	 * actively fetched those blocks: processChainConnected only retries the
 	 * queue in place and connectingOrphans only covers orphan=true entries.
-	 * Walk every queued beacon and fetch each missing referenced block by hash
-	 * from the requester mesh, so a lagging node can actually catch up to the
+	 * Walk every queued beacon and fetch each missing referenced block from
+	 * the requester mesh, so a lagging node can actually catch up to the
 	 * canonical chain instead of retrying forever.
+	 *
+	 * Fetching is BATCHED: the missing hashes are collected first and pulled
+	 * with getBlocksByHashList (chunks per requester). The old one-HTTP-call-
+	 * per-hash walk lost the race against chain growth on any mesh where the
+	 * nearest requester misses some blocks (two round-trips per ref, single
+	 * thread). Ancestors discovered inside fetched blocks are collected and
+	 * fetched in the next round; rounds repeat until no progress. If no
+	 * requester supports the batch endpoint (rolling upgrade), fall back to
+	 * the legacy per-hash walk.
 	 */
 	public void requestMissingReferenced(BlockStoreInterface store) throws BlockStoreException {
 		List<ChainBlockQueue> cbs = store.selectChainblockqueue(false, serverConfiguration.getSyncblocks());
@@ -418,7 +438,20 @@ public class SyncBlockService {
 				break;
 			}
 		}
-		Set<Sha256Hash> requested = new HashSet<>();
+
+		// ---- Collect every missing hash reachable from the queued beacons --
+		// prev-reward chains are walked through LOCAL blocks only; unknown
+		// hashes go straight into the missing set (their own ancestors are
+		// picked up after they arrive, in a later round).
+		Set<Sha256Hash> missing = new LinkedHashSet<>();
+		// BFS through the LOCAL DAG: a queued beacon's referenced blocks may be
+		// present but unsolid because one of THEIR predecessors is absent.
+		// Without expanding requirements recursively, a single deep hole
+		// starves every descendant and the whole queue defers forever while
+		// the fetch set looks empty.
+		java.util.ArrayDeque<Sha256Hash> expand = new java.util.ArrayDeque<>();
+		Set<Sha256Hash> visited = new HashSet<>();
+		int expansions = 0;
 		for (ChainBlockQueue cb : cbs) {
 			Block block = networkParameters.getDefaultSerializer().makeBlock(cb.getBlock());
 			if (block.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
@@ -426,39 +459,173 @@ public class SyncBlockService {
 			}
 			try {
 				RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-				// Fetch the prevRewardHash chain back to the confirmed chain.
-				// A block that merely exists in the store (fetched but not yet
-				// connected) is NOT a valid anchor — keep walking and fetch its
-				// ancestors too, otherwise the gap below it stays missing and
-				// the queued beacon remains unsolid forever.
 				Sha256Hash prev = ri.getPrevRewardHash();
 				guard = 0;
-				while (prev != null && requested.add(prev) && guard++ < 10000) {
-					if (confirmed.contains(prev)) {
+				while (prev != null && guard++ < 10000) {
+					if (confirmed.contains(prev) || !missing.add(prev)) {
 						break;
 					}
 					Block local = blockService.getBlock(prev, store);
-					if (local != null) {
-						prev = rewardParent(local);
-						continue;
+					if (local == null) {
+						break; // unknown — fetched in a later round
 					}
-					byte[] data = requestBlock(prev, store);
-					if (data == null) {
-						break;
+					if (visited.add(prev)) {
+						expand.push(prev);
 					}
-					Block prevBlock = networkParameters.getDefaultSerializer().makeBlock(data);
-					prev = rewardParent(prevBlock);
+					prev = rewardParent(local);
 				}
-				// Fetch each DAG block referenced by the beacon's approved set.
 				for (Sha256Hash h : ri.getBlocks()) {
-					if (requested.add(h) && blockService.getBlock(h, store) == null) {
-						requestBlock(h, store);
+					Block local = blockService.getBlock(h, store);
+					if (local == null) {
+						missing.add(h);
+					} else if (visited.add(h)) {
+						expand.push(h);
 					}
 				}
 			} catch (Exception e) {
 				log.debug("requestMissingReferenced {} : {}", block.getHash(), e.getMessage());
 			}
 		}
+		ServiceBase serviceBase = new ServiceBase(serverConfiguration, networkParameters, cacheBlockService,
+				jsonmapper);
+		while (!expand.isEmpty() && expansions++ < 50000) {
+			Sha256Hash h = expand.pop();
+			try {
+				Block local = blockService.getBlock(h, store);
+				if (local == null || local.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+					continue;
+				}
+				for (Sha256Hash req : serviceBase.getAllRequiredBlockHashes(local)) {
+					if (confirmed.contains(req)) {
+						continue;
+					}
+					Block reqLocal = blockService.getBlock(req, store);
+					if (reqLocal == null) {
+						missing.add(req);
+					} else if (visited.add(req)) {
+						expand.push(req);
+					}
+				}
+			} catch (Exception e) {
+				log.debug("requestMissingReferenced expand {}: {}", h, e.getMessage());
+			}
+		}
+		if (missing.isEmpty()) {
+			return;
+		}
+		log.info("requestMissingReferenced: fetching {} missing block(s) in batches", missing.size());
+
+		// ---- Batched rounds until no progress ------------------------------
+		int rounds = 0;
+		while (!missing.isEmpty() && rounds++ < 100) {
+			Set<Sha256Hash> fetched = requestBlocksByHashes(missing, store);
+			if (fetched.isEmpty()) {
+				break;
+			}
+			missing.removeAll(fetched);
+			// Requirements of newly arrived blocks may themselves be missing:
+			// push them through the same recursive expansion.
+			for (Sha256Hash h : fetched) {
+				if (visited.add(h)) {
+					expand.push(h);
+				}
+			}
+			while (!expand.isEmpty() && expansions++ < 50000) {
+				Sha256Hash h = expand.pop();
+				try {
+					Block local = blockService.getBlock(h, store);
+					if (local == null || local.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+						continue;
+					}
+					for (Sha256Hash req : serviceBase.getAllRequiredBlockHashes(local)) {
+						if (confirmed.contains(req)) {
+							continue;
+						}
+						Block reqLocal = blockService.getBlock(req, store);
+						if (reqLocal == null) {
+							missing.add(req);
+						} else if (visited.add(req)) {
+							expand.push(req);
+						}
+					}
+				} catch (Exception e) {
+					log.debug("requestMissingReferenced expand {}: {}", h, e.getMessage());
+				}
+			}
+		}
+		if (!missing.isEmpty()) {
+			log.info("requestMissingReferenced: {} block(s) not served by any requester, sample: {}", missing.size(),
+					missing.stream().limit(5).map(Sha256Hash::toString)
+							.reduce((a, b) -> a + "," + b).orElse(""));
+		}
+	}
+
+	/** Batch size for getBlocksByHashList chunks (bytes-safe small blocks). */
+	private static final int HASHLIST_CHUNK = 200;
+
+	/**
+	 * Pull the given hashes via the getBlocksByHashList batch endpoint, trying
+	 * each requester in order; the first requester answering without error
+	 * serves the whole chunk. Blocks are added with {@code blockgraph
+	 * .addFromSync(block, true, store)} exactly like the legacy path. Returns
+	 * the subset of requested hashes that was fetched and added.
+	 */
+	private Set<Sha256Hash> requestBlocksByHashes(Set<Sha256Hash> hashes, BlockStoreInterface store) {
+		Set<Sha256Hash> fetched = new HashSet<>();
+		List<Sha256Hash> list = new ArrayList<>(hashes);
+		String[] re = serverConfiguration.getRequester().split(",");
+		for (int from = 0; from < list.size(); from += HASHLIST_CHUNK) {
+			List<Sha256Hash> chunk = list.subList(from, Math.min(from + HASHLIST_CHUNK, list.size()));
+			HashMap<String, Object> requestParam = new HashMap<>();
+			List<String> hexs = new ArrayList<>();
+			for (Sha256Hash h : chunk) {
+				hexs.add(Utils.HEX.encode(h.getBytes()));
+			}
+			requestParam.put("hashHexs", hexs);
+			boolean served = false;
+			for (String s : re) {
+				s = s == null ? null : s.trim();
+				if (s == null || s.isEmpty()) {
+					continue;
+				}
+				try {
+					byte[] response = OkHttp3Util.postString(s + "/" + ReqCmd.getBlocksByHashList,
+							Json.jsonmapper().writeValueAsString(requestParam));
+					GetBlockListResponse blocklist = Json.jsonmapper().readValue(response, GetBlockListResponse.class);
+					served = true;
+					if (blocklist.getBlockbytelist() == null) {
+						break;
+					}
+					for (byte[] data : blocklist.getBlockbytelist()) {
+						try {
+							Block block = networkParameters.getDefaultSerializer().makeBlock(data);
+							blockgraph.addFromSync(block, true, store);
+							fetched.add(block.getHash());
+						} catch (Exception e) {
+							log.debug("batch fetch parse {}: {}", s, e.getMessage());
+						}
+					}
+					break;
+				} catch (Exception e) {
+					log.debug("batch fetch from {}: {}", s, e.getMessage());
+				}
+			}
+			if (!served) {
+				// No requester supports the batch endpoint (rolling upgrade):
+				// fall back to the legacy per-hash walk for this chunk.
+				for (Sha256Hash h : chunk) {
+					try {
+						byte[] data = requestBlock(h, store);
+						if (data != null) {
+							fetched.add(h);
+						}
+					} catch (Exception e) {
+						log.debug("legacy fetch {}: {}", h, e.getMessage());
+					}
+				}
+			}
+		}
+		return fetched;
 	}
 
 	private Sha256Hash rewardParent(Block b) {

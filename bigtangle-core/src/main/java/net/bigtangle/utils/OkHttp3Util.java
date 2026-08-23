@@ -38,7 +38,20 @@ public class OkHttp3Util {
 
     private static final Logger logger = LoggerFactory.getLogger(OkHttp3Util.class);
 
-    public static long timeoutMinute = 45;
+    /**
+     * Read/write timeout for sync/API calls, minutes. Overridable via system
+     * property. The old flat 45-minute default turned any dead peer into a
+     * multi-minute boot hang: a single TCP connect to an unreachable requester
+     * parked the init thread (and with it serviceReady) far longer than the
+     * mesh could keep producing.
+     */
+    public static long timeoutMinute = Long.getLong("bigtangle.httpTimeoutMinutes", 2);
+    /**
+     * Connect timeout, seconds. Establishing a TCP connection on a LAN mesh is
+     * sub-second; anything longer means the peer is unreachable and the caller
+     * must move on to the next requester immediately.
+     */
+    public static long connectTimeoutSec = Long.getLong("bigtangle.httpConnectTimeoutSec", 15);
     /**
      * Short timeout for CONSENSUS-PATH calls (gossip of attestations/beacons).
      * A stalled peer must fail fast: these calls run on the single duty
@@ -263,7 +276,7 @@ public class OkHttp3Util {
                         public boolean verify(String hostname, SSLSession session) {
                             return true;
                         }
-                    }).connectTimeout(timeout, unit).writeTimeout(timeout, unit)
+                    }).connectTimeout(connectTimeoutSec, TimeUnit.SECONDS).writeTimeout(timeout, unit)
                     .addInterceptor(new BasicAuthInterceptor(pubkey, signHex, contentHex))
                     .readTimeout(timeout, unit).build();
             return client;

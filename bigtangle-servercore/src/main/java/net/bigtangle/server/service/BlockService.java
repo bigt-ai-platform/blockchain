@@ -1,5 +1,6 @@
 package net.bigtangle.server.service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +138,27 @@ public class BlockService {
 			throws BlockStoreException {
 
 		return GetBlockListResponse.create(store.blocksFromChainLength(start, end));
+	}
+
+	/**
+	 * Batch fetch: raw serialized blocks for the requested hashes, skipping
+	 * unknown ones. Serves {@code requestMissingReferenced} so a lagging node
+	 * pulls its missing DAG set in a handful of requests instead of one HTTP
+	 * round-trip per hash.
+	 */
+	public GetBlockListResponse getBlocksByHashList(List<String> hashHexs, BlockStoreInterface store)
+			throws BlockStoreException {
+		List<byte[]> blocks = new ArrayList<>();
+		if (hashHexs == null) {
+			return GetBlockListResponse.create(blocks);
+		}
+		for (String hex : hashHexs) {
+			Block block = getBlock(Sha256Hash.wrap(hex), store);
+			if (block != null) {
+				blocks.add(block.bitcoinSerialize());
+			}
+		}
+		return GetBlockListResponse.create(blocks);
 	}
 
 	public GetBlockListResponse blocksFromNonChainHeigth(long cutoffHeight, long maxHeight, int limit,

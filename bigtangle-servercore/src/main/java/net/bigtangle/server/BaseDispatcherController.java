@@ -410,6 +410,15 @@ public abstract class BaseDispatcherController implements DisposableBean {
 			}
 				break;
 
+			case getBlocksByHashList: {
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				@SuppressWarnings("unchecked")
+				List<String> hashHexs = (List<String>) request.get("hashHexs");
+				GetBlockListResponse response = this.blockService.getBlocksByHashList(hashHexs, store);
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
 			case getBlockByHash: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);

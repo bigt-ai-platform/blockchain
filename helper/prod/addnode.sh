@@ -10,7 +10,12 @@
 #   addnode.sh status                  mesh overview (validators/chainLength per seed)
 #   addnode.sh verify [INDEX]          cross-node acceptance (validator_common verify)
 #
-# Env overrides: NODE_HOST, DB_PORT, KAFKA_BOOTSTRAP (default 10.8.0.1:9092 = s2001),
+# add/rejoin auto-start the WireGuard VPN (wg-quick up) when NODE_HOST is on
+# the 10.8.0.x mesh and the tunnel is down; run with sudo, or provision the
+# tunnel once via helper/prod/addwg.sh.
+#
+# Env overrides: WG_IFACE (default wg0), NODE_HOST, DB_PORT,
+#                KAFKA_BOOTSTRAP (default 10.8.0.1:9092 = s2001),
 #                SERVER_JAR, TOOL_IMAGE.
 # A node added by this script persists KAFKA_BOOTSTRAP in its validator.env and its
 # server starts with --server.runKafkaStream=true --kafka.bootstrapServers=<s2001>.
@@ -35,6 +40,7 @@ done
 unset _v _CALLER_OV
 
 KAFKA_DEFAULT="10.8.0.1:9092"
+WG_IFACE="${WG_IFACE:-wg0}"
 KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-${KAFKA_DEFAULT}}"
 SERVER_JAR="${SERVER_JAR:-$(ls -t "${ROOT}"/bigtangle-servercore/target/bigtangle-servercore-*-exec.jar 2>/dev/null | head -1 || true)}"
 TOOL_IMAGE="${TOOL_IMAGE:-${SERVER_IMAGE}:${IMAGE_TAG}}"
@@ -45,7 +51,7 @@ NODE_HOST="${NODE_HOST:-}"
 die() { echo "addnode: $*" >&2; exit 1; }
 log() { echo "[addnode] $*"; }
 
-usage() { sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; }
 
 next_index() {
     local max=-1 d i
@@ -60,6 +66,29 @@ next_index() {
 
 detect_host() {
     ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'
+}
+
+vpn_start() { # bring up the WireGuard tunnel when NODE_HOST lives on the mesh
+    case "${NODE_HOST}" in
+        10.8.0.*) ;;
+        *) log "vpn: ${NODE_HOST} not on the 10.8.0.x mesh; skipping"; return 0 ;;
+    esac
+    command -v wg >/dev/null 2>&1 || die "wireguard tools missing (sudo helper/prod/addwg.sh)"
+    local conf="/etc/wireguard/${WG_IFACE}.conf"
+    if ! ip link show "$WG_IFACE" >/dev/null 2>&1; then
+        [ -f "$conf" ] || die "no ${conf}: join the mesh first (sudo helper/prod/addwg.sh)"
+        log "vpn start: bringing up ${WG_IFACE}"
+        local up=(wg-quick)
+        [ "$(id -u)" = "0" ] || up=(sudo -n wg-quick)
+        "${up[@]}" up "$WG_IFACE" \
+            || die "wg-quick up ${WG_IFACE} failed (needs root: run $0 with sudo, or 'sudo wg-quick up ${WG_IFACE}')"
+        sleep 2
+    fi
+    if ping -c1 -W2 10.8.0.1 >/dev/null 2>&1; then
+        log "vpn: ${WG_IFACE} up, hub 10.8.0.1 reachable"
+    else
+        die "vpn: ${WG_IFACE} up but hub 10.8.0.1 unreachable (sudo helper/prod/addwg.sh status)"
+    fi
 }
 
 tool_cp() {
@@ -228,6 +257,8 @@ cmd_add() {
     docker image inspect "${TOOL_IMAGE}" >/dev/null 2>&1 \
         || die "image missing: ${TOOL_IMAGE} (build with helper/deploy.sh)"
 
+    vpn_start
+
     log "provisioning node-${idx} on ${host} (kafka=${KAFKA_BOOTSTRAP})"
     mkdir -p "${VALDIR}/node-${idx}"
     local out key pub hash addr db_name
@@ -351,6 +382,7 @@ cmd_leave() {
 cmd_rejoin() {
     local idx="$1"
     load_node "$idx"
+    vpn_start
     local kb
     kb="$(grep -E '^KAFKA_BOOTSTRAP=' "${NODE_DIR}/validator.env" | cut -d= -f2- || true)"
     if [ -z "$kb" ]; then kb="${KAFKA_DEFAULT}"; fi
