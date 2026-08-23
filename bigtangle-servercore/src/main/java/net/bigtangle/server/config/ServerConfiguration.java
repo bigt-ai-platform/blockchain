@@ -128,7 +128,14 @@ public class ServerConfiguration {
      * with the unconfirmed set) and collapses throughput under sustained
      * overload.  Shedding load at the edge keeps the confirm path bounded.
      */
-    private int mempoolMaxTx = 50_000;
+    /**
+     * Submission admission bound. Must stay close to what the confirmation
+     * pipeline actually drains per couple of slots: a bound far above the
+     * confirm rate lets bursts pile up minutes of backlog, starving follower
+     * validators into quorum loss (whole-mesh stall). Override for bigger
+     * meshes via --server.mempoolMaxTx.
+     */
+    private int mempoolMaxTx = 4_000;
 
     /**
      * Whether proof-of-work is required for new blocks.
