@@ -275,11 +275,23 @@ public abstract class ServiceBase {
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
 
+		// Parsed-instance cache: batch blocks are multi-MB zipped payloads;
+		// beacon-connect re-reads the same hashes several times per cycle and
+		// re-decompression dominated it. Shared/read-only by convention (same
+		// contract as ServiceBaseConfirmation.cacheParsedBlock).
+		Block cached = ServiceBaseConfirmation.getCachedParsedBlock(blockhash);
+		if (cached != null) {
+			return cached;
+		}
+
 		byte[] re = cacheBlockService.getBlock(blockhash, store);
 		if (re == null)
 			return null;
 		try {
-			return networkParameters.getDefaultSerializer().makeZippedBlockStream(new ByteArrayInputStream(re));
+			Block block = networkParameters.getDefaultSerializer()
+					.makeZippedBlockStream(new ByteArrayInputStream(re));
+			ServiceBaseConfirmation.cacheParsedBlock(block);
+			return block;
 		} catch (Exception e) {
 
 			throw new BlockStoreException(e);

@@ -593,7 +593,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	// ~15-20MB live, so even 1024 entries would pin ~20GB. The memo only has
 	// to bridge from save to the NEXT sweep (<1 slot); 32 entries cover one
 	// drain window (batch.minTx=50000 drains ~25 blocks) with headroom.
-	private static final int PARSED_BLOCK_CACHE_MAX = 32;
+	private static final int PARSED_BLOCK_CACHE_MAX = 128;
 
 	/**
 	 * Registers a just-built block so the next sweep skips re-parsing it (the
@@ -608,6 +608,18 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			PARSED_BLOCK_CACHE.clear();
 		}
 		PARSED_BLOCK_CACHE.put(block.getHash(), block);
+	}
+
+	/**
+	 * Returns the cached parsed instance for {@code hash}, or null. Callers
+	 * must treat the returned block as shared/read-only — the cache exists so
+	 * beacon-connect can skip re-decompressing multi-MB batch blocks.
+	 */
+	public static Block getCachedParsedBlock(Sha256Hash hash) {
+		if (hash == null) {
+			return null;
+		}
+		return PARSED_BLOCK_CACHE.get(hash);
 	}
 
 	private BlockWrap getCachedBlockWrap(Sha256Hash hash, BlockStoreInterface store) throws BlockStoreException {
