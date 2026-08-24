@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# testnodes.sh — hermetic 3-node local testnet for fast sync/kafka/finality/leave/join
+# testnodes.sh — hermetic local testnet (default 3 nodes, NNODES env to vary)
+# for fast sync/kafka/finality/leave/join
 # iteration. Runs everything on ONE host against the real validator_common.sh,
 # on dedicated ports (82xx/93xx/94xx/304xx) so it never touches a live mesh.
 #
@@ -38,7 +39,7 @@ KAFKA="${KAFKA:-localhost:9092}"
 SLOT_MS="${SLOT_MS:-2000}"
 READINESS_MIN="${READINESS_MIN:-10}"
 XMX="${XMX:-3g}"
-NNODES=3
+NNODES="${NNODES:-3}"
 PGCONT=test-bigtangle-postgres
 PGINNER=""
 
@@ -69,6 +70,16 @@ else: print('-')" 2>/dev/null || echo -; }
 cl_of()       { api "$1" /getChainNumber '{}' | jget chainLength; }
 fin_of()      { api "$1" /getChainNumber '{}' | jget finalized; }
 valcount_of() { api "$1" /getValidators '{}' | jget validators; }
+head_of() { # confirmed head hash (short hex) of node $1
+    api "$1" /getChainNumber '{}' | python3 -c "
+import sys, json, base64
+try:
+    d = json.load(sys.stdin); r = d.get('txReward') or {}
+    b = (r.get('blockHash') or {}).get('bytes')
+    print(base64.b64decode(b).hex()[:16] if b else '-')
+except Exception:
+    print('-')" 2>/dev/null || echo -
+}
 
 pg_mount_ok() { # true when the running container already binds PGDATA_ROOT
     docker inspect "${PGCONT}" --format '{{range .Mounts}}{{.Source}}
@@ -273,9 +284,27 @@ cmd_stake() {
 }
 
 cmd_status() {
+    local heads="" i h
     for i in $(seq 0 $((NNODES - 1))); do
-        printf '  node-%d  cl=%-6s finalized=%-6s validators=%s\n' "$i" "$(cl_of "$i")" "$(fin_of "$i")" "$(valcount_of "$i")"
+        h="$(head_of "$i")"
+        printf '  node-%d  cl=%-6s finalized=%-6s validators=%s head=%s\n' "$i" "$(cl_of "$i")" "$(fin_of "$i")" "$(valcount_of "$i")" "$h"
+        [ -n "$h" ] && [ "$h" != "-" ] && heads="${heads}${h}
+"
     done
+    # DIVERGENCE BANNER: distinct confirmed heads at this moment = the mesh is
+    # split; every distinct head is one conflicting version of the chain.
+    local distinct
+    distinct=$(printf '%s' "$heads" | sort -u | grep -c . || true)
+    if [ "${distinct:-0}" -gt 1 ]; then
+        echo "  ============================================================"
+        echo "  ⚠ DIVERGENCE: ${distinct} conflicting chain heads detected!"
+        for i in $(seq 0 $((NNODES - 1))); do
+            h="$(head_of "$i")"
+            [ -n "$h" ] && [ "$h" != "-" ] && printf '    conflict: node-%d holds %s\n' "$i" "$h"
+        done
+        echo "    (reconciliation/finality must converge these — see logs)"
+        echo "  ============================================================"
+    fi
 }
 
 wait_finality() { # $1=min finalized length, $2=timeout-seconds

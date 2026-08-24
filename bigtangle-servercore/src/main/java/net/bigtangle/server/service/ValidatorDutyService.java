@@ -45,6 +45,14 @@ public class ValidatorDutyService {
     @Autowired
     private CacheBlockService cacheBlockService;
 
+    /**
+     * Bootstrap warmup: confirmed chainlength below this runs with a SINGLE
+     * deterministic proposer (the first selection validator). See the gate in
+     * {@link #performDuty()} — prevents same-height sibling forks from
+     * fragmenting a freshly booted mesh before votes can arbitrate.
+     */
+    private static final long WARMUP_SLOTS = Long.getLong("pos.warmupSlots", 32);
+
     @Autowired
     private ServerConfiguration serverConfiguration;
 
@@ -213,6 +221,35 @@ public class ValidatorDutyService {
             if (proposerIdx >= 0 && proposerIdx < validators.size()) {
                 StakeRecord proposer = validators.get((int) proposerIdx);
                 isProposer = java.util.Arrays.equals(proposer.getPubkey(), validatorKey.getPubKey());
+            }
+
+            // BOOTSTRAP WARMUP: while the confirmed chain is shorter than
+            // WARMUP_SLOTS, only the FIRST selection validator produces
+            // beacons. Confirmation (~seconds per connect) lags production
+            // (one beacon per RANDAO slot per validator), so concurrent
+            // slots seed same-height sibling forks that fragment small
+            // meshes — observed as 4 conflicting heads on a fresh 5-node
+            // boot, with no majority evidence to reconcile them. A single
+            // deterministic producer grows genesis linearly until there is
+            // enough confirmed chain for votes/reconciliation to be decisive.
+            // Deterministic across nodes: the active set is chain-derived.
+            if (isProposer) {
+                long tipCl = 0;
+                try {
+                    tipCl = cacheBlockService.getMaxConfirmedReward(store).getChainLength();
+                } catch (Exception e) {
+                    log.debug("warmup: confirmed length unavailable: {}", e.getMessage());
+                }
+                if (tipCl < WARMUP_SLOTS) {
+                    boolean firstValidator = !validators.isEmpty() && java.util.Arrays
+                            .equals(validators.get(0).getPubkey(), validatorKey.getPubKey());
+                    if (!firstValidator) {
+                        log.debug("warmup: confirmed chainlength {} < {} — only the first "
+                                + "selection validator proposes", tipCl, WARMUP_SLOTS);
+                        lastDutySlot = slot;
+                        return;
+                    }
+                }
             }
         } finally {
             store.close();

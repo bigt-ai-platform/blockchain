@@ -49,8 +49,11 @@ if [ ! -d "$M2_REPO" ] && [ -d /root/.m2/repository ]; then
 fi
 req_pubkey() {
     local seed="$1"
+    # pick NEWEST jar of each lib: head -1 can grab ancient versions
+    # (guava-10 lacks com.google.common.io.BaseEncoding)
+    newest() { find "$M2_REPO" -name "$1-*.jar" ! -name '*sources*' ! -name '*javadoc*' ! -name '*android*' | sort -V | tail -1; }
     "$JAVA_HOME/bin/java" -cp \
-        "$ROOT/bigtangle-core/target/classes:$(find "$M2_REPO" -name 'slf4j-api-*.jar' | head -1):$(find "$M2_REPO" -name 'guava-*.jar' | head -1):$(find "$M2_REPO" -name 'bcprov-jdk18on-*.jar' | head -1)" \
+        "$ROOT/bigtangle-core/target/classes:$(newest slf4j-api):$(newest guava):$(newest bcprov-jdk18on)" \
         net.bigtangle.tools.ValidatorKeyTool pubkey "$seed" 2>/dev/null | grep '^VALIDATOR_PUBKEY=' | cut -d= -f2
 }
 
