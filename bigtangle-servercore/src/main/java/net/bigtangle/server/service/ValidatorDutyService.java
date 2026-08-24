@@ -327,27 +327,29 @@ public class ValidatorDutyService {
                 log.debug("Kafka attestation publish failed: {}", e.getMessage());
             }
 
-            // Best-effort loopback broadcast: the vote is already processed
-            // locally (processVote also gossips) — a post failure must never
-            // fail the duty. requester may be a comma-separated list; post to
-            // each candidate with the SHORT gossip timeout so a stalled node
-            // cannot block the duty thread (45-min default would).
-            try {
-                String requester = serverConfiguration.getRequester();
-                String[] urls;
-                if (requester != null && !requester.trim().isEmpty()) {
-                    urls = java.util.Arrays.stream(requester.split(",")).map(String::trim).filter(s -> !s.isEmpty())
-                            .toArray(String[]::new);
-                } else {
-                    urls = new String[] { "http://localhost:" + serverConfiguration.getPort() };
+            // Best-effort loopback broadcast — GOSSIP-FALLBACK ONLY: with the
+            // kafka consumers active (runKafkaStream) the sendAttestation
+            // publish above already delivers this vote to every validator;
+            // the HTTP copies were re-verified and re-gossiped by each
+            // receiver for zero information (measurable CPU burn).
+            if (!serverConfiguration.getRunKafkaStream()) {
+                try {
+                    String requester = serverConfiguration.getRequester();
+                    String[] urls;
+                    if (requester != null && !requester.trim().isEmpty()) {
+                        urls = java.util.Arrays.stream(requester.split(",")).map(String::trim)
+                                .filter(s -> !s.isEmpty()).toArray(String[]::new);
+                    } else {
+                        urls = new String[] { "http://localhost:" + serverConfiguration.getPort() };
+                    }
+                    for (int i = 0; i < urls.length; i++) {
+                        urls[i] = urls[i].endsWith("/") ? urls[i] + ReqCmd.submitAttestation.name()
+                                : urls[i] + "/" + ReqCmd.submitAttestation.name();
+                    }
+                    OkHttp3Util.postGossip(urls, Json.jsonmapper().writeValueAsBytes(att));
+                } catch (Exception e) {
+                    log.debug("Loopback attestation post failed: {}", e.getMessage());
                 }
-                for (int i = 0; i < urls.length; i++) {
-                    urls[i] = urls[i].endsWith("/") ? urls[i] + ReqCmd.submitAttestation.name()
-                            : urls[i] + "/" + ReqCmd.submitAttestation.name();
-                }
-                OkHttp3Util.postGossip(urls, Json.jsonmapper().writeValueAsBytes(att));
-            } catch (Exception e) {
-                log.debug("Loopback attestation post failed: {}", e.getMessage());
             }
         } finally {
             store.close();

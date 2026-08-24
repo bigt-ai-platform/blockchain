@@ -92,7 +92,7 @@ db_setup() {
 
 # ---- Processes -------------------------------------------------------------
 docker_run() { # $1=container-name  $2=image  rest=java command args
-    local name="$1" image="$2"; shift 2
+    local name="${CONTAINER_PREFIX:-}${1}" image="$2"; shift 2
     docker rm -f "${name}" >/dev/null 2>&1 || true
     log "starting container ${name} (${image})"
     docker run -d --name "${name}" \

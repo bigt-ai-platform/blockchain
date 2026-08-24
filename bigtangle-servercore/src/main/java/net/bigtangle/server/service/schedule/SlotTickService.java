@@ -111,8 +111,13 @@ public class SlotTickService {
      * and pos_state pruning from the CONFIRMED chain. Chain-derived and
      * idempotent, so a slow cycle costs nothing but latency — it must simply
      * never run on the duty thread.
+     *
+     * <p>Runs on its OWN executor: when it shared posChainExecutor, a backed-up
+     * connect queue rejected the submission outright (TaskRejectedException in
+     * the scheduler) and finality evaluation silently stopped —
+     * finalizedChainLength pinned at 0 while blocks kept confirming.
      */
-    @Async("posChainExecutor")
+    @Async("posEpochExecutor")
     @Scheduled(fixedDelayString = "${pos.epochTickRateMs:5000}")
     public void epochTick() {
         if (!epochRunning.compareAndSet(false, true)) {

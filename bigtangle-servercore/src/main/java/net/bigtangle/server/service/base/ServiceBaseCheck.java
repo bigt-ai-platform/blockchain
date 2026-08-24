@@ -1849,7 +1849,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		//	logger.debug("Incorrect amount field" + currentToken.getToken().getAmount() + " !="
 		//			+ block.getTransactions().get(0).getOutputSum());
 			if (throwExceptions){
-				logger.debug(block.toString());
+				logger.debug("invalid tx amount in block {}", block.getHashAsString());
 				 
 				throw new InvalidTransactionDataException("Incorrect amount field" + currentToken.getToken().getAmount() + " !="
 					+ block.getTransactions().get(0).getOutputSum());

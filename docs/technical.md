@@ -71,7 +71,7 @@ if (hasSpentInputs(allApprovedNewBlocks, true, store)) {
 | solid | State | Meaning |
 |---|---|---|
 | 0 | MissingPredecessor | a referenced block/UTXO is not yet stored |
-| 1 | MissingCalculation | block content valid; difficulty/PoW metadata missing |
+| 1 | MissingCalculation | block content valid; final calculation still missing (e.g. BEACON chainlength promotion) |
 | 2 | Success | fully solid |
 | -1 | Invalid | rejected |
 | -N | Conflict | conflicts with the block confirmed by chainlength N (`solid=-chainlength`) |
@@ -173,6 +173,41 @@ Fork choice is by reward-chain **length**, not accumulated work. `handleNewBestC
 Because the `solid=-chainlength` conflict markers of the old chain are cleared on revert, reorganizations are fully reversible.
 
 ## Block Lifecycle
+
+### Workflow graph
+
+```mermaid
+flowchart TD
+    TX["User transaction"] -->|"submitTransaction"| MP["MempoolService<br/>tx status: MEMPOOL"]
+    MP -->|"saveBatchBlock"| BB["Batch block<br/>tx status: BATCHED"]
+    BB -->|"batchBlocks"| DAG["DAG block<br/>tx status: IN_BLOCK"]
+    DAG --> SB["saveBlock / saveBlockPermissive<br/>addNonChain"]
+    SB --> SOL{"solidifyBlock"}
+    SOL -->|"referenced block/UTXO missing"| S0["solid=0 MissingPredecessor"]
+    SOL -->|"final calculation missing (e.g. BEACON chainlength promotion)"| S1["solid=1 MissingCalculation"]
+    SOL -->|"content valid"| S2["solid=2 Success"]
+    SOL -->|"invalid"| SM1["solid=-1 Invalid"]
+    SOL -->|"spends already-confirmed input"| SCN["solid=-chainlength Conflict"]
+    S0 -->|"later pass"| SOL
+    S1 -->|"later pass"| SOL
+    S2 --> TOPO["getSolidBlockTopologyInInterval<br/>(filters solid=2 only)"]
+    SLOT["SlotTickService / ValidatorDutyService<br/>slot-selected proposer"] --> BEACON["BEACON reward block<br/>prevRewardHash chain, chainlength=N"]
+    TOPO --> GHOST["GhostService.getTwoTips<br/>stake-weighted GHOST trunk/branch"]
+    GHOST --> PROTO["CacheBlockPrototypeService.getBlockPrototype<br/>trunk + branch"]
+    PROTO --> BEACON
+    BEACON -->|"createReward<br/>dagBlockHashesFrom = collectedBlocks"| QUEUE["saveBlock → addChain<br/>saveChainBlockQueue"]
+    QUEUE -->|"UpdateChainService every 10 s<br/>(needs initsync=true)"| VR["verifyRewardChainConfirmReferenced<br/>hasSpentInputs → skip already-confirmed<br/>removeIf(chainlength > 0)"]
+    VR --> CB["confirmBlocksSorted"]
+    CB --> CONF["updateAllTransactionOutputsConfirmed(true)<br/>updateBlockEvaluationConfirmed + Chainlength(N)<br/>L1 updateOrderresult / Contractresult Chainlength<br/>tx status: CONFIRMED"]
+
+    FORK["Longer reward chain arrives<br/>(higher head.chainlength)"] --> HNB["handleNewBestChain"]
+    HNB --> SPLIT["findSplit"]
+    SPLIT --> RESET["resetChainlengthSolid(N)<br/>conflicts back to solid=0"]
+    RESET --> UNCONF["unconfirmBlocks(N interval)<br/>confirmed=false, chainlength=-1<br/>txs: DROPPED → MEMPOOL"]
+    UNCONF --> RECON["reconnect winner chain via<br/>verifyRewardChainConfirmReferenced"]
+    RECON --> CB
+    SCN -.->|"conflict cleared when<br/>chainlength N reverts"| UNCONF
+```
 
 ```
 saveBlockPermissive

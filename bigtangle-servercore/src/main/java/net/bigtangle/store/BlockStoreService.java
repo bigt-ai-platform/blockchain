@@ -300,8 +300,19 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			// Queue hygiene: entries at or below the confirmed tip can never
 			// extend it — they are dead weight that would otherwise clog the
 			// queue forever (observed as a 4k-row livelock once one low-cl row
-			// topped the ordered select). Drop them instead of re-selecting.
-			cbs.removeIf(cb -> cb.getChainlength() <= maxConfirmedReward.getChainLength());
+			// topped the ordered select). Drop them — but ARCHIVE their bytes
+			// into the blocks table first: the queue row is often the ONLY
+			// mesh-wide copy (peers purge independently at the same height),
+			// and later beacons still reference purged hashes (permanent
+			// MissingReferenced with no recovery source).
+			final long tipCl = maxConfirmedReward.getChainLength();
+			for (java.util.Iterator<ChainBlockQueue> qit = cbs.iterator(); qit.hasNext();) {
+				ChainBlockQueue staleCb = qit.next();
+				if (staleCb.getChainlength() <= tipCl) {
+					qit.remove();
+					guardedDeleteChainQueue(staleCb, store);
+				}
+			}
 			if (cbs.isEmpty()) {
 				return;
 			}
@@ -320,18 +331,25 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					// Idempotence: gossip/sync re-delivers blocks this node
 					// already stored. Skip re-verification entirely.
 					if (store.get(block.getHash()) != null) {
-						deleteChainQueue(chainBlockQueue, store);
+						guardedDeleteChainQueue(chainBlockQueue, store);
 						continue;
 					}
 					saveChainConnected(block, store);
-					deleteChainQueue(chainBlockQueue, store);
+					guardedDeleteChainQueue(chainBlockQueue, store);
 				} catch (net.bigtangle.exception.VerificationException.InfeasiblePrototypeException
 						| net.bigtangle.exception.VerificationException.MissingDependencyException e) {
 					// The beacon references DAG blocks this node has not synced
 					// yet. Dropping it would fork the chain: keep it queued and
 					// let SyncBlockService request the missing parents.
 					deferred++;
+					if (deferred <= 3) {
+						log.info("chain-connect deferral sample {}: {}", Sha256Hash.wrap(chainBlockQueue.getHash()),
+								e.getMessage());
+					}
 				} catch (Exception e) {
+					// Archive before the row goes away: a failed connect must
+					// never destroy the only copy of the bytes.
+					archiveQueueBytes(chainBlockQueue, store);
 					deleteChainQueue(chainBlockQueue, store);
 					if (throwException) {
 						throw e;
@@ -385,7 +403,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				// forking the network. Throw MissingDependencyException instead so
 				// the queue wrapper keeps the beacon queued, requests the missing
 				// parent from a peer, and retries on the next tick.
-				log.debug("Beacon isDirectlyMissing, deferring for sync: {}", block.getHash());
+				log.info("Beacon isDirectlyMissing ({}), deferring for sync: {}", solidityState, block.getHash());
 				throw new MissingDependencyException(
 						"beacon parent/reference not synced yet: " + block.getHash());
 			}
@@ -426,6 +444,40 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		store.deleteChainBlockQueue(l);
 	}
 
+	/**
+	 * Drops a queue row, but only after making sure the bytes survive in the
+	 * blocks table. The queue is frequently the ONLY copy of a beacon on this
+	 * node (peers hold their own copies independently); deleting a row whose
+	 * block was never stored turned every later reference into a permanent
+	 * MissingReferenced with no recovery source.
+	 */
+	private void guardedDeleteChainQueue(ChainBlockQueue chainBlockQueue, BlockStoreInterface store)
+			throws BlockStoreException {
+		try {
+			Sha256Hash h = Sha256Hash.wrap(chainBlockQueue.getHash());
+			if (!store.existBlock(h)) {
+				store.put(networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock()));
+				log.info("archived queue-only block {} before delete", h);
+			}
+		} catch (Exception e) {
+			log.debug("archive before queue delete failed: {}", e.getMessage());
+		}
+		deleteChainQueue(chainBlockQueue, store);
+	}
+
+	/** Preserves a queue entry's bytes without deleting the row. */
+	private void archiveQueueBytes(ChainBlockQueue chainBlockQueue, BlockStoreInterface store) {
+		try {
+			Sha256Hash h = Sha256Hash.wrap(chainBlockQueue.getHash());
+			if (!store.existBlock(h)) {
+				store.put(networkParameters.getDefaultSerializer().makeBlock(chainBlockQueue.getBlock()));
+				log.info("archived queue-only block {} after failed connect", h);
+			}
+		} catch (Exception e) {
+			log.debug("archive of failed-connect block failed: {}", e.getMessage());
+		}
+	}
+
 	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore)
 			throws BlockStoreException {
 		return addNonChain(block, allowUnsolid, blockStore, false);
@@ -438,7 +490,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 
 	public boolean addNonChain(Block block, boolean allowUnsolid, BlockStoreInterface blockStore,
 			boolean allowMissingPredecessor, boolean batch) throws BlockStoreException {
-	 	log.debug("addNonChain"+ block.toString());
+	 	log.debug("addNonChain hash={}", block.getHashAsString());
 		// Layer scoping: only accept block types allowed on this chain. Every
 		// ingestion path (gossip, sync, batch, local save) reaches this method,
 		// so the allow-set gate is enforced on all of them.

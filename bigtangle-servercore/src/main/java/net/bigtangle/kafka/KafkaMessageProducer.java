@@ -83,19 +83,24 @@ public class KafkaMessageProducer implements DisposableBean {
         }
         try {
             ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, data);
-            // Fire-and-forget: the producer's IO thread owns delivery (acks=all,
-            // retries=3).  Blocking the caller here serialized every tx ingest
-            // behind a broker round-trip.
-            producer.send(record, (meta, err) -> {
-                if (err != null) {
-                    log.warn("Kafka async send failed topic={} key={}", topic, key, err);
-                } else {
-                    log.trace("Sent to topic={} partition={} offset={}", meta.topic(), meta.partition(), meta.offset());
-                }
-            });
-            return true;
+            // DELIVERY-CONFIRMED send. The previous fire-and-forget silently
+            // lost records whenever the broker hiccupped past retries=3 —
+            // peers then chained onto a block nobody else ever received, and
+            // those beacons deferred forever (MissingReferenced with the
+            // dependency absent on EVERY node). Happy-path latency is a few
+            // ms (linger=5ms), so a bounded blocking ack is cheap insurance.
+            try {
+                producer.send(record).get(5, java.util.concurrent.TimeUnit.SECONDS);
+                return true;
+            } catch (java.util.concurrent.TimeoutException te) {
+                // One flush+retry before giving up: covers a slow controller
+                // election without blocking the caller indefinitely.
+                producer.flush();
+                producer.send(record).get(5, java.util.concurrent.TimeUnit.SECONDS);
+                return true;
+            }
         } catch (Exception e) {
-            log.warn("Kafka send failed topic={} key={}", topic, key, e);
+            log.warn("Kafka send FAILED topic={} key={} — block may be missing on peers", topic, key, e);
             return false;
         }
     }

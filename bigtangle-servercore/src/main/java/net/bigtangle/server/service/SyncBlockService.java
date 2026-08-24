@@ -81,6 +81,9 @@ public class SyncBlockService {
 	private BlockService blockService;
 
 	@Autowired
+	private net.bigtangle.kafka.BlockStreamHandler blockStreamHandler;
+
+	@Autowired
 	protected ObjectMapper jsonmapper;
 
 	@Autowired
@@ -284,7 +287,7 @@ public class SyncBlockService {
 					data = OkHttp3Util.postAndGetBlock(s.trim() + "/" + ReqCmd.getBlockByHash,
 							Json.jsonmapper().writeValueAsString(requestParam));
 					Block block = networkParameters.getDefaultSerializer().makeBlock(data);
-					log.info("   requestBlock {} ", block.toString());
+					log.info("   requestBlock {} ", block.getHashAsString());
 					blockgraph.addFromSync(block, true, store);
 					break;
 				} catch (Exception e) {
@@ -445,6 +448,18 @@ public class SyncBlockService {
 		// hashes go straight into the missing set (their own ancestors are
 		// picked up after they arrive, in a later round).
 		Set<Sha256Hash> missing = new LinkedHashSet<>();
+		// Locally PENDING bytes count as present: a queued beacon's parent is
+		// often itself queued (connect is head-of-line). Listing it as missing
+		// made every cycle re-fetch identical hashes from peers while the real
+		// blocker was the connect order.
+		Set<Sha256Hash> queuedLocal = new HashSet<>();
+		try {
+			for (net.bigtangle.server.data.ChainBlockQueue cbq : store.selectChainblockqueue(false, 10_000)) {
+				queuedLocal.add(Sha256Hash.wrap(cbq.getHash()));
+			}
+		} catch (Exception e) {
+			log.debug("queued-hash scan failed: {}", e.getMessage());
+		}
 		// BFS through the LOCAL DAG: a queued beacon's referenced blocks may be
 		// present but unsolid because one of THEIR predecessors is absent.
 		// Without expanding requirements recursively, a single deep hole
@@ -463,7 +478,7 @@ public class SyncBlockService {
 				Sha256Hash prev = ri.getPrevRewardHash();
 				guard = 0;
 				while (prev != null && guard++ < 10000) {
-					if (confirmed.contains(prev) || !missing.add(prev)) {
+					if (confirmed.contains(prev) || queuedLocal.contains(prev) || !missing.add(prev)) {
 						break;
 					}
 					Block local = blockService.getBlock(prev, store);
@@ -478,7 +493,9 @@ public class SyncBlockService {
 				for (Sha256Hash h : ri.getBlocks()) {
 					Block local = blockService.getBlock(h, store);
 					if (local == null) {
-						missing.add(h);
+						if (!queuedLocal.contains(h)) {
+							missing.add(h);
+						}
 					} else if (visited.add(h)) {
 						expand.push(h);
 					}
@@ -497,12 +514,14 @@ public class SyncBlockService {
 					continue;
 				}
 				for (Sha256Hash req : serviceBase.getAllRequiredBlockHashes(local)) {
-					if (confirmed.contains(req)) {
+					if (confirmed.contains(req) || visited.contains(req)) {
 						continue;
 					}
 					Block reqLocal = blockService.getBlock(req, store);
 					if (reqLocal == null) {
-						missing.add(req);
+						if (!queuedLocal.contains(req)) {
+							missing.add(req);
+						}
 					} else if (visited.add(req)) {
 						expand.push(req);
 					}
@@ -514,7 +533,8 @@ public class SyncBlockService {
 		if (missing.isEmpty()) {
 			return;
 		}
-		log.info("requestMissingReferenced: fetching {} missing block(s) in batches", missing.size());
+		log.info("requestMissingReferenced: fetching {} missing block(s) in batches, sample: {}", missing.size(),
+				missing.stream().limit(3).map(Sha256Hash::toString).reduce((a, b) -> a + "," + b).orElse(""));
 
 		// ---- Batched rounds until no progress ------------------------------
 		int rounds = 0;
@@ -552,6 +572,38 @@ public class SyncBlockService {
 				} catch (Exception e) {
 					log.debug("requestMissingReferenced expand {}: {}", h, e.getMessage());
 				}
+			}
+		}
+		if (!missing.isEmpty()) {
+			// Last resort before giving up, in two tiers:
+			// (1) this node's OWN pending-connect queue holds the bytes;
+			// (2) the kafka consumer's retry buffer holds raw bytes whose
+			//     ingest kept failing — retry them once here.
+			// Either way the block becomes locally stored and servable.
+			int recovered = 0;
+			try {
+				for (net.bigtangle.server.data.ChainBlockQueue cb : store.selectChainblockqueue(false, 10_000)) {
+					if (missing.remove(Sha256Hash.wrap(cb.getHash()))) {
+						blockService.addConnectedFromKafka(cb.getHash(), cb.getBlock());
+						recovered++;
+					}
+				}
+			} catch (Exception e) {
+				log.debug("local queue recovery failed: {}", e.getMessage());
+			}
+			try {
+				java.util.Map<String, byte[]> buffered = blockStreamHandler.retryBytesFor(missing);
+				for (java.util.Map.Entry<String, byte[]> en : buffered.entrySet()) {
+					blockService.addConnectedFromKafka(en.getKey().getBytes(), en.getValue());
+					missing.remove(Sha256Hash.wrap(Utils.HEX.decode(en.getKey())));
+					recovered++;
+				}
+			} catch (Exception e) {
+				log.debug("retry-buffer recovery failed: {}", e.getMessage());
+			}
+			if (recovered > 0) {
+				log.info("requestMissingReferenced: recovered {} block(s) from local pending queue/retry buffer",
+						recovered);
 			}
 		}
 		if (!missing.isEmpty()) {
@@ -1287,7 +1339,7 @@ public class SyncBlockService {
 		// remove too old OrphanBlock and cutoff chain length
 		if (System.currentTimeMillis() - orphanBlock.getInserttime() * 1000 > 2 * 60 * 60 * 1000
 				|| block.getLastMiningRewardBlock() < cut) {
-			log.info("deleteChainBlockQueue too old with cut {} ,   {}", cut, block.toString());
+			log.info("deleteChainBlockQueue too old with cut {} ,   {}", cut, block.getHashAsString());
 			List<ChainBlockQueue> l = new ArrayList<ChainBlockQueue>();
 			l.add(orphanBlock);
 			store.deleteChainBlockQueue(l);
@@ -1302,7 +1354,7 @@ public class SyncBlockService {
 			// log.debug("Orphan block {} is not connectable right now",
 			// orphanBlock.block.getHash());
 			requestBlock(serviceVerifyReward.getRewardInfo(block).getPrevRewardHash(), store);
-			log.info("syncBlockService orphan {}", block.toString());
+			log.info("syncBlockService orphan {}", block.getHashAsString());
 
 		} else {
 			// Otherwise we can connect it now.

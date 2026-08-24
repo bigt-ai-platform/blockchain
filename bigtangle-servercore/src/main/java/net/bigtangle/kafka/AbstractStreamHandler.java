@@ -44,6 +44,15 @@ public abstract class AbstractStreamHandler {
      * bean wiring, gated only by {@code server.runKafkaStream}. Deliberately
      * independent of the shared @Scheduled infrastructure, whose one-shot
      * starter died with early-boot failures and left nodes without consumers.
+     *
+     * <p>The loop only ever CREATES a client when none exists or the previous
+     * one reached a terminal state. A live client in CREATED/REBALANCING/
+     * RUNNING heals itself — Kafka Streams re-joins its group autonomously.
+     * Recreating a live client orphans the old one (close() does not reap a
+     * member stuck in rebalance), and each orphan keeps churning the SAME
+     * consumer group: observed as a permanent rebalance storm (~150 leaked
+     * threads per handler per node) whose starving groups never delivered
+     * attestations — hence zero finality — at ~100% CPU.
      */
     @jakarta.annotation.PostConstruct
     public void startWhenReady() {
@@ -56,8 +65,12 @@ public abstract class AbstractStreamHandler {
         Thread t = new Thread(() -> {
             for (int attempt = 1; attempt <= 120 && !started; attempt++) {
                 try {
-                    runStream();
-                    if (streams != null && KafkaStreams.State.RUNNING.equals(streams.state())) {
+                    if (streams == null || isTerminal(streams.state())) {
+                        runStream();
+                    }
+                    // Wait on THIS client; a slow/REBALANCING client must be
+                    // waited out, not replaced next round.
+                    if (awaitRunning(600_000)) {
                         started = true;
                         return;
                     }
@@ -74,6 +87,36 @@ public abstract class AbstractStreamHandler {
         }, "stream-starter-" + getClass().getSimpleName());
         t.setDaemon(true);
         t.start();
+    }
+
+    private static boolean isTerminal(KafkaStreams.State s) {
+        return s == KafkaStreams.State.ERROR || s == KafkaStreams.State.NOT_RUNNING
+                || s == KafkaStreams.State.PENDING_SHUTDOWN;
+    }
+
+    /** Bounded wait for the current client to reach RUNNING; false on fatal states or timeout. */
+    private boolean awaitRunning(long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            KafkaStreams s = streams;
+            if (s == null) return false;
+            KafkaStreams.State st = s.state();
+            if (st == KafkaStreams.State.RUNNING) return true;
+            if (isTerminal(st)) return false;
+            Thread.sleep(1000);
+        }
+        return false;
+    }
+
+    /**
+     * Idempotent kick for external schedulers: starts a client ONLY when none
+     * is alive. Schedulers calling {@link #runStream()} directly recreated a
+     * healthy client every tick and caused the orphan/rebalance storm above.
+     */
+    public void ensureStarted() {
+        if (streams == null || isTerminal(streams.state())) {
+            runStream();
+        }
     }
 
     protected abstract String topic();
@@ -105,6 +148,15 @@ public abstract class AbstractStreamHandler {
             return;
         }
 
+        // Close any previous client first: an unclosed KafkaStreams keeps its
+        // whole thread family (admin, producer, coordinator, stream threads).
+        if (streams != null) {
+            try {
+                streams.close(java.time.Duration.ofSeconds(10));
+            } catch (Exception e) {
+                log.debug("previous stream client close failed", e);
+            }
+        }
         streams = new KafkaStreams(builder.build(), props);
         streams.setUncaughtExceptionHandler((thread, ex) -> {
             StringWriter sw = new StringWriter();

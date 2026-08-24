@@ -17,6 +17,8 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockEvaluationDisplay;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.Sha256Hash;
+import java.util.HashSet;
+import java.util.Set;
 import net.bigtangle.core.TXReward;
 import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.exception.ProtocolException;
@@ -145,6 +147,12 @@ public class BlockService {
 	 * unknown ones. Serves {@code requestMissingReferenced} so a lagging node
 	 * pulls its missing DAG set in a handful of requests instead of one HTTP
 	 * round-trip per hash.
+	 *
+	 * <p>Falls back to this node's pending-connect queue: a queued beacon's
+	 * ONLY mesh-wide copy can live there (its block-table row appears when the
+	 * queue entry finally connects). Without the fallback a peer holding the
+	 * bytes answers 404-ish "absent", every requester marks the block permanently
+	 * unservable, and all beacons referencing it defer forever.
 	 */
 	public GetBlockListResponse getBlocksByHashList(List<String> hashHexs, BlockStoreInterface store)
 			throws BlockStoreException {
@@ -152,10 +160,28 @@ public class BlockService {
 		if (hashHexs == null) {
 			return GetBlockListResponse.create(blocks);
 		}
+		Set<Sha256Hash> absent = new HashSet<>();
 		for (String hex : hashHexs) {
 			Block block = getBlock(Sha256Hash.wrap(hex), store);
 			if (block != null) {
 				blocks.add(block.bitcoinSerialize());
+			} else {
+				absent.add(Sha256Hash.wrap(hex));
+			}
+		}
+		if (!absent.isEmpty()) {
+			try {
+				for (net.bigtangle.server.data.ChainBlockQueue cb : store.selectChainblockqueue(false, 10_000)) {
+					Sha256Hash queued = Sha256Hash.wrap(cb.getHash());
+					if (absent.remove(queued)) {
+						blocks.add(cb.getBlock());
+						if (absent.isEmpty()) {
+							break;
+						}
+					}
+				}
+			} catch (Exception e) {
+				logger.debug("queue fallback in getBlocksByHashList failed: {}", e.getMessage());
 			}
 		}
 		return GetBlockListResponse.create(blocks);
@@ -205,43 +231,61 @@ public class BlockService {
 		if (bytes == null)
 			return Optional.empty();
 		Block makeBlock = networkParameters.getDefaultSerializer().makeBlock(bytes);
-		logger.debug(" addConnected  Blockhash={} height ={} block: {}", makeBlock.getHashAsString(),
-				makeBlock.getHeight(), makeBlock);
+		logger.debug(" addConnected  Blockhash={} height ={}", makeBlock.getHashAsString(),
+				makeBlock.getHeight());
 		return addConnectedBlock(makeBlock, allowUnsolid);
 	}
 
-	public Optional<Block> addConnectedBlock(Block block, boolean allowUnsolid) throws BlockStoreException {
-		BlockStoreInterface store = storeService.getStore();
-		try {
-			if (!store.existBlock(block.getHash())) {
-				try {
-					if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
-						logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
-						// Record the beacon's slot sighting at INGEST: a second
-						// different beacon for the same slot is proposal
-						// equivocation — captured here as slashable evidence,
-						// regardless of which fork later wins confirmation.
-						net.bigtangle.server.service.StakeService stake = stakeServiceProvider.getIfAvailable();
-						if (stake != null) {
-							stake.checkSlotSightingForEquivocation(block, store);
-						}
-					}
-					blockgraph.addBlock(block, allowUnsolid, store);
-					// removeBlockPrototype(block,store);
-					return Optional.of(block);
-				} catch (UnsolidException e) {
-					return Optional.empty();
-				} catch (Exception e) {
-					logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(),
-							block.getHeight(), block, e);
-					return Optional.empty();
-
-				}
-			}
-		} finally {
-			store.close();
+	/**
+	 * Striped per-hash locks. The Kafka stream thread and the gossip HTTP
+	 * executor deliver the SAME block within milliseconds of each other;
+	 * without serialization both threads pass existBlock() and race through
+	 * addBlock, where concurrent batch writes can roll back the winner's row.
+	 * The block then exists on NO node while already-referenced beacons defer
+	 * forever (observed as 'chain-connect deferred' storms and a chainlength
+	 * frozen below the first Casper epoch boundary — hence zero finality).
+	 */
+	private static final int INGEST_STRIPES = 64;
+	private static final Object[] INGEST_LOCKS = new Object[INGEST_STRIPES];
+	static {
+		for (int i = 0; i < INGEST_STRIPES; i++) {
+			INGEST_LOCKS[i] = new Object();
 		}
+	}
 
+	public Optional<Block> addConnectedBlock(Block block, boolean allowUnsolid) throws BlockStoreException {
+		final Object stripe = INGEST_LOCKS[Math.floorMod(block.getHash().hashCode(), INGEST_STRIPES)];
+		synchronized (stripe) {
+			BlockStoreInterface store = storeService.getStore();
+			try {
+				if (!store.existBlock(block.getHash())) {
+					try {
+						if (block.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
+							logger.debug(" connected received chain block  {}", block.getLastMiningRewardBlock());
+							// Record the beacon's slot sighting at INGEST: a second
+							// different beacon for the same slot is proposal
+							// equivocation — captured here as slashable evidence,
+							// regardless of which fork later wins confirmation.
+							net.bigtangle.server.service.StakeService stake = stakeServiceProvider.getIfAvailable();
+							if (stake != null) {
+								stake.checkSlotSightingForEquivocation(block, store);
+							}
+						}
+						blockgraph.addBlock(block, allowUnsolid, store);
+						// removeBlockPrototype(block,store);
+						return Optional.of(block);
+					} catch (UnsolidException e) {
+						return Optional.empty();
+					} catch (Exception e) {
+						logger.debug(" cannot add block: Blockhash={} height ={} block: {}", block.getHashAsString(),
+								block.getHeight(), block, e);
+						return Optional.empty();
+					}
+				}
+			} finally {
+				store.close();
+			}
+		}
 		return Optional.empty();
 	}
 

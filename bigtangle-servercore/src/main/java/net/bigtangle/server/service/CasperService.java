@@ -99,6 +99,9 @@ public class CasperService {
     private GhostService ghostService;
 
     @Autowired
+    private net.bigtangle.server.config.ServerConfiguration serverConfiguration;
+
+    @Autowired
     private StakeService stakeService;
 
     @Autowired
@@ -658,7 +661,14 @@ public class CasperService {
         persistEpochVotes(vkey, store);
         persistFullAttestation(att, store);
 
-        gossipService.broadcastAttestation(att);
+        // Kafka is the reliable vote transport (the gossip HTTP path proved
+        // lossy under load — see AttestationStreamHandler). Relaying every
+        // first-seen vote via HTTP on TOP of kafka triple-delivered each
+        // attestation: receivers paid HTTP parse + BLS verify + DB writes
+        // per redundant copy, dominating CPU at ~0 useful blocks/min.
+        if (!serverConfiguration.getRunKafkaStream()) {
+            gossipService.broadcastAttestation(att);
+        }
     }
 
     /** Persists the validator's per-epoch vote window (epochs below the finality floor are dropped). */

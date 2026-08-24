@@ -287,6 +287,12 @@ public class BlockSaveService {
 				logger.warn("broadcastTransaction serialization error", e);
 			}
 		}
+		// GOSSIP-FALLBACK ONLY: with kafka consumers active the topic already
+		// delivers to every node; the HTTP copies duplicated ingest (racing
+		// addConnectedBlock on the same hash) and burned CPU on re-verify.
+		if (serverConfiguration.getRunKafkaStream()) {
+			return;
+		}
 		if (gossipProtocol != null) {
 			if (isBlock) {
 				try {

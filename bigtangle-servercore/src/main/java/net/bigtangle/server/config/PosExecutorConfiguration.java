@@ -65,12 +65,59 @@ public class PosExecutorConfiguration {
         // It never shares a thread with the slot tick, so a long connect cannot
         // delay a beacon proposal.
         executor.setQueueCapacity(16);
+        // Latest-wins: when the single connect thread falls behind, queued
+        // updateChain submissions go STALE — each one re-reads the same queue
+        // state. With the default AbortPolicy the pool fills, submissions are
+        // rejected with TaskRejectedException straight into the scheduler log,
+        // and — far worse — anything else sharing this executor (epochTick)
+        // is starved: finality evaluation stops while connect backlogs. Drop
+        // the oldest stale submission and keep the newest.
+        executor.setRejectedExecutionHandler((r, e) -> {
+            e.getQueue().poll();
+            if (!e.getQueue().offer(r)) {
+                log.warn("posChainExecutor dropped a chain-connect submission");
+            }
+        });
         executor.setThreadFactory(new ThreadFactory() {
             private final AtomicInteger counter = new AtomicInteger(0);
 
             @Override
             public Thread newThread(Runnable r) {
                 Thread t = new Thread(r, "pos-chain-" + counter.incrementAndGet());
+                t.setDaemon(true);
+                t.setPriority(Thread.MAX_PRIORITY);
+                return t;
+            }
+        });
+        return executor;
+    }
+
+    /**
+     * Finality evaluation must NEVER wait behind the chain-connect backlog:
+     * both are single-threaded DB-bound loops, but only epochTick advances
+     * Casper justification/finalization. When it shared posChainExecutor, a
+     * saturated connect queue (each cycle 1.5-10s under load) rejected or
+     * delayed every epochTick for minutes — observed as finalizedChainLength
+     * pinned at 0 on otherwise healthy nodes.
+     */
+    @Bean(name = "posEpochExecutor")
+    public ThreadPoolTaskExecutor posEpochExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(1);
+        executor.setRejectedExecutionHandler((r, e) -> {
+            e.getQueue().poll();
+            if (!e.getQueue().offer(r)) {
+                log.warn("posEpochExecutor dropped an epoch tick (previous still running)");
+            }
+        });
+        executor.setThreadFactory(new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(0);
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread t = new Thread(r, "pos-epoch-" + counter.incrementAndGet());
                 t.setDaemon(true);
                 t.setPriority(Thread.MAX_PRIORITY);
                 return t;

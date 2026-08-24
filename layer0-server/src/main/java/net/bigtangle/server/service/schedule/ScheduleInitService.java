@@ -58,8 +58,12 @@ public class ScheduleInitService extends AbstractScheduleInitService {
             return;
         }
         try {
-            blockStreamHandler.runStream();
-            transactionStreamHandler.runStream();
+            // ensureStarted only creates a client when none is alive; calling
+            // runStream() here unconditionally killed the PostConstruct
+            // starter's healthy client every 30s (rebalance storm, leaked
+            // threads, starved attestation groups).
+            blockStreamHandler.ensureStarted();
+            transactionStreamHandler.ensureStarted();
             streamsStarted = true;
             logger.info("Kafka stream consumers started");
         } catch (Exception e) {

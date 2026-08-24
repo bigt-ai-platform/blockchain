@@ -54,6 +54,10 @@ public class GossipProtocol implements DisposableBean {
     private static final int GOSSIP_QUEUE_CAPACITY = 100_000;
     /** Max frames coalesced into a single socket write before one flush. */
     private static final int GOSSIP_BATCH_MAX = 512;
+    /** Bound on blocking reads per frame: a dead/half-open peer must not pin
+     *  its reader thread forever (peers reconnect within one discovery cycle,
+     *  so a timed-out idle connection is simply re-established). */
+    private static final int GOSSIP_READ_TIMEOUT_MS = 120_000;
     @Autowired
     private NetworkParameters networkParameters;
 
@@ -91,7 +95,11 @@ public class GossipProtocol implements DisposableBean {
         try (ServerSocket server = new ServerSocket(gossipPort)) {
             while (running) {
                 Socket sock = server.accept();
-                String addr = sock.getInetAddress().getHostAddress();
+                // Unique key per CONNECTION (ip:ephemeralPort): bare IPs
+                // collide when several peers share one address (e.g. four
+                // nodes on 127.0.0.1), and each collision used to orphan the
+                // previous connection's reader AND sender threads.
+                String addr = sock.getInetAddress().getHostAddress() + ":" + sock.getPort();
                 registerPeer(addr, sock);
                 listenerPool.submit(() -> handleConnection(sock));
             }
@@ -102,6 +110,7 @@ public class GossipProtocol implements DisposableBean {
 
     private void handleConnection(Socket sock) {
         try (DataInputStream in = new DataInputStream(sock.getInputStream())) {
+            sock.setSoTimeout(GOSSIP_READ_TIMEOUT_MS);
             while (running && !sock.isClosed()) {
                 int magic = in.readInt();
                 if (magic != MAGIC) continue;
@@ -228,7 +237,9 @@ public class GossipProtocol implements DisposableBean {
     private void connectTo(String host, int port) {
         try {
             Socket sock = new Socket(host, port);
-            registerPeer(host, sock);
+            // Same key scheme as the configured-peer skip check: host:port.
+            // Keying by bare host collided on shared addresses (localhost).
+            registerPeer(host + ":" + port, sock);
             listenerPool.submit(() -> handleConnection(sock));
             log.info("Connected to gossip peer: {}:{}", host, port);
         } catch (Exception e) {
@@ -241,8 +252,14 @@ public class GossipProtocol implements DisposableBean {
      *  sender, so the submit path never blocks on a slow peer. */
     private void registerPeer(String key, Socket sock) {
         BlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(GOSSIP_QUEUE_CAPACITY);
-        peers.put(key, sock);
+        Socket prev = peers.put(key, sock);
         sendQueues.put(key, queue);
+        // A replaced registration must CLOSE the old socket: its reader and
+        // sender threads only exit when the socket breaks. Without this every
+        // reconnect leaked two blocked threads until process death.
+        if (prev != null && prev != sock) {
+            try { prev.close(); } catch (Exception ignore) { }
+        }
         senderPool.submit(() -> senderLoop(key, sock, queue));
     }
 
@@ -270,8 +287,10 @@ public class GossipProtocol implements DisposableBean {
         } catch (Exception e) {
             log.debug("Gossip send to {} failed: {}", key, e.getMessage());
         } finally {
-            peers.remove(key);
-            sendQueues.remove(key);
+            // Conditional removal: a newer registration under the same key
+            // must survive this connection's teardown.
+            peers.remove(key, sock);
+            sendQueues.remove(key, queue);
             try { sock.close(); } catch (Exception ignore) { }
         }
     }
