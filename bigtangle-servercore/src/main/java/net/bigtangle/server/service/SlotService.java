@@ -524,13 +524,17 @@ public class SlotService {
 
         TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
         Sha256Hash prevRewardHash = maxConfirmedReward.getBlockHash();
-        // PoS fork choice: the canonical parent is the LMD-GHOST head
-        // (attestation-weighted) from the highest justified checkpoint, NOT the
-        // longest confirmed chain. Every honest proposer must build on the same
-        // GHOST winner, otherwise each node extends its own fork forever and the
-        // network never converges on one chain.
+        // PoS fork choice: the canonical parent is the LMD-GHOST head computed
+        // FROM THE CONFIRMED TIP — never from the abstract DAG root. With no
+        // (or few) embedded votes yet, a dagRoot walk degenerates to a hash
+        // tie-break that can select an UNCONNECTABLE stale branch: proposals
+        // then never satisfy prev==tip, the confirmed chain starves, and the
+        // whole mesh livelocks (observed as proposals stuck N heights below
+        // the confirmed tip forever). Rooting GHOST at the confirmed tip makes
+        // the confirmable chain the default; genuine forks need actual votes
+        // to win, and reconciliation handles cross-branch evidence.
         try {
-            Sha256Hash ghostHead = ghostService.executeGhost(ghostService.getDagRoot(store), store);
+            Sha256Hash ghostHead = ghostService.executeGhost(prevRewardHash, store);
             if (ghostHead != null) {
                 prevRewardHash = ghostHead;
             }

@@ -594,6 +594,36 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			long ghostStart = System.currentTimeMillis();
 			boolean haveNewBestChain = ghostWinsForkChoice(block, store);
 			logConnectPhase("connect+ghost", block, cbStart);
+			// BOOTSTRAP-FORK RECONCILIATION. ghostWinsForkChoice compares
+			// against fork-choice weights derived ONLY from this node's own
+			// confirmed chain — so after an early first-wins split every side
+			// believes its own branch wins and the mesh never reconciles,
+			// even though the competing branch (with its 2/3-stake embedded
+			// attestation proof) is already stored locally. Weigh BOTH
+			// branches by their own embedded votes; adopt the strictly
+			// heavier one. The finalized-anchor and justified-descent guards
+			// below still vet the decision.
+			boolean reconciled = false;
+			if (!haveNewBestChain && casperServiceProvider.getIfAvailable() != null
+					&& ghostServiceProvider.getIfAvailable() != null && head != null
+					&& !head.getHash().equals(block.getHash())) {
+				try {
+					net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+					long totalValidators = 0;
+					try {
+						totalValidators = store.getActiveStakeDeposits().size();
+					} catch (Exception e2) {
+						log.debug("active validator count failed: {}", e2.getMessage());
+					}
+					if (totalValidators > 0
+							&& ghost.shouldAdoptBranch(store, head.getHash(), block.getHash(), totalValidators)) {
+						haveNewBestChain = true;
+						reconciled = true;
+					}
+				} catch (Exception e) {
+					log.debug("branch-weight reconciliation failed: {}", e.getMessage());
+				}
+			}
 			// TODO check this
 			// block.getRewardInfo().moreWorkThan(head.getRewardInfo());
 			// FINALITY: a reorg may only replace the head if the winning chain
@@ -638,6 +668,19 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
 				serviceVerifyReward.handleNewBestChain(block, store);
+				if (reconciled) {
+					// The abandoned minority branch may carry cached/persisted
+					// checkpoints; drop everything above genesis — they are
+					// chain-derived again on demand from the adopted branch.
+					try {
+						net.bigtangle.server.service.CasperService casperSvc = casperServiceProvider.getIfAvailable();
+						if (casperSvc != null) {
+							casperSvc.invalidateCheckpointsFrom(1, store);
+						}
+					} catch (Exception e) {
+						log.debug("checkpoint invalidation after reconciliation failed: {}", e.getMessage());
+					}
+				}
 			} else {
 				// parallel chain, save as unconfirmed
 			}

@@ -78,6 +78,12 @@ public class GhostService {
     @Autowired
     private SlotService slotService;
 
+    // Lazy provider (not field injection) — ValidatorDutyService itself
+    // depends on GhostService, a direct field would be a boot-ordering cycle.
+    @Lazy
+    @Autowired
+    private org.springframework.beans.factory.ObjectProvider<ValidatorDutyService> validatorDutyServiceProvider;
+
     @PostConstruct
     public void restoreState() {
         reloadForkChoiceFromStore();
@@ -319,13 +325,35 @@ public class GhostService {
 
     /** The uncached chain walk behind {@link #chainForkChoiceVotes}. */
     private Map<Sha256Hash, Long> deriveChainForkChoiceVotes(BlockStoreInterface store) {
-        Map<String, AttestationData> latestHead = new HashMap<>();
+        Sha256Hash start;
         try {
             TXReward tip = store.getMaxConfirmedReward();
-            if (tip == null) {
-                return new HashMap<>();
-            }
-            Sha256Hash cursor = tip.getBlockHash();
+            start = tip != null ? tip.getBlockHash() : null;
+        } catch (Exception e) {
+            start = null;
+        }
+        if (start == null) {
+            return new HashMap<>();
+        }
+        return deriveChainForkChoiceVotesFrom(start, store);
+    }
+
+    /**
+     * Fork-choice votes derived from the embedded attestations of the reward
+     * chain ENDING at {@code startHash}, walked backwards up to the lookback.
+     *
+     * <p>Public because bootstrap-fork reconciliation needs the SAME derivation
+     * for a COMPETING branch: chain-derived weights read only from this node's
+     * own confirmed chain, so after an early first-wins split every node sees
+     * "my branch wins" forever — even though the majority branch's 2/3-stake
+     * attestation proof is already stored locally. Weighing both branches by
+     * their own embedded votes is what lets a minority node adopt the majority.
+     */
+    public Map<Sha256Hash, Long> deriveChainForkChoiceVotesFrom(Sha256Hash startHash,
+            BlockStoreInterface store) {
+        Map<String, AttestationData> latestHead = new HashMap<>();
+        try {
+            Sha256Hash cursor = startHash;
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
@@ -368,6 +396,140 @@ public class GhostService {
             weights.merge(att.getBeaconBlockHash(), w, Long::sum);
         }
         return weights;
+    }
+
+    /**
+     * TRUE LMD reconciliation decision: should the branch ending at
+     * {@code candidateTip} replace the branch ending at {@code currentTip}?
+     *
+     * <p>Per validator, the vote belongs to whichever branch carries its
+     * HIGHEST-slot attestation (latest vote wins, Ethereum LMD rule). Branch-
+     * local counting is ambiguous — a validator that switched sides leaves
+     * votes in BOTH histories, so two branches can each claim 2 of 3 voters
+     * (observed: 49 adoption reversions). Slot comparison makes the tallies
+     * globally consistent: a validator contributes to exactly one branch.
+     *
+     * @return true when the candidate holds strictly more latest-votes than
+     *         the current branch AND a strict majority of {@code totalValidators}
+     */
+    public boolean shouldAdoptBranch(BlockStoreInterface store, Sha256Hash currentTip,
+            Sha256Hash candidateTip, long totalValidators) {
+        Map<String, AttestationData> cur = latestEmbeddedVotes(currentTip, store);
+        Map<String, AttestationData> cand = latestEmbeddedVotes(candidateTip, store);
+        // EXCLUDE this node's own vote: right after a stall the minority node
+        // has just attested its own (stale) tip, so its self-vote can briefly
+        // out-slot the majority's votes and revert a correct adoption — the
+        // node must follow OTHERS' consensus, not re-rank itself into it.
+        String selfPk = null;
+        ValidatorDutyService duty = validatorDutyServiceProvider.getIfAvailable();
+        if (duty != null && duty.getValidatorKey() != null) {
+            selfPk = Utils.HEX.encode(duty.getValidatorKey().getPubKey());
+        }
+        int candTally = 0;
+        int curTally = 0;
+        java.util.Set<String> all = new java.util.HashSet<>(cur.keySet());
+        all.addAll(cand.keySet());
+        for (String pk : all) {
+            if (pk.equals(selfPk) || equivocatingValidators.contains(pk)) {
+                continue;
+            }
+            AttestationData c = cand.get(pk);
+            AttestationData u = cur.get(pk);
+            long cs = c != null ? c.getSlot() : Long.MIN_VALUE;
+            long us = u != null ? u.getSlot() : Long.MIN_VALUE;
+            if (cs > us) {
+                candTally++;
+            } else if (us > cs) {
+                curTally++;
+            }
+        }
+        boolean wins = candTally > curTally && candTally * 2 > totalValidators;
+        log.info("branch reconciliation check: candidate={} current={} total={} → adopt={}",
+                candTally, curTally, totalValidators, wins);
+        return wins;
+    }
+
+    /**
+     * Distinct validators whose latest embedded vote lies on {@code branchTip}'s
+     * branch. Integer-valued ON PURPOSE: summed stake flips-flops when one side's
+     * ancestry is only partially stored (freshly reconciled node mid-backfill),
+     * causing adopt/adoption-reverse oscillation. Voter COUNT is stable under
+     * partial walks — a missing ancestor can only undercount BOTH sides equally
+     * near the common ancestor, never invert the majority.
+     */
+    public long branchVoterCount(Sha256Hash branchTip, BlockStoreInterface store) {
+        long count = 0;
+        for (AttestationData att : latestEmbeddedVotes(branchTip, store).values()) {
+            if (att.getBeaconBlockHash() == null) {
+                continue;
+            }
+            if (equivocatingValidators.contains(net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey()))) {
+                continue;
+            }
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * Total voting weight behind {@code branchTip}'s branch: one unit per
+     * distinct validator, weighted by effective stake when resolvable.
+     */
+    public long branchVoteWeight(Sha256Hash branchTip, BlockStoreInterface store) {
+        long total = 0;
+        for (AttestationData att : latestEmbeddedVotes(branchTip, store).values()) {
+            if (att.getBeaconBlockHash() == null) {
+                continue;
+            }
+            if (equivocatingValidators.contains(net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey()))) {
+                continue;
+            }
+            long w = 1;
+            try {
+                long s = stakeService.getEffectiveStake(att.getValidatorPubkey(), store);
+                if (s > 0) {
+                    w = s;
+                }
+            } catch (Exception e) {
+                // keep unit weight
+            }
+            total += w;
+        }
+        return total;
+    }
+
+    /**
+     * Latest-slot embedded attestation per validator pubkey along the reward
+     * chain ending at {@code startHash}, walked backwards up to the lookback.
+     */
+    private Map<String, AttestationData> latestEmbeddedVotes(Sha256Hash startHash,
+            BlockStoreInterface store) {
+        Map<String, AttestationData> latest = new HashMap<>();
+        try {
+            Sha256Hash cursor = startHash;
+            Set<Sha256Hash> visited = new HashSet<>();
+            int count = 0;
+            while (cursor != null && visited.add(cursor)
+                    && count < net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+                count++;
+                Block b = store.get(cursor);
+                if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
+                    break;
+                }
+                for (AttestationData att : embeddedAttestationsOf(b)) {
+                    String pk = Utils.HEX.encode(att.getValidatorPubkey());
+                    AttestationData existing = latest.get(pk);
+                    if (existing == null || att.getSlot() > existing.getSlot()) {
+                        latest.put(pk, att);
+                    }
+                }
+                RewardInfo ri = new RewardInfo().parseChecked(b.getTransactions().get(0).getData());
+                cursor = ri != null ? ri.getPrevRewardHash() : null;
+            }
+        } catch (Exception e) {
+            log.debug("Failed to collect embedded votes", e);
+        }
+        return latest;
     }
 
     /** The attestations embedded in a beacon's SlotData, or empty. */

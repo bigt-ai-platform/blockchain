@@ -803,8 +803,22 @@ public class CasperService {
         }
     }
 
+    /**
+     * Carry-forward window for attestation embedding: a vote is offered to
+     * EVERY proposer for this many slots after it was cast, not just to the
+     * proposer of the same slot. The old same-slot-only rule made embedding a
+     * lottery — the single proposer of slot N had to observe the vote BEFORE
+     * building, otherwise the vote never entered ANY beacon, leaving early
+     * confirmed history without embedded attestations. That starved both
+     * justification (0-weight checkpoints) and bootstrap-fork reconciliation
+     * (branch walks found no votes to compare).
+     */
+    public static final long EMBED_CARRY_SLOTS = 32;
+    /** Upper bound on embedded attestations per beacon (payload safety). */
+    public static final int EMBED_MAX_ATTESTATIONS = 256;
+
     /** The full (signed) attestations persisted for {@code slot} on this node. */
-    public List<AttestationData> getAttestationsForSlot(long slot, BlockStoreInterface store) {
+    private List<AttestationData> readAttestationsForSlot(long slot, BlockStoreInterface store) {
         List<AttestationData> list = new ArrayList<>();
         String prefix = "att_" + String.format("%020d", slot) + "_";
         try {
@@ -826,6 +840,31 @@ public class CasperService {
             log.debug("Failed to read attestations for slot {}", slot, e);
         }
         return list;
+    }
+
+    /**
+     * Attestations to embed in the beacon proposed for {@code slot}: this
+     * slot's votes plus the LATEST-per-validator vote from the trailing
+     * {@link #EMBED_CARRY_SLOTS} window. Latest-wins per validator keeps the
+     * set LMD-consistent (a later vote supersedes an earlier one from the same
+     * validator) and bounded.
+     */
+    public List<AttestationData> getAttestationsForSlot(long slot, BlockStoreInterface store) {
+        Map<String, AttestationData> latest = new java.util.LinkedHashMap<>();
+        for (AttestationData att : readAttestationsForSlot(slot, store)) {
+            latest.put(Utils.HEX.encode(att.getValidatorPubkey()), att);
+        }
+        long from = Math.max(0, slot - EMBED_CARRY_SLOTS);
+        for (long s = slot - 1; s >= from && latest.size() < EMBED_MAX_ATTESTATIONS; s--) {
+            for (AttestationData att : readAttestationsForSlot(s, store)) {
+                String pk = Utils.HEX.encode(att.getValidatorPubkey());
+                AttestationData existing = latest.get(pk);
+                if (existing == null || att.getSlot() > existing.getSlot()) {
+                    latest.put(pk, att);
+                }
+            }
+        }
+        return new ArrayList<>(latest.values());
     }
 
     /**

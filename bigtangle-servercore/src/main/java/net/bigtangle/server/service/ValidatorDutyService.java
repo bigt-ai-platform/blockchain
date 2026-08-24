@@ -246,12 +246,14 @@ public class ValidatorDutyService {
             if (beaconHead == null) {
                 beaconHead = ghostService.getDagRoot(store);
             }
-            // PoS fork choice: attest to the LMD-GHOST head (attestation-weighted
-            // from the highest justified checkpoint), NOT the local longest
-            // chain. If every validator attested to its own local head, votes
-            // fragment across forks and 2/3 justification can never form.
+            // PoS fork choice: attest to the LMD-GHOST head computed FROM THE
+            // CONFIRMED TIP (see SlotService.proposeBeaconBlock — a dagRoot
+            // walk with no votes yet selects unconnectable stale branches and
+            // starves the confirmed chain). Attesting to the confirmable
+            // chain's head keeps proposal/attestation/confirmation aligned.
             try {
-                Sha256Hash ghostHead = ghostService.executeGhost(ghostService.getDagRoot(store), store);
+                Sha256Hash confirmedTip = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
+                Sha256Hash ghostHead = ghostService.executeGhost(confirmedTip, store);
                 if (ghostHead != null) {
                     beaconHead = ghostHead;
                 }
