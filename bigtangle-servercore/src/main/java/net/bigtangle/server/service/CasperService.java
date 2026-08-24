@@ -1326,7 +1326,7 @@ public class CasperService {
                     net.bigtangle.core.SlotData sd = net.bigtangle.utils.Json.jsonmapper()
                             .readValue(tx.getData(), net.bigtangle.core.SlotData.class);
                     if (sd != null && sd.getAttestations() != null) {
-                        return sd.getAttestations();
+                        return signatureValid(sd.getAttestations());
                     }
                 } catch (Exception e) {
                     return List.of();
@@ -1334,6 +1334,49 @@ public class CasperService {
             }
         }
         return List.of();
+    }
+
+    /**
+     * BLS-verdict cache for embedded votes, keyed by message hash. Embedded
+     * attestations are proposer-supplied content: without this gate a
+     * Byzantine proposer could fabricate OTHER validators' votes inside its
+     * own beacon and forge majority weight for its fork — poisoning GHOST,
+     * justification and reconciliation alike. Verdicts are immutable per
+     * attestation content, so caching is safe; the cache bounds the BLS cost
+     * of repeated chain walks.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Sha256Hash, Boolean> EMBED_SIG_VERDICTS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int EMBED_SIG_CACHE_MAX = 100_000;
+
+    static List<AttestationData> signatureValid(List<AttestationData> atts) {
+        if (atts == null || atts.isEmpty()) {
+            return atts;
+        }
+        List<AttestationData> out = new ArrayList<>(atts.size());
+        for (AttestationData att : atts) {
+            if (att == null || att.getMessageHash() == null) {
+                continue;
+            }
+            Sha256Hash key = att.getMessageHash();
+            Boolean ok = EMBED_SIG_VERDICTS.get(key);
+            if (ok == null) {
+                ok = att.verifySignature();
+                if (!ok) {
+                    log.warn("EMBEDDED ATTESTATION FORGED/INVALID: pubkey={} slot={} — excluded from consensus",
+                            Utils.HEX.encode(att.getValidatorPubkey() == null ? new byte[0] : att.getValidatorPubkey()),
+                            att.getSlot());
+                }
+                if (EMBED_SIG_VERDICTS.size() >= EMBED_SIG_CACHE_MAX) {
+                    EMBED_SIG_VERDICTS.clear();
+                }
+                EMBED_SIG_VERDICTS.put(key, ok);
+            }
+            if (ok) {
+                out.add(att);
+            }
+        }
+        return out;
     }
 
     private BigInteger votedStakeFromChain(Checkpoint target, Sha256Hash requiredSource,

@@ -540,7 +540,10 @@ public class GhostService {
                     net.bigtangle.core.SlotData sd = net.bigtangle.utils.Json.jsonmapper()
                             .readValue(tx.getData(), net.bigtangle.core.SlotData.class);
                     if (sd != null && sd.getAttestations() != null) {
-                        return sd.getAttestations();
+                        // BLS-verdict-cached filter (see CasperService): a
+                        // Byzantine proposer must not be able to forge other
+                        // validators' votes into its own branch's evidence.
+                        return CasperService.signatureValid(sd.getAttestations());
                     }
                 } catch (Exception e) {
                     return List.of();
