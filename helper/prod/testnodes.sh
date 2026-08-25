@@ -23,7 +23,9 @@
 #   default /data/vm/test-bigtangle-postgres/var/lib/postgresql/data — survives
 #   container recreation and lives on the big disk, not the root fs),
 # KAFKA (default localhost:9092),
-# SLOT_MS (pos.slotIntervalMs, default 2000 — small epochs for fast finality),
+# SLOT_MS (pos.slotIntervalMs, default 12000 — Ethereum's 12 s slot; gives the
+# receive→connect→confirm pipeline time to adopt each proposer block before
+# the next slot, instead of forking under 2 s slots),
 # READINESS_MIN (bigtangle.readinessTimeoutMinutes, default 10),
 # XMX (per-node JVM heap, default 3g — 3 nodes ≈ 11G RSS, sized for a 16G host;
 #   lower it on smaller machines, e.g. XMX=1200m testnodes.sh up).
@@ -45,7 +47,7 @@ IMAGE="${IMAGE:-ghcr.io/bigt-ai-platform/layer0-server:latest}"
 PGPORT="${PGPORT:-21532}"
 PGDATA_ROOT="${PGDATA_ROOT:-/data/vm/test-bigtangle-postgres/var/lib/postgresql/data}"
 KAFKA="${KAFKA:-localhost:9092}"
-SLOT_MS="${SLOT_MS:-2000}"
+SLOT_MS="${SLOT_MS:-12000}"
 READINESS_MIN="${READINESS_MIN:-10}"
 XMX="${XMX:-3g}"
 NNODES="${NNODES:-3}"
