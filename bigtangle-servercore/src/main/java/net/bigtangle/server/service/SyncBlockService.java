@@ -328,6 +328,41 @@ public class SyncBlockService {
 		}
 		Collections.sort(sortedBlocks, new SortbyBlock());
 
+		// PARALLEL CRYPTO PREWARM: the serial addFromSync loop below pays the
+		// full proposer-PQ + RANDAO-BLS cost per beacon (~2 s), so a single
+		// 30-block range took ~30 s of sync-worker time — stragglers closed a
+		// 40-block gap in minutes while kafka had delivered everything up
+		// front. Fan the pure-crypto checks out across extra pooled store
+		// connections first; addFromSync then hits memoized verdicts.
+		try {
+			if (!sortedBlocks.isEmpty()) {
+				int workers = Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+				java.util.List<BlockStoreInterface> prewarmStores = new ArrayList<BlockStoreInterface>(workers);
+				for (int i = 0; i < workers; i++) {
+					try {
+						prewarmStores.add(storeService.getStore());
+					} catch (Exception e2) {
+						break;
+					}
+				}
+				try {
+					if (!prewarmStores.isEmpty()) {
+						new net.bigtangle.server.service.base.ServiceBaseCheck(serverConfiguration, networkParameters,
+								cacheBlockService, jsonmapper).prewarmBeaconCrypto(sortedBlocks, prewarmStores);
+					}
+				} finally {
+					for (BlockStoreInterface ws : prewarmStores) {
+						try {
+							ws.close();
+						} catch (Exception ignore) {
+						}
+					}
+				}
+			}
+		} catch (Exception e) {
+			log.debug("range crypto prewarm skipped: {}", e.getMessage());
+		}
+
 		for (Block block : sortedBlocks) {
 			// no genesis block and no spend pending set
 			if (block.getHeight() > 0) {
