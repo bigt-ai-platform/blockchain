@@ -71,6 +71,11 @@ public class BlockService {
 	@Autowired
 	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
 
+	// Feeds the gossip-observed fork-choice view (GhostService.observeBeacon)
+	// with every ingested beacon; lazily resolved to avoid service cycles.
+	@Autowired
+	protected org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.GhostService> ghostServiceProvider;
+
 	private static final Logger logger = LoggerFactory.getLogger(BlockService.class);
 
 	public Block getBlock(Sha256Hash blockhash, BlockStoreInterface store) throws BlockStoreException {
@@ -272,6 +277,17 @@ public class BlockService {
 							}
 						}
 						blockgraph.addBlock(block, allowUnsolid, store);
+						// Feed the gossip-observed fork-choice view so GHOST
+						// weighs majority attestations as soon as they ARRIVE
+						// (kafka stream or gossip), not only after confirmation.
+						net.bigtangle.server.service.GhostService ghost = ghostServiceProvider.getIfAvailable();
+						if (ghost != null) {
+							try {
+								ghost.observeBeacon(block);
+							} catch (Exception e1) {
+								logger.debug("observeBeacon failed: {}", e1.getMessage());
+							}
+						}
 						// removeBlockPrototype(block,store);
 						return Optional.of(block);
 					} catch (UnsolidException e) {

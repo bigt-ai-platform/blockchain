@@ -279,6 +279,18 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 	 */
 	public void handleNewBestChain(Block newChainHead, BlockStoreInterface store)
 			throws BlockStoreException, VerificationException {
+		handleNewBestChain(newChainHead, store, null);
+	}
+
+	/**
+	 * @param prewarmWorkerStores optional extra store connections (opened and
+	 *        closed by the caller) used to fan beacon-crypto verification out
+	 *        across cores before the serial walk; {@code null} keeps the fully
+	 *        serial path.
+	 */
+	public void handleNewBestChain(Block newChainHead, BlockStoreInterface store,
+			java.util.List<BlockStoreInterface> prewarmWorkerStores)
+			throws BlockStoreException, VerificationException {
 		// checkState(lock.isHeldByCurrentThread());
 		// This chain has overtaken the one we currently believe is best.
 		// Reorganize is required.
@@ -304,6 +316,19 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			oldBlocks = getPartialChain(head, splitPoint, store);
 		}
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
+		// Parallel crypto pre-verification of the incoming beacons: proposer PQ
+		// signature + RANDAO BLS reveal are ~2 s per block serially and dominate
+		// catch-up reorgs. Fan them out first so the serial walk below reads
+		// memoized results instead.
+		try {
+			if (prewarmWorkerStores != null && !prewarmWorkerStores.isEmpty()) {
+				new net.bigtangle.server.service.base.ServiceBaseCheck(serverConfiguration, networkParameters,
+						cacheBlockService, jsonmapper)
+						.prewarmBeaconCrypto(newBlocks, prewarmWorkerStores);
+			}
+		} catch (Exception e) {
+			logger.debug("crypto prewarm skipped: {}", e.getMessage());
+		}
 		// Disconnect each block in the previous best chain that is no
 		// longer in the new best chain from last to begin
 		oldBlocks.sort(Comparator.comparingLong((Block w) -> w.getHeight()));

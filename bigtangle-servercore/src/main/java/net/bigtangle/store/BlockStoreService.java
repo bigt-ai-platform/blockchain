@@ -667,7 +667,29 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			}
 			if (haveNewBestChain) {
 				log.info("Block is causing a re-organize");
-				serviceVerifyReward.handleNewBestChain(block, store);
+				// Open a few extra pooled connections so the reorg's beacon
+				// crypto checks (proposer PQ sig + RANDAO BLS, ~2 s/block
+				// serial) run in parallel; closed again right after.
+				java.util.List<BlockStoreInterface> prewarmStores = new java.util.ArrayList<>();
+				try {
+					int n = Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+					for (int i = 0; i < n; i++) {
+						prewarmStores.add(storeService.getStore());
+					}
+				} catch (Exception e) {
+					log.debug("prewarm store open failed: {}", e.getMessage());
+					prewarmStores.clear();
+				}
+				try {
+					serviceVerifyReward.handleNewBestChain(block, store, prewarmStores);
+				} finally {
+					for (BlockStoreInterface s : prewarmStores) {
+						try {
+							s.close();
+						} catch (Exception ignore) {
+						}
+					}
+				}
 				if (reconciled) {
 					// The abandoned minority branch may carry cached/persisted
 					// checkpoints; drop everything above genesis — they are

@@ -115,6 +115,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			new java.util.concurrent.ConcurrentHashMap<>();
 	private static final java.util.Map<Sha256Hash, Boolean> RANDAO_CACHE =
 			new java.util.concurrent.ConcurrentHashMap<>();
+	// Embedded-attestation BLS verdicts, keyed by the SlotData message hash:
+	// the attestation list is immutable inside a signed SlotData, so its
+	// inclusion-integrity result never changes either.
+	private static final java.util.Map<Sha256Hash, Boolean> EMBEDDED_ATT_CACHE =
+			new java.util.concurrent.ConcurrentHashMap<>();
 
 	private static boolean cachedCheck(java.util.Map<Sha256Hash, Boolean> cache, Sha256Hash hash,
 			java.util.function.BooleanSupplier verify) {
@@ -128,6 +133,98 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		cache.put(hash, ok);
 		return ok;
+	}
+
+	// Bounded daemon pool for PARALLEL beacon-crypto pre-verification during
+	// reorg backfill. The serial connect walk pays ~0.6 s proposer PQ verify +
+	// ~1.7 s RANDAO BLS verify PER beacon, so a 40-block catch-up reorg takes
+	// minutes; fanning the pure-crypto checks out across cores before the walk
+	// turns that into batch-depth/parallelism.
+	private static final java.util.concurrent.ThreadPoolExecutor CRYPTO_PREWARM_POOL =
+			new java.util.concurrent.ThreadPoolExecutor(
+					2, Math.max(4, Runtime.getRuntime().availableProcessors()),
+					60L, java.util.concurrent.TimeUnit.SECONDS,
+					new java.util.concurrent.LinkedBlockingQueue<>(1024),
+					r -> {
+						Thread t = new Thread(r, "beacon-crypto-prewarm");
+						t.setDaemon(true);
+						return t;
+					},
+					new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+
+	/**
+	 * Pre-verify proposer signature + RANDAO reveal for a batch of beacons in
+	 * parallel, warming {@link #PROPOSER_SIG_CACHE} / {@link #RANDAO_CACHE} so
+	 * the subsequent serial connect walk ({@code handleNewBestChain}) finds
+	 * every result memoized instead of grinding through PQ+BLS per block.
+	 *
+	 * <p>Pure latency optimization: the checks are order-independent pure
+	 * functions of (block bytes, validator-set rows), results identical to the
+	 * serial path. Each worker borrows its OWN store connection from
+	 * {@code workerStores} (JDBC connections are not thread-safe); callers open
+	 * and close those stores around this call. When the queue saturates or the
+	 * list is empty the remaining beacons simply verify on the serial path.
+	 */
+	public void prewarmBeaconCrypto(java.util.Collection<Block> blocks,
+			java.util.List<BlockStoreInterface> workerStores) {
+		if (blocks == null || blocks.isEmpty() || workerStores == null || workerStores.isEmpty()) {
+			return;
+		}
+		final java.util.concurrent.BlockingQueue<BlockStoreInterface> storePool =
+				new java.util.concurrent.LinkedBlockingQueue<>(workerStores);
+		java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
+		try {
+			for (Block b : blocks) {
+				if (b == null || b.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+					continue;
+				}
+				if (PROPOSER_SIG_CACHE.containsKey(b.getHash()) && RANDAO_CACHE.containsKey(b.getHash())) {
+					continue;
+				}
+				futures.add(CRYPTO_PREWARM_POOL.submit(() -> {
+					final BlockStoreInterface s;
+					try {
+						s = storePool.poll(10, java.util.concurrent.TimeUnit.SECONDS);
+					} catch (InterruptedException ie) {
+						Thread.currentThread().interrupt();
+						return;
+					}
+					if (s == null) {
+						return; // all workers busy: serial path handles it
+					}
+					try {
+						cachedCheck(PROPOSER_SIG_CACHE, b.getHash(), () -> {
+							try {
+								return verifyProposerSignature(b, s);
+							} catch (Exception e) {
+								return false;
+							}
+						});
+						cachedCheck(RANDAO_CACHE, b.getHash(), () -> {
+							try {
+								return verifyRandaoReveal(b, s);
+							} catch (Exception e) {
+								return false;
+							}
+						});
+					} catch (Exception e) {
+						logger.debug("crypto prewarm failed for {}: {}", b.getHash(), e.getMessage());
+					} finally {
+						storePool.add(s);
+					}
+				}));
+			}
+		} catch (java.util.concurrent.RejectedExecutionException e) {
+			// queue saturated mid-batch: what was submitted still warms; the
+			// rest verifies on the serial path
+		}
+		for (java.util.concurrent.Future<?> f : futures) {
+			try {
+				f.get(120, java.util.concurrent.TimeUnit.SECONDS);
+			} catch (Exception e) {
+				// partial warm is fine
+			}
+		}
 	}
 
 	private void checCoinbaseTransactionalSolidity(Block block, BlockStoreInterface store) throws BlockStoreException {
@@ -791,16 +888,25 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// Use the SNAPSHOTTED active validator set from two epochs earlier
 			// (same boundary discipline as mixfinal_), never the node's live local
 			// set — the expected proposer must be a fixed chain fact.
-			List<StakeRecord> active = validatorsForEpoch(sd.getSlot() / 32 - 2, store);
+			long laggedEpoch = sd.getSlot() / 32 - 2;
+			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
 				return false;
+			}
+			if (bootstrapWindow(store, laggedEpoch)) {
+				// No chain-derived snapshot yet (epochs before the first
+				// finalized boundary): electing an expected proposer from the
+				// live local deposit view is node-local and diverges across
+				// nodes — honest beacons get rejected and the mesh forks.
+				// Authenticate against any locally-registered key instead;
+				// slot-election enforcement resumes once snapshots exist.
+				return bootstrapProposerOk(store, sd, null);
 			}
 			// FINALIZED RANDAO snapshot (pos_state mixfinal_) or the deterministic
 			// default, matching RandaoService.getSelectionMix. The snapshot is
 			// written once at the epoch boundary and is IMMUTABLE, so proposer
 			// identity is identical on every node regardless of local confirmation
 			// progress or late-confirming beacons.
-			long laggedEpoch = sd.getSlot() / 32 - 2;
 			byte[] mix = laggedEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + laggedEpoch) : null;
 			if (mix == null) {
 				mix = sha256DefaultMix(laggedEpoch);
@@ -882,14 +988,19 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			}
 			// Use the SNAPSHOTTED active validator set from two epochs earlier
 			// (same boundary discipline as mixfinal_), never the node's live set.
-			List<StakeRecord> active = validatorsForEpoch(sd.getSlot() / 32 - 2, store);
+			long laggedEpoch = sd.getSlot() / 32 - 2;
+			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
 				return false;
+			}
+			if (bootstrapWindow(store, laggedEpoch)) {
+				// Pre-snapshot bootstrap: authenticate against any locally-known
+				// deposit key — see bootstrapProposerOk.
+				return bootstrapProposerOk(store, sd, reveal);
 			}
 			// IMMUTABLE FINALIZED mix from two epochs earlier (matching
 			// RandaoService.getSelectionMix), so the expected proposer is a fixed
 			// chain fact, identical on every node and immune to late beacons.
-			long laggedEpoch = sd.getSlot() / 32 - 2;
 			byte[] mix = laggedEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + laggedEpoch) : null;
 			if (mix == null) {
 				mix = sha256DefaultMix(laggedEpoch);
@@ -921,22 +1032,30 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	 * deterministic root over the embedded attestations, and every embedded
 	 * attestation must carry a valid BLS signature. A proposer cannot claim a
 	 * root that does not match the attestations it actually includes.
+	 *
+	 * <p>Result memoized per SlotData message hash: the embedded attestation
+	 * set is immutable inside a signed SlotData, but this check re-ran a BLS
+	 * verify per attestation on EVERY connect/reconnect of the beacon — the
+	 * dominant residual cost of catch-up reorgs after the proposer-sig/RANDAO
+	 * caches.
 	 */
-	private boolean verifyEmbeddedAttestations(SlotData sd) {
-		net.bigtangle.core.Sha256Hash committed = sd.getAttestationRoot();
-		net.bigtangle.core.Sha256Hash actual = net.bigtangle.server.service.CasperService
-				.computeAttestationRoot(sd.getAttestations());
-		if (!actual.equals(committed != null ? committed : net.bigtangle.core.Sha256Hash.ZERO_HASH)) {
-			return false;
-		}
-		if (sd.getAttestations() != null) {
-			for (AttestationData a : sd.getAttestations()) {
-				if (a == null || !a.verifySignature()) {
-					return false;
+	private boolean verifyEmbeddedAttestations(net.bigtangle.core.SlotData sd) {
+		return cachedCheck(EMBEDDED_ATT_CACHE, sd.getMessageHash(), () -> {
+			net.bigtangle.core.Sha256Hash committed = sd.getAttestationRoot();
+			net.bigtangle.core.Sha256Hash actual = net.bigtangle.server.service.CasperService
+					.computeAttestationRoot(sd.getAttestations());
+			if (!actual.equals(committed != null ? committed : net.bigtangle.core.Sha256Hash.ZERO_HASH)) {
+				return false;
+			}
+			if (sd.getAttestations() != null) {
+				for (AttestationData a : sd.getAttestations()) {
+					if (a == null || !a.verifySignature()) {
+						return false;
+					}
 				}
 			}
-		}
-		return true;
+			return true;
+		});
 	}
 
 	private byte[] sha256(byte[] input) {
@@ -1018,6 +1137,56 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					net.bigtangle.server.service.SlotService.currentChainEpoch(store));
 		} catch (Exception e) {
 			return new java.util.ArrayList<>();
+		}
+	}
+
+	/**
+	 * True when no chain-derived validator snapshot exists for the lagged
+	 * source epoch (epochs before the first finalized boundary). In this window
+	 * {@link #validatorsForEpoch} silently falls back to each node's LIVE local
+	 deposit view, so the elected proposer is not a chain fact: nodes with
+	 * different local confirmation progress compute different expected signers
+	 * and permanently reject honest foreign beacons — the bootstrap fork.
+	 */
+	private boolean bootstrapWindow(BlockStoreInterface store, long sourceEpoch) {
+		java.util.List<StakeRecord> snap = net.bigtangle.server.service.SlotService
+				.getValidatorSnapshot(sourceEpoch, store);
+		return snap == null || snap.isEmpty();
+	}
+
+	/**
+	 * Bootstrap-window beacon authentication: the proposer signature must
+	 * verify under SOME locally-registered stake deposit's key, and — when a
+	 * RANDAO reveal is being checked — that reveal must verify under the SAME
+	 * key's registered BLS pubkey. Authentication strength is preserved (only
+	 * real staked keys can author beacons); slot-election enforcement resumes
+	 * automatically once chain-derived snapshots become available.
+	 *
+	 * @param reveal {@code null} when only the proposer signature is checked
+	 */
+	private boolean bootstrapProposerOk(BlockStoreInterface store, net.bigtangle.core.SlotData sd, byte[] reveal) {
+		try {
+			for (net.bigtangle.core.StakeRecord dep : store.getAllStakeDeposits()) {
+				if (dep == null || dep.getPubkey() == null) {
+					continue;
+				}
+				if (!verifySlotDataSignature(dep.getPubkey(), sd)) {
+					continue;
+				}
+				if (reveal == null) {
+					return verifyEmbeddedAttestations(sd);
+				}
+				if (dep.getBlsPubkey() == null) {
+					continue;
+				}
+				if (net.bigtangle.server.service.RandaoService.verifyReveal(dep.getBlsPubkey(), sd.getSlot(), reveal)
+						&& verifyEmbeddedAttestations(sd)) {
+					return true;
+				}
+			}
+			return false;
+		} catch (Exception e) {
+			return false;
 		}
 	}
 

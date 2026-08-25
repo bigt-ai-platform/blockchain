@@ -54,6 +54,27 @@ public class GhostService {
     private Sha256Hash chainVotesTip;
     private Map<Sha256Hash, Long> chainVotesCache = java.util.Collections.emptyMap();
 
+    // GOSSIP-OBSERVED fork-choice view: each validator's LATEST embedded
+    // attestation seen on ANY ingested beacon (kafka stream or gossip),
+    // regardless of which branch that beacon sits on. The confirmed-chain
+    // derivation above is self-referential after a split — each camp's chain
+    // carries only its own validators' votes, so every node computes "my branch
+    // wins" and the mesh never reconciles (a 5-node bootstrap split stayed
+    // frozen for dozens of slots for exactly this reason). Merging the observed
+    // view lets GHOST see majority weight as soon as the votes ARRIVE rather
+    // than after they confirm, collapsing forks within ~one epoch.
+    private final ConcurrentHashMap<String, AttestationData> observedLatestVotes = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong observedMaxSlot =
+            new java.util.concurrent.atomic.AtomicLong(-1);
+    private final java.util.concurrent.atomic.AtomicLong observedVersion =
+            new java.util.concurrent.atomic.AtomicLong(0);
+    // Memoization for the union derivation (see effectiveForkChoiceWeights):
+    // executeGhost runs several times per slot, and PQ/BLS re-verification is
+    // expensive; the version counter invalidates on every observation.
+    private final Object effLock = new Object();
+    private String effCacheKey;
+    private Map<Sha256Hash, Long> effCache = java.util.Collections.emptyMap();
+
     // @Lazy breaks the GhostService <-> StakeService <-> BlockSaveService
     // cycle (stakeService is only touched at runtime, never at startup).
     @Lazy
@@ -218,10 +239,11 @@ public class GhostService {
         }
         // Fork-choice weight: at/above the on-chain-attestation activation height
         // the weight is a deterministic function of the confirmed chain (LMD head
-        // votes); below it, the local gossip vote view.
+        // votes) UNIONED with the gossip-observed view; below it, the local gossip
+        // vote view.
         Map<Sha256Hash, Long> weights;
         if (net.bigtangle.server.service.CasperService.onChainAttestationActive(store)) {
-            weights = chainForkChoiceVotes(store);
+            weights = effectiveForkChoiceWeights(store);
         } else {
             weights = forkChoiceVotes;
         }
@@ -351,6 +373,17 @@ public class GhostService {
      */
     public Map<Sha256Hash, Long> deriveChainForkChoiceVotesFrom(Sha256Hash startHash,
             BlockStoreInterface store) {
+        return weighLatest(deriveChainLatestHeadFrom(startHash, store), store);
+    }
+
+    /**
+     * Walk backwards from {@code startHash} along the reward chain (bounded by
+     * the attestation lookback) collecting each validator's HIGHEST-slot
+     * embedded attestation. The raw LMD map behind
+     * {@link #deriveChainForkChoiceVotesFrom}.
+     */
+    private Map<String, AttestationData> deriveChainLatestHeadFrom(Sha256Hash startHash,
+            BlockStoreInterface store) {
         Map<String, AttestationData> latestHead = new HashMap<>();
         try {
             Sha256Hash cursor = startHash;
@@ -376,8 +409,14 @@ public class GhostService {
         } catch (Exception e) {
             log.debug("Failed to derive chain fork-choice votes", e);
         }
+        return latestHead;
+    }
+
+    /** Stake-weigh a per-validator latest-vote map into per-beacon weights. */
+    private Map<Sha256Hash, Long> weighLatest(Map<String, AttestationData> latest,
+            BlockStoreInterface store) {
         Map<Sha256Hash, Long> weights = new HashMap<>();
-        for (AttestationData att : latestHead.values()) {
+        for (AttestationData att : latest.values()) {
             if (att.getBeaconBlockHash() == null) {
                 continue;
             }
@@ -396,6 +435,88 @@ public class GhostService {
             weights.merge(att.getBeaconBlockHash(), w, Long::sum);
         }
         return weights;
+    }
+
+    /**
+     * Fork-choice weights for GHOST: LMD over the UNION of (a) attestations
+     * embedded in the confirmed chain and (b) the gossip-observed view from
+     * every ingested beacon ({@link #observeBeacon}). Per validator only the
+     * HIGHEST-slot vote counts across both sources, so a validator present in
+     * both contributes exactly once — no double counting. Memoized per
+     * (confirmed tip, observation version).
+     */
+    private Map<Sha256Hash, Long> effectiveForkChoiceWeights(BlockStoreInterface store)
+            throws Exception {
+        Sha256Hash tipHash = null;
+        try {
+            TXReward tip = store.getMaxConfirmedReward();
+            tipHash = tip != null ? tip.getBlockHash() : null;
+        } catch (Exception e) {
+            log.debug("Failed to read confirmed tip", e);
+        }
+        String key = (tipHash == null ? "null" : tipHash.toString())
+                + "#" + observedVersion.get();
+        synchronized (effLock) {
+            if (key.equals(effCacheKey)) {
+                return effCache;
+            }
+        }
+        Map<String, AttestationData> latest = new HashMap<>();
+        if (tipHash != null) {
+            latest.putAll(deriveChainLatestHeadFrom(tipHash, store));
+        }
+        observedLatestVotes.forEach((pk, att) -> {
+            AttestationData cur = latest.get(pk);
+            if (cur == null || att.getSlot() > cur.getSlot()) {
+                latest.put(pk, att);
+            }
+        });
+        Map<Sha256Hash, Long> fresh = weighLatest(latest, store);
+        synchronized (effLock) {
+            effCacheKey = key;
+            effCache = fresh;
+        }
+        return fresh;
+    }
+
+    /**
+     * Record the embedded attestations of an ingested beacon into the
+     * gossip-observed LMD view. Called from BlockService on EVERY accepted
+     * ingest path (kafka stream + gossip), so the view reflects what this node
+     * has actually heard — the same trust model as Ethereum's attestation
+     * gossip subnet. Only BLS-signature-valid attestations are recorded
+     * (embeddedAttestationsOf filters), one vote per validator by slot.
+     */
+    public void observeBeacon(Block b) {
+        if (b == null || b.getBlockType() != BlockType.BLOCKTYPE_BEACON) {
+            return;
+        }
+        boolean changed = false;
+        for (AttestationData att : embeddedAttestationsOf(b)) {
+            if (att == null || att.getValidatorPubkey() == null || att.getBeaconBlockHash() == null) {
+                continue;
+            }
+            String pk = net.bigtangle.core.Utils.HEX.encode(att.getValidatorPubkey());
+            if (equivocatingValidators.contains(pk)) {
+                continue;
+            }
+            observedMaxSlot.accumulateAndGet(att.getSlot(), Math::max);
+            AttestationData cur = observedLatestVotes.get(pk);
+            if (cur == null || att.getSlot() > cur.getSlot()) {
+                observedLatestVotes.put(pk, att);
+                changed = true;
+            }
+        }
+        // Evict entries that fell out of the lookback window so memory stays
+        // bounded and ancient votes cannot resurrect an abandoned branch.
+        long cutoff = observedMaxSlot.get()
+                - net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS;
+        if (cutoff > 0) {
+            observedLatestVotes.values().removeIf(a -> a.getSlot() < cutoff);
+        }
+        if (changed) {
+            observedVersion.incrementAndGet();
+        }
     }
 
     /**
