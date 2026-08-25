@@ -241,8 +241,32 @@ public class ValidatorDutyService {
                     log.debug("warmup: confirmed length unavailable: {}", e.getMessage());
                 }
                 if (tipCl < WARMUP_SLOTS) {
-                    boolean firstValidator = !validators.isEmpty() && java.util.Arrays
-                            .equals(validators.get(0).getPubkey(), validatorKey.getPubKey());
+                    // Deterministic across nodes EVEN during the bootstrap
+                    // window, where the selection snapshot silently falls back
+                    // to each node's LIVE deposit view (order and content
+                    // differ while sync lags — observed: every node computed a
+                    // different 'first' validator, four sat idle while one
+                    // raced ahead on a solo fork). Pick the lexicographically
+                    // lowest pubkey among ALL registered deposits instead:
+                    // identical on every node as soon as the deposits have
+                    // propagated, independent of local confirmation progress.
+                    boolean firstValidator = false;
+                    try {
+                        String myPk = Utils.HEX.encode(validatorKey.getPubKey());
+                        String minPk = null;
+                        for (StakeRecord r : store.getAllStakeDeposits()) {
+                            if (r == null || r.getPubkey() == null) {
+                                continue;
+                            }
+                            String pk = Utils.HEX.encode(r.getPubkey());
+                            if (minPk == null || pk.compareTo(minPk) < 0) {
+                                minPk = pk;
+                            }
+                        }
+                        firstValidator = minPk != null && minPk.equals(myPk);
+                    } catch (Exception e) {
+                        log.debug("warmup: first-validator pick failed: {}", e.getMessage());
+                    }
                     if (!firstValidator) {
                         log.debug("warmup: confirmed chainlength {} < {} — only the first "
                                 + "selection validator proposes", tipCl, WARMUP_SLOTS);
@@ -312,6 +336,19 @@ public class ValidatorDutyService {
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
             long sourceEpoch = justified != null ? justified.epoch : Math.max(0, targetEpoch - 1);
             Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(targetEpoch, store).getBlockHash();
+
+            // ABSTAIN when the epoch boundary is not yet derivable: the fallback
+            // target above is a node-local transient (this node's confirmed head)
+            // that no other validator can match, so attesting it produces
+            // permanently uncountable votes and fragments quorum (observed:
+            // justification pinned at 3/5 while one voter named divergent
+            // targets). A canonical boundary appears within a slot or two.
+            if (!casperService.isCanonicalCheckpoint(targetEpoch, targetCheckpoint)) {
+                log.debug("Abstaining from attestation slot {}: epoch-{} boundary not derivable yet "
+                        + "(transient target {})", slot, targetEpoch,
+                        Utils.HEX.encode(targetCheckpoint.getBytes()));
+                return;
+            }
 
             // ABSTAIN when this validator's justified checkpoint is hopelessly
             // behind the chain epoch. Voting from dead state poisons quorum

@@ -569,6 +569,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper, mempoolService);
+		serviceVerifyReward.setCasperServiceProvider(casperServiceProvider);
 		long cbStart = System.currentTimeMillis();
 		if (serviceVerifyReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
 			connect(block, solidityState, store);
@@ -632,7 +633,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 			// history can never be reverted ("Once finalized, never reverted").
 			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
 			if (haveNewBestChain && casper != null) {
-				net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+				net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint(store);
 				// Only enforce the anchor when the finalized block is actually in
 				// this store: on a fresh/reset node the checkpoint belongs to a
 				// prior chain and there is nothing to anchor yet. On the live

@@ -43,6 +43,18 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 	private final MempoolService mempoolService;
 
+	/**
+	 * Lazily-resolved CasperService for the monotone-finality guard; optional
+	 * because this class is constructed manually in several places (tests,
+	 * tools) where no Spring context exists — the guard then simply no-ops.
+	 */
+	private volatile org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+
+	public void setCasperServiceProvider(
+			org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> p) {
+		this.casperServiceProvider = p;
+	}
+
 	public ServiceVerifyReward(ServerConfiguration serverConfiguration, NetworkParameters networkParameters,
 			CacheBlockService cacheBlockService, ObjectMapper jsonmapper) {
 		this(serverConfiguration, networkParameters, cacheBlockService, jsonmapper, null);
@@ -306,6 +318,29 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 		}
 
 		logger.info("Re-organize after split at height {}", splitPoint.getHeight());
+		// MONOTONE FINALITY GUARD: never unwind chain history at or below the
+		// highest LIVE finalized checkpoint. resetChainlengthSolid + unconfirm
+		// on a finalized block zeroes its reward-chain row, which (a) violates
+		// "once finalized, never reverted" and (b) makes the advertised
+		// finalizedChainLength collapse to 0 even though an older finality is
+		// perfectly intact. A conflicting-finality reorg must go through the
+		// gated sibling-fork reconciliation instead.
+		try {
+			net.bigtangle.server.service.CasperService casper =
+					casperServiceProvider != null ? casperServiceProvider.getIfAvailable() : null;
+			net.bigtangle.server.service.CasperService.Checkpoint fin =
+					casper != null ? casper.getLastFinalizedCheckpoint(store) : null;
+			if (fin != null) {
+				long finLen = store.getRewardChainLength(fin.getBlockHash());
+				if (finLen > 0 && splitPoint.getHeight() <= finLen) {
+					logger.warn("Reorg REFUSED: split at height {} would unwind finalized checkpoint epoch={} "
+							+ "(block {}, cl={})", splitPoint.getHeight(), fin.getEpoch(), fin.getBlockHash(), finLen);
+					return;
+				}
+			}
+		} catch (Exception e) {
+			logger.debug("monotone-finality guard skipped: {}", e.getMessage());
+		}
 		logger.info("Old chain head: \n {}", head);
 		logger.info("New chain head: \n {}", newChainHead);
 		logger.info("Split at block: \n {}", splitPoint);

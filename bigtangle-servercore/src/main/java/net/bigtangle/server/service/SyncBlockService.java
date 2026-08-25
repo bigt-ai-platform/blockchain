@@ -918,7 +918,7 @@ public class SyncBlockService {
 		if (casper == null) {
 			return false;
 		}
-		net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+		net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint(store);
 		if (finalized == null) {
 			return false;
 		}
@@ -1335,6 +1335,7 @@ public class SyncBlockService {
 
 		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper);
+		serviceVerifyReward.setCasperServiceProvider(casperServiceProvider);
 
 		// remove too old OrphanBlock and cutoff chain length
 		if (System.currentTimeMillis() - orphanBlock.getInserttime() * 1000 > 2 * 60 * 60 * 1000

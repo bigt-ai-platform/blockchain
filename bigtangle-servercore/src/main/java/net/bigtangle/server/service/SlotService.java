@@ -748,7 +748,7 @@ public class SlotService {
     private void prunePosState(BlockStoreInterface store) throws Exception {
         long floor = 0;
         if (casperService != null) {
-            net.bigtangle.server.service.CasperService.Checkpoint fin = casperService.getLastFinalizedCheckpoint();
+            net.bigtangle.server.service.CasperService.Checkpoint fin = casperService.getLastFinalizedCheckpoint(store);
             if (fin != null) {
                 floor = Math.max(0, fin.epoch - 1); // keep one epoch of slack
             }

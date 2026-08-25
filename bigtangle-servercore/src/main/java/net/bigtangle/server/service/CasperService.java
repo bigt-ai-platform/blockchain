@@ -289,6 +289,23 @@ public class CasperService {
     }
 
     /**
+     * True when {@code hash} is the CACHED canonical checkpoint for
+     * {@code epoch} (the chain-derived epoch boundary).
+     *
+     * <p>{@link #ensureCheckpoint(long, BlockStoreInterface)} returns a
+     * TRANSIENT node-local fallback (the confirmed head) while the true
+     * boundary is not yet derivable. Attesting such a target is poison: no
+     * other node can derive the same hash, so the vote is permanently
+     * uncountable for the canonical checkpoint and fragments quorum (observed:
+     * justification pinned at exactly 3/5 = 60% while one validator's votes
+     * named divergent targets). Duty callers must abstain instead.
+     */
+    public boolean isCanonicalCheckpoint(long epoch, Sha256Hash hash) {
+        Checkpoint cp = checkpoints.get(epoch);
+        return cp != null && cp.blockHash != null && cp.blockHash.equals(hash);
+    }
+
+    /**
      * Chain-derived checkpoint creation. The checkpoint hash for an epoch is a
      * PURE FUNCTION of the confirmed chain: the last confirmed beacon with slot
      * &lt; epoch*32 (the epoch boundary, see {@link #epochBoundaryHash}). This
@@ -473,6 +490,39 @@ public class CasperService {
         for (Checkpoint cp : checkpoints.values()) {
             if (cp.finalized && (best == null || cp.epoch > best.epoch)) {
                 best = cp;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The highest FINALIZED checkpoint whose block is still LIVE in the store
+     * (txreward row present with chainlength &gt; 0).
+     *
+     * <p>During tip churn a newer-epoch checkpoint can end up on a branch that
+     * later lost support; reorg bookkeeping then resets that block's chainlength
+     * row to 0 while the checkpoint object lingers. The unfiltered lookup above
+     * still returns it (highest epoch wins), so the advertised
+     * finalizedChainLength reads 0 and the finalized-anchor reorg guard walks a
+     * dead branch — masking real, still-confirmed finality underneath and
+     * stalling sync peers. Filtering keeps the anchor monotone and grounded:
+     * a checkpoint whose block is gone can never be the anchor of anything.
+     */
+    public Checkpoint getLastFinalizedCheckpoint(BlockStoreInterface store) {
+        Checkpoint best = null;
+        for (Checkpoint cp : checkpoints.values()) {
+            if (!cp.finalized) {
+                continue;
+            }
+            if (best != null && cp.epoch <= best.epoch) {
+                continue;
+            }
+            try {
+                if (store.getRewardChainLength(cp.blockHash) > 0) {
+                    best = cp;
+                }
+            } catch (Exception e) {
+                log.debug("checkpoint liveness check failed for epoch {}: {}", cp.epoch, e.getMessage());
             }
         }
         return best;
@@ -674,7 +724,7 @@ public class CasperService {
     /** Persists the validator's per-epoch vote window (epochs below the finality floor are dropped). */
     private void persistEpochVotes(String vkey, BlockStoreInterface store) {
         try {
-            Checkpoint fin = getLastFinalizedCheckpoint();
+            Checkpoint fin = getLastFinalizedCheckpoint(store);
             long floor = fin != null ? fin.epoch - 1 : 0;
             ConcurrentHashMap<Long, Sha256Hash> tgts = epochVoteTargets.get(vkey);
             ConcurrentHashMap<Long, Sha256Hash> srcs = epochVoteSources.get(vkey);
@@ -991,7 +1041,7 @@ public class CasperService {
             if (voters == null) {
                 return; // pre-fork — no chain-authoritative voter set
             }
-            Checkpoint fin = getLastFinalizedCheckpoint();
+            Checkpoint fin = getLastFinalizedCheckpoint(store);
             long delay = fin != null ? epoch - fin.epoch : 0;
             if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
                 store.savePosState(LEAK_SERVICE, appliedKey, new byte[] { 1 });

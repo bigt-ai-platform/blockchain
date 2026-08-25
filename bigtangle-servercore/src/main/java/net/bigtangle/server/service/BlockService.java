@@ -337,7 +337,7 @@ public class BlockService {
 				response.setJustifiedBlockHash(justified.getBlockHash().toString());
 				response.setJustifiedEpoch(justified.getEpoch());
 			}
-			net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint();
+			net.bigtangle.server.service.CasperService.Checkpoint finalized = casper.getLastFinalizedCheckpoint(store);
 			if (finalized != null) {
 				response.setFinalizedBlockHash(finalized.getBlockHash().toString());
 				response.setFinalizedEpoch(finalized.getEpoch());
