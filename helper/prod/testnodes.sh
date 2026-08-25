@@ -29,6 +29,15 @@
 #   lower it on smaller machines, e.g. XMX=1200m testnodes.sh up).
 set -euo pipefail
 
+# Use Java 25 if available (classes are compiled for class file version 69)
+if [ -x /tmp/opencode/jdk25/bin/java ]; then
+    export JAVA_HOME=/tmp/opencode/jdk25
+    export PATH=$JAVA_HOME/bin:$PATH
+elif [ -x /home/jcui/.local/java-25/bin/java ]; then
+    export JAVA_HOME=/home/jcui/.local/java-25
+    export PATH=$JAVA_HOME/bin:$PATH
+fi
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 VALSRC="${ROOT}/helper/prod/validators"
 WORKDIR="${WORKDIR:-/tmp/bt4test}"
@@ -153,7 +162,8 @@ gen_keys() { # → ValidatorKeyTool output lines (uses exec jar, falls back to i
         local dir="${WORKDIR}/cp"
         mkdir -p "$dir"
         if [ ! -f "${dir}/.stamp" ] || [ "$jar" -nt "${dir}/.stamp" ]; then
-            rm -rf "${dir}/BOOT-INF"; unzip -oq "$jar" 'BOOT-INF/*' -d "$dir"; touch "${dir}/.stamp"
+            rm -rf "${dir}/BOOT-INF" "${dir}/.stamp"
+            unzip -oq "$jar" 'BOOT-INF/*' -d "$dir" && touch "${dir}/.stamp"
         fi
         java -cp "${dir}/BOOT-INF/classes:${dir}/BOOT-INF/lib/*" net.bigtangle.tools.ValidatorKeyTool generate
     else
