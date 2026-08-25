@@ -65,6 +65,9 @@ public class ValidatorDutyService {
     @Autowired
     private StoreService storeService;
 
+    @Autowired
+    private StakeService stakeService;
+
     @Value("${pos.validatorKey:}")
     private String configuredValidatorKey;
 
@@ -185,6 +188,79 @@ public class ValidatorDutyService {
         return validatorKey;
     }
 
+    /** Current wall-clock slot, for gate memoization in other services. */
+    public long getCurrentSlotPublic() {
+        return slotService.getCurrentSlot();
+    }
+
+    /**
+     * True when this node holds block-building rights for the CURRENT slot:
+     * the same proposer election (+ bootstrap warmup restriction) that gates
+     * beacon proposals.
+     *
+     * <p>Non-beacon block building (mempool → TRANSFER batch blocks) MUST be
+     * gated by this identically. Every node receives every transaction via the
+     * kafka stream, so an ungated builder wraps the same transactions into a
+     * DIFFERENT competing block per node; the copies spend identical outpoints,
+     * conflict pairwise in {@code checkSpentByOther}, and starve each other
+     * forever (observed: payment batches stuck at solid=2 / chainlength<0 with
+     * refs≈1 per sweep, while every replica held its own losing copy).
+     */
+    public boolean isCurrentBlockBuilder() {
+        if (validatorKey == null || !dutyEnabled) {
+            return false;
+        }
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            long slot = slotService.getCurrentSlot();
+            List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
+            long proposerIdx = slotService.selectProposer(slot, store);
+            if (!(proposerIdx >= 0 && proposerIdx < validators.size())) {
+                return false;
+            }
+            StakeRecord proposer = validators.get((int) proposerIdx);
+            boolean isProposer = java.util.Arrays.equals(proposer.getPubkey(), validatorKey.getPubKey());
+            if (!isProposer) {
+                return false;
+            }
+            long tipCl;
+            try {
+                tipCl = cacheBlockService.getMaxConfirmedReward(store).getChainLength();
+            } catch (Exception e) {
+                tipCl = 0;
+            }
+            if (tipCl >= WARMUP_SLOTS) {
+                return true;
+            }
+            // Bootstrap warmup: mirror the beacon gate's deterministic
+            // first-validator rule (lexicographically-lowest pubkey among ALL
+            // registered deposits — identical on every node).
+            String myPk = Utils.HEX.encode(validatorKey.getPubKey());
+            String minPk = null;
+            for (StakeRecord r : store.getAllStakeDeposits()) {
+                if (r == null || r.getPubkey() == null) {
+                    continue;
+                }
+                String pk = Utils.HEX.encode(r.getPubkey());
+                if (minPk == null || pk.compareTo(minPk) < 0) {
+                    minPk = pk;
+                }
+            }
+            return myPk.equals(minPk);
+        } catch (Exception e) {
+            log.debug("isCurrentBlockBuilder failed: {}", e.getMessage());
+            return false;
+        } finally {
+            if (store != null) {
+                try {
+                    store.close();
+                } catch (Exception ignore) {
+                }
+            }
+        }
+    }
+
     public void performDuty() throws Exception {
         if (validatorKey == null) {
             return;
@@ -303,6 +379,15 @@ public class ValidatorDutyService {
     private void attest(long slot, long epoch) throws Exception {
         BlockStoreInterface store = storeService.getStore();
         try {
+            // Do not attest before this validator's deposit is ACTIVE (the
+            // MAX_SEED_LOOKAHEAD+1 activation delay): every receiver rejects
+            // such votes as non-validator (CasperService.processVote), so
+            // publishing them only burns a BLS signature per slot and
+            // pollutes the attestation stream during bootstrap.
+            if (stakeService.getEffectiveStake(validatorKey.getPubKey(), store) <= 0) {
+                log.debug("Abstaining from attestation slot {}: deposit not active yet", slot);
+                return;
+            }
             Sha256Hash beaconHead = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
             if (beaconHead == null) {
                 beaconHead = ghostService.getDagRoot(store);
@@ -334,7 +419,15 @@ public class ValidatorDutyService {
             long targetEpoch = Math.max(0, chainEpoch);
 
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
-            long sourceEpoch = justified != null ? justified.epoch : Math.max(0, targetEpoch - 1);
+            // BOOTSTRAP LIVENESS: with no justified checkpoint beyond genesis,
+            // anchor votes at the GENESIS checkpoint (epoch 0 — justified and
+            // finalized by definition, deterministic on every node). Abstaining
+            // until a "real" justified checkpoint exists is self-defeating:
+            // justification NEEDS those votes, so the abstention perpetuated
+            // itself and froze finality permanently on any chain that failed to
+            // justify within its first two epochs (observed: mesh at epoch 14
+            // with justifiedEpoch null forever, every validator abstaining).
+            long sourceEpoch = justified != null ? justified.epoch : 0;
             Sha256Hash targetCheckpoint = casperService.ensureCheckpoint(targetEpoch, store).getBlockHash();
 
             // ABSTAIN when the epoch boundary is not yet derivable: the fallback
@@ -355,9 +448,12 @@ public class ValidatorDutyService {
             // formation for every real checkpoint (observed: sourceEpoch=0 /
             // targetEpoch=8 votes on a live chain at epoch 663k scattered the
             // vote set and froze finality mesh-wide). Ethereum semantics: a
-            // validator without a usable source simply skips its slot.
-            if ((justified == null && targetEpoch > 1)
-                    || (justified != null && sourceEpoch < targetEpoch - ATTEST_MAX_SOURCE_LAG)) {
+            // validator without a usable source simply skips its slot. The
+            // genesis fallback above is exempt by construction: epoch 0 IS
+            // justified, so its votes are honest, countable (see CasperService.
+            // isJustifiedCheckpointHash) and can never scatter the vote set —
+            // all bootstrap validators name the same deterministic checkpoint.
+            if (sourceEpoch < targetEpoch - ATTEST_MAX_SOURCE_LAG) {
                 log.warn("Abstaining from attestation slot {}: justifiedEpoch={} targetEpoch={} "
                         + "(catching up — will resume once synced)", slot, sourceEpoch, targetEpoch);
                 return;
@@ -378,7 +474,8 @@ public class ValidatorDutyService {
             att.setSourceEpoch(sourceEpoch);
             att.setTargetEpoch(targetEpoch);
             att.setBeaconBlockHash(beaconHead);
-            att.setSourceCheckpoint(justified != null ? justified.getBlockHash() : Sha256Hash.ZERO_HASH);
+            att.setSourceCheckpoint(justified != null ? justified.getBlockHash()
+                    : casperService.ensureCheckpoint(0, store).getBlockHash());
             att.setTargetCheckpoint(targetCheckpoint);
             att.setValidatorPubkey(validatorKey.getPubKey());
             // BLS key (deterministically derived from the ML-DSA seed, registered

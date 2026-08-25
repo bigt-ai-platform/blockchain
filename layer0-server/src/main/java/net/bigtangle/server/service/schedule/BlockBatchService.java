@@ -38,11 +38,22 @@ public class BlockBatchService {
     @Autowired
     private MempoolService mempoolService;
 
+    @Autowired
+    private net.bigtangle.server.service.ValidatorDutyService validatorDutyService;
+
     @Scheduled(fixedDelayString = "${service.schedule.blockbatchrate:50000}")
     public void batch() {
-        if (scheduleConfiguration.isBlockBatchService_active() && serverConfiguration.checkService()) {
-            startSingleProcess();
+        if (!scheduleConfiguration.isBlockBatchService_active() || !serverConfiguration.checkService()) {
+            return;
         }
+        // SINGLE-BUILDER GATE: publish queued batches only while this node
+        // holds proposal rights. Every node's mempool receives every tx via
+        // kafka; ungated publishers wrap identical spends into competing
+        // blocks that conflict pairwise and starve each other forever.
+        if (!builderGateWithWarmup()) {
+            return;
+        }
+        startSingleProcess();
     }
 
     @Async
@@ -53,6 +64,13 @@ public class BlockBatchService {
         }
         int size = mempoolService.size();
         if (size == 0) {
+            return;
+        }
+        // SINGLE-BUILDER GATE (see batch()): only the current proposer drains
+        // the mempool into batch blocks. Other nodes keep their mempools until
+        // their turn — they must NOT wrap the same spends into competing
+        // blocks.
+        if (!builderGateWithWarmup()) {
             return;
         }
         long now = System.currentTimeMillis();
@@ -92,6 +110,29 @@ public class BlockBatchService {
     private volatile long lastDrain = System.currentTimeMillis();
 
     protected final ReentrantLock lock = Threading.lock("BlockBatchService");
+
+    /**
+     * Cheap memo for the builder gate: the election answer is stable within a
+     * slot, and the gate runs on a 100 ms tick. Recomputed whenever the slot
+     * rolls over (or on first use).
+     */
+    private volatile long gatedSlot = Long.MIN_VALUE;
+    private volatile boolean gatedAnswer;
+
+    private boolean builderGateWithWarmup() {
+        try {
+            long slot = validatorDutyService.getCurrentSlotPublic();
+            if (slot != gatedSlot) {
+                gatedAnswer = validatorDutyService.isCurrentBlockBuilder();
+                gatedSlot = slot;
+            }
+            return gatedAnswer;
+        } catch (Exception e) {
+            // Fail-open would resurrect competing builders; fail-closed just
+            // delays batching by one tick.
+            return false;
+        }
+    }
 
     public void startSingleProcess() {
         if (lock.isHeldByCurrentThread() || !lock.tryLock()) {
