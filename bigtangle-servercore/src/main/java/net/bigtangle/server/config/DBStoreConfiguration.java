@@ -50,7 +50,9 @@ public class DBStoreConfiguration {
 
 	@Bean
 	public DataSource dataSource() throws BlockStoreException, IOException, InterruptedException, ExecutionException {
-		return dataSourcePostgresql(50, 5);
+		return dataSourcePostgresql(
+				Integer.getInteger("db.pool.mainMaxSize", 50),
+				Integer.getInteger("db.pool.mainMinIdle", 5));
 	}
 
 	/**
@@ -61,10 +63,18 @@ public class DBStoreConfiguration {
 	 * propose late on a stale head — forking the chain. Giving the consensus
 	 * path its own pool guarantees it never waits for a connection behind the
 	 * burst.
+	 *
+	 * <p>Sized from {@code db.pool.posMaxSize} (default 16): under a heavy
+	 * submit burst the connect/confirm path nests several store borrows per
+	 * cycle; with the old default of 8 the pool pinned at 3 leaked-or-active
+	 * connections and the epoch tick timed out after 30s ("HikariPool-2 -
+	 * Connection is not available"), which froze Casper finality evaluation.
 	 */
 	@Bean
 	public DataSource posDataSource() throws BlockStoreException, IOException, InterruptedException, ExecutionException {
-		return dataSourcePostgresql(8, 2);
+		return dataSourcePostgresql(
+				Integer.getInteger("db.pool.posMaxSize", 16),
+				Integer.getInteger("db.pool.posMinIdle", 4));
 	}
 
 	public DataSource dataSourcePostgresql(int maximumPoolSize, int minimumIdle)

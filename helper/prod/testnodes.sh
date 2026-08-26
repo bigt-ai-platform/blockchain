@@ -108,7 +108,8 @@ ensure_pg() {
         docker run -d --name ${PGCONT} \
             -v "${PGDATA_ROOT}:/var/lib/postgresql/data" \
             -p "${PGPORT}:5432" -e POSTGRES_USER=root \
-            -e POSTGRES_PASSWORD=test1234 -e POSTGRES_DB=info postgres:16 >/dev/null
+            -e POSTGRES_PASSWORD=test1234 -e POSTGRES_DB=info \
+            postgres:16 -c max_connections=500 >/dev/null
         sleep 6
     fi
     # existing containers may listen on a non-5432 internal port (e.g. 21532)

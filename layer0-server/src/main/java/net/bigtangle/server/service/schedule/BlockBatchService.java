@@ -18,6 +18,7 @@ import net.bigtangle.server.config.ScheduleConfiguration;
 import net.bigtangle.server.config.ServerConfiguration;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.MempoolService;
+import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Threading;
 
 @Component
@@ -40,6 +41,9 @@ public class BlockBatchService {
 
     @Autowired
     private net.bigtangle.server.service.ValidatorDutyService validatorDutyService;
+
+    @Autowired
+    private net.bigtangle.server.service.StoreService storeService;
 
     @Scheduled(fixedDelayString = "${service.schedule.blockbatchrate:50000}")
     public void batch() {
@@ -92,6 +96,10 @@ public class BlockBatchService {
         }
         lastDrain = now;
         try {
+            if (connectQueueSaturated()) {
+                logger.debug("Micro-batch paused: chain-connect queue at depth {}", maxConnectQueueDepth);
+                return;
+            }
             int batched = blockSaveService.batchBlocksFromMempool();
             if (batched > 0) {
                 logger.debug("Micro-batched {} transactions", batched);
@@ -107,7 +115,43 @@ public class BlockBatchService {
     private static final int minBatchTx = Integer.getInteger("batch.minTx", 2000);
     /** Max age of the oldest pending tx before the micro-batch force-drains. */
     private static final long maxBatchAgeMs = Long.getLong("batch.maxBatchAgeMs", 2000);
+    /**
+     * INGEST BACKPRESSURE: stop creating new batch blocks while the
+     * chain-connect queue is at least this deep. Under a submit burst far
+     * above the confirm rate (~390 tx/s on a 5-node mesh), batch blocks were
+     * manufactured faster than beacons could reference and confirm them — a
+     * million transactions piled up as unconfirmed DAG weight, block rates
+     * halved, and the epoch tick starved behind connection contention.
+     * Pausing the PRODUCER (not the chain) lets confirmation catch up; the
+     * mempool absorbs the difference up to server.mempoolMaxTx and further
+     * submits are rejected with MempoolFullException. Tune via
+     * batch.maxConnectQueueDepth (0 disables).
+     */
+    private static final int maxConnectQueueDepth = Integer.getInteger("batch.maxConnectQueueDepth", 2000);
     private volatile long lastDrain = System.currentTimeMillis();
+
+    /** True when the local chain-connect backlog reached the pause threshold. */
+    private boolean connectQueueSaturated() {
+        if (maxConnectQueueDepth <= 0) {
+            return false;
+        }
+        BlockStoreInterface store = null;
+        try {
+            store = storeService.getStore();
+            return store.selectChainblockqueue(false, maxConnectQueueDepth).size() >= maxConnectQueueDepth;
+        } catch (Exception e) {
+            // Advisory guard only: on lookup failure keep producing rather
+            // than stall the pipeline because the probe itself failed.
+            return false;
+        } finally {
+            if (store != null) {
+                try {
+                    store.close();
+                } catch (Exception ignore) {
+                }
+            }
+        }
+    }
 
     protected final ReentrantLock lock = Threading.lock("BlockBatchService");
 
