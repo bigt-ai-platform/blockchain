@@ -199,7 +199,7 @@ SERVER_GOSSIP=$((9421 + i))
 DB_NAME=bt4_${i}
 DB_PORT=${PGPORT}
 KAFKA_BOOTSTRAP=${KAFKA}
-JAVA_OPTS_SERVER="-Xmx${XMX} -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
+JAVA_OPTS_SERVER="-Xmx${XMX} -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
 EOF
     chmod 600 "${WORKDIR}/node-${i}/validator.env"
 }
@@ -238,7 +238,7 @@ FUND_MODE=bootstrap
 FUND_ENABLED=true
 GENESIS_CSV=
 POS_SLOTS_PER_EPOCH=32
-JAVA_OPTS_SERVER="-Xmx${XMX} -Dnet.bigtangle.pos.attestationActivation=1 -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
+JAVA_OPTS_SERVER="-Xmx${XMX} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
 EOF
     # the test drives the REAL shared machinery
     cp "${VALSRC}/validator_common.sh" "${WORKDIR}/validator_common.sh"

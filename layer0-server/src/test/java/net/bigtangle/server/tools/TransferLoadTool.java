@@ -26,6 +26,8 @@ public class TransferLoadTool {
         List<String> seeds = Files.readAllLines(Paths.get(args[0]));
         String urlPrefix = args[1];
         long durationSec = Long.parseLong(args[2]);
+        double ratePerSec = args.length > 4 && Double.parseDouble(args[4]) > 0
+                ? Double.parseDouble(args[4]) : 0;
         long amountSat = Long.parseLong(args[3]);
         NetworkParameters params = MainNetParams.get();
 
@@ -71,10 +73,32 @@ public class TransferLoadTool {
             ts[w] = new Thread(() -> {
                 Wallet wallet = wallets[idx];
                 int rot = 0;
+                java.util.List<Transaction> outbox = new java.util.ArrayList<>();
+                // BATCHED SUBMISSION (mirrors ConfirmedPaymentBenchmark):
+                // sign streaming, flush BATCH txs per HTTP call on
+                // submitTransactions so per-tx HTTP round trips never cap the
+                // offered load. Candidate fetches are throttled to every
+                // CAND_REFRESH_MS: change outputs recycle through
+                // confirmations, and polling them faster only adds DB load.
+                final long CAND_REFRESH_MS = Long.getLong("load.candRefreshMs", 4000L);
+                long nextCandFetch = 0;
+                java.util.List<net.bigtangle.wallet.FreeStandingTransactionOutput> cands =
+                        new java.util.ArrayList<>();
+                // Optional total-rate pacing across all workers: worker w
+                // submits at rate/n so the OFFER side never outruns intent.
+                final double share = ratePerSec > 0 ? (double) ratePerSec / n : 0;
+                long nextAllowed = System.nanoTime();
                 while (System.currentTimeMillis() < deadline) {
                     try {
-                        List<net.bigtangle.wallet.FreeStandingTransactionOutput> cands =
-                                wallet.calculateAllSpendCandidates(null, false);
+                        if (share > 0) {
+                            long waitNs = nextAllowed - System.nanoTime();
+                            if (waitNs > 0) Thread.sleep((long) Math.ceil(waitNs / 1e6));
+                            nextAllowed += (long) (1e9 / share);
+                        }
+                        if (cands.isEmpty() && System.currentTimeMillis() >= nextCandFetch) {
+                            cands = wallet.calculateAllSpendCandidates(null, false);
+                            nextCandFetch = System.currentTimeMillis() + CAND_REFRESH_MS;
+                        }
                         if (cands.isEmpty()) {
                             if (err.incrementAndGet() <= 2) {
                                 System.out.println("w" + idx + ": no candidates; wallet addr="
@@ -89,18 +113,26 @@ public class TransferLoadTool {
                         give.put(recipients[(idx + rot++) % recipients.length],
                                 BigInteger.valueOf(amountSat));
                         Transaction tx = wallet.payToListTransaction(null, give,
-                                NetworkParameters.BIGTANGLE_TOKENID, "tps", cands);
+                                NetworkParameters.BIGTANGLE_TOKENID, "tps",
+                                java.util.Collections.singletonList(cands.remove(0)));
                         if (tx == null) {
                             err.incrementAndGet();
                             continue;
                         }
-                        OkHttp3Util.post(urls[idx] + "submitTransaction", tx.bitcoinSerialize());
+                        outbox.add(tx);
                         ok.incrementAndGet();
+                        if (outbox.size() >= BATCH_SUBMIT) {
+                            submitBatch(outbox, urls[idx]);
+                            outbox.clear();
+                        }
                     } catch (Exception e) {
                         long en = err.incrementAndGet();
                         if (en <= 3) { System.out.println("ERR: " + e); }
                         try { Thread.sleep(200); } catch (InterruptedException ie) { return; }
                     }
+                }
+                if (!outbox.isEmpty()) {
+                    try { submitBatch(outbox, urls[idx]); } catch (Exception ignore) { }
                 }
             });
             ts[w].start();
@@ -110,4 +142,19 @@ public class TransferLoadTool {
                 ok.get(), err.get(),
                 ok.get() / Math.max(1.0, durationSec));
     }
+
+    /** Sign-off-the-clock batched submit: length-prefixed stream of serialized txs. */
+    private static void submitBatch(java.util.List<Transaction> txs, String url) throws Exception {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+        for (Transaction t : txs) {
+            byte[] b = t.bitcoinSerialize();
+            dos.writeInt(b.length);
+            dos.write(b);
+        }
+        dos.close();
+        OkHttp3Util.post(url + "submitTransactions", baos.toByteArray());
+    }
+
+    private static final int BATCH_SUBMIT = Integer.getInteger("load.batchSubmit", 250);
 }
