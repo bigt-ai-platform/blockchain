@@ -40,6 +40,7 @@ public class TransferLoadTool {
             // Worker i signs for seed i but queries node (i % nnodes): allows
             // more parallel signers than nodes.
             urls[i] = urlPrefix + (8281 + (i % nnodes)) + "/";
+            wallets[i].setServerURL(urls[i]);
         }
         String[] recipients = new String[8];
         for (int r = 0; r < recipients.length; r++) {
@@ -51,6 +52,19 @@ public class TransferLoadTool {
 
         AtomicLong ok = new AtomicLong(), err = new AtomicLong();
         long deadline = System.currentTimeMillis() + durationSec * 1000;
+        long t0 = System.currentTimeMillis();
+        Thread progress = new Thread(() -> {
+            while (System.currentTimeMillis() < deadline) {
+                try { Thread.sleep(15000); } catch (InterruptedException ie) { return; }
+                long el = System.currentTimeMillis() - t0;
+                System.out.printf("[tps] %ds submitted=%d err=%d rate=%.1f/s%n",
+                        el / 1000, ok.get(), err.get(),
+                        ok.get() / Math.max(1.0, el / 1000.0));
+                System.out.flush();
+            }
+        });
+        progress.setDaemon(true);
+        progress.start();
         Thread[] ts = new Thread[n];
         for (int w = 0; w < n; w++) {
             final int idx = w;

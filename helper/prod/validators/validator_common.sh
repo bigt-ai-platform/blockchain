@@ -31,7 +31,10 @@ done
 # Exclude SELF from the requester list: a cold-starting node's own API
 # answers 'service is not ready' until startInit completes, and startInit
 # pulls through the requester endpoints — self-inclusion deadlocks boot.
-REQUESTER="$(echo "${REQUESTER}" | tr ',' '\n' | grep -v "^http://${NODE_HOST}:${SERVER_PORT}$" | paste -sd, -)"
+# The grep must be || true-guarded inside its pipe stage: with NNODES=1 the
+# only candidate IS self, so grep exits 'no match' (1) and set -o pipefail
+# turned that into a silent sourcing failure of the whole file.
+REQUESTER="$(echo "${REQUESTER}" | tr ',' '\n' | { grep -v "^http://${NODE_HOST}:${SERVER_PORT}$" || true; } | paste -sd, -)"
 # Drop requesters that are unreachable right now: a hanging TCP connect
 # stalls the initial chain scan; periodic sync re-tests them later.
 _REQ_OUT=""
@@ -44,7 +47,10 @@ for _u in $(echo "${REQUESTER}" | tr ',' ' '); do
         echo "[node-${NODE_INDEX}] requester ${_u} unreachable at boot; skipping"
     fi
 done
-[ -n "$_REQ_OUT" ] && REQUESTER="$_REQ_OUT"
+# if-form (not [ ] && ) — an empty result must not trip set -e and abort the
+# sourced script (observed: NNODES=1 has zero peers, so the self-exclusion
+# above leaves _REQ_OUT empty and a bare && chain killed startup silently).
+if [ -n "$_REQ_OUT" ]; then REQUESTER="$_REQ_OUT"; fi
 unset _REQ_OUT _u _pair
 POS_GOSSIP_PEERS="${SEED_HOSTS}"
 
