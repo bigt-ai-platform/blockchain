@@ -448,12 +448,20 @@ public class ValidatorDutyService {
             // formation for every real checkpoint (observed: sourceEpoch=0 /
             // targetEpoch=8 votes on a live chain at epoch 663k scattered the
             // vote set and froze finality mesh-wide). Ethereum semantics: a
-            // validator without a usable source simply skips its slot. The
-            // genesis fallback above is exempt by construction: epoch 0 IS
-            // justified, so its votes are honest, countable (see CasperService.
-            // isJustifiedCheckpointHash) and can never scatter the vote set —
-            // all bootstrap validators name the same deterministic checkpoint.
-            if (sourceEpoch < targetEpoch - ATTEST_MAX_SOURCE_LAG) {
+            // validator without a usable source simply skips its slot.
+            //
+            // The genesis fallback is EXEMPT (justified == null): epoch 0 IS
+            // justified, its votes are countable (CasperService.
+            // isJustifiedCheckpointHash) and every honest validator names the
+            // SAME deterministic target, so they cannot scatter the vote set —
+            // they are exactly how a mesh that fell >LAG epochs behind without
+            // ever justifying catches up. Applying the lag gate to them made a
+            // temporary stall permanent: justification needs votes, the gate
+            // suppressed votes whenever justification trailed by >8 epochs,
+            // so it could never recover (observed under heavy load: whole mesh
+            // abstaining with justifiedEpoch=0 targetEpoch=88, finality frozen
+            // for 25+ minutes and never resuming).
+            if (justified != null && sourceEpoch < targetEpoch - ATTEST_MAX_SOURCE_LAG) {
                 log.warn("Abstaining from attestation slot {}: justifiedEpoch={} targetEpoch={} "
                         + "(catching up — will resume once synced)", slot, sourceEpoch, targetEpoch);
                 return;
