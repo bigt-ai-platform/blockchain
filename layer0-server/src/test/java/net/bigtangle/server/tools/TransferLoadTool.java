@@ -32,12 +32,14 @@ public class TransferLoadTool {
         int n = seeds.size();
         Wallet[] wallets = new Wallet[n];
         String[] urls = new String[n];
+        int nnodes = 5;
         for (int i = 0; i < n; i++) {
             wallets[i] = Wallet.fromKeys(params,
                     PQKey.fromMLDSA(Utils.HEX.decode(seeds.get(i).trim())),
                     "/tmp/opencode/walletctx" + i);
-            urls[i] = urlPrefix + (8281 + i) + "/";
-            wallets[i].setServerURL(urls[i]);
+            // Worker i signs for seed i but queries node (i % nnodes): allows
+            // more parallel signers than nodes.
+            urls[i] = urlPrefix + (8281 + (i % nnodes)) + "/";
         }
         String[] recipients = new String[8];
         for (int r = 0; r < recipients.length; r++) {
