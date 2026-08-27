@@ -135,6 +135,17 @@ public class ServerConfiguration {
      * validators into quorum loss (whole-mesh stall). Override for bigger
      * meshes via --server.mempoolMaxTx.
      */
+    /** Expose /fundAddresses beyond loopback (requires fundEnabled=true too). */
+    private boolean faucetPublic = false;
+
+    public boolean isFaucetPublic() {
+        return faucetPublic;
+    }
+
+    public void setFaucetPublic(boolean faucetPublic) {
+        this.faucetPublic = faucetPublic;
+    }
+
     private int mempoolMaxTx = 4_000;
 
     /**

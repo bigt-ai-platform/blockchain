@@ -69,7 +69,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: '*'
+        # Restrict by default: loggers/threaddump/beans must not be writable/
+        # readable on the API port. Extend selectively via env override.
+        include: health,info,prometheus
   endpoint:
     prometheus:
       enabled: true

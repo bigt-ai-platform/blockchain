@@ -1,4 +1,5 @@
 package net.bigtangle.server;
+import net.bigtangle.exception.VerificationException;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -62,9 +63,23 @@ public class FundAddressesController {
     private NetworkParameters networkParameters;
     @Autowired
     private StoreService storeService;
+    @Autowired
+    private net.bigtangle.server.config.ServerConfiguration serverConfiguration;
 
     @PostMapping
-    public AbstractResponse fund(@RequestBody byte[] bodyByte) throws Exception {
+    public AbstractResponse fund(jakarta.servlet.http.HttpServletRequest httpRequest,
+            @RequestBody byte[] bodyByte) throws Exception {
+        // PRODUCTION GUARD: the faucet mints spendable UTXOs. Gate it to the
+        // loopback interface unless an operator explicitly publishes it — a
+        // single misconfigured fundEnabled=true on an exposed node would
+        // otherwise be a remote inflation bug.
+        String remote = httpRequest.getRemoteAddr();
+        boolean loopback = "127.0.0.1".equals(remote) || "::1".equals(remote)
+                || remote.startsWith("127.");
+        if (!loopback && !serverConfiguration.isFaucetPublic()) {
+            throw new VerificationException(
+                    "fundAddresses is loopback-only; set server.faucetPublic=true to expose");
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> req = Json.jsonmapper().readValue(bodyByte, Map.class);
         @SuppressWarnings("unchecked")
