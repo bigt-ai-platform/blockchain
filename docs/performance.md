@@ -47,6 +47,26 @@ Key findings:
   waves grows with backlog size.
 - Postgres peaked at **26 % CPU** — never the constraint. Host CPU did: load
   11–14 on 8 cores, java alone burning 2.3–3.3 cores.
+### Turning the wave burst into sustained TPS
+
+Root cause of the inter-wave dead time at depth: `connectRewardBlock` cost
+per beacon grows with referenced-row volume (measured 4.3–9.4 s connecting
+1000-tx batch blocks at 100k scale) — few huge beacons = long dead gaps.
+Countermeasure: **many small beacons instead of few huge ones**, tuning
+`batch.txPerBlock` down while raising slot cadence:
+
+| Config (60–100k tx, embedded node) | Submit | **CONFIRMED sustained** |
+|---|---|---|
+| tier C: txPerBlock=2000 @4s | 1519 tx/s | 584.7 tx/s |
+| + sweep/ref bounds (`pos.maxSweepCandidates`, `pos.maxNewRefsPerBeacon`) | same | 595.3 tx/s (bounds never engaged during drain — sweep wasn't the drain-phase bottleneck there) |
+| **tier E: txPerBlock=500 @4s** | 1511 tx/s | **726.8 tx/s** ✔ best stable |
+| tier F: txPerBlock=500 @**2s** | 1466 tx/s | peak **749.6 tx/s** @79 s, then host-saturation decay (avg drops) |
+
+Conclusion: raw write capacity already exceeds 1,500 tx/s inside a single
+connect wave; converting it to *constant* throughput requires shrinking
+per-beacon connect volume (`batch.txPerBlock≈500`) and keeping slot cadence
+moderate (4 s) so beacons flow densely without CPU starvation. Peak observed
+**749.6 tx/s**; stable-best configured **726.8 tx/s** on this host.
 
 ### Multi-node mesh (`testnodes.sh`) and mempool hardening
 

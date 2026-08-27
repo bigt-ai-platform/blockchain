@@ -492,6 +492,20 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 	protected final java.util.concurrent.ConcurrentHashMap<Sha256Hash, Integer> invalidRetryCounts = new java.util.concurrent.ConcurrentHashMap<>();
 	static final int INVALID_RETRY_LIMIT = Integer.getInteger("pos.invalidRetryLimit", 20);
 
+	/**
+	 * Reference-set bounds for one beacon proposal. Without them the sweep
+	 * cost grows with backlog depth (load+conflict per candidate), stretching
+	 * cycles to tens of seconds and starving slots — measured as multi-second
+	 * gaps between confirmation mega-waves. With bounds, each beacon does a
+	 * FIXED-cost slice and the next slot's proposer picks up the remainder
+	 * (lastBeaconRefs skip-set prevents duplicate work), turning the
+	 * transient >1,500 tx/s wave bursts into sustained confirmation cadence.
+	 */
+	static final int MAX_SWEEP_CANDIDATES = Integer.getInteger("pos.maxSweepCandidates", 600);
+	static final int MAX_NEW_REFS_PER_BEACON = Integer.getInteger("pos.maxNewRefsPerBeacon", 120);
+	/** Hard wall-clock ceiling for one sweep regardless of candidate count. */
+	static final long MAX_SWEEP_MS = Long.getLong("pos.maxSweepMs", 1500);
+
 	public void rehabilitateInvalidBlocks(BlockStoreInterface store, long cutoffheight) {
 		if (!Boolean.parseBoolean(System.getProperty("pos.invalidBlockRetry", "true"))) {
 			return;
@@ -557,8 +571,21 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
 			}
 		}
+		int newRefs = 0;
+		long sweepStartMs = perfStart;
 		for (Sha256Hash hash : candidates) {
 			scanned++;
+			if ((scanned & 31) == 0 && System.currentTimeMillis() - sweepStartMs > MAX_SWEEP_MS) {
+				logger.info("addAllUnconfirmedBlocks bounded by time: processed={} newRefs={} "
+						+ "candidates-left={} (remainder picked up next slot)",
+						scanned, newRefs, candidates.size() - scanned);
+				break;
+			}
+			if (newRefs >= MAX_NEW_REFS_PER_BEACON) {
+				logger.info("addAllUnconfirmedBlocks bounded by refs: newRefs={} candidates-left={}",
+						newRefs, candidates.size() - scanned + 1);
+				break;
+			}
 			t = System.currentTimeMillis();
 			if (existing.contains(hash)) {
 				continue;
@@ -603,6 +630,7 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (checked) {
 				blocks.add(wrap);
 				existing.add(hash);
+				newRefs++;
 				for (ConflictCandidate c : candPoints) {
 					pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
 				}
