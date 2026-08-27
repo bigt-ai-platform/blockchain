@@ -41,6 +41,14 @@ import net.bigtangle.store.BlockStoreInterface;
  */
 public class ServiceVerifyReward extends ServiceBaseConnect {
 
+	private volatile java.util.function.Supplier<BlockStoreInterface> solidifyStoreSupplier;
+	public void setSolidifyStoreSupplier(java.util.function.Supplier<BlockStoreInterface> s) {
+		this.solidifyStoreSupplier = s;
+	}
+	private java.util.function.Supplier<BlockStoreInterface> getSolidifyStoreSupplier() {
+		return solidifyStoreSupplier;
+	}
+
 	private final MempoolService mempoolService;
 
 	/**
@@ -90,7 +98,7 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 
 		// Solidify referenced blocks
 		t = System.currentTimeMillis();
-		solidifyBlocks(currRewardInfo, store);
+		solidifyBlocks(currRewardInfo, store, getSolidifyStoreSupplier());
 
 		// Sanity check: No reward blocks are approved
 		checkContainsNoRewardBlocks(newChainlengthBlock, store);

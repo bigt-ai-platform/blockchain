@@ -9,6 +9,8 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -609,7 +611,20 @@ public abstract class ServiceBase {
 			cacheBlockService.evictBlockEvaluation(block.getHash());
 	}
 
+	/**
+	 * Bounded-work parallel variant. pos.parallelSolidify (default true) +
+	 * a non-null {@code storeSupplier} enable it; each candidate block is
+	 * EVALUATED read-only on its own short-lived connection, then decisions
+	 * are applied sequentially on the caller's transactional store in the
+	 * original height order. This keeps confirm-connect cycles fixed-cost at
+	 * backlog depth instead of O(backlog) sequential verification.
+	 */
 	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
+		solidifyBlocks(currRewardInfo, store, null);
+	}
+
+	public void solidifyBlocks(RewardInfo currRewardInfo, BlockStoreInterface store,
+			java.util.function.Supplier<BlockStoreInterface> storeSupplier) throws BlockStoreException {
 		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight).thenComparing(Block::getHash);
 		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
 		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
@@ -617,9 +632,101 @@ public abstract class ServiceBase {
 			if (block != null)
 				referencedBlocks.add(block);
 		}
-		for (Block block : referencedBlocks) {
+		boolean parallel = Boolean.parseBoolean(System.getProperty("pos.parallelSolidify", "true"))
+				&& storeSupplier != null && referencedBlocks.size() > 1
+				&& !Boolean.parseBoolean(System.getProperty("pos.solidifyParallelDisable", "false"));
+
+		if (!parallel) {
+			for (Block block : referencedBlocks) {
+				solidifyWaiting(block, store);
+			}
+			return;
+		}
+
+		int threads = Math.min(Integer.getInteger("pos.solidifyParallelism",
+				Runtime.getRuntime().availableProcessors() / 2), referencedBlocks.size());
+		ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, threads));
+		try {
+			Map<Block, SolidityState> decided = new HashMap<>();
+			List<java.util.concurrent.CompletableFuture<Void>> futures = new ArrayList<>();
+			for (Block b0 : referencedBlocks) {
+				futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+					BlockStoreInterface s0 = null;
+					try {
+						s0 = storeSupplier.get();
+						SolidityState st = evaluateSolidityForParallel(b0, s0);
+						synchronized (decided) {
+							decided.put(b0, st);
+						}
+					} catch (Exception ex) {
+						synchronized (decided) {
+							decided.put(b0, null); // marker: fall back sequentially
+						}
+					} finally {
+						if (s0 != null) try { s0.close(); } catch (Exception ignore) {}
+					}
+				}, pool));
+			}
+			java.util.concurrent.CompletableFuture.allOf(
+					futures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+
+			for (Block b : referencedBlocks) {
+				SolidityState st = decided.getOrDefault(b, null);
+				if (st == null) { solidifyWaiting(b, store); continue; }
+				if (SolidityState.State.MissingPredecessor.equals(st.getState())) {
+					// PARITY GUARD: parallel readers cannot see writes still
+					// pending in this connect's open batch transaction —
+					// re-resolve on the MAIN store exactly as legacy did.
+					Block prev = store.get(b.getPrevBlockHash());
+					Block prevBranch = store.get(b.getPrevBranchBlockHash());
+					if (prev != null && prevBranch != null && allInputsExist(b, store)) {
+						st = SolidityState.getSuccessState();
+					}
+				}
+				solidifyBlock(b, st, false, store);
+			}
+		} finally {
+			pool.shutdownNow();
+		}
+	}
+
+	/** READ-ONLY evaluation for the parallel phase: returns the final state
+	 *  that legacy solidifyWaiting would hand to solidifyBlock. */
+	private SolidityState evaluateSolidityForParallel(Block block, BlockStoreInterface s)
+			throws BlockStoreException {
+		BlockEvaluation eval = s.getBlockEvaluationsByhashs(block.getHash());
+		if (eval != null && eval.getSolid() >= 0
+				&& cacheBlockService.isTxValidated(block.getHash())
+				&& s.get(block.getPrevBlockHash()) != null
+				&& s.get(block.getPrevBranchBlockHash()) != null) {
+			return SolidityState.getSuccessState();
+		}
+		SolidityState st = new ServiceBaseCheck(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper).checkSolidity(block, false, s, false);
+		if (SolidityState.State.MissingPredecessor.equals(st.getState())
+				&& s.get(block.getPrevBlockHash()) != null
+				&& s.get(block.getPrevBranchBlockHash()) != null
+				&& allInputsExist(block, s)) {
+			return SolidityState.getSuccessState();
+		}
+		return st;
+	}
+
+	public void solidifyBlocksLegacy(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
+		for (Block block : referencedSorted(currRewardInfo, store)) {
 			solidifyWaiting(block, store);
 		}
+	}
+
+	private TreeSet<Block> referencedSorted(RewardInfo currRewardInfo, BlockStoreInterface store) throws BlockStoreException {
+		Comparator<Block> comparator = Comparator.comparingLong(Block::getHeight).thenComparing(Block::getHash);
+		TreeSet<Block> referencedBlocks = new TreeSet<>(comparator);
+		for (Sha256Hash hash : currRewardInfo.getBlocks()) {
+			Block block = getBlock(hash, store);
+			if (block != null)
+				referencedBlocks.add(block);
+		}
+		return referencedBlocks;
 	}
 
 	public void solidifyWaiting(Block block, BlockStoreInterface store) throws BlockStoreException {

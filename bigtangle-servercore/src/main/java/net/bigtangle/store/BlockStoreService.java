@@ -569,6 +569,9 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 		Block head = store.get(cacheBlockService.getMaxConfirmedReward(store).getBlockHash());
 		ServiceVerifyReward serviceVerifyReward = new ServiceVerifyReward(serverConfiguration, networkParameters,
 				cacheBlockService, jsonmapper, mempoolService);
+		serviceVerifyReward.setSolidifyStoreSupplier(() -> {
+			try { return storeService.getStore(); } catch (Exception e) { return null; }
+		});
 		serviceVerifyReward.setCasperServiceProvider(casperServiceProvider);
 		long cbStart = System.currentTimeMillis();
 		if (serviceVerifyReward.getRewardInfo(block).getPrevRewardHash().equals(head.getHash())) {
