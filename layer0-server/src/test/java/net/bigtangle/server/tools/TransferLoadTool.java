@@ -34,7 +34,7 @@ public class TransferLoadTool {
         int n = seeds.size();
         Wallet[] wallets = new Wallet[n];
         String[] urls = new String[n];
-        int nnodes = 5;
+        int nnodes = Integer.getInteger("load.nnodes", 5);
         for (int i = 0; i < n; i++) {
             wallets[i] = Wallet.fromKeys(params,
                     PQKey.fromMLDSA(Utils.HEX.decode(seeds.get(i).trim())),
