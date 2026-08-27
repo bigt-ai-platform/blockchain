@@ -454,7 +454,14 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
     if [ -f "$stamp" ]; then
         local left_cl now_cl need
         left_cl=$(cat "$stamp" | tr -dc '0-9')
-        now_cl=$(cl_of 0)
+        # query ANY reachable node (the joining node may be the one queried
+        # otherwise — e.g. NNODES=1 or node-0 churn — and answer garbage)
+        now_cl=""
+        for _j in $(seq 0 $((NNODES - 1))); do
+            now_cl=$(cl_of "$_j")
+            [ -n "${now_cl:-}" ] && [ "${now_cl:-0}" -gt 0 ] 2>/dev/null && break
+            now_cl=""
+        done
         need=$(( left_cl + 2 * ${POS_SLOTS_PER_EPOCH:-32} ))
         if [ "${now_cl:-0}" -lt "$need" ] && [ "${JOIN_FORCE:-0}" != "1" ]; then
             die "join node-${i} blocked: exit finalizing (cl=$now_cl, need>=$need). Wait or JOIN_FORCE=1"
