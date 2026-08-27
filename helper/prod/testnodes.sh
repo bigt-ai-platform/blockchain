@@ -432,6 +432,10 @@ cmd_leave() { # $1=index — signed BLOCKTYPE_EXIT, stop it, drop from seeds
         sleep 8
     done
     [ "$ok" = 1 ] || die "requestValidatorExit failed for node-${i}"
+    # STAMP the exit: cmd_join refuses re-keying until this cl + 2 epochs is
+    # confirmed (else old deposit + fresh deposit BOTH stay active — measured
+    # validators=5->6->7 voting-weight inflation across join-storm cycles).
+    cl_of "$i" > "${WORKDIR}/node-${i}.leave_stamp" 2>/dev/null || true
     log "exit accepted; waiting ~2 epochs for the BLOCKTYPE_EXIT to finalize"
     sleep $(( SLOT_MS * ${POS_SLOTS_PER_EPOCH:-32} * 2 / 1000 ))
     docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true
@@ -442,6 +446,23 @@ cmd_leave() { # $1=index — signed BLOCKTYPE_EXIT, stop it, drop from seeds
 
 cmd_join() { # $1=index — fresh keys, seed, start, stake
     local i="$1"
+    # ENFORCEMENT: a fresh-key join re-activates voting weight. If the OLD
+    # deposit's exit has not finalized, old + new BOTH count — an operator
+    # shortcut (kill instead of finalized leave) silently inflates the
+    # validator set (audited: validators 5->6->7 across join-storm rounds).
+    local stamp="${WORKDIR}/node-${i}.leave_stamp"
+    if [ -f "$stamp" ]; then
+        local left_cl now_cl need
+        left_cl=$(cat "$stamp" | tr -dc '0-9')
+        now_cl=$(cl_of 0)
+        need=$(( left_cl + 2 * ${POS_SLOTS_PER_EPOCH:-32} ))
+        if [ "${now_cl:-0}" -lt "$need" ] && [ "${JOIN_FORCE:-0}" != "1" ]; then
+            die "join node-${i} blocked: exit finalizing (cl=$now_cl, need>=$need). Wait or JOIN_FORCE=1"
+        fi
+        rm -f "$stamp"
+    elif [ -d "${WORKDIR}/node-${i}.old" ] || docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1; then
+        die "join node-${i} blocked: no finalized leave stamp (run 'leave ${i}' first, or JOIN_FORCE=1)"
+    fi
     rm -rf "${WORKDIR}/node-${i}.old" && mv "${WORKDIR}/node-${i}" "${WORKDIR}/node-${i}.old" 2>/dev/null || true
     mkdir -p "${WORKDIR}/node-${i}"; make_node_env "$i"
     docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "DROP DATABASE IF EXISTS bt4_${i};" >/dev/null
