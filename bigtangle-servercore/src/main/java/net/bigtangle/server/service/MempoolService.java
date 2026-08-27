@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -118,10 +119,78 @@ public class MempoolService {
      * lifecycle; each tx is still fully verified and conflict-checked.
      */
     public void submitTransactions(List<Transaction> txs, BlockStoreInterface store) {
+        // ATOMIC ADMISSION: a mid-payload failure (MempoolFull, single
+        // conflicting item, ...) previously left the earlier half admitted
+        // while clients discarded the WHOLE flush — orphaning spend-pending
+        // claims whose transactions existed nowhere else, deadlocking later
+        // submissions behind 'already spent by pending' until restart
+        // (observed as a permanent ~4000-claim wedge on every max-load run).
+        List<Transaction> added = new ArrayList<>();
+        try {
+            for (Transaction tx : txs) {
+                checkCapacity();
+                checkAndAdd(tx, store);
+                addToPending(tx);
+                added.add(tx);
+            }
+        } catch (Exception e) {
+            for (Transaction t : added) {
+                removeFromPending(t);
+            }
+            throw e;
+        }
+    }
+
+    /** Rollback helper for atomic admission above. */
+    private void removeFromPending(Transaction tx) {
+        if (!pendingTxns.remove(tx)) {
+            return; // duplicate no-op that was never queued
+        }
+        ConcurrentLinkedQueue<Transaction> typeQueue =
+                pendingTxnsByType.get(getTransactionType(tx));
+        if (typeQueue != null) {
+            typeQueue.remove(tx);
+        }
+        mempoolSize.decrementAndGet();
+        // Release THIS tx's spend-pending claims so honest retries succeed.
+        Set<TransactionOutPoint> ops = txOutpoints.remove(tx);
+        if (ops != null) {
+            for (TransactionOutPoint op : ops) {
+                spentOutpoints.remove(op, tx.getHash());
+            }
+        }
+    }
+
+    /**
+     * Re-queue txs whose batch block failed to save AFTER they were drained.
+     * They already passed verification, so skip re-checks but RESTORE the
+     * conflict bookkeeping removed at drain time — otherwise the txs are lost
+     * while their outpoints remain chain-valid, silently shrinking capacity.
+     */
+    public void requeue(Collection<Transaction> txs) {
+        if (txs == null) {
+            return;
+        }
         for (Transaction tx : txs) {
-            checkCapacity();
-            checkAndAdd(tx, store);
-            addToPending(tx);
+            pendingTxnsByType.computeIfAbsent(getTransactionType(tx),
+                    k -> new ConcurrentLinkedQueue<>()).add(tx);
+            pendingTxns.add(tx);
+            mempoolSize.incrementAndGet();
+            Set<TransactionOutPoint> ops = new HashSet<>();
+            if (tx.getInputs() != null) {
+                for (TransactionInput in : tx.getInputs()) {
+                    TransactionOutPoint op = in.getOutpoint();
+                    if (op != null && !op.isCoinBase()) {
+                        ops.add(op);
+                    }
+                }
+            }
+            for (TransactionOutPoint op : ops) {
+                spentOutpoints.put(op, tx.getHash());
+            }
+            if (!ops.isEmpty()) {
+                txOutpoints.put(tx, ops);
+            }
         }
     }
 

@@ -114,6 +114,10 @@ public class MeshBench {
                       PQKey.fromMLDSA(new byte[] {(byte) 0x51}).getPubKeyHash())
                           .toBase58();
         long payAmount = Long.getLong("bench.pay", 10000L);
+        // Optional TOTAL offered-rate cap (tx/s across clients): keeps load
+        // under the mempool cap so we can measure SUSTAINED confirm TPS
+        // without triggering backpressure drop-out.
+        double ratePerSec = Double.parseDouble(System.getProperty("bench.rate", "0"));
         long fundAmount = Long.getLong("bench.fund", 20000L);
 
         // genesis funding-UTXO identity, same construction as faucet/benchmark
@@ -135,7 +139,14 @@ public class MeshBench {
             fs.add(CompletableFuture.runAsync(() -> {
                 java.util.Map<Integer, ArrayList<Transaction>> outboxByNode = new HashMap<>();
                 try {
+                    long nextAllowed = System.nanoTime();
                     for (int j = 0; j < txPerClient; j++) {
+                        if (ratePerSec > 0) {
+                            double share = ratePerSec / Math.max(1, clients);
+                            long waitNs = nextAllowed - System.nanoTime();
+                            if (waitNs > 0) Thread.sleep((long) Math.ceil(waitNs / 1e6));
+                            nextAllowed += (long) (1e9 / share);
+                        }
                         int idx = ci * txPerClient + j;
                         if (idx >= totalTx) break;
                         PQKey wk = PQKey.fromMLDSA(seeds[idx]);

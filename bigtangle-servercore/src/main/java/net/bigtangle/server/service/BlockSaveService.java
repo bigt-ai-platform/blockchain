@@ -385,7 +385,17 @@ public class BlockSaveService {
 			}
 			int window = 0;
 			for (List<Transaction> txns : txnsByType.values()) {
-				totalBatched += batchTransactionGroup(txns);
+				try {
+					totalBatched += batchTransactionGroup(txns);
+				} catch (Exception e) {
+					// REQUEUE on failed save: drained txs lost here would
+					// silently vanish while their spend-pending claims kept
+					// blocking resubmission (measured: whole windows of 8000
+					// txs vaporised, wallet capacities halved per run).
+					logger.warn("Batch window save failed, requeueing {} txs",
+							txns.size(), e);
+					mempoolService.requeue(txns);
+				}
 				window += txns.size();
 			}
 			if (feeService != null) {
