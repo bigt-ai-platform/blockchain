@@ -68,6 +68,23 @@ per-beacon connect volume (`batch.txPerBlock≈500`) and keeping slot cadence
 moderate (4 s) so beacons flow densely without CPU starvation. Peak observed
 **749.6 tx/s**; stable-best configured **726.8 tx/s** on this host.
 
+### Depth-validation + production-hardening follow-up (same day)
+
+100k-tx run ON THE PARALLEL-SOLIDIFY BUILD: submit 1,501 tx/s, peak-sustained
+**720.7 tx/s**, but end-to-end decayed to 176 tx/s average over a 566 s wall
+with 72 unconfirmed at timeout — reproducing the documented shared-database
+variance (autovacuum lag behind ~400k-row `outputs` after several tier runs
+on one `layer0` DB). Rule stands: recreate the database between campaigns
+before comparing numbers.
+
+Hardening shipped:
+- `/fundAddresses` is now loopback-only unless `server.faucetPublic=true`
+  (faucet mints spendable UTXOs — a misconfigured exposed node was an
+  inflation vector).
+- Actuator exposure restricted from `*` to `health,info,prometheus`;
+  loggers/threaddump writes are no longer reachable on the API port
+  (set `-Dmanagement.endpoints.web.exposure.include=*` when debugging).
+
 ### Multi-node mesh (`testnodes.sh`) and mempool hardening
 
 Using `MeshBench` (benchmark-replica against a running mesh over HTTP,
