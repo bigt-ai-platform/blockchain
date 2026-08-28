@@ -14,7 +14,8 @@ fixes.
 | 10,000 tx | 12 s | 3000 | 2,069 tx/s | **554 tx/s** |
 | 20,000 tx | 6 s | 5000 | 1,854 tx/s | **626 tx/s** |
 | 50,000 tx | 6 s | 10000 | 1,029 tx/s | **468 tx/s avg, ~1,600 tx/s steady-state drain** |
-| **200,000 tx (2026-08-28 max-resource)** | 1 s | 3000 | 1,626 tx/s | **1,094.8 tx/s** ✔ best |
+| 200,000 tx (2026-08-28 max-resource, 8-core host) | 1 s | 3000 | 1,626 tx/s | 1,094.8 tx/s |
+| **200,000 tx (2026-08-28 Aliyun `g8i.16xlarge`, 64 vCPU)** | 1 s | 3000 | **13,880 tx/s** | **2,756.5 tx/s** ✔ best |
 
 All submitted transactions confirmed on-chain (10000/10000, 20000/20000,
 50000/50000, 200000/200000). The 50k run's average is dominated by ramp-up;
@@ -133,8 +134,9 @@ critical path:
 | 2 | 400k tx / 48 clients | 10000 | 2 s | 20 g | **Stalled at 145,499/399,984**: heap OOM killed Hazelcast, chain froze |
 | 3 | 300k tx / 40 clients | 5000 | 2 s | 18 g | Submit 1,436 tx/s → **peak 999.4 tx/s** (160,755/165,750; mempool rejects lost 44% of offered load) |
 
-Run 1 is the new single-node best (1,094.8 tx/s confirmed, all 200k
-on-chain). Details and the failure modes:
+Run 1 is the single-node best on THIS host (1,094.8 tx/s confirmed, all 200k
+on-chain; superseded by the Aliyun 64-core run below). Details and the failure
+modes:
 
 - **Submit ingest caps at ~1,600 tx/s** regardless of client count
   (32 vs 48 identical): server-side mempool admission (parse + double-spend
@@ -248,6 +250,44 @@ node issued MID-LOAD:
   is the remaining max-load stability blocker. Next lever: find and close
   the leak in the admission path (`MempoolService.submitTransactions` et
   al.), then re-run this campaign.
+
+## 2026-08-28 Aliyun campaign: 2,756 tx/s confirmed on 64 cores
+
+`alitest.sh` (repo root) automates the whole cycle: create the best Aliyun ECS
+instance (`ecs.g8i.16xlarge`, 64 vCPU / 256 GiB, cn-hangzhou, postpaid, 200G
+ESSD) → provision JDK 25.0.4.1 + PostgreSQL 16 + maven → rsync the workspace →
+build → run `ConfirmedPaymentBenchmark` with the best-known max-resource
+config → parse Submit/CONFIRMED TPS → shut the instance down when finished
+(KEEP/RELEASE variants). Re-running on a stopped instance
+(`--instance-id … --key-file …`) reuses the warm `~/.m2`/JDK and finishes in
+~7 min instead of ~35.
+
+| Host | Config | Submit | **CONFIRMED** |
+|---|---|---|---|
+| 8-core / 31 GB (sweep run 1 above) | 200k tx / 32 clients / batch 250 / txPerBlock 2000 / 1 s slots / heap 16 g | 1,626 tx/s | 1,094.8 tx/s |
+| **Aliyun `g8i.16xlarge` (64 vCPU / 256 GiB)** | same, heap 64 g, **mempoolMaxTx 200000** | **13,880 tx/s** | **2,756.5 tx/s** ✔ new best |
+
+200,000/200,000 confirmed on-chain (fresh `layer0` DB per run, JDK 25.0.4.1,
+PostgreSQL 16). Submit completed in 14.4 s; the entire 200k backlog confirmed
+within 58 s of submit completion. Full log:
+`logs/alitest-20260828-192001.bench.log`.
+
+Findings:
+
+- **First run on the big instance aborted at 11,750/200,000** with
+  `MempoolFullException`: 32 clients × 250-tx batches offer 8,000 tx instantly,
+  the default `mempoolMaxTx=4000` fills mid-burst, and the rejected payload
+  kills the client threads (the documented failure mode above) — the run
+  "finishes" with 94% of the load never offered and 126.5 tx/s confirmed.
+  `server.mempoolMaxTx` must cover the whole burst at this scale (set to
+  200,000); the harness retry-with-backoff fix remains outstanding.
+- **Submit ingest scales with cores**: 1,626 → 13,880 tx/s (~8.5× on 8× the
+  cores). The mempool admission path (parse + double-spend checks) parallelizes
+  well and was never DB-bound.
+- **Confirmed TPS 1,094.8 → 2,756.5 (~2.5×)**: the serial per-beacon
+  propose→sweep→connect cycle still bounds the drain — it speeds up with more
+  cores but remains the ceiling, exactly as the sweep concluded. The confirm
+  waves now move ~2.8k tx/s end-to-end instead of ~1.1k.
 
 ## Bottlenecks found and fixed
 
@@ -398,7 +438,7 @@ mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
   -Dserver.mempoolMaxTx=300000 \
   -DargLine="-Xmx12g"
 
-# current best (2026-08-28 max-resource: 200k tx, CONFIRMED ~1,095 tx/s)
+# 8-core max-resource sweep run 1 (CONFIRMED 1,094.8 tx/s)
 mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
   -Ddb.port=21532 -Ddb.dbName=layer0 \
   -Dbench.tx=200000 -Dbench.clients=32 -Dbench.batch=250 \
@@ -406,6 +446,15 @@ mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
   -Dserver.mempoolMaxTx=100000 \
   -Dperf.confirmLogMinTx=50 -Dperf.sweepLogMinBlocks=10 -Dperf.connectLogMinRefs=10 \
   -DargLine="-Xmx16g"
+
+# current best (2026-08-28 Aliyun g8i.16xlarge, 64 vCPU: CONFIRMED 2,756.5 tx/s)
+# — ./alitest.sh provisions the instance and runs exactly this
+mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
+  -Ddb.port=5432 -Ddb.dbName=layer0 \
+  -Dbench.tx=200000 -Dbench.clients=32 -Dbench.batch=250 \
+  -Dbatch.minTx=3000 -Dbatch.maxBatchAgeMs=1500 -Dpos.slotIntervalMs=1000 \
+  -Dbatch.txPerBlock=2000 -Dserver.mempoolMaxTx=200000 \
+  -DargLine="-Xmx64g"
 ```
 
 The test needs a reachable PostgreSQL (`-Ddb.port`, database `layer0`).
