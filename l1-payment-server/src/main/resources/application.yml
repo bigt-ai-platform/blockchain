@@ -10,7 +10,7 @@ server:
     key-store-password: ${KEYSTOREPW:changeit}
     keyStoreType: ${KEYSTORETYPE:PKCS12}
   permissioned: ${PERMISSIONED:false}
-  permissionadmin: ${PERMISSIONADMIN:mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG}
+  permissionadmin: ${PERMISSIONADMIN:}
   myserverblockOnly: ${MYSERVERBLOCKONLY:false}
   fundEnabled: ${FUND_ENABLED:false}
   runKafkaStream: ${RUNKAFKASTREAM:true}
@@ -34,14 +34,12 @@ service:
     chainlength: ${SERVICE_CHAINLENGTH:false}
     microbatch: ${SERVICE_MICROBATCH:true}
     blockbatch: ${SERVICE_BLOCKBATCH:false}
-    sync: ${SERVICE_SYNC:true}
     syncrate: ${SERVICE_SYNC_RATE:50000}
     blockbatchrate: ${SERVICE_BLOCKBATCH_RATE:50000}
     initsync: ${SERVICE_INITSYNC:true}
 
 kafka:
   bootstrapServers: ${BOOT_STRAP_SERVERS:}
-  topicOutName: ${TOPIC_OUT_NAME:bigtangle}
   consumerIdSuffix: ${CONSUMERIDSUFFIX:bigtangletest}
 
 management:
