@@ -20,15 +20,22 @@ fork gate is a *chainlength* gate, not a hot fork of a live chain.
       `POS_VALIDATOR_KEY`/`VALIDATOR_PUBKEY` per node, `NODE_HOST` set.
 - [ ] Staging network reachable, ports unique per node (see `prod.md` §6).
 - [ ] Decide the **fork/activation height** once and record it (see §3).
-- [ ] Back up each node's PostgreSQL (warm standby or `pg_basebackup` snapshot)
-      before the first node starts the chain.
+- [ ] Back up each node's PostgreSQL (warm standby or `pg_basebackup` snapshot,
+      or `helper/prod/backup.sh backup`) before the first node starts the chain.
+- [ ] Generate a per-deployment API key (`openssl rand -hex 32`) and set
+      `API_KEY=` in every `node-<i>/validator.env` — the sensitive PoS endpoints
+      must never run open on Mainnet.
+- [ ] Generate deployment TLS keystores (`helper/prod/generate_keystore.sh`);
+      never reuse the development keystore from the source tree.
 
 ---
 
 ## 1. Genesis bootstrap (chain epoch 0 window)
 
 1. Start the `layer0-server` processes (one per node, unique DB/ports,
-   `--pos.dutyEnabled=true`, `--pos.validatorKey=<key_i>`, `--server.createtable=true`).
+   `--pos.dutyEnabled=true`, `--server.createtable=true`; the validator seed
+   travels as the `POS_VALIDATOR_KEY` env var and the API key as
+   `SERVER_APIKEY` — both come from `validator.env`, never CLI args).
    Validator duties run on the server itself, so beacons start as soon as the
    first validator is active — complete the staking window (§2) promptly.
 2. Confirm each node: `getChainNumber` == `0` and the genesis hash is identical
@@ -55,12 +62,15 @@ node-<i>/setup.sh verify    #    cross-node acceptance (validators == N everywhe
 ```
 
 `setup.sh stake` submits `stakeDeposit`/`activateValidator` to the node's **own**
-API (the STAKE tx is signed with that node's configured `pos.validatorKey`):
+API (the STAKE tx is signed with that node's configured validator key; the
+scripts attach the `X-Api-Key` header automatically when `API_KEY` is set):
 
 ```bash
 curl -X POST http://<node-i>:8081/stakeDeposit -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <API_KEY>' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","amount":"32000000"}'
 curl -X POST http://<node-i>:8081/activateValidator -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <API_KEY>' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","epoch":0}'
 ```
 
@@ -115,14 +125,16 @@ the gate must be identical on every node). Production uses the default 1024.
 
 ## 5. Enable TLS
 
-1. Provision a PKCS12 keystore per node (`SSL=true`,
-   `KEYSTORE=<path>/ca.pkcs12`, `KEYSTOREPW=…`, `KEYSTORETYPE=PKCS12`) and set
-   `server.port` to the public TLS port.
+1. Provision a PKCS12 keystore per node with
+   `helper/prod/generate_keystore.sh` (`SSL=true`,
+   `KEYSTORE=<path>/ca.pkcs12`, `KEYSTOREPW=<generated>`, `KEYSTORETYPE=PKCS12`)
+   and set `server.port` to the public TLS port. Never use the development
+   keystore from the source tree — it is public.
 2. Rotate `pos.gossipPeers`/`server.requester` to the `https://` URLs.
 3. Restart both processes on each node; verify the health endpoint answers over
    TLS and DAG sync / attestation gossip still converge.
 
-## 6. Disable `fundAddresses`
+## 6. Disable `fundAddresses` + security warning audit
 
 `server.fundEnabled` mints confirmed coins over an **unauthenticated** endpoint.
 It must be `false` on every production node **before** any node is publicly
@@ -144,6 +156,14 @@ curl -X POST http://127.0.0.1:8081/getValidators -H 'Content-Type: application/j
 
 # 4. Finality advances (justified/finalized epochs increase) — check logs:
 docker logs -f node-0-server | grep -iE "justif|final"
+```
+
+Also verify no `SECURITY:` startup warnings remain in each node's log — every
+one of them (missing API key, fundEnabled, no TLS, default DB password) is a
+launch blocker:
+
+```bash
+grep -i "SECURITY:" node-0-server.log && echo "UNSAFE: fix warnings above" || echo "OK: no security warnings"
 ```
 
 ## 7. Post-cutover audit

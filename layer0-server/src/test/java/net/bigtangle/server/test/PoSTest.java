@@ -227,7 +227,7 @@ public class PoSTest extends AbstractIntegrationTest {
 
             assertTrue(CasperService.onChainAttestationActive(store),
                     "chain-read must be active at/above the (lowered) activation height");
-            java.util.Set<String> voters = CasperService.votersForEpoch(epoch, store);
+            java.util.Set<String> voters = CasperService.votersForEpoch(epoch, store, networkParameters.getSlotsPerEpoch());
             assertTrue(voters.contains(Utils.HEX.encode(v1.getPubKey())),
                     "embedded attestation must be read from the confirmed chain");
         } finally {
@@ -744,14 +744,14 @@ public class PoSTest extends AbstractIntegrationTest {
         stakeService.applySlashingConfirmed(slashBlock, 10, store);
         StakeRecord slashed = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(slashed.isSlashed());
-        assertEquals(10 + StakeService.WITHDRAWAL_DELAY_EPOCHS, slashed.getWithdrawableEpoch());
+        assertEquals(10 + StakeService.withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()), slashed.getWithdrawableEpoch());
 
         // ...and a re-confirming beacon (e.g. after the first beacon was
         // unconfirmed) OVERWRITES it, so a stale epoch can never be frozen by a
         // keep-first guard.
         stakeService.applySlashingConfirmed(slashBlock, 20, store);
         slashed = store.getStakeDeposit(validatorKey.getPubKey());
-        assertEquals(20 + StakeService.WITHDRAWAL_DELAY_EPOCHS, slashed.getWithdrawableEpoch());
+        assertEquals(20 + StakeService.withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()), slashed.getWithdrawableEpoch());
     }
 
     @Test
@@ -771,11 +771,11 @@ public class PoSTest extends AbstractIntegrationTest {
         stakeService.applyExitConfirmed(exitBlock, 10, store);
         StakeRecord exiting = store.getStakeDeposit(validatorKey.getPubKey());
         assertTrue(exiting.isExiting());
-        assertEquals(10 + StakeService.WITHDRAWAL_DELAY_EPOCHS, exiting.getWithdrawableEpoch());
+        assertEquals(10 + StakeService.withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()), exiting.getWithdrawableEpoch());
 
         stakeService.applyExitConfirmed(exitBlock, 20, store);
         exiting = store.getStakeDeposit(validatorKey.getPubKey());
-        assertEquals(20 + StakeService.WITHDRAWAL_DELAY_EPOCHS, exiting.getWithdrawableEpoch());
+        assertEquals(20 + StakeService.withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()), exiting.getWithdrawableEpoch());
     }
 
     @Test
@@ -1119,22 +1119,22 @@ public class PoSTest extends AbstractIntegrationTest {
         // follow the signed slot (slot % 32 == 0), not the chainlength.
         Block drifted = makeBeacon(genesis, genesis.getHash(), 5, 64L);
         RewardInfo ri = new RewardInfo().parseChecked(drifted.getTransactions().get(0).getData());
-        assertTrue(SlotService.isEpochStartBeacon(drifted, ri),
+        assertTrue(SlotService.isEpochStartBeacon(drifted, ri, networkParameters.getSlotsPerEpoch()),
                 "slot % 32 == 0 with drifted chainlength must still be epoch-start");
 
         Block midEpoch = makeBeacon(genesis, genesis.getHash(), 33, 65L);
         RewardInfo ri2 = new RewardInfo().parseChecked(midEpoch.getTransactions().get(0).getData());
-        assertFalse(SlotService.isEpochStartBeacon(midEpoch, ri2),
+        assertFalse(SlotService.isEpochStartBeacon(midEpoch, ri2, networkParameters.getSlotsPerEpoch()),
                 "slot % 32 != 0 is mid-epoch even at chainlength % 32 == 1");
 
         // Legacy beacons without SlotData keep the chainlength classification.
         Block legacyStart = makeBeacon(genesis, genesis.getHash(), 33, null);
         RewardInfo ri3 = new RewardInfo().parseChecked(legacyStart.getTransactions().get(0).getData());
-        assertTrue(SlotService.isEpochStartBeacon(legacyStart, ri3),
+        assertTrue(SlotService.isEpochStartBeacon(legacyStart, ri3, networkParameters.getSlotsPerEpoch()),
                 "legacy fallback: chainlength % 32 == 1");
         Block legacyMid = makeBeacon(genesis, genesis.getHash(), 32, null);
         RewardInfo ri4 = new RewardInfo().parseChecked(legacyMid.getTransactions().get(0).getData());
-        assertFalse(SlotService.isEpochStartBeacon(legacyMid, ri4));
+        assertFalse(SlotService.isEpochStartBeacon(legacyMid, ri4, networkParameters.getSlotsPerEpoch()));
     }
 
     @Test
@@ -1142,15 +1142,15 @@ public class PoSTest extends AbstractIntegrationTest {
         // Regression: after a missed slot the chainlength lags the slot; the
         // epoch-crossing beacon must remain valid (the old slot==chainlength
         // binding rejected it and halted the chain).
-        assertTrue(SlotService.slotSequenceValid(32, 1, 30),
+        assertTrue(SlotService.slotSequenceValid(32, 1, 30, networkParameters.getSlotsPerEpoch()),
                 "missed slot before the boundary must not invalidate the epoch-start beacon");
-        assertTrue(SlotService.slotSequenceValid(5, 0, -1),
+        assertTrue(SlotService.slotSequenceValid(5, 0, -1, networkParameters.getSlotsPerEpoch()),
                 "no prev SlotData (legacy/genesis): only self-consistency");
-        assertFalse(SlotService.slotSequenceValid(32, 0, 30),
+        assertFalse(SlotService.slotSequenceValid(32, 0, 30, networkParameters.getSlotsPerEpoch()),
                 "epoch must equal slot/32");
-        assertFalse(SlotService.slotSequenceValid(30, 0, 30),
+        assertFalse(SlotService.slotSequenceValid(30, 0, 30, networkParameters.getSlotsPerEpoch()),
                 "slots must strictly increase along the reward chain");
-        assertFalse(SlotService.slotSequenceValid(29, 0, 30),
+        assertFalse(SlotService.slotSequenceValid(29, 0, 30, networkParameters.getSlotsPerEpoch()),
                 "a slot at/below the prev beacon's slot is rejected");
     }
 
@@ -1332,7 +1332,7 @@ public class PoSTest extends AbstractIntegrationTest {
     @Test
     public void testEmptyValidatorSnapshotDoesNotBrickEpoch() throws Exception {
         // Nothing is frozen when the active set is empty at the boundary.
-        SlotService.snapshotValidatorsForEpoch(7, store);
+        SlotService.snapshotValidatorsForEpoch(7, store, networkParameters.getSlotsPerEpoch());
         assertNull(SlotService.getValidatorSnapshot(7, store),
                 "an empty active set must never be snapshotted");
 
@@ -1341,7 +1341,7 @@ public class PoSTest extends AbstractIntegrationTest {
         // proposer for every slot of the epoch.
         store.savePosState("posvalidators", "validators_8", new byte[0]);
         registerValidator();
-        List<StakeRecord> sel = SlotService.selectionValidators(320, store); // 320/32 - 2 = 8
+        List<StakeRecord> sel = SlotService.selectionValidators(320, store, networkParameters.getSlotsPerEpoch()); // 320/32 - 2 = 8
         assertFalse(sel.isEmpty(), "empty snapshot must fall back to the live set");
         assertTrue(Arrays.equals(sel.get(0).getPubkey(), validatorKey.getPubKey()));
     }
@@ -1506,7 +1506,7 @@ public class PoSTest extends AbstractIntegrationTest {
                 "a restarted validator must not re-propose the same slot (self-slash)");
 
         Sha256Hash head = cacheBlockService.getMaxConfirmedReward(store).getBlockHash();
-        long chainEpoch = SlotService.currentChainEpoch(store);
+        long chainEpoch = SlotService.currentChainEpoch(store, networkParameters.getSlotsPerEpoch());
         Sha256Hash targetCkpt = casperService.ensureCheckpoint(chainEpoch, store).getBlockHash();
         assertTrue(validatorDutyService.mayAttest(slot, head, targetCkpt),
                 "byte-identical re-vote is safe");
@@ -1632,35 +1632,75 @@ public class PoSTest extends AbstractIntegrationTest {
         String key = "net.bigtangle.pos.attestationActivation";
         String original = System.getProperty(key);
         try {
-            System.setProperty(key, "0");
-
+            // The anchor is built PRE-fork (activation default): full-stake
+            // gossip-view votes justify checkpoint 1. The activation flip
+            // below switches the leak to the chain-read voter set.
             PQKey v1 = PQKey.createNew();
             PQKey v2 = PQKey.createNew();
             PQKey v3 = PQKey.createNew();
             PQKey v4 = PQKey.createNew();
-            for (PQKey k : List.of(v1, v2, v3, v4)) {
+            registerValidator(v1);
+
+            Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
+
+            // LIVE finalized anchor: checkpoint 1 over beacon C (chainlength 1),
+            // justified+finalized via a pre-fork full-stake vote while v1 is the
+            // ONLY validator (2/3 of total requires full stake here). The
+            // store-view finalized lookup requires a live reward row, and the
+            // genesis checkpoint is pinned at chainlength 0, so it never passes
+            // the filter.
+            Block c = Block.createBlock(networkParameters, genesis, genesis);
+            c.setBlockType(BlockType.BLOCKTYPE_BEACON);
+            Transaction crtx = new Transaction(networkParameters);
+            RewardInfo cri = new RewardInfo();
+            cri.setChainlength(1);
+            cri.setPrevRewardHash(genesis.getHash());
+            cri.setBlocks(new java.util.HashSet<>());
+            crtx.setData(cri.toByteArray());
+            c.addTransaction(crtx);
+            store.put(c);
+            store.insertReward(c.getHash(), genesis.getHash(), 1);
+            store.updateRewardConfirmed(c.getHash(), true);
+
+            casperService.ensureCheckpoint(1, c.getHash());
+            CasperService.Checkpoint source = casperService.getJustifiedCheckpoint();
+            assertNotNull(source, "genesis checkpoint must be justified");
+            casperService.processVote(signedVoteFor(v1, 64, source.getEpoch(), 1,
+                    source.getBlockHash(), c.getHash()), store);
+            casperService.finalizeCheckpoint(1, store);
+            assertTrue(casperService.isCheckpointFinalized(1),
+                    "checkpoint 1 must finalize — the leak needs a live finalized anchor");
+
+            // The remaining validators join AFTER the anchor exists, and the
+            // chain-read (post-fork) voter set takes over for the leak.
+            for (PQKey k : List.of(v2, v3, v4)) {
                 registerValidator(k);
             }
+            System.setProperty(key, "0");
 
-            CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint();
+            CasperService.Checkpoint base = casperService.getLastFinalizedCheckpoint(store);
             assertNotNull(base);
             // The leaked epoch must be past the penalty threshold relative to
             // the last finalized checkpoint. A delay of 9 (threshold + 5) makes
             // a SINGLE leak application reduce each offline validator below
             // half of MIN_STAKE, so the 2-online / 2-offline split regains a
-            // 2/3 supermajority of the leaked total.
-            long epoch = base.getEpoch() + CasperService.INACTIVITY_PENALTY_THRESHOLD_EPOCHS + 5;
-            long slot = epoch * 32;
+            // 2/3 supermajority of the leaked total. Threshold + divisor are
+            // epoch-length-safe derivations: identical numbers on the 32-slot
+            // test net.
+            long slotsPerEpoch = networkParameters.getSlotsPerEpoch();
+            long epoch = base.getEpoch()
+                    + CasperService.inactivityPenaltyThresholdEpochs(slotsPerEpoch) + 5;
+            long slot = epoch * slotsPerEpoch;
 
             // Boundary beacon carrying on-chain attestations from the two
             // ONLINE validators for the target epoch (chain-read voter set).
-            Block genesis = UtilGeneseBlock.createGenesis(networkParameters);
-            Block b = Block.createBlock(networkParameters, genesis, genesis);
+            // Descends from C so the confirmed tip is deterministic.
+            Block b = Block.createBlock(networkParameters, c, c);
             b.setBlockType(BlockType.BLOCKTYPE_BEACON);
             Transaction rtx = new Transaction(networkParameters);
             RewardInfo ri = new RewardInfo();
-            ri.setChainlength(1);
-            ri.setPrevRewardHash(genesis.getHash());
+            ri.setChainlength(2);
+            ri.setPrevRewardHash(c.getHash());
             ri.setBlocks(new java.util.HashSet<>());
             rtx.setData(ri.toByteArray());
             b.addTransaction(rtx);
@@ -1668,7 +1708,7 @@ public class PoSTest extends AbstractIntegrationTest {
                     base.getBlockHash(), Sha256Hash.of(("leakB-" + epoch).getBytes()));
             AttestationData att2 = signedVoteFor(v2, slot, base.getEpoch(), epoch,
                     base.getBlockHash(), Sha256Hash.of(("leakB-" + epoch).getBytes()));
-            net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, epoch, 0, genesis.getHash());
+            net.bigtangle.core.SlotData sd = new net.bigtangle.core.SlotData(slot, epoch, 0, c.getHash());
             sd.setAttestations(List.of(att1, att2));
             sd.setAttestationRoot(CasperService.computeAttestationRoot(List.of(att1, att2)));
             Transaction slotTx = new Transaction(networkParameters);
@@ -1676,12 +1716,12 @@ public class PoSTest extends AbstractIntegrationTest {
             slotTx.setData(Json.jsonmapper().writeValueAsBytes(sd));
             b.addTransaction(slotTx);
             store.put(b);
-            store.insertReward(b.getHash(), genesis.getHash(), 1);
+            store.insertReward(b.getHash(), c.getHash(), 2);
             store.updateRewardConfirmed(b.getHash(), true);
 
             assertTrue(CasperService.onChainAttestationActive(store),
                     "chain-read voter set must be active");
-            assertEquals(2, CasperService.votersForEpoch(epoch, store).size(),
+            assertEquals(2, CasperService.votersForEpoch(epoch, store, networkParameters.getSlotsPerEpoch()).size(),
                     "only the online validators are in the chain-read voter set");
 
             // No leak below the threshold: the online set alone cannot justify.
@@ -1690,8 +1730,9 @@ public class PoSTest extends AbstractIntegrationTest {
 
             // Apply the leak at the epoch boundary.
             casperService.applyInactivityLeak(epoch, b, store);
-            long div = CasperService.INACTIVITY_LEAK_DIVISOR
-                    + (long) (epoch - base.getEpoch()) * (epoch - base.getEpoch());
+            long delay = epoch - base.getEpoch();
+            long delayCanonical = delay * slotsPerEpoch / CasperService.CANONICAL_SLOTS_PER_EPOCH;
+            long div = CasperService.INACTIVITY_LEAK_DIVISOR + delayCanonical * delayCanonical;
             BigInteger leaked = StakeService.MIN_STAKE
                     .multiply(BigInteger.valueOf(CasperService.INACTIVITY_LEAK_DIVISOR))
                     .divide(BigInteger.valueOf(div));
@@ -1726,6 +1767,35 @@ public class PoSTest extends AbstractIntegrationTest {
             } else {
                 System.clearProperty(key);
             }
+        }
+    }
+
+    @Test
+    public void testOptimisticFinalityEndpoint() throws Exception {
+        // Phase 3: advisory read-only endpoint — head vote weight vs total
+        // stake plus the justified/finalized checkpoints. Parses and returns
+        // the checkpoint state; no consensus effect.
+        byte[] resp = net.bigtangle.utils.OkHttp3Util.post(
+                contextRoot + net.bigtangle.params.ReqCmd.getOptimisticFinality.name(), "{}".getBytes());
+        net.bigtangle.response.OptimisticFinalityResponse of = Json.jsonmapper()
+                .readValue(resp, net.bigtangle.response.OptimisticFinalityResponse.class);
+        assertNotNull(of, "optimistic finality response must parse");
+        // The endpoint mirrors the service's checkpoint view: on a bare store
+        // the finalized view is empty (no live reward row), on a mature chain
+        // it is the FFG anchor — either way the response must agree with the
+        // in-process service.
+        CasperService.Checkpoint finalized = casperService.getLastFinalizedCheckpoint(store);
+        assertEquals(finalized == null ? null : finalized.getEpoch(), of.getFinalizedEpoch());
+        CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
+        assertEquals(justified == null ? null : justified.getEpoch(), of.getJustifiedEpoch());
+        // Head fields mirror the confirmed tip when one exists.
+        TXReward head = cacheBlockService.getMaxConfirmedReward(store);
+        if (head != null && head.getBlockHash() != null) {
+            assertEquals(head.getBlockHash().toString(), of.getHeadBlockHash());
+            assertEquals(head.getChainLength(), of.getChainLength());
+            assertNotNull(of.getHeadVoteWeight());
+            assertNotNull(of.getTotalStake());
+            assertNotNull(of.getSupermajority());
         }
     }
 }

@@ -214,7 +214,8 @@ public class ValidatorDutyService {
         try {
             store = storeService.getStore();
             long slot = slotService.getCurrentSlot();
-            List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
+            List<StakeRecord> validators = SlotService.selectionValidators(slot, store,
+                    networkParameters.getSlotsPerEpoch());
             long proposerIdx = slotService.selectProposer(slot, store);
             if (!(proposerIdx >= 0 && proposerIdx < validators.size())) {
                 return false;
@@ -292,7 +293,8 @@ public class ValidatorDutyService {
             // back), the same list beacon validation recomputes it from — looking
             // it up in the live set would misidentify the proposer whenever the
             // two differ (activation/exit/top-up within the lookback window).
-            List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
+            List<StakeRecord> validators = SlotService.selectionValidators(slot, store,
+                    networkParameters.getSlotsPerEpoch());
             long proposerIdx = slotService.selectProposer(slot, store);
             if (proposerIdx >= 0 && proposerIdx < validators.size()) {
                 StakeRecord proposer = validators.get((int) proposerIdx);
@@ -415,7 +417,7 @@ public class ValidatorDutyService {
             // attestations fragment and 2/3 justification never forms. Targeting
             // the CHAIN epoch (deterministic from confirmed chainlength) makes
             // all nodes agree on the same checkpoint — the source of convergence.
-            long chainEpoch = SlotService.currentChainEpoch(store);
+            long chainEpoch = SlotService.currentChainEpoch(store, networkParameters.getSlotsPerEpoch());
             long targetEpoch = Math.max(0, chainEpoch);
 
             CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();

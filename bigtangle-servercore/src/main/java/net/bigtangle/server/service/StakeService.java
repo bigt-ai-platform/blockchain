@@ -54,7 +54,21 @@ public class StakeService {
      * weight is capped.
      */
     public static final BigInteger MAX_EFFECTIVE_BALANCE = MIN_STAKE;
+    /**
+     * Withdrawal delay: canonical value 256 epochs × 32 slots = 8192 slots
+     * (≈ 7.6 h at 12 s). DERIVED per network via
+     * {@link #withdrawalDelayEpochs(long)} so shorter epochs keep the same
+     * wall-time bond lock — a hardcoded 256 epochs at 4-slot epochs would let
+     * a slashed/exiting validator unbond in ~1.7 h instead of ~7.6 h.
+     */
     public static final long WITHDRAWAL_DELAY_EPOCHS = 256;
+    /** Canonical slot count the withdrawal delay was defined against (256 × 32). */
+    public static final long WITHDRAWAL_DELAY_SLOTS = 8192L;
+
+    /** Per-network withdrawal delay in epochs, preserving the 8192-slot bond lock. */
+    public static long withdrawalDelayEpochs(long slotsPerEpoch) {
+        return Math.ceilDiv(WITHDRAWAL_DELAY_SLOTS, slotsPerEpoch);
+    }
     /** Activation delay (Ethereum MAX_SEED_LOOKAHEAD): a deposit becomes active
      *  this many epochs + 1 after it is registered. */
     public static final long MAX_SEED_LOOKAHEAD = 4;
@@ -122,7 +136,8 @@ public class StakeService {
         // (cannot attest) until the CURRENT CHAIN epoch reaches its activation
         // epoch. Same chain-derived domain on every node.
         if (stake == null || stake.isSlashed() || stake.getActivatedEpoch() < 0) return 0L;
-        if (stake.getActivatedEpoch() > SlotService.currentChainEpoch(store)) return 0L;
+        if (stake.getActivatedEpoch() > SlotService.currentChainEpoch(store, networkParameters.getSlotsPerEpoch()))
+            return 0L;
         return effectiveBalance(stake.getAmount()).longValue();
     }
 
@@ -147,7 +162,7 @@ public class StakeService {
             // confirmation.
             log.debug("Deposit block {} has no beacon parent, using current chain epoch: {}",
                     block.getHashAsString(), e.getMessage());
-            depositEpoch = SlotService.currentChainEpoch(store);
+            depositEpoch = SlotService.currentChainEpoch(store, networkParameters.getSlotsPerEpoch());
         }
         if (depositEpoch <= 0) {
             return 0L; // genesis bootstrap window — activate immediately
@@ -406,12 +421,13 @@ public class StakeService {
      * selection over the epoch's validator snapshot with the immutable mix —
      * the same inputs beacon validation uses.
      */
-    public static byte[] expectedProposerPubkey(long slot, BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = SlotService.selectionValidators(slot, store);
+    public static byte[] expectedProposerPubkey(long slot, BlockStoreInterface store, long slotsPerEpoch)
+            throws Exception {
+        List<StakeRecord> validators = SlotService.selectionValidators(slot, store, slotsPerEpoch);
         if (validators.isEmpty()) {
             return null;
         }
-        long mixEpoch = slot / 32 - 2;
+        long mixEpoch = slot / slotsPerEpoch - 2;
         byte[] mix = mixEpoch >= 0 ? store.getPosState("randao", "mixfinal_" + mixEpoch) : null;
         if (mix == null) {
             mix = sha256(String.valueOf(mixEpoch).getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -490,7 +506,7 @@ public class StakeService {
             if (sd == null || sd.getProposerSignature() == null) {
                 return;
             }
-            byte[] proposer = expectedProposerPubkey(sd.getSlot(), store);
+            byte[] proposer = expectedProposerPubkey(sd.getSlot(), store, networkParameters.getSlotsPerEpoch());
             if (proposer == null
                     || !PQScriptUtils.verifyPQ(proposer, sd.getProposerSignature(), sd.getMessageHash())) {
                 return; // not signed by the elected proposer — ignore
@@ -536,7 +552,7 @@ public class StakeService {
         if (sd1 == null || sd2 == null || sd1.getSlot() != sd2.getSlot()) {
             return;
         }
-        byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store);
+        byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store, networkParameters.getSlotsPerEpoch());
         if (proposer == null || !isProposalEquivocation(sd1, sd2, proposer)) {
             return;
         }
@@ -644,7 +660,7 @@ public class StakeService {
             if (sd1 == null || sd2 == null) {
                 return;
             }
-            byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store);
+            byte[] proposer = expectedProposerPubkey(sd1.getSlot(), store, networkParameters.getSlotsPerEpoch());
             if (proposer == null || !isProposalEquivocation(sd1, sd2, proposer)) {
                 return; // forged / unauthenticated proposal proof — ignore
             }
@@ -701,7 +717,8 @@ public class StakeService {
             if (data.get("slotData1") != null) {
                 net.bigtangle.core.SlotData sd1 = Json.jsonmapper().convertValue(data.get("slotData1"),
                         net.bigtangle.core.SlotData.class);
-                return sd1 != null ? expectedProposerPubkey(sd1.getSlot(), store) : null;
+                return sd1 != null ? expectedProposerPubkey(sd1.getSlot(), store,
+                        networkParameters.getSlotsPerEpoch()) : null;
             }
         } catch (Exception e) {
             return null;
@@ -740,12 +757,12 @@ public class StakeService {
         if (stake == null) {
             return;
         }
-        store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        store.updateStakeSlashing(pubkey, chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
         // The slashing block confirmed: its refund/reporter mints ride the
         // normal confirm lifecycle (restored even after a prior revert).
         confirmSlashingMints(block, store);
         log.info("Slash withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
-                Utils.HEX.encode(pubkey), chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+                Utils.HEX.encode(pubkey), chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
     }
 
     /**
@@ -830,11 +847,11 @@ public class StakeService {
         long chainEpoch = 0;
         TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
         if (tip != null) {
-            chainEpoch = tip.getChainLength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+            chainEpoch = tip.getChainLength() / networkParameters.getSlotsPerEpoch();
         }
-        store.updateStakeSlashing(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        store.updateStakeSlashing(pubkey, chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
         log.info("Validator slashed (flag only): pubkey={}, withdrawable at epoch={}",
-                Utils.HEX.encode(pubkey), chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+                Utils.HEX.encode(pubkey), chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
     }
 
     /** Marks the bonded deposit output as spent (burned/confiscated). Consensus-driven. */
@@ -1033,7 +1050,8 @@ public class StakeService {
     public BigInteger getTotalActiveStake(BlockStoreInterface store) throws Exception {
         // Active as of the CURRENT CHAIN epoch: validators that activated within
         // the delay window (activatedEpoch > currentChainEpoch) are excluded.
-        return store.getActiveStakeDeposits(SlotService.currentChainEpoch(store)).stream()
+        return store.getActiveStakeDeposits(
+                SlotService.currentChainEpoch(store, networkParameters.getSlotsPerEpoch())).stream()
                 .map(StakeService::effectiveBalance)
                 .reduce(BigInteger.ZERO, BigInteger::add);
     }
@@ -1112,7 +1130,7 @@ public class StakeService {
             if (ri == null) {
                 throw new IllegalStateException("Cannot derive chain epoch: parent reward info is unparseable");
             }
-            return ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+            return ri.getChainlength() / networkParameters.getSlotsPerEpoch();
         }
         if (parent.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
             return 0;
@@ -1177,9 +1195,9 @@ public class StakeService {
         // Always (re)derived from the confirming beacon (see
         // applySlashingConfirmed): a stale epoch from an unconfirmed beacon must
         // be overwritten on the next confirmation, never frozen.
-        store.updateStakeExit(pubkey, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+        store.updateStakeExit(pubkey, chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
         log.info("Exit withdrawable set at confirmation: pubkey={}, withdrawable at epoch={}",
-                pubkeyHex, chainEpoch + WITHDRAWAL_DELAY_EPOCHS);
+                pubkeyHex, chainEpoch + withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch()));
     }
 
     /** Reverts an EXIT block on reorg: the validator is no longer exiting. */
@@ -1277,7 +1295,7 @@ public class StakeService {
                 if (stakeBlock != null) {
                     try {
                         long depositEpoch = chainEpochOf(stakeBlock, store);
-                        if (currentEpoch - depositEpoch > WITHDRAWAL_DELAY_EPOCHS) {
+                        if (currentEpoch - depositEpoch > withdrawalDelayEpochs(networkParameters.getSlotsPerEpoch())) {
                             net.bigtangle.core.BlockEvaluation be = store.getBlockEvaluationsByhashs(stake.getBlockHash());
                             if (be == null || !be.isConfirmed()) {
                                 store.releaseStakeDeposit(stake.getPubkey());

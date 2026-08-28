@@ -35,8 +35,13 @@ package net.bigtangle.server.config;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+
+import jakarta.annotation.PostConstruct;
 
 import net.bigtangle.core.Block;
 import net.bigtangle.utils.OkHttp3Util;
@@ -44,6 +49,74 @@ import net.bigtangle.utils.OkHttp3Util;
 @Component
 @ConfigurationProperties(prefix = "server")
 public class ServerConfiguration {
+
+    private static final Logger logger = LoggerFactory.getLogger(ServerConfiguration.class);
+
+    /** Well-known development default DB password (must never run on Mainnet). */
+    private static final String DEFAULT_DB_PASSWORD = "test1234";
+    /** Well-known development default keystore password (must never run on Mainnet). */
+    private static final String DEFAULT_KEYSTORE_PASSWORD = "changeit";
+
+    /**
+     * API key guarding the sensitive PoS endpoints (stakeDeposit,
+     * activateValidator, processWithdrawal, setValidatorKey). When blank the
+     * endpoints are open (backwards-compatible test behavior); on Mainnet the
+     * key MUST be set — see {@link #warnOnInsecureMainnetDefaults()}.
+     */
+    private String apiKey;
+
+    @Value("${server.ssl.enabled:false}")
+    private boolean sslEnabled;
+
+    @Value("${server.ssl.key-store-password:changeit}")
+    private String keystorePassword;
+
+    @Value("${db.password:test1234}")
+    private String dbPassword;
+
+    /**
+     * Loud startup warnings for insecure settings on Mainnet. Warnings only —
+     * a legacy deployment may intentionally run without TLS behind a trusted
+     * reverse proxy — but every one of these is a launch blocker for a public
+     * node.
+     */
+    @PostConstruct
+    public void warnOnInsecureMainnetDefaults() {
+        if (net == null || !net.equalsIgnoreCase("Mainnet")) {
+            return;
+        }
+        if (apiKey == null || apiKey.isBlank()) {
+            logger.warn("SECURITY: server.apiKey is not set on Mainnet — stakeDeposit/"
+                    + "activateValidator/processWithdrawal/setValidatorKey are reachable "
+                    + "without an API key. Set server.apiKey and send it in the X-Api-Key header.");
+        }
+        if (Boolean.TRUE.equals(fundEnabled)) {
+            logger.warn("SECURITY: fundEnabled=true on Mainnet — fundAddresses mints confirmed "
+                    + "UTXOs. Disable before any public exposure.");
+        }
+        if (!sslEnabled) {
+            logger.warn("SECURITY: TLS is disabled on Mainnet (server.ssl.enabled=false) — "
+                    + "requests including the X-Api-Key travel in cleartext. Enable SSL or front "
+                    + "the API with a TLS-terminating proxy.");
+        }
+        if (DEFAULT_DB_PASSWORD.equals(dbPassword)) {
+            logger.warn("SECURITY: the PostgreSQL password is the well-known default '{}' — "
+                    + "set db.password to a deployment-specific value.", DEFAULT_DB_PASSWORD);
+        }
+        if (sslEnabled && DEFAULT_KEYSTORE_PASSWORD.equals(keystorePassword)) {
+            logger.warn("SECURITY: the TLS keystore uses the well-known default password '{}' — "
+                    + "set server.ssl.key-store-password (KEYSTOREPW).", DEFAULT_KEYSTORE_PASSWORD);
+        }
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
+
     /** 
      * Identifier for this server when making requests to other nodes.
      * Used in peer-to-peer communication and seed synchronization.

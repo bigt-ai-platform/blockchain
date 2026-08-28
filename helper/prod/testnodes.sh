@@ -199,7 +199,7 @@ SERVER_GOSSIP=$((9421 + i))
 DB_NAME=bt4_${i}
 DB_PORT=${PGPORT}
 KAFKA_BOOTSTRAP=${KAFKA}
-JAVA_OPTS_SERVER="-Xmx${XMX} -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
+JAVA_OPTS_SERVER="-Xmx${XMX} -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}${MEMPOOL_MAX_TX:+ -Dserver.mempoolMaxTx=${MEMPOOL_MAX_TX}}${BATCH_TX_PER_BLOCK:+ -Dbatch.txPerBlock=${BATCH_TX_PER_BLOCK}}"
 EOF
     chmod 600 "${WORKDIR}/node-${i}/validator.env"
 }

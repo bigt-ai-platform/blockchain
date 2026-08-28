@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - ordermatch
+      - pos
   workflow_dispatch:
 
 jobs:

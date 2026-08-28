@@ -2,6 +2,11 @@
 
 This document describes how to set up Cloudflare Tunnel to expose your BigTangle server via `test.bigtangle.org`.
 
+> **SECURITY:** the `credentials.json` committed in git history was leaked. Rotate
+> the tunnel first (`cloudflared tunnel delete` + `create`), then copy the NEW
+> credentials file to `./credentials.json` (gitignored) and update the tunnel id
+> in `cloudflared-config.yml`.
+
 ## Prerequisites
 
 - Cloudflare account with domain `bigtangle.org` managed
@@ -77,7 +82,7 @@ curl http://test.bigtangle.org/getChainHeight
 Set the test environment variable:
 
 ```bash
-cd /home/jcui/git/bigtangle-ts
+cd /path/to/bigtangle-ts
 INCLUDE_INTEGRATION_TESTS=1 TEST_CONTEXT_ROOT=http://test.bigtangle.org/ npx vitest run test/testintegration/RemoteFromAddressTests.test.ts
 ```
 
@@ -117,8 +122,6 @@ docker compose -f docker-compose-tunnel.yml restart
 The tunnel routes:
 
 - `test.bigtangle.org` → BigTangle server (port 18089)
-- `test-minio.bigtangle.org` → MinIO console (port 9001)
-- `test-minio-api.bigtangle.org` → MinIO API (port 9000)
 
 Edit `cloudflared-config.yml` to modify routing.
 

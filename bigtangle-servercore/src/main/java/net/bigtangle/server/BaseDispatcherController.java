@@ -201,6 +201,10 @@ public abstract class BaseDispatcherController implements DisposableBean {
 			if (!checkReady(httpServletResponse, watch)) {
 				return;
 			}
+			if (isSensitivePosCommand(reqCmd0000)
+					&& !checkApiKey(httprequest, httpServletResponse, watch, reqCmd)) {
+				return;
+			}
 			if (handleLayerSpecific(reqCmd0000, bodyByte, httpServletResponse, watch, store, reqCmd)) {
 				return;
 			}
@@ -789,6 +793,36 @@ public abstract class BaseDispatcherController implements DisposableBean {
 		} else {
 			return true;
 		}
+	}
+
+	/**
+	 * Commands that mutate stake/validator state. When {@code server.apiKey}
+	 * is configured these require the key in the {@code X-Api-Key} header; an
+	 * unauthenticated caller could otherwise stake, activate or withdraw on a
+	 * misconfigured node.
+	 */
+	private static final Set<ReqCmd> SENSITIVE_POS_COMMANDS = Set.of(
+			ReqCmd.stakeDeposit, ReqCmd.activateValidator, ReqCmd.processWithdrawal, ReqCmd.setValidatorKey);
+
+	private boolean isSensitivePosCommand(ReqCmd reqCmd) {
+		return SENSITIVE_POS_COMMANDS.contains(reqCmd);
+	}
+
+	private boolean checkApiKey(HttpServletRequest httprequest, HttpServletResponse httpServletResponse,
+			Stopwatch watch, String reqCmd) throws Exception {
+		String configured = serverConfiguration.getApiKey();
+		if (configured == null || configured.isBlank()) {
+			return true;
+		}
+		String provided = httprequest.getHeader("X-Api-Key");
+		if (provided != null && java.security.MessageDigest.isEqual(
+				configured.getBytes(StandardCharsets.UTF_8), provided.getBytes(StandardCharsets.UTF_8))) {
+			return true;
+		}
+		AbstractResponse resp = ErrorResponse.create(403);
+		resp.setMessage("API key required for " + reqCmd);
+		this.outPrintJSONString(httpServletResponse, resp, watch, reqCmd);
+		return false;
 	}
 
 	public boolean checkAuth(HttpServletRequest httprequest,

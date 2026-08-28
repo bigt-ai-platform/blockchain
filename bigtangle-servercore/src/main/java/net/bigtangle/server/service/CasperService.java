@@ -412,7 +412,7 @@ public class CasperService {
      * yet reached the boundary (the genesis checkpoint is the root of trust).
      */
     public Sha256Hash epochBoundaryHash(long epoch, BlockStoreInterface store) {
-        long boundaryChainlength = epoch * SlotService.SLOTS_PER_EPOCH;
+        long boundaryChainlength = epoch * networkParameters.getSlotsPerEpoch();
         try {
             TXReward tip = cacheBlockService.getMaxConfirmedReward(store);
             if (tip == null) {
@@ -590,7 +590,7 @@ public class CasperService {
     public void processSlot(long slot, Sha256Hash beaconHash,
             List<AttestationData> attestations, BlockStoreInterface store) throws Exception {
         if (beaconHash != null) {
-            ensureCheckpoint(slot / 32, store);
+            ensureCheckpoint(networkParameters.getEpochForSlot(slot), store);
         }
         for (AttestationData att : attestations) {
             processVote(att, store);
@@ -624,7 +624,7 @@ public class CasperService {
         // epochs. The TARGET epoch may legitimately be older than the slot's
         // epoch (a late vote still counts toward its target, like Ethereum's
         // attestation inclusion window).
-        if (att.getEpoch() != att.getSlot() / 32) {
+        if (att.getEpoch() != networkParameters.getEpochForSlot(att.getSlot())) {
             log.warn("Rejecting attestation with inconsistent epoch from pubkey={} slot={} epoch={}",
                     vkey, att.getSlot(), att.getEpoch());
             return;
@@ -632,7 +632,8 @@ public class CasperService {
         // The wall epoch uses the bounded clock-skew upper bound: a node whose
         // clock is behind by up to maxClockSkewMs must not reject attestations
         // for the REAL current epoch as "far future".
-        long wallEpoch = SlotService.epochAt(System.currentTimeMillis() + maxClockSkewMs(), slotIntervalMs);
+        long wallEpoch = SlotService.epochAt(System.currentTimeMillis() + maxClockSkewMs(), slotIntervalMs,
+                networkParameters.getSlotsPerEpoch());
         if (att.getTargetEpoch() > wallEpoch + 1) {
             log.warn("Rejecting far-future attestation from pubkey={} slot={} (wall epoch {})",
                     vkey, att.getSlot(), wallEpoch);
@@ -643,7 +644,8 @@ public class CasperService {
         // they come from validators whose justification state is stale (mass
         // restart / catch-up) and can never contribute to real quorum — but
         // silently counting them hides the stall. Visible + excluded.
-        long chainEpochNow = net.bigtangle.server.service.SlotService.currentChainEpoch(store);
+        long chainEpochNow = net.bigtangle.server.service.SlotService.currentChainEpoch(store,
+                networkParameters.getSlotsPerEpoch());
         if (att.getTargetEpoch() < chainEpochNow - ATTEST_MAX_STALE_EPOCHS) {
             log.warn("Rejecting stale-epoch attestation from pubkey={} slot={} target={} (chain epoch {})",
                     vkey, att.getSlot(), att.getTargetEpoch(), chainEpochNow);
@@ -930,8 +932,21 @@ public class CasperService {
      * Bouncing-attack defense (Ethereum): a justified checkpoint may only switch
      * to a competing (non-descendant) chain during the first this-many slots of
      * an epoch; afterwards it must descend from the current justified checkpoint.
+     * Canonical value: 8 slots = 25 % of a 32-slot epoch. DERIVED per network
+     * ({@link #safeSlotsToUpdateJustified(long)}) so shorter epochs keep the
+     * same fraction of the epoch open for a switch — with a hardcoded slot
+     * count, slotsPerEpoch &lt; 8 would leave the window permanently open and
+     * silently disable the defense.
      */
     public static final long SAFE_SLOTS_TO_UPDATE_JUSTIFIED = 8;
+
+    /** The epoch length every slot-normalized constant is defined against. */
+    public static final long CANONICAL_SLOTS_PER_EPOCH = 32L;
+
+    /** Per-network switch window: 25 % of an epoch, at least one slot. */
+    public static long safeSlotsToUpdateJustified(long slotsPerEpoch) {
+        return Math.max(1, slotsPerEpoch / 4);
+    }
 
     /**
      * Chain-read lookback (slots) for on-chain embedded attestations: 10 epochs
@@ -939,20 +954,41 @@ public class CasperService {
      * longer than the reward-chain horizon — the attestation read needs to reach
      * further back than {@code CHAINLENGTH_CUTOFF}.
      */
-    public static final int ATTESTATION_LOOKBACK_SLOTS = 320;
+    /**
+     * Attestation inclusion lookback, in EPOCHS (10 at 32-slot epochs = 320
+     * slots). Slots are derived per network ({@code lookbackEpochs ×
+     * slotsPerEpoch}) so shorter-epoch networks keep the same wall-history
+     * window semantics.
+     */
+    public static final int ATTESTATION_LOOKBACK_EPOCHS = 10;
 
     /**
      * The inactivity leak (Ethereum): when the chain fails to finalize for more
-     * than this many epochs, validators that stopped voting have their effective
-     * weight drained so the remaining online stake regains 2/3 and finality
-     * resumes. The leak is a pure function of CHAIN state (on-chain embedded
-     * attestations + finality delay), never the node's local vote view.
+     * than the derived threshold, validators that stopped voting have their
+     * effective weight drained so the remaining online stake regains 2/3 and
+     * finality resumes. The leak is a pure function of CHAIN state (on-chain
+     * embedded attestations + finality delay), never the node's local vote
+     * view.
+     *
+     * <p>Epoch-length safe: the tolerance is canonicalized in SLOTS
+     * ({@link #INACTIVITY_PENALTY_THRESHOLD_SLOTS} = 4 × 32 epochs), so the
+     * wall-time grace period does not shrink when epochs do. At 4-slot epochs
+     * a hardcoded 4-epoch threshold would start draining offline stake after
+     * ~96 s of stall — an outage punishing validators instead of the attacker.
      */
-    public static final long INACTIVITY_PENALTY_THRESHOLD_EPOCHS = 4;
+    public static final long INACTIVITY_PENALTY_THRESHOLD_SLOTS = 128L;
     /** Quadratic-drain divisor for the leak (Ethereum's inactivity score analog). */
     public static final long INACTIVITY_LEAK_DIVISOR = 64;
     /** pos_state service namespace for the real inactivity leak bookkeeping. */
     public static final String LEAK_SERVICE = "leak";
+
+    /**
+     * Per-network leak tolerance in epochs, preserving the canonical 128-slot
+     * (≈ 25.6 min at 12 s) grace: 32-slot epochs → 4, 8-slot → 16, 4-slot → 32.
+     */
+    public static long inactivityPenaltyThresholdEpochs(long slotsPerEpoch) {
+        return Math.max(4, Math.ceilDiv(INACTIVITY_PENALTY_THRESHOLD_SLOTS, slotsPerEpoch));
+    }
 
     /**
      * The 2/3 justification threshold over the TOTAL active stake — Ethereum's
@@ -979,7 +1015,8 @@ public class CasperService {
         // window already closed and refuse a switch the rest of the network
         // allows — fail-safe on the permissive side.
         long earliestNow = System.currentTimeMillis() - maxClockSkewMs();
-        if (SlotService.currentSlotInEpoch(earliestNow, slotIntervalMs) < SAFE_SLOTS_TO_UPDATE_JUSTIFIED) {
+        if (SlotService.currentSlotInEpoch(earliestNow, slotIntervalMs, networkParameters.getSlotsPerEpoch())
+                < safeSlotsToUpdateJustified(networkParameters.getSlotsPerEpoch())) {
             return true;
         }
         try {
@@ -1037,17 +1074,22 @@ public class CasperService {
             if (store.getPosState(LEAK_SERVICE, appliedKey) != null) {
                 return;
             }
-            Set<String> voters = votersForEpoch(epoch, store);
+            Set<String> voters = votersForEpoch(epoch, store, networkParameters.getSlotsPerEpoch());
             if (voters == null) {
                 return; // pre-fork — no chain-authoritative voter set
             }
             Checkpoint fin = getLastFinalizedCheckpoint(store);
             long delay = fin != null ? epoch - fin.epoch : 0;
-            if (delay <= INACTIVITY_PENALTY_THRESHOLD_EPOCHS) {
+            long slotsPerEpoch = networkParameters.getSlotsPerEpoch();
+            if (delay <= inactivityPenaltyThresholdEpochs(slotsPerEpoch)) {
                 store.savePosState(LEAK_SERVICE, appliedKey, new byte[] { 1 });
                 return; // no leak while finality is healthy
             }
-            long div = INACTIVITY_LEAK_DIVISOR + delay * delay;
+            // Normalize the delay to canonical 32-slot epochs so the quadratic
+            // drain keeps its wall-time shape at any epoch length (a hardcoded
+            // delay^2 would drain 4× faster per wall-minute at 8-slot epochs).
+            long delayCanonical = delay * slotsPerEpoch / CANONICAL_SLOTS_PER_EPOCH;
+            long div = INACTIVITY_LEAK_DIVISOR + delayCanonical * delayCanonical;
             for (StakeRecord v : store.getActiveStakeDeposits(epoch)) {
                 if (voters.contains(Utils.HEX.encode(v.getPubkey()))) {
                     continue;
@@ -1116,12 +1158,12 @@ public class CasperService {
      *  which callers treat as "reward all active validators". Deterministic
      *  post-fork — the basis for per-attestation rewards.
      */
-    public static Set<String> votersForEpoch(long epoch, BlockStoreInterface store) {
+    public static Set<String> votersForEpoch(long epoch, BlockStoreInterface store, long slotsPerEpoch) {
         if (!onChainAttestationActive(store)) {
             return null;
         }
         Set<String> voters = new HashSet<>();
-        for (AttestationData att : includedAttestations(store).values()) {
+        for (AttestationData att : includedAttestations(store, slotsPerEpoch).values()) {
             if (att.getTargetEpoch() == epoch) {
                 voters.add(Utils.HEX.encode(att.getValidatorPubkey()));
             }
@@ -1162,7 +1204,7 @@ public class CasperService {
         // must not repeat per vote sum (memoized per tip — see
         // {@link #includedAttestations}).
         Map<String, AttestationData> included = onChainAttestationActive(store)
-                ? includedAttestations(store) : null;
+                ? includedAttestations(store, networkParameters.getSlotsPerEpoch()) : null;
 
         BigInteger totalStake = leakedTotalStake(store, epoch);
         if (totalStake.compareTo(BigInteger.ZERO) <= 0) {
@@ -1285,7 +1327,8 @@ public class CasperService {
     private BigInteger votedStakeFor(Checkpoint target, Sha256Hash requiredSource,
             BlockStoreInterface store, Map<String, AttestationData> included) throws Exception {
         if (onChainAttestationActive(store)) {
-            Map<String, AttestationData> inc = included != null ? included : includedAttestations(store);
+            Map<String, AttestationData> inc = included != null ? included
+                    : includedAttestations(store, networkParameters.getSlotsPerEpoch());
             return votedStakeFromChain(target, requiredSource, store, inc);
         }
         return votedStakeFromGossip(target, requiredSource, store);
@@ -1299,30 +1342,32 @@ public class CasperService {
     // the ATTESTATION_LOOKBACK_SLOTS block walk independently.
     private static final Object INCLUDED_CACHE_LOCK = new Object();
     private static volatile Sha256Hash includedCacheTip;
+    private static volatile long includedCacheLookback;
     private static volatile Map<String, AttestationData> includedCache = java.util.Collections.emptyMap();
 
     /**
      * {@link #collectIncludedAttestations} memoized per confirmed tip. Racy
      * recomputation is harmless (pure function), so reads stay lock-free.
      */
-    static Map<String, AttestationData> includedAttestations(BlockStoreInterface store) {
+    static Map<String, AttestationData> includedAttestations(BlockStoreInterface store, long slotsPerEpoch) {
         Sha256Hash tip;
         try {
             TXReward t = store.getMaxConfirmedReward();
             tip = t != null ? t.getBlockHash() : null;
         } catch (Exception e) {
-            return collectIncludedAttestations(store);
+            return collectIncludedAttestations(store, slotsPerEpoch);
         }
         if (tip == null) {
             return new HashMap<>();
         }
         Map<String, AttestationData> cached = includedCache;
-        if (tip.equals(includedCacheTip) && cached != null) {
+        if (tip.equals(includedCacheTip) && includedCacheLookback == slotsPerEpoch && cached != null) {
             return cached;
         }
-        Map<String, AttestationData> fresh = collectIncludedAttestations(store);
+        Map<String, AttestationData> fresh = collectIncludedAttestations(store, slotsPerEpoch);
         synchronized (INCLUDED_CACHE_LOCK) {
             includedCacheTip = tip;
+            includedCacheLookback = slotsPerEpoch;
             includedCache = fresh;
         }
         return fresh;
@@ -1334,7 +1379,7 @@ public class CasperService {
      * deterministic inclusion set every node derives identically from the
      * confirmed chain — the source of truth for justification post-fork.
      */
-    static Map<String, AttestationData> collectIncludedAttestations(BlockStoreInterface store) {
+    static Map<String, AttestationData> collectIncludedAttestations(BlockStoreInterface store, long slotsPerEpoch) {
         Map<String, AttestationData> latest = new HashMap<>();
         try {
             TXReward tip = store.getMaxConfirmedReward();
@@ -1345,7 +1390,7 @@ public class CasperService {
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
-                    && count < ATTESTATION_LOOKBACK_SLOTS) {
+                    && count < ATTESTATION_LOOKBACK_EPOCHS * slotsPerEpoch) {
                 count++;
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {

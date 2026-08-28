@@ -1,19 +1,13 @@
+# Cloudflared ingress routing for the BigTangle test tunnel.
+# NOTE: the tunnel credentials committed earlier were LEAKED (see git history).
+# Rotate the tunnel (cloudflared tunnel create) and replace both the tunnel id
+# below and credentials.json before using this file.
 tunnel: bd09841e-d40c-4bc1-a16d-c16c201e3406
 credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: test.bigtangle.org
     service: http://test-bigtangle:18089
-    originRequest:
-      noTLSVerify: true
-
-  - hostname: test-minio.bigtangle.org
-    service: http://minio:9001
-    originRequest:
-      noTLSVerify: true
-
-  - hostname: test-minio-api.bigtangle.org
-    service: http://minio:9000
     originRequest:
       noTLSVerify: true
 

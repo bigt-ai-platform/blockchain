@@ -200,8 +200,30 @@ public abstract class NetworkParameters {
 	// 10^17 BIG total supply (10^(11 + 6 decimals))
 	public static BigInteger BigtangleCoinTotal = BigInteger.valueOf(LongMath.pow(10, 11 + BIGTANGLE_DECIMAL));
 
-	// PoS epoch configuration
-	public static final long SLOTS_PER_EPOCH = 32L;
+	// PoS epoch configuration. Slots per epoch is CONSENSUS-relevant: every
+	// node of a network must derive identical epoch boundaries (attestation
+	// sanity verifies `epoch == slot / slotsPerEpoch`), so the value lives in
+	// the per-network parameters, NOT in a node-local property. Default 32;
+	// networks that rolled out shorter epochs (faster finality) override it.
+	private long slotsPerEpoch = 32L;
+
+	public long getSlotsPerEpoch() {
+		return slotsPerEpoch;
+	}
+
+	public void setSlotsPerEpoch(long slotsPerEpoch) {
+		this.slotsPerEpoch = slotsPerEpoch;
+	}
+
+	/** The epoch containing {@code slot} (slot-derived). */
+	public long getEpochForSlot(long slot) {
+		return slot / slotsPerEpoch;
+	}
+
+	/** The slot's position within its epoch (0 = epoch-start slot). */
+	public long getSlotInEpoch(long slot) {
+		return slot % slotsPerEpoch;
+	}
 
 	// Reward-chainlength at which every beacon MUST carry SlotData with a valid
 	// proposer signature + RANDAO reveal. Below this height legacy beacons

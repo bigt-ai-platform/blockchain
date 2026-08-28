@@ -35,6 +35,14 @@ public class RandaoService {
     @Autowired
     private StoreService storeService;
 
+    @Autowired
+    private net.bigtangle.params.NetworkParameters networkParameters;
+
+    private long slotsPerEpoch() {
+        return networkParameters != null ? networkParameters.getSlotsPerEpoch()
+                : net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH_DEFAULT;
+    }
+
     @PostConstruct
     public void restoreState() {
         try {
@@ -189,7 +197,7 @@ public class RandaoService {
      * deterministic SHA-256(epoch) seed is used — never the live accumulator.
      */
     public byte[] getSelectionMix(long slot, BlockStoreInterface store) {
-        long epoch = slot / 32;
+        long epoch = slot / slotsPerEpoch();
         long sourceEpoch = epoch - 2;
         if (sourceEpoch < 0) {
             return sha256(String.valueOf(sourceEpoch).getBytes());
@@ -232,7 +240,7 @@ public class RandaoService {
     }
 
     public byte[] getRandaoMix(long slot) {
-        long epoch = slot / 32;
+        long epoch = slot / slotsPerEpoch();
         return randaoMixes.getOrDefault(epoch, sha256(String.valueOf(epoch).getBytes()));
     }
 
@@ -255,7 +263,7 @@ public class RandaoService {
             return;
         }
         byte[] folded = sha256(reveal);
-        long epoch = slot / 32;
+        long epoch = slot / slotsPerEpoch();
         byte[] epochSeed = sha256(String.valueOf(epoch).getBytes());
         if (store != null) {
             // Fold against the PENDING value in the batch store (which reflects

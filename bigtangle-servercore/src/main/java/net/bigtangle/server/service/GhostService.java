@@ -291,10 +291,20 @@ public class GhostService {
      * {@link net.bigtangle.server.service.CasperService#ATTESTATION_LOOKBACK_SLOTS}
      * so a vote deep on a long branch still counts toward every ancestor.
      */
+    /**
+     * Attestation lookback window in SLOTS for this network: the epoch-based
+     * lookback ({@link net.bigtangle.server.service.CasperService#ATTESTATION_LOOKBACK_EPOCHS})
+     * converted with the network's slots-per-epoch.
+     */
+    private long attestationLookbackSlots() {
+        return net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_EPOCHS
+                * networkParameters.getSlotsPerEpoch();
+    }
+
     private long subtreeWeight(Sha256Hash hash, Map<Sha256Hash, Long> weights,
             Map<Sha256Hash, Long> memo, Set<Sha256Hash> inProgress, BlockStoreInterface store, int depth)
             throws Exception {
-        if (hash == null || depth >= net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+        if (hash == null || depth >= attestationLookbackSlots()) {
             return 0;
         }
         Long cached = memo.get(hash);
@@ -390,7 +400,7 @@ public class GhostService {
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
-                    && count < net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+                    && count < attestationLookbackSlots()) {
                 count++;
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {
@@ -509,8 +519,7 @@ public class GhostService {
         }
         // Evict entries that fell out of the lookback window so memory stays
         // bounded and ancient votes cannot resurrect an abandoned branch.
-        long cutoff = observedMaxSlot.get()
-                - net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS;
+        long cutoff = observedMaxSlot.get() - attestationLookbackSlots();
         if (cutoff > 0) {
             observedLatestVotes.values().removeIf(a -> a.getSlot() < cutoff);
         }
@@ -631,7 +640,7 @@ public class GhostService {
             Set<Sha256Hash> visited = new HashSet<>();
             int count = 0;
             while (cursor != null && visited.add(cursor)
-                    && count < net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+                    && count < attestationLookbackSlots()) {
                 count++;
                 Block b = store.get(cursor);
                 if (b == null || b.getBlockType() == BlockType.BLOCKTYPE_INITIAL) {

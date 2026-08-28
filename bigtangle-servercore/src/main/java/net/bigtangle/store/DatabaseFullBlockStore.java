@@ -3578,7 +3578,8 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
  		try (PreparedStatement s = getConnection()
  				.prepareStatement("SELECT * FROM stake_deposits WHERE activated_epoch >= 0 "
  					+ "AND activated_epoch <= ? "
- 					+ "AND slashed = FALSE AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0) "
+ 					+ "AND slashed = FALSE AND exiting = FALSE "
+ 					+ "AND (withdrawable_epoch < 0 OR withdrawable_epoch > 0) "
  					+ "ORDER BY pubkey ASC")) {
  			s.setLong(1, currentEpoch);
  			try (ResultSet rs = s.executeQuery()) {

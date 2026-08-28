@@ -109,14 +109,24 @@ Each validator needs a PQ seed (ML-DSA-87). The seed is the private key
 ```
 POS_VALIDATOR_KEY=<64 or 128 hex>
 VALIDATOR_PUBKEY=<hex of the prefixed key bundle>
+API_KEY=<openssl rand -hex 32>
 ```
 
-Keep `POS_VALIDATOR_KEY` secret — put it in a gitignored `validator.env`:
+Keep `POS_VALIDATOR_KEY` and `API_KEY` secret — put them in a gitignored
+`validator.env`:
 
 ```bash
 POS_VALIDATOR_KEY=...
 VALIDATOR_PUBKEY=...
+API_KEY=...
 ```
+
+`POS_VALIDATOR_KEY` is passed to the process as the `POS_VALIDATOR_KEY`
+environment variable (NOT a CLI arg, so it never appears in `ps` output);
+`API_KEY` is passed as `SERVER_APIKEY`. When `server.apiKey` is set the
+sensitive PoS endpoints (`stakeDeposit`, `activateValidator`,
+`processWithdrawal`, `setValidatorKey`) require the key in the `X-Api-Key`
+header, and the server logs a security warning on Mainnet when it is unset.
 
 ## 4. Start the first node
 
@@ -127,19 +137,21 @@ java -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   -jar layer0-server/target/layer0-server-0.6.0-exec.jar \
   --server.port=8081 --server.net=Mainnet --server.chain=L0 \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 \
+  --db.username=root --db.password=<PROD_DB_PASSWORD> \
   --server.createtable=true \
   --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
   --server.runKafkaStream=false \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=true \
+  --pos.dutyEnabled=true --server.apiKey=<API_KEY> \
   --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
+# with the validator seed supplied as an env var, not a CLI arg:
+POS_VALIDATOR_KEY=<POS_VALIDATOR_KEY_0> java -Xmx5028m ...
 ```
 
 (`--server.chain=L0` runs the shared Layer-0 chain; leave it unset for the
 network default. `--server.net=Mainnet` selects the mainnet `NetworkParameters`,
-whose genesis is fixed at chain launch. The server must set
-`--pos.validatorKey` so `stakeDeposit` can sign, and `--pos.dutyEnabled=true`
+whose genesis is fixed at chain launch. The server must have
+`POS_VALIDATOR_KEY` set so `stakeDeposit` can sign, and `--pos.dutyEnabled=true`
 so it proposes/attests — validator duties run on the `layer0-server` itself
 in PoS mode.)
 
@@ -157,12 +169,15 @@ curl -X POST http://127.0.0.1:8081/fundAddresses -H 'Content-Type: application/j
 
 # 2) Stake (amount must be >= 32,000,000 satoshis = 32 BIG). No private key is
 #    sent over HTTP: the STAKE block is signed with the server's configured
-#    --pos.validatorKey, which must match <VALIDATOR_PUBKEY_i>.
+#    POS_VALIDATOR_KEY, which must match <VALIDATOR_PUBKEY_i>. The endpoint
+#    requires the X-Api-Key header when server.apiKey is set (Mainnet: always).
 curl -X POST http://127.0.0.1:8081/stakeDeposit -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <API_KEY>' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","amount":"32000000"}'
 
 # 3) Activate (join the proposer set at the given epoch)
 curl -X POST http://127.0.0.1:8081/activateValidator -H 'Content-Type: application/json' \
+  -H 'X-Api-Key: <API_KEY>' \
   -d '{"pubkey":"<VALIDATOR_PUBKEY_i>","epoch":0}'
 ```
 
@@ -185,10 +200,10 @@ Example for node 1 (ports derive from node 0: server 8081+1, peer/gossip
 30307/30308/9095 + 2·1, etc. — see `helper/prod/validators/`):
 
 ```bash
-java ... -jar layer0-server-0.6.0-exec.jar \
+POS_VALIDATOR_KEY=<POS_VALIDATOR_KEY_1> java ... -jar layer0-server-0.6.0-exec.jar \
   --server.port=8082 ... --db.dbName=layer0_1 \
   --server.requester=http://<node0>:8081 --server.createtable=true \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_1> --pos.dutyEnabled=true \
+  --pos.dutyEnabled=true --server.apiKey=<API_KEY> \
   --peer.udpPort=30309 --peer.tcpPort=30310 --gossip.port=9097 \
   --pos.gossipPeers="<node0 host>:8081,<node1 host>:8082"
 ```
@@ -206,32 +221,37 @@ the host. Example for node 0:
 
 ```bash
 docker run -d --name l0-pg \
-  -e POSTGRES_USER=root -e POSTGRES_PASSWORD=test1234 -e POSTGRES_DB=layer0 \
+  -e POSTGRES_USER=root -e POSTGRES_PASSWORD=<PROD_DB_PASSWORD> -e POSTGRES_DB=layer0 \
   -p 5432:5432 -v /data/l0-pg:/var/lib/postgresql/data postgres:16
 
 docker run -d --name l0-server --network host \
+  -e POS_VALIDATOR_KEY=<POS_VALIDATOR_KEY_0> \
+  -e SERVER_APIKEY=<API_KEY> \
+  -e HEALTHCHECK_PORT=8081 \
   --entrypoint java ghcr.io/bigt-ai-platform/layer0-server \
   -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED \
   --add-exports java.base/java.lang=ALL-UNNAMED -jar /app/app.jar \
   --server.port=8081 --server.net=Mainnet --server.chain=L0 \
   --db.hostname=localhost --db.port=5432 --db.dbName=layer0 \
-  --db.username=root --db.password=test1234 \
+  --db.username=root --db.password=<PROD_DB_PASSWORD> \
   --server.createtable=true \
   --service.schedule.chainlength=true --service.schedule.blockbatch=true \
   --service.schedule.microbatch=true --service.schedule.initsync=true \
   --server.runKafkaStream=false \
-  --pos.validatorKey=<POS_VALIDATOR_KEY_0> --pos.dutyEnabled=true \
+  --pos.dutyEnabled=true \
   --peer.udpPort=30307 --peer.tcpPort=30308 --gossip.port=9095
 ```
 
 Repeat for the remaining nodes with unique ports/DBs and `--pos.gossipPeers`.
 The per-validator `helper/prod/validators/` scripts automate exactly this
-(container names `node-<i>-server`, `--network host`, CLI flags).
+(container names `node-<i>-server`, `--network host`, env-var secrets).
 
 The image entrypoint is `java ... -jar app.jar`, so configuration can also be
 passed as environment variables via Spring relaxed binding (e.g. `SERVER_PORT`,
-`SERVER_REQUESTER`, `DB_DBNAME`, `SERVICE_SCHEDULE_CHAINLENGTH`). The CLI flags
-above mirror §4 and are the recommended form.
+`SERVER_REQUESTER`, `DB_DBNAME`, `SERVICE_SCHEDULE_CHAINLENGTH`). Secrets
+(`POS_VALIDATOR_KEY`, `SERVER_APIKEY`, `DB_PASSWORD`) must be env vars — never
+CLI flags. The CLI flags above mirror §4 and are the recommended form for
+non-secret settings.
 
 ## 8. Config reference
 
@@ -242,6 +262,9 @@ above mirror §4 and are the recommended form.
 | `server.chain` | Chain id; `L0` for the shared Layer-0 chain | `L0` |
 | `server.requester` | Peer node URL for DAG sync | `https://peer.bigtangle.org:8088` |
 | `server.createtable` | Auto-create schema (`true` server only, first start) | `false` |
+| `server.apiKey` | API key guarding the sensitive PoS endpoints (`stakeDeposit`/`activateValidator`/`processWithdrawal`/`setValidatorKey`); send via `X-Api-Key` header. **Required on Mainnet** (env: `SERVER_APIKEY`) | `<openssl rand -hex 32>` |
+| `server.corsAllowedOrigins` | Comma-separated CORS origin allow-list (default: CORS disabled) | `https://app.bigtangle.org` |
+| `HEALTHCHECK_PORT` (env) | Port the container healthcheck probes (must match `server.port`) | `8081` |
 | `db.hostname` / `db.port` / `db.dbName` / `db.username` / `db.password`  | PostgreSQL connection | `localhost / 5432 / layer0 / root / … / postgresql` |
 | `service.schedule.chainlength` / `service.schedule.syncrate` | Chain-length update scheduler + sync rate | `true / 50000` |
 | `service.schedule.blockbatch` / `service.schedule.blockbatchrate` | Batch block service + rate | `true / 50000` |
@@ -250,12 +273,12 @@ above mirror §4 and are the recommended form.
 | `service.schedule.microbatch` | Micro-batch service | `true` |
 | `server.runKafkaStream` | Kafka stream processing (unused in this deployment; leave off) | `false` |
 | `server.fundEnabled` | Enable the coin-minting `fundAddresses` endpoint (**test/bootstrap only**; must stay `false` on Mainnet) | `false` |
-| `pos.validatorKey` | Validator private seed (64 or 128 hex) | `…` |
+| `POS_VALIDATOR_KEY` (env) | Validator private seed (64 or 128 hex). Env var only — never a CLI arg | `…` |
 | `pos.dutyEnabled` | This process proposes/attests (validator duties run on `layer0-server`) | `true` |
 | `pos.slotIntervalMs` | Slot duration | `12000` |
 | `pos.gossipPeers` | Comma-separated `host:port` attestation mesh | `10.0.0.1:8081,10.0.0.2:8081` |
 | `peer.udpPort` / `peer.tcpPort` / `gossip.port` | P2P gossip ports (unique per node) | `30307 / 30308 / 9095` |
-| `SSL` / `KEYSTORE` / `KEYSTOREPW` / `KEYSTORETYPE` | TLS (PKCS12) | `true / /app/ca.pkcs12 / changeit / PKCS12` |
+| `SSL` / `KEYSTORE` / `KEYSTOREPW` / `KEYSTORETYPE` | TLS (PKCS12; use a deployment-specific keystore generated with `helper/prod/generate_keystore.sh`) | `true / /app/ca.pkcs12 / <generated pw> / PKCS12` |
 
 ## 9. Verify
 
@@ -272,15 +295,23 @@ docker logs -f l0-server
 
 ## Security notes
 
-- `POS_VALIDATOR_KEY` is a private seed. Keep it in a gitignored `validator.env`,
-  never log it, and never commit it.
+- `POS_VALIDATOR_KEY` is a private seed and `server.apiKey` guards the PoS
+  endpoints. Keep both in a gitignored `validator.env`, never log them, and
+  never commit them. Pass them as env vars (`POS_VALIDATOR_KEY`,
+  `SERVER_APIKEY`), never as CLI args — CLI args are visible in `ps`.
 - **`fundAddresses` mints confirmed coins over an unauthenticated endpoint.** It
   is disabled by default (`server.fundEnabled=false`) and must remain disabled on any
-  public or production node. Only enable it for test/bootstrap networks.
-- `stakeDeposit` signs with the node's configured `pos.validatorKey` (it rejects
-  a `privateKey` in the request). That key is supplied to the process as a
-  command-line arg — in production enable TLS (`SSL=true` + `KEYSTORE`) and/or
-  restrict the endpoint to trusted operators.
+  public or production node. Only enable it for test/bootstrap networks. Even
+  when enabled it refuses non-loopback callers unless `server.faucetPublic=true`.
+- `stakeDeposit` signs with the node's configured `POS_VALIDATOR_KEY` (it
+  rejects a `privateKey` in the request), and `stakeDeposit` /
+  `activateValidator` / `processWithdrawal` / `setValidatorKey` require the
+  `X-Api-Key` header when `server.apiKey` is set — set it on Mainnet. In
+  addition enable TLS (`SSL=true` + a deployment-specific `KEYSTORE`, see
+  `helper/prod/generate_keystore.sh`) so the API key never travels in
+  cleartext.
+- On Mainnet the server logs startup warnings when the API key, TLS, or a
+  non-default DB password is missing — treat each warning as a launch blocker.
 - Use one DB per node and one `layer0-server` per DB.
 - Genesis and the domain-permission root are fixed at chain launch (defined in
   the `NetworkParameters` for `server.net`).

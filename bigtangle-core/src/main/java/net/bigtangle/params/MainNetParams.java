@@ -68,6 +68,11 @@ public class MainNetParams extends NetworkParameters {
       
         spendableCoinbaseDepth = 100;
 
+        // Shorter epochs: finality ≈ 2 epochs × slotsPerEpoch × slotIntervalMs.
+        // 32 slots × 12 s → 12.8 min; 8 slots × 12 s → 3.2 min. Consensus
+        // parameter: every node must ship this same value in the same release.
+        setSlotsPerEpoch(8);
+
         dnsSeeds = new String[] { "enrtree://0000000000000000000000000000000000000000000000000000000000000000@seeds.bigtangle.org" };
        
 

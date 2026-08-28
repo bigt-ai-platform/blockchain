@@ -91,6 +91,9 @@ public class DispatcherController extends BaseDispatcherController {
 	@Autowired
 	private ValidatorDutyService validatorDutyService;
 
+	@Autowired
+	private net.bigtangle.server.service.GhostService ghostService;
+
 	@Override
 	protected String getChainName() {
 		return "Bigtangle";
@@ -368,6 +371,39 @@ public class DispatcherController extends BaseDispatcherController {
 			this.outPrintJSONString(httpServletResponse,
 					net.bigtangle.response.GetStringResponse.create(
 							Json.jsonmapper().writeValueAsString(result)), watch, reqCmdName);
+			return true;
+		}
+		case getOptimisticFinality: {
+			// Advisory, read-only: the confirmed head's current vote weight vs
+			// total active stake, plus the justified/finalized checkpoints.
+			// No consensus effect — the FFG finality rules are unchanged.
+			net.bigtangle.response.OptimisticFinalityResponse resp =
+					net.bigtangle.response.OptimisticFinalityResponse.create();
+			net.bigtangle.core.TXReward head = store.getMaxConfirmedReward();
+			if (head != null && head.getBlockHash() != null) {
+				resp.setHeadBlockHash(head.getBlockHash().toString());
+				resp.setChainLength(head.getChainLength());
+				long weight = ghostService.branchVoteWeight(head.getBlockHash(), store);
+				java.math.BigInteger total = stakeService.getTotalActiveStake(store);
+				resp.setHeadVoteWeight(String.valueOf(weight));
+				resp.setTotalStake(total.toString());
+				resp.setSupermajority(total.signum() > 0 && java.math.BigInteger.valueOf(weight)
+						.multiply(java.math.BigInteger.valueOf(3))
+						.compareTo(total.multiply(java.math.BigInteger.valueOf(2))) >= 0);
+			}
+			CasperService.Checkpoint justified = casperService.getJustifiedCheckpoint();
+			if (justified != null) {
+				resp.setJustifiedEpoch(justified.getEpoch());
+				resp.setJustifiedBlockHash(
+						justified.getBlockHash() != null ? justified.getBlockHash().toString() : null);
+			}
+			CasperService.Checkpoint finalized = casperService.getLastFinalizedCheckpoint(store);
+			if (finalized != null) {
+				resp.setFinalizedEpoch(finalized.getEpoch());
+				resp.setFinalizedBlockHash(
+						finalized.getBlockHash() != null ? finalized.getBlockHash().toString() : null);
+			}
+			this.outPrintJSONString(httpServletResponse, resp, watch, reqCmdName);
 			return true;
 		}
 		case getBaseFee: {

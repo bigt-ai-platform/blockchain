@@ -71,7 +71,9 @@ fi
 log()  { echo "[node-${NODE_INDEX}] $*"; }
 
 http_post() { # $1=path  $2=json-body
-    curl -sS -X POST "${API_BASE}${1}" -H 'Content-Type: application/json' -d "$2"
+    local -a headers=(-H 'Content-Type: application/json')
+    if [ -n "${API_KEY:-}" ]; then headers+=(-H "X-Api-Key: ${API_KEY}"); fi
+    curl -sS -X POST "${API_BASE}${1}" "${headers[@]}" -d "$2"
 }
 
 # ---- Database --------------------------------------------------------------
@@ -101,9 +103,17 @@ docker_run() { # $1=container-name  $2=image  rest=java command args
     local name="${CONTAINER_PREFIX:-}${1}" image="$2"; shift 2
     docker rm -f "${name}" >/dev/null 2>&1 || true
     log "starting container ${name} (${image})"
+    # Secrets travel as container env vars, never as CLI args: process
+    # listings (`ps aux`, `/proc/*/cmdline`) must not expose the validator
+    # seed or the API key. Env vars remain visible to root via
+    # /proc/*/environ — protect the host accordingly.
     docker run -d --name "${name}" \
         --network "${DOCKER_NETWORK}" \
+        --init --stop-timeout 30 \
         ${DOCKER_RUN_FLAGS:-} \
+        -e POS_VALIDATOR_KEY="${POS_VALIDATOR_KEY:-}" \
+        -e SERVER_APIKEY="${API_KEY:-}" \
+        -e HEALTHCHECK_PORT="${HEALTHCHECK_PORT:-${SERVER_PORT}}" \
         --entrypoint java \
         "${image}" \
         "$@" >/dev/null
@@ -123,6 +133,13 @@ start_server() {
     if [ -n "${KAFKA_BOOTSTRAP:-}" ]; then
         kafka_args=("--server.runKafkaStream=true" "--kafka.bootstrapServers=${KAFKA_BOOTSTRAP}")
     fi
+    local fund_args=("--server.fundEnabled=${FUND_ENABLED:-false}")
+    if [ "${FUND_ENABLED:-false}" = "true" ]; then
+        # Bootstrap funding reaches the node over the mesh (NODE_HOST), not the
+        # loopback interface, so the faucet must be published. FUND_ENABLED is
+        # turned off before any public exposure — see cutover-runbook.md §6.
+        fund_args+=(--server.faucetPublic=true)
+    fi
     log "starting layer0-server on :${SERVER_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-server" "${SERVER_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_SERVER} "${genesis_csv_arg[@]}" -jar /app/app.jar \
@@ -133,13 +150,13 @@ start_server() {
         --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" \
         --server.createtable="${createtable}" \
         "${kafka_args[@]}" \
-        --server.fundEnabled="${FUND_ENABLED:-false}" \
+        "${fund_args[@]}" \
         --server.requester="${REQUESTER}" \
         --service.schedule.chainlength=true --service.schedule.blockbatch=true \
         --service.schedule.microbatch=true --service.schedule.initsync=true \
         --peer.udpPort="${SERVER_PEER_UDP}" --peer.tcpPort="${SERVER_PEER_TCP}" --gossip.port="${SERVER_GOSSIP}" \
         --gossip.peers="${GOSSIP_SEEDS}" \
-        --pos.validatorKey="${POS_VALIDATOR_KEY}" --pos.dutyEnabled=true \
+        --pos.dutyEnabled=true \
         --pos.gossipPeers="${POS_GOSSIP_PEERS}"
 }
 

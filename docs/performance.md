@@ -14,13 +14,15 @@ fixes.
 | 10,000 tx | 12 s | 3000 | 2,069 tx/s | **554 tx/s** |
 | 20,000 tx | 6 s | 5000 | 1,854 tx/s | **626 tx/s** |
 | 50,000 tx | 6 s | 10000 | 1,029 tx/s | **468 tx/s avg, ~1,600 tx/s steady-state drain** |
+| **200,000 tx (2026-08-28 max-resource)** | 1 s | 3000 | 1,626 tx/s | **1,094.8 tx/s** ✔ best |
 
 All submitted transactions confirmed on-chain (10000/10000, 20000/20000,
-50000/50000). The 50k run's average is dominated by ramp-up; once backlogged,
-the confirm pipeline drains at ~900–1,600 tx/s (30,680 tx in 19 s observed).
-Run-to-run variance at 50k scale is significant on a shared benchmark
-database: as `outputs` grows past ~300k rows across runs, autovacuum lags
-and confirm cycles stretch — recreate the database for comparable numbers.
+50000/50000, 200000/200000). The 50k run's average is dominated by ramp-up;
+once backlogged, the confirm pipeline drains at ~900–1,600 tx/s (30,680 tx
+in 19 s observed). Run-to-run variance at 50k scale is significant on a
+shared benchmark database: as `outputs` grows past ~300k rows across runs,
+autovacuum lags and confirm cycles stretch — recreate the database for
+comparable numbers.
 
 ## 2026-08-27 campaign: cadence is irrelevant; wave dynamics are the ceiling
 
@@ -117,6 +119,135 @@ cleanly once instead of wedging intake forever.
 
 Also: bootstrap warmup default removed (`pos.warmupSlots=0`) — it was 2 s-era
 fork insurance; all cold boots at 12 s slots converge cleanly without it.
+
+## 2026-08-28 campaign: max-resource single-node sweep
+
+Swept to the machine limit on the 8-core / 31 GB host (JDK 25, `-Xmx16–20g`,
+dedicated `layer0` DB on the dockerized PostgreSQL, `bt4` mesh stopped to
+free resources). Three configs probe the heap/GC wall and the per-beacon
+critical path:
+
+| Run | Load | txPerBlock | Slots | Heap | Result |
+|---|---|---|---|---|---|
+| 1 | 200k tx / 32 clients / batch 250 | 2000 | 1 s | 16 g | Submit 1,626 tx/s → **CONFIRMED 1,094.8 tx/s** (200k/200k in 182.7 s) ✔ |
+| 2 | 400k tx / 48 clients | 10000 | 2 s | 20 g | **Stalled at 145,499/399,984**: heap OOM killed Hazelcast, chain froze |
+| 3 | 300k tx / 40 clients | 5000 | 2 s | 18 g | Submit 1,436 tx/s → **peak 999.4 tx/s** (160,755/165,750; mempool rejects lost 44% of offered load) |
+
+Run 1 is the new single-node best (1,094.8 tx/s confirmed, all 200k
+on-chain). Details and the failure modes:
+
+- **Submit ingest caps at ~1,600 tx/s** regardless of client count
+  (32 vs 48 identical): server-side mempool admission (parse + double-spend
+  checks per tx) is the ingest ceiling.
+- **Serial per-beacon path dominates the wall.** With 1 s slots the ticker
+  produced 120 proposals but only 43 connected (**64 % of slots skipped**):
+  proposal reference sweep averaged **2.2 s** (max 6.1 s, DB scan of
+  unconfirmed blocks each slot) and beacon connect averaged **5.2 s**
+  (max 9.2 s; solidity + conflict + confirm). Bigger slots (2 s) change
+  nothing — the cycle costs 4–15 s regardless.
+- **Heap is the hard wall at scale.** 10k-tx blocks (run 2) pinned the 20 g
+  heap: 527 GC pauses totaling 36.3 s (13 % of wall, max pause 984 ms,
+  40 evacuation failures) → `OutOfMemoryError` inside `HazelcastCache.put`
+  → `HazelcastInstanceNotActiveException` on every subsequent beacon
+  proposal → proposals carried empty reference sets → confirmation stopped
+  forever. The Hazelcast-backed Spring caches (`CacheBlockService` evicts)
+  are a single point of failure: cache outage = beacon reference collection
+  outage = chain stall, with no recovery path.
+- **`MempoolService.pruneSpentOutpoints` storms the DB at backlog depth.**
+  Every 60 s it walks ALL unconfirmed outpoints with one
+  `getTransactionOutput` query each — O(backlog) sequential round-trips that
+  saturate PostgreSQL for minutes and starve the beacon pipeline (observed
+  at ~600k outstanding outpoints in run 2). Needs batched/`IN`-clause
+  lookup or incremental pruning.
+- **Mempool admission kills bench clients.** At `mempoolMaxTx` too small for
+  the burst (run 3), `MempoolFullException` ends the client thread and its
+  remaining slice is silently lost (165,750/300,000 submitted); the harness
+  should retry-with-backoff instead of dying.
+- **Confirm write path is not the limit**: inside one beacon connect the
+  confirm step moved 110,000 txs in 12.3 s (~9k tx/s) in run 2 — the
+  bottleneck is the fixed per-beacon cycle cost, not row writes.
+
+Max confirmed TPS on this host: **~1,100 tx/s** (run 1). The chain-side
+capacity is higher (~9k tx/s confirm writes) but unreachable while the
+propose→sweep→connect cycle stays serial and per-beacon cost grows with
+backlog.
+
+### Shorter-epoch + optimistic-finality rollout (implemented)
+
+Finality is FFG-shaped: ~2 epochs × `slotsPerEpoch` × slot interval
+(32 × 12 s → 12.8 min). Implemented changes:
+
+- **`slotsPerEpoch` is now a per-network consensus parameter**
+  (`NetworkParameters.getSlotsPerEpoch()`): every `slot / 32` site in the
+  epoch arithmetic (SlotService helpers, CasperService checkpoints/lookback,
+  RANDAO mix epochs, validator snapshots, ServiceBaseCheck attestation
+  sanity, BlockStoreService boundary duties) was parameterized. The
+  attestation lookback stays 10 EPOCHS (80 slots on mainnet) — epoch-denoted
+  windows keep their semantics, not their slot counts.
+- **Mainnet ships 8-slot epochs** → finality ≈ 2 × 8 × 12 s = **3.2 min**
+  (64 s at 4 s slots). Test net keeps 32 until its suites migrate. Consensus
+  upgrade: all nodes must ship the same value in the same release —
+  `att.getEpoch() == slot / slotsPerEpoch` is verified on-chain, so a
+  mismatched node fragments quorum instead of following the chain.
+- **`getOptimisticFinality` endpoint** (Layer-0, advisory): the confirmed
+  head's vote weight vs total active stake (`supermajority` flag) plus the
+  justified/finalized checkpoints — Solana-style fast-approval UX for
+  exchanges/bridges without touching the FFG finality rules.
+
+### Epoch-length-safe safety parameters (implemented)
+
+Epoch-denominated safety constants were re-derived from slotsPerEpoch so
+their wall-time semantics survive shorter epochs (and shorter slots). All
+canonical values are slot-based; the epoch-denominated derivations are pure
+functions of the per-net `slotsPerEpoch`:
+
+| Parameter | Canonical | Derived value (32 / 8 / 4-slot epochs) | Why |
+|---|---|---|---|
+| Inactivity-leak grace (`inactivityPenaltyThresholdEpochs`) | 128 slots | 4 / 16 / 32 epochs | a hardcoded 4 epochs at 4-slot would start draining offline stake after ~96 s of stall |
+| Leak quadratic divisor | normalized to canonical 32-slot epochs (`delay × slotsPerEpoch / 32`) | identical wall-time drain shape at any epoch length | raw `delay²` drains 4× faster per wall-minute at 8-slot epochs |
+| Justified-switch window (`safeSlotsToUpdateJustified`) | 25 % of an epoch (min 1 slot) | 8 / 2 / 1 slots | with a hardcoded 8 slots, `slotsPerEpoch < 8` keeps the switch window open for the WHOLE epoch and silently disables the bouncing-attack defense |
+| Withdrawal delay (`withdrawalDelayEpochs`) | 8192 slots ≈ 7.6 h @ 12 s | 256 / 1024 / 2048 epochs | a hardcoded 256 epochs at 4-slot would let a slashed/exiting validator unbond in ~1.7 h |
+
+With these derivations, 4-slot epochs (48 s finality at 6 s slots) keep the
+same operator-stake protections as the original 32-slot design; epoch-relative
+parameters (RANDAO 2-epoch lag, `ATTEST_MAX_STALE_EPOCHS`,
+`MAX_SEED_LOOKAHEAD`) were already epoch-relative and scale automatically.
+
+Validation: `SlotEpochParameterTest` (epoch arithmetic + the derivation
+table above), `PosConsensusHardeningTest`, the PoSTest suite — 59/59 green,
+including the previously order-dependent `testInactivityLeakRestoresFinality`
+(rewritten to finalize a live checkpoint anchor first — the genesis
+checkpoint is pinned at chainlength 0 and can never pass the store-view
+finalized lookup). Full `ConfirmedPaymentBenchmark` smoke passes end-to-end.
+
+### Mesh churn campaign (leave/rejoin/new-node under load) — 2026-08-28
+
+`testnodes.sh` 3- and 5-node meshes (local `phase4` image, 12 s slots, 8-slot
+epochs, `server.mempoolMaxTx=40000`, `batch.txPerBlock=4000`), 260k funded
+wallets, MeshBench phases with a signed leave / fresh rejoin / brand-new
+node issued MID-LOAD:
+
+- **Stable envelope confirmed**: while all nodes served, beacon cadence was
+  exactly 12 s, finality tracked ~1.3–2 epochs behind the head, and one
+  finalized root held across the mesh. Max clean offered rate 250 tx/s
+  (45k/45k accepted, 0 dropped).
+- **Confirm drain is wave-shaped**: flat gaps then bursts of ~450 tx/s;
+  per-beacon ceiling ≈ 3–4 batch blocks × `batch.txPerBlock` — the
+  single-builder gate drains each node's mempool only on its own proposer
+  turn (every Nth slot).
+- **Fixes verified live**: the epoch-safe safety derivations behaved (no
+  leak/switch-window misbehavior), raised mempool + retry/backoff in the
+  driver absorbed rejection storms without client death, and the formal
+  leave completed under load without a finality stall.
+- **Sixth bottleneck pinned (connection leak)**: under sustained rejection
+  pressure the submit path leaks store connections (459 HikariPool leak /
+  timeout events on one node; leak-detection fired exactly when the node
+  went unresponsive) → pool exhaustion → every HTTP request blocks → API
+  dead while background threads tick → missed proposer slots → 1-vote-per-
+  branch fork tie → confirmation stall. This, not the (now-wrapped) cache,
+  is the remaining max-load stability blocker. Next lever: find and close
+  the leak in the admission path (`MempoolService.submitTransactions` et
+  al.), then re-run this campaign.
 
 ## Bottlenecks found and fixed
 
@@ -216,24 +347,38 @@ every verification.
 | End-to-end submit TPS | ~545-bound | 1,029–2,069 tx/s |
 | 50k-tx run | collapsed: 11.5k/50k confirmed, ~170 tx/s peak | **50k/50k confirmed**, ~1,600 tx/s drain |
 
-## Remaining bottlenecks (confirm path) — updated by the 2026-08-27 campaign
+## Remaining bottlenecks (confirm path) — updated by the 2026-08-28 campaign
 
-The earlier "cadence-bound" hypothesis is **disproven** (tier B). The measured
-ceiling mechanism is the beacon propose → reference-sweep → single-threaded
-`pos-chain` connect cycle: its cost grows with unconfirmed backlog
-(`conflictMs=2279ms` at depth; sweeps ms→seconds), so at high offered rates
-the pipeline spends most wall-time inside ever-larger connect phases instead
-of confirming more often. During those cycles host CPU saturates (java
-2.3–3.3 cores busy in PQ crypto + serialization on an 8-core box) while PG idles.
+The earlier "cadence-bound" hypothesis is **disproven** (tier B, and again
+by the 08-28 run 1). The measured ceiling mechanism is the beacon propose →
+reference-sweep → single-threaded `pos-chain` connect cycle: its cost grows
+with unconfirmed backlog (`conflictMs=2279ms` at depth; sweeps ms→seconds),
+so at high offered rates the pipeline spends most wall-time inside
+ever-larger connect phases instead of confirming more often. During those
+cycles host CPU saturates (java 2.3–3.3 cores busy in PQ crypto +
+serialization on an 8-core box) while PG idles.
 
 Ranked leverage, replacing the old list:
 
-1. **Cap reference-set size per beacon** — keep every connect cycle short and
-   fixed-cost so confirmation cadence tracks slot cadence exactly.
-2. **Parallelize/incrementalize the reference sweep** (`addAllUnconfirmedBlocks`
+1. **Decouple cache availability from consensus.** The Hazelcast-backed
+   Spring caches must never fail the beacon reference sweep: at heap
+   exhaustion in run 2 a single `OutOfMemoryError` in `HazelcastCache.put`
+   made every later proposal carry an empty reference set and froze
+   confirmation permanently. Cache outage must degrade to uncached
+   (slower) reads, not to lost references.
+2. **Cap reference-set size per beacon** — keep every connect cycle short
+   and fixed-cost so confirmation cadence tracks slot cadence exactly.
+3. **Parallelize/incrementalize the reference sweep** (`addAllUnconfirmedBlocks`
    `load=` phase dominates at depth) and the single-threaded `pos-chain`
    connect work across independent sibling blocks.
-3. **Multi-node remaining gap** (~1/4 of single-node sustained under churn):
+4. **Batch `pruneSpentOutpoints`** — replace the per-outpoint
+   `getTransactionOutput` walk (one query per unconfirmed input, every 60 s)
+   with a single `IN`-list/batched lookup; at 400k-tx scale it becomes a
+   minutes-long DB storm that starves the beacon pipeline.
+5. **Raise the ingest ceiling (~1,600 tx/s)** — mempool admission and
+   double-spend checks are the submit cap; look at parallel admission or
+   cheaper conflict indexing if the confirm path ever exceeds it.
+6. **Multi-node remaining gap** (~1/4 of single-node sustained under churn):
    kafka fanout × peer re-validation, plus shared-DB contention when all mesh
    nodes target one postgres. Dedicated DB per node is mandatory for scale.
 
@@ -252,6 +397,15 @@ mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
   -Dbench.tx=100000 -Dbench.clients=64 -Dbench.batch=1000 \
   -Dserver.mempoolMaxTx=300000 \
   -DargLine="-Xmx12g"
+
+# current best (2026-08-28 max-resource: 200k tx, CONFIRMED ~1,095 tx/s)
+mvn test -pl layer0-server -am -Dtest=ConfirmedPaymentBenchmark \
+  -Ddb.port=21532 -Ddb.dbName=layer0 \
+  -Dbench.tx=200000 -Dbench.clients=32 -Dbench.batch=250 \
+  -Dbatch.minTx=3000 -Dbatch.maxBatchAgeMs=1500 -Dpos.slotIntervalMs=1000 \
+  -Dserver.mempoolMaxTx=100000 \
+  -Dperf.confirmLogMinTx=50 -Dperf.sweepLogMinBlocks=10 -Dperf.connectLogMinRefs=10 \
+  -DargLine="-Xmx16g"
 ```
 
 The test needs a reachable PostgreSQL (`-Ddb.port`, database `layer0`).

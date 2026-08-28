@@ -922,7 +922,9 @@ public class SyncBlockService {
 	private long subtreeWeightOf(Sha256Hash hash, java.util.Map<Sha256Hash, Long> weights,
 			java.util.Map<Sha256Hash, Long> memo, java.util.Set<Sha256Hash> inProgress,
 			BlockStoreInterface store, int depth) {
-		if (hash == null || depth >= net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_SLOTS) {
+		long lookback = net.bigtangle.server.service.CasperService.ATTESTATION_LOOKBACK_EPOCHS
+				* networkParameters.getSlotsPerEpoch();
+		if (hash == null || depth >= lookback) {
 			return 0;
 		}
 		Long cached = memo.get(hash);
@@ -1053,7 +1055,7 @@ public class SyncBlockService {
 				return false;
 			}
 			long ancestorChainlength = store.getRewardChainLength(ancestor);
-			long ancestorEpoch = Math.max(0, ancestorChainlength / SlotService.SLOTS_PER_EPOCH);
+			long ancestorEpoch = Math.max(0, ancestorChainlength / networkParameters.getSlotsPerEpoch());
 			net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
 			if (casper == null) {
 				return false;

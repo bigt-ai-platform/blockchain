@@ -93,9 +93,20 @@ public class MeshBench {
                                 .header("Content-Type", "application/json")
                                 .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
                                 .build();
-                        java.net.http.HttpResponse<String> resp =
-                                hc.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
-                        if (resp.body().contains("\"errorcode\" : 0")) ok.addAndGet(hi - lo);
+                        java.net.http.HttpResponse<String> resp = null;
+                        for (int attempt = 0; attempt < 3 && resp == null; attempt++) {
+                            try {
+                                resp = hc.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+                            } catch (Exception retry) {
+                                Thread.sleep(1000);
+                            }
+                        }
+                        if (resp != null && resp.body().contains("\"errorcode\" : 0")) {
+                            ok.addAndGet(hi - lo);
+                        } else {
+                            System.out.println("FUNDFAIL chunk=" + ci + " node=" + (8281 + n)
+                                    + " resp=" + (resp == null ? "null" : resp.body().substring(0, Math.min(120, resp.body().length()))));
+                        }
                     } catch (Exception e) {
                         System.out.println("fund err @" + ci + ": " + e);
                     }
@@ -212,8 +223,8 @@ public class MeshBench {
         CompletableFuture.allOf(fs.toArray(new CompletableFuture[0])).get();
         pool.shutdownNow();
         long submitWallMs = (System.nanoTime() - submitWallStart) / 1_000_000;
-        System.out.printf("SUBMIT done: %d ms submitted=%d (%.1f tx/s)%n",
-                submitWallMs, submitted.get(),
+        System.out.printf("SUBMIT done: %d ms submitted=%d dropped=%d (%.1f tx/s)%n",
+                submitWallMs, submitted.get(), dropped.get(),
                 submitted.get() * 1000.0 / Math.max(1, submitWallMs));
         System.out.println(confirmStartSentinel);
     }
@@ -222,6 +233,16 @@ public class MeshBench {
 
     static void Sha256Like(Object o) { }
 
+    private static final java.util.concurrent.atomic.AtomicInteger dropped =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * Deliver a batch with retry/backoff: transient failures (Mempool full,
+     * brief node restarts) are retried with 1 s backoff (max 60 attempts);
+     * permanent rejections ("UTXO not found" — wallets the target node never
+     * held) fail fast. A batch that cannot be delivered is DROPPED and
+     * counted, never fatal to the client thread — churn-tolerant load.
+     */
     private static void flush(List<Transaction> txs, String url) throws Exception {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(baos);
@@ -231,6 +252,23 @@ public class MeshBench {
             dos.write(b);
         }
         dos.close();
-        OkHttp3Util.post(url + "submitTransactions", baos.toByteArray());
+        byte[] payload = baos.toByteArray();
+        for (int attempt = 0; attempt < 60; attempt++) {
+            try {
+                OkHttp3Util.post(url + "submitTransactions", payload);
+                return;
+            } catch (Exception e) {
+                String msg = String.valueOf(e.getMessage());
+                if (msg.contains("UTXO not found")) {
+                    dropped.addAndGet(txs.size());
+                    return;
+                }
+                if (attempt == 59) {
+                    dropped.addAndGet(txs.size());
+                    return;
+                }
+                Thread.sleep(1000);
+            }
+        }
     }
 }

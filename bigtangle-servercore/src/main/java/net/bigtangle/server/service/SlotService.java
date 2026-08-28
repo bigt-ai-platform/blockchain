@@ -42,8 +42,13 @@ public class SlotService {
     private static final Logger log = LoggerFactory.getLogger(SlotService.class);
 
     public static final long SLOT_DURATION_MS = 12_000L;
-    public static final long SLOTS_PER_EPOCH = 32L;
-    public static final long EPOCH_DURATION_MS = SLOT_DURATION_MS * SLOTS_PER_EPOCH;
+    /**
+     * Default slots per epoch (32) when no NetworkParameters are available.
+     * The consensus value comes from
+     * {@link NetworkParameters#getSlotsPerEpoch()} — per-network, identical on
+     * every node; never node-local config.
+     */
+    public static final long SLOTS_PER_EPOCH_DEFAULT = 32L;
 
     /** Log the beacon propose sweep when it collects at least this many references. */
     private static final int PERF_SWEEP_LOG_MIN_BLOCKS = Integer.getInteger("perf.sweepLogMinBlocks", 50);
@@ -130,14 +135,19 @@ public class SlotService {
         return System.currentTimeMillis() + maxClockSkewMs();
     }
 
+    /** The consensus slots-per-epoch value (per-network), default 32. */
+    public long slotsPerEpoch() {
+        return networkParameters != null ? networkParameters.getSlotsPerEpoch() : SLOTS_PER_EPOCH_DEFAULT;
+    }
+
     public long getCurrentSlot() {
         return (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
     }
 
     /** The wall-clock slot's position within its epoch, for the given interval. */
-    public static long currentSlotInEpoch(long slotIntervalMs) {
+    public static long currentSlotInEpoch(long slotIntervalMs, long slotsPerEpoch) {
         long slot = (System.currentTimeMillis() - 1532896109000L) / slotIntervalMs;
-        return slot % SLOTS_PER_EPOCH;
+        return slot % slotsPerEpoch;
     }
 
     /**
@@ -145,24 +155,25 @@ public class SlotService {
      * skew on gates that must not over-restrict under an ahead clock: the
      * caller passes the EARLIEST plausible time).
      */
-    public static long currentSlotInEpoch(long timeMs, long slotIntervalMs) {
+    public static long currentSlotInEpoch(long timeMs, long slotIntervalMs, long slotsPerEpoch) {
         long slot = (timeMs - 1532896109000L) / slotIntervalMs;
-        return slot % SLOTS_PER_EPOCH;
+        return slot % slotsPerEpoch;
     }
 
     public long getCurrentEpoch() {
-        return getCurrentSlot() / SLOTS_PER_EPOCH;
+        return getCurrentSlot() / slotsPerEpoch();
     }
 
     /**
-     * The CHAIN-derived current epoch (max confirmed reward chainlength / 32).
-     * Deterministic from chain state (unlike the wall-clock {@link #getCurrentEpoch()}),
-     * used for activation/weighting comparisons so all nodes agree.
+     * The CHAIN-derived current epoch (max confirmed reward chainlength /
+     * slotsPerEpoch). Deterministic from chain state (unlike the wall-clock
+     * {@link #getCurrentEpoch()}), used for activation/weighting comparisons
+     * so all nodes agree.
      */
-    public static long currentChainEpoch(BlockStoreInterface store) {
+    public static long currentChainEpoch(BlockStoreInterface store, long slotsPerEpoch) {
         try {
             TXReward tip = store.getMaxConfirmedReward();
-            return tip != null ? tip.getChainLength() / SLOTS_PER_EPOCH : 0;
+            return tip != null ? tip.getChainLength() / slotsPerEpoch : 0;
         } catch (Exception e) {
             return 0;
         }
@@ -177,38 +188,38 @@ public class SlotService {
      * attestation looks like it targets a far-future epoch and is rejected.
      */
     public long epochAt(long timeMs) {
-        return ((timeMs - 1532896109000L) / slotIntervalMs) / SLOTS_PER_EPOCH;
+        return ((timeMs - 1532896109000L) / slotIntervalMs) / slotsPerEpoch();
     }
 
     /** Static variant for consumers that inject the slot interval themselves. */
-    public static long epochAt(long timeMs, long slotIntervalMs) {
-        return ((timeMs - 1532896109000L) / slotIntervalMs) / SLOTS_PER_EPOCH;
+    public static long epochAt(long timeMs, long slotIntervalMs, long slotsPerEpoch) {
+        return ((timeMs - 1532896109000L) / slotIntervalMs) / slotsPerEpoch;
     }
 
     public long getSlotInEpoch(long slot) {
-        return slot % SLOTS_PER_EPOCH;
+        return slot % slotsPerEpoch();
     }
 
     public long getEpochForSlot(long slot) {
-        return slot / SLOTS_PER_EPOCH;
+        return slot / slotsPerEpoch();
     }
 
-    /** Epoch-start (rewarding) beacons are proposed at slot % SLOTS_PER_EPOCH == 0. */
-    public static boolean isEpochStartSlot(long slot) {
-        return slot % SLOTS_PER_EPOCH == 0;
+    /** Epoch-start (rewarding) beacons are proposed at slot % slotsPerEpoch == 0. */
+    public static boolean isEpochStartSlot(long slot, long slotsPerEpoch) {
+        return slot % slotsPerEpoch == 0;
     }
 
     /**
      * Chain-derived slot sanity for a beacon: the declared epoch must equal
-     * slot/32 (self-consistent signed data) and slots must strictly increase
-     * along the reward chain ({@code prevSlot} of the prev beacon, -1 when the
-     * prev beacon carries no SlotData, e.g. legacy or genesis). This anchors
-     * the declared slot to the chain WITHOUT binding it to the reward
-     * chainlength — a missed slot must never make the next epoch's beacons
-     * invalid (chainlength lags behind the slot after any miss).
+     * slot/slotsPerEpoch (self-consistent signed data) and slots must strictly
+     * increase along the reward chain ({@code prevSlot} of the prev beacon,
+     * -1 when the prev beacon carries no SlotData, e.g. legacy or genesis).
+     * This anchors the declared slot to the chain WITHOUT binding it to the
+     * reward chainlength — a missed slot must never make the next epoch's
+     * beacons invalid (chainlength lags behind the slot after any miss).
      */
-    public static boolean slotSequenceValid(long slot, long epoch, long prevSlot) {
-        if (epoch != slot / SLOTS_PER_EPOCH) {
+    public static boolean slotSequenceValid(long slot, long epoch, long prevSlot, long slotsPerEpoch) {
+        if (epoch != slot / slotsPerEpoch) {
             return false;
         }
         return prevSlot < 0 || slot > prevSlot;
@@ -216,12 +227,13 @@ public class SlotService {
 
     /**
      * Epoch-start classification is SLOT-based: a beacon with a signed SlotData
-     * is epoch-start iff its slot % SLOTS_PER_EPOCH == 0. Legacy beacons
-     * without SlotData fall back to the chainlength position
-     * (chainlength % SLOTS_PER_EPOCH == 1), which coincides with slot % 32 == 0
-     * on a drift-free chain, so historical beacons classify identically.
+     * is epoch-start iff its slot % slotsPerEpoch == 0. Legacy beacons without
+     * SlotData fall back to the chainlength position
+     * (chainlength % slotsPerEpoch == 1), which coincides with slot %
+     * slotsPerEpoch == 0 on a drift-free chain, so historical beacons classify
+     * identically.
      */
-    public static boolean isEpochStartBeacon(Block beacon, RewardInfo ri) {
+    public static boolean isEpochStartBeacon(Block beacon, RewardInfo ri, long slotsPerEpoch) {
         if (beacon == null || beacon.getTransactions() == null) {
             return false;
         }
@@ -230,7 +242,7 @@ public class SlotService {
                 if ("SlotData".equals(tx.getDataClassName()) && tx.getData() != null) {
                     SlotData sd = Json.jsonmapper().readValue(tx.getData(), SlotData.class);
                     if (sd != null) {
-                        return isEpochStartSlot(sd.getSlot());
+                        return isEpochStartSlot(sd.getSlot(), slotsPerEpoch);
                     }
                 }
             }
@@ -238,7 +250,7 @@ public class SlotService {
             // fall through to the legacy chainlength classification
         }
         return ri != null && ri.getChainlength() > 0
-                && ri.getChainlength() % SLOTS_PER_EPOCH == 1;
+                && ri.getChainlength() % slotsPerEpoch == 1;
     }
 
     /**
@@ -248,8 +260,9 @@ public class SlotService {
      * Proposer selection, beacon validation and the epoch-reward split must all
      * use this exact list so they agree on every node.
      */
-    public static List<StakeRecord> selectionValidators(long slot, BlockStoreInterface store) throws Exception {
-        List<StakeRecord> validators = getValidatorSnapshot(slot / 32 - 2, store);
+    public static List<StakeRecord> selectionValidators(long slot, BlockStoreInterface store, long slotsPerEpoch)
+            throws Exception {
+        List<StakeRecord> validators = getValidatorSnapshot(slot / slotsPerEpoch - 2, store);
         // An EMPTY snapshot is treated as missing: freezing an empty set would
         // select no proposer for every slot of the epoch — and since snapshots
         // are only written by confirming beacons, the chain could never recover.
@@ -257,7 +270,7 @@ public class SlotService {
             // Bootstrap fallback: the LIVE set of validators active as of the
             // current chain epoch (activation-delay aware), so a not-yet-active
             // deposit can never be selected as proposer.
-            validators = store.getActiveStakeDeposits(currentChainEpoch(store));
+            validators = store.getActiveStakeDeposits(currentChainEpoch(store, slotsPerEpoch));
         }
         return validators;
     }
@@ -267,7 +280,7 @@ public class SlotService {
         // earlier (same boundary discipline as the RANDAO mixfinal), never the
         // node's live, locally-confirmed set — otherwise nodes at different
         // confirmation heights derive different proposers for the same slot.
-        return selectProposerForSlot(slot, selectionValidators(slot, store),
+        return selectProposerForSlot(slot, selectionValidators(slot, store, slotsPerEpoch()),
                 randaoService.getSelectionMix(slot, store));
     }
 
@@ -278,7 +291,8 @@ public class SlotService {
      * it two epochs later, so the expected proposer for a slot is a fixed chain
      * fact, identical on every node.
      */
-    public static void snapshotValidatorsForEpoch(long epoch, BlockStoreInterface store) throws BlockStoreException {
+    public static void snapshotValidatorsForEpoch(long epoch, BlockStoreInterface store, long slotsPerEpoch)
+            throws BlockStoreException {
         if (epoch < 0) {
             return;
         }
@@ -287,7 +301,8 @@ public class SlotService {
             // CURRENT CHAIN epoch has reached are frozen into the snapshot, so a
             // deposit still in its delay window can never influence proposer
             // selection, rewards or justification.
-            List<StakeRecord> active = store.getActiveStakeDeposits(SlotService.currentChainEpoch(store));
+            List<StakeRecord> active = store
+                    .getActiveStakeDeposits(SlotService.currentChainEpoch(store, slotsPerEpoch));
             // Never freeze an EMPTY set: with no fallback the epoch two epochs
             // later would have no proposer for any slot, no beacons would
             // confirm, no new snapshot would be written — an unrecoverable halt.
@@ -477,7 +492,7 @@ public class SlotService {
             try {
                 RewardInfo prevRi = new RewardInfo().parseChecked(prevBeacon.getTransactions().get(0).getData());
                 if (prevRi != null) {
-                    if (prevRi.getBlocks() != null && isEpochStartBeacon(prevBeacon, prevRi)) {
+                    if (prevRi.getBlocks() != null && isEpochStartBeacon(prevBeacon, prevRi, slotsPerEpoch())) {
                         rewarded.addAll(prevRi.getBlocks());
                     }
                     cursor = prevRi.getPrevRewardHash();
@@ -499,7 +514,7 @@ public class SlotService {
         // The proposer index refers to the SELECTION SNAPSHOT list — looking it
         // up in the live set would pick the wrong validator (or fail) whenever
         // the two differ.
-        List<StakeRecord> validators = selectionValidators(slot, store);
+        List<StakeRecord> validators = selectionValidators(slot, store, slotsPerEpoch());
         StakeRecord proposer = validators.get((int) proposerIdx);
 
         byte[] reveal = proposerKey != null ? randaoService.computeReveal(proposerKey, slot) : null;
@@ -675,8 +690,8 @@ public class SlotService {
                 // snapshot/RANDAO lag), so the outputs are a deterministic
                 // function of chain state.
                 for (Transaction rewardTx : epochRewardService.buildEpochRewardTransactions(
-                        epochFeePool, selectionValidators(slot, store),
-                        CasperService.votersForEpoch(epoch - 2, store))) {
+                        epochFeePool, selectionValidators(slot, store, slotsPerEpoch()),
+                        CasperService.votersForEpoch(epoch - 2, store, slotsPerEpoch()))) {
                     beaconBlock.addTransaction(rewardTx);
                 }
                 log.info("Epoch reward pool of {} embedded in proposer beacon at slot {}", epochFeePool, slot);
@@ -774,7 +789,7 @@ public class SlotService {
         // attestationKey), so lexicographic order == slot order and the whole
         // stale range is dropped in a single statement — no per-key map scan.
         store.deletePosStateByServiceKeyRange("attestation", "att_",
-                "att_" + String.format("%020d", floor * SLOTS_PER_EPOCH) + "_");
+                "att_" + String.format("%020d", floor * slotsPerEpoch()) + "_");
     }
 
     private void pruneEpochKeys(BlockStoreInterface store, String service, String prefix, long floor)
@@ -802,7 +817,7 @@ public class SlotService {
             }
             try {
                 long slot = Long.parseLong(key.substring(prefix.length()));
-                if (slot / SLOTS_PER_EPOCH < floor) {
+                if (slot / slotsPerEpoch() < floor) {
                     store.deletePosState(service, key);
                 }
             } catch (NumberFormatException ignored) {

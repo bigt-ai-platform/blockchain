@@ -83,7 +83,12 @@ public class ScheduleConfiguration {
     public void setPosEnabled(boolean v) { }
     public long getPosSlotIntervalMs() { return posSlotIntervalMs; }
     public void setPosSlotIntervalMs(long v) { this.posSlotIntervalMs = v; }
-    public long getPosSlotsPerEpoch() { return net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH; }
+    public long getPosSlotsPerEpoch() {
+        // Epoch length is consensus-relevant: per-network NetworkParameters
+        // (getSlotsPerEpoch), never node-local config. Legacy accessor for
+        // callers without parameters; new code must not rely on the default.
+        return 32L;
+    }
     public void setPosSlotsPerEpoch(long v) { /* epoch length is fixed at 32 slots */ }
 
 	@Override

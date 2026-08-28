@@ -51,4 +51,27 @@ public class CachingConfig {
         return config;
 
     }
+
+    /**
+     * The Hazelcast instance is owned HERE (not by Boot auto-configuration)
+     * so the cache manager below can wrap it deterministically.
+     */
+    @Bean(destroyMethod = "shutdown")
+    public com.hazelcast.core.HazelcastInstance hazelcastInstance(Config hazelCastConfig) {
+        return com.hazelcast.core.Hazelcast.newHazelcastInstance(hazelCastConfig);
+    }
+
+    /**
+     * Cache operations must never take the node down: the wrapper degrades a
+     * dead backing cache to a bounded in-memory fallback (see
+     * {@link ResilientCacheManager}) instead of throwing
+     * HazelcastInstanceNotActiveException into the beacon reference sweep,
+     * which reads a sweep failure as "no references" and stalls confirmation.
+     */
+    @Bean
+    public org.springframework.cache.CacheManager cacheManager(
+            com.hazelcast.core.HazelcastInstance hazelcastInstance) {
+        return new ResilientCacheManager(
+                new com.hazelcast.spring.cache.HazelcastCacheManager(hazelcastInstance));
+    }
 }

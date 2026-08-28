@@ -745,7 +745,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				}
 				if (store != null) {
 					byte[] proposer = net.bigtangle.server.service.StakeService
-							.expectedProposerPubkey(sd1.getSlot(), store);
+							.expectedProposerPubkey(sd1.getSlot(), store, networkParameters.getSlotsPerEpoch());
 					if (proposer == null || !net.bigtangle.server.service.StakeService
 							.isProposalEquivocation(sd1, sd2, proposer)) {
 						throw new BlockStoreException("SLASHING proposal proof is not an authenticated equivocation");
@@ -814,7 +814,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		}
 		try {
 			RewardInfo ri = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
-			return net.bigtangle.server.service.SlotService.isEpochStartBeacon(block, ri);
+			return net.bigtangle.server.service.SlotService.isEpochStartBeacon(block, ri,
+					networkParameters.getSlotsPerEpoch());
 		} catch (Exception e) {
 			return false;
 		}
@@ -888,7 +889,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// Use the SNAPSHOTTED active validator set from two epochs earlier
 			// (same boundary discipline as mixfinal_), never the node's live local
 			// set — the expected proposer must be a fixed chain fact.
-			long laggedEpoch = sd.getSlot() / 32 - 2;
+			long laggedEpoch = networkParameters.getEpochForSlot(sd.getSlot()) - 2;
 			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
 				return false;
@@ -983,12 +984,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// proposer signature + RANDAO reveal already bind this beacon to the
 			// declared slot's elected proposer.
 			if (!net.bigtangle.server.service.SlotService.slotSequenceValid(sd.getSlot(), sd.getEpoch(),
-					prevBeaconSlot(block, store))) {
+					prevBeaconSlot(block, store), networkParameters.getSlotsPerEpoch())) {
 				return false;
 			}
 			// Use the SNAPSHOTTED active validator set from two epochs earlier
 			// (same boundary discipline as mixfinal_), never the node's live set.
-			long laggedEpoch = sd.getSlot() / 32 - 2;
+			long laggedEpoch = networkParameters.getEpochForSlot(sd.getSlot()) - 2;
 			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
 				return false;
@@ -1134,7 +1135,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			// Activation-delay aware: the live fallback set only includes
 			// validators active as of the current chain epoch.
 			return store.getActiveStakeDeposits(
-					net.bigtangle.server.service.SlotService.currentChainEpoch(store));
+					net.bigtangle.server.service.SlotService.currentChainEpoch(store,
+							networkParameters.getSlotsPerEpoch()));
 		} catch (Exception e) {
 			return new java.util.ArrayList<>();
 		}
@@ -1773,7 +1775,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		try {
 			java.math.BigInteger activeStake = java.math.BigInteger.ZERO;
 			for (net.bigtangle.core.StakeRecord v : store.getActiveStakeDeposits(
-					net.bigtangle.server.service.SlotService.currentChainEpoch(store))) {
+					net.bigtangle.server.service.SlotService.currentChainEpoch(store,
+							networkParameters.getSlotsPerEpoch()))) {
 				activeStake = activeStake.add(v.getAmount());
 			}
 			// Deterministic recomputation: the reward must equal the sum of fee
@@ -1841,7 +1844,8 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 						return SolidityState.fromPrevReward(cursor, true);
 					}
 					if (prevRi.getBlocks() != null
-							&& net.bigtangle.server.service.SlotService.isEpochStartBeacon(prevBeacon, prevRi)) {
+							&& net.bigtangle.server.service.SlotService.isEpochStartBeacon(prevBeacon, prevRi,
+									networkParameters.getSlotsPerEpoch())) {
 						// Only EPOCH-START beacons reward blocks (signed slot %
 						// 32 == 0); a block referenced/confirmed by a mid-epoch
 						// beacon is not yet rewarded and remains eligible for
@@ -1902,11 +1906,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				// without SlotData skip this (pre-PoS chains had no split rule).
 				net.bigtangle.core.SlotData rsd = slotDataOf(block);
 				if (rsd != null) {
-					long rewardEpoch = rsd.getSlot() / 32 - 2;
+					long rewardEpoch = networkParameters.getEpochForSlot(rsd.getSlot()) - 2;
 					java.util.List<net.bigtangle.core.StakeRecord> rewardValidators = validatorsForEpoch(
 							rewardEpoch, store);
 					java.util.Set<String> rewardVoters = net.bigtangle.server.service.CasperService
-							.votersForEpoch(rewardEpoch, store);
+							.votersForEpoch(rewardEpoch, store, networkParameters.getSlotsPerEpoch());
 					java.util.Map<String, java.math.BigInteger> expectedSplit = net.bigtangle.server.service.EpochRewardService
 							.planEpochRewards(expectedFromBlocks, rewardValidators, rewardVoters, networkParameters);
 					java.util.Map<String, java.math.BigInteger> actualSplit = new java.util.HashMap<>();

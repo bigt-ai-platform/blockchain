@@ -22,3 +22,9 @@ validator.env
 *-server.log
 *-server.cid
 helper/prod/validators/node-*/
+
+# secrets — never commit (see helper/prod/generate_keystore.sh for keystores)
+helper/cloudflare/credentials.json
+**/ca.pkcs12
+*.pkcs12
+*.p12

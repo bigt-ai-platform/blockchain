@@ -146,7 +146,7 @@ public class SlotTickService {
                 // Driving it from the confirmed chain makes every node
                 // evaluate the SAME chain epoch and converge on the same
                 // checkpoint.
-                long chainEpoch = SlotService.currentChainEpoch(store);
+                long chainEpoch = SlotService.currentChainEpoch(store, slotService.slotsPerEpoch());
                 if (chainEpoch != lastProcessedEpoch) {
                     // Evaluate the just-COMPLETED chain epoch: only its
                     // attestations are complete. Evaluating the current

@@ -982,13 +982,15 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					// every node. Fail-closed: a persistence error aborts the batch.
 					net.bigtangle.core.SlotData sd = slotDataOf(blk);
 					if (sd != null) {
-						randaoService.finalizeEpochMix(sd.getSlot() / 32 - 1, blockStore);
+						long boundaryEpoch = networkParameters.getEpochForSlot(sd.getSlot()) - 1;
+						randaoService.finalizeEpochMix(boundaryEpoch, blockStore);
 						// Same boundary discipline for the active validator set:
 						// proposer selection two epochs later reads this immutable
 						// snapshot instead of each node's live local set.
 						net.bigtangle.server.service.SlotService slotService = slotServiceProvider.getIfAvailable();
 						if (slotService != null) {
-							slotService.snapshotValidatorsForEpoch(sd.getSlot() / 32 - 1, blockStore);
+							slotService.snapshotValidatorsForEpoch(boundaryEpoch, blockStore,
+									networkParameters.getSlotsPerEpoch());
 						}
 						// Real inactivity leak: applied at the epoch boundary
 						// (keyed to this beacon) when finality is stalled, so the
@@ -997,12 +999,12 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 						net.bigtangle.server.service.CasperService casperLeak =
 								casperServiceProvider.getIfAvailable();
 						if (casperLeak != null) {
-							casperLeak.applyInactivityLeak(sd.getSlot() / 32 - 1, blk, blockStore);
+							casperLeak.applyInactivityLeak(boundaryEpoch, blk, blockStore);
 						}
 						// Chain-driven finality is evaluated AFTER the commit
 						// (see below): the two most recently completed slot-epochs
 						// have complete votes. Only collect the epochs here.
-						long slotEpoch = sd.getSlot() / 32;
+						long slotEpoch = networkParameters.getEpochForSlot(sd.getSlot());
 						for (long e = Math.max(0, slotEpoch - 2); e < slotEpoch; e++) {
 							finalityEpochs.add(e);
 						}
@@ -1059,7 +1061,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 					if (ri == null || ri.getBlocks() == null) {
 						continue;
 					}
-					long epoch = ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+					long epoch = ri.getChainlength() / networkParameters.getSlotsPerEpoch();
 					for (Sha256Hash referenced : ri.getBlocks()) {
 						Block refBlock = blockStore.get(referenced);
 						if (refBlock == null) {
@@ -1086,7 +1088,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				// validation reads this table (validation divergence).
 				if (!beacons.isEmpty()) {
 					long batchChainEpoch = (Long) beacons.get(beacons.size() - 1)[0]
-							/ net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+							/ networkParameters.getSlotsPerEpoch();
 					try {
 						stakeService.processWithdrawals(batchChainEpoch, blockStore);
 					} catch (Exception e) {
@@ -1218,7 +1220,8 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				if (blk.getBlockType() == BlockType.BLOCKTYPE_BEACON) {
 					net.bigtangle.core.SlotData sd = slotDataOf(blk);
 					if (sd != null) {
-						casper.invalidateCheckpointsFrom(sd.getSlot() / 32, blockStore);
+						casper.invalidateCheckpointsFrom(networkParameters.getEpochForSlot(sd.getSlot()),
+								blockStore);
 					}
 				}
 			}
@@ -1327,7 +1330,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 				net.bigtangle.core.RewardInfo ri = new net.bigtangle.core.RewardInfo()
 						.parseChecked(beacon.getTransactions().get(0).getData());
 				if (ri != null && ri.getBlocks() != null && ri.getBlocks().contains(target)) {
-					return ri.getChainlength() / net.bigtangle.server.service.SlotService.SLOTS_PER_EPOCH;
+					return ri.getChainlength() / networkParameters.getSlotsPerEpoch();
 				}
 				cursor = ri != null ? ri.getPrevRewardHash() : null;
 			}
@@ -1353,7 +1356,7 @@ public void updateChain(boolean confirmTimebox) throws BlockStoreException {
 							net.bigtangle.core.SlotData.class);
 					if (sd != null && sd.getRandaoReveal() != null) {
 						randaoService.applyReveal(sd.getSlot(), sd.getRandaoReveal(), store);
-						epochs.add(sd.getSlot() / 32);
+						epochs.add(networkParameters.getEpochForSlot(sd.getSlot()));
 					}
 					break;
 				}

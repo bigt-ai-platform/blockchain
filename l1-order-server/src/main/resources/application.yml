@@ -58,8 +58,8 @@ management:
         enabled: true
   endpoints:
     web:
-      accessibility:
-        include: '*'
+      exposure:
+        include: health,info,prometheus
   endpoint:
     prometheus:
       enabled: true

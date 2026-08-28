@@ -1,5 +1,3 @@
-  
- 
 networks:
   bigtangle-bridged-network:
     driver: bridge
@@ -26,62 +24,35 @@ services:
       retries: 5
     restart: always
 
-  minio:
-    image: minio/minio
-    container_name: minio
-    hostname: minio
-    networks:
-      - bigtangle-bridged-network
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadminpassword
-      MINIO_DEFAULT_BUCKETS: testbigtangle
-    volumes:
-      - /data/vm/minio/minio_data:/data
-    command: server /data --console-address ":9001"
-    restart: always
-
   test-bigtangle:
-    build:
-      context: ..
-      dockerfile: helper/bigtangle/Dockerfile
-    image: bigtangle-server:local
+    image: ghcr.io/bigt-ai-platform/layer0-server:latest
     container_name: test-bigtangle
     hostname: test-bigtangle
     networks:
       - bigtangle-bridged-network
     ports:
       - "18089:18089"
-    links:
-      - test-bigtangle-postgres
     environment:
-      JAVA_OPTS: "-Ddebug -Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
+      JAVA_OPTS: "-Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED -Dfile.encoding=UTF-8"
       DB_PASSWORD: test1234
-      DB_USER: root
       DB_PORT: 5432
       SERVER_PORT: 18089
       DB_NAME: info
       DB_HOSTNAME: test-bigtangle-postgres
-      MINIO_URL: http://minio:9000
-      MINIO_ACCESSKEY: minioadmin
-      MINIO_SECRETKEY: minioadminpassword
-      MINIO_BUCKETNAME: testbigtangle
-      SERVER_MINERADDRESS: mjWvzPZz4YJtWqb7ux7cdgq5G7rzkg3bXG
-      SERVERMODE: ""
       SERVER_REQUESTER: http://test-bigtangle:18089
       REQUESTER: http://test-bigtangle:18089
-
       SERVICE_CHAINLENGTH: "false"
       SERVER_RUN_KAFKA_STREAM: "false"
       SERVER_NET: Test
       SSL: "false"
+      # The coin-minting fundAddresses endpoint is disabled by default and
+      # refuses non-loopback callers. This is a PUBLIC testnet domain: only
+      # set FUND_ENABLED + SERVER_FAUCETPUBLIC if the tunnel is meant to
+      # serve as a public faucet (never on Mainnet).
+      # FUND_ENABLED: "true"
+      # SERVER_FAUCETPUBLIC: "true"
     depends_on:
       - test-bigtangle-postgres
-      - minio
-
     restart: always
 
   cloudflared:
@@ -94,5 +65,8 @@ services:
     command: ["cloudflared", "tunnel", "run"]
     restart: always
     volumes:
-      - /home/jcui/git/server/helper/cloudflared-config.yml:/etc/cloudflared/config.yml:ro
-      - /home/jcui/git/server/helper/credentials.json:/etc/cloudflared/credentials.json
+      # credentials.json holds the tunnel SECRET — it is gitignored and must
+      # be generated per machine (see README-tunnel.md). The version committed
+      # earlier leaked: rotate the tunnel before using this setup.
+      - ./credentials.json:/etc/cloudflared/credentials.json:ro
+      - ./cloudflared-config.yml:/etc/cloudflared/config.yml:ro
