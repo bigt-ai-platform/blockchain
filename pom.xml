@@ -24,6 +24,8 @@
 		<argLine></argLine>
 		<maven.compiler.source>25</maven.compiler.source>
 		<maven.compiler.target>25</maven.compiler.target>
+		<!-- Enforce the Java 25 (latest LTS) API surface no matter which JDK runs the build -->
+		<maven.compiler.release>25</maven.compiler.release>
 		<maven.compiler.parameters>true</maven.compiler.parameters>
 
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
