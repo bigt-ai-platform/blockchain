@@ -35,6 +35,10 @@ for i in $(seq 0 $((N_VALIDATORS - 1))); do
         exit 1
     fi
 
+    # Per-node operator API key guarding the sensitive PoS endpoints
+    # (stakeDeposit/activateValidator/processWithdrawal/setValidatorKey).
+    api_key="$(openssl rand -hex 32)"
+
     cat > "${node_dir}/validator.env" <<EOF
 # Node ${i} validator credentials — KEEP SECRET (gitignored).
 NODE_INDEX=${i}
@@ -43,6 +47,7 @@ POS_VALIDATOR_KEY=${key}
 VALIDATOR_PUBKEY=${pub}
 PUBKEY_HASH=${hash}
 ADDRESS=${addr}
+API_KEY=${api_key}
 EOF
     chmod 600 "${node_dir}/validator.env"
     echo "wrote ${node_dir}/validator.env  (address=${addr})"
