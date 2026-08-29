@@ -88,6 +88,8 @@ public class SyncBlockService {
 
 	@Autowired
 	protected ServerConfiguration serverConfiguration;
+	@Autowired
+	protected RequesterSeedDiscovery requesterSeedDiscovery;
 	private static final Logger log = LoggerFactory.getLogger(SyncBlockService.class);
 	private static final String LOCKID = "sync";
 
@@ -275,7 +277,7 @@ public class SyncBlockService {
 		// not have. Only remote peers can help here. Peers are matched by
 		// port — unique per node in the mesh.
 		String ownPort = ":" + serverConfiguration.getPort();
-		String[] re = serverConfiguration.getRequester().split(",");
+		List<String> re = requesterSeedDiscovery.getRequesters();
 		List<String> badserver = new ArrayList<>();
 		byte[] data = null;
 		for (String s : re) {
@@ -670,7 +672,7 @@ public class SyncBlockService {
 	 */
 	public long getMaxPeerFinalizedChainLength() {
 		long max = -1;
-		for (String s : serverConfiguration.getRequester().split(",")) {
+		for (String s : requesterSeedDiscovery.getRequesters()) {
 			s = s == null ? null : s.trim();
 			if (s == null || s.isEmpty()) {
 				continue;
@@ -700,7 +702,7 @@ public class SyncBlockService {
 	private Set<Sha256Hash> requestBlocksByHashes(Set<Sha256Hash> hashes, BlockStoreInterface store) {
 		Set<Sha256Hash> fetched = new HashSet<>();
 		List<Sha256Hash> list = new ArrayList<>(hashes);
-		String[] re = serverConfiguration.getRequester().split(",");
+		List<String> re = requesterSeedDiscovery.getRequesters();
 		for (int from = 0; from < list.size(); from += HASHLIST_CHUNK) {
 			List<Sha256Hash> chunk = list.subList(from, Math.min(from + HASHLIST_CHUNK, list.size()));
 			HashMap<String, Object> requestParam = new HashMap<>();
@@ -816,7 +818,7 @@ public class SyncBlockService {
 	}
 
 	public void syncChain(Long chainlength, boolean initsync, BlockStoreInterface store) throws BlockStoreException {
-		String[] re = serverConfiguration.getRequester().split(",");
+		List<String> re = requesterSeedDiscovery.getRequesters();
 		MaxConfirmedReward aMaxConfirmedReward = new MaxConfirmedReward();
 		TXReward my = cacheBlockService.getMaxConfirmedReward(store);
 		if (chainlength > -1) {
@@ -824,7 +826,7 @@ public class SyncBlockService {
 			if (my1 != null)
 				my = my1;
 		}
-		log.debug(" my chain length " + my.getChainLength() + " remote " + re[0]);
+		log.debug(" my chain length " + my.getChainLength() + " remote " + (re.isEmpty() ? "" : re.get(0)));
 		// PoS fork choice: the canonical chain is the LMD-GHOST head
 		// (attestation-weighted from the highest justified checkpoint), NOT the
 		// longest chain. Rank remotes by the fork-choice weight of their
@@ -1140,7 +1142,7 @@ public class SyncBlockService {
 	 * sync the remote data that not in chain
 	 */
 	public void syncNonChained(BlockStoreInterface store) throws BlockStoreException {
-		String[] re = serverConfiguration.getRequester().split(",");
+		List<String> re = requesterSeedDiscovery.getRequesters();
 		for (String s : re) {
 			if (s != null && !"".equals(s)) {
 				try {
@@ -1159,7 +1161,7 @@ public class SyncBlockService {
 	 * (submitTransaction enforces the full mempool verification).
 	 */
 	public void syncMempool(BlockStoreInterface store) {
-		String[] re = serverConfiguration.getRequester().split(",");
+		List<String> re = requesterSeedDiscovery.getRequesters();
 		for (String s : re) {
 			if (s != null && !"".equals(s)) {
 				try {

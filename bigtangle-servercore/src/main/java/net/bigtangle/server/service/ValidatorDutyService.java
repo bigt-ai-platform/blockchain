@@ -57,6 +57,9 @@ public class ValidatorDutyService {
     private ServerConfiguration serverConfiguration;
 
     @Autowired
+    private RequesterSeedDiscovery requesterSeedDiscovery;
+
+    @Autowired
     private ScheduleConfiguration scheduleConfiguration;
 
     @Autowired
@@ -522,11 +525,10 @@ public class ValidatorDutyService {
             // receiver for zero information (measurable CPU burn).
             if (!serverConfiguration.getRunKafkaStream()) {
                 try {
-                    String requester = serverConfiguration.getRequester();
+                    List<String> discovered = requesterSeedDiscovery.getRequesters();
                     String[] urls;
-                    if (requester != null && !requester.trim().isEmpty()) {
-                        urls = java.util.Arrays.stream(requester.split(",")).map(String::trim)
-                                .filter(s -> !s.isEmpty()).toArray(String[]::new);
+                    if (!discovered.isEmpty()) {
+                        urls = discovered.toArray(new String[0]);
                     } else {
                         urls = new String[] { "http://localhost:" + serverConfiguration.getPort() };
                     }
