@@ -2,8 +2,6 @@ server:
   port: ${SERVER_PORT:8086}
   net: ${SERVER_NET:Test}
   requester: ${REQUESTER:}
-  serverversion: ${SERVERVERSION:0.5.0}
-  clientversion: ${CLIENTVERSION:0.5.0}
   ssl:
     enabled: ${SSL:false}
     key-store: ${KEYSTORE:src/main/resources/ca.pkcs12}

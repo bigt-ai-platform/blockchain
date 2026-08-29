@@ -144,13 +144,7 @@ public class ServerConfiguration {
 
     /** Base URL for this server's API endpoints */
     private String serverurl;
-    
-    /** Current server software version */
-    private String serverversion;
-    
-    /** Minimum required client version for compatibility */
-    private String clientversion;
-    
+
     /** 
      * Whether the server operates in permissioned mode, requiring
      * explicit access grants for certain operations.
@@ -380,38 +374,6 @@ public class ServerConfiguration {
      * @return The miner's reward address
      */
     /**
-     * Gets the current server software version.
-     * @return The version string in semver format
-     */
-    public String getServerversion() {
-        return serverversion;
-    }
-
-    /**
-     * Sets the server software version.
-     * @param serverversion The version string to use
-     */
-    public void setServerversion(String serverversion) {
-        this.serverversion = serverversion;
-    }
-
-    /**
-     * Gets the minimum required client version for compatibility.
-     * @return The minimum client version string
-     */
-    public String getClientversion() {
-        return clientversion;
-    }
-
-    /**
-     * Sets the minimum required client version.
-     * @param clientversion The minimum version string to require
-     */
-    public void setClientversion(String clientversion) {
-        this.clientversion = clientversion;
-    }
-
-    /**
      * Checks if the server is running in permissioned mode.
      * @return true if permissioned mode is enabled
      */
@@ -599,8 +561,8 @@ public class ServerConfiguration {
      */
     @Override
     public String toString() {
-        return "ServerConfiguration [requester=" + requester + ", port=" + port + ", net=" + net + ", serverurl=" + serverurl + ", serverversion=" + serverversion + ", clientversion="
-                + clientversion + ", permissioned=" + permissioned + ", permissionadmin=" + permissionadmin
+        return "ServerConfiguration [requester=" + requester + ", port=" + port + ", net=" + net + ", serverurl=" + serverurl
+                + ", permissioned=" + permissioned + ", permissionadmin=" + permissionadmin
                 + ", myserverblockOnly=" + myserverblockOnly
                 + ", maxsearchblocks=" + maxsearchblocks  
                 + ", serviceReady=" + serviceReady + ", createtable=" + createtable
