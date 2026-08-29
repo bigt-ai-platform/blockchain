@@ -255,7 +255,7 @@ phase_stake() {
 # one epoch. Also fails on missing validators / zero beacons anywhere.
 verify_network() {
     local expected="${EXPECTED_VALIDATORS:-$(echo "${SEED_HOSTS}" | tr ',' '\n' | wc -l | tr -d ' ')}"
-    local epoch="${POS_SLOTS_PER_EPOCH:-32}"
+    local epoch="${POS_SLOTS_PER_EPOCH:-8}"
     local maxcl=0 mincl=999999999
     local finlist=""
     local -A FIN_RAW=() FIN_GRP=()

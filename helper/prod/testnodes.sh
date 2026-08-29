@@ -23,9 +23,11 @@
 #   default /data/vm/test-bigtangle-postgres/var/lib/postgresql/data — survives
 #   container recreation and lives on the big disk, not the root fs),
 # KAFKA (default localhost:9092),
-# SLOT_MS (pos.slotIntervalMs, default 12000 — Ethereum's 12 s slot; gives the
-# receive→connect→confirm pipeline time to adopt each proposer block before
-# the next slot, instead of forking under 2 s slots),
+# SLOT_MS (pos.slotIntervalMs, default 12000 — prod value. With the 8-slot
+# epochs of MainNetParams finality ≈ 2 epochs ≈ 3.2 min. 6 s slots were
+# tried for speed but split the mesh three times (nodes freeze on short
+# forks at 3-5 nodes; 2 s forks even 3 nodes) — the receive→connect pipeline
+# needs the full 12 s to adopt each proposer block reliably),
 # READINESS_MIN (bigtangle.readinessTimeoutMinutes, default 10),
 # XMX (per-node JVM heap, default 3g — 3 nodes ≈ 11G RSS, sized for a 16G host;
 #   lower it on smaller machines, e.g. XMX=1200m testnodes.sh up).
@@ -237,7 +239,10 @@ FUND_AMOUNT=160000000
 FUND_MODE=bootstrap
 FUND_ENABLED=true
 GENESIS_CSV=
-POS_SLOTS_PER_EPOCH=32
+# MUST match the nodes' params: SERVER_NET=Mainnet -> MainNetParams has
+# slotsPerEpoch=8 (TestParams would be 32). Drives the leave poll timeout,
+# the join stamp gate and verify_network's epoch math.
+POS_SLOTS_PER_EPOCH=8
 JAVA_OPTS_SERVER="-Xmx${XMX} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
 EOF
     # the test drives the REAL shared machinery
@@ -265,18 +270,54 @@ EOF
             start_server" ) > "${WORKDIR}/node-${i}/start.log" 2>&1 &
     done
     wait
-    local ok=0
-    for i in $(seq 0 $((NNODES - 1))); do
-        for _ in $(seq 1 100); do
-            [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$((8281 + i))/" 2>/dev/null)" = "200" ] && { ok=$((ok+1)); break; }
-            sleep 3
+    # Nodes boot in parallel — poll all pending APIs each round instead of
+    # waiting out node-0's full window before even looking at node-1.
+    local ok=0 pending="" i
+    for i in $(seq 0 $((NNODES - 1))); do pending="${pending} $i"; done
+    for _ in $(seq 1 100); do
+        local still=""
+        for i in $pending; do
+            if [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$((8281 + i))/" 2>/dev/null)" = "200" ]; then
+                ok=$((ok+1))
+            else
+                still="${still} $i"
+            fi
         done
+        pending="$still"
+        [ -z "$pending" ] && break
+        sleep 3
     done
     [ "$ok" = "$NNODES" ] || die "only ${ok}/${NNODES} APIs up — see ${WORKDIR}/node-*/start.log"
     log "up: ${NNODES} nodes serving"
 }
 
+wait_synced() { # $1=index — block until node $1's confirmed tip reaches the
+    # best tip of the other running nodes. Staking/activating an UNSYNCED
+    # node makes it propose beacons on its own short fork (observed: a
+    # rejoined node at cl 2-3 proposing into a cl-500 mesh), and its
+    # minted balance only becomes visible once sync reconnects the caches.
+    local i="$1" target=0 j cl waited=0
+    for j in $(seq 0 $((NNODES - 1))); do
+        [ "$j" = "$i" ] && continue
+        docker inspect "bt4-node-node-${j}-server" >/dev/null 2>&1 || continue
+        cl="$(cl_of "$j")"
+        [ -n "$cl" ] && [ "$cl" != "-" ] && [ "$cl" -gt "$target" ] 2>/dev/null && target="$cl"
+    done
+    [ "$target" -le 0 ] && return 0
+    log "node-${i}: waiting for chain sync to peer tip ${target}"
+    cl=0
+    while [ "$waited" -lt 600 ]; do
+        cl="$(cl_of "$i")"
+        [ -n "$cl" ] && [ "$cl" != "-" ] && [ "$cl" -ge "$target" ] 2>/dev/null && \
+            { log "node-${i} synced (cl=${cl}) after ${waited}s"; return 0; }
+        sleep 10; waited=$((waited + 10))
+    done
+    log "node-${i} did not reach peer tip ${target} in 600s (cl=${cl})"
+    return 1
+}
+
 phase_stake_one() { # $1=index
+    wait_synced "$1"
     ( cd "${WORKDIR}/node-$1" && bash -c "
         set -euo pipefail
         source ../common.env; source ./validator.env
@@ -288,10 +329,17 @@ phase_stake_one() { # $1=index
 }
 
 cmd_stake() {
+    # Nodes stake independently (own key, own fund index) — fund+stake them
+    # concurrently instead of serializing three ~1 min bootstrap cycles.
+    local i pids=""
     for i in $(seq 0 $((NNODES - 1))); do
         log "staking node-${i}"
-        phase_stake_one "$i" >&2
+        phase_stake_one "$i" &
+        pids="${pids} $!"
     done
+    local rc=0 p
+    for p in $pids; do wait "$p" || rc=1; done
+    [ "$rc" = 0 ] || die "one or more stake phases failed"
     sleep 5
     log "staked: $(for i in $(seq 0 $((NNODES - 1))); do printf '%s ' "$(valcount_of "$i")"; done)validators seen"
 }
@@ -395,8 +443,8 @@ cmd_transfer() {
     java -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
         "${VALSRC}/TransferOnce.java" "$seed" "$rph" 50000 "http://127.0.0.1:$((8281 + from))/" \
         "${WORKDIR}/walletctx-transfer" || die "transfer tx build/submit failed"
-    for attempt in 1 2 3 4 5 6; do
-        sleep 15
+    for attempt in 1 2 3 4 5 6 7 8 9; do
+        sleep 10
         bal=999999999
         for i in $(seq 0 $((NNODES - 1))); do
             # skip a node that was intentionally stopped (leave test)
@@ -468,8 +516,22 @@ cmd_leave() { # $1=index — signed BLOCKTYPE_EXIT, stop it, drop from seeds
     # confirmed (else old deposit + fresh deposit BOTH stay active — measured
     # validators=5->6->7 voting-weight inflation across join-storm cycles).
     cl_of "$i" > "${WORKDIR}/node-${i}.leave_stamp" 2>/dev/null || true
-    log "exit accepted; waiting ~2 epochs for the BLOCKTYPE_EXIT to finalize"
-    sleep $(( SLOT_MS * ${POS_SLOTS_PER_EPOCH:-32} * 2 / 1000 ))
+    # Poll for the deposit ACTUALLY dropping out of the validator set instead
+    # of a blind 2-epoch sleep: inclusion takes a slot and finalization needs
+    # ~2 more epochs, so allow 3 — and fail loudly here rather than letting a
+    # still-active old deposit inflate the validator set at join time.
+    local waited=0 timeout=$(( SLOT_MS * ${POS_SLOTS_PER_EPOCH:-8} * 4 / 1000 )) vc
+    log "exit accepted; waiting for the BLOCKTYPE_EXIT to finalize (validator set ${NNODES} -> $((NNODES - 1)))"
+    while [ "$waited" -lt "$timeout" ]; do
+        vc="$(valcount_of "$i")"
+        [ -n "$vc" ] && [ "$vc" != "-" ] && [ "$vc" -lt "$NNODES" ] 2>/dev/null && \
+            { log "old deposit left the validator set after ${waited}s"; break; }
+        sleep 15; waited=$((waited + 15))
+        [ $((waited % 60)) -eq 0 ] && log "  validators=${vc:--} (${waited}s)"
+    done
+    vc="$(valcount_of "$i")"
+    [ -n "$vc" ] && [ "$vc" != "-" ] && [ "$vc" -ge "$NNODES" ] 2>/dev/null && \
+        die "old deposit still active after ${timeout}s (validators=${vc}) — join would inflate the set"
     docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true
     seed_env_drop SEED_HOSTS "$((8281 + i))"
     seed_env_drop GOSSIP_SEEDS "$((9421 + i))"
@@ -494,13 +556,17 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
             [ -n "${now_cl:-}" ] && [ "${now_cl:-0}" -gt 0 ] 2>/dev/null && break
             now_cl=""
         done
-        need=$(( left_cl + 2 * ${POS_SLOTS_PER_EPOCH:-32} ))
+        need=$(( left_cl + 2 * ${POS_SLOTS_PER_EPOCH:-8} ))
         if [ "${now_cl:-0}" -lt "$need" ] && [ "${JOIN_FORCE:-0}" != "1" ]; then
             die "join node-${i} blocked: exit finalizing (cl=$now_cl, need>=$need). Wait or JOIN_FORCE=1"
         fi
         rm -f "$stamp"
     elif [ -d "${WORKDIR}/node-${i}.old" ] || docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1; then
-        die "join node-${i} blocked: no finalized leave stamp (run 'leave ${i}' first, or JOIN_FORCE=1)"
+        # JOIN_FORCE also covers a consumed stamp with a stale node dir: the
+        # previous join attempt may have died AFTER consuming the stamp
+        # (e.g. at the sync gate), leaving no way back without this escape.
+        [ "${JOIN_FORCE:-0}" = "1" ] || die "join node-${i} blocked: no finalized leave stamp (run 'leave ${i}' first, or JOIN_FORCE=1)"
+        log "join node-${i}: JOIN_FORCE — overriding missing leave stamp"
     fi
     rm -rf "${WORKDIR}/node-${i}.old" && mv "${WORKDIR}/node-${i}" "${WORKDIR}/node-${i}.old" 2>/dev/null || true
     mkdir -p "${WORKDIR}/node-${i}"; make_node_env "$i"
