@@ -2,12 +2,10 @@
 # Run the Remote*IT tests against a DEPLOYED (already running) prod L0 server.
 #
 # Unlike helper/fulltest/remote.sh this does NOT start/stop databases or
-# servers -- it assumes the prod validator node is already up (fundAddresses
-# bootstrap mode enabled). It only:
-#   1. funds the genesis (seed 0x01) and yuan (seed 0x03) wallets used by the
-#      remote tests with CONFIRMED BIG via /fundAddresses,
-#   2. waits for the PoS beacon chain to be producing, and
-#   3. runs `mvn test` on layer0-server against the prod URL.
+# servers -- it assumes the prod validator node is already up and bootstrapped
+# with a genesis distribution CSV that funds the test wallets. It only:
+#   1. waits for the PoS beacon chain to be producing, and
+#   2. runs `mvn test` on layer0-server against the prod URL.
 #
 # Usage:
 #   ./prodtest.sh [TestClassPattern]      # default: net.bigtangle.server.remote.Remote*IT
@@ -93,32 +91,15 @@ else
 fi
 
 echo ""
-echo "=== Fund genesis wallet (seed 0x01) ==="
-GENESIS_FUND_UTXOS="${GENESIS_FUND_UTXOS:-64}"
-GENESIS_ENTRIES=""
-for i in $(seq 1 "$GENESIS_FUND_UTXOS"); do
-    GENESIS_ENTRIES="${GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$GENESIS_PUBKEY\"},"
-done
-GENESIS_ENTRIES="[${GENESIS_ENTRIES%,}]"
-if post_ok "$PROD_BASE/fundAddresses" "{\"addresses\":$GENESIS_ENTRIES}"; then
-    echo "genesis wallet funded ($GENESIS_FUND_UTXOS UTXOs)"
-else
-    echo "WARNING: genesis funding did not confirm via fundAddresses" >&2
-fi
+echo "=== Genesis wallet (seed 0x01) ==="
+# The /fundAddresses faucet has been removed: the genesis + yuan wallets must
+# be funded inside the genesis block via a genesis distribution CSV
+# (TestGenesisOutput.csv / -Dbigtangle.genesis.csv). Nothing to do here.
+echo "genesis wallet funded via genesis CSV (no faucet)"
 
 echo ""
-echo "=== Fund yuan wallet (seed 0x03) ==="
-YUAN_FUND_UTXOS="${YUAN_FUND_UTXOS:-8}"
-YUAN_ENTRIES=""
-for i in $(seq 1 "$YUAN_FUND_UTXOS"); do
-    YUAN_ENTRIES="${YUAN_ENTRIES}{\"address\":\"yuan\",\"value\":100000000000000,\"pubkey\":\"$YUAN_PUBKEY\"},"
-done
-YUAN_ENTRIES="[${YUAN_ENTRIES%,}]"
-if post_ok "$PROD_BASE/fundAddresses" "{\"addresses\":$YUAN_ENTRIES}"; then
-    echo "yuan wallet funded ($YUAN_FUND_UTXOS UTXOs)"
-else
-    echo "WARNING: yuan funding did not confirm via fundAddresses" >&2
-fi
+echo "=== Yuan wallet (seed 0x03) ==="
+echo "yuan wallet funded via genesis CSV (no faucet)"
 
 echo ""
 echo "=== Run remote tests against $PROD_URL ==="

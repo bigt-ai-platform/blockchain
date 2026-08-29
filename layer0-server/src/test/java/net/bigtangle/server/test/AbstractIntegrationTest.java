@@ -139,7 +139,7 @@ import net.bigtangle.wallet.Wallet;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0ServerStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 		properties = { "server.net=Test", "service.schedule.initsync=false", "server.runKafkaStream=false",
-				"server.fundEnabled=true", "spring.main.allow-circular-references=true" })
+				"spring.main.allow-circular-references=true" })
 
 @TestExecutionListeners(value = { DependencyInjectionTestExecutionListener.class, MockitoTestExecutionListener.class,
 

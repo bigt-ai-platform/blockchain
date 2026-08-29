@@ -91,33 +91,23 @@ public class PqSerializationIT extends AbstractIntegrationTest {
 
     @Test
     public void testFundAddressesUtxoHashMatches() throws Exception {
-        PQKey key = PQKey.createNew();
-        byte[] expectedHash = key.getPubKeyHash();
+        // The coin-minting /fundAddresses faucet has been removed (bootstrap is
+        // now done via the genesis block CSV). Verify the same P2PKH UTXO
+        // behaviour using the genesis wallet's injected genesis coinbase UTXO.
+        PQKey genesisKey = wallet.walletKeys(null).get(0);
+        byte[] expectedHash = genesisKey.getPubKeyHash();
 
-        HashMap<String, Object> fundReq = new HashMap<>();
-        List<HashMap<String, Object>> entries = new ArrayList<>();
-        HashMap<String, Object> entry = new HashMap<>();
-        entry.put("pubkey", Utils.HEX.encode(key.getPubKey()));
-        entry.put("address",
-                Address.fromHash160(networkParameters, expectedHash).toBase58());
-        entry.put("value", 100000L);
-        entries.add(entry);
-        fundReq.put("addresses", entries);
-        OkHttp3Util.post(contextRoot + "fundAddresses",
-                Json.jsonmapper().writeValueAsString(fundReq)
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-
-        Wallet w = Wallet.fromKeys(networkParameters, key, contextRoot);
+        Wallet w = wallet;
         List<UTXO> utxos = w.calculateAllSpendCandidatesUTXO(null, false);
-        assertTrue(utxos.size() > 0, "must have at least one UTXO after funding");
+        assertTrue(utxos.size() > 0, "genesis wallet must have at least one UTXO");
         UTXO utxo = utxos.get(0);
 
         Script scriptPubKey = utxo.getScript();
         assertTrue(scriptPubKey.isSentToAddress(), "UTXO script must be P2PKH");
         byte[] utxoHash = scriptPubKey.getPubKeyHash();
 
-        log.info("key.getPubKeyHash():     {}", Utils.HEX.encode(expectedHash));
-        log.info("UTXO scriptPubKey hash:  {}", Utils.HEX.encode(utxoHash));
+        log.info("genesis key pubKeyHash: {}", Utils.HEX.encode(expectedHash));
+        log.info("UTXO scriptPubKey hash: {}", Utils.HEX.encode(utxoHash));
 
         assertArrayEquals(expectedHash, utxoHash,
                 "UTXO scriptPubKey hash must match the funded key's pubKeyHash");

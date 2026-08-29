@@ -107,7 +107,7 @@ public class MaxTpsBenchmarkProd {
         PQKey recipient = PQKey.createNew();
         String recvAddr = Address.fromHash160(params, recipient.getPubKeyHash()).toBase58();
 
-        // 2. Fund every wallet in ONE fundAddresses call (node-local faucet).
+        // 2. (Faucet removed) bootstrap wallets via genesis CSV instead.
         List<Map<String, Object>> entries = new ArrayList<>();
         for (PQKey k : walletKeys) {
             Map<String, Object> e = new HashMap<>();
@@ -119,7 +119,7 @@ public class MaxTpsBenchmarkProd {
         Map<String, Object> fundBody = new HashMap<>();
         fundBody.put("addresses", entries);
         long fundStart = System.nanoTime();
-        OkHttp3Util.postString(base + "fundAddresses", Json.jsonmapper().writeValueAsString(fundBody));
+        requireGenesisBootstrap();
         log.info("Funded {} wallets ({} ms)", walletKeys.size(),
                 (System.nanoTime() - fundStart) / 1_000_000);
 
@@ -321,5 +321,12 @@ public class MaxTpsBenchmarkProd {
         Collections.sort(sorted);
         int idx = Math.min(sorted.size() - 1, (int) Math.ceil(pct / 100.0 * sorted.size()) - 1);
         return sorted.get(Math.max(0, idx));
+    }
+
+    /** The coin-minting faucet was removed; bootstrap must come from a genesis CSV. */
+    private static void requireGenesisBootstrap() {
+        throw new RuntimeException(
+                "fundAddresses faucet removed — bootstrap the node via a genesis CSV "
+                        + "that funds the benchmark wallets (see helper/test/TestGenesisOutput.csv)");
     }
 }

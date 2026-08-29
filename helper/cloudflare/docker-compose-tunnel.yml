@@ -45,12 +45,6 @@ services:
       SERVER_RUN_KAFKA_STREAM: "false"
       SERVER_NET: Test
       SSL: "false"
-      # The coin-minting fundAddresses endpoint is disabled by default and
-      # refuses non-loopback callers. This is a PUBLIC testnet domain: only
-      # set FUND_ENABLED + SERVER_FAUCETPUBLIC if the tunnel is meant to
-      # serve as a public faucet (never on Mainnet).
-      # FUND_ENABLED: "true"
-      # SERVER_FAUCETPUBLIC: "true"
     depends_on:
       - test-bigtangle-postgres
     restart: always

@@ -55,11 +55,18 @@ L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-}"
 # fresh PoS chain the genesis coin is paid out to the configured miner address,
 # so the genesis wallet is funded explicitly below (Step 7). The L1-order chain
 # has a fresh genesis and needs its wallet funded too (Step 7c).
+#
+# Preferred: fund the init wallets (genesis / yuan / validator / miner) directly
+# in the L0 GENESIS BLOCK via a GenesisOutput CSV (TestGenesisOutput.csv), so
+# the test wallets start with REAL confirmed chain state and no faucet
+# (chicken-and-egg) injection is needed. If the CSV is absent, remote.sh falls
+# back to the fundAddresses faucet in Step 7.
 L0_GENESIS_PUBKEY="${L0_GENESIS_PUBKEY:-}"
 L0_YUAN_PUBKEY="${L0_YUAN_PUBKEY:-}"
+TEST_GENESIS_CSV="${TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutput.csv}"
 L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-}"
 
-POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-2000}"
+POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-6000}"
 
 # Use Java 25 if available
 if [ -x /tmp/opencode/jdk25/bin/java ]; then
@@ -273,14 +280,22 @@ echo "L0 validator pubkey: ${L0_VALIDATOR_PUBKEY:0:24}... (${#L0_VALIDATOR_PUBKE
 echo "L1 validator pubkey: ${L1_VALIDATOR_PUBKEY:0:24}... (${#L1_VALIDATOR_PUBKEY} hex)"
 echo "L0 genesis wallet pubkey: ${L0_GENESIS_PUBKEY:0:24}... (${#L0_GENESIS_PUBKEY} hex)"
 
-L0_POS_ARGS="-Dpos.validatorKey=$L0_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true -Dserver.fundEnabled=true"
+L0_POS_ARGS="-Dpos.validatorKey=$L0_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true"
+# When a test genesis CSV is present, mint the init wallets (genesis/yuan/
+# validator/miner) inside the L0 genesis block instead of the fundAddresses
+# faucet — the wallets then start with real, confirmed chain state.
+L0_GENESIS_CSV_ARGS=""
+if [ -f "$TEST_GENESIS_CSV" ]; then
+    L0_GENESIS_CSV_ARGS="-Dbigtangle.genesis.csv=$TEST_GENESIS_CSV"
+    echo "Using L0 genesis distribution: $TEST_GENESIS_CSV"
+fi
 
 # --- Step 4: Start L0 HTTP server (PoS validator duty on the settlement chain) ---
 echo ""
 echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS -Dbridge.active=false -Danchor.active=false" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS $L0_GENESIS_CSV_ARGS -Dbridge.active=false -Danchor.active=false" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -382,12 +397,18 @@ echo "TipsQueue has $(pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -t -A -c "S
 # --- Step 7: Register the L0 PoS validator (the key the L0 server holds) ---
 echo ""
 echo "=== Step 7: Register L0 PoS validator ==="
-FUND_AMOUNT=1000000000000
-if post_ok "$SERVER_BASE/fundAddresses" \
-    "{\"addresses\":[{\"address\":\"validator\",\"value\":$FUND_AMOUNT,\"pubkey\":\"$L0_VALIDATOR_PUBKEY\"}]}"; then
-    echo "L0 validator funded"
-else
-    echo "L0 validator funding failed"
+
+# When the genesis CSV is used, the validator / genesis / yuan wallets already
+# hold confirmed coins from the genesis block, so the fundAddresses faucet calls
+# below are skipped (no synthetic off-chain minting needed).
+if [ -z "$L0_GENESIS_CSV_ARGS" ]; then
+    FUND_AMOUNT=1000000000000
+    if post_ok "$SERVER_BASE/fundAddresses" \
+        "{\"addresses\":[{\"address\":\"validator\",\"value\":$FUND_AMOUNT,\"pubkey\":\"$L0_VALIDATOR_PUBKEY\"}]}"; then
+        echo "L0 validator funded"
+    else
+        echo "L0 validator funding failed"
+    fi
 fi
 
 sleep 2
@@ -406,39 +427,43 @@ else
     echo "L0 validator activation failed"
 fi
 
-# Fund the L0 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can
-# pay fees / create tokens on the settlement chain as the genesis wallet.
-# Many distinct confirmed UTXOs are minted (one per entry) so each test /
-# token creation can spend a fresh confirmed BIG source; a single UTXO would
-# leave only unconfirmed change after the first spend and later tests would
-# fail with InsufficientMoneyException.
-GENESIS_FUND_UTXOS="${GENESIS_FUND_UTXOS:-64}"
-L0_GENESIS_ENTRIES=""
-for i in $(seq 1 "$GENESIS_FUND_UTXOS"); do
-    L0_GENESIS_ENTRIES="${L0_GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L0_GENESIS_PUBKEY\"},"
-done
-L0_GENESIS_ENTRIES="[${L0_GENESIS_ENTRIES%,}]"
-if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$L0_GENESIS_ENTRIES}"; then
-    echo "L0 genesis wallet funded ($GENESIS_FUND_UTXOS UTXOs)"
+if [ -n "$L0_GENESIS_CSV_ARGS" ]; then
+    echo "L0 init wallets funded via genesis CSV (no faucet)"
 else
-    echo "L0 genesis funding failed"
-fi
+    # Fund the L0 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can
+    # pay fees / create tokens on the settlement chain as the genesis wallet.
+    # Many distinct confirmed UTXOs are minted (one per entry) so each test /
+    # token creation can spend a fresh confirmed BIG source; a single UTXO would
+    # leave only unconfirmed change after the first spend and later tests would
+    # fail with InsufficientMoneyException.
+    GENESIS_FUND_UTXOS="${GENESIS_FUND_UTXOS:-64}"
+    L0_GENESIS_ENTRIES=""
+    for i in $(seq 1 "$GENESIS_FUND_UTXOS"); do
+        L0_GENESIS_ENTRIES="${L0_GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L0_GENESIS_PUBKEY\"},"
+    done
+    L0_GENESIS_ENTRIES="[${L0_GENESIS_ENTRIES%,}]"
+    if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$L0_GENESIS_ENTRIES}"; then
+        echo "L0 genesis wallet funded ($GENESIS_FUND_UTXOS UTXOs)"
+    else
+        echo "L0 genesis funding failed"
+    fi
 
-# Fund the yuan key (ML-DSA-87 seed 0x03) that RemoteFromAddressIT uses as the
-# yuan token issuer + yuanWallet, so it has confirmed BIG to pay the token
-# creation fee and the token-payment fees. The plain mempool transfer path
-# (submitTransaction) never confirms on this PoS build, so the yuan wallet
-# must start with confirmed BIG instead of waiting for a transfer to confirm.
-YUAN_FUND_UTXOS="${YUAN_FUND_UTXOS:-8}"
-YUAN_FUND_ENTRIES=""
-for i in $(seq 1 "$YUAN_FUND_UTXOS"); do
-    YUAN_FUND_ENTRIES="${YUAN_FUND_ENTRIES}{\"address\":\"yuan\",\"value\":100000000000000,\"pubkey\":\"$L0_YUAN_PUBKEY\"},"
-done
-YUAN_FUND_ENTRIES="[${YUAN_FUND_ENTRIES%,}]"
-if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$YUAN_FUND_ENTRIES}"; then
-    echo "L0 yuan key funded ($YUAN_FUND_UTXOS UTXOs)"
-else
-    echo "L0 yuan key funding failed"
+    # Fund the yuan key (ML-DSA-87 seed 0x03) that RemoteFromAddressIT uses as the
+    # yuan token issuer + yuanWallet, so it has confirmed BIG to pay the token
+    # creation fee and the token-payment fees. The plain mempool transfer path
+    # (submitTransaction) never confirms on this PoS build, so the yuan wallet
+    # must start with confirmed BIG instead of waiting for a transfer to confirm.
+    YUAN_FUND_UTXOS="${YUAN_FUND_UTXOS:-8}"
+    YUAN_FUND_ENTRIES=""
+    for i in $(seq 1 "$YUAN_FUND_UTXOS"); do
+        YUAN_FUND_ENTRIES="${YUAN_FUND_ENTRIES}{\"address\":\"yuan\",\"value\":100000000000000,\"pubkey\":\"$L0_YUAN_PUBKEY\"},"
+    done
+    YUAN_FUND_ENTRIES="[${YUAN_FUND_ENTRIES%,}]"
+    if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$YUAN_FUND_ENTRIES}"; then
+        echo "L0 yuan key funded ($YUAN_FUND_UTXOS UTXOs)"
+    else
+        echo "L0 yuan key funding failed"
+    fi
 fi
 
 # Wait for the L0 (PoS) beacon chain to start producing
@@ -465,9 +490,17 @@ L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.p
 # fully separated from Layer 0. It connects to L0 only to pull order blocks via
 # the cross-layer transfer (blocksFromNonChainHeight).
 L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.requester=http://127.0.0.1:$L0_PORT --spring.main.allow-circular-references=true"
-L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true -Dserver.fundEnabled=true"
+L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true"
+# L1-order has its own chain/genesis; fund its init wallets in the L1 genesis
+# block via its own CSV (same seeds as L0 where applicable).
+L1_TEST_GENESIS_CSV="${L1_TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutputL1.csv}"
+L1_GENESIS_CSV_ARGS=""
+if [ -f "$L1_TEST_GENESIS_CSV" ]; then
+    L1_GENESIS_CSV_ARGS="-Dbigtangle.genesis.csv=$L1_TEST_GENESIS_CSV"
+    echo "Using L1 genesis distribution: $L1_TEST_GENESIS_CSV"
+fi
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_GENESIS_CSV_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!
@@ -494,12 +527,17 @@ mvn test-compile -q -pl layer0-server
 # --- Step 7c: Bootstrap the L1-order chain's own validator + genesis wallet ---
 echo ""
 echo "=== Step 7c: Bootstrap L1-order validator ==="
-L1_FUND_AMOUNT=1000000000000
-if post_ok "$L1_BASE/fundAddresses" \
-    "{\"addresses\":[{\"address\":\"validator\",\"value\":$L1_FUND_AMOUNT,\"pubkey\":\"$L1_VALIDATOR_PUBKEY\"}]}"; then
-    echo "L1 validator funded"
-else
-    echo "L1 validator funding failed"
+
+# When the L1 genesis CSV is used, the L1 validator / genesis wallet already
+# hold confirmed coins from the L1 genesis block — no faucet needed.
+if [ -z "$L1_GENESIS_CSV_ARGS" ]; then
+    L1_FUND_AMOUNT=1000000000000
+    if post_ok "$L1_BASE/fundAddresses" \
+        "{\"addresses\":[{\"address\":\"validator\",\"value\":$L1_FUND_AMOUNT,\"pubkey\":\"$L1_VALIDATOR_PUBKEY\"}]}"; then
+        echo "L1 validator funded"
+    else
+        echo "L1 validator funding failed"
+    fi
 fi
 
 sleep 2
@@ -520,7 +558,7 @@ fi
 
 # Fund the L1 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can pay
 # fees / create tokens directly on the L1-order chain.
-if [ -n "$L1_GENESIS_PUBKEY" ]; then
+if [ -z "$L1_GENESIS_CSV_ARGS" ] && [ -n "$L1_GENESIS_PUBKEY" ]; then
     # Many distinct confirmed UTXOs (one per entry) so consecutive order
     # tests can each spend a fresh confirmed BIG source; a single UTXO would
     # leave only unconfirmed change after the first spend and a rerun would
@@ -537,6 +575,8 @@ if [ -n "$L1_GENESIS_PUBKEY" ]; then
     else
         echo "L1 genesis funding failed"
     fi
+elif [ -n "$L1_GENESIS_CSV_ARGS" ]; then
+    echo "L1 init wallets funded via genesis CSV (no faucet)"
 fi
 
 # Wait for the L1-order chain to produce its own beacon

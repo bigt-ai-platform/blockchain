@@ -88,7 +88,7 @@ public class DoubleSpendAttackBenchmark {
         String merchantAddr = Address.fromHash160(params, merchant.getPubKeyHash()).toBase58();
         String attackerAddr = Address.fromHash160(params, attacker.getPubKeyHash()).toBase58();
 
-        // 2. Fund every wallet in one fundAddresses call.
+        // 2. (Faucet removed) bootstrap wallets via genesis CSV instead.
         List<Map<String, Object>> entries = new ArrayList<>();
         for (PQKey k : walletKeys) {
             Map<String, Object> e = new HashMap<>();
@@ -99,7 +99,7 @@ public class DoubleSpendAttackBenchmark {
         }
         Map<String, Object> fundBody = new HashMap<>();
         fundBody.put("addresses", entries);
-        OkHttp3Util.postString(base + "fundAddresses", Json.jsonmapper().writeValueAsString(fundBody));
+        requireGenesisBootstrap();
         log.info("Funded {} wallets", walletKeys.size());
 
         // 3. Fetch the funded UTXOs.
@@ -259,5 +259,12 @@ public class DoubleSpendAttackBenchmark {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** The coin-minting faucet was removed; bootstrap must come from a genesis CSV. */
+    private static void requireGenesisBootstrap() {
+        throw new RuntimeException(
+                "fundAddresses faucet removed — bootstrap the node via a genesis CSV "
+                        + "that funds the benchmark wallets (see helper/test/TestGenesisOutput.csv)");
     }
 }

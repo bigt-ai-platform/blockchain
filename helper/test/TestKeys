@@ -1,0 +1,16 @@
+# Bigtangle test/dev keys for the genesis distribution in TestGenesisOutput.csv.
+#
+# ML-DSA-87 seeds are 32 bytes; the value shown is that byte repeated 32x.
+# These wallets are minted in the genesis block so tests have REAL confirmed
+# BIG to pay fees / create tokens (no faucet / fundAddresses needed).
+#
+# role | seed(hex x32) | base58 address | hash160 | genesis amount
+
+genesis-wallet|0101010101010101010101010101010101010101010101010101010101010101|mnvGDASDFGpHXycAadQC4STYFNwfhfTGsf|513167221fc3436ab42a5003ea4bfd7253453489|64x 100000000 BIG (6,400,000,000)
+yuan-wallet|0303030303030303030303030303030303030303030303030303030303030303|mizQPijhrrdR98aKR7D18pRbRMretYPjaj|261964c19f3450f5cb4d3530376e4663d29bdfad|8x 100000000 BIG (800,000,000)
+l0-validator|0404040404040404040404040404040404040404040404040404040404040404|n2cKSV6WuE3cd4XD2jcvi15BVwjm6XGd7n|e75e5f5e27277598adfa05b1ee62a1e48ab4943f|1000000000000 (1,000,000 BIG)
+l1-validator|0505050505050505050505050505050505050505050505050505050505050505|mikXSgivoeHey8PRQMPL8YmLZ1HBiJYUzZ|237974c2d0aa9d9d34f324dc04a02801ae5df886|1000000000000 (1,000,000 BIG, L1-order chain)
+miner|(TestParams.genesisPub)|mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4|(n/a)|92799000000000000 (92,799,000,000 BIG)
+
+# L0 = TestGenesisOutput.csv ; L1-order = TestGenesisOutputL1.csv (same seeds).
+# Reconstruct a key in TS: PQKey.fromMLDSA(new Uint8Array(32).fill(0xNN)).

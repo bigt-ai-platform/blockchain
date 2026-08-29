@@ -30,9 +30,11 @@ import net.bigtangle.wallet.Wallet;
 /**
  * PoS-era payment throughput benchmark (HTTP to a live {@code layer0-server}).
  *
- * <p>Each client is pre-funded with one large UTXO via the test-only
- * {@code /fundAddresses} faucet ({@code FUND_ENABLED=true} on the node), then
- * submits a batched multi-recipient payment through the mempool
+ * <p>Each client must be pre-funded with one large UTXO. The old
+ * {@code /fundAddresses} faucet has been removed — start the node with a
+ * genesis distribution CSV that funds the benchmark wallets (see
+ * {@code helper/test/TestGenesisOutput.csv}), then each client submits a
+ * batched multi-recipient payment through the mempool
  * ({@code Wallet.payToList} → {@code /submitTransaction}).
  *
  * <p>Run (see {@code helper/fulltest/benchmark.sh}):
@@ -67,7 +69,7 @@ public class PaymentBenchmark {
         }
 
         // Pre-fund each client with one large UTXO to avoid per-payment
-        // UTXO contention (fundAddresses mints confirmed coins directly).
+        // UTXO contention (bootstrap coins come from the genesis CSV).
         String apiUrl = serverUrl.endsWith("/") ? serverUrl : serverUrl + "/";
         HashMap<String, Object> fundReq = new HashMap<>();
         List<HashMap<String, Object>> entries = new ArrayList<>();
@@ -80,8 +82,7 @@ public class PaymentBenchmark {
             entries.add(entry);
         }
         fundReq.put("addresses", entries);
-        OkHttp3Util.post(apiUrl + "fundAddresses",
-                Json.jsonmapper().writeValueAsString(fundReq).getBytes(StandardCharsets.UTF_8));
+        requireGenesisBootstrap();
         log.info("Funding done");
 
         List<Wallet> wallets = new ArrayList<>();
@@ -138,5 +139,12 @@ public class PaymentBenchmark {
         log.info("Throughput:  {} tx/s", (long) tps);
         log.info("==============================================");
         System.exit(ok.get() > 0 ? 0 : 1);
+    }
+
+    /** The coin-minting faucet was removed; bootstrap must come from a genesis CSV. */
+    private static void requireGenesisBootstrap() {
+        throw new RuntimeException(
+                "fundAddresses faucet removed — bootstrap the node via a genesis CSV "
+                        + "that funds the benchmark wallets (see helper/test/TestGenesisOutput.csv)");
     }
 }

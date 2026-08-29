@@ -45,9 +45,8 @@ import net.bigtangle.wallet.Wallet;
  *       with control blocks proving the crafted path itself is valid</li>
  *   <li>V3 invalid-block injection: tampered tx signature, unknown DAG parent,
  *       forged BEACON block by a non-validator</li>
- *   <li>V4 unauthorized minting via /fundAddresses (bootstrap faucet abuse —
- *       EXPECTED to succeed while server.fundEnabled=true; reported as a
- *       deployment finding, not an assertion failure)</li>
+ *   <li>V4 unauthorized minting via /fundAddresses — the faucet has been
+ *       removed from the server, so the endpoint must refuse (404)</li>
  *   <li>V5 PoS endpoint guards: stakeDeposit with attacker pubkey / embedded
  *       privateKey must both be refused</li>
  *   <li>V6 fabricated slashing proof must be rejected</li>
@@ -98,35 +97,12 @@ public class FullAttackSuite {
     }
 
     private static Map<String, UTXO> fundAndFetchByAddress(List<PQKey> keys, long amount) throws Exception {
-        List<Map<String, Object>> entries = new ArrayList<>();
-        for (PQKey k : keys) {
-            Map<String, Object> e = new HashMap<>();
-            e.put("address", Address.fromHash160(params, k.getPubKeyHash()).toBase58());
-            e.put("value", amount);
-            e.put("pubkey", Utils.HEX.encode(k.getPubKey()));
-            entries.add(e);
-        }
-        OkHttp3Util.postString(base + "fundAddresses",
-                Json.jsonmapper().writeValueAsString(Map.of("addresses", entries)));
-        List<String> hashes = new ArrayList<>();
-        for (PQKey k : keys) {
-            hashes.add(Utils.HEX.encode(k.getPubKeyHash()));
-        }
-        GetOutputsResponse gor = Json.jsonmapper().readValue(
-                OkHttp3Util.postString(base + "getOutputs", Json.jsonmapper().writeValueAsString(hashes)),
-                GetOutputsResponse.class);
-        // KEYED by address: getOutputs makes NO ordering guarantee, so a
-        // positional list silently pairs wallets with FOREIGN UTXOs (their
-        // scriptSig then fails verification at submit).
-        Map<String, UTXO> byAddr = new HashMap<>();
-        if (gor.getOutputs() != null) {
-            for (UTXO u : gor.getOutputs()) {
-                if (u.getValue() != null && u.getValue().getValue().longValue() == amount && u.getAddress() != null) {
-                    byAddr.put(u.getAddress(), u);
-                }
-            }
-        }
-        return byAddr;
+        // The coin-minting /fundAddresses faucet has been removed; bootstrap is
+        // done via the genesis block CSV. Fund the attacker wallets in the
+        // genesis distribution instead.
+        throw new RuntimeException(
+                "fundAddresses faucet removed — bootstrap the node via a genesis CSV "
+                        + "that funds the attacker wallets (see helper/test/TestGenesisOutput.csv)");
     }
 
     private static UTXO utxoFor(Map<String, UTXO> byAddr, PQKey wallet) {
@@ -473,14 +449,14 @@ public class FullAttackSuite {
         } catch (Exception e) {
             minted = false;
         }
-        // On THIS bootstrap network fundEnabled=true, so minting succeeds by
-        // design. The verdict records the exposure; the hard requirement is
-        // that it MUST be off on mainnet (see prod.md security notes).
-        log.warn("V4: /fundAddresses minting {} on prod bootstrap network — "
-                + "server.fundEnabled=true is REQUIRED to be false on mainnet!", minted ? "SUCCEEDED" : "refused");
-        verdict("V4 unauthorized mint (faucet)", true,
-                minted ? "EXPOSURE: minting open (bootstrap mode; must be disabled on mainnet)"
-                        : "refused (faucet disabled)");
+        // The coin-minting /fundAddresses faucet has been REMOVED from the
+        // server entirely (bootstrap now happens via the genesis block CSV),
+        // so this must always be refused.
+        log.warn("V4: /fundAddresses minting {} — faucet removed, bootstrap via genesis CSV",
+                minted ? "SUCCEEDED (UNEXPECTED!)" : "refused");
+        verdict("V4 unauthorized mint (faucet)", !minted,
+                minted ? "FAIL: fundAddresses still mints coins"
+                        : "refused (endpoint removed)");
     }
 
     // --------------------------------------------- V5: PoS endpoint guards

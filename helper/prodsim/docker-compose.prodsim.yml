@@ -28,7 +28,6 @@ x-common-server: &common-server
     SERVICE_INITSYNC: "true"
     SYNCBLOCKS: 1000
     CREATETABLE: "true"
-    FUND_ENABLED: "true"
     RUNKAFKASTREAM: "false"
     POS_SLOT_INTERVAL_MS: 2000
     SERVICE_BLOCKBATCH: "true"
@@ -44,8 +43,8 @@ x-common-server: &common-server
     # Pointing every node at every node lets missing parents always be pulled.
     REQUESTER: "http://prodsim-svr-0:8081,http://prodsim-svr-1:8082,http://prodsim-svr-2:8083,http://prodsim-svr-3:8084"
     # Validators are funded IN GENESIS (the shared distribution CSV), so every
-    # node derives the same funded genesis and stake blocks apply cross-node —
-    # fundAddresses bootstrap UTXOs do not propagate and cannot converge.
+    # node derives the same funded genesis and stake blocks apply cross-node.
+    # The /fundAddresses faucet has been removed.
     BIGTANGLE_GENESIS_CSV: /genesis/GenesisOutput.csv
 
 services:

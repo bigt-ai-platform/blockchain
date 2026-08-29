@@ -14,8 +14,9 @@ import net.bigtangle.wallet.Wallet;
 
 /**
  * TransferOnce — submit ONE real signed transfer tx (testnodes.sh transfer
- * step). fundAddresses only mints a node-local UTXO ("test/bootstrap only"),
- * so the visibility check must exercise an actual propagating transaction.
+ * step). The /fundAddresses faucet has been removed; the source wallet is
+ * funded in the genesis distribution CSV, so the visibility check exercises an
+ * actual propagating transaction.
  *
  * Usage: TransferOnce <seedHex> <toPubKeyHashHex> <amountSat> <apiUrl> [workDir]
  * Mirrors TransferLoadTool: Wallet candidates -> payToListTransaction ->

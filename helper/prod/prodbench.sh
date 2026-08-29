@@ -2,9 +2,10 @@
 # prodbench.sh — real-time TPS benchmark against the DEPLOYED production PoS
 # network (the 3-node WireGuard mesh: node-0/node-1 on s2001, node-2 on cui).
 #
-# Drives MaxTpsBenchmarkProd: a remote HTTP benchmark that funds wallets via the
-# bootstrap faucet (/fundAddresses), submits payments over /submitTransactions
-# and measures submit TPS + end-to-end confirmation TPS and latency percentiles.
+# Drives MaxTpsBenchmarkProd: a remote HTTP benchmark that funds wallets from a
+# genesis distribution CSV (the /fundAddresses faucet has been removed), submits
+# payments over /submitTransactions and measures submit TPS + end-to-end
+# confirmation TPS and latency percentiles.
 #
 # The benchmark client MUST run on a mesh host (the driver has no route into
 # 10.8.0.x), so this script shells out to CHECK_HOST (default cui) and runs the

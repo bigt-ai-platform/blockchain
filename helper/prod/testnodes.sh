@@ -236,8 +236,6 @@ SEED_HOSTS="${seeds}"
 GOSSIP_SEEDS="${gossip}"
 STAKE_AMOUNT=32000000
 FUND_AMOUNT=160000000
-FUND_MODE=bootstrap
-FUND_ENABLED=true
 GENESIS_CSV=
 # MUST match the nodes' params: SERVER_NET=Mainnet -> MainNetParams has
 # slotsPerEpoch=8 (TestParams would be 32). Drives the leave poll timeout,
@@ -421,20 +419,11 @@ cmd_verify() { # reachable nodes must agree on the finalized root and see full s
 cmd_transfer() {
     local from=0 to=1 ph addr attempt bal
     ph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
-    # /fundAddresses requires a Base58 address (Address.fromBase58); the hex
-    # PUBKEY_HASH is only for /getBalances — funding with it 500s with
-    # AddressFormatException "Illegal character 0 ...".
     addr="$(grep '^ADDRESS=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
-    # The mint is a NODE-LOCAL confirmed UTXO ("test/bootstrap only") — it
-    # does not propagate, so a spend funded on one node is invalid on every
-    # other (tx dropped, status UNKNOWN). Mirror genesis-CSV parity instead:
-    # mint the SAME (address, index) UTXO on EVERY running node so the source
-    # outpoint validates mesh-wide, then submit ONE real signed transfer.
-    local fund_index=700000000
-    for i in $(seq 0 $((NNODES - 1))); do
-        docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1 || continue
-        api "$i" /fundAddresses "{\"addresses\":[{\"address\":\"${addr}\",\"value\":100000,\"index\":${fund_index}}]}" >/dev/null
-    done
+    # The /fundAddresses faucet has been removed; the from-validator's coins
+    # come from the genesis distribution CSV (GENESIS_CSV), so its UTXOs are
+    # already confirmed chain state on every node. Just wait for them, then
+    # submit ONE real signed transfer.
     sleep 5
     local seed rph
     seed="$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"

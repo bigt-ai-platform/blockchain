@@ -11,7 +11,6 @@ server:
   permissionadmin: ${PERMISSIONADMIN:}
   myserverblockOnly: ${MYSERVERBLOCKONLY:false}
   runKafkaStream: ${RUNKAFKASTREAM:false}
-  fundEnabled: ${FUND_ENABLED:false}
   createtable: ${CREATETABLE:true}
   checkpoint: ${CHECKPOINT:-1}
   servermode: ${SERVERMODE:Fullnode}

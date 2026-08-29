@@ -10,7 +10,6 @@ server:
   permissioned: ${PERMISSIONED:false}
   permissionadmin: ${PERMISSIONADMIN:}
   myserverblockOnly: ${MYSERVERBLOCKONLY:false}
-  fundEnabled: ${FUND_ENABLED:false}
   runKafkaStream: ${RUNKAFKASTREAM:true}
   createtable: ${CREATETABLE:true}
   checkpoint: ${CHECKPOINT:-1}

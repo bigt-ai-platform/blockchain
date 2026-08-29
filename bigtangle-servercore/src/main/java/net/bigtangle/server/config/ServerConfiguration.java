@@ -90,10 +90,6 @@ public class ServerConfiguration {
                     + "activateValidator/processWithdrawal/setValidatorKey are reachable "
                     + "without an API key. Set server.apiKey and send it in the X-Api-Key header.");
         }
-        if (Boolean.TRUE.equals(fundEnabled)) {
-            logger.warn("SECURITY: fundEnabled=true on Mainnet — fundAddresses mints confirmed "
-                    + "UTXOs. Disable before any public exposure.");
-        }
         if (!sslEnabled) {
             logger.warn("SECURITY: TLS is disabled on Mainnet (server.ssl.enabled=false) — "
                     + "requests including the X-Api-Key travel in cleartext. Enable SSL or front "
@@ -202,33 +198,8 @@ public class ServerConfiguration {
      * validators into quorum loss (whole-mesh stall). Override for bigger
      * meshes via --server.mempoolMaxTx.
      */
-    /** Expose /fundAddresses beyond loopback (requires fundEnabled=true too). */
-    private boolean faucetPublic = false;
-
-    public boolean isFaucetPublic() {
-        return faucetPublic;
-    }
-
-    public void setFaucetPublic(boolean faucetPublic) {
-        this.faucetPublic = faucetPublic;
-    }
-
     private int mempoolMaxTx = 4_000;
 
-    /**
-     * Whether proof-of-work is required for new blocks.
-     * Disable on test networks for higher throughput.
-     */
-
-    /**
-     * Whether the coin-minting {@code fundAddresses} endpoint is enabled.
-     * Defaults to {@code false}: a production node must never mint confirmed
-     * UTXOs over an unauthenticated API. Enable only in test/benchmark/
-     * bootstrap setups (e.g. prodsim, remote integration tests).
-     */
-    private Boolean fundEnabled = false;
-
-    
     /** 
      * Block interval for creating checkpoints.
      * Checkpoints improve synchronization performance and security.
@@ -492,23 +463,6 @@ public class ServerConfiguration {
 
     public void setMempoolMaxTx(int mempoolMaxTx) {
         this.mempoolMaxTx = mempoolMaxTx;
-    }
-
-    /**
-     * Checks whether the coin-minting {@code fundAddresses} endpoint is
-     * enabled (test/benchmark bootstrap setups only).
-     * @return true if {@code fundAddresses} may mint confirmed UTXOs
-     */
-    public Boolean getFundEnabled() {
-        return fundEnabled;
-    }
-
-    /**
-     * Enables or disables the coin-minting {@code fundAddresses} endpoint.
-     * @param fundEnabled true to allow {@code fundAddresses} to mint coins
-     */
-    public void setFundEnabled(Boolean fundEnabled) {
-        this.fundEnabled = fundEnabled;
     }
 
     /**

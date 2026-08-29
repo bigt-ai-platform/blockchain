@@ -84,7 +84,7 @@ import net.bigtangle.wallet.Wallet;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = Layer0ServerStart.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 		properties = { "server.net=Test", "service.schedule.initsync=false", "server.runKafkaStream=false",
-				"server.fundEnabled=true", "spring.main.allow-circular-references=true",
+				"spring.main.allow-circular-references=true",
 				"service.schedule.chainlength=true", "service.schedule.blockbatch=true",
 				"service.schedule.microbatch=true", "service.schedule.upchainrate=1000",
 				// pos.slotIntervalMs intentionally NOT pinned here: it resolves

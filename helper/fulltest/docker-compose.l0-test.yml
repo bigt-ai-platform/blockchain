@@ -106,7 +106,6 @@ services:
       SYNCBLOCKS: 1000
       RUNKAFKASTREAM: "false"
       CREATETABLE: "true"
-      FUND_ENABLED: "true"
     depends_on:
       postgres-l0-0: { condition: service_healthy }
 
@@ -136,7 +135,6 @@ services:
       SYNCBLOCKS: 1000
       RUNKAFKASTREAM: "false"
       CREATETABLE: "false"
-      FUND_ENABLED: "true"
     depends_on:
       postgres-l0-1: { condition: service_healthy }
 
@@ -166,7 +164,6 @@ services:
       SYNCBLOCKS: 1000
       RUNKAFKASTREAM: "false"
       CREATETABLE: "false"
-      FUND_ENABLED: "true"
     depends_on:
       postgres-l0-2: { condition: service_healthy }
 

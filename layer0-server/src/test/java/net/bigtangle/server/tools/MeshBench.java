@@ -65,58 +65,13 @@ public class MeshBench {
                 Arrays.asList(addrs));
 
         if ("fund".equals(mode)) {
-            AtomicInteger ok = new AtomicInteger();
-            ExecutorService fp = Executors.newFixedThreadPool(nnodes);
-            List<CompletableFuture<Void>> fs = new ArrayList<>();
-            int chunk = 100;
-            int callsPerNode = (totalTx + chunk - 1) / chunk;
-            for (int c = 0; c < callsPerNode; c++) {
-                final int ci = c;
-                fs.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        int n = ci % nnodes;
-                        StringBuilder sb = new StringBuilder("[");
-                        int lo = ci * chunk;
-                        int hi = Math.min(totalTx, lo + chunk);
-                        for (int i = lo; i < hi; i++) {
-                            sb.append(i > lo ? "," : "")
-                              .append("{\"address\":\"").append(addrs[i]).append("\",")
-                              .append("\"value\":20000,\"index\":").append(startIndex + i)
-                              .append("}");
-                        }
-                        sb.append("]");
-                        String body = "{\"addresses\":" + sb.toString() + "}";
-                        java.net.http.HttpClient hc = java.net.http.HttpClient.newHttpClient();
-                        java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
-                                .uri(java.net.URI.create(
-                                        urlPrefix + (8281 + n) + "/fundAddresses"))
-                                .header("Content-Type", "application/json")
-                                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
-                                .build();
-                        java.net.http.HttpResponse<String> resp = null;
-                        for (int attempt = 0; attempt < 3 && resp == null; attempt++) {
-                            try {
-                                resp = hc.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
-                            } catch (Exception retry) {
-                                Thread.sleep(1000);
-                            }
-                        }
-                        if (resp != null && resp.body().contains("\"errorcode\" : 0")) {
-                            ok.addAndGet(hi - lo);
-                        } else {
-                            System.out.println("FUNDFAIL chunk=" + ci + " node=" + (8281 + n)
-                                    + " resp=" + (resp == null ? "null" : resp.body().substring(0, Math.min(120, resp.body().length()))));
-                        }
-                    } catch (Exception e) {
-                        System.out.println("fund err @" + ci + ": " + e);
-                    }
-                }, fp));
-            }
-            CompletableFuture.allOf(fs.toArray(new CompletableFuture[0])).get();
-            fp.shutdownNow();
-            System.out.printf("FUND done: %d/%d wallets funded (startIndex=%d)%n",
-                    ok.get(), totalTx, startIndex);
-            return;
+            // The coin-minting /fundAddresses faucet has been removed (bootstrap
+            // is now done via the genesis block CSV). Fund the mesh wallets in
+            // the genesis distribution instead (see helper/test/TestGenesisOutput.csv).
+            throw new IllegalStateException(
+                    "fund mode removed: /fundAddresses faucet is gone. Add the mesh "
+                            + "wallets to the genesis CSV distribution (helper/test/TestGenesisOutput.csv) "
+                            + "and start the mesh with -Dbigtangle.genesis.csv.");
         }
 
         // ---------- timed RUN ----------

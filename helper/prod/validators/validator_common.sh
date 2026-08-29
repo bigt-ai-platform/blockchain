@@ -133,13 +133,7 @@ start_server() {
     if [ -n "${KAFKA_BOOTSTRAP:-}" ]; then
         kafka_args=("--server.runKafkaStream=true" "--kafka.bootstrapServers=${KAFKA_BOOTSTRAP}")
     fi
-    local fund_args=("--server.fundEnabled=${FUND_ENABLED:-false}")
-    if [ "${FUND_ENABLED:-false}" = "true" ]; then
-        # Bootstrap funding reaches the node over the mesh (NODE_HOST), not the
-        # loopback interface, so the faucet must be published. FUND_ENABLED is
-        # turned off before any public exposure — see cutover-runbook.md §6.
-        fund_args+=(--server.faucetPublic=true)
-    fi
+    local fund_args=()
     log "starting layer0-server on :${SERVER_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-server" "${SERVER_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_SERVER} "${genesis_csv_arg[@]}" -jar /app/app.jar \
@@ -150,7 +144,6 @@ start_server() {
         --db.username="${DB_USERNAME}" --db.password="${DB_PASSWORD}" \
         --server.createtable="${createtable}" \
         "${kafka_args[@]}" \
-        "${fund_args[@]}" \
         --server.requester="${REQUESTER}" \
         --service.schedule.chainlength=true --service.schedule.blockbatch=true \
         --service.schedule.microbatch=true --service.schedule.initsync=true \
@@ -200,20 +193,10 @@ wait_balance() { # $1 = min satoshis
 }
 
 # ---- Bootstrap -------------------------------------------------------------
-fund_validator() {
-    if [ "${FUND_MODE}" != "bootstrap" ]; then
-        log "FUND_MODE=${FUND_MODE}; skipping fundAddresses"
-        return 0
-    fi
-    log "funding validator via fundAddresses (${FUND_AMOUNT} satoshis)"
-    # Unique per-node fund index so each validator's STAKE block spends a
-    # DIFFERENT genesis outpoint. Without it every node's first fundAddresses
-    # call mints at (genesis, 1e9) and a beacon referencing all three STAKE
-    # blocks is rejected as conflicting (chain stalls at chainlength 0).
-    local fund_index=$((1000000000 + NODE_INDEX))
-    http_post "/fundAddresses" \
-        "{\"addresses\":[{\"address\":\"validator\",\"value\":${FUND_AMOUNT},\"pubkey\":\"${VALIDATOR_PUBKEY}\",\"index\":${fund_index}}]}"
-}
+# The fundAddresses faucet has been removed. Validators / init wallets must be
+# funded inside the GENESIS block via GENESIS_CSV (see TestGenesisOutput.csv in
+# this repo). GENESIS_CSV must contain every validator pubkey (and any test
+# wallet) with enough confirmed BIG to cover the stake.
 
 stake_validator() {
     log "staking ${STAKE_AMOUNT} satoshis for ${VALIDATOR_PUBKEY}"
@@ -239,7 +222,6 @@ phase_server() {
 
 phase_stake() {
     wait_api
-    [ "${FUND_MODE}" = "bootstrap" ] && fund_validator
     wait_balance "${STAKE_AMOUNT}"
     stake_validator
     sleep 3

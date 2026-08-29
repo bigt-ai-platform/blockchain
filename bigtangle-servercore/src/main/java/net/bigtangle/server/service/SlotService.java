@@ -426,13 +426,14 @@ public class SlotService {
                             in.getOutpoint().getBlockHash(), in.getOutpoint().getTxHash(),
                             in.getOutpoint().getIndex());
                     if (utxo == null) {
-                        // A fundAddresses/bootstrap UTXO of a FOREIGN chain
-                        // lives under that chain's genesis outpoint. When the
-                        // input's containing block is a known INITIAL block
-                        // that is NOT this chain's own genesis, the input
-                        // belongs to the foreign chain: its fees can never
-                        // resolve here, so skip it instead of failing the
-                        // epoch-fee computation. Deterministic: every node on
+                        // A bootstrap UTXO of a FOREIGN chain (genesis-CSV
+                        // distribution) lives under that chain's genesis
+                        // outpoint. When the input's containing block is a
+                        // known INITIAL block that is NOT this chain's own
+                        // genesis, the input belongs to the foreign chain: its
+                        // fees can never resolve here, so skip it instead of
+                        // failing the epoch-fee computation. Deterministic:
+                        // every node on
                         // this chain classifies the same outpoint identically.
                         Sha256Hash inBlockHash = in.getOutpoint().getBlockHash();
                         Block inBlock = inBlockHash == null ? null : store.get(inBlockHash);

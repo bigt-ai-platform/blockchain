@@ -89,7 +89,7 @@ public class DoubleSpendBlockAttackBenchmark {
             e.put("pubkey", Utils.HEX.encode(k.getPubKey()));
             entries.add(e);
         }
-        OkHttp3Util.postString(base + "fundAddresses", Json.jsonmapper().writeValueAsString(Map.of("addresses", entries)));
+        requireGenesisBootstrap();
 
         // 3. Fetch UTXOs.
         List<String> hashes = new ArrayList<>();
@@ -317,5 +317,12 @@ public class DoubleSpendBlockAttackBenchmark {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** The coin-minting faucet was removed; bootstrap must come from a genesis CSV. */
+    private static void requireGenesisBootstrap() {
+        throw new RuntimeException(
+                "fundAddresses faucet removed — bootstrap the node via a genesis CSV "
+                        + "that funds the benchmark wallets (see helper/test/TestGenesisOutput.csv)");
     }
 }

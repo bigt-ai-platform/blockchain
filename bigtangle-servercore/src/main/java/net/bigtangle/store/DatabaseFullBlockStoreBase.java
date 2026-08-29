@@ -809,7 +809,13 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 			Block genesisBlock = UtilGeneseBlock.createGenesis( params );
 			saveNewStore(genesisBlock);
-			if (params.genesisMintsBIG()) {
+			// Persist the genesis coinbase outputs as spendable UTXOs when the
+			// chain mints BIG OR the genesis distribution CSV minted outputs on
+			// a non-minting side chain (e.g. ordermatch), so genesis-CSV-funded
+			// wallets/validators are spendable there too. No-op when the genesis
+			// coinbase has no outputs.
+			if (params.genesisMintsBIG()
+					|| !genesisBlock.getTransactions().get(0).getOutputs().isEmpty()) {
 			    saveGenesisTransactionOutput(genesisBlock);
 			}
 
