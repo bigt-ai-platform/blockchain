@@ -342,20 +342,27 @@ wait_finality() { # $1=min finalized length, $2=timeout-seconds
 
 cmd_verify() { # reachable nodes must agree on the finalized root and see full set
     local roots="" i f v expected="${EXPECTED:-${NNODES}}" reachable=0 down=0
+    # node_down: true when the API is unreachable or answers garbage — a
+    # stopped/left node returns "-" from valcount_of, NOT 0, so the old
+    # [ "$v" = 0 ] check let dead nodes through and their empty roots were
+    # counted as a divergent checkpoint.
+    node_down() {
+        local vv="$(valcount_of "$1")"
+        [ -z "$vv" ] || [ "$vv" = "-" ] || [ "$vv" = "0" ] || \
+            ! curl -s -m 2 -o /dev/null "http://127.0.0.1:$((8281 + $1))/"
+    }
     for i in $(seq 0 $((NNODES - 1))); do
-        v="$(valcount_of "$i")"
-        [ "${v:-0}" = "0" ] && ! curl -s -m 2 -o /dev/null "http://127.0.0.1:$((8281 + i))/" \
-            && { down=$((down+1)); continue; }
-        reachable=$((reachable+1))
+        if node_down "$i"; then down=$((down+1)); else reachable=$((reachable+1)); fi
     done
     local eff=$expected
     [ "$reachable" -lt "$expected" ] && eff=$reachable
     for i in $(seq 0 $((NNODES - 1))); do
+        node_down "$i" && { log "node-${i} unreachable — skipped (left?)"; continue; }
         v="$(valcount_of "$i")"
-        [ "${v:-0}" = "0" ] && { log "node-${i} unreachable — skipped (left?)"; continue; }
         [ "$v" -lt "$eff" ] && die "node-${i} has ${v}/${eff} validators"
         f="$(curl -s -m 5 -X POST "http://127.0.0.1:$((8281 + i))/getChainNumber" -H 'Content-Type: application/json' -d '{}' |
             python3 -c 'import sys,json; d=json.load(sys.stdin); f=d.get("finalizedBlockHash") or ""; print((f["bytes"] if isinstance(f,dict) else str(f)).strip())' 2>/dev/null || echo none)"
+        [ -z "$f" ] || [ "$f" = "none" ] && { down=$((down+1)); log "node-${i} gave no finalized root — skipped"; continue; }
         roots="${roots}${f}\n"
     done
     local n; n=$(printf '%b' "$roots" | sort -u | grep -c . || true)
@@ -364,16 +371,37 @@ cmd_verify() { # reachable nodes must agree on the finalized root and see full s
 }
 
 cmd_transfer() {
-    local from=0 ph attempt bal
+    local from=0 to=1 ph addr attempt bal
     ph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
-    api "$from" /fundAddresses "{\"addresses\":[{\"address\":\"${ph}\",\"value\":100000,\"index\":$((700000000 + RANDOM))}]}" >/dev/null
+    # /fundAddresses requires a Base58 address (Address.fromBase58); the hex
+    # PUBKEY_HASH is only for /getBalances — funding with it 500s with
+    # AddressFormatException "Illegal character 0 ...".
+    addr="$(grep '^ADDRESS=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
+    # The mint is a NODE-LOCAL confirmed UTXO ("test/bootstrap only") — it
+    # does not propagate, so a spend funded on one node is invalid on every
+    # other (tx dropped, status UNKNOWN). Mirror genesis-CSV parity instead:
+    # mint the SAME (address, index) UTXO on EVERY running node so the source
+    # outpoint validates mesh-wide, then submit ONE real signed transfer.
+    local fund_index=700000000
+    for i in $(seq 0 $((NNODES - 1))); do
+        docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1 || continue
+        api "$i" /fundAddresses "{\"addresses\":[{\"address\":\"${addr}\",\"value\":100000,\"index\":${fund_index}}]}" >/dev/null
+    done
+    sleep 5
+    local seed rph
+    seed="$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
+    rph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${to}/validator.env" | cut -d= -f2-)"
+    sign_exit_for_cp
+    java -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
+        "${VALSRC}/TransferOnce.java" "$seed" "$rph" 50000 "http://127.0.0.1:$((8281 + from))/" \
+        "${WORKDIR}/walletctx-transfer" || die "transfer tx build/submit failed"
     for attempt in 1 2 3 4 5 6; do
         sleep 15
         bal=999999999
         for i in $(seq 0 $((NNODES - 1))); do
             # skip a node that was intentionally stopped (leave test)
             docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1 || continue
-            bal=$(api "$i" /getBalances "[\"${ph}\"]" | python3 -c '
+            bal=$(api "$i" /getBalances "[\"${rph}\"]" | python3 -c '
 import sys, json, base64
 try: d=json.load(sys.stdin)
 except Exception: print(0); sys.exit(0)
@@ -382,21 +410,25 @@ for u in d.get("outputs") or []:
     v=(u or {}).get("value") or {}
     if isinstance(v,dict) and base64.b64decode(v.get("tokenid") or "")==b"\xbc": t+=int(v.get("value") or 0)
 print(t)')
-            [ "${bal:-0}" -ge 100000 ] || break
+            [ "${bal:-0}" -ge 50000 ] || break
         done
-        [ "${bal:-0}" -ge 100000 ] && { log "transfer visible on all running nodes"; return 0; }
+        [ "${bal:-0}" -ge 50000 ] && { log "transfer visible on all running nodes"; return 0; }
     done
     die "transfer not visible everywhere (kafka/sync broken)"
 }
 
-sign_exit_for() { # $1=index, $2=nonce → PUBKEY=/SIGNATURE= lines
+sign_exit_for_cp() { # ensure the exec-jar classpath is unpacked for tool runs
     local cpdir="${WORKDIR}/cp"
     if [ ! -d "${cpdir}/BOOT-INF/classes" ]; then
         mkdir -p "${cpdir}"
         local jar; jar="$(ls -t "${ROOT}"/layer0-server/target/layer0-server-*-exec.jar | head -1)"
         unzip -oq "$jar" 'BOOT-INF/*' -d "${cpdir}"
     fi
-    java -cp "${cpdir}/BOOT-INF/classes:${cpdir}/BOOT-INF/lib/*" \
+}
+
+sign_exit_for() { # $1=index, $2=nonce → PUBKEY=/SIGNATURE= lines
+    sign_exit_for_cp
+    java -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
         "${VALSRC}/SignExit.java" \
         "$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/node-$1/validator.env" | cut -d= -f2-)" "$2"
 }
