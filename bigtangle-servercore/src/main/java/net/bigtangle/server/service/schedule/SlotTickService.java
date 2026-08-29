@@ -43,6 +43,13 @@ public class SlotTickService {
     @Autowired
     private ValidatorDutyService validatorDutyService;
 
+    // Resolved lazily to avoid bean-init cycles (CasperService and
+    // SyncBlockService are heavy, mutually interconnected services).
+    @Autowired
+    private org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.CasperService> casperServiceProvider;
+    @Autowired
+    private org.springframework.beans.factory.ObjectProvider<net.bigtangle.server.service.SyncBlockService> syncBlockServiceProvider;
+
     private long lastProcessedEpoch = -1;
 
     /** Guards against concurrent ticks (the scheduled task can overlap). */
@@ -147,6 +154,33 @@ public class SlotTickService {
                 // evaluate the SAME chain epoch and converge on the same
                 // checkpoint.
                 long chainEpoch = SlotService.currentChainEpoch(store, slotService.slotsPerEpoch());
+                // Cold-start finality bootstrap: a node whose Casper state
+                // begins empty (fresh rejoin) can never justify from genesis —
+                // the mesh's votes for past epochs are gone (embedded votes
+                // live only ATTESTATION_LOOKBACK_EPOCHS deep). Adopt the
+                // peers' finalized checkpoint as the anchor once; live
+                // justification resumes from it (~2 epochs). The anchor hash
+                // is verified against our own chain-derived boundary inside
+                // adoptFinalizedAnchor, and a node already at/near the peers'
+                // finality (or a young chain) skips the query entirely.
+                if (chainEpoch > 2) {
+                    net.bigtangle.server.service.CasperService casper = casperServiceProvider.getIfAvailable();
+                    net.bigtangle.server.service.CasperService.Checkpoint fin =
+                            casper == null ? null : casper.getLastFinalizedCheckpoint(store);
+                    long finEpoch = fin == null ? -1 : fin.getEpoch();
+                    if (finEpoch < chainEpoch - 2 && casper != null) {
+                        net.bigtangle.server.service.SyncBlockService sync =
+                                syncBlockServiceProvider.getIfAvailable();
+                        net.bigtangle.response.GetTXRewardResponse peer =
+                                sync == null ? null : sync.getBestPeerFinalizedCheckpoint();
+                        if (peer != null && peer.getFinalizedEpoch() != null
+                                && peer.getFinalizedEpoch() > finEpoch
+                                && peer.getFinalizedBlockHash() != null) {
+                            casper.adoptFinalizedAnchor(peer.getFinalizedEpoch(),
+                                    net.bigtangle.core.Sha256Hash.wrap(peer.getFinalizedBlockHash()), store);
+                        }
+                    }
+                }
                 if (chainEpoch != lastProcessedEpoch) {
                     // Evaluate the just-COMPLETED chain epoch: only its
                     // attestations are complete. Evaluating the current

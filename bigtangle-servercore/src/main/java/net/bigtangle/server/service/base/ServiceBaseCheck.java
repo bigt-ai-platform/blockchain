@@ -121,6 +121,18 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 	private static final java.util.Map<Sha256Hash, Boolean> EMBEDDED_ATT_CACHE =
 			new java.util.concurrent.ConcurrentHashMap<>();
 
+	// Bootstrap-window beacons whose verification failed: logged once per
+	// block so a rejoining node's retry loop cannot spam the log.
+	private static final java.util.Set<Sha256Hash> BOOTSTRAP_FAIL_LOGGED =
+			java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+	private void logBootstrapFailure(Sha256Hash blockHash, long slot, String reason) {
+		if (BOOTSTRAP_FAIL_LOGGED.add(blockHash)) {
+			logger.warn("Bootstrap-window beacon verification failed (slot={}, block={}): {}"
+					+ " — will retry while local state replays", slot, blockHash, reason);
+		}
+	}
+
 	private static boolean cachedCheck(java.util.Map<Sha256Hash, Boolean> cache, Sha256Hash hash,
 			java.util.function.BooleanSupplier verify) {
 		Boolean cached = cache.get(hash);
@@ -131,7 +143,17 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 		if (cache.size() > 4096) {
 			cache.clear();
 		}
-		cache.put(hash, ok);
+		// Cache POSITIVE verdicts only. A false is NOT deterministic on this
+		// node: inside the bootstrap window the verdict consults the local
+		// stake table, which fills progressively while chain data replays. A
+		// cached false from such a transient moment poisons every retry of the
+		// same beacon forever — observed as a rejoining node stuck at
+		// chainlength 0 with "checkSolidity is failed: Invalid" on a block the
+		// mesh had long confirmed. Re-running the check is the correct
+		// behaviour; the prewarm still gets its full win from cached positives.
+		if (ok) {
+			cache.put(hash, ok);
+		}
 		return ok;
 	}
 
@@ -892,6 +914,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			long laggedEpoch = networkParameters.getEpochForSlot(sd.getSlot()) - 2;
 			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
+				logBootstrapFailure(block.getHash(), sd.getSlot(), "no validator snapshot for epoch " + laggedEpoch);
 				return false;
 			}
 			if (bootstrapWindow(store, laggedEpoch)) {
@@ -901,7 +924,12 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 				// nodes — honest beacons get rejected and the mesh forks.
 				// Authenticate against any locally-registered key instead;
 				// slot-election enforcement resumes once snapshots exist.
-				return bootstrapProposerOk(store, sd, null);
+				boolean ok = bootstrapProposerOk(store, sd, null);
+				if (!ok) {
+					logBootstrapFailure(block.getHash(), sd.getSlot(),
+							"proposer signature matches no local deposit");
+				}
+				return ok;
 			}
 			// FINALIZED RANDAO snapshot (pos_state mixfinal_) or the deterministic
 			// default, matching RandaoService.getSelectionMix. The snapshot is
@@ -992,12 +1020,18 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 			long laggedEpoch = networkParameters.getEpochForSlot(sd.getSlot()) - 2;
 			List<StakeRecord> active = validatorsForEpoch(laggedEpoch, store);
 			if (active.isEmpty()) {
+				logBootstrapFailure(block.getHash(), sd.getSlot(), "no validator snapshot for epoch " + laggedEpoch);
 				return false;
 			}
 			if (bootstrapWindow(store, laggedEpoch)) {
 				// Pre-snapshot bootstrap: authenticate against any locally-known
 				// deposit key — see bootstrapProposerOk.
-				return bootstrapProposerOk(store, sd, reveal);
+				boolean ok = bootstrapProposerOk(store, sd, reveal);
+				if (!ok) {
+					logBootstrapFailure(block.getHash(), sd.getSlot(),
+							"RANDAO reveal/attestations match no local deposit");
+				}
+				return ok;
 			}
 			// IMMUTABLE FINALIZED mix from two epochs earlier (matching
 			// RandaoService.getSelectionMix), so the expected proposer is a fixed

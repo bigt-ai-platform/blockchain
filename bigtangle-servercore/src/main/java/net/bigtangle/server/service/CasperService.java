@@ -529,6 +529,39 @@ public class CasperService {
     }
 
     /**
+     * Cold-start anchor adoption for a node whose Casper state begins empty
+     * (fresh rejoin or first sync after the mesh moved on): back-justifying
+     * history is impossible by construction, because embedded votes live only
+     * {@link #ATTESTATION_LOOKBACK_EPOCHS} deep in the confirmed chain — once
+     * the mesh finalizes past an epoch, its votes are gone. The peers'
+     * finalized checkpoint is adopted instead. Its hash is verified against
+     * THIS node's chain-derived epoch boundary, so a peer can only ever name
+     * an anchor our own confirmed chain already contains; justification then
+     * resumes from the anchor with live votes (~2 epochs to the next
+     * finalization via the consecutive-epoch link rule).
+     */
+    public synchronized boolean adoptFinalizedAnchor(long epoch, Sha256Hash blockHash, BlockStoreInterface store) {
+        if (epoch <= 0 || blockHash == null) {
+            return false;
+        }
+        Checkpoint best = getLastFinalizedCheckpoint(store);
+        if (best != null && best.epoch >= epoch) {
+            return false;
+        }
+        Checkpoint boundary = ensureCheckpoint(epoch, store);
+        if (boundary == null || boundary.blockHash == null || !boundary.blockHash.equals(blockHash)) {
+            log.debug("anchor adoption refused: advertised {} != chain-derived boundary {}",
+                    blockHash, boundary == null ? "null" : boundary.blockHash);
+            return false;
+        }
+        boundary.justified = true;
+        boundary.finalized = true;
+        persistCheckpoint(boundary, store);
+        log.info("Adopted peers' finalized checkpoint as anchor: epoch={}, block={}", epoch, blockHash);
+        return true;
+    }
+
+    /**
      * True if the reward chain containing {@code startHash} descends from (or
      * is) {@code chainAncestor}. {@code startHash} MUST already be persisted —
      * callers pass the new block's prevRewardHash (whose existence solidity

@@ -693,6 +693,38 @@ public class SyncBlockService {
 	}
 
 	/**
+	 * The highest finalized checkpoint advertised by any requester, for the
+	 * cold-start Casper bootstrap. Same peer set and trust model as block
+	 * sync ({@code server.requester} / {@link RequesterSeedDiscovery}); the
+	 * returned hash is still verified against the node's own chain-derived
+	 * epoch boundary before adoption ({@code CasperService
+	 * .adoptFinalizedAnchor}). Null when no requester reports finality.
+	 */
+	public GetTXRewardResponse getBestPeerFinalizedCheckpoint() {
+		long best = -1;
+		GetTXRewardResponse bestResp = null;
+		for (String s : requesterSeedDiscovery.getRequesters()) {
+			s = s == null ? null : s.trim();
+			if (s == null || s.isEmpty()) {
+				continue;
+			}
+			try {
+				byte[] response = OkHttp3Util.postString(s + "/" + ReqCmd.getChainNumber,
+						Json.jsonmapper().writeValueAsString(new HashMap<String, String>()));
+				GetTXRewardResponse r = Json.jsonmapper().readValue(response, GetTXRewardResponse.class);
+				if (r != null && r.getFinalizedChainLength() != null
+						&& r.getFinalizedChainLength() > best) {
+					best = r.getFinalizedChainLength();
+					bestResp = r;
+				}
+			} catch (Exception e) {
+				log.debug("peer finalized checkpoint {}: {}", s, e.getMessage());
+			}
+		}
+		return bestResp;
+	}
+
+	/**
 	 * Pull the given hashes via the getBlocksByHashList batch endpoint, trying
 	 * each requester in order; the first requester answering without error
 	 * serves the whole chunk. Blocks are added with {@code blockgraph
