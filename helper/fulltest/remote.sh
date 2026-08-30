@@ -613,6 +613,26 @@ run_pegin() {
     printf '%s\n' "$out" | grep '^BENEFICIARY_ADDR=' | cut -d= -f2
 }
 
+# 0) Wait for the L1-order chain's beacon chain to START producing (the L1
+#    server proposes as the imported L0 validator deposit, seed 04) BEFORE
+#    submitting peg-ins — the wrapped mints are then collected and confirmed by
+#    the live beacon chain within a few slots instead of sitting unconfirmed
+#    for many minutes.
+echo "Waiting for the L1-order beacon chain to start..."
+for i in $(seq 1 60); do
+    L1_CL=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
+        "SELECT max(chainlength) FROM blocks WHERE blocktype='BLOCKTYPE_BEACON';" 2>/dev/null || echo "0")
+    if [ -n "$L1_CL" ] && [ "${L1_CL//[^0-9]/}" -ge 1 ]; then
+        echo "L1-order beacon chain producing (chainlength=$L1_CL)"
+        break
+    fi
+    if [ $i -eq 60 ]; then
+        echo "WARNING: L1 beacon chain not producing after 180s, tail:"
+        tail -30 "$L1_LOG"
+    fi
+    sleep 3
+done
+
 # 1) Peg-in for the L1 validator (>= MIN_STAKE 32000000 + fee). A whole
 #    genesis-CSV UTXO (100000000000000) is locked 1:1.
 L1_VALIDATOR_ADDR="$(run_pegin "$L0_GENESIS_KEY" "$L1_VALIDATOR_PUBKEY")"

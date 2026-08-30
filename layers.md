@@ -61,9 +61,10 @@ The bridge enforces two hard invariants (per L1 chain, per token):
 2. **L1→L0 ≤ L0→L1** — cumulative released value can never exceed cumulative
    locked value (`sumUnspentVaultValue` gate in `BridgeService`).
 
-A consequence is that **minting `bc` directly in an L1 genesis (as the dev/test
-harness does today) violates invariant 1** — it creates L1 `bc` with no L0
-vault backing. The intended bootstrap is a vault peg-in (see §5.2 and §8).
+A consequence is that **minting `bc` directly in an L1 genesis would violate
+invariant 1** — it creates L1 `bc` with no L0 vault backing. The
+design-consistent bootstrap is a vault peg-in (see §5.2); the remote harness
+now follows exactly this path (§8).
 
 ---
 
@@ -135,8 +136,9 @@ Base params:
             ▲ wrapped issuance (L0→L1, peg-in)     ▲ L1 burn + anchor
             │
    ┌────────┴────────────────────────────────────────────────┐
-   │ L1-ordermatch (chainId "ordermatch") · L1-evm "EVM" ·    │
-   │ L1-social/payment "PAYMENT" · L1-contract · L1-pai        │
+   │ L1-ordermatch (chainId "ordermatch") · L1-evm "EVM" ·     │
+   │ L1-social "SOCIAL" · L1-payment "PAYMENT" · L1-contract ·  │
+   │ L1-pai "PAI"                                               │
    │ own genesis · own DB · own PoS validator set              │
    │ genesisMintsBIG = false — bc only via vault peg-in        │
    └───────────────────────────────────────────────────────────┘
@@ -311,8 +313,9 @@ Result: **wrapped supply == locked L0 collateral** for every token.
      (`BridgeService.java`).
 3. The release block spends the *actual* vault output (peg-in block hash, tx
    hash, index 0) to the burn recipient. The input is signed by the vault key
-   (legacy P2PKH) or `vaultM` of the ordered multisig keys (P2SH M-of-N) —
-   `signVaultRelease`. Unsigned/invalid releases are rejected by L0 consensus.
+   (P2PKH single-key mode) or `vaultM` of the ordered multisig keys (P2SH
+   M-of-N) — `signVaultRelease`. Unsigned/invalid releases are rejected by L0
+   consensus.
 4. The vault is marked spent; a retry service (`PegOutRetryService`,
    `bridge.pegOutRetryMs`, default 30 s) re-attempts failed peg-outs
    idempotently.
@@ -350,6 +353,10 @@ passes, so releases are delayed — not lost — while finality catches up.
   pages (`blocksFromNonChainHeight`, page limit 300, max 500 pages) and applies
   them into the L1 graph with `blockgraph.addBlock` — this is how L0 order/token
   context reaches the L1 chain. Genesis blocks are not re-imported (height > 0).
+  A **non-minting L1** skips L0 `CROSSTANGLE` blocks (their inputs spend foreign
+  L0 UTXOs that the L1 chain does not hold); such an L1 learns bridge state
+  through its own watchers (`PegInWatcherService`, `AnchorWatcherService`)
+  rather than by importing L0's blocks.
 - **Vault observations**: `PegInWatcherService` (L1) polls L0 `getBalances`
   for the vault address; peg-in L0-side runs on the L0 node itself.
 
@@ -380,36 +387,72 @@ empty; the intended way to give L1 spendable value is a vault peg-in (§5.2).
 
 ### 7.3 Validator bootstrapping (dev/test)
 
-- Stake must be ≥ 32,000,000 BIG in the validator address's *confirmed* L1
-  UTXOs; then `stakeDeposit` + `activateValidator` (`l1-order-server
-  DispatcherController`) register it, and the warmup proposer rule starts the
-  beacon chain.
+- On L0, the genesis CSV (`TestGenesisOutput.csv`) funds the validator/genesis
+  wallets with confirmed `bc`; `stakeDeposit` + `activateValidator`
+  (`layer0-server`/`l1-order-server` `DispatcherController`) register them, and
+  the warmup proposer rule starts the beacon chain.
+- On a non-minting L1 there is a chicken-and-egg problem: the validator needs
+  ≥ 32,000,000 BIG of *confirmed* L1 `bc` to stake, but L1 `bc` only exists
+  after a vault peg-in — and the wrapped mint needs a live beacon chain. The
+  harness (`helper/fulltest/remote.sh`) resolves it with a **phantom deposit**:
+  the L1 server proposes beacons with the *L0* validator key (seed `0x04`), and
+  the L0 `STAKE` block the L1 imports via the requester registers that same key
+  as the sole active L1 deposit — so the deterministic warmup proposer (the
+  lexicographically-lowest, and only, registered pubkey) is a key the L1 server
+  actually holds. The beacon chain starts with no L1 genesis `bc`; vault
+  peg-ins then mint the wrapped `bc` (§5.2), and `stakeDeposit`/`activateValidator`
+  run on top, fully vault-backed.
 - Test keys derive validator/genesis wallets from ML-DSA-87 seeds (see
-  `helper/test/`), with genesis distributions in
-  `helper/test/TestGenesisOutput.csv` (L0) and `TestGenesisOutputL1.csv` (L1).
+  `helper/test/`), with the L0 genesis distribution in
+  `helper/test/TestGenesisOutput.csv`.
 
 ---
 
-## 8. Known divergence in the dev/test harness
+## 8. The dev/test harness bootstrap (vault-based, no L1 bc genesis)
 
-The remote test harness (`helper/fulltest/remote.sh`) starts L0 with
-`-Dbridge.active=false -Danchor.active=false` and passes
-`-Dbigtangle.genesis.csv=TestGenesisOutputL1.csv` to the L1 server. This mints
-`bc` directly into the **L1 genesis** so the L1 validator can stake and the
-order-test wallets are funded.
+The remote test harness (`helper/fulltest/remote.sh`) now bootstraps the
+L1-order chain the design-consistent way — **no bc in the L1 genesis**:
 
-This works, but it **bypasses the vault**: the L1 `bc` has no L0 vault backing,
-violating the "wrapped supply == locked L0 collateral" invariant for the `bc`
-token (§5.2). The design-consistent bootstrap is instead:
+1. L0 starts with the bridge enabled (`bridge.active=true`, vault keys) and
+   mints its own genesis via `TestGenesisOutput.csv` (L0 *is* the minting chain).
+2. L1 starts with **no genesis CSV** (`genesisMintsBIG=false`, empty coinbase),
+   with the bridge enabled (vault pubkey, issuance keys, `anchor.l0Url`).
+3. The harness waits for the L1 beacon chain to start producing, then submits
+   `processPegIn` transactions on L0 (`helper/prod/validators/PegInTool.java`)
+   that lock the L0 genesis wallet's bc to the vault with
+   `chainId=ordermatch` and the L1 validator / L1 genesis wallet as
+   beneficiaries (one UTXO per entry).
+4. L1's `PegInWatcherService` observes the confirmed vault locks and mints the
+   wrapped bc 1:1 (CROSSTANGLE issuance, §5.2); the live beacon chain confirms
+   them, and the existing `stakeDeposit` + `activateValidator` path runs fully
+   vault-backed.
 
-1. Drop the L1 genesis CSV (L1 genesis has no `bc`).
-2. Enable the bridge on L0 and L1 (`bridge.active=true`, vault + issuance keys,
-   `anchor.l0Url`, …).
-3. On L0, submit `processPegIn` transactions that lock ≥ 32,000,000 + fee `bc`
-   to the vault with `chainId` = the L1 chain and `toAddressInSubtangle` = the
-   L1 validator (and test wallets) as beneficiary.
-4. `PegInWatcherService` mints the wrapped `bc` on L1; `stakeDeposit` +
-   `activateValidator` then run unchanged, fully vault-backed.
+### 8.1 Bootstrap deadlock and its resolution
+
+A non-minting L1 cannot gain its *first* confirmed balance via the vault: the
+peg-in mints need a beacon chain to confirm, the beacon chain needs a staked
+validator, and the validator needs confirmed balance. The harness resolves it
+by bootstrapping the beacon chain on a **registered deposit the L1 node
+already holds**: the L1 server uses the L0 validator key (seed 04), whose
+`STAKE` block the L1 imports from L0 via the requester — so the imported
+deposit (the "phantom") is active on the L1 chain and the L1 node can propose
+with the key it holds, all before any L1 balance exists. The peg-in mints then
+confirm on that beacon chain and the validator stakes vault-backed bc on top.
+
+Two code fixes were needed to make this work:
+
+- **`StakeService.applyStakeBlock` top-up fix**: a stake **top-up** no longer
+  overwrites `activated_epoch` with a value recomputed from the top-up block's
+  (high) chain position. Doing so pushed the activation into the future and
+  deactivated an already-active validator, silently stalling beacon production
+  (`StakeService.java`).
+- **`SyncBlockService` L1 import**: a non-minting L1 skips L0 `CROSSTANGLE`
+  blocks during non-chain sync — they spend L0 UTXOs the L1 does not hold and
+  cannot validate; the L1 learns bridge state through its own watchers instead
+  (`SyncBlockService.java`).
+
+All 9 remote ITs (`Remote*IT`) pass under this bootstrap.
+
 
 ---
 
@@ -486,3 +529,49 @@ value in the same release.
   "confirmed", though the locking block is fetched and hash-verified. Binding
   issuance to L0 *finality* (as peg-out now is) is a further hardening left
   open.
+
+---
+
+## 12. Comparison to other layered systems
+
+The individual mechanisms are all proven in production; what is novel is the
+*combination*. Bigtangle is closest to **Cosmos-style app chains that run their
+own validator set** + **a Polkadot/rollup-style L0 anchor for finality** + **a
+Liquid/rollup-style vault peg** for value.
+
+| Dimension | Bigtangle | Polkadot | Cosmos | Avalanche | ETH rollups | Bitcoin sidechains |
+|---|---|---|---|---|---|---|
+| L1 validator set | **own PoS set per chain** | shared (parachains lease relay security) | own set per zone | own set (subnets) | none (sequencer; L1 enforces) | N/A (federation) |
+| L1 finality | **anchored to L0 (Casper FFG)** | GRANDPA (shared) | per-zone Tendermint | per-subnet Snow | L1 state-root settlement | federated confirmations |
+| Value transfer | **vault peg (lock → wrapped 1:1)** | reserve assets via XCM | IBC (escrow + light client) | subnet bridges | canonical escrow contract | federated multisig peg |
+| App specialisation | restricted block-type set | parachain pallets | SDK modules | VM/subnet | rollup VM | N/A |
+| Proven in production | no (dev/test) | yes (2021) | yes (2021) | yes (2020) | yes, at scale | yes (2018) |
+
+**Where each piece comes from**
+
+- **Own-validator-set L1s** ≈ Cosmos zones ("sovereign app chain"). Each L1 is
+  structurally Cosmos-like: its own genesis, DB, and PoS set.
+- **L0 anchoring for finality** ≈ Polkadot (relay chain) and, more directly,
+  Ethereum rollups (post state roots to L1, inherit L1 finality without L1
+  replaying L2) — the anchor → `confirmedRoot` + SPV proof → L0 Casper finality
+  flow.
+- **Vault M-of-N peg** ≈ Liquid/RSK (Bitcoin federated multisig): lock on the
+  base layer, mint a 1:1 pegged asset on the side chain — the same model as
+  `vaultM`-of-N with `vaultPubKeyHexList`/`vaultPriKeyHexList`.
+
+**The defining trade-off**
+
+Bigtangle deliberately keeps **independent security per L1** (a chain's fork,
+reorg or slashing does not consume L0 finality — §1.1 point 3), which both
+Polkadot (shared security) and rollups (L1 enforces everything) give up. It
+then layers **L0-anchored finality** back on top, so an L1 borrows *finality*
+from L0 without borrowing *security*.
+
+The cost is **economic**: an L1's security is bounded by the stake actually
+deposited on that chain (min 32,000,000 BIG, but total L1 supply is only the
+wrapped amount), so a small-stake L1 is cheap to attack *locally*. Polkadot
+closes this with shared security, rollups with L1-enforced fraud/validity
+proofs; Bigtangle's only backstops are the L0 freeze list
+(`anchor.disabledChains`) and the FLOW INVARIANT capping outflow at
+`sumUnspentVaultValue`. This — not any single layer — is the under-tested part
+of the design (§11 trust assumptions).

@@ -380,9 +380,15 @@ public class StakeService {
             log.info("Re-applied stake deposit for pubkey={} amount={} block={}",
                     Utils.HEX.encode(pubkey), amount, block.getHashAsString());
         } else if (existing != null) {
-            // Top-up: accumulate onto the existing deposit.
+            // Top-up: accumulate onto the existing deposit. The activation epoch
+            // is fixed by the FIRST deposit (validator joins then); recomputing
+            // it from the top-up block's own chain position would push it into
+            // the FUTURE (a late top-up sits at a high chainlength) and
+            // deactivate an already-active validator, stalling beacon
+            // production. Keep the existing activation.
+            long keepActivation = existing.getActivatedEpoch();
             store.updateStakeDepositAmount(pubkey, existing.getAmount().add(amount.getValue()).longValue(),
-                    block.getHash(), tx.getHash(), activatedEpoch);
+                    block.getHash(), tx.getHash(), keepActivation);
             log.info("Stake top-up for pubkey={}: now {} (block {})",
                     Utils.HEX.encode(pubkey), existing.getAmount().add(amount.getValue()), block.getHashAsString());
         } else {
