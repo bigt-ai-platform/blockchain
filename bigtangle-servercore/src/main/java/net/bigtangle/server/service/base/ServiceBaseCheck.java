@@ -1881,7 +1881,7 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 							&& net.bigtangle.server.service.SlotService.isEpochStartBeacon(prevBeacon, prevRi,
 									networkParameters.getSlotsPerEpoch())) {
 						// Only EPOCH-START beacons reward blocks (signed slot %
-						// 32 == 0); a block referenced/confirmed by a mid-epoch
+						// slotsPerEpoch == 0); a block referenced/confirmed by a mid-epoch
 						// beacon is not yet rewarded and remains eligible for
 						// this epoch's payout.
 						prevRewarded.addAll(prevRi.getBlocks());

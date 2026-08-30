@@ -61,7 +61,7 @@ public class SlotService {
      */
     private java.util.Set<Sha256Hash> lastBeaconRefs = new java.util.HashSet<>();
 
-    /** Configurable slot-tick interval (pos.slotIntervalMs); the EPOCH length is fixed at 32 slots. */
+    /** Configurable slot-tick interval (pos.slotIntervalMs); the EPOCH length is per-network (slotsPerEpoch, default 32). */
     @org.springframework.beans.factory.annotation.Value("${pos.slotIntervalMs:12000}")
     private long slotIntervalMs = SLOT_DURATION_MS;
 

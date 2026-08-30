@@ -22,6 +22,16 @@ public class BridgeConfiguration {
      */
     private String issuancePubKeyHex;
     private String issuancePriKeyHex;
+    /**
+     * M-of-N issuance keys (optional). When non-empty, wrapped-token issuance is
+     * signed by EVERY private key in {@code issuancePriKeyHexList} and verified
+     * as a quorum of {@code issuanceM} distinct authorized public keys
+     * ({@code issuancePubKeyHexList}). Empty = single-key issuance
+     * ({@code issuancePubKeyHex}/{@code issuancePriKeyHex}).
+     */
+    private java.util.List<String> issuancePubKeyHexList = new ArrayList<>();
+    private java.util.List<String> issuancePriKeyHexList = new ArrayList<>();
+    private int issuanceM = 1;
     private String burnAddress;
     private String l1Url;
     /** M-of-N multisig vault keys. Requires vaultM signatures to spend. */
@@ -39,11 +49,22 @@ public class BridgeConfiguration {
      */
     private boolean requireFinality = true;
 
+    /**
+     * When true, refuse to start if {@code bridge.active} and the vault is
+     * single-key (no {@code vaultPubKeyHexList}). Single-key custody means one
+     * key controls ALL locked collateral. Default false (warn only) so the
+     * dev/test harness keeps working; set true in production.
+     */
+    private boolean requireMultisigVault = false;
+
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
 
     public boolean isRequireFinality() { return requireFinality; }
     public void setRequireFinality(boolean requireFinality) { this.requireFinality = requireFinality; }
+
+    public boolean isRequireMultisigVault() { return requireMultisigVault; }
+    public void setRequireMultisigVault(boolean requireMultisigVault) { this.requireMultisigVault = requireMultisigVault; }
 
     public String getVaultPubKeyHex() { return vaultPubKeyHex; }
     public void setVaultPubKeyHex(String vaultPubKeyHex) { this.vaultPubKeyHex = vaultPubKeyHex; }
@@ -56,6 +77,15 @@ public class BridgeConfiguration {
 
     public String getIssuancePriKeyHex() { return issuancePriKeyHex; }
     public void setIssuancePriKeyHex(String issuancePriKeyHex) { this.issuancePriKeyHex = issuancePriKeyHex; }
+
+    public java.util.List<String> getIssuancePubKeyHexList() { return issuancePubKeyHexList; }
+    public void setIssuancePubKeyHexList(java.util.List<String> v) { this.issuancePubKeyHexList = v != null ? v : new java.util.ArrayList<>(); }
+
+    public java.util.List<String> getIssuancePriKeyHexList() { return issuancePriKeyHexList; }
+    public void setIssuancePriKeyHexList(java.util.List<String> v) { this.issuancePriKeyHexList = v != null ? v : new java.util.ArrayList<>(); }
+
+    public int getIssuanceM() { return issuanceM; }
+    public void setIssuanceM(int issuanceM) { this.issuanceM = Math.max(1, issuanceM); }
 
     public String getBurnAddress() { return burnAddress; }
     public void setBurnAddress(String burnAddress) { this.burnAddress = burnAddress; }

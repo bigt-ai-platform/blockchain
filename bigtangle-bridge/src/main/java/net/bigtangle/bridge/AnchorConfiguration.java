@@ -12,6 +12,9 @@ public class AnchorConfiguration {
     private String l0Url;
     private String priKeyHex;
     private String pubKeyHex;
+    /** Optional M-of-N production keys: the posting node signs with EVERY key it
+     *  holds, producing a multi-signature anchor. Empty = single-key (priKeyHex). */
+    private java.util.List<String> priKeyHexList = new java.util.ArrayList<>();
     private long rewardAmount;
     private String feePoolPriKeyHex;
     private String feePoolPubKeyHex;
@@ -75,6 +78,14 @@ public class AnchorConfiguration {
 
     public void setPubKeyHex(String pubKeyHex) {
         this.pubKeyHex = pubKeyHex;
+    }
+
+    public java.util.List<String> getPriKeyHexList() {
+        return priKeyHexList;
+    }
+
+    public void setPriKeyHexList(java.util.List<String> priKeyHexList) {
+        this.priKeyHexList = priKeyHexList != null ? priKeyHexList : new java.util.ArrayList<>();
     }
 
     public long getRewardAmount() {

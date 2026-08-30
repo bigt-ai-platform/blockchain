@@ -29,6 +29,8 @@ import net.bigtangle.exception.BlockStoreException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.params.ReqCmd;
 import net.bigtangle.response.GetBalancesResponse;
+import net.bigtangle.response.GetBlockEvaluationsResponse;
+import net.bigtangle.response.GetTXRewardResponse;
 import net.bigtangle.script.Script;
 import net.bigtangle.script.ScriptBuilder;
 import net.bigtangle.server.data.AnchorRecord;
@@ -80,6 +82,25 @@ public class BridgeService {
 
     @Autowired
     private ObjectMapper jsonmapper;
+
+    /**
+     * Startup guard: a single-key vault is the weakest custody (one key held in
+     * this node's config controls all locked collateral). Warn loudly, or refuse
+     * to start when {@code bridge.requireMultisigVault=true}.
+     */
+    @jakarta.annotation.PostConstruct
+    public void validateVaultConfiguration() {
+        if (!bridgeConfiguration.isActive() || isMultisigVault()) {
+            return;
+        }
+        String msg = "bridge.active=true with a SINGLE-KEY vault (bridge.vaultPubKeyHex only): "
+                + "one key controls ALL locked collateral. Configure bridge.vaultPubKeyHexList "
+                + "and bridge.vaultM (M-of-N multisig) for production custody.";
+        if (bridgeConfiguration.isRequireMultisigVault()) {
+            throw new IllegalStateException(msg);
+        }
+        logger.error(msg);
+    }
 
     private Address vaultAddress() {
         if (isMultisigVault()) {
@@ -593,6 +614,16 @@ public class BridgeService {
                             output.getBlockHash(), output.getIndex());
                     continue;
                 }
+                // FINALITY GATE (issuance): mirror the peg-out gate — only mint
+                // wrapped tokens against a lock that is L0-FINALIZED, not merely
+                // confirmed. L0 confirmation is endpoint-claimed and reversible;
+                // a reorg after minting would leave wrapped supply unbacked.
+                if (bridgeConfiguration.isRequireFinality()
+                        && !isLockFinalizedOnL0(l0Url, output.getBlockHashHex())) {
+                    logger.debug("Vault lock {}:{} not yet finalized on L0, deferring mint",
+                            output.getBlockHash(), output.getIndex());
+                    continue;
+                }
 
                 // N3: fetch the locking block and verify its hash matches the
                 // requested one — the block hash is a commitment to its content,
@@ -683,12 +714,28 @@ public class BridgeService {
      */
     private void issueWrappedTokens(Address address, Coin amount, Sha256Hash lockBlockHash, long lockIndex,
             BlockStoreInterface store) throws Exception {
-        String issuancePriKeyHex = bridgeConfiguration.getIssuancePriKeyHex();
-        if (issuancePriKeyHex == null || issuancePriKeyHex.isEmpty()) {
-            logger.warn("bridge.issuancePriKeyHex not configured; cannot sign wrapped issuance; skipping");
-            return;
+        boolean multisig = bridgeConfiguration.getIssuancePubKeyHexList() != null
+                && !bridgeConfiguration.getIssuancePubKeyHexList().isEmpty();
+        java.util.List<PQKey> signers = new ArrayList<>();
+        if (multisig) {
+            for (String hex : bridgeConfiguration.getIssuancePriKeyHexList()) {
+                if (hex != null && !hex.isEmpty()) {
+                    signers.add(PQKey.fromPrivateKeyHex(hex));
+                }
+            }
+            if (signers.size() < bridgeConfiguration.getIssuanceM()) {
+                logger.warn("bridge.issuancePriKeyHexList holds {} signers but issuanceM requires {}; skipping",
+                        signers.size(), bridgeConfiguration.getIssuanceM());
+                return;
+            }
+        } else {
+            String issuancePriKeyHex = bridgeConfiguration.getIssuancePriKeyHex();
+            if (issuancePriKeyHex == null || issuancePriKeyHex.isEmpty()) {
+                logger.warn("bridge.issuancePriKeyHex not configured; cannot sign wrapped issuance; skipping");
+                return;
+            }
+            signers.add(PQKey.fromPrivateKeyHex(issuancePriKeyHex));
         }
-        PQKey issuanceKey = PQKey.fromPrivateKeyHex(issuancePriKeyHex);
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);
 
@@ -709,8 +756,17 @@ public class BridgeService {
         tx.addOutput(amount, address);
         // The signature covers the outputs (amount + recipient), the declared
         // chain id and the L0 lock reference — tx.getHash() excludes the
-        // dataSignature field, so it can be set after signing.
-        tx.setDataSignature(issuanceKey.sign(tx.getHash()).serialize());
+        // dataSignature field, so it can be set after signing. Single-key stores
+        // one SignatureBundle; M-of-N stores a length-prefixed quorum container.
+        if (multisig) {
+            java.util.List<byte[]> sigs = new ArrayList<>();
+            for (PQKey k : signers) {
+                sigs.add(k.sign(tx.getHash()).serialize());
+            }
+            tx.setDataSignature(L1CrosstangleHandler.encodeSignatureList(sigs));
+        } else {
+            tx.setDataSignature(signers.get(0).sign(tx.getHash()).serialize());
+        }
         b.addTransaction(tx);
         blockSaveService.saveBlockPermissive(b, store);
     }
@@ -750,5 +806,55 @@ public class BridgeService {
                     "L0 returned a block whose hash does not match the requested " + blockHashHex);
         }
         return block;
+    }
+
+    /**
+     * L0's Casper-finalized chain length as advertised by {@code getChainNumber},
+     * or -1 when unavailable. This is the same peer-trusted signal the L1 uses
+     * for cold-start finality adoption, so the issuance gate below is consistent
+     * with the rest of the L1's view of L0.
+     */
+    private long getRemoteFinalizedChainLength(String l0Url) throws Exception {
+        byte[] response = OkHttp3Util.postString(l0Url + "/" + ReqCmd.getChainNumber.name(),
+                Json.jsonmapper().writeValueAsString(new java.util.HashMap<String, String>()));
+        GetTXRewardResponse r = jsonmapper.readValue(response, GetTXRewardResponse.class);
+        return r != null && r.getFinalizedChainLength() != null ? r.getFinalizedChainLength() : -1L;
+    }
+
+    /** The L0 confirmed chainlength of the given block hash, or -1 when unknown. */
+    private long getRemoteBlockChainLength(String l0Url, String blockHashHex) throws Exception {
+        java.util.HashMap<String, Object> params = new java.util.HashMap<>();
+        params.put("blockhashs", java.util.List.of(blockHashHex));
+        byte[] response = OkHttp3Util.postString(l0Url + "/" + ReqCmd.searchBlockByBlockHashs.name(),
+                Json.jsonmapper().writeValueAsString(params));
+        GetBlockEvaluationsResponse r = jsonmapper.readValue(response, GetBlockEvaluationsResponse.class);
+        if (r != null && r.getEvaluations() != null) {
+            for (net.bigtangle.core.BlockEvaluationDisplay e : r.getEvaluations()) {
+                if (e != null && blockHashHex.equalsIgnoreCase(
+                        e.getBlockHash() != null ? e.getBlockHash().toString() : "")) {
+                    return e.getChainlength();
+                }
+            }
+        }
+        return -1L;
+    }
+
+    /**
+     * True when the L0 lock block is at/below L0's finalized checkpoint (Casper
+     * FFG). Fails closed: any error or missing finality returns false, so a mint
+     * is deferred until finality is actually observable.
+     */
+    private boolean isLockFinalizedOnL0(String l0Url, String blockHashHex) {
+        try {
+            long finalizedLength = getRemoteFinalizedChainLength(l0Url);
+            if (finalizedLength <= 0) {
+                return false;
+            }
+            long lockLength = getRemoteBlockChainLength(l0Url, blockHashHex);
+            return lockLength > 0 && lockLength <= finalizedLength;
+        } catch (Exception e) {
+            logger.warn("L0 finality check for lock {} failed: {}", blockHashHex, e.getMessage());
+            return false;
+        }
     }
 }

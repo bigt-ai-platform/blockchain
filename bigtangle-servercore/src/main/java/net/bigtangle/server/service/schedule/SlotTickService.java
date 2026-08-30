@@ -145,7 +145,7 @@ public class SlotTickService {
             var store = storeService.getStore();
             try {
                 // Finality is driven by the CHAIN epoch (confirmed
-                // chainlength / 32), NOT the wall-clock epoch. On a young
+                // chainlength / slotsPerEpoch), NOT the wall-clock epoch. On a young
                 // chain the wall-clock epoch runs far ahead of the chain
                 // (the beacon chain confirms ~1 block per proposer slot), so
                 // finalizeCheckpoint(wallEpoch) targets an epoch boundary

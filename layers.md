@@ -38,7 +38,9 @@ into two layers:
    *structurally* scoped to its layer, not just by convention.
 3. **Independent security.** Each chain runs its own PoS validator set and
    stake, so an application chain's failure (fork, reorg, slashing) does not
-   consume L0 finality.
+   consume L0 finality. This is both a benefit (fault isolation) and a
+   liability: an L1 is only as secure as the stake deposited on *that* chain —
+   see the trade-off in §12.
 4. **Finality via anchoring.** L1 chains periodically post a signed checkpoint
    (anchor) to L0; once the anchor's L0 block reaches Casper **finality**, the
    referenced L1 state is final.
@@ -227,7 +229,7 @@ Every L1 node schedules `postAnchor` (`anchor.postIntervalMs`, default 30 s):
    path proof.
 2. Builds a `LayerAnchor` payload `{ chainId, l1RewardHeadHash, l1Height,
    confirmedRoot, spvProof, burn (optional), signature }` and signs it with the
-   L1 anchor key(s) (`anchor.priKeyHex`, or an M-of-N set — see below).
+   L1 anchor key (`anchor.priKeyHex`).
 3. Wraps it in a `BLOCKTYPE_CROSSTANGLE` block and posts it to L0
    (`POST batchBlock`).
 4. L0's `L0AnchorHandler` validates the anchor, records an `AnchorRecord`, and
@@ -235,12 +237,16 @@ Every L1 node schedules `postAnchor` (`anchor.postIntervalMs`, default 30 s):
    again. Confirmation is not sufficient to release value: peg-out additionally
    requires the anchor's L0 block to be **finalized** (§5.3).
 
-Anchor authentication supports an **M-of-N quorum**, not just a single key:
-`anchor.chainPubKeys` is a per-`chainId` registry of authorized signer public
-keys and `anchor.chainSignersRequired` the threshold (default 1, single-key
-fallback to the global `anchor.pubKeyHex`). `validateAnchor` verifies the
-quorum via `LayerAnchor.verifyQuorum`. A single compromised key therefore
-cannot forge an anchor for a chain that has its own registry entry.
+Anchor **verification** on L0 supports an **M-of-N quorum**: `anchor.chainPubKeys`
+is a per-`chainId` registry of authorized signer public keys and
+`anchor.chainSignersRequired` the threshold (default 1, single-key fallback to
+the global `anchor.pubKeyHex`); `validateAnchor` checks the quorum via
+`LayerAnchor.verifyQuorum`. A single compromised key therefore cannot forge an
+anchor for a chain that has its own registry entry. **Anchor production is
+M-of-N capable**: `anchor.priKeyHexList` (fallback to the single
+`anchor.priKeyHex`) makes `AnchorService.postAnchor` sign with every configured
+key, producing a multi-signature anchor. (Each posting node only signs with the
+keys it holds; aggregating signatures from multiple *nodes* is not wired up.)
 
 An anchor reward (`anchor.rewardAmount`) is **not credited** in the current
 code: `AnchorService.creditAnchorReward` is deliberately disabled because a
@@ -253,7 +259,7 @@ chain-id binding, and that the SPV proof is *internally consistent*
 (`spvProof.verify(l1RewardHeadHash, confirmedRoot)`), but it cannot
 independently check that `confirmedRoot` matches real L1 state — that guarantee
 rests on the honesty of the anchor signer set (see §11, trust assumptions).
-Peg-out is gated on the anchor's L0 **finality** (§5.3).
+Peg-out is gated on the anchor's L0 **confirmation and finality** (§5.3).
 
 ### 5.2 Peg-in — L0 → L1 (`BridgeService.processPegIn`, `processPegInFromL0`)
 
@@ -276,17 +282,24 @@ L1 side (`PegInWatcherService.pollPegIns` → `processPegInFromL0`, every
    tx actually pays the configured vault for the same value, and that the lock
    declares **this** L1 chain — otherwise a single L0 deposit would mint on
    every L1 (1:N collateral multiplication is rejected).
-3. `issueWrappedTokens` mints wrapped tokens to the beneficiary as a
+3. **Finality gate (issuance)**: with `bridge.requireFinality=true` (default),
+   the mint is deferred until the lock's L0 block is at or below L0's Casper
+   finalized checkpoint (`BridgeService.isLockFinalizedOnL0`), so a later L0
+   reorg cannot leave wrapped supply unbacked.
+4. `issueWrappedTokens` mints wrapped tokens to the beneficiary as a
    **zero-input CROSSTANGLE** issuance block, signed by the dedicated L1
-   **issuance key** (`bridge.issuancePriKeyHex`; the vault key stays on L0).
-4. The lock is recorded as issued (spent vault set) so it is never minted twice.
+   **issuance key(s)** (`bridge.issuancePriKeyHex`, or an M-of-N set via
+   `bridge.issuancePriKeyHexList`/`issuanceM`; the vault key stays on L0).
+5. The lock is recorded as issued (spent vault set) so it is never minted twice.
 
 Consensus binding — `L1CrosstangleHandler.validateIssuance`
 (`L1CrosstangleHandler.java:208`):
 - zero-input value creation is only legal as an authenticated issuance: correct
-  data class, declared `chainId ==` this chain, valid signature under
-  `bridge.issuancePubKeyHex`, and **exactly one output** that matches the
-  declared `lockAmount`, `lockTokenId` and `lockBeneficiary` 1:1.
+  data class, declared `chainId ==` this chain, valid signature(s) under the
+  chain's issuance key set (single `bridge.issuancePubKeyHex`, or an M-of-N
+  quorum of `bridge.issuancePubKeyHexList`/`issuanceM` distinct keys), and
+  **exactly one output** that matches the declared `lockAmount`, `lockTokenId`
+  and `lockBeneficiary` 1:1.
 - **Replay guard (R3)**: at confirmation the lock is recorded in the
   chain-derived `pos_state` table (`issuedlock_<chain:blockhash:index>`); a
   different block trying to re-issue the same lock is vetoed. An unconfirm
@@ -332,7 +345,9 @@ passes, so releases are delayed — not lost — while finality catches up.
 
 - Single-key mode: a P2PKH to `bridge.vaultPubKeyHex` (private key
   `bridge.vaultPriKeyHex`). This is the *weakest* custody: one key (held in
-  JVM config on the L0 node) can release all locked collateral.
+  JVM config on the L0 node) can release all locked collateral. A startup guard
+  (`BridgeService.validateVaultConfiguration`) errors on single-key custody, and
+  `bridge.requireMultisigVault=true` turns the error into a startup refusal.
 - Multisig mode (preferred): P2SH over `vaultPubKeyHexList` (sorted) with
   threshold `bridge.vaultM` and the corresponding `vaultPriKeyHexList` signer
   keys. An M-of-N vault requires `vaultM` signatures, so a single key (or node)
@@ -476,13 +491,17 @@ All 9 remote ITs (`Remote*IT`) pass under this bootstrap.
 | `server.` | `net`, `port`, `requester`, `mineraddress`, `permissioned` | node identity; `net=Test` selects Test params |
 | `CHAIN_ID` | env var read by each L1 `NetworkConfiguration` (e.g. `SocialL1NetworkConfiguration` default `SOCIAL`, `PaymentL1NetworkConfiguration` default `PAYMENT`) | the chain's identity; must be unique per chain (§2) |
 | `pos.` | `validatorKey`, `slotIntervalMs`, `warmupSlots`, `dutyEnabled`, `gossipPeers` | per-chain PoS |
-| `anchor.` | `active`, `l0Url`, `priKeyHex`, `pubKeyHex`, `rewardAmount`, `feePoolPriKeyHex`, `feePoolPubKeyHex`, `postIntervalMs`, `watchIntervalMs`, `chainSignersRequired`, `chainPubKeys`, `disabledChains` | anchor post/confirm, M-of-N quorum, freeze list |
-| `bridge.` | `active`, `vaultPubKeyHex`, `vaultPriKeyHex`, `vaultPubKeyHexList`, `vaultM`, `vaultPriKeyHexList`, `issuancePubKeyHex`, `issuancePriKeyHex`, `burnAddress`, `l1Url`, `pegInPollMs`, `pegOutRetryMs` | vault + peg |
+| `anchor.` | `active`, `l0Url`, `priKeyHex`, `priKeyHexList`, `pubKeyHex`, `rewardAmount`, `feePoolPriKeyHex`, `feePoolPubKeyHex`, `postIntervalMs`, `postInterval`, `watchIntervalMs`, `chainSignersRequired`, `chainPubKeys`, `disabledChains` | anchor post/confirm, M-of-N quorum (verify + produce), freeze list |
+| `bridge.` | `active`, `vaultPubKeyHex`, `vaultPriKeyHex`, `vaultPubKeyHexList`, `vaultM`, `vaultPriKeyHexList`, `requireMultisigVault`, `issuancePubKeyHex`, `issuancePriKeyHex`, `issuancePubKeyHexList`, `issuancePriKeyHexList`, `issuanceM`, `requireFinality`, `burnAddress`, `l1Url`, `pegInPollMs`, `pegOutRetryMs` | vault + peg + issuance (single or M-of-N) |
 | `bigtangle.` | `genesis.csv` | dev/test genesis distribution |
 
 `slotsPerEpoch` is a **consensus code parameter** (`NetworkParameters.setSlotsPerEpoch`,
 default 32, mainnet 8), not a `-D` config key — every node must ship the same
-value in the same release.
+value in the same release. Similarly, `anchor.` has **two** interval knobs that
+are easy to confuse: `anchor.postIntervalMs` (the `AnchorPostService` wall-clock
+scheduling delay, default 30 s) and `anchor.postInterval` (a *block-count*
+threshold — `AnchorPostService` skips posting unless
+`rewardHeightDiff >= postInterval`, default 10).
 
 ---
 
@@ -517,32 +536,37 @@ value in the same release.
   peg-out. Mitigation: M-of-N quorum (`anchor.chainPubKeys`), the freeze list
   (`anchor.disabledChains`), and the FLOW INVARIANT bounding total outflow to
   locked collateral.
-- **The issuance key is currently single-key** (`bridge.issuancePubKeyHex`).
-  Compromising it mints unbacked *wrapped* tokens on L1 (inflating L1 supply),
-  but it cannot alone drain L0: a peg-out also needs a valid, finalized anchor
-  with a burn signed by the anchor quorum, and is bounded by
-  `sumUnspentVaultValue`. A threshold issuance scheme is a future hardening.
+- **The issuance key may be single-key or M-of-N.** With
+  `bridge.issuancePubKeyHexList`/`issuanceM` configured, a mint needs a quorum
+  of distinct authorized keys (threshold issuance). Single-key issuance
+  (`bridge.issuancePubKeyHex`) remains the default. Compromising the issuance
+  key(s) mints unbacked *wrapped* tokens on L1 (inflating L1 supply), but it
+  cannot alone drain L0: a peg-out also needs a valid, finalized anchor with a
+  burn signed by the anchor quorum, and is bounded by `sumUnspentVaultValue`.
 - **The vault is operator-custodial** — releases are driven by the L0 node
   holding the vault key(s) (`AnchorWatcherService`/`PegOutRetryService`). Use
-  M-of-N multisig so no single key/node controls collateral.
-- **L1 issuance trusts L0's `getBalances` response** (`PegInWatcherService`) as
-  "confirmed", though the locking block is fetched and hash-verified. Binding
-  issuance to L0 *finality* (as peg-out now is) is a further hardening left
-  open.
+  M-of-N multisig (`vaultM`-of-N) so no single key/node controls collateral;
+  `bridge.requireMultisigVault=true` refuses to start on single-key custody.
+- **L1 issuance is gated on L0 finality** (`bridge.requireFinality=true`): a
+  wrapped mint is deferred until the L0 lock block is at/below L0's finalized
+  checkpoint (`isLockFinalizedOnL0`), so a post-mint L0 reorg cannot unback the
+  wrapped supply. L0's finalized length is still peer-advertised (same trust
+  model as block sync); the lock block itself is hash-verified.
 
 ---
 
 ## 12. Comparison to other layered systems
 
-The individual mechanisms are all proven in production; what is novel is the
-*combination*. Bigtangle is closest to **Cosmos-style app chains that run their
-own validator set** + **a Polkadot/rollup-style L0 anchor for finality** + **a
-Liquid/rollup-style vault peg** for value.
+The individual mechanisms are each proven in production systems; what is
+**unproven** is the *combination* (the table's "proven" row marks the systems,
+not their sub-mechanisms). Bigtangle is closest to **Cosmos-style app chains
+that run their own validator set** + **a Polkadot/rollup-style L0 anchor for
+finality** + **a Liquid/rollup-style vault peg** for value.
 
 | Dimension | Bigtangle | Polkadot | Cosmos | Avalanche | ETH rollups | Bitcoin sidechains |
 |---|---|---|---|---|---|---|
 | L1 validator set | **own PoS set per chain** | shared (parachains lease relay security) | own set per zone | own set (subnets) | none (sequencer; L1 enforces) | N/A (federation) |
-| L1 finality | **anchored to L0 (Casper FFG)** | GRANDPA (shared) | per-zone Tendermint | per-subnet Snow | L1 state-root settlement | federated confirmations |
+| L1 finality | **anchored to L0 (Casper FFG)** | GRANDPA (shared) | per-zone Tendermint | per-subnet Snow | L1 settlement (optimistic: challenge window; ZK: proof verification) | federated confirmations |
 | Value transfer | **vault peg (lock → wrapped 1:1)** | reserve assets via XCM | IBC (escrow + light client) | subnet bridges | canonical escrow contract | federated multisig peg |
 | App specialisation | restricted block-type set | parachain pallets | SDK modules | VM/subnet | rollup VM | N/A |
 | Proven in production | no (dev/test) | yes (2021) | yes (2021) | yes (2020) | yes, at scale | yes (2018) |
@@ -552,9 +576,11 @@ Liquid/rollup-style vault peg** for value.
 - **Own-validator-set L1s** ≈ Cosmos zones ("sovereign app chain"). Each L1 is
   structurally Cosmos-like: its own genesis, DB, and PoS set.
 - **L0 anchoring for finality** ≈ Polkadot (relay chain) and, more directly,
-  Ethereum rollups (post state roots to L1, inherit L1 finality without L1
+  Ethereum rollups (post state roots to L1, so L1 settles L2 state without
   replaying L2) — the anchor → `confirmedRoot` + SPV proof → L0 Casper finality
-  flow.
+  flow. (Rollup "finality" is not instant: optimistic rollups keep a ~7-day
+  fraud-proof window, ZK rollups wait on proof verification; Bigtangle's L0
+  finality is a single Casper-FFG checkpoint.)
 - **Vault M-of-N peg** ≈ Liquid/RSK (Bitcoin federated multisig): lock on the
   base layer, mint a 1:1 pegged asset on the side chain — the same model as
   `vaultM`-of-N with `vaultPubKeyHexList`/`vaultPriKeyHexList`.

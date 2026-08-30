@@ -413,8 +413,9 @@ public class ValidatorDutyService {
             }
 
             // CHAIN-derived attestation target. The beacon chain advances ~1
-            // confirmed block per proposer slot, so the wall-clock epoch (slot/32)
-            // runs FAR ahead of the chain epoch (confirmed chainlength/32) on a
+            // confirmed block per proposer slot, so the wall-clock epoch
+            // (slot/slotsPerEpoch) runs FAR ahead of the chain epoch (confirmed
+            // chainlength/slotsPerEpoch) on a
             // young chain. Targeting the wall-clock epoch makes every node derive
             // a different (or non-existent) epoch-boundary checkpoint, so
             // attestations fragment and 2/3 justification never forms. Targeting

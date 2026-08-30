@@ -66,9 +66,30 @@ public class AnchorService {
             return;
         }
         String priKeyHex = anchorConfiguration.getPriKeyHex();
-        if (priKeyHex == null || priKeyHex.isEmpty()) {
-            logger.warn("anchor.priKeyHex not configured; cannot sign anchors");
+        java.util.List<PQKey> signerKeys = new ArrayList<>();
+        java.util.List<String> priKeyHexList = anchorConfiguration.getPriKeyHexList();
+        if (priKeyHexList != null && !priKeyHexList.isEmpty()) {
+            for (String hex : priKeyHexList) {
+                if (hex != null && !hex.isEmpty()) {
+                    signerKeys.add(PQKey.fromPrivateKeyHex(hex));
+                }
+            }
+        } else if (priKeyHex != null && !priKeyHex.isEmpty()) {
+            signerKeys.add(PQKey.fromPrivateKeyHex(priKeyHex));
+        }
+        if (signerKeys.isEmpty()) {
+            logger.warn("anchor.priKeyHex (or anchor.priKeyHexList) not configured; cannot sign anchors");
             return;
+        }
+
+        // Single-key mode: the primary key must match the configured public key.
+        if (signerKeys.size() == 1) {
+            String pubKeyHex = anchorConfiguration.getPubKeyHex();
+            if (pubKeyHex != null && !pubKeyHex.isEmpty()
+                    && !Utils.HEX.encode(signerKeys.get(0).getPublicKeyBytes()).equals(pubKeyHex)) {
+                logger.warn("anchor.priKeyHex does not match anchor.pubKeyHex; refusing to sign");
+                return;
+            }
         }
 
         TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
@@ -80,14 +101,6 @@ public class AnchorService {
         Sha256Hash l1RewardHeadHash = maxConfirmedReward.getBlockHash();
         long l1Height = maxConfirmedReward.getChainLength();
 
-        PQKey signKey = PQKey.fromPrivateKeyHex(priKeyHex);
-        String pubKeyHex = anchorConfiguration.getPubKeyHex();
-        if (pubKeyHex != null && !pubKeyHex.isEmpty()
-                && !Utils.HEX.encode(signKey.getPublicKeyBytes()).equals(pubKeyHex)) {
-            logger.warn("anchor.priKeyHex does not match anchor.pubKeyHex; refusing to sign");
-            return;
-        }
-
         List<Sha256Hash> confirmedHashes = collectConfirmedBlockHashes(l1Height, store);
         Sha256Hash confirmedRoot = MerkleProof.computeRoot(confirmedHashes);
         MerkleProof spvProof = MerkleProof.buildProofFor(confirmedHashes, l1RewardHeadHash);
@@ -95,8 +108,13 @@ public class AnchorService {
         LayerAnchor anchor = new LayerAnchor(networkParameters.getChainId(),
                 networkParameters.getChainId() + ":" + l1Height,
                 l1RewardHeadHash, l1Height, confirmedRoot, null, spvProof, null);
-        SignatureBundle sig = anchor.sign(signKey);
-        anchor.setSignature(sig.serialize());
+        // Sign with every configured key: the first becomes the primary
+        // signature (legacy single-key format), the rest are appended as the
+        // M-of-N quorum set (LayerAnchor.signatures).
+        anchor.setSignature(signerKeys.get(0).sign(anchor.canonicalDigest()).serialize());
+        for (int i = 1; i < signerKeys.size(); i++) {
+            anchor.addSignature(signerKeys.get(i));
+        }
 
         Block b = cacheBlockPrototypeService.getBlockPrototype(store);
         b.setBlockType(BlockType.BLOCKTYPE_CROSSTANGLE);

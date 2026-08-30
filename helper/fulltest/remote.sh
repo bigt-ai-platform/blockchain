@@ -548,7 +548,10 @@ L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=tr
 # funded by vault peg-ins instead: the bridge watches L0 vault locks for this
 # chain and mints wrapped bc (PegInWatcherService -> processPegInFromL0). The
 # vault key matches L0; the issuance key signs the wrapped mint.
-L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE"
+# requireFinality=false: the single-validator L0 does not reach Casper finality
+# (its attestations gossip to a production seed), so the issuance/peg-out
+# finality gate would stall the bootstrap. Production defaults the gate ON.
+L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE -Dbridge.requireFinality=false"
 nohup mvn spring-boot:run -pl l1-order-server \
   -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \

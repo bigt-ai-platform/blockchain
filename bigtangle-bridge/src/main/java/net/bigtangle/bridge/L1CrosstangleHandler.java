@@ -191,13 +191,6 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
             throw new BlockStoreException(
                     "L1 CROSSTANGLE zero-input tx creates value without authenticated bridge issuance");
         }
-        // R4: a DEDICATED issuance key, never the L0 vault key — the vault key
-        // must only live on L0 (it signs peg-out releases).
-        String issuancePubKeyHex = bridgeConfiguration.getIssuancePubKeyHex();
-        if (issuancePubKeyHex == null || issuancePubKeyHex.isEmpty()) {
-            throw new BlockStoreException(
-                    "L1 CROSSTANGLE issuance cannot be authenticated: bridge.issuancePubKeyHex is not configured");
-        }
         @SuppressWarnings("unchecked")
         Map<String, Object> data = Json.jsonmapper().readValue(tx.getData(), Map.class);
         Object declaredChain = data.get("chainId");
@@ -209,10 +202,25 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
         if (signature == null || signature.length == 0) {
             throw new BlockStoreException("L1 CROSSTANGLE issuance is not signed");
         }
-        PQKey issuanceKey = PQKey.fromPublicOnly(Utils.HEX.decode(issuancePubKeyHex));
-        if (!PQScriptUtils.verifyPQ(issuanceKey.getPublicKeyBytes(), signature, tx.getHash())) {
-            throw new BlockStoreException(
-                    "L1 CROSSTANGLE issuance signature does not verify under the chain's issuance key");
+
+        // R4: a DEDICATED issuance key, never the L0 vault key — the vault key
+        // must only live on L0 (it signs peg-out releases). Single-key (legacy)
+        // or M-of-N: with a configured public-key list, the mint must carry a
+        // quorum of DISTINCT authorized signatures over the transaction hash.
+        java.util.List<String> pubKeyHexList = bridgeConfiguration.getIssuancePubKeyHexList();
+        if (pubKeyHexList != null && !pubKeyHexList.isEmpty()) {
+            verifyIssuanceQuorum(signature, pubKeyHexList, bridgeConfiguration.getIssuanceM(), tx);
+        } else {
+            String issuancePubKeyHex = bridgeConfiguration.getIssuancePubKeyHex();
+            if (issuancePubKeyHex == null || issuancePubKeyHex.isEmpty()) {
+                throw new BlockStoreException(
+                        "L1 CROSSTANGLE issuance cannot be authenticated: bridge.issuancePubKeyHex is not configured");
+            }
+            PQKey issuanceKey = PQKey.fromPublicOnly(Utils.HEX.decode(issuancePubKeyHex));
+            if (!PQScriptUtils.verifyPQ(issuanceKey.getPublicKeyBytes(), signature, tx.getHash())) {
+                throw new BlockStoreException(
+                        "L1 CROSSTANGLE issuance signature does not verify under the chain's issuance key");
+            }
         }
 
         // LOCK-BACKED BINDING: a mint must declare the exact L0 lock it backs and
@@ -248,6 +256,58 @@ public class L1CrosstangleHandler implements BlockTypeHandler {
             throw new BlockStoreException(
                     "L1 CROSSTANGLE issuance mint recipient does not match the declared lock beneficiary "
                             + lockBeneficiary);
+        }
+    }
+
+    /** Encodes an M-of-N issuance signature set as a length-prefixed container. */
+    public static byte[] encodeSignatureList(java.util.List<byte[]> signatures) throws Exception {
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+        dos.writeInt(signatures.size());
+        for (byte[] s : signatures) {
+            dos.writeInt(s.length);
+            dos.write(s);
+        }
+        dos.flush();
+        return baos.toByteArray();
+    }
+
+    /** Decodes an M-of-N issuance signature container back into a signature list. */
+    public static java.util.List<byte[]> decodeSignatureList(byte[] container) throws Exception {
+        java.io.DataInputStream dis = new java.io.DataInputStream(new java.io.ByteArrayInputStream(container));
+        int count = dis.readInt();
+        java.util.List<byte[]> out = new java.util.ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            int len = dis.readInt();
+            byte[] s = new byte[len];
+            dis.readFully(s);
+            out.add(s);
+        }
+        return out;
+    }
+
+    /** Verifies an M-of-N issuance: at least {@code required} DISTINCT authorized keys signed. */
+    private void verifyIssuanceQuorum(byte[] signature, java.util.List<String> pubKeyHexList, int required,
+            Transaction tx) throws Exception {
+        java.util.List<byte[]> sigs;
+        try {
+            sigs = decodeSignatureList(signature);
+        } catch (Exception e) {
+            throw new BlockStoreException("L1 CROSSTANGLE issuance signature list is malformed");
+        }
+        java.util.Set<String> matched = new java.util.HashSet<>();
+        for (String keyHex : pubKeyHexList) {
+            PQKey key = PQKey.fromPublicOnly(Utils.HEX.decode(keyHex));
+            for (byte[] s : sigs) {
+                if (PQScriptUtils.verifyPQ(key.getPublicKeyBytes(), s, tx.getHash())) {
+                    matched.add(Utils.HEX.encode(key.getPublicKeyBytes()));
+                    break;
+                }
+            }
+        }
+        if (matched.size() < required) {
+            throw new BlockStoreException("L1 CROSSTANGLE issuance signature quorum not met: "
+                    + matched.size() + " of " + required + " distinct authorized keys");
         }
     }
 
