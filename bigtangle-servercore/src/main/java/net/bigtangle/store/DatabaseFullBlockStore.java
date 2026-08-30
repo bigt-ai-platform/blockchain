@@ -1102,7 +1102,7 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	public UTXO getOutputsWithHexStr(byte[] hash, long outputindex) throws BlockStoreException {
 		String sql = "SELECT coinvalue, scriptbytes, coinbase, toaddress,"
 				+ " addresstargetable, blockhash, tokenid, fromaddress, memo, minimumsign, time, spent, confirmed, "
-				+ " spendpending, spendpendingtime FROM outputs WHERE hash = ? and outputindex = ?";
+				+ " spendpending, spendpendingtime, spenderblockhash FROM outputs WHERE hash = ? and outputindex = ?";
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(sql)) {
 			preparedStatement.setBytes(1, hash);

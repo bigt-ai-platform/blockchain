@@ -52,9 +52,20 @@ public class UTXO extends SpentBlock implements  Serializable {
     // saved in database as JSON from MemoInfo,
     // but it is simple kv text from database to display in UI
     private String memo;
+
+    /** Chainlength of the containing block (for finality status display). */
+    private long chainlength;
    
     // JSON
     public UTXO() {
+    }
+
+    public long getChainlength() {
+        return chainlength;
+    }
+
+    public void setChainlength(long chainlength) {
+        this.chainlength = chainlength;
     }
 
     public String keyAsString() {

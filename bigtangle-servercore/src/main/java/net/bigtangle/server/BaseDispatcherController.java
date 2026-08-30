@@ -319,6 +319,36 @@ public abstract class BaseDispatcherController implements DisposableBean {
 				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
 			}
 				break;
+			case getOutputDetail: {
+				// Per-UTXO detail lookup (balance screen "… for more"): fetches ONE
+				// output by key (hex "blockHash:outputIndex") and the block that
+				// contains it. Done on demand so the bulk outputs/history queries
+				// never join the (potentially huge) blocks table.
+				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
+				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);
+				String hexStr = (String) request.get("hex");
+				if (hexStr == null || hexStr.isEmpty()) {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
+					break;
+				}
+				String[] parts = hexStr.split(":");
+				net.bigtangle.core.UTXO output = store.getOutputsWithHexStr(Utils.HEX.decode(parts[0]),
+						Long.parseLong(parts[1]));
+				if (output == null) {
+					this.outPrintJSONString(httpServletResponse, ErrorResponse.create(0), watch, reqCmd);
+					break;
+				}
+				net.bigtangle.core.BlockEvaluation eval = store.getBlockEvaluationsByhashs(output.getBlockHash());
+				output.setChainlength(eval == null ? 0 : eval.getChainlength());
+				AbstractResponse response = net.bigtangle.response.OutputDetailResponse.create(output,
+						eval == null ? 0 : eval.getHeight(),
+						output.getChainlength(),
+						eval != null && eval.isConfirmed(),
+						output.getTime(),
+						output.getBlockHashHex());
+				this.outPrintJSONString(httpServletResponse, response, watch, reqCmd);
+			}
+				break;
 			case outputsOfTokenid: {
 				String reqStr = new String(bodyByte, StandardCharsets.UTF_8);
 				Map<String, Object> request = Json.jsonmapper().readValue(reqStr, Map.class);

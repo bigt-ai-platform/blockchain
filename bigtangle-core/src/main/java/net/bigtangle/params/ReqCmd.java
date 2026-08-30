@@ -22,7 +22,7 @@ public enum ReqCmd {
 	// Block Order
 	getOrders, getOrdersTicker,
 	// Outputs
-	getOutputByKey, getOutputs, getOutputsHistory, outputsOfTokenid, getBalances,getAccountBalances, getTransactionStatus, getTransactionsStatusByAddress,
+	getOutputByKey, getOutputDetail, getOutputs, getOutputsHistory, outputsOfTokenid, getBalances,getAccountBalances, getTransactionStatus, getTransactionsStatusByAddress,
 
 	// payment
 	launchPayMultiSign, payMultiSign,

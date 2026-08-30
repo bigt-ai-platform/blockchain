@@ -91,6 +91,12 @@ L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-}"
 
 POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-6000}"
 
+# Browser clients (the Expo web app on :8081) query the node cross-origin.
+# CORS is disabled by default on the server (server.corsAllowedOrigins empty);
+# open the local dev origins explicitly for the dev/web e2e flow.
+CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081}"
+CORS_ARGS="-Dserver.corsAllowedOrigins=$CORS_ORIGINS"
+
 # Use Java 25 if available
 if [ -x /tmp/opencode/jdk25/bin/java ]; then
     export JAVA_HOME=/tmp/opencode/jdk25
@@ -348,7 +354,7 @@ SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgoss
 # (layers.md §5.2), so L0 must accept processPegIn and record VaultRecords.
 L0_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.vaultPriKeyHex=$VAULT_SEED"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS $L0_GENESIS_CSV_ARGS $L0_BRIDGE_ARGS" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS $L0_GENESIS_CSV_ARGS $L0_BRIDGE_ARGS $CORS_ARGS" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -553,7 +559,7 @@ L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=tr
 # finality gate would stall the bootstrap. Production defaults the gate ON.
 L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE -Dbridge.requireFinality=false"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS $CORS_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!
@@ -660,13 +666,14 @@ done
 echo "Waiting for L1 wrapped bc mints to confirm on L1..."
 # Output confirmation is DERIVED from the containing block's confirmed state
 # (OUTPUTS_CONFIRMED joins blocks.confirmed), NOT the outputs.confirmed column
-# — poll the join so the count reflects real confirmation. The single-validator
-# L1 beacon chain confirms slowly (production outpaces confirmation), so allow
-# up to ~15 min.
+# — poll the join. The L1 order chain mints no bc at genesis, so on a fresh L1
+# the ONLY confirmed bc outputs are the peg-in mints: counting them all is
+# equivalent to matching the validator/genesis-wallet addresses and avoids
+# depending on captured addresses.
 EXPECTED_CONFIRMED=$((1 + L1_GENESIS_PEGIN_UTXOS))
 for i in $(seq 1 300); do
     COUNT=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
-        "SELECT count(*) FROM outputs o JOIN blocks b ON b.hash=o.blockhash WHERE b.confirmed AND o.tokenid='bc' AND o.toaddress IN ('$L1_VALIDATOR_ADDR','$L1_GENESIS_ADDR');" 2>/dev/null || echo "0")
+        "SELECT count(*) FROM outputs o JOIN blocks b ON b.hash=o.blockhash WHERE b.confirmed AND o.tokenid='bc';" 2>/dev/null || echo "0")
     if [ -n "$COUNT" ] && [ "${COUNT//[^0-9]/}" -ge "$EXPECTED_CONFIRMED" ]; then
         echo "L1 wrapped bc confirmed: $COUNT/$EXPECTED_CONFIRMED UTXOs"
         break

@@ -1887,7 +1887,10 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 
 		PreparedStatement preparedStatement = null;
 		try {
-			String sql = SELECT_TRANSACTION_OUTPUTS_SQL_BASE + "WHERE  confirmed=true ";
+			// Confirmation is block-derived (OUTPUTS_CONFIRMED); the raw
+			// outputs.confirmed column is stale/unused in the PoS codebase, so
+			// filter on the block's confirmed state like getOpenTransactionOutputs.
+			String sql = SELECT_TRANSACTION_OUTPUTS_SQL_BASE + "WHERE " + OUTPUTS_CONFIRMED + " = true ";
 
 			if (fromaddress != null && !fromaddress.trim().isEmpty()) {
 				sql += " AND outputs.fromaddress=?";
