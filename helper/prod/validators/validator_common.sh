@@ -107,10 +107,18 @@ docker_run() { # $1=container-name  $2=image  rest=java command args
     # listings (`ps aux`, `/proc/*/cmdline`) must not expose the validator
     # seed or the API key. Env vars remain visible to root via
     # /proc/*/environ — protect the host accordingly.
+    local genesis_mount=()
+    if [ -n "${GENESIS_CSV:-}" ]; then
+        # Mount the genesis distribution CSV read-only so the (dockerized)
+        # server can read it via -Dbigtangle.genesis.csv=/genesis.csv.
+        [ -f "${GENESIS_CSV}" ] || { log "genesis CSV not found: ${GENESIS_CSV}"; return 1; }
+        genesis_mount=("-v" "${GENESIS_CSV}:/genesis.csv:ro")
+    fi
     docker run -d --name "${name}" \
         --network "${DOCKER_NETWORK}" \
         --init --stop-timeout 30 \
         ${DOCKER_RUN_FLAGS:-} \
+        ${genesis_mount[@]+"${genesis_mount[@]}"} \
         -e POS_VALIDATOR_KEY="${POS_VALIDATOR_KEY:-}" \
         -e SERVER_APIKEY="${API_KEY:-}" \
         -e HEALTHCHECK_PORT="${HEALTHCHECK_PORT:-${SERVER_PORT}}" \
@@ -125,7 +133,9 @@ start_server() {
     local createtable="${CREATETABLE:-true}"
     local genesis_csv_arg=()
     if [ -n "${GENESIS_CSV:-}" ]; then
-        genesis_csv_arg=("-Dbigtangle.genesis.csv=${GENESIS_CSV}")
+        # Nodes run inside docker (docker_run below); the genesis distribution
+        # CSV is mounted read-only at /genesis.csv and read from there.
+        genesis_csv_arg=("-Dbigtangle.genesis.csv=/genesis.csv")
     fi
     # Kafka stream processing off by default; nodes with KAFKA_BOOTSTRAP set
     # (e.g. s2001:9092, written by addnode.sh) consume the block stream.

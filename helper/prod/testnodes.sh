@@ -177,6 +177,23 @@ gen_keys() { # → ValidatorKeyTool output lines (uses exec jar, falls back to i
     fi
 }
 
+gen_keys_for_seed() { # $1=seedHex → ValidatorKeyTool pubkey output lines (fixed identity)
+    local jar
+    jar="$(ls -t "${ROOT}"/layer0-server/target/layer0-server-*-exec.jar 2>/dev/null | head -1 || true)"
+    if [ -n "$jar" ]; then
+        local dir="${WORKDIR}/cp"
+        mkdir -p "$dir"
+        if [ ! -f "${dir}/.stamp" ] || [ "$jar" -nt "${dir}/.stamp" ]; then
+            rm -rf "${dir}/BOOT-INF" "${dir}/.stamp"
+            unzip -oq "$jar" 'BOOT-INF/*' -d "$dir" && touch "${dir}/.stamp"
+        fi
+        java -cp "${dir}/BOOT-INF/classes:${dir}/BOOT-INF/lib/*" net.bigtangle.tools.ValidatorKeyTool pubkey "$1"
+    else
+        docker run --rm --network none --entrypoint java "$IMAGE" \
+            -cp /app/app.jar net.bigtangle.tools.ValidatorKeyTool pubkey "$1"
+    fi
+}
+
 make_node_env() { # $1=index
     local i="$1" out key pub hash addr
     out="$(gen_keys)"
@@ -249,6 +266,30 @@ EOF
         rm -rf "${WORKDIR}/node-${i}"; mkdir -p "${WORKDIR}/node-${i}"
         make_node_env "$i"
     done
+    # The /fundAddresses faucet has been removed — wallets must be funded at
+    # GENESIS via a genesis distribution CSV (see UtilGeneseBlock). Every node
+    # boots the SAME shared CSV so the genesis block is identical chain-wide.
+    GENESIS_FUND="${GENESIS_FUND:-1000000000000}"
+    # A staked validator's funds are BONDED (locked) until exit, so transfers /
+    # join-funding must come from a dedicated non-staked wallet. Fund a fixed
+    # test wallet (seed below) at genesis; testnodes holds its seed to sign.
+    TESTWALLET_SEED="${TESTWALLET_SEED:-0707070707070707070707070707070707070707070707070707070707070707}"
+    TESTWALLET_FUND="${TESTWALLET_FUND:-1000000000000000}"
+    {
+        echo "POS_VALIDATOR_KEY=${TESTWALLET_SEED}"
+        gen_keys_for_seed "$TESTWALLET_SEED" | grep -E '^(VALIDATOR_PUBKEY|PUBKEY_HASH|ADDRESS)='
+    } > "${WORKDIR}/testwallet.env"
+    tw_pub="$(grep '^VALIDATOR_PUBKEY=' "${WORKDIR}/testwallet.env" | cut -d= -f2-)"
+    [ -n "$tw_pub" ] || die "test wallet key derivation failed"
+    {
+        echo "address,pubkey,value"
+        for i in $(seq 0 $((NNODES - 1))); do
+            pub="$(grep '^VALIDATOR_PUBKEY=' "${WORKDIR}/node-${i}/validator.env" | cut -d= -f2-)"
+            echo ",${pub},${GENESIS_FUND}"
+        done
+        echo ",${tw_pub},${TESTWALLET_FUND}"
+    } > "${WORKDIR}/genesis.csv"
+    sed -i "s#^GENESIS_CSV=.*#GENESIS_CSV=${WORKDIR}/genesis.csv#" "${WORKDIR}/common.env"
     # stop leftover node containers FIRST: DROP DATABASE silently fails
     # while a previous run's servers still hold connections, resurrecting
     # stale chain state on the "fresh" databases.
@@ -321,7 +362,6 @@ phase_stake_one() { # $1=index
         source ../common.env; source ./validator.env
         source ../validator_common.sh
         wait_api
-        if [ \"\$(balance_big)\" -lt \"\${STAKE_AMOUNT}\" ]; then fund_validator; fi
         wait_balance \${STAKE_AMOUNT}
         stake_validator >/dev/null; sleep 2; activate_validator >/dev/null" )
 }
@@ -418,15 +458,15 @@ cmd_verify() { # reachable nodes must agree on the finalized root and see full s
 
 cmd_transfer() {
     local from=0 to=1 ph addr attempt bal
-    ph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
-    addr="$(grep '^ADDRESS=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
-    # The /fundAddresses faucet has been removed; the from-validator's coins
-    # come from the genesis distribution CSV (GENESIS_CSV), so its UTXOs are
-    # already confirmed chain state on every node. Just wait for them, then
-    # submit ONE real signed transfer.
+    ph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/testwallet.env" | cut -d= -f2-)"
+    addr="$(grep '^ADDRESS=' "${WORKDIR}/testwallet.env" | cut -d= -f2-)"
+    # The /fundAddresses faucet has been removed. Staked validators' coins are
+    # BONDED (locked), so the transfer source is the dedicated non-staked TEST
+    # wallet funded at genesis (GENESIS_CSV) — its UTXOs are confirmed chain
+    # state on every node. Just wait for them, then submit ONE real transfer.
     sleep 5
     local seed rph
-    seed="$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/node-${from}/validator.env" | cut -d= -f2-)"
+    seed="$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/testwallet.env" | cut -d= -f2-)"
     rph="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${to}/validator.env" | cut -d= -f2-)"
     sign_exit_for_cp
     java -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
@@ -546,8 +586,24 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
             now_cl=""
         done
         need=$(( left_cl + 2 * ${POS_SLOTS_PER_EPOCH:-8} ))
+        # The exit must finalize (cl advances ~2 epochs) before a fresh-key
+        # join reactivates voting weight; otherwise old + new deposits both
+        # count. Wait it out instead of requiring a manual re-run (the `all`
+        # flow calls join right after leave).
         if [ "${now_cl:-0}" -lt "$need" ] && [ "${JOIN_FORCE:-0}" != "1" ]; then
-            die "join node-${i} blocked: exit finalizing (cl=$now_cl, need>=$need). Wait or JOIN_FORCE=1"
+            local waited=0
+            log "join node-${i}: waiting for exit finalization (cl=${now_cl:-0}, need>=$need)..."
+            while [ "$waited" -lt 900 ] && [ "${now_cl:-0}" -lt "$need" ]; do
+                sleep 15; waited=$((waited + 15))
+                now_cl=""
+                for _j in $(seq 0 $((NNODES - 1))); do
+                    now_cl=$(cl_of "$_j")
+                    [ -n "${now_cl:-0}" ] && [ "${now_cl:-0}" -gt 0 ] 2>/dev/null && break
+                    now_cl=""
+                done
+            done
+            [ "${now_cl:-0}" -ge "$need" ] ||
+                die "join node-${i}: exit not finalized after ${waited}s (cl=${now_cl:-0}, need>=$need) — JOIN_FORCE=1 to override"
         fi
         rm -f "$stamp"
     elif [ -d "${WORKDIR}/node-${i}.old" ] || docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1; then
@@ -567,6 +623,20 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
         source ../validator_common.sh
         start_server" ) > "${WORKDIR}/node-${i}/start.log" 2>&1 &
     sleep 5
+    # The joining validator has NO genesis funding (the chain is already live),
+    # so fund it from the dedicated non-staked TEST wallet (its funds are not
+    # bonded) via a real signed transfer, then stake it.
+    local funder seed2 rph2
+    for funder in $(seq 0 $((NNODES - 1))); do
+        docker inspect "bt4-node-node-${funder}-server" >/dev/null 2>&1 && break
+    done
+    seed2="$(grep '^POS_VALIDATOR_KEY=' "${WORKDIR}/testwallet.env" | cut -d= -f2-)"
+    rph2="$(grep '^PUBKEY_HASH=' "${WORKDIR}/node-${i}/validator.env" | cut -d= -f2-)"
+    sign_exit_for_cp
+    java -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
+        "${VALSRC}/TransferOnce.java" "$seed2" "$rph2" "${JOIN_FUND:-40000000}" \
+        "http://127.0.0.1:$((8281 + funder))/" "${WORKDIR}/walletctx-join" \
+        || die "join funding transfer for node-${i} failed"
     phase_stake_one "$i" >&2
     log "node-${i} rejoined with fresh identity"
 }
