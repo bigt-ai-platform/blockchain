@@ -248,6 +248,15 @@ public interface BlockStoreInterface {
 
 	void updateOrderConfirmed(Collection<OrderRecord> orderRecords, boolean confirm) throws BlockStoreException;
 
+	/**
+	 * Confirm (or unconfirm) an order row WITHOUT touching the spent /
+	 * spenderblockhash fields. Order matching owns the spent state: the matcher
+	 * supersedes a row by marking it spent when the next beacon interval
+	 * collects it, and the ORDER_OPEN confirmation must never clobber that
+	 * (otherwise a fully-matched order reappears as open in the order book).
+	 */
+	void updateOrderConfirmedOnly(Sha256Hash blockhash, boolean confirm) throws BlockStoreException;
+
 	void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException;
 
 	HashMap<Sha256Hash, OrderRecord> getOrderMatchingIssuedOrders(Sha256Hash issuingMatcherBlockHash)

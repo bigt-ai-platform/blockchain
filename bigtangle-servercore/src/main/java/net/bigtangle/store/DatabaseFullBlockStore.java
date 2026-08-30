@@ -1439,6 +1439,19 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void updateOrderConfirmedOnly(Sha256Hash blockhash, boolean confirm) throws BlockStoreException {
+		try (PreparedStatement preparedStatement = getConnection().prepareStatement(
+				"UPDATE orders SET confirmed = ? WHERE blockhash = ? AND collectinghash = ?")) {
+			preparedStatement.setBoolean(1, confirm);
+			preparedStatement.setBytes(2, blockhash.getBytes());
+			preparedStatement.setBytes(3, Sha256Hash.ZERO_HASH.getBytes());
+			preparedStatement.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+	}
+
+	@Override
 	public void updateOrderSpent(Collection<OrderRecord> orderRecords) throws BlockStoreException {
 
 		try (PreparedStatement preparedStatement = getConnection().prepareStatement(UPDATE_ORDER_SPENT_SQL)) {

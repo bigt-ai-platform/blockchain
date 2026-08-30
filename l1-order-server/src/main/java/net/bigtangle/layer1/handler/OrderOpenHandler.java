@@ -28,8 +28,11 @@ public class OrderOpenHandler implements BlockTypeHandler {
 		ServiceBaseConfirmation base = (ServiceBaseConfirmation) ctx.base();
 		ServiceBaseConfirmation.queueBlockEvaluation(ctx.blockHash(), ctx.chainlength(), ctx.confirmation(),
 				ctx.store());
-		ctx.store().updateOrderBlockhash(ctx.blockHash(),
-				net.bigtangle.core.Sha256Hash.ZERO_HASH, ctx.confirmation(), false, null);
+		// Confirmation only — never reset spent/spenderblockhash. The matcher
+		// marks the order's initial (ZERO_HASH) row spent when the first beacon
+		// interval supersedes it; clobbering that here resurrects a matched
+		// order as open in the order book (getAllOpenOrdersSorted).
+		ctx.store().updateOrderConfirmedOnly(ctx.blockHash(), ctx.confirmation());
 	}
 
 	@Override

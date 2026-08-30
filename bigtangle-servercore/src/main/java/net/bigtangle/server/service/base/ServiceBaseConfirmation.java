@@ -590,11 +590,24 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			if (existing.contains(hash)) {
 				continue;
 			}
-			// Already referenced by a recent (unconfirmed) beacon: no need to
-			// re-run the expensive conflict resolution on it this slot.
+			// Already referenced by the previous beacon: normally safe to skip
+			// (that beacon will confirm it, so no need to re-run the expensive
+			// conflict resolution this slot). BUT if the previous beacon was
+			// ORPHANED, its references are stranded forever — a side block
+			// (token creation, transfer, order, ...) referenced only by the
+			// losing branch never gets re-referenced and stays unconfirmed with
+			// a deep negative chainlength. So only skip references the previous
+			// beacon has ALREADY CONFIRMED; referenced-but-still-unconfirmed
+			// blocks must remain eligible so the next beacon can re-include and
+			// confirm them (re-referencing a confirmed block is harmless — the
+			// epoch-start reward path already handles already-confirmed refs).
 			if (alreadyReferenced != null && alreadyReferenced.contains(hash)) {
-				skipped++;
-				continue;
+				BlockWrap prior = getCachedBlockWrap(hash, store);
+				if (prior != null && prior.getBlockEvaluation() != null
+						&& prior.getBlockEvaluation().isConfirmed()) {
+					skipped++;
+					continue;
+				}
 			}
 			BlockWrap wrap = getCachedBlockWrap(hash, store);
 			if (wrap == null) {
@@ -1889,7 +1902,9 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			break;
 		case BLOCKTYPE_ORDER_OPEN:
 			updateBlockConfirmOnly(block.getBlockHash(), chainlength, confirmation, blockStore);
-			blockStore.updateOrderBlockhash(block.getBlockHash(), Sha256Hash.ZERO_HASH, confirmation, false, null);
+			// Confirmation only — never reset spent/spenderblockhash (the
+			// matcher owns those; see OrderOpenHandler.confirm).
+			blockStore.updateOrderConfirmedOnly(block.getBlockHash(), confirmation);
 			break;
 		default:
 			throw new RuntimeException("Not Implemented");

@@ -165,17 +165,25 @@ public class RemoteOrderIT extends RemoteTestBase {
         assertTrue(remainingOrders == null || remainingOrders.isEmpty(),
                 "All orders should be matched");
 
-        // 8. Verify issuer received BC from the trade
-        List<UTXO> issuerBalance = getBalance(false, issuer);
-        log.info("Issuer has {} UTXOs after trade", issuerBalance.size());
-        boolean hasBcTrade = false;
-        for (UTXO u : issuerBalance) {
-            log.info("  UTXO: {} value={}", u.getTokenId(), u.getValue().getValue());
-            if (Arrays.equals(bcToken, u.getValue().getTokenid()))
-                hasBcTrade = true;
-        }
-        assertTrue(hasBcTrade, "Issuer should have BC from the sell order");
-        log.info("Buy/sell trade test completed successfully");
+		// 8. Verify issuer received BC from the trade. The matcher's payout
+		// output confirms on its own schedule AFTER the order book empties, so
+		// poll (getBalance returns only confirmed outputs) instead of checking
+		// immediately — otherwise the payout is still unconfirmed and the check
+		// races the confirmation.
+		boolean hasBcTrade = false;
+		for (int i = 0; i < 60 && !hasBcTrade; i++) {
+			List<UTXO> issuerBalance = getBalance(false, issuer);
+			log.info("Issuer has {} UTXOs after trade (poll {})", issuerBalance.size(), i);
+			for (UTXO u : issuerBalance) {
+				log.info("  UTXO: {} value={}", u.getTokenId(), u.getValue().getValue());
+				if (Arrays.equals(bcToken, u.getValue().getTokenid()))
+					hasBcTrade = true;
+			}
+			if (!hasBcTrade)
+				Thread.sleep(2000);
+		}
+		assertTrue(hasBcTrade, "Issuer should have BC from the sell order");
+		log.info("Buy/sell trade test completed successfully");
     }
 
     private Token getToken(String idcom) throws Exception {

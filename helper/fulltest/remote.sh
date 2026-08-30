@@ -46,7 +46,12 @@ L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqk
 # TLDR: L0_VALIDATOR_KEY must stay in sync with L0_VALIDATOR_PUBKEY, and
 # L1_VALIDATOR_KEY with L1_VALIDATOR_PUBKEY.
 L0_VALIDATOR_KEY="${L0_VALIDATOR_KEY:-0404040404040404040404040404040404040404040404040404040404040404}"
-L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0505050505050505050505050505050505050505050505050505050505050505}"
+# L1's validator pubkey MUST be lexicographically lower than the phantom L0
+# validator deposit (seed 04 -> f38c...) that the L1 order server imports into
+# its own DB via the requester reward-chain sync; otherwise the deterministic
+# warmup proposer (lowest-pubkey deposit) never selects the L1 validator and the
+# L1 beacon chain deadlocks at genesis. Seed 06 -> ea69... < f38c...
+L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0606060606060606060606060606060606060606060606060606060606060606}"
 # Derived via `ValidatorKeyTool pubkey <seed>` (see below for exact values).
 L0_VALIDATOR_PUBKEY="${L0_VALIDATOR_PUBKEY:-}"
 L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-}"
@@ -125,14 +130,18 @@ if [ -z "$PG_CONTAINER" ] && command -v docker >/dev/null 2>&1; then
 fi
 if [ -n "$PG_CONTAINER" ]; then
     pg_exec() { docker exec "$PG_CONTAINER" "$@"; }
+    # Postgres inside the container listens on its own port (usually 5432);
+    # $PG_PORT is the HOST-side mapping used by the JVM server DB args.
+    PG_INTERNAL_PORT="${PG_INTERNAL_PORT:-5432}"
 else
     pg_exec() { "$@"; }
+    PG_INTERNAL_PORT="$PG_PORT"
 fi
 pgisready() {
     if [ -n "$PG_CONTAINER" ]; then
-        pg_exec pg_isready -U root -d postgres -p "$PG_PORT" >/dev/null 2>&1
+        pg_exec pg_isready -U root -d postgres -p "$PG_INTERNAL_PORT" >/dev/null 2>&1
     else
-        pg_exec pg_isready -h 127.0.0.1 -U root -d postgres -p "$PG_PORT" >/dev/null 2>&1
+        pg_exec pg_isready -h 127.0.0.1 -U root -d postgres -p "$PG_INTERNAL_PORT" >/dev/null 2>&1
     fi
 }
 
@@ -212,14 +221,14 @@ fi
 echo ""
 echo "=== Step 2: Drop & recreate databases '$DB_NAME' and '$L1_DB_NAME' ==="
 pgerr() { if [ -n "$PG_CONTAINER" ]; then echo "postgres:$PG_PORT (container $PG_CONTAINER)"; else echo "127.0.0.1:$PG_PORT"; fi; }
-pg_exec psql -U root -d postgres -p "$PG_PORT" -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null 2>&1 || true
-if ! pg_exec psql -U root -d postgres -p "$PG_PORT" -c "CREATE DATABASE $DB_NAME;" >/dev/null 2>&1; then
+pg_exec psql -U root -d postgres -p "$PG_INTERNAL_PORT" -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null 2>&1 || true
+if ! pg_exec psql -U root -d postgres -p "$PG_INTERNAL_PORT" -c "CREATE DATABASE $DB_NAME;" >/dev/null 2>&1; then
     echo "ERROR: could not create database '$DB_NAME' on $(pgerr). Is PostgreSQL up with role root/test1234?"
     exit 1
 fi
 echo "Database '$DB_NAME' ready"
-pg_exec psql -U root -d postgres -p "$PG_PORT" -c "DROP DATABASE IF EXISTS $L1_DB_NAME;" >/dev/null 2>&1 || true
-pg_exec psql -U root -d postgres -p "$PG_PORT" -c "CREATE DATABASE $L1_DB_NAME;" >/dev/null 2>&1
+pg_exec psql -U root -d postgres -p "$PG_INTERNAL_PORT" -c "DROP DATABASE IF EXISTS $L1_DB_NAME;" >/dev/null 2>&1 || true
+pg_exec psql -U root -d postgres -p "$PG_INTERNAL_PORT" -c "CREATE DATABASE $L1_DB_NAME;" >/dev/null 2>&1
 echo "Database '$L1_DB_NAME' ready"
 
 # --- Step 3: Build modules ---
@@ -368,7 +377,7 @@ echo ""
 echo "=== Step 5: Wait for genesis block ==="
 for i in $(seq 1 10); do
     sleep 3
-    HASH=$(pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -t -A -c "
+    HASH=$(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c "
       SELECT encode(hash, 'hex') FROM blocks WHERE blocktype = 'BLOCKTYPE_INITIAL' LIMIT 1;
     " 2>/dev/null || echo "")
     if [ -n "$HASH" ]; then
@@ -384,7 +393,7 @@ done
 
 # Insert genesis into TipsQueue for initial tip
 echo "=== Step 6: Insert genesis into TipsQueue ==="
-pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -c "
+pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -c "
   INSERT INTO tipsqueue (hash, block, height, inserttime)
   SELECT b.hash, b.block, b.height, b.inserttime
   FROM blocks b WHERE b.blocktype = 'BLOCKTYPE_INITIAL' LIMIT 1
@@ -392,7 +401,7 @@ pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -c "
 " 2>/dev/null || true
 sleep 3
 
-echo "TipsQueue has $(pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -t -A -c "SELECT count(*) FROM tipsqueue;" 2>/dev/null || echo 0), proceeding to validators"
+echo "TipsQueue has $(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c "SELECT count(*) FROM tipsqueue;" 2>/dev/null || echo 0), proceeding to validators"
 
 # --- Step 7: Register the L0 PoS validator (the key the L0 server holds) ---
 echo ""
@@ -470,7 +479,7 @@ fi
 echo "Waiting for L0 PoS beacon production..."
 for i in $(seq 1 60); do
     sleep 3
-    HEIGHT=$(pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -t -A -c \
+    HEIGHT=$(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
         "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
     if [ -n "$HEIGHT" ] && [ "$HEIGHT" -gt 0 ]; then
         echo "L0 PoS beacon produced, height=$HEIGHT"
@@ -583,7 +592,7 @@ fi
 echo "Waiting for L1-order beacon production..."
 for i in $(seq 1 60); do
     sleep 3
-    L1_HEIGHT=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_PORT" -t -A -c \
+    L1_HEIGHT=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
         "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
     if [ -n "$L1_HEIGHT" ] && [ "$L1_HEIGHT" -gt 0 ]; then
         echo "L1-order beacon produced, height=$L1_HEIGHT"
@@ -602,7 +611,7 @@ done
 STABLE_BEACONS="${STABLE_BEACONS:-6}"
 echo "Waiting for a stable L0 beacon chain (>= $STABLE_BEACONS confirmed beacons)..."
 for i in $(seq 1 60); do
-    STABLE_COUNT=$(pg_exec psql -U root -d $DB_NAME -p "$PG_PORT" -t -A -c \
+    STABLE_COUNT=$(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
         "SELECT count(*) FROM blocks WHERE confirmed AND chainlength > 0;" 2>/dev/null || echo "0")
     if [ -n "$STABLE_COUNT" ] && [ "${STABLE_COUNT//[^0-9]/}" -ge "$STABLE_BEACONS" ]; then
         echo "L0 beacon chain stable: $STABLE_COUNT confirmed beacons"
