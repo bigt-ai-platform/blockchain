@@ -36,6 +36,7 @@ import net.bigtangle.server.data.VaultRecord;
 import net.bigtangle.server.service.BlockSaveService;
 import net.bigtangle.server.service.CacheBlockPrototypeService;
 import net.bigtangle.server.service.CacheBlockService;
+import net.bigtangle.server.service.CasperService;
 import net.bigtangle.store.BlockStoreInterface;
 import net.bigtangle.utils.Json;
 import net.bigtangle.utils.OkHttp3Util;
@@ -73,6 +74,9 @@ public class BridgeService {
 
     @Autowired
     private CacheBlockPrototypeService cacheBlockPrototypeService;
+
+    @Autowired
+    private CasperService casperService;
 
     @Autowired
     private ObjectMapper jsonmapper;
@@ -356,6 +360,18 @@ public class BridgeService {
                     anchor.getChainId(), anchor.getL1Height());
             return;
         }
+        // FINALITY GATE: a peg-out is honoured only after the anchor's L0 block
+        // is FINALIZED (Casper FFG), not merely confirmed. Confirmation is
+        // optimistic and reversible; releasing on confirmation would let a reorg
+        // unconfirm the anchor after the vault was already released and marked
+        // spent. A block at or below the finalized checkpoint's chainlength is on
+        // the immutable branch, so the release can never be rolled back. The
+        // PegOutRetryService re-attempts confirmed anchors until this passes.
+        if (bridgeConfiguration.isRequireFinality() && !isAnchorFinalized(anchor, store)) {
+            logger.info("Peg-out for chain {} height {} is confirmed but not yet finalized; deferring",
+                    anchor.getChainId(), anchor.getL1Height());
+            return;
+        }
         if (anchor.getBurnJson() == null || anchor.getBurnJson().isEmpty()) {
             logger.warn("Peg-out requires an embedded burn in the anchor, chain {} height {}",
                     anchor.getChainId(), anchor.getL1Height());
@@ -475,6 +491,37 @@ public class BridgeService {
             }
         }
         return sum;
+    }
+
+    /**
+     * True when the anchor's L0 block has reached Casper FFG finality — its
+     * confirmed chainlength is at or below the last finalized checkpoint's
+     * chainlength. Confirmation alone is optimistic and reversible (a reorg can
+     * unconfirm it); finality is the only state under which a released vault
+     * cannot later be rolled back. Fails closed on any error or when no
+     * finalized checkpoint exists yet.
+     */
+    private boolean isAnchorFinalized(AnchorRecord anchor, BlockStoreInterface store) {
+        try {
+            if (anchor.getBlockHash() == null) {
+                return false;
+            }
+            CasperService.Checkpoint finalized = casperService.getLastFinalizedCheckpoint(store);
+            if (finalized == null || finalized.getBlockHash() == null) {
+                return false;
+            }
+            long finalizedLength = store.getRewardChainLength(finalized.getBlockHash());
+            if (finalizedLength <= 0) {
+                return false;
+            }
+            net.bigtangle.core.BlockEvaluation eval = store.getBlockEvaluationsByhashs(anchor.getBlockHash());
+            long anchorLength = eval != null ? eval.getChainlength() : -1L;
+            return anchorLength > 0 && anchorLength <= finalizedLength;
+        } catch (Exception e) {
+            logger.warn("Anchor finality check failed for chain {} height {}: {}",
+                    anchor.getChainId(), anchor.getL1Height(), e.getMessage());
+            return false;
+        }
     }
 
     private VaultRecord findVault(String chainId, String vaultRef, BlockStoreInterface store) throws Exception {

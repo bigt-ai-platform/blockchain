@@ -31,8 +31,19 @@ public class BridgeConfiguration {
     /** The M private keys used to sign a vault release (one per held signer key). */
     private List<String> vaultPriKeyHexList = new ArrayList<>();
 
+    /**
+     * Peg-out finality gate (default true): a peg-out is honoured only after the
+     * anchor's L0 block is Casper-FINALIZED, not merely confirmed (confirmation
+     * is optimistic and reversible). Tests/dev that do not run Casper finality
+     * set this false to preserve the old confirm-only behaviour.
+     */
+    private boolean requireFinality = true;
+
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public boolean isRequireFinality() { return requireFinality; }
+    public void setRequireFinality(boolean requireFinality) { this.requireFinality = requireFinality; }
 
     public String getVaultPubKeyHex() { return vaultPubKeyHex; }
     public void setVaultPubKeyHex(String vaultPubKeyHex) { this.vaultPubKeyHex = vaultPubKeyHex; }

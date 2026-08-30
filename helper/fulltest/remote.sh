@@ -46,15 +46,29 @@ L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqk
 # TLDR: L0_VALIDATOR_KEY must stay in sync with L0_VALIDATOR_PUBKEY, and
 # L1_VALIDATOR_KEY with L1_VALIDATOR_PUBKEY.
 L0_VALIDATOR_KEY="${L0_VALIDATOR_KEY:-0404040404040404040404040404040404040404040404040404040404040404}"
-# L1's validator pubkey MUST be lexicographically lower than the phantom L0
-# validator deposit (seed 04 -> f38c...) that the L1 order server imports into
-# its own DB via the requester reward-chain sync; otherwise the deterministic
-# warmup proposer (lowest-pubkey deposit) never selects the L1 validator and the
-# L1 beacon chain deadlocks at genesis. Seed 06 -> ea69... < f38c...
-L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0606060606060606060606060606060606060606060606060606060606060606}"
+# The L1 order chain must not mint bc at genesis (layers.md §5), so its own
+# validator cannot stake until the vault peg-in mints confirm — but those mints
+# need a beacon chain, and the beacon chain needs a registered, active deposit.
+# Bootstrap: the L1 server proposes beacons with the L0 validator key (seed 04,
+# pubkey f38c...). The L0 STAKE block the L1 imports via the requester registers
+# that exact key as an active L1 deposit (the "phantom"), so the warmup proposer
+# (lowest registered pubkey = f38c, the only deposit) is a key the L1 server
+# actually holds — the L1 beacon chain starts with no L1 genesis bc. The peg-in
+# mints then confirm and the validator stakes vault-backed bc on top.
+L1_VALIDATOR_KEY="${L1_VALIDATOR_KEY:-0404040404040404040404040404040404040404040404040404040404040404}"
 # Derived via `ValidatorKeyTool pubkey <seed>` (see below for exact values).
 L0_VALIDATOR_PUBKEY="${L0_VALIDATOR_PUBKEY:-}"
 L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-}"
+
+# Bridge / vault keys (layers.md §5): the L1 order chain must NOT mint bc at
+# genesis, so its validator + test wallets are funded by VAULT PEG-INS — L0
+# locks bc to the vault, L1's PegInWatcherService mints the wrapped bc 1:1.
+# The vault key lives on L0 (it locks/unlocks vault collateral); the issuance
+# key is the L1 chain's dedicated wrapped-mint signer (never the vault key).
+VAULT_SEED="${VAULT_SEED:-1111111111111111111111111111111111111111111111111111111111111111}"
+ISSUANCE_SEED="${ISSUANCE_SEED:-2222222222222222222222222222222222222222222222222222222222222222}"
+VAULT_PUBKEY="${VAULT_PUBKEY:-}"
+ISSUANCE_PUBKEY="${ISSUANCE_PUBKEY:-}"
 
 # The remote tests sign as the L0 genesis wallet (ML-DSA-87 seed 0x01). On a
 # fresh PoS chain the genesis coin is paid out to the configured miner address,
@@ -68,6 +82,10 @@ L1_VALIDATOR_PUBKEY="${L1_VALIDATOR_PUBKEY:-}"
 # back to the fundAddresses faucet in Step 7.
 L0_GENESIS_PUBKEY="${L0_GENESIS_PUBKEY:-}"
 L0_YUAN_PUBKEY="${L0_YUAN_PUBKEY:-}"
+# ML-DSA-87 seed of the L0 genesis wallet (also the L1 genesis wallet). It is
+# funded on L0 by the genesis CSV and is the funding wallet for the L1
+# peg-ins below.
+L0_GENESIS_KEY="${L0_GENESIS_KEY:-$(printf '01%.0s' {1..32})}"
 TEST_GENESIS_CSV="${TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutput.csv}"
 L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-}"
 
@@ -130,9 +148,21 @@ if [ -z "$PG_CONTAINER" ] && command -v docker >/dev/null 2>&1; then
 fi
 if [ -n "$PG_CONTAINER" ]; then
     pg_exec() { docker exec "$PG_CONTAINER" "$@"; }
-    # Postgres inside the container listens on its own port (usually 5432);
-    # $PG_PORT is the HOST-side mapping used by the JVM server DB args.
-    PG_INTERNAL_PORT="${PG_INTERNAL_PORT:-5432}"
+    # Postgres inside the container may listen on its own port (5432 for the
+    # standard image) or on the host-mapped port (e.g. `postgres -p 21532`);
+    # $PG_PORT is the HOST-side mapping used by the JVM server DB args. Probe
+    # the container for the actual internal listener so in-container psql
+    # always reaches it.
+    PG_INTERNAL_PORT="${PG_INTERNAL_PORT:-}"
+    if [ -z "$PG_INTERNAL_PORT" ]; then
+        for cand in "$PG_PORT" 5432; do
+            if pg_exec pg_isready -U root -d postgres -p "$cand" >/dev/null 2>&1; then
+                PG_INTERNAL_PORT="$cand"
+                break
+            fi
+        done
+    fi
+    [ -n "$PG_INTERNAL_PORT" ] || PG_INTERNAL_PORT=5432
 else
     pg_exec() { "$@"; }
     PG_INTERNAL_PORT="$PG_PORT"
@@ -285,9 +315,20 @@ fi
 if [ -z "$L1_GENESIS_PUBKEY" ]; then
     L1_GENESIS_PUBKEY="$(req_pubkey "$(printf '01%.0s' {1..32})" || true)"
 fi
+# Bridge vault + L1 issuance keys (layers.md §5.2). Deterministic seeds keep
+# the harness reproducible; override per environment via VAULT_PUBKEY /
+# ISSUANCE_PUBKEY.
+if [ -z "$VAULT_PUBKEY" ]; then
+    VAULT_PUBKEY="$(req_pubkey "$VAULT_SEED" || true)"
+fi
+if [ -z "$ISSUANCE_PUBKEY" ]; then
+    ISSUANCE_PUBKEY="$(req_pubkey "$ISSUANCE_SEED" || true)"
+fi
 echo "L0 validator pubkey: ${L0_VALIDATOR_PUBKEY:0:24}... (${#L0_VALIDATOR_PUBKEY} hex)"
 echo "L1 validator pubkey: ${L1_VALIDATOR_PUBKEY:0:24}... (${#L1_VALIDATOR_PUBKEY} hex)"
 echo "L0 genesis wallet pubkey: ${L0_GENESIS_PUBKEY:0:24}... (${#L0_GENESIS_PUBKEY} hex)"
+echo "Bridge vault pubkey: ${VAULT_PUBKEY:0:24}... (${#VAULT_PUBKEY} hex)"
+echo "L1 issuance pubkey: ${ISSUANCE_PUBKEY:0:24}... (${#ISSUANCE_PUBKEY} hex)"
 
 L0_POS_ARGS="-Dpos.validatorKey=$L0_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true"
 # When a test genesis CSV is present, mint the init wallets (genesis/yuan/
@@ -303,8 +344,11 @@ fi
 echo ""
 echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="
 SERVER_PEER_ARGS="-Dpeer.udpPort=$L0_PEER_UDP -Dpeer.tcpPort=$L0_PEER_TCP -Dgossip.port=$L0_GOSSIP"
+# Bridge enabled with the vault key: the L1 chain is funded by vault peg-ins
+# (layers.md §5.2), so L0 must accept processPegIn and record VaultRecords.
+L0_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.vaultPriKeyHex=$VAULT_SEED"
 nohup mvn spring-boot:run -pl layer0-server \
-    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS $L0_GENESIS_CSV_ARGS -Dbridge.active=false -Danchor.active=false" \
+    -Dspring-boot.run.jvmArguments="$DB_ARGS $SCHED_ARGS $SERVER_PEER_ARGS $L0_POS_ARGS $L0_GENESIS_CSV_ARGS $L0_BRIDGE_ARGS" \
     -Dspring-boot.run.arguments="$L0_ARGS" \
     > "$L0_LOG" 2>&1 &
 L0_PID=$!
@@ -500,16 +544,13 @@ L1_PEER_ARGS="-Dpeer.udpPort=$L1_PEER_UDP -Dpeer.tcpPort=$L1_PEER_TCP -Dgossip.p
 # the cross-layer transfer (blocksFromNonChainHeight).
 L1_ARGS="--server.net=Test --server.port=$L1_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --server.requester=http://127.0.0.1:$L0_PORT --spring.main.allow-circular-references=true"
 L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true"
-# L1-order has its own chain/genesis; fund its init wallets in the L1 genesis
-# block via its own CSV (same seeds as L0 where applicable).
-L1_TEST_GENESIS_CSV="${L1_TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutputL1.csv}"
-L1_GENESIS_CSV_ARGS=""
-if [ -f "$L1_TEST_GENESIS_CSV" ]; then
-    L1_GENESIS_CSV_ARGS="-Dbigtangle.genesis.csv=$L1_TEST_GENESIS_CSV"
-    echo "Using L1 genesis distribution: $L1_TEST_GENESIS_CSV"
-fi
+# L1 must NOT mint bc at genesis (genesisMintsBIG=false, layers.md §5). It is
+# funded by vault peg-ins instead: the bridge watches L0 vault locks for this
+# chain and mints wrapped bc (PegInWatcherService -> processPegInFromL0). The
+# vault key matches L0; the issuance key signs the wrapped mint.
+L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_GENESIS_CSV_ARGS" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!
@@ -533,26 +574,91 @@ wait_http_ready "$L1_PORT" "$L1_LOG" || exit 1
 # Recompile test classes with latest server changes
 mvn test-compile -q -pl layer0-server
 
-# --- Step 7c: Bootstrap the L1-order chain's own validator + genesis wallet ---
+# --- Step 7c: Bootstrap the L1-order chain via vault peg-ins (layers.md §5.2) ---
 echo ""
-echo "=== Step 7c: Bootstrap L1-order validator ==="
+echo "=== Step 7c: Bootstrap L1-order via vault peg-in (no L1 bc genesis) ==="
 
-# When the L1 genesis CSV is used, the L1 validator / genesis wallet already
-# hold confirmed coins from the L1 genesis block — no faucet needed.
-if [ -z "$L1_GENESIS_CSV_ARGS" ]; then
-    L1_FUND_AMOUNT=1000000000000
-    if post_ok "$L1_BASE/fundAddresses" \
-        "{\"addresses\":[{\"address\":\"validator\",\"value\":$L1_FUND_AMOUNT,\"pubkey\":\"$L1_VALIDATOR_PUBKEY\"}]}"; then
-        echo "L1 validator funded"
-    else
-        echo "L1 validator funding failed"
+# The L1 order chain does NOT mint bc at genesis (genesisMintsBIG=false).
+# Its validator + test wallet are funded the design-consistent way: on L0 we
+# lock bc to the vault (processPegIn) declaring chainId=ordermatch and the L1
+# recipient; L1's PegInWatcherService observes the confirmed vault lock and
+# mints the wrapped bc 1:1 on the L1 chain. Only then can the L1 validator
+# stakeDeposit/activateValidator.
+PEGIN_TOOL="$ROOT/helper/prod/validators/PegInTool.java"
+
+# Unpack the layer0 exec jar once so the single-file Java tools can run
+# (BOOT-INF classes + lib), mirroring testnodes.sh's sign_exit_for_cp.
+CP_DIR="${PEGIN_CP_DIR:-$ROOT/target/pegin-cp}"
+if [ ! -d "$CP_DIR/BOOT-INF/classes" ]; then
+    rm -rf "$CP_DIR"; mkdir -p "$CP_DIR"
+    EXEC_JAR="$(ls -t "$ROOT"/layer0-server/target/layer0-server-*-exec.jar 2>/dev/null | head -1)"
+    if [ -z "$EXEC_JAR" ] || [ ! -f "$EXEC_JAR" ]; then
+        echo "ERROR: no layer0-server exec jar at layer0-server/target/ (run mvn package first)"
+        exit 1
     fi
+    unzip -oq "$EXEC_JAR" 'BOOT-INF/*' -d "$CP_DIR"
 fi
+PEGIN_CP="$CP_DIR/BOOT-INF/classes:$CP_DIR/BOOT-INF/lib/*"
+
+# Submit ONE peg-in from a funding wallet (L0 genesis wallet, seed 01) to the
+# L1 beneficiary; echoes the beneficiary address for later polling.
+run_pegin() {
+    local seed="$1" benpub="$2" out
+    out="$("$JAVA_HOME/bin/java" -cp "$PEGIN_CP" "$PEGIN_TOOL" \
+        "$seed" "$benpub" "ordermatch" "$VAULT_PUBKEY" "$SERVER_BASE" 2>&1)"
+    printf '%s\n' "$out"
+    if [ "$(printf '%s\n' "$out" | grep '^PEGIN_OK=' | cut -d= -f2)" != "true" ]; then
+        echo "  WARNING: peg-in to $benpub failed (see PEGIN_RESPONSE above)"
+    fi
+    printf '%s\n' "$out" | grep '^BENEFICIARY_ADDR=' | cut -d= -f2
+}
+
+# 1) Peg-in for the L1 validator (>= MIN_STAKE 32000000 + fee). A whole
+#    genesis-CSV UTXO (100000000000000) is locked 1:1.
+L1_VALIDATOR_ADDR="$(run_pegin "$L0_GENESIS_KEY" "$L1_VALIDATOR_PUBKEY")"
+sleep 3
+
+# 2) Peg-ins for the L1 genesis wallet (ML-DSA-87 seed 0x01, same key as the
+#    L0 genesis wallet) so the remote order tests can pay fees / create tokens
+#    directly on the L1-order chain. Multiple confirmed UTXOs (one per entry)
+#    so consecutive order tests each spend a fresh confirmed BIG source — a
+#    single UTXO would leave only unconfirmed change after the first spend.
+L1_GENESIS_PEGIN_UTXOS="${L1_GENESIS_PEGIN_UTXOS:-8}"
+L1_GENESIS_ADDR=""
+for i in $(seq 1 "$L1_GENESIS_PEGIN_UTXOS"); do
+    L1_GENESIS_ADDR="$(run_pegin "$L0_GENESIS_KEY" "$L0_GENESIS_PUBKEY")"
+    sleep 2
+done
+
+# 3) Wait for the L1 chain to observe the confirmed L0 vault locks and mint the
+#    wrapped bc (PegInWatcherService polls L0 every 15s), and for those
+#    CROSSTANGLE mints to confirm on L1. The L1 beacon chain runs on the
+#    imported L0 validator deposit, so the mints confirm.
+echo "Waiting for L1 wrapped bc mints to confirm on L1..."
+# Output confirmation is DERIVED from the containing block's confirmed state
+# (OUTPUTS_CONFIRMED joins blocks.confirmed), NOT the outputs.confirmed column
+# — poll the join so the count reflects real confirmation. The single-validator
+# L1 beacon chain confirms slowly (production outpaces confirmation), so allow
+# up to ~15 min.
+EXPECTED_CONFIRMED=$((1 + L1_GENESIS_PEGIN_UTXOS))
+for i in $(seq 1 300); do
+    COUNT=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
+        "SELECT count(*) FROM outputs o JOIN blocks b ON b.hash=o.blockhash WHERE b.confirmed AND o.tokenid='bc' AND o.toaddress IN ('$L1_VALIDATOR_ADDR','$L1_GENESIS_ADDR');" 2>/dev/null || echo "0")
+    if [ -n "$COUNT" ] && [ "${COUNT//[^0-9]/}" -ge "$EXPECTED_CONFIRMED" ]; then
+        echo "L1 wrapped bc confirmed: $COUNT/$EXPECTED_CONFIRMED UTXOs"
+        break
+    fi
+    if [ $i -eq 300 ]; then
+        echo "WARNING: L1 wrapped bc mints not confirmed after 900s (count=$COUNT), tail:"
+        tail -30 "$L1_LOG"
+    fi
+    sleep 3
+done
 
 sleep 2
 if post_ok "$L1_BASE/stakeDeposit" \
     "{\"pubkey\":\"$L1_VALIDATOR_PUBKEY\",\"amount\":\"32000000\"}"; then
-    echo "L1 stake deposited"
+    echo "L1 stake deposited (funded via vault peg-in)"
 else
     echo "L1 stake deposit failed"
 fi
@@ -563,29 +669,6 @@ if post_ok "$L1_BASE/activateValidator" \
     echo "L1 validator activated"
 else
     echo "L1 validator activation failed"
-fi
-
-# Fund the L1 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can pay
-# fees / create tokens directly on the L1-order chain.
-if [ -z "$L1_GENESIS_CSV_ARGS" ] && [ -n "$L1_GENESIS_PUBKEY" ]; then
-    # Many distinct confirmed UTXOs (one per entry) so consecutive order
-    # tests can each spend a fresh confirmed BIG source; a single UTXO would
-    # leave only unconfirmed change after the first spend and a rerun would
-    # fail with InsufficientMoneyException (mirrors the L0 genesis funding).
-    L1_GENESIS_FUND_UTXOS="${L1_GENESIS_FUND_UTXOS:-8}"
-    L1_GENESIS_ENTRIES=""
-    for i in $(seq 1 "$L1_GENESIS_FUND_UTXOS"); do
-        L1_GENESIS_ENTRIES="${L1_GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L1_GENESIS_PUBKEY\"},"
-    done
-    L1_GENESIS_ENTRIES="[${L1_GENESIS_ENTRIES%,}]"
-    if post_ok "$L1_BASE/fundAddresses" \
-        "{\"addresses\":$L1_GENESIS_ENTRIES}"; then
-        echo "L1 genesis wallet funded ($L1_GENESIS_FUND_UTXOS UTXOs)"
-    else
-        echo "L1 genesis funding failed"
-    fi
-elif [ -n "$L1_GENESIS_CSV_ARGS" ]; then
-    echo "L1 init wallets funded via genesis CSV (no faucet)"
 fi
 
 # Wait for the L1-order chain to produce its own beacon

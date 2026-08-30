@@ -85,6 +85,10 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         bridgeConfiguration.setVaultPubKeyHexList(new ArrayList<>());
         bridgeConfiguration.setVaultPriKeyHexList(new ArrayList<>());
         bridgeConfiguration.setVaultM(1);
+        // The integration store does not run Casper finality; the default
+        // finality gate would defer every peg-out. Tests opt out here and
+        // exercise the gate explicitly in testPegOutDeferredUntilFinalized.
+        bridgeConfiguration.setRequireFinality(false);
         // Reset any per-chain registry left by a previous test.
         anchorConfiguration.setChainPubKeys(new java.util.HashMap<>());
         // Reset any L0-side freeze left by a previous test.
@@ -672,6 +676,56 @@ public class BridgeServiceTest extends AbstractIntegrationTest {
         List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
         assertFalse(unspent.isEmpty(), "partial burn must not release the vault");
         assertFalse(unspent.get(0).isSpent(), "partial burn must not mark the vault spent (R5)");
+    }
+
+    /**
+     * FINALITY GATE: with {@code bridge.requireFinality=true} (production
+     * default) a CONFIRMED anchor whose L0 block is not yet Casper-finalized must
+     * NOT release the vault — confirmation is reversible, finality is not. The
+     * release is deferred (the retry service re-attempts it) rather than
+     * performed early and later rolled back.
+     */
+    @Test
+    public void testPegOutDeferredUntilFinalized() throws Exception {
+        bridgeConfiguration.setRequireFinality(true);
+
+        long amount = 100000;
+        String recipient = Address.fromHash160(networkParameters, testKey.getPubKeyHash()).toBase58();
+        VaultRecord vault = createRealVault(testKey, recipient, amount);
+
+        // A confirmed anchor with a valid burn, but its block hash is synthetic
+        // (not a real block with a chainlength at/below a finalized checkpoint).
+        Sha256Hash head = Sha256Hash.wrap("4444444444444444444444444444444444444444444444444444444444444444");
+        List<Sha256Hash> leaves = new ArrayList<>();
+        leaves.add(head);
+        leaves.add(Sha256Hash.wrap("0000000000000000000000000000000000000000000000000000000000000000"));
+        java.util.Collections.sort(leaves);
+        Sha256Hash root = MerkleProof.computeRoot(leaves);
+        MerkleProof proof = MerkleProof.buildProofFor(leaves, head);
+
+        LayerAnchor.AnchorBurn burn = new LayerAnchor.AnchorBurn(
+                vault.getUtxoBlockHash().toString() + ":" + vault.getUtxoIndex(), recipient,
+                vault.getAmount(), Utils.HEX.encode(NetworkParameters.BIGTANGLE_TOKENID));
+        LayerAnchor anchor = new LayerAnchor(L1_CHAIN_ID, L1_CHAIN_ID + ":55",
+                head, 55, root, null, proof, burn);
+        anchor.setSignature(anchor.sign(testKey).serialize());
+
+        anchorService.validateAndSaveAnchor(anchor, head, store);
+        store.updateAnchorConfirmed(L1_CHAIN_ID, 55, true);
+
+        AnchorRecord confirmed = store.getAnchorByChainIdAndHeight(L1_CHAIN_ID, 55);
+        assertNotNull(confirmed);
+        assertTrue(confirmed.isConfirmed());
+
+        bridgeService.processPegOut(confirmed, store);
+
+        // The vault must remain locked: confirmation without finality is not
+        // enough to move collateral.
+        List<VaultRecord> unspent = store.getVaultUTXOsByChainId(L1_CHAIN_ID, false);
+        assertEquals(1, unspent.size(),
+                "a confirmed-but-not-finalized anchor must NOT release the vault");
+        assertFalse(unspent.get(0).isSpent(),
+                "the vault must stay locked until the anchor's L0 block is finalized");
     }
 
     @Test

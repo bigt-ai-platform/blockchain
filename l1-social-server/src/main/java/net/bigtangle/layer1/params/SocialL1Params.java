@@ -8,7 +8,7 @@ import net.bigtangle.params.MainNetParams;
 public class SocialL1Params extends MainNetParams {
 
     public SocialL1Params() {
-        this("PAYMENT");
+        this("SOCIAL");
     }
 
     public SocialL1Params(String chainId) {

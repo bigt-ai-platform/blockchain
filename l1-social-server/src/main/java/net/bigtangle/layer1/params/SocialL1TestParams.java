@@ -8,7 +8,7 @@ import net.bigtangle.params.TestParams;
 public class SocialL1TestParams extends TestParams {
 
     public SocialL1TestParams() {
-        this("PAYMENT");
+        this("SOCIAL");
     }
 
     public SocialL1TestParams(String chainId) {

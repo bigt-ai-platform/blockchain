@@ -384,7 +384,7 @@ public class SyncBlockService {
 
 	}
 
-	public void requestNonĆhainBlocks(String s, BlockStoreInterface store)
+	public void requestNonChainBlocks(String s, BlockStoreInterface store)
 			throws JsonProcessingException, IOException, ProtocolException, BlockStoreException, NoBlockException {
 
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
@@ -418,6 +418,16 @@ public class SyncBlockService {
 			}
 			Collections.sort(sortedBlocks, new SortbyBlock());
 			for (Block block : sortedBlocks) {
+				// A non-minting L1 chain shares no UTXO set with L0, so an L0
+				// CROSSTANGLE block (anchor / peg-in / peg-out spending L0 UTXOs)
+				// cannot be imported: its input UTXOs are foreign and the L1
+				// CROSSTANGLE handler rejects them (see layers.md §5). The L1
+				// learns bridge state through its own watchers (PegInWatcherService,
+				// AnchorWatcherService) instead of importing L0's blocks.
+				if (!networkParameters.genesisMintsBIG()
+						&& block.getBlockType() == BlockType.BLOCKTYPE_CROSSTANGLE) {
+					continue;
+				}
 				// no genesis block and no spend pending set
 				if (block.getHeight() > 0) {
 					blockgraph.addBlock(block, true, store);
@@ -1178,7 +1188,7 @@ public class SyncBlockService {
 		for (String s : re) {
 			if (s != null && !"".equals(s)) {
 				try {
-					requestNonĆhainBlocks(s, store);
+					requestNonChainBlocks(s, store);
 				} catch (Exception e) {
 					log.debug("", e);
 				}
