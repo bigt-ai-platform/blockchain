@@ -143,6 +143,21 @@ public class DispatcherController extends BaseDispatcherController {
 					new net.bigtangle.response.OkResponse(), watch, reqCmdName);
 			return true;
 		}
+		case getBridgeInfo: {
+			if (bridgeService == null) {
+				this.outPrintJSONString(httpServletResponse,
+						net.bigtangle.response.ErrorResponse.create(503), watch, reqCmdName);
+				return true;
+			}
+			Map<String, Object> info = new HashMap<>();
+			info.put("active", bridgeService.isActive());
+			info.put("vaultAddress", bridgeService.vaultAddress().toBase58());
+			info.put("vaultScriptHex", Utils.HEX.encode(bridgeService.vaultScript().getProgram()));
+			String json = Json.jsonmapper().writeValueAsString(info);
+			httpServletResponse.setCharacterEncoding("UTF-8");
+			httpServletResponse.getOutputStream().write(json.getBytes(StandardCharsets.UTF_8));
+			return true;
+		}
 		case getOutputsHistory: {
 			outputHistory(bodyByte, httpServletResponse, watch, store);
 			return true;

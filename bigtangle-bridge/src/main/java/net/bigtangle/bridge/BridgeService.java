@@ -102,7 +102,11 @@ public class BridgeService {
         logger.error(msg);
     }
 
-    private Address vaultAddress() {
+    public boolean isActive() {
+        return bridgeConfiguration != null && bridgeConfiguration.isActive();
+    }
+
+    public Address vaultAddress() {
         if (isMultisigVault()) {
             return Address.fromP2SHScript(networkParameters, vaultScript());
         }
@@ -135,7 +139,7 @@ public class BridgeService {
      * peg-in must pay this script and the peg-out release spends it, so the
      * script is the single source of truth for what "the vault" is.
      */
-    private Script vaultScript() {
+    public Script vaultScript() {
         if (isMultisigVault()) {
             return ScriptBuilder.createP2SHOutputScript(vaultRedeemScript());
         }

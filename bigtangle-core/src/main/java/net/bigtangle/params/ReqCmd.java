@@ -8,7 +8,7 @@ public enum ReqCmd {
 	// Block
 	submitTransaction, submitTransactions, getBlockByHash, getBlocksByHashList, findBlockEvaluation, searchBlockByBlockHashs, batchBlock,
 	// Bridge
-	processPegIn, processPegOut,
+	processPegIn, processPegOut, getBridgeInfo,
 
 	getTip, getTips, adjustHeight, findRetryBlocks,
 	// Chain
