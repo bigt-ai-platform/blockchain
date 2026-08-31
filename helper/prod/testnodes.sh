@@ -53,7 +53,39 @@ SLOT_MS="${SLOT_MS:-12000}"
 READINESS_MIN="${READINESS_MIN:-10}"
 XMX="${XMX:-3g}"
 NNODES="${NNODES:-3}"
+BENCH_WALLETS="${BENCH_WALLETS:-0}"
+BENCH_FUND="${BENCH_FUND:-50000}"
+# Isolatable mesh identity: a DIFFERENT container/db prefix than the default
+# lets a concurrent mesh (e.g. another agent's /tmp/bt4test run) not wipe this
+# one via docker rm -f bt4-* / DROP DATABASE bt4_*.
+CONTAINER_PREFIX="${CONTAINER_PREFIX:-bt4-node-}"
+DB_PREFIX="${DB_PREFIX:-bt4}"
+# Per-node PostgreSQL isolation (docs/performance.md: "dedicated DB per node is
+# mandatory for scale"). With PER_NODE_PG=1 each node i gets its OWN postgres
+# container ${DB_PREFIX}-pg-${i} on port PG_PORT_BASE+i instead of all nodes
+# hammering one shared instance. Measured on the 5-node mesh: shared-DB
+# contention stalled beacon connects -> stale heads -> 359 orphaned beacons vs
+# 105 confirmed; per-node DBs -> 26 vs 36 with confirmations flowing.
+PER_NODE_PG="${PER_NODE_PG:-0}"
+PG_PORT_BASE="${PG_PORT_BASE:-21533}"
 PGCONT=test-bigtangle-postgres
+
+# Postgres container serving node i (per-node isolation or the shared one).
+pg_of() { # $1=node-index
+    if [ "${PER_NODE_PG:-0}" = "1" ]; then
+        echo "${DB_PREFIX}-pg-${1}"
+    else
+        echo "${PGCONT}"
+    fi
+}
+
+# psql against the postgres serving node i.
+pg_exec() { # $1=node-index  rest=psql args
+    local i="$1"; shift
+    local inner="${PGINNER:-5432}"
+    [ "${PER_NODE_PG:-0}" = "1" ] && inner=5432
+    docker exec "$(pg_of "$i")" psql -p "${inner}" -U root -d postgres "$@"
+}
 PGINNER=""
 
 log()  { echo "[nodes] $*"; }
@@ -100,6 +132,23 @@ pg_mount_ok() { # true when the running container already binds PGDATA_ROOT
 }
 
 ensure_pg() {
+    # Per-node mode: one postgres per node so DB contention never stalls the
+    # beacon connect pipeline (the documented multi-node fork-churn root cause).
+    if [ "${PER_NODE_PG:-0}" = "1" ]; then
+        for i in $(seq 0 $((NNODES - 1))); do
+            local pgc="$(pg_of "$i")" port=$((PG_PORT_BASE + i))
+            if ! (echo > /dev/tcp/127.0.0.1/"${port}") 2>/dev/null; then
+                log "starting per-node postgres ${pgc} on :${port}"
+                docker rm -f "${pgc}" >/dev/null 2>&1 || true
+                docker run -d --name "${pgc}" -p "${port}:5432" \
+                    -e POSTGRES_USER=root -e POSTGRES_PASSWORD=test1234 -e POSTGRES_DB=info \
+                    postgres:16 -c max_connections=500 >/dev/null
+            fi
+        done
+        sleep 6
+        PGINNER=5432
+        return 0
+    fi
     # Recreate unless the container is up AND persists its datadir on
     # PGDATA_ROOT: an ephemeral postgres silently loses all chain state on
     # restart, which turns every later run into a confusing full resync.
@@ -205,7 +254,7 @@ make_node_env() { # $1=index
     cat > "${WORKDIR}/node-${i}/validator.env" <<EOF
 NODE_INDEX=${i}
 NODE_HOST=127.0.0.1
-CONTAINER_PREFIX=bt4-node-
+CONTAINER_PREFIX=${CONTAINER_PREFIX}
 POS_VALIDATOR_KEY=${key}
 VALIDATOR_PUBKEY=${pub}
 PUBKEY_HASH=${hash}
@@ -215,10 +264,10 @@ MCMC_PORT=$((8381 + i))
 SERVER_PEER_UDP=$((30407 + i * 2))
 SERVER_PEER_TCP=$((30408 + i * 2))
 SERVER_GOSSIP=$((9421 + i))
-DB_NAME=bt4_${i}
-DB_PORT=${PGPORT}
+DB_NAME=${DB_PREFIX}_${i}
+DB_PORT=$([ "${PER_NODE_PG:-0}" = "1" ] && echo $((PG_PORT_BASE + i)) || echo "${PGPORT}")
 KAFKA_BOOTSTRAP=${KAFKA}
-JAVA_OPTS_SERVER="-Xmx${XMX} -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}${MEMPOOL_MAX_TX:+ -Dserver.mempoolMaxTx=${MEMPOOL_MAX_TX}}${BATCH_TX_PER_BLOCK:+ -Dbatch.txPerBlock=${BATCH_TX_PER_BLOCK}}"
+JAVA_OPTS_SERVER="-Xmx${XMX} -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -Dbigtangle.readinessTimeoutMinutes=${READINESS_MIN} -Dpos.slotIntervalMs=${SLOT_MS} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}${MEMPOOL_MAX_TX:+ -Dserver.mempoolMaxTx=${MEMPOOL_MAX_TX}}${BATCH_TX_PER_BLOCK:+ -Dbatch.txPerBlock=${BATCH_TX_PER_BLOCK}}"
 EOF
     chmod 600 "${WORKDIR}/node-${i}/validator.env"
 }
@@ -228,7 +277,7 @@ cmd_up() {
     # stop leftover node containers FIRST: they keep producing to the kafka
     # topics (resurrecting them mid delete/create) and hold the old DBs.
     for i in $(seq 0 $((NNODES - 1))); do
-        docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true
+        docker rm -f "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1 || true
     done
     ensure_pg; ensure_kafka
     # hermetic common.env — same shape as prod, localhost-only
@@ -258,7 +307,7 @@ GENESIS_CSV=
 # slotsPerEpoch=8 (TestParams would be 32). Drives the leave poll timeout,
 # the join stamp gate and verify_network's epoch math.
 POS_SLOTS_PER_EPOCH=8
-JAVA_OPTS_SERVER="-Xmx${XMX} -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
+JAVA_OPTS_SERVER="-Xmx${XMX} -XX:MaxMetaspaceSize=256m -XX:MaxDirectMemorySize=256m -Dnet.bigtangle.pos.attestationActivation=1 -Dpos.warmupSlots=${WARMUP_SLOTS:-0} -Ddb.pool.mainMaxSize=${DBPOOL_MAIN:-48} -Ddb.pool.posMaxSize=${DBPOOL_POS:-24}"
 EOF
     # the test drives the REAL shared machinery
     cp "${VALSRC}/validator_common.sh" "${WORKDIR}/validator_common.sh"
@@ -288,43 +337,100 @@ EOF
             echo ",${pub},${GENESIS_FUND}"
         done
         echo ",${tw_pub},${TESTWALLET_FUND}"
+        # Optional load wallets (one seed hex per line in $LOAD_SEEDS): each is
+        # funded at genesis so TransferLoadTool/load scripts have confirmed,
+        # spendable sources without the removed /fundAddresses faucet.
+        LOAD_FUND="${LOAD_FUND:-1000000000000000}"
+        if [ -n "${LOAD_SEEDS:-}" ] && [ -f "$LOAD_SEEDS" ]; then
+            while read -r lseed; do
+                [ -z "${lseed// /}" ] && continue
+                lp="$(gen_keys_for_seed "${lseed// /}" | grep '^VALIDATOR_PUBKEY=' | cut -d= -f2-)"
+                [ -n "$lp" ] && echo ",${lp},${LOAD_FUND}"
+            done < "$LOAD_SEEDS"
+        fi
     } > "${WORKDIR}/genesis.csv"
     sed -i "s#^GENESIS_CSV=.*#GENESIS_CSV=${WORKDIR}/genesis.csv#" "${WORKDIR}/common.env"
+    # Optional benchmark wallets: deterministic single-spend wallets minted at
+    # genesis (the /fundAddresses faucet was removed), so the mesh can be load-
+    # tested purely over HTTP. Derived by helper/prod/validators/MeshBm.java
+    # (same seed formula the driver uses to re-derive spenders), appended AFTER
+    # the validator + test-wallet rows so the genesis output index of bench
+    # wallet i is NNODES+1+i == MeshBm startIndex+i.
+    if [ "${BENCH_WALLETS:-0}" -gt 0 ] 2>/dev/null; then
+        log "adding ${BENCH_WALLETS} genesis-funded benchmark wallets (${BENCH_FUND} sat each)"
+        sign_exit_for_cp
+        java -Dbench.fund="${BENCH_FUND}" \
+            -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
+            "${VALSRC}/MeshBm.java" genesis $((NNODES + 1)) "${BENCH_WALLETS}" \
+            >> "${WORKDIR}/genesis.csv"
+    fi
     # stop leftover node containers FIRST: DROP DATABASE silently fails
     # while a previous run's servers still hold connections, resurrecting
     # stale chain state on the "fresh" databases.
     for i in $(seq 0 $((NNODES - 1))); do
-        docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true
+        docker rm -f "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1 || true
     done
     for i in $(seq 0 $((NNODES - 1))); do
-        docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "DROP DATABASE IF EXISTS bt4_${i};" >/dev/null 2>&1 || true
-        docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "CREATE DATABASE bt4_${i};" >/dev/null 2>&1 || true
+        pg_exec "$i" -c "DROP DATABASE IF EXISTS ${DB_PREFIX}_${i};" >/dev/null 2>&1 || true
+        pg_exec "$i" -c "CREATE DATABASE ${DB_PREFIX}_${i};" >/dev/null 2>&1 || true
     done
-    log "starting ${NNODES} nodes (image ${IMAGE}, slots ${SLOT_MS}ms)"
-    for i in $(seq 0 $((NNODES - 1))); do
-        ( cd "${WORKDIR}/node-${i}" && bash -c "
-            set -euo pipefail
-            source ../common.env; source ./validator.env
-            source ../validator_common.sh
-            start_server" ) > "${WORKDIR}/node-${i}/start.log" 2>&1 &
-    done
-    wait
-    # Nodes boot in parallel — poll all pending APIs each round instead of
-    # waiting out node-0's full window before even looking at node-1.
-    local ok=0 pending="" i
-    for i in $(seq 0 $((NNODES - 1))); do pending="${pending} $i"; done
-    for _ in $(seq 1 100); do
-        local still=""
-        for i in $pending; do
-            if [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$((8281 + i))/" 2>/dev/null)" = "200" ]; then
-                ok=$((ok+1))
-            else
-                still="${still} $i"
-            fi
+    # Boot nodes in WAVES (NODES_PER_WAVE at a time, default 2): every node's
+    # JVM balloons well past Xmx during init-sync/cache build, and starting a
+    # large mesh all at once OOM-kills the host (10 nodes -> kernel oom_kill).
+    # Staggering keeps the memory peak bounded. Use NODES_PER_WAVE=$NNODES for
+    # the old all-parallel boot.
+    local ok=0 wave_size="${NODES_PER_WAVE:-2}"
+    log "starting ${NNODES} nodes (image ${IMAGE}, slots ${SLOT_MS}ms, wave=${wave_size})"
+    for wave_start in $(seq 0 "$wave_size" $((NNODES - 1))); do
+        local wave_end=$((wave_start + wave_size - 1))
+        [ "$wave_end" -ge "$NNODES" ] && wave_end=$((NNODES - 1))
+        for i in $(seq "$wave_start" "$wave_end"); do
+            ( cd "${WORKDIR}/node-${i}" && bash -c "
+                set -euo pipefail
+                source ../common.env; source ./validator.env
+                source ../validator_common.sh
+                start_server" ) > "${WORKDIR}/node-${i}/start.log" 2>&1 &
         done
-        pending="$still"
-        [ -z "$pending" ] && break
-        sleep 3
+        wait
+        # Poll THIS wave's APIs until they answer (up to ~5 min per wave).
+        local pending=""
+        for i in $(seq "$wave_start" "$wave_end"); do pending="${pending} $i"; done
+        local wave_ok=0
+        for _ in $(seq 1 100); do
+            local still=""
+            for i in $pending; do
+                if [ "$(curl -s -m 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$((8281 + i))/" 2>/dev/null)" = "200" ]; then
+                    wave_ok=$((wave_ok + 1))
+                else
+                    still="${still} $i"
+                fi
+            done
+            pending="$still"
+            [ -z "$pending" ] && break
+            sleep 3
+        done
+        ok=$((ok + wave_ok))
+        [ "$wave_ok" -eq $((wave_end - wave_start + 1)) ] ||
+            die "only ${ok}/${NNODES} APIs up — see ${WORKDIR}/node-*/start.log"
+        log "wave $((wave_start / wave_size + 1)) up: nodes ${wave_start}..${wave_end}"
+        # Settle: a freshly-booted node's JVM spikes well past its steady RSS
+        # during init-sync/cache build. Wait until this wave's containers drop
+        # under NODE_SETTLE_MB before booting the next wave, or the overlapping
+        # spikes OOM the host on big meshes.
+        local settle=0 settle_mb="${NODE_SETTLE_MB:-1500}"
+        while [ "$settle" -lt 900 ]; do
+            local cur=0
+            for i in $(seq "$wave_start" "$wave_end"); do
+                m="$(docker stats --no-stream --format '{{.MemUsage}}' "${CONTAINER_PREFIX}node-${i}-server" 2>/dev/null \
+                    | awk '{print $1}' | python3 -c "import sys; s=sys.stdin.read().strip()
+try:
+    print(int(float(s[:-3])*1024) if s.endswith('GiB') else int(float(s[:-3])) if s.endswith('MiB') else 0)
+except Exception: print(0)")"
+                [ -n "${m:-0}" ] && [ "$m" -gt "$cur" ] 2>/dev/null && cur="$m"
+            done
+            [ "${cur:-0}" -le "$settle_mb" ] && { log "wave $((wave_start / wave_size + 1)) settled (${cur}MiB < ${settle_mb})"; break; }
+            sleep 10; settle=$((settle + 10))
+        done
     done
     [ "$ok" = "$NNODES" ] || die "only ${ok}/${NNODES} APIs up — see ${WORKDIR}/node-*/start.log"
     log "up: ${NNODES} nodes serving"
@@ -338,7 +444,7 @@ wait_synced() { # $1=index — block until node $1's confirmed tip reaches the
     local i="$1" target=0 j cl waited=0
     for j in $(seq 0 $((NNODES - 1))); do
         [ "$j" = "$i" ] && continue
-        docker inspect "bt4-node-node-${j}-server" >/dev/null 2>&1 || continue
+        docker inspect "${CONTAINER_PREFIX}node-${j}-server" >/dev/null 2>&1 || continue
         cl="$(cl_of "$j")"
         [ -n "$cl" ] && [ "$cl" != "-" ] && [ "$cl" -gt "$target" ] 2>/dev/null && target="$cl"
     done
@@ -477,7 +583,7 @@ cmd_transfer() {
         bal=999999999
         for i in $(seq 0 $((NNODES - 1))); do
             # skip a node that was intentionally stopped (leave test)
-            docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1 || continue
+            docker inspect "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1 || continue
             bal=$(api "$i" /getBalances "[\"${rph}\"]" | python3 -c '
 import sys, json, base64
 try: d=json.load(sys.stdin)
@@ -561,7 +667,7 @@ cmd_leave() { # $1=index — signed BLOCKTYPE_EXIT, stop it, drop from seeds
     vc="$(valcount_of "$i")"
     [ -n "$vc" ] && [ "$vc" != "-" ] && [ "$vc" -ge "$NNODES" ] 2>/dev/null && \
         die "old deposit still active after ${timeout}s (validators=${vc}) — join would inflate the set"
-    docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true
+    docker rm -f "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1 || true
     seed_env_drop SEED_HOSTS "$((8281 + i))"
     seed_env_drop GOSSIP_SEEDS "$((9421 + i))"
     log "node-${i} exited: container stopped, seeds updated"
@@ -606,7 +712,7 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
                 die "join node-${i}: exit not finalized after ${waited}s (cl=${now_cl:-0}, need>=$need) — JOIN_FORCE=1 to override"
         fi
         rm -f "$stamp"
-    elif [ -d "${WORKDIR}/node-${i}.old" ] || docker inspect "bt4-node-node-${i}-server" >/dev/null 2>&1; then
+    elif [ -d "${WORKDIR}/node-${i}.old" ] || docker inspect "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1; then
         # JOIN_FORCE also covers a consumed stamp with a stale node dir: the
         # previous join attempt may have died AFTER consuming the stamp
         # (e.g. at the sync gate), leaving no way back without this escape.
@@ -615,8 +721,8 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
     fi
     rm -rf "${WORKDIR}/node-${i}.old" && mv "${WORKDIR}/node-${i}" "${WORKDIR}/node-${i}.old" 2>/dev/null || true
     mkdir -p "${WORKDIR}/node-${i}"; make_node_env "$i"
-    docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "DROP DATABASE IF EXISTS bt4_${i};" >/dev/null
-    docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "CREATE DATABASE bt4_${i};" >/dev/null
+    pg_exec "$i" -c "DROP DATABASE IF EXISTS ${DB_PREFIX}_${i};" >/dev/null
+    pg_exec "$i" -c "CREATE DATABASE ${DB_PREFIX}_${i};" >/dev/null
     ( cd "${WORKDIR}/node-${i}" && bash -c "
         set -euo pipefail
         source ../common.env; source ./validator.env
@@ -642,10 +748,17 @@ cmd_join() { # $1=index — fresh keys, seed, start, stake
 }
 
 cmd_down() {
-    for i in $(seq 0 $((NNODES - 1))); do docker rm -f "bt4-node-node-${i}-server" >/dev/null 2>&1 || true; done
+    for i in $(seq 0 $((NNODES - 1))); do docker rm -f "${CONTAINER_PREFIX}node-${i}-server" >/dev/null 2>&1 || true; done
     for i in $(seq 0 $((NNODES - 1))); do
-        docker exec ${PGCONT} psql -p ${PGINNER:-5432} -U root -d postgres -c "DROP DATABASE IF EXISTS bt4_${i};" >/dev/null 2>&1 || true
+        pg_exec "$i" -c "DROP DATABASE IF EXISTS ${DB_PREFIX}_${i};" >/dev/null 2>&1 || true
     done
+    if [ "${PER_NODE_PG:-0}" = "1" ]; then
+        for i in $(seq 0 $((NNODES - 1))); do
+            docker rm -f "$(pg_of "$i")" >/dev/null 2>&1 || true
+        done
+        log "down (per-node postgres removed)"
+        return 0
+    fi
     log "down"
 }
 
