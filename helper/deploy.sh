@@ -27,6 +27,7 @@ MODULES["l1-nft-server"]="l1-nft-server/Dockerfile"
 MODULES["l1-payment-server"]="l1-payment-server/Dockerfile"
 MODULES["l1-contract-server"]="l1-contract-server/Dockerfile"
 MODULES["l1-evm-server"]="l1-evm-server/Dockerfile"
+MODULES["l1-social-server"]="l1-social-server/Dockerfile"
 
 usage() {
     echo "Usage: $0 [options]"
@@ -61,7 +62,7 @@ fi
 
 # ── Build all modules ──────────────────────────────────────────────────────
 header "Building all modules with Maven"
-MAVEN_PLUGINS="-pl layer0-server,l1-pai-server,l1-order-server,l1-nft-server,l1-payment-server,l1-contract-server,l1-evm-server"
+MAVEN_PLUGINS="-pl layer0-server,l1-pai-server,l1-order-server,l1-nft-server,l1-payment-server,l1-contract-server,l1-evm-server,l1-social-server"
 if [ -n "${MODULE:-}" ]; then
     MAVEN_PLUGINS="-pl $MODULE"
 fi

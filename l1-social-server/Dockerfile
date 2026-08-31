@@ -1,25 +1,19 @@
-FROM maven:3-eclipse-temurin-25 AS build
-WORKDIR /build
-COPY pom.xml pom.xml
-COPY bigtangle-core/pom.xml bigtangle-core/pom.xml
-COPY bigtangle-servercore/pom.xml bigtangle-servercore/pom.xml
-COPY bigtangle-bridge/pom.xml bigtangle-bridge/pom.xml
-COPY bigtangle-evm/pom.xml bigtangle-evm/pom.xml
-COPY layer0-server/pom.xml layer0-server/pom.xml
-COPY l1-contract-server/pom.xml l1-contract-server/pom.xml
-COPY l1-order-server/pom.xml l1-order-server/pom.xml
-COPY l1-evm-server/pom.xml l1-evm-server/pom.xml
-COPY l1-pai-server/pom.xml l1-pai-server/pom.xml
-COPY l1-nft-server/pom.xml l1-nft-server/pom.xml
-COPY l1-payment-server/pom.xml l1-payment-server/pom.xml
-COPY l1-social-server/pom.xml l1-social-server/pom.xml
+FROM eclipse-temurin:25-jre-jammy
 
-RUN mkdir -p /build/l1-social-server/target && mvn dependency:go-offline -q -pl l1-social-server -am 2>/dev/null || true
-COPY . .
-RUN mvn package -Dmaven.test.skip=true -q -pl l1-social-server -am
+# Run as an unprivileged user. Container orchestration mounts (config,
+# keystore, logs) must be readable/writable by UID 10001.
+RUN groupadd -g 10001 bigtangle && useradd -u 10001 -g bigtangle -m -s /bin/bash bigtangle
 
-FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
-COPY --from=build /build/l1-social-server/target/l1-social-server-0.6.0.jar app.jar
+COPY --chown=bigtangle:bigtangle target/l1-social-server-0.6.0.jar app.jar
+
+USER bigtangle
+
 EXPOSE 8080
-ENTRYPOINT ["java", "--add-exports", "java.base/sun.nio.ch=ALL-UNNAMED", "--add-exports", "java.base/java.lang=ALL-UNNAMED", "-jar", "app.jar"]
+
+# Liveness: the actuator health endpoint must answer UP. Override the probe
+# port via the HEALTHCHECK_PORT env var when the node binds a custom port.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${HEALTHCHECK_PORT:-${SERVER_PORT:-8080}}; printf 'GET /actuator/health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3; RESP=$(cat <&3); case \"$RESP\" in *\\\"status\\\":\\\"UP\\\"*) exit 0 ;; *) exit 1 ;; esac"]
+
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -jar app.jar"]
