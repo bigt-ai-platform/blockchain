@@ -479,6 +479,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
     private static final String CREATE_BLOCKS_HEIGHT_INDEX = "CREATE INDEX blocks_height_idx ON blocks (height)   ";
     private static final String CREATE_BLOCKS_SOLID_HEIGHT_INDEX = "CREATE INDEX blocks_solid_height_idx ON blocks (solid, height)   ";
     private static final String CREATE_TXREARD_CHAINLENGTH_INDEX = "CREATE INDEX txreard_chainlength_idx ON txreward (chainlength, confirmed)  ";
+    private static final String CREATE_TXREWARD_PREVBLOCKHASH_INDEX = "CREATE INDEX IF NOT EXISTS txreward_prevblockhash_idx ON txreward (prevblockhash, blockhash)  ";
     private static final String CREATE_CONTRACT_EVENT_CONTRACTTOKENID_TABLE_INDEX = "CREATE INDEX contractevent_contracttokenid_idx ON contractevent (contracttokenid) ";
     private static final String CREATE_CONTRACT_EVENT_COLLECTINGHASH_TABLE_INDEX = "CREATE INDEX contractevent_collectinghash_idx ON contractevent (collectinghash)";
     private static final String CREATE_CONTRACT_EXECUTION_CONTRACTTOKENID_TABLE_INDEX = "CREATE INDEX contractresult_contracttokenid_idx ON contractresult (contracttokenid) ";
@@ -616,6 +617,7 @@ public class PostgreSQLFullBlockStore extends DatabaseFullBlockStore {
 
         sqlStatements.add(CREATE_ORDERS_COLLECTINGHASH_TABLE_INDEX);
         sqlStatements.add(CREATE_TXREARD_CHAINLENGTH_INDEX);
+        sqlStatements.add(CREATE_TXREWARD_PREVBLOCKHASH_INDEX);
 
         return sqlStatements;
     }
