@@ -47,6 +47,22 @@ public class CachingConfig {
         JoinConfig joinConfig = networkConfig.getJoin();
         joinConfig.getMulticastConfig().setEnabled(false);
         joinConfig.getTcpIpConfig().setEnabled(false);
+        // AUTO-DETECTION is the discovery path that silently clusters every
+        // node's Hazelcast on the same host even when multicast/tcp-ip are off
+        // (the mesh nodes share --network host). A clustered shared cache is
+        // both useless (each node reads its own full DB) and a consensus
+        // killer: under load one member's heartbeat lapses -> partition
+        // migration storm -> ClearOperations block for minutes -> the beacon
+        // reference sweep stalls -> heads go stale -> proposers fork.
+        // Each node runs its Hazelcast STANDALONE; caches stay local
+        // read-through.
+        joinConfig.getAutoDetectionConfig().setEnabled(false);
+        // Belt-and-braces: no cloud/kubernetes discovery either.
+        joinConfig.getAwsConfig().setEnabled(false);
+        joinConfig.getAzureConfig().setEnabled(false);
+        joinConfig.getGcpConfig().setEnabled(false);
+        joinConfig.getKubernetesConfig().setEnabled(false);
+        joinConfig.getEurekaConfig().setEnabled(false);
 
         return config;
 
