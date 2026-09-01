@@ -373,6 +373,18 @@ EOF
             "${VALSRC}/MeshBm.java" genesis $((NNODES + 1)) "${BENCH_WALLETS}" \
             >> "${WORKDIR}/genesis.csv"
     fi
+    # Optional attack wallets for MeshAttack.java (deterministic single-spend
+    # wallets minted at genesis, same pattern as BENCH_WALLETS). They are
+    # appended AFTER the bench wallets so their genesis output indices do not
+    # collide; MeshAttack re-derives them from the same seed formula.
+    if [ "${ATTACK_WALLETS:-0}" -gt 0 ] 2>/dev/null; then
+        log "adding ${ATTACK_WALLETS} genesis-funded attack wallets (${ATTACK_FUND:-30000} sat each)"
+        sign_exit_for_cp
+        java -Dattack.fund="${ATTACK_FUND:-30000}" \
+            -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
+            "${VALSRC}/MeshAttack.java" genesis $((NNODES + 1 + BENCH_WALLETS)) "${ATTACK_WALLETS}" \
+            >> "${WORKDIR}/genesis.csv"
+    fi
     # stop leftover node containers FIRST: DROP DATABASE silently fails
     # while a previous run's servers still hold connections, resurrecting
     # stale chain state on the "fresh" databases.
