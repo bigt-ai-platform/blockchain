@@ -430,7 +430,11 @@ public class ServiceBaseCheck extends ServiceBaseConnect {
 					listScriptVerificationResults.add(future);
 				}
 			}
-			if (!checkFee)
+			// The block-level fee gate is skipped on fee-free chains
+			// (bigtangle.fee.default=0, e.g. L1-SOCIAL): with FEE_DEFAULT=0
+			// the mempool already accepts balanced txs, and value
+			// conservation is still enforced per transaction above.
+			if (!checkFee && Coin.FEE_DEFAULT.signum() > 0)
 				throw new VerificationException.NoFeeException(Coin.FEE_DEFAULT.toString());
 
 			for (Future<VerificationException> future : listScriptVerificationResults) {
