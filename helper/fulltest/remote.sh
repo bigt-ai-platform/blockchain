@@ -29,7 +29,7 @@ SERVER_BASE="${SERVER_URL%/}"
 L1_BASE="${L1_URL%/}"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
 L1_DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$L1_DB_NAME"
-SCHED_ARGS="-Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=5000 -Dservice.schedule.initsync=true -Dservice.schedule.chainlength=true"
+SCHED_ARGS="-Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=1000 -Dservice.schedule.initsync=true -Dservice.schedule.chainlength=true"
 L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --spring.main.allow-circular-references=true"
 
 # PoS-era: the L0 HTTP server itself runs the validator duty (beacon proposal +
@@ -89,12 +89,12 @@ L0_GENESIS_KEY="${L0_GENESIS_KEY:-$(printf '01%.0s' {1..32})}"
 TEST_GENESIS_CSV="${TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutput.csv}"
 L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-}"
 
-POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-6000}"
+POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-2000}"
 
 # Browser clients (the Expo web app on :8081) query the node cross-origin.
 # CORS is disabled by default on the server (server.corsAllowedOrigins empty);
 # open the local dev origins explicitly for the dev/web e2e flow.
-CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081}"
+CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:8081,http://127.0.0.1:8081,http://localhost:18081,http://127.0.0.1:18081}"
 CORS_ARGS="-Dserver.corsAllowedOrigins=$CORS_ORIGINS"
 
 # Use Java 25 if available
@@ -219,7 +219,7 @@ if [ "$STOP_ONLY" = "true" ]; then
         pkill -9 -f "spring-boot:run.*-pl $mod" 2>/dev/null || true
         pkill -9 -f "-pl $mod .*spring-boot:run" 2>/dev/null || true
     done
-    sleep 3
+    sleep 2
     if ss -tln 2>/dev/null | grep -qE ":(24089|24086) "; then
         echo "Ports still in use, forcing..."
         pkill -9 -f "spring-boot:run" 2>/dev/null || true
@@ -426,7 +426,7 @@ wait_http_ready "$L0_PORT" "$L0_LOG" || exit 1
 echo ""
 echo "=== Step 5: Wait for genesis block ==="
 for i in $(seq 1 10); do
-    sleep 3
+    sleep 2
     HASH=$(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c "
       SELECT encode(hash, 'hex') FROM blocks WHERE blocktype = 'BLOCKTYPE_INITIAL' LIMIT 1;
     " 2>/dev/null || echo "")
@@ -528,7 +528,7 @@ fi
 # Wait for the L0 (PoS) beacon chain to start producing
 echo "Waiting for L0 PoS beacon production..."
 for i in $(seq 1 60); do
-    sleep 3
+    sleep 2
     HEIGHT=$(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
         "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
     if [ -n "$HEIGHT" ] && [ "$HEIGHT" -gt 0 ]; then
@@ -557,9 +557,9 @@ L1_POS_ARGS="-Dpos.validatorKey=$L1_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=tr
 # requireFinality=false: the single-validator L0 does not reach Casper finality
 # (its attestations gossip to a production seed), so the issuance/peg-out
 # finality gate would stall the bootstrap. Production defaults the gate ON.
-L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE -Dbridge.requireFinality=false"
+L1_BRIDGE_ARGS="-Dbridge.active=true -Dbridge.vaultPubKeyHex=$VAULT_PUBKEY -Dbridge.issuancePubKeyHex=$ISSUANCE_PUBKEY -Dbridge.issuancePriKeyHex=$ISSUANCE_SEED -Danchor.l0Url=$SERVER_BASE -Dbridge.requireFinality=false -Dbridge.pegInPollMs=2000"
 nohup mvn spring-boot:run -pl l1-order-server \
-  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=10000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS $CORS_ARGS" \
+  -Dspring-boot.run.jvmArguments="$L1_DB_ARGS $SCHED_ARGS -Dservice.schedule.syncrate=2000 $L1_PEER_ARGS -Dserver.port=$L1_PORT $L1_POS_ARGS $L1_BRIDGE_ARGS $CORS_ARGS" \
   -Dspring-boot.run.arguments="$L1_ARGS" \
   > "$L1_LOG" 2>&1 &
 L1_PID=$!
@@ -639,7 +639,7 @@ for i in $(seq 1 60); do
         echo "WARNING: L1 beacon chain not producing after 180s, tail:"
         tail -30 "$L1_LOG"
     fi
-    sleep 3
+    sleep 2
 done
 
 # 1) Peg-in for the L1 validator (>= MIN_STAKE 32000000 + fee). A whole
@@ -682,7 +682,7 @@ for i in $(seq 1 300); do
         echo "WARNING: L1 wrapped bc mints not confirmed after 900s (count=$COUNT), tail:"
         tail -30 "$L1_LOG"
     fi
-    sleep 3
+    sleep 2
 done
 
 sleep 2
@@ -704,7 +704,7 @@ fi
 # Wait for the L1-order chain to produce its own beacon
 echo "Waiting for L1-order beacon production..."
 for i in $(seq 1 60); do
-    sleep 3
+    sleep 2
     L1_HEIGHT=$(pg_exec psql -U root -d $L1_DB_NAME -p "$PG_INTERNAL_PORT" -t -A -c \
         "SELECT max(height) FROM blocks WHERE blocktype <> 'BLOCKTYPE_INITIAL';" 2>/dev/null || echo "0")
     if [ -n "$L1_HEIGHT" ] && [ "$L1_HEIGHT" -gt 0 ]; then
@@ -733,7 +733,7 @@ for i in $(seq 1 60); do
     if [ "$i" -eq 60 ]; then
         echo "WARNING: L0 beacon chain not stable after 180s (confirmed=$STABLE_COUNT), continuing anyway"
     fi
-    sleep 3
+    sleep 2
 done
 sleep 3
 
