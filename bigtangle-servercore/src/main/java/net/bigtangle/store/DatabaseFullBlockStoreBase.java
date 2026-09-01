@@ -243,7 +243,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "AND blocktype <> 'BLOCKTYPE_BEACON' order by height asc limit ?";
 
 	protected final String SELECT_HASHES_FROM_AND_NOT_CHAINLENGTH_SQL = "SELECT hash "
-			+ "FROM blocks WHERE chainlength = -1 AND height >= ? AND solid > -1 order by height desc ";
+			+ "FROM blocks WHERE chainlength < 0 AND height >= ? AND solid > -1 order by height desc ";
 
 	/**
 	 * Orphaned (non-chain) blocks currently marked invalid. The reference sweep
