@@ -303,6 +303,16 @@ public interface BlockStoreInterface {
 	net.bigtangle.server.data.TransactionStatusRecord getTransactionStatus(Sha256Hash txhash)
 			throws BlockStoreException;
 
+	/**
+	 * Returns the hash of a CONFIRMED block that contains the given
+	 * transaction, or {@code null} when the transaction is not present in any
+	 * confirmed block. Used to reconcile transaction status when a
+	 * double-batched block is invalidated by conflict detection: the same
+	 * transaction can appear in a confirmed block AND in an orphaned block,
+	 * and the status record must point at the confirmed one.
+	 */
+	Sha256Hash getConfirmedBlockForTransaction(Sha256Hash txHash) throws BlockStoreException;
+
 	List<net.bigtangle.server.data.TransactionStatusRecord> getTransactionStatusesByStatus(
 			net.bigtangle.server.data.TransactionStatus status) throws BlockStoreException;
 

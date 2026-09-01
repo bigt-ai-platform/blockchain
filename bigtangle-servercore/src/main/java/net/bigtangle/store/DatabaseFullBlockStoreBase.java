@@ -1155,6 +1155,27 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 	}
 
 	@Override
+	public Sha256Hash getConfirmedBlockForTransaction(Sha256Hash txHash) throws BlockStoreException {
+		// The same transaction can be included in several blocks (a
+		// double-batched twin). The outputs rows for the tx carry their
+		// containing block hash; join with blocks.confirmed to find the block
+		// that actually confirmed the transaction.
+		try (PreparedStatement s = getConnection().prepareStatement(
+				"SELECT o.blockhash FROM outputs o JOIN blocks b ON b.hash = o.blockhash "
+						+ "WHERE o.hash = ? AND b.confirmed = true LIMIT 1")) {
+			s.setBytes(1, txHash.getBytes());
+			try (ResultSet results = s.executeQuery()) {
+				if (results.next()) {
+					return Sha256Hash.wrap(results.getBytes(1));
+				}
+			}
+			return null;
+		} catch (SQLException ex) {
+			throw new BlockStoreException(ex);
+		}
+	}
+
+	@Override
 	public SpentBlockData getTransactionSpentBlock(Sha256Hash blockHash, Sha256Hash hash, long index)
 			throws BlockStoreException {
 

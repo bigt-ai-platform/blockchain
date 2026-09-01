@@ -71,6 +71,8 @@ import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.core.ConflictCandidate;
 import net.bigtangle.server.core.ConflictPoint;
 import net.bigtangle.server.data.Contractresult;
+import net.bigtangle.server.data.TransactionStatus;
+import net.bigtangle.server.data.TransactionStatusRecord;
 import net.bigtangle.server.service.base.handler.ContractConnectSupport;
 import net.bigtangle.server.service.base.handler.ContractExecutorRegistry;
 import net.bigtangle.server.service.base.handler.OrderExecutorRegistry;
@@ -682,6 +684,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 					checked = !hasSpentInputs(java.util.Collections.singleton(wrap), checkChainlength, store);
 					if (!checked) {
 						skipConflict++;
+						// Sibling storm: a candidate whose spends were claimed by a
+						// sibling batch block (same mempool drained by 2+ nodes)
+						// is rejected by hasSpentInputs, NOT by duplicatePoint.
+						// Collect it too so the deadlock-break below can still
+						// reference exactly one when EVERY candidate conflicts —
+						// otherwise the beacon carries 0 refs and the whole
+						// mempool strands BATCHED forever.
+						conflictingSiblings.add(wrap);
 					}
 				}
 				if (checkChainlength) {
@@ -904,12 +914,21 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							long m = hasConflictDependencyChainlength(c, checkChainlength, store);
 							boolean re = hasConflictDependency(m, checkChainlength );
 							if (re){
-								logger.debug("hasSpentInputs {}", c.getBlock().getBlock().toString());
+								logger.debug("hasSpentInputs {} m={} point={} block={}", c.getBlock().getBlock().toString(),
+										m, c.getConflictPoint(), c.getBlock().getBlockHash());
 							store.updateBlockEvaluationChainlength(c.getBlock().getBlock().getHash(), -1*m);
+							// A block whose inputs are already spent by a
+							// confirmed twin is invalidated (negative
+							// chainlength) but its transactions' status
+							// records keep pointing at it, so getTransactionStatus
+							// reports BATCHED forever even though the same
+							// transaction confirmed in the winning block.
+							// Reconcile: re-point to the confirmed block, else
+							// mark DROPPED.
+							reconcileInvalidatedBlock(c.getBlock(), store);
 							}
 								return re;
 						} catch (BlockStoreException e) {
-
 							logger.debug("hasSpentInputs exception", e);
 							return true;
 						}
@@ -919,6 +938,59 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			logger.debug("hasSpentInputs outer", e);
 		}
 		return result;
+	}
+
+	/**
+	 * Reconciles the transaction-status records of a block that conflict
+	 * detection just invalidated (chainlength set to a negative value because
+	 * its inputs are already spent by a confirmed block).
+	 *
+	 * <p>The reorg path reconciles statuses via
+	 * {@code unconfirmBlocks} (DROPPED + re-mempool), but this invalidation
+	 * path never did, so a double-batched transaction kept pointing at the
+	 * orphaned block and {@code getTransactionStatus} reported BATCHED forever
+	 * even though the SAME transaction confirmed in the winning twin block.
+	 * Here: if the transaction confirmed in another block, re-point its status
+	 * to that confirmed block; otherwise mark it DROPPED (it is on an invalid
+	 * branch and must not read as pending).
+	 */
+	public void reconcileInvalidatedBlock(BlockWrap blockWrap, BlockStoreInterface store) {
+		Block block = blockWrap.getBlock();
+		if (block == null || block.getTransactions() == null) {
+			return;
+		}
+		for (Transaction tx : block.getTransactions()) {
+			if (tx.isCoinBase() || tx.getInputs() == null || tx.getInputs().isEmpty()) {
+				continue;
+			}
+			try {
+				Sha256Hash confirmedBlock = store.getConfirmedBlockForTransaction(tx.getHash());
+				if (confirmedBlock != null) {
+					// The same transaction confirmed in the winning twin block:
+					// re-point its status there so getTransactionStatus reads
+					// CONFIRMED instead of BATCHED-on-the-orphan forever.
+					net.bigtangle.core.BlockEvaluation ev = store.getBlockEvaluationsByhashs(confirmedBlock);
+					TransactionStatusRecord.mark(store, tx, TransactionStatus.CONFIRMED, confirmedBlock,
+							ev == null ? null : ev.getChainlength(), networkParameters);
+					logger.debug("reconcileInvalidatedBlock: tx {} re-pointed to confirmed block {}", tx.getHash(),
+							confirmedBlock);
+					continue;
+				}
+				// Not confirmed anywhere. Only mark DROPPED when the status
+				// currently points at THIS invalidated block; a status owned by
+				// another still-unconfirmed block (e.g. a re-batch) must be left
+				// untouched so its own confirmation still applies.
+				TransactionStatusRecord record = store.getTransactionStatus(tx.getHash());
+				if (record != null && record.getBlockHash() != null
+						&& record.getBlockHash().equals(block.getHash())) {
+					TransactionStatusRecord.mark(store, tx, TransactionStatus.DROPPED, block.getHash(), null,
+							networkParameters);
+					logger.debug("reconcileInvalidatedBlock: tx {} marked DROPPED (invalid branch)", tx.getHash());
+				}
+			} catch (Exception e) {
+				logger.debug("reconcileInvalidatedBlock failed for tx {}: {}", tx.getHash(), e.getMessage());
+			}
+		}
 	}
 
 	/**

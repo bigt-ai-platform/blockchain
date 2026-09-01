@@ -96,20 +96,36 @@ public class MempoolService {
             checkCapacity();
             ConcurrentLinkedQueue<Transaction> typeQueue = pendingTxnsByType
                     .computeIfAbsent(blockType, k -> new ConcurrentLinkedQueue<>());
+            int accepted = 0;
             for (Transaction tx : txs) {
-                checkAndAdd(tx);
-                pendingTxns.add(tx);
-                typeQueue.add(tx);
+                // Only fresh txs are queued (see submitTransaction); a tx that
+                // is already pending must not be queued again or the drain
+                // would batch it twice and create conflicting twin blocks.
+                if (checkAndAdd(tx)) {
+                    pendingTxns.add(tx);
+                    typeQueue.add(tx);
+                    accepted++;
+                }
             }
-            mempoolSize.addAndGet(txs.size());
-            totalSubmitted.addAndGet(txs.size());
+            if (accepted > 0) {
+                mempoolSize.addAndGet(accepted);
+                totalSubmitted.addAndGet(accepted);
+            }
         }
     }
 
     public void submitTransaction(Transaction tx) {
         checkCapacity();
-        checkAndAdd(tx);
-        addToPending(tx);
+        // checkAndAdd returns false for a duplicate resubmission (already seen
+        // this run, e.g. a client retry or a self-delivered gossip/kafka copy).
+        // Only a FRESH tx must be queued: queueing the duplicate would let the
+        // same transaction be drained into TWO batch blocks, which then
+        // conflict (each spends the same inputs) and one is orphaned — the
+        // orphaned block's tx keeps a BATCHED status forever even though the
+        // twin confirmed.
+        if (checkAndAdd(tx)) {
+            addToPending(tx);
+        }
     }
 
     /**
@@ -129,9 +145,12 @@ public class MempoolService {
         try {
             for (Transaction tx : txs) {
                 checkCapacity();
-                checkAndAdd(tx, store);
-                addToPending(tx);
-                added.add(tx);
+                // Only fresh transactions are queued (see submitTransaction);
+                // a duplicate in the batch must not be drained twice.
+                if (checkAndAdd(tx, store)) {
+                    addToPending(tx);
+                    added.add(tx);
+                }
             }
         } catch (Exception e) {
             for (Transaction t : added) {
@@ -232,25 +251,35 @@ public class MempoolService {
         return queue == null ? 0 : queue.size();
     }
 
-    private void checkAndAdd(Transaction tx) {
+    /**
+     * Verifies and accepts a single transaction into the mempool conflict
+     * bookkeeping. Returns {@code false} when the transaction is a duplicate
+     * resubmission (already seen this run) — the caller must then NOT queue
+     * it, or the same transaction would be drained twice into two batch
+     * blocks. Throws {@link VerificationException} for conflicting or invalid
+     * transactions.
+     */
+    private boolean checkAndAdd(Transaction tx) {
         // No store opened here: transactions without spendable inputs (e.g.
         // orders) never need one, so the open stays lazy inside
         // {@link #verifyTransaction(Transaction)}.
         if (isDuplicateResubmission(tx)) {
-            return;
+            return false;
         }
         checkMempoolConflicts(tx);
         verifyTransaction(tx);
         finishCheckAndAdd(tx);
+        return true;
     }
 
-    private void checkAndAdd(Transaction tx, BlockStoreInterface sharedStore) {
+    private boolean checkAndAdd(Transaction tx, BlockStoreInterface sharedStore) {
         if (isDuplicateResubmission(tx)) {
-            return;
+            return false;
         }
         checkMempoolConflicts(tx);
         verifyTransaction(tx, sharedStore);
         finishCheckAndAdd(tx);
+        return true;
     }
 
     /**
