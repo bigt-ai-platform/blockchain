@@ -138,6 +138,17 @@ public abstract class AbstractStreamHandler {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.Serdes$ByteArraySerde");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Batch blocks are multi-MB (a full batch.txPerBlock of PQ-signed
+        // transactions). The default 1 MB fetch limits silently drop them,
+        // so peers never receive the block and the mesh forks permanently.
+        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG,
+                String.valueOf(KafkaMessageProducer.KAFKA_MAX_MESSAGE_BYTES));
+        props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG,
+                String.valueOf(KafkaMessageProducer.KAFKA_MAX_MESSAGE_BYTES));
+        props.put("consumer.max.partition.fetch.bytes",
+                String.valueOf(KafkaMessageProducer.KAFKA_MAX_MESSAGE_BYTES));
+        props.put("consumer.fetch.max.bytes",
+                String.valueOf(KafkaMessageProducer.KAFKA_MAX_MESSAGE_BYTES));
 
         StreamsBuilder builder = new StreamsBuilder();
         try {

@@ -20,6 +20,10 @@ public class KafkaMessageProducer implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaMessageProducer.class);
 
+    /** Max kafka message (32 MB): a full batch block of PQ-signed transactions
+     * must fit, or peers reject it and the mesh forks (see MAX_REQUEST_SIZE). */
+    public static final int KAFKA_MAX_MESSAGE_BYTES = 32 * 1024 * 1024;
+
     @Autowired
     private KafkaConfiguration kafkaConfiguration;
 
@@ -56,6 +60,14 @@ public class KafkaMessageProducer implements DisposableBean {
         props.setProperty(ProducerConfig.LINGER_MS_CONFIG, "5");
         props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "65536");
         props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
+        // A batch block carries up to batch.txPerBlock PQ-signed transactions
+        // (~6 KB each) — tens of MB. The 1 MB default silently fails the
+        // publish, so peers NEVER receive the block: its transactions confirm
+        // only on the creating node and the mesh forks permanently (measured:
+        // 'Message larger than MAX_BLOCK_SIZE' on every peer while the builder
+        // confirms its own chain). 32 MB covers a full batch block.
+        props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG,
+                String.valueOf(KAFKA_MAX_MESSAGE_BYTES));
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producer = new KafkaProducer<>(props);

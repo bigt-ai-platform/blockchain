@@ -177,7 +177,14 @@ ensure_kafka() {
     if ! (echo > /dev/tcp/127.0.0.1/9092) 2>/dev/null; then
         log "starting local kafka (bt4-kafka on :9092)"
         docker rm -f bt4-kafka >/dev/null 2>&1 || true
-        docker run -d --name bt4-kafka -p 9092:9092 apache/kafka:3.9.0 >/dev/null
+        # message.max.bytes must cover a full batch block (batch.txPerBlock x
+        # ~6 KB PQ-signed txs). The 1 MB default silently drops the publish,
+        # so peers never receive the block: its transactions confirm only on
+        # the creating node and the mesh forks permanently (measured as
+        # 'Message larger than MAX_BLOCK_SIZE' on every peer).
+        docker run -d --name bt4-kafka -p 9092:9092 apache/kafka:3.9.0 \
+            --override message.max.bytes=33554432 \
+            --override replica.fetch.max.bytes=33554432 >/dev/null
         sleep 8
     fi
     # kafka-topics is NOT on PATH in apache/kafka images — full path required

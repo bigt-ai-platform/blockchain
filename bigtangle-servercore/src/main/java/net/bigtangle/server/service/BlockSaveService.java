@@ -408,8 +408,55 @@ public class BlockSaveService {
 		return totalBatched;
 	}
 
+	/**
+	 * Hard ceiling for one batch block's serialized size. MAX_DEFAULT_BLOCK_SIZE
+	 * is 20 MB; keep a margin for the block header, the varint sizing error of
+	 * the optimal-encoding estimate, and the kafka envelope (32 MB producer /
+	 * broker limit). Every published block must be transportable, or peers
+	 * reject it with LargerThanMaxBlockSize and the mesh forks permanently.
+	 */
+	static final int MAX_BATCH_BLOCK_BYTES = Integer.getInteger("batch.maxBlockBytes", 16 * 1024 * 1024);
+
+	/**
+	 * Split drained transactions into batch-block groups bounded BOTH by
+	 * {@link #BATCH_TX_PER_BLOCK} (count) and {@link #MAX_BATCH_BLOCK_BYTES}
+	 * (serialized size, using the cheap optimal-encoding estimate). A group
+	 * over the byte cap is transportable only in part: peers reject oversized
+	 * blocks with LargerThanMaxBlockSize, so those transactions would confirm
+	 * on the creating node alone and the mesh forks permanently.
+	 */
+	static List<List<Transaction>> groupBySize(List<Transaction> txns) {
+		List<List<Transaction>> groups = new ArrayList<>();
+		List<Transaction> current = new ArrayList<>();
+		long bytes = 0;
+		for (Transaction tx : txns) {
+			int sz = tx.getOptimalEncodingMessageSize();
+			if (!current.isEmpty() && (current.size() >= BATCH_TX_PER_BLOCK || bytes + sz > MAX_BATCH_BLOCK_BYTES)) {
+				groups.add(current);
+				current = new ArrayList<>();
+				bytes = 0;
+			}
+			// A single transaction over the cap still goes in its own group —
+			// it cannot be split, and dropping it would strand its UTXO.
+			current.add(tx);
+			bytes += sz;
+		}
+		if (!current.isEmpty()) {
+			groups.add(current);
+		}
+		return groups;
+	}
+
 	private int batchTransactionGroup(List<Transaction> txns) throws Exception {
-		if (txns.size() <= BATCH_TX_PER_BLOCK) {
+		// BYTE-SAFE grouping: a batch block of batch.txPerBlock PQ-signed
+		// transactions is 20-48 MB — over MAX_DEFAULT_BLOCK_SIZE (20 MB), so
+		// peers reject it with LargerThanMaxBlockSize and it NEVER syncs: its
+		// transactions confirm only on the creating node and the mesh forks
+		// permanently. Cap every group by serialized size (with margin for the
+		// block header + kafka envelope) so every published block is
+		// transportable.
+		List<List<Transaction>> groups = groupBySize(txns);
+		if (groups.size() == 1) {
 			BlockStoreInterface store = storeService.getStore();
 			try {
 				Block block = cacheBlockPrototypeService.getBlockPrototype(store);
@@ -422,10 +469,6 @@ public class BlockSaveService {
 				store.close();
 			}
 			return txns.size();
-		}
-		List<List<Transaction>> groups = new ArrayList<>();
-		for (int i = 0; i < txns.size(); i += BATCH_TX_PER_BLOCK) {
-			groups.add(txns.subList(i, Math.min(i + BATCH_TX_PER_BLOCK, txns.size())));
 		}
 		BlockStoreInterface store = storeService.getStore();
 		try {
