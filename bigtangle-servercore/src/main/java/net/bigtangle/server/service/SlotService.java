@@ -642,11 +642,13 @@ public class SlotService {
                         refElapsedMs, deadlineMs, slot);
             }
             long sweepMs = System.currentTimeMillis() - refStartMs;
-            if (blocks.size() >= PERF_SWEEP_LOG_MIN_BLOCKS || sweepMs > 2000) {
-                log.info("Beacon propose slot={} refs={} sweep={}ms trunk={}ms branch={}ms allUnconfirmed={}ms "
-                        + "addAllUnconfirmed={}", slot, blocks.size(), sweepMs, trunkMs, branchMs, allUnconfirmedMs,
-                        refElapsedMs < deadlineMs);
-            }
+            // DIAG (temporarily unconditional): the proposer's reference-set
+            // size is the exact number the beacon will carry; a ~0 here is
+            // invisible in every other metric and directly explains stalled
+            // confirmations.
+            log.info("Beacon propose diag: slot={} refs={} sweep={}ms trunk={}ms branch={}ms allUnconfirmed={}ms "
+                    + "addAllUnconfirmed={}", slot, blocks.size(), sweepMs, trunkMs, branchMs, allUnconfirmedMs,
+                    refElapsedMs < deadlineMs);
             // Publish this cycle's conflict resolutions for the connect to reuse.
             net.bigtangle.server.service.base.ServiceBaseConfirmation.publishConflictCache(conflictCacheToken);
             // Head-independent hand-off: the paired connect may run after the

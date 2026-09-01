@@ -572,7 +572,26 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 			}
 		}
 		int newRefs = 0;
+		int skipExisting = 0, skipConfirmed = 0, skipNullWrap = 0, skipType = 0, skipConflict = 0, skipChain = 0;
+		int lastBeaconReprocess = 0;
+		// Sibling batch blocks that carry the same spends (each node drains the
+		// shared kafka mempool, so 2+ nodes can emit near-identical batch
+		// blocks). The cumulative gate must not reference two of them (the
+		// beacon would double-spend), but rejecting ALL of them strands every
+		// transaction and leaves the beacon with 0 references — the measured
+		// 5-node confirmation stall. Keep them; if NOTHING else was added this
+		// slot, deterministically reference exactly one (lowest block hash —
+		// identical on every validator) so the txs confirm and the duplicates
+		// are dropped on the next slot.
+		java.util.List<BlockWrap> conflictingSiblings = new java.util.ArrayList<>();
 		long sweepStartMs = perfStart;
+
+		// PASS 1 (cheap): identity/type filtering only — NO DB conflict work.
+		// Collect the referable candidates first so the expensive per-candidate
+		// conflict resolution can be batched in ONE prefetch (the per-candidate
+		// singleton prefetch measured 1-2 s per transfer block and blew the
+		// 12 s slot deadline).
+		java.util.LinkedHashMap<Sha256Hash, BlockWrap> referable = new java.util.LinkedHashMap<>();
 		for (Sha256Hash hash : candidates) {
 			scanned++;
 			if ((scanned & 31) == 0 && System.currentTimeMillis() - sweepStartMs > MAX_SWEEP_MS) {
@@ -581,13 +600,8 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 						scanned, newRefs, candidates.size() - scanned);
 				break;
 			}
-			if (newRefs >= MAX_NEW_REFS_PER_BEACON) {
-				logger.info("addAllUnconfirmedBlocks bounded by refs: newRefs={} candidates-left={}",
-						newRefs, candidates.size() - scanned + 1);
-				break;
-			}
-			t = System.currentTimeMillis();
 			if (existing.contains(hash)) {
+				skipExisting++;
 				continue;
 			}
 			// Already referenced by the previous beacon: normally safe to skip
@@ -606,47 +620,109 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 				if (prior != null && prior.getBlockEvaluation() != null
 						&& prior.getBlockEvaluation().isConfirmed()) {
 					skipped++;
+					skipConfirmed++;
 					continue;
 				}
+				lastBeaconReprocess++;
 			}
 			BlockWrap wrap = getCachedBlockWrap(hash, store);
 			if (wrap == null) {
+				skipNullWrap++;
 				continue;
 			}
 			if (!matchType(wrap, blocktypes)) {
+				skipType++;
 				continue;
 			}
 			loadMs += System.currentTimeMillis() - t;
-			t = System.currentTimeMillis();
-			// Cumulative conflict check: sibling batch blocks must not carry
-			// mutually-conflicting inputs into the beacon's reference set
-			// (verifyRewardChainConfirmReferenced rejects the beacon if two
-			// referenced blocks spend the same outpoint — e.g. bootstrap-funded
-			// validators sharing the genesis-1e9 fund index). The cumulative
-			// gate excludes the conflicting block; a singleton check would
-			// reference all of them and stall confirmation.
-			java.util.Set<ConflictCandidate> candPoints = wrap.toConflictCandidates();
-			boolean duplicatePoint = candPoints.stream()
-					.anyMatch(c -> pointIndex.getOrDefault(c.getConflictPoint(), 0) > 0);
-			boolean checked;
-			if (duplicatePoint) {
-				checked = false;
-			} else {
-				// Chain-spent check for this candidate's own points only —
-				// resolutions come from the (retained) conflict cache.
-				checked = !hasSpentInputs(java.util.Collections.singleton(wrap), checkChainlength, store);
+			referable.put(hash, wrap);
+		}
+
+		// PASS 2: ONE batched conflict prefetch for every referable candidate,
+		// then resolve each from the (thread-local) cache — no DB round-trip
+		// inside the loop.
+		if (!referable.isEmpty()) {
+			long preAllStart = System.currentTimeMillis();
+			try {
+				prefetchTransactionOutputConflicts(
+						new java.util.HashSet<>(referable.values()), checkChainlength, store);
+			} catch (Exception e) {
+				logger.debug("bulk conflict prefetch failed; per-candidate fallback", e);
 			}
-			conflictMs += System.currentTimeMillis() - t;
-			if (checkChainlength) {
-				checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
-			}
-			if (checked) {
-				blocks.add(wrap);
-				existing.add(hash);
-				newRefs++;
-				for (ConflictCandidate c : candPoints) {
-					pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
+			conflictMs += System.currentTimeMillis() - preAllStart;
+
+			for (Map.Entry<Sha256Hash, BlockWrap> entry : referable.entrySet()) {
+				if (newRefs >= MAX_NEW_REFS_PER_BEACON) {
+					logger.info("addAllUnconfirmedBlocks bounded by refs: newRefs={} candidates-left={}",
+							newRefs, referable.size() - newRefs);
+					break;
 				}
+				Sha256Hash hash = entry.getKey();
+				BlockWrap wrap = entry.getValue();
+				long t2 = System.currentTimeMillis();
+				// Cumulative conflict check: sibling batch blocks must not carry
+				// mutually-conflicting inputs into the beacon's reference set
+				// (verifyRewardChainConfirmReferenced rejects the beacon if two
+				// referenced blocks spend the same outpoint). The cumulative
+				// gate excludes the conflicting block; a singleton check would
+				// reference all of them and stall confirmation.
+				java.util.Set<ConflictCandidate> candPoints = wrap.toConflictCandidates();
+				boolean duplicatePoint = candPoints.stream()
+						.anyMatch(c -> pointIndex.getOrDefault(c.getConflictPoint(), 0) > 0);
+				boolean checked;
+				if (duplicatePoint) {
+					checked = false;
+					// Sibling duplicate: carries a spend already claimed by another
+					// candidate THIS sweep. Safe to tie-break (see deadlock break
+					// below) — exactly one of the siblings must win.
+					conflictingSiblings.add(wrap);
+					skipConflict++;
+				} else {
+					// Resolves from the bulk prefetch cache — no DB round-trip.
+					checked = !hasSpentInputs(java.util.Collections.singleton(wrap), checkChainlength, store);
+					if (!checked) {
+						skipConflict++;
+					}
+				}
+				if (checkChainlength) {
+					checked = checked && checkBestExecutionChain(wrap.getBlock(), store);
+					if (!checked) {
+						skipChain++;
+					}
+				}
+				conflictMs += System.currentTimeMillis() - t2;
+				if (checked) {
+					blocks.add(wrap);
+					existing.add(hash);
+					newRefs++;
+					for (ConflictCandidate c : candPoints) {
+						pointIndex.merge(c.getConflictPoint(), 1, Integer::sum);
+					}
+				}
+			}
+		}
+		// Deadlock break: every candidate conflicted (sibling batch blocks with
+		// the same spends) and nothing else was added — the beacon would carry
+		// 0 references and confirm nothing this slot, stranding the whole
+		// mempool. Reference exactly ONE conflicting sibling, chosen by lowest
+		// block hash so every validator derives the identical reference set
+		// (the beacon is only valid if all nodes agree). The unreferenced
+		// duplicates stay unconfirmed; their duplicate txs are dropped on the
+		// next sweep since the UTXOs are now spent by the winner.
+		if (newRefs == 0 && !conflictingSiblings.isEmpty()) {
+			BlockWrap winner = null;
+			for (BlockWrap cw : conflictingSiblings) {
+				if (winner == null || cw.getBlockHash().compareTo(winner.getBlockHash()) < 0) {
+					winner = cw;
+				}
+			}
+			if (winner != null) {
+				blocks.add(winner);
+				existing.add(winner.getBlockHash());
+				newRefs++;
+				logger.info("addAllUnconfirmedBlocks deadlock-break: all {} scanned candidates conflicted; "
+						+ "referencing single sibling {} (of {} conflicting) so its transactions confirm",
+						scanned, winner.getBlockHash(), conflictingSiblings.size());
 			}
 		}
 		long perfMs = System.currentTimeMillis() - perfStart;
@@ -656,6 +732,14 @@ public abstract class ServiceBaseConfirmation extends ServiceBaseOrder {
 							+ "prefetch={}ms loop={}ms grouping={}ms total={}ms",
 					scanned, blocks.size(), skipped, queryMs, loadMs, conflictMs, conflictBreakdown[0],
 					conflictBreakdown[1], conflictBreakdown[2], perfMs);
+			// Rejection breakdown: where every scanned candidate went. Without
+			// this the reason a proposer's beacon ends up with ~0 references
+			// is invisible from outside (all counters zero while refs=0).
+			logger.info("addAllUnconfirmedBlocks breakdown: scanned={} added={} skipExisting={} "
+					+ "skipConfirmed={} skipNullWrap={} skipType={} skipConflict={} skipChain={} "
+					+ "lastBeaconReprocess={}",
+					scanned, newRefs, skipExisting, skipConfirmed, skipNullWrap, skipType,
+					skipConflict, skipChain, lastBeaconReprocess);
 		}
 	}
 
