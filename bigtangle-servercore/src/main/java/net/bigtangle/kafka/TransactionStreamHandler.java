@@ -30,6 +30,7 @@ public class TransactionStreamHandler extends AbstractStreamHandler {
     @Override
     protected void process(KStream<String, byte[]> stream) {
         stream.foreach((key, bytes) -> {
+            if (foreignChainRecord(key)) return;
             try {
                 Transaction tx = networkParameters.getDefaultSerializer().makeTransaction(bytes);
                 mempoolService.submitTransaction(tx);

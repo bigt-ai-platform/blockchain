@@ -199,7 +199,9 @@ ensure_kafka() {
     # assignment (broker auto-create only fires on produce, which races
     # stream startup and loses).
     local t
-    for t in bigtangle-blocks bigtangle-transactions bigtangle-attestations; do
+    # topics are chain-suffixed by KafkaConfiguration (chainId "L0" for both
+    # MainNetParams and TestParams layer0 variants)
+    for t in bigtangle-blocks-L0 bigtangle-transactions-L0 bigtangle-attestations-L0; do
         "${kt[@]}" --delete --topic "$t" >/dev/null 2>&1 || true
         for _ in $(seq 1 30); do
             "${kt[@]}" --list 2>/dev/null | grep -qx "$t" || break

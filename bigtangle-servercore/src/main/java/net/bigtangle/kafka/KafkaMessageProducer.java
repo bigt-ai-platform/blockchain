@@ -28,6 +28,9 @@ public class KafkaMessageProducer implements DisposableBean {
     private KafkaConfiguration kafkaConfiguration;
 
     @Autowired
+    private net.bigtangle.params.NetworkParameters networkParameters;
+
+    @Autowired
     private KafkaSeedDiscovery seedDiscovery;
 
     private KafkaProducer<String, byte[]> producer;
@@ -94,7 +97,12 @@ public class KafkaMessageProducer implements DisposableBean {
             return false; // still no brokers discovered
         }
         try {
-            ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, key, data);
+            // Belt-and-braces chain stamp: the key prefix names the PRODUCING
+            // chain so a consumer sharing the broker can drop foreign records
+            // even if topics were misconfigured to overlap.
+            String cid = networkParameters != null ? networkParameters.getChainId() : null;
+            String stampedKey = (cid == null || cid.isBlank()) ? key : cid + ":" + key;
+            ProducerRecord<String, byte[]> record = new ProducerRecord<>(topic, stampedKey, data);
             // DELIVERY-CONFIRMED send. The previous fire-and-forget silently
             // lost records whenever the broker hiccupped past retries=3 —
             // peers then chained onto a block nobody else ever received, and

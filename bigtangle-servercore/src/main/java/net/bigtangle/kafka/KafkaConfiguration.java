@@ -1,17 +1,38 @@
 package net.bigtangle.kafka;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+
+import net.bigtangle.params.NetworkParameters;
 
 @Component
 @ConfigurationProperties(prefix = "kafka")
 public class KafkaConfiguration {
 
+    public static final String DEFAULT_BLOCK_TOPIC = "bigtangle-blocks";
+    public static final String DEFAULT_TRANSACTION_TOPIC = "bigtangle-transactions";
+    public static final String DEFAULT_ATTESTATION_TOPIC = "bigtangle-attestations";
+
     private String bootstrapServers;
     private String consumerIdSuffix;
-    private String blockTopic = "bigtangle-blocks";
-    private String transactionTopic = "bigtangle-transactions";
-    private String attestationTopic = "bigtangle-attestations";
+    // Explicit overrides (kafka.blockTopic=…). When unset the topic defaults to
+    // "<base>-<chainId>" so co-hosted layer chains sharing one broker never
+    // consume each other's blocks/txs/attestations.
+    private String blockTopic;
+    private String transactionTopic;
+    private String attestationTopic;
+
+    // Optional: absent only in bare unit tests; the resolved topics then fall
+    // back to the unsuffixed base name. Package-private for same-package tests.
+    @Autowired(required = false)
+    NetworkParameters networkParameters;
+
+    private String chainTopic(String configured, String base) {
+        if (configured != null && !configured.isBlank()) return configured;
+        String chainId = networkParameters != null ? networkParameters.getChainId() : null;
+        return (chainId == null || chainId.isBlank()) ? base : base + "-" + chainId;
+    }
 
     public String getBootstrapServers() {
         return bootstrapServers;
@@ -30,7 +51,7 @@ public class KafkaConfiguration {
     }
 
     public String getBlockTopic() {
-        return blockTopic;
+        return chainTopic(blockTopic, DEFAULT_BLOCK_TOPIC);
     }
 
     public void setBlockTopic(String blockTopic) {
@@ -38,7 +59,7 @@ public class KafkaConfiguration {
     }
 
     public String getTransactionTopic() {
-        return transactionTopic;
+        return chainTopic(transactionTopic, DEFAULT_TRANSACTION_TOPIC);
     }
 
     public void setTransactionTopic(String transactionTopic) {
@@ -46,7 +67,7 @@ public class KafkaConfiguration {
     }
 
     public String getAttestationTopic() {
-        return attestationTopic;
+        return chainTopic(attestationTopic, DEFAULT_ATTESTATION_TOPIC);
     }
 
     public void setAttestationTopic(String attestationTopic) {
@@ -57,7 +78,8 @@ public class KafkaConfiguration {
     public String toString() {
         return "KafkaConfiguration [bootstrapServers=" + bootstrapServers
                 + ", consumerIdSuffix=" + consumerIdSuffix
-                + ", blockTopic=" + blockTopic
-                + ", transactionTopic=" + transactionTopic + "]";
+                + ", blockTopic=" + getBlockTopic()
+                + ", transactionTopic=" + getTransactionTopic()
+                + ", attestationTopic=" + getAttestationTopic() + "]";
     }
 }

@@ -123,6 +123,24 @@ public abstract class AbstractStreamHandler {
 
     protected abstract void process(KStream<String, byte[]> stream);
 
+    /**
+     * True when the record's key is stamped with a foreign chain id
+     * ("chainId:payload-key", see KafkaMessageProducer.send). Such records are
+     * skipped: one shared broker must never leak another chain's blocks/txs/
+     * attestations into this node's consensus. Unprefixed keys (legacy
+     * producers) are accepted.
+     */
+    protected boolean foreignChainRecord(String key) {
+        int i = key == null ? -1 : key.indexOf(':');
+        return i > 0 && !networkParameters.getChainId().equals(key.substring(0, i));
+    }
+
+    /** The payload key without the chain-id stamp. */
+    protected String recordKey(String key) {
+        int i = key == null ? -1 : key.indexOf(':');
+        return i > 0 ? key.substring(i + 1) : key;
+    }
+
     public void runStream() {
         String bs = kafkaConfiguration.getBootstrapServers();
         if (bs == null || bs.isEmpty()) {

@@ -63,8 +63,10 @@ public class BlockStreamHandler extends AbstractStreamHandler {
     @Override
     protected void process(KStream<String, byte[]> stream) {
         stream.foreach((key, bytes) -> {
-            if (!blockService.addConnectedFromKafka(key.getBytes(), bytes).isPresent()) {
-                enqueueRetry(key, bytes);
+            if (foreignChainRecord(key)) return;
+            String payloadKey = recordKey(key);
+            if (!blockService.addConnectedFromKafka(payloadKey.getBytes(), bytes).isPresent()) {
+                enqueueRetry(payloadKey, bytes);
             }
         });
         startReplayLoop();

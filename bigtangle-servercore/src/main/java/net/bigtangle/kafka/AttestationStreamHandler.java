@@ -42,6 +42,7 @@ public class AttestationStreamHandler extends AbstractStreamHandler {
     @Override
     protected void process(KStream<String, byte[]> stream) {
         stream.foreach((key, bytes) -> {
+            if (foreignChainRecord(key)) return;
             BlockStoreInterface store = null;
             try {
                 AttestationData att = Json.jsonmapper().readValue(bytes, AttestationData.class);
