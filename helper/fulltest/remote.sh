@@ -89,7 +89,12 @@ L0_GENESIS_KEY="${L0_GENESIS_KEY:-$(printf '01%.0s' {1..32})}"
 TEST_GENESIS_CSV="${TEST_GENESIS_CSV:-$ROOT/helper/test/TestGenesisOutput.csv}"
 L1_GENESIS_PUBKEY="${L1_GENESIS_PUBKEY:-}"
 
-POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-2000}"
+# Slot interval. 2000ms is TOO fast for a single node: beacon production then
+# races ahead of confirmation (each beacon connect ~1.2s), so several beacons
+# pile up as siblings on the same DAG tip and only ~1/5 confirms — a ~75%
+# orphan rate that strands test payments. 6000ms lets confirmation keep up
+# (one beacon per slot, ~1 sibling) at the cost of slower confirmations.
+POS_ARGS="-Dpos.slotIntervalMs=${SLOT_INTERVAL_MS:-6000}"
 
 # Browser clients (the Expo web app on :8081) query the node cross-origin.
 # CORS is disabled by default on the server (server.corsAllowedOrigins empty);
