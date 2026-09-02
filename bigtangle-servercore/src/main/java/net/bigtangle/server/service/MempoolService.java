@@ -129,6 +129,68 @@ public class MempoolService {
     }
 
     /**
+     * Re-enters a transaction whose block was orphaned by a reorg so it can
+     * confirm on the winning chain. This is NOT a client duplicate retry — the
+     * transaction is no longer pending (it was drained into the orphaned
+     * block), so the {@code seenTxIds} dedup is bypassed.
+     *
+     * <p>Two things the normal submit path would wrongly reject here are
+     * handled for recovery:
+     * <ul>
+     * <li>the transaction's own outpoint spend-guard (kept since its drain to
+     * close the double-spend window) is released first, so the conflict check
+     * does not reject its own spend;</li>
+     * <li>verification is fee-relaxed — a whole-UTXO lock the chain already
+     * accepted (e.g. a vault peg-in paying out exactly its input value) is
+     * valid on-chain even though it pays no fee.</li>
+     * </ul>
+     */
+    public void reSubmit(Transaction tx, BlockStoreInterface store) {
+        if (isPending(tx.getHash())) {
+            return;
+        }
+        releaseOutpoints(tx);
+        checkMempoolConflicts(tx);
+        verifyTransaction(tx, store, false);
+        finishCheckAndAdd(tx);
+        addToPending(tx);
+    }
+
+    private boolean isPending(Sha256Hash txHash) {
+        for (Transaction pending : pendingTxns) {
+            if (pending.getHash().equals(txHash)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Releases the double-spend guard {@code spentOutpoints} holds for
+     * {@code tx}'s outpoints. The guard is kept when a transaction drains into
+     * a batch block (until it confirms) so a conflicting spend cannot slip into
+     * a second block; when that block is later orphaned the transaction must be
+     * free to re-enter the mempool.
+     */
+    public void releaseOutpoints(Transaction tx) {
+        Set<TransactionOutPoint> ops = txOutpoints.remove(tx);
+        if (ops == null || ops.isEmpty()) {
+            ops = new HashSet<>();
+            if (tx.getInputs() != null) {
+                for (TransactionInput in : tx.getInputs()) {
+                    TransactionOutPoint op = in.getOutpoint();
+                    if (op != null && !op.isCoinBase()) {
+                        ops.add(op);
+                    }
+                }
+            }
+        }
+        for (TransactionOutPoint op : ops) {
+            spentOutpoints.remove(op, tx.getHash());
+        }
+    }
+
+    /**
      * Batch submit with a SHARED store: UTXO verification needs a DB read per
      * input, and opening/closing a pooled store per transaction adds hundreds
      * of checkouts to every large submit call. The caller owns the store
@@ -384,6 +446,16 @@ public class MempoolService {
     }
 
     private void verifyTransaction(Transaction tx, BlockStoreInterface sharedStore) {
+        verifyTransaction(tx, sharedStore, true);
+    }
+
+    /**
+     * @param requireFee when false (reorg recovery of a transaction the chain
+     *            already accepted) the strict fee requirement is skipped: a
+     *            whole-UTXO lock (e.g. a vault peg-in that pays out exactly its
+     *            input value) is valid on-chain even though it pays no fee.
+     */
+    private void verifyTransaction(Transaction tx, BlockStoreInterface sharedStore, boolean requireFee) {
         tx.verify();
         // Coinbase-like transactions mint value by protocol design; their value
         // conservation is validated by the reward solidity checks, not here.
@@ -469,7 +541,9 @@ public class MempoolService {
                 feePaid = true;
             }
         }
-        if (!feePaid && valueIn.containsKey(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
+        if (requireFee && !feePaid && valueIn.containsKey(NetworkParameters.BIGTANGLE_TOKENID_STRING)) {
+            log.debug("NoFeeException reject: tx={} inputs={} valueIn={} valueOut={}",
+                    tx.getHash(), inputs == null ? 0 : inputs.size(), valueIn, valueOut);
             throw new VerificationException.NoFeeException(net.bigtangle.core.Coin.FEE_DEFAULT.toString());
         }
 

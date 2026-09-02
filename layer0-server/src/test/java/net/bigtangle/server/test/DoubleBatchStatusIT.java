@@ -3,6 +3,8 @@ package net.bigtangle.server.test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -20,6 +22,7 @@ import net.bigtangle.core.Block;
 import net.bigtangle.core.PQKey;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.core.Transaction;
+import net.bigtangle.exception.VerificationException;
 import net.bigtangle.params.NetworkParameters;
 import net.bigtangle.server.core.BlockWrap;
 import net.bigtangle.server.data.TransactionStatus;
@@ -175,5 +178,49 @@ public class DoubleBatchStatusIT extends AbstractIntegrationTest {
 		assertEquals(blockB, reconciled.getBlockHash(),
 				"reconciled status must point at the confirmed twin block");
 		log.info("tx {} status reconciled to {} @ {}", txHash, reconciled.getStatus(), reconciled.getBlockHash());
+	}
+
+	/**
+	 * Recovery fix: a transaction whose block was orphaned must be able to
+	 * re-enter the mempool even when it is a whole-UTXO lock the chain accepts
+	 * but the strict mempool fee policy would reject (e.g. a vault peg-in that
+	 * pays out exactly its input value). The normal submit path correctly
+	 * rejects the no-fee tx; reSubmit (used by reorg recovery) re-admits it.
+	 */
+	@Test
+	public void testReMempoolRecoversNoFeeTransaction() throws Exception {
+		List<FreeStandingTransactionOutput> candidates = wallet.calculateAllSpendCandidates(null, false);
+		FreeStandingTransactionOutput coin = null;
+		for (FreeStandingTransactionOutput c : candidates) {
+			if (Arrays.equals(NetworkParameters.BIGTANGLE_TOKENID, c.getUTXO().getTokenidBuf())) {
+				coin = c;
+				break;
+			}
+		}
+		assertNotNull(coin, "genesis wallet must hold a spendable bc UTXO");
+
+		// A whole-UTXO lock: 1 input, 1 output for the FULL value, no change,
+		// no fee — valueIn == valueOut (what a vault peg-in looks like).
+		Transaction noFeeTx = new Transaction(networkParameters);
+		noFeeTx.addInput(coin.getUTXO().getBlockHash(), coin);
+		PQKey recipient = PQKey.createNew();
+		noFeeTx.addOutput(coin.getUTXO().getValue(),
+				Address.fromHash160(networkParameters, recipient.getPubKeyHash()));
+		wallet.signTransaction(noFeeTx, null);
+
+		// The strict submit path must reject the no-fee tx...
+		assertThrows(VerificationException.NoFeeException.class,
+				() -> mempoolService.submitTransaction(noFeeTx),
+				"the mempool fee policy must reject a no-fee tx on submit");
+
+		// ...but recovery (tx already accepted by the chain) must re-admit it.
+		int before = mempoolService.size();
+		mempoolService.reSubmit(noFeeTx, store);
+		assertEquals(before + 1, mempoolService.size(),
+				"reSubmit must re-admit the orphaned no-fee tx into the mempool");
+		boolean pending = mempoolService.getPending().stream()
+				.anyMatch(t -> t.getHash().equals(noFeeTx.getHash()));
+		assertTrue(pending, "the recovered no-fee tx must be pending in the mempool");
+		log.info("no-fee tx {} recovered into the mempool", noFeeTx.getHash());
 	}
 }

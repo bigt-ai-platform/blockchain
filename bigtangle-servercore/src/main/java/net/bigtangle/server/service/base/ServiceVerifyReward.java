@@ -438,7 +438,11 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 				continue;
 			}
 			try {
-				mempoolService.submitTransaction(tx);
+				// reSubmit (not submitTransaction): this is recovery, not a
+				// client retry. The tx must bypass the seenTxIds dedup, its own
+				// outpoint guard must be released, and fee-relaxed verification
+				// lets whole-UTXO locks the chain already accepted re-enter.
+				mempoolService.reSubmit(tx, store);
 				TransactionStatusRecord.mark(store, tx, TransactionStatus.MEMPOOL, null, null, networkParameters);
 			} catch (Exception e) {
 				logger.debug("re-mempool failed for tx {}: {}", tx.getHash(), e.getMessage());
