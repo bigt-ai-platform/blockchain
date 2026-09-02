@@ -16,7 +16,7 @@ OWNER="${OWNER:-bigt-ai-platform}"
 PUSH=false
 VERSION="${TAG:-latest}"
 JAVA_VERSION="${JAVA_VERSION:-25}"
-MVN_VERSION="0.6.0"
+MVN_VERSION="0.6.1"
 
 # Modules to build (layer0 + L1 servers)
 declare -A MODULES

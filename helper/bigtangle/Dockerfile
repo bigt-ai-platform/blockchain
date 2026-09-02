@@ -1,4 +1,4 @@
-ARG BIGTANGLEVERSION=0.6.0
+ARG BIGTANGLEVERSION=0.6.1
 
 FROM eclipse-temurin:25-jre-jammy
 

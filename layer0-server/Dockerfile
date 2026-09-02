@@ -5,7 +5,7 @@ FROM eclipse-temurin:25-jre-jammy
 RUN groupadd -g 10001 bigtangle && useradd -u 10001 -g bigtangle -m -s /bin/bash bigtangle
 
 WORKDIR /app
-COPY --chown=bigtangle:bigtangle target/layer0-server-0.6.0-exec.jar app.jar
+COPY --chown=bigtangle:bigtangle target/layer0-server-0.6.1-exec.jar app.jar
 
 USER bigtangle
 
