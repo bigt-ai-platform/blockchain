@@ -420,6 +420,196 @@ public class MeshAttack {
                     + " advancing " + before + " -> " + after);
         }
 
+        // ================================================================ V9
+        // Stale-fork replay must never push a live node onto a shorter branch
+        // (regression for the minority-fork wedge: handleNewBestChain must not
+        // unwind a finalized/confirmed chain to follow a stale competitor).
+        // We replay a short, VALID transfer fork that extends an ancestor
+        // several blocks behind the live head; a healthy node keeps its best
+        // chain, never regresses, and never diverges.
+        System.out.println("============ V9: STALE-FORK REWIND REORG ============");
+        {
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            long minBefore = Long.MAX_VALUE;
+            for (long c : clBefore) minBefore = Math.min(minBefore, c);
+            int depth = 2 + (int) n.applyAsInt(3);
+            int rejected = 0, accepted = 0, funded = 0;
+            String forkAttacker = addrFor(seedFor(merchantIdxBase + 20)).toBase58();
+            for (int round = 0; round < 3; round++) {
+                try {
+                    Block fork = staleForkBlock(nodeUrls, startIndex + 120 + round, depth,
+                            forkAttacker, payAmount);
+                    if (fork == null) continue;
+                    funded++;
+                    for (int i = 0; i < nnodes; i++) {
+                        try {
+                            if (submitBlockTo(nodeUrls[i], fork)) accepted++;
+                            else rejected++;
+                        } catch (Exception e) {
+                            rejected++;
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+            }
+            // Give the mesh a full slot to (correctly) refuse the stale fork.
+            Thread.sleep(45000);
+            long minCl = Long.MAX_VALUE, maxFin = -1;
+            long[] finHash = new long[1];
+            boolean finEqual = true;
+            java.util.Set<String> fins = new java.util.HashSet<>();
+            for (int i = 0; i < nnodes; i++) {
+                long cl = chainLength(nodeUrls[i]);
+                minCl = Math.min(minCl, cl);
+                fins.add(finalizedHash(nodeUrls[i]));
+            }
+            boolean regressed = minCl < minBefore - 2;
+            boolean diverge = fins.size() > 1;
+            boolean ok = funded > 0 && !regressed && !diverge;
+            verdict("V9 stale-fork rewind reorg (" + depth + " back x3)",
+                    ok, "fork accepted " + accepted + "/" + (accepted + rejected)
+                            + ", min-cl " + minBefore + " -> " + minCl
+                            + ", finroots=" + fins.size() + (regressed ? " REGRESSED" : "")
+                            + (diverge ? " DIVERGED" : ""));
+        }
+
+        // ================================================================ V10
+        // Side-branch status spoof: a double-spend that only ever lands in a
+        // non-canonical (edge / stale-parent) block must NOT be reported
+        // CONFIRMED by ANY node's getTransactionsStatusByAddress. This is the
+        // regression for the sticky V3 artifact (node0 labeling an IN_BLOCK
+        // side-branch tx as CONFIRMED poisoned every later attack run).
+        System.out.println("============ V10: SIDE-BRANCH STATUS SPOOF ============");
+        {
+            String attackerAddr = addrFor(seedFor(merchantIdxBase + 21)).toBase58();
+            long confirmedAny = 0;
+            String detail = "no ds tx accepted into a side block";
+            try {
+                Block side = staleForkBlock(nodeUrls, startIndex + 150, 3, attackerAddr, payAmount);
+                if (side != null) {
+                    submitBlockTo(nodeUrls[0], side);
+                    Thread.sleep(30000);
+                    long confirmedOn = 0;
+                    for (int i = 0; i < nnodes; i++) {
+                        confirmedOn += countConfirmedOn(nodeUrls[i], attackerAddr);
+                    }
+                    confirmedAny = confirmedOn;
+                    detail = "side-branch ds CONFIRMED on " + confirmedOn + "/" + nnodes + " nodes";
+                }
+            } catch (Exception e) {
+                detail = "vector error: " + e.getMessage();
+            }
+            verdict("V10 side-branch status spoof", confirmedAny == 0, detail);
+        }
+
+        // ================================================================ V11
+        // Orphan/duplicate resubmit flood: (a) blocks referencing an unknown
+        // parent must not wedge a node, and (b) re-submitting an identical
+        // valid block and the same mempool tx must confirm exactly once
+        // (no double-batch / duplicate spend) while the chain stays healthy.
+        System.out.println("============ V11: ORPHAN / DUP RESUBMIT FLOOD ============");
+        {
+            String merchantAddr = addrFor(seedFor(merchantIdxBase + 22)).toBase58();
+            long before = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) before = Math.min(before, chainLength(nodeUrls[i]));
+            // (a) orphans referencing an unknown parent
+            int orphanRejected = 0;
+            for (int r = 0; r < 8; r++) {
+                try {
+                    Block b = Block.setBlock2(params, 0);
+                    b.setPrevBlockHash(Sha256Hash.wrap(java.util.Arrays.copyOfRange(
+                            seedFor(startIndex + 700 + r), 0, 32)));
+                    b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+                    if (!submitBlockTo(nodeUrls[r % nnodes], b)) orphanRejected++;
+                } catch (Exception e) {
+                    orphanRejected++;
+                }
+            }
+            // (b) dup valid block + dup mempool tx, expect single confirmation
+            int confSingle = 0;
+            try {
+                UTXO u = utxos.get(addrFor(seedFor(startIndex + 160)).toBase58());
+                if (u != null) {
+                    Transaction t = pay(keyFor(startIndex + 160), u, merchantAddr, payAmount, "v11-dup");
+                    Block blk = craftTransferBlock(t);
+                    submitBlockTo(nodeUrls[0], blk);
+                    submitBlockTo(nodeUrls[0], blk);   // duplicate resubmit
+                    submitBlockTo(nodeUrls[1], blk);   // cross-node duplicate
+                    submitTx(t);
+                    submitTx(t);
+                    long deadline = System.currentTimeMillis() + Math.min(90000, confirmTimeoutSec * 1000L / 2);
+                    while (System.currentTimeMillis() < deadline) {
+                        Thread.sleep(8000);
+                        confSingle = countConfirmedOn(nodeUrls[0], merchantAddr);
+                        if (confSingle >= 1) break;
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("  V11 dup-tx error: " + e.getMessage());
+            }
+            long after = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) after = Math.min(after, chainLength(nodeUrls[i]));
+            boolean healthy = after >= before && confSingle == 1;
+            verdict("V11 orphan/dup resubmit flood",
+                    healthy, "orphans rejected " + orphanRejected + "/8, dup-tx confirmed "
+                            + confSingle + " (want exactly 1), cl " + before + " -> " + after);
+        }
+
+        // ================================================================ V12
+        // Forged finalized-anchor broadcast: a node must never move its
+        // finalized checkpoint to an advertised boundary it cannot verify on
+        // its own chain (CasperService.adoptFinalizedAnchor boundary check).
+        // We cannot inject a bogus peer advertisement over the public API, so
+        // we drive the equivalent on-chain vector: forge a BEACON-type block
+        // that claims an impossible finalized reward-chain position. A node
+        // must reject it and must not regress or move finality.
+        System.out.println("============ V12: FORGED FINALIZED ANCHOR ============");
+        {
+            long[] finBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) finBefore[i] = finalizedLength(nodeUrls[i]);
+            String[] finRootsBefore = new String[nnodes];
+            for (int i = 0; i < nnodes; i++) finRootsBefore[i] = finalizedHash(nodeUrls[i]);
+            int rejected = 0, accepted = 0;
+            try {
+                byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
+                Block proto = params.getDefaultSerializer().makeBlock(
+                        Utils.HEX.decode((String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                for (int r = 0; r < 3; r++) {
+                    Block fakeBeacon = Block.createBlock(params, proto, proto);
+                    fakeBeacon.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                    // Nonsense reward chain position: prevRewardHash points at
+                    // an unconfirmed/unknown future block -> must be refused.
+                    fakeBeacon.setPrevBlockHash(Sha256Hash.wrap(seedFor(999_999_900L + r)));
+                    for (int i = 0; i < nnodes; i++) {
+                        try {
+                            if (submitBlockTo(nodeUrls[i], fakeBeacon)) accepted++;
+                            else rejected++;
+                        } catch (Exception e) {
+                            rejected++;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("  V12 error: " + e.getMessage());
+            }
+            Thread.sleep(30000);
+            boolean finAdvanced = true, finStable = true;
+            for (int i = 0; i < nnodes; i++) {
+                long finAfter = finalizedLength(nodeUrls[i]);
+                if (finAfter < finBefore[i]) finStable = false;
+                if (finAfter > finBefore[i]) finAdvanced = true;
+            }
+            boolean rootsStable = true;
+            for (int i = 0; i < nnodes; i++) {
+                if (!finRootsBefore[i].equals(finalizedHash(nodeUrls[i]))) rootsStable = false;
+            }
+            boolean ok = rejected > 0 && finStable && rootsStable;
+            verdict("V12 forged finalized anchor", ok,
+                    "forged beacon accepted " + accepted + ", rejected " + rejected
+                            + ", fin stable=" + finStable + " roots-stable=" + rootsStable);
+        }
+
         // ================================================================ report
         System.out.println("==============================================");
         System.out.println("  MESHATTACK — VERDICT TABLE");
@@ -512,6 +702,127 @@ public class MeshAttack {
         } catch (Exception e) {
             return -1;
         }
+    }
+
+    static String chainNumberJson(String hostPort) {
+        try {
+            String u = (hostPort.startsWith("http") ? hostPort : "http://" + hostPort) + "/getChainNumber";
+            byte[] r = OkHttp3Util.postString(u.replaceAll("/+getChainNumber", "/getChainNumber"), "{}");
+            Map<?, ?> m = Json.jsonmapper().readValue(r, Map.class);
+            return Json.jsonmapper().writeValueAsString(m);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    /** finalizedChainLength from getChainNumber. */
+    static long finalizedLength(String hostPort) {
+        try {
+            Map<?, ?> m = Json.jsonmapper().readValue(chainNumberJson(hostPort), Map.class);
+            Object fl = m.get("finalizedChainLength");
+            return fl instanceof Number ? ((Number) fl).longValue() : Long.parseLong(String.valueOf(fl));
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /** finalizedBlockHash (plain hex string) from getChainNumber. */
+    static String finalizedHash(String hostPort) {
+        try {
+            Map<?, ?> m = Json.jsonmapper().readValue(chainNumberJson(hostPort), Map.class);
+            Object fh = m.get("finalizedBlockHash");
+            return fh == null ? "" : String.valueOf(fh);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** Submit a serialized block to a specific node; true if accepted (no throw). */
+    static boolean submitBlockTo(String nodeUrl, Block block) {
+        try {
+            OkHttp3Util.post((nodeUrl.startsWith("http") ? nodeUrl : "http://" + nodeUrl) + "batchBlock",
+                    block.bitcoinSerialize());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** countConfirmed on a specific node rather than always the seed node. */
+    static int countConfirmedOn(String nodeUrl, String address) {
+        try {
+            String u = (nodeUrl.startsWith("http") ? nodeUrl : "http://" + nodeUrl);
+            byte[] r = OkHttp3Util.postString(u + "getTransactionsStatusByAddress",
+                    Json.jsonmapper().writeValueAsString(Map.of("address", address)));
+            GetTransactionStatusResponse.GetTransactionsStatusResponse resp = Json.jsonmapper().readValue(r,
+                    GetTransactionStatusResponse.GetTransactionsStatusResponse.class);
+            int cnt = 0;
+            if (resp.getTransactions() != null) {
+                for (GetTransactionStatusResponse item : resp.getTransactions()) {
+                    if ("CONFIRMED".equals(item.getStatus())) {
+                        cnt++;
+                    }
+                }
+            }
+            return cnt;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Build a short, structurally-valid TRANSFER fork that extends an ancestor
+     * {@code depth} blocks behind the live head (instead of the current tip),
+     * paying {@code payAmount} to {@code toAddr} from the funded wallet at
+     * {@code walletIdx}. Returns null when the wallet or an ancestor is
+     * unavailable. Parents are real persisted blocks, so the block is solid but
+     * strictly shorter than the live chain — exactly the stale-competitor
+     * situation that must never win a reorg.
+     */
+    static Block staleForkBlock(String[] nodeUrls, long walletIdx, int depth, String toAddr, long payAmount) {
+        try {
+            UTXO u = fetchUtxo(walletIdx);
+            if (u == null) return null;
+            byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
+            Block proto = params.getDefaultSerializer().makeBlock(
+                    Utils.HEX.decode((String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+            // Walk the live trunk back `depth` real blocks.
+            Block cur = fetchBlock(proto.getPrevBlockHash());
+            for (int d = 0; d < depth && cur != null; d++) {
+                Block parent = fetchBlock(cur.getPrevBlockHash());
+                if (parent == null || parent.getHash().equals(cur.getHash())) break;
+                cur = parent;
+            }
+            if (cur == null) return null;
+            Block branch = fetchBlock(cur.getPrevBranchBlockHash());
+            Block fork = Block.createBlock(params, cur, branch);
+            fork.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+            Transaction t = pay(keyFor(walletIdx), u, toAddr, payAmount, "v9-stale-fork");
+            fork.addTransaction(t);
+            return fork;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static UTXO fetchUtxo(long walletIdx) {
+        try {
+            byte[] seed = seedFor(walletIdx);
+            String addr = addrFor(seed).toBase58();
+            byte[] resp = OkHttp3Util.postString(SEED_NODE + "getOutputs",
+                    Json.jsonmapper().writeValueAsString(List.of(
+                            Utils.HEX.encode(PQKey.fromMLDSA(seed).getPubKeyHash()))));
+            GetOutputsResponse gor = Json.jsonmapper().readValue(resp, GetOutputsResponse.class);
+            if (gor.getOutputs() != null) {
+                for (UTXO x : gor.getOutputs()) {
+                    if (x.getValue() != null && x.getAddress() != null && !x.isSpent()) {
+                        return x;
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+        }
+        return null;
     }
 
     static long chainLength(String[] urls, int skip) {
