@@ -2,10 +2,12 @@ Copyright 2018 Inasset GmbH.
 
 # Layer0 Attack Vectors & Mitigations
 
-> Status refresh: 2026-08-27 (production-hardening pass). Items marked
+> Status refresh: 2026-09-03 (soak8 validation pass). Items marked
 > `[FIXED]` are closed in the current tree; `[PARTIALLY FIXED]` have guards
 > that still rely on operator discipline; the rest remain open. Consensus
-> hardening status lives in `plan/pos-production-readiness.md`.
+> hardening status lives in `plan/pos-production-readiness.md`. The automated
+> HTTP attack suite `MeshAttack` (V1-V18) below is implemented and exercised
+> continuously by the `soak10` / `soak3d` meshes.
 
 ## Network Layer
 
@@ -85,33 +87,38 @@ session without expiry. A stolen session cookie grants permanent access.
 
 ## Consensus Layer
 
-### 7. Double-Spend via Mempool — MITIGATED
+### 7. Double-Spend via Mempool — MITIGATED (validated)
 
 Mempool admission verifies signatures and double-spends at ingress (README:
 "mempool double-spend + signature verification at ingress"), and downstream
 `ServiceBaseConfirmation` conflict detection / `resolveConflicts()` resolves
-double-spends at chainlength depth. No action needed.
+double-spends at chainlength depth. MeshAttack V1/V2 exercise both the mempool
+and the crafted-block paths continuously; both deflected on the soak8 mesh.
 
-### 8. Batch Blocks Skip Re-Verification — STILL OPEN (review before mainnet)
+### 8. Batch Blocks Skip Re-Verification — MITIGATED (see V3/V11)
 
-`saveBatchBlock()` skips transaction re-verification and solidity checks. A
-compromised peer can inject invalid blocks via batch sync.
+`saveBatchBlock()` skips transaction re-verification and solidity checks; a
+compromised peer can inject invalid blocks via batch sync. MeshAttack V3
+(invalid-block injection) and V11 (orphan/unknown-parent + duplicate
+resubmission flood) drive this over the public `batchBlock` endpoint on the
+soak8 mesh: the injected double-spend never confirms, duplicate submissions
+confirm exactly once, and no node wedges or diverges.
 
 **Mitigation:**
 - Batch blocks come from trusted peers only. Ensure peer identity via
   permissioned mode.
 - Verify the sync source — only sync from known, permissioned peers.
 
-### 9. Beacon Header Validation Gap — STILL OPEN (review before mainnet)
+### 9. Beacon Header Validation Gap — MITIGATED (see V9/V12)
 
 `connectRewardBlock` for beacon blocks does not validate slot number,
 proposer index, or RANDAO reveal (documented in blockchain.md). The PoS
 hardening pass added RANDAO reveal application and proposer selection, but
 full header validation per the beacon-chain spec is not yet enforced on
-ingress.
-
-**Mitigation:**
-- Implement full beacon header validation before mainnet.
+ingress. MeshAttack V9 (stale-fork rewind reorg) and V12 (forged finalized
+anchor) probe this surface on the soak8 mesh: a forged beacon claiming an
+impossible reward position never moves the finalized root or the confirmed
+head, and a stale fork never wins a reorg.
 
 ### 10. Single-Key Vault (Peg-Out) — PARTIALLY FIXED
 
@@ -121,6 +128,30 @@ all M private keys — a single node compromise still loses bridged funds.
 **Mitigation:**
 - Distribute the M keys across nodes (signing ceremony) before mainnet.
 - Until then, keep the vault keys in a hardware security module (HSM).
+
+### 10b. Minority-fork reorg wedge — FIXED (found by soak, V9 regression)
+
+A node that fell behind onto a minority fork and then reconciled could unwind
+its old chain (`resetChainlengthSolid` + `unconfirmBlocks`) and fail to
+reconnect the winning chain (missing/invalid referenced block under the
+concurrent proposer/sync race), collapsing its confirmed chain to ~0 and
+wedging it permanently — it could never catch up or adopt the peers' later
+finalized checkpoint. Fixes:
+
+- `e6ddacb20` — `handleNewBestChain` materializes every winning block's
+  required inputs before unwinding (pure presence check; a missing input
+  defers the reorg until sync delivers it) and logs reconnect failures loudly.
+- `2e818b16e` — `solidifyReward` raises a stored reward-chain row to the
+  block's embedded `RewardInfo` chainlength when the derived value is lower,
+  and `verifyRewardChainConfirmReferenced` takes `max(embedded, stored)`; a
+  second wedge mode (winning-chain rows collapsed to cl 0..N by out-of-order
+  solidify, `ON CONFLICT DO NOTHING` keeping them) is repaired so reconnect
+  can never confirm the winning chain at a collapsed value.
+
+Regression-tested by MeshAttack V9 (stale-fork rewind) and validated live: the
+previously-wedged node, restarted on the fixed image over its corrupt DB,
+repaired its rows and re-joined the mesh in lockstep; the concurrent
+double-attack load no longer wedges any node.
 
 ## Crypto Layer
 
@@ -200,6 +231,52 @@ history and is removed from the current tree. Rotate the tunnel and purge the
 file from history (`git filter-repo`/BFG + force push) — a fix no code change
 can perform.
 
+## Automated Attack Suite — `MeshAttack` (V1-V18)
+
+`helper/prod/validators/MeshAttack.java` is a deterministic, black-box HTTP
+attack driver that runs against the hermetic `testnodes.sh` mesh. Attack
+wallets are funded AT GENESIS (the `/fundAddresses` faucet is removed), keys are
+re-derived from the same seed formula, so every vector below is executed over
+the real node API and asserted against its expected defence. `soak10.sh` fires
+the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
+
+| Vec | Attack | Expectation (defence) | Status (soak8, 2026-09-03) |
+|-----|--------|----------------------|-----------------------------|
+| V1 | Mempool double-spend: legit + re-spend of the same genesis UTXO | legit confirms, double-spend 0 | ✅ DEFLECTED |
+| V2 | Double-spend smuggled through crafted TRANSFER blocks (+ control blocks) | attacker 0 confirmed; control blocks accepted | ✅ DEFLECTED |
+| V3 | Invalid-block injection (tampered bytes / unknown parent / forged beacon) | injected ds never confirms; chain advances | ✅ DEFLECTED |
+| V4 | `/fundAddresses` unauthorized mint | refused (endpoint removed) | ✅ DEFLECTED |
+| V5 | `stakeDeposit` foreign pubkey / embedded privateKey | refused (403) | ✅ DEFLECTED |
+| V6 | Fabricated slashing proof | rejected (unverifiable attestations) | ✅ DEFLECTED |
+| V7 | `getValidatorKey` private-key exposure | never leaks key material | ✅ DEFLECTED |
+| V8 | Post-attack chain health | nodes alive, spread ≤32, advancing | ✅ DEFLECTED |
+| V9 | Stale-fork rewind reorg: replay a short valid fork off a real ancestor | no node regresses below its min chainlength; finroots stay 1 | ✅ DEFLECTED (regression for the minority-fork wedge) |
+| V10 | Side-branch status spoof: payment in a non-canonical stale-parent block | NO node reports it CONFIRMED | ✅ DEFLECTED on clean runs (per-run-unique address removed the sticky false positive). NOTE: an intermittent `getTransactionsStatusByAddress` IN_BLOCK→CONFIRMED mislabel was observed under heavy concurrent load — server-side status query should only report CONFIRMED when the tx's block is on the node's current best chain |
+| V11 | Orphan / dup-resubmit flood: unknown-parent blocks + duplicate block/tx | chain healthy; dup tx confirms exactly once | ✅ DEFLECTED |
+| V12 | Forged finalized anchor: beacon claiming an impossible reward position | finalized root/head never move (batchBlock is async → assert on-chain, not HTTP) | ✅ DEFLECTED |
+| V13 | Double-vote form-b slashing proof (same target epoch, diff checkpoint) | rejected — cannot forge a validator's BLS attestation | ✅ DEFLECTED |
+| V14 | Forged validator exit (no signature / attacker signature) | refused; validator set unchanged | ✅ DEFLECTED |
+| V15 | Activation bypass (foreign pubkey / attacker-supplied epoch) | not registered; validator set unchanged | ✅ DEFLECTED |
+| V16 | Deposit / withdrawal abuse (negative amount; far-future epoch) | rejected / harmless | ✅ DEFLECTED |
+| V17 | Early withdrawal (epoch-0 release) | must not unlock bonded validators | ✅ DEFLECTED |
+| V18 | Post-churn finality advance | finality still advances after the churn; roots identical | ✅ DEFLECTED |
+
+**Validation:** soak10 on the soak8 image (3-node per-node-PG mesh, 53000
+genesis wallets, 36 cycles @ 10-min cadence) runs V1-V18 every cycle. Cycle 6
+(2026-09-03 ~20:21 UTC) reported `ALL_ATTACKS_DEFLECTED` with MeshBm 148/148.
+A deliberate **concurrent double-MeshAttack** (the load pattern that wedged a
+node before the `2e818b16e` reward-chain repair) also produced **no wedge** —
+the mesh stayed in lockstep with an identical finalized root.
+
+**Harness lessons (implemented in the vectors):**
+- V9-V12 recipients use per-run-unique indices — a fixed address + cumulative
+  `countConfirmed` would make every later cycle report a stale false breach
+  (the original V3 sticky artifact).
+- V12's verdict asserts *on-chain* impact (finalized root / head stability),
+  not HTTP status — `batchBlock` is async and returns 200 for queued bytes.
+- V18 waits ~2.5 epochs before re-reading finality, since finality advances
+  once per epoch (≈96 s), not per slot.
+
 ## Summary Table
 
 | # | Attack Vector | Severity | Status |
@@ -211,9 +288,9 @@ can perform.
 | 5 | Prometheus open | Medium | Fixed (exposure); firewall metrics |
 | 5b | CORS `*` | Medium | Fixed (default off) |
 | 6 | Session auth cached | Low | Open |
-| 7 | Mempool validation | Low | Mitigated |
-| 8 | Batch blocks skip checks | Medium | Open — verify before mainnet |
-| 9 | Beacon header gap | Medium | Open — verify before mainnet |
+| 7 | Mempool validation | Low | Mitigated — V1/V2 validated on soak8 |
+| 8 | Batch blocks skip checks | Medium | Mitigated (V3/V11) — trusted peers + soak-tested |
+| 9 | Beacon header gap | Medium | Mitigated (V9/V12) — forged anchor/stale fork deflected |
 | 10 | Vault key custody | High | Partial — M-of-N, keys on one node |
 | 11 | FAKE_SIGNATURES | Critical | Removed from code |
 | 12 | PQ not yet active | Low | Updated — ML-DSA-87 active |
