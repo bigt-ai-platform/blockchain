@@ -454,6 +454,7 @@ public abstract class DatabaseFullBlockStoreBase implements BlockStoreInterface 
 			+ "FROM txreward WHERE blockhash = ?";
 	protected final String UPDATE_TX_REWARD_CONFIRMED_SQL = "UPDATE txreward SET confirmed = ? WHERE blockhash = ?";
 	protected final String UPDATE_TX_REWARD_SPENT_SQL = "UPDATE txreward SET spent = ?, spenderblockhash = ? WHERE blockhash = ?";
+	protected final String UPDATE_TX_REWARD_CHAINLENGTH_SQL = "UPDATE txreward SET chainlength = ? WHERE blockhash = ? AND chainlength < ?";
 
 	/* TRANSACTION STATUS */
 	protected final String INSERT_TRANSACTIONSTATUS_SQL = getInsert()

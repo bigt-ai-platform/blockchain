@@ -68,6 +68,8 @@ import net.bigtangle.server.service.base.handler.BlockTypeHandlerRegistry;
 import net.bigtangle.store.BlockStoreInterface;
 
 public abstract class ServiceBase {
+
+	private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ServiceBase.class);
 	protected ServerConfiguration serverConfiguration;
 	protected NetworkParameters networkParameters;
 	protected CacheBlockService cacheBlockService;
@@ -541,6 +543,37 @@ public abstract class ServiceBase {
 		RewardInfo rewardInfo = new RewardInfo().parseChecked(block.getTransactions().get(0).getData());
 		Sha256Hash prevRewardHash = rewardInfo.getPrevRewardHash();
 		long currChainLength = blockStore.getRewardChainLength(prevRewardHash) + 1;
+
+		// RAISE-TO-EMBEDDED REPAIR. The stored reward-chainlength for this
+		// beacon is derived from its prevRewardHash's row (+1). Under a
+		// concurrent adversarial race a beacon can be solidified out of order,
+		// before its prevRewardHash row exists: getRewardChainLength(prev)
+		// returns -1 and this beacon is stamped chainlength 0 (then 1, 2, ...
+		// down the winning chain). Because txreward inserts are ON CONFLICT DO
+		// NOTHING, the later correct solidify is silently dropped and the
+		// winning chain stays collapsed at cl 0..N forever — the observed
+		// second wedge: handleNewBestChain reconnect reads the corrupt low rows
+		// and can never exceed the frozen head. The block's OWN RewardInfo
+		// (verified proposer signature + solidity) authoritatively claims the
+		// true chainlength, so raise the stored row to it when it is higher.
+		long embeddedChainLength = rewardInfo.getChainlength();
+		if (embeddedChainLength > currChainLength) {
+			try {
+				long stored = blockStore.getRewardChainLength(block.getHash());
+				if (stored < embeddedChainLength) {
+					if (stored < 0) {
+						blockStore.insertReward(block.getHash(), prevRewardHash, embeddedChainLength);
+					} else {
+						blockStore.updateRewardChainlength(block.getHash(), embeddedChainLength);
+					}
+					logger.info("solidifyReward: repaired collapsed reward row for {}: stored cl={} -> embedded cl={}",
+							block.getHash(), stored, embeddedChainLength);
+				}
+			} catch (Exception e) {
+				logger.debug("solidifyReward raise-to-embedded skipped for {}: {}", block.getHash(), e.getMessage());
+			}
+			return;
+		}
 
 		blockStore.insertReward(block.getHash(), prevRewardHash, currChainLength);
 

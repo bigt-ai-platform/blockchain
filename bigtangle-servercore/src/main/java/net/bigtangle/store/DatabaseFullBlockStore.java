@@ -527,6 +527,21 @@ public abstract class DatabaseFullBlockStore extends DatabaseFullBlockStoreBase 
 	}
 
 	@Override
+	public void updateRewardChainlength(Sha256Hash hash, long minChainlength) throws BlockStoreException {
+
+		try (PreparedStatement preparedStatement = getConnection()
+				.prepareStatement(UPDATE_TX_REWARD_CHAINLENGTH_SQL)) {
+			preparedStatement.setLong(1, minChainlength);
+			preparedStatement.setBytes(2, hash.getBytes());
+			preparedStatement.setLong(3, minChainlength);
+			preparedStatement.executeUpdate();
+		} catch (SQLException e) {
+			throw new BlockStoreException(e);
+		}
+
+	}
+
+	@Override
 	public void upsertTransactionStatus(net.bigtangle.server.data.TransactionStatusRecord record)
 			throws BlockStoreException {
 		if (record == null || record.getTxHash() == null) {

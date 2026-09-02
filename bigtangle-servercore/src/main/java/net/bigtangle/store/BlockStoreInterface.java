@@ -292,6 +292,19 @@ public interface BlockStoreInterface {
 
 	void updateRewardSpent(Sha256Hash hash, boolean b, Sha256Hash spenderHash) throws BlockStoreException;
 
+	/**
+	 * Raise the stored reward-chainlength for {@code hash} to at least
+	 * {@code minChainlength}, when the current stored value is lower. Used to
+	 * repair a collapsed txreward row during a winning-chain reconnect: a
+	 * corrupt low chainlength (written when a beacon was solidified out of
+	 * order under load, and never overwritten because txreward inserts are
+	 * {@code ON CONFLICT DO NOTHING}) otherwise wedges the node — reconnect
+	 * reads the low row back and can never exceed the frozen head. A
+	 * raise-only update is safe: it only ever moves a row toward the value the
+	 * block itself authoritatively claims, never backwards.
+	 */
+	void updateRewardChainlength(Sha256Hash hash, long minChainlength) throws BlockStoreException;
+
 	Sha256Hash getRewardSpender(Sha256Hash hash) throws BlockStoreException;
 
 	/* Transaction status tracking */

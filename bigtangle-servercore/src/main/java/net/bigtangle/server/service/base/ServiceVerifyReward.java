@@ -126,7 +126,16 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 					" .checkSolidity is failed: " + solidityState + "\n with block = " + newChainlengthBlock);
 		}
 
-		long chainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
+		// The reward chainlength for this beacon is authoritative from its own
+		// embedded RewardInfo (verified proposer signature + solidity). Reading
+		// the stored txreward row alone is dangerous: a row corrupted low by an
+		// earlier out-of-order solidify (see solidifyReward raise-to-embedded
+		// repair) makes the reconnect confirm the WHOLE winning chain at the
+		// collapsed value, so the head can never advance — the live-lock wedge.
+		// Take the max of the embedded claim and any stored row, never a lower
+		// stored value that would drag the adopted chain backwards.
+		long storedChainlength = store.getRewardChainLength(newChainlengthBlock.getHash());
+		long chainlength = Math.max(currRewardInfo.getChainlength(), storedChainlength);
 
 		// Reuse the proposal's conflict resolutions when the confirmed head is
 		// unchanged (same token) so the batched prefetch does not re-read the
