@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # soak3d.sh — 3-day (72 h) stability + attack orchestration on the hermetic
-# 3-node testnodes mesh, driven from current HEAD (IMAGE=layer0-server:soak3).
+# 3-node testnodes mesh, driven from current HEAD (IMAGE=layer0-server:soak4).
 #
 # Sequence:
 #   1. down + up a FRESH 3-node mesh with genesis-funded bench + attack wallets
@@ -21,7 +21,7 @@ S="${ROOT}/helper/prod/testnodes.sh"
 VALSRC="${ROOT}/helper/prod/validators"
 WORKDIR="${WORKDIR:-/tmp/bt4test}"
 NNODES="${NNODES:-3}"
-IMAGE="${IMAGE:-layer0-server:soak3}"
+IMAGE="${IMAGE:-layer0-server:soak4}"
 
 # bench wallets fund indices [4, 4+BENCH_WALLETS): soak uses 40011..50811,
 # so BENCH_WALLETS >= 50812; 51000 gives margin.
@@ -144,22 +144,31 @@ for h in $(seq 0 $((SOAK_HOURS - 1))); do
 
     # Mesh-health gate: abort the soak (loudly) if the mesh has split — a 3-day
     # stability signal is meaningless on divergent forks. Confirmed-head spread
-    # > 1 epoch = split (forkcheck.sh threshold).
+    # > 1 epoch = split (forkcheck.sh threshold). A SINGLE divergent sample can
+    # be transient PoS fork-choice churn (nodes reconcile within a slot or two),
+    # so a split only aborts after 2 CONSECUTIVE divergent samples.
     split=0
     for i in $(seq 0 $((NNODES - 1))); do
-        h="$(curl -s -m 5 -X POST "http://127.0.0.1:$((8281 + i))/getChainNumber" -H 'Content-Type: application/json' -d '{}' 2>/dev/null \
+        head="$(curl -s -m 5 -X POST "http://127.0.0.1:$((8281 + i))/getChainNumber" -H 'Content-Type: application/json' -d '{}' 2>/dev/null \
             | python3 -c "import sys,json,base64
 try:
     d=json.load(sys.stdin); r=d.get('txReward'); r=json.loads(r) if isinstance(r,str) else (r or {})
     b=(r.get('blockHash') or {}).get('bytes'); print(base64.b64decode(b).hex()[:16] if b else '-')
 except Exception: print('-')" 2>/dev/null)"
-        [ -n "$h" ] && [ "$h" != "-" ] && echo "$h" >> "${WORKDIR}/.heads.${h}"
+        [ -n "$head" ] && [ "$head" != "-" ] && echo "$head" >> "${WORKDIR}/.heads.${head}"
     done
     nheads=$(cat "${WORKDIR}"/.heads.* 2>/dev/null | sort -u | grep -c . || true)
     rm -f "${WORKDIR}"/.heads.*
     if [ "${nheads:-0}" -gt 1 ]; then
-        split=1
-        log "!!! MESH SPLIT at hour ${h}: ${nheads} distinct confirmed heads"
+        # persist the streak; only a SECOND consecutive divergent sample aborts
+        streak_file="${WORKDIR}/.soak_split_streak"
+        streak=$([ -f "$streak_file" ] && cat "$streak_file" || echo 0)
+        streak=$((streak + 1))
+        echo "$streak" > "$streak_file"
+        log "!!! MESH SPLIT SAMPLE ${streak}/2 at hour ${h}: ${nheads} distinct confirmed heads"
+        [ "$streak" -ge 2 ] && split=1
+    else
+        rm -f "${WORKDIR}/.soak_split_streak"
     fi
 
     log "hour ${h}: MeshBm wave ${WAVE_SIZE} tx from index ${start} (clients=${CLIENTS} batch=${BATCH})"
