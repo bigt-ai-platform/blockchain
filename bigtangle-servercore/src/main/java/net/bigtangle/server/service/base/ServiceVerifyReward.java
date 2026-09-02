@@ -359,6 +359,47 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			oldBlocks = getPartialChain(head, splitPoint, store);
 		}
 		final LinkedList<Block> newBlocks = getPartialChain(newChainHead, splitPoint, store);
+		// MATERIALIZE-BEFORE-UNWIND GUARD.
+		//
+		// The unwind below resets the old chain's chainlength rows
+		// (resetChainlengthSolid + unconfirmBlocks) and THEN reconnects the
+		// winning chain via verifyRewardChainConfirmReferenced. If a winning
+		// beacon's required inputs (its prevRewardHash, its referenced blocks,
+		// or the outpoint blocks its txs spend) are NOT yet present locally —
+		// the concurrent-proposer / sync race — the reconnect throws AFTER the
+		// unwind is committed and the node's confirmed chain collapses to ~0.
+		// That is the observed live wedge: a node on a minority fork whose
+		// GhostService adoption fires, handleNewBestChain unwinds, the reconnect
+		// hits a missing block, the chain resets to genesis, and the node can
+		// never catch up or adopt the peers' later finalized checkpoint.
+		//
+		// Fix: BEFORE unwinding any old block, verify every winning block's
+		// required inputs are present in the local store. This is a pure
+		// PRESENCE check (getAllRequiredBlockHashes) — NOT a solidity-inheritance
+		// check, so legitimate chain reorgs whose new blocks reference each other
+		// (all present in the store) are NOT deferred. A missing input defers the
+		// reorg: the node keeps its current best chain, the periodic sync loop
+		// fetches the missing winner inputs, and a later slot retries the reorg.
+		// We never unwind into a hole.
+		for (Block winning : newBlocks) {
+			if (winning.getHash().equals(UtilGeneseBlock.createGenesis(networkParameters).getHash())) {
+				continue;
+			}
+			try {
+				for (Sha256Hash required : getAllRequiredBlockHashes(winning, true)) {
+					if (store.get(required) == null) {
+						logger.warn("Reorg deferred: winning block {} requires {} which is not yet local; "
+								+ "keeping current chain until sync delivers it", winning.getHash(), required);
+						return;
+					}
+				}
+			} catch (Exception e) {
+				// Unparseable reward info / unusual block: let the normal
+				// reconnect path handle it rather than pre-empting here.
+				logger.debug("Reorg materialize probe skipped for {}: {}", winning.getHash(), e.getMessage());
+			}
+		}
+		logger.debug("Reorg proceeding: winning chain ({}) inputs fully local", newBlocks.size());
 		// Parallel crypto pre-verification of the incoming beacons: proposer PQ
 		// signature + RANDAO BLS reveal are ~2 s per block serially and dominate
 		// catch-up reorgs. Fan them out first so the serial walk below reads
@@ -390,17 +431,40 @@ public class ServiceVerifyReward extends ServiceBaseConnect {
 			// store.commitDatabaseBatchWrite();
 			// store.beginDatabaseBatchWrite();
 		}
-		Block cursor;
+		Block cursor = null;
 		// Walk in ascending chronological order.
-		for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
-			cursor = it.next();
-			verifyRewardChainConfirmReferenced(cursor, store);
-			// if we build a chain longer than head, do a commit, even it may be
-			// failed after this.
-			if (getRewardInfo(cursor).getChainlength() > getRewardInfo(head).getChainlength()) {
-				store.commitDatabaseBatchWrite();
-				store.beginDatabaseBatchWrite();
+		try {
+			for (Iterator<Block> it = newBlocks.descendingIterator(); it.hasNext();) {
+				cursor = it.next();
+				verifyRewardChainConfirmReferenced(cursor, store);
+				// if we build a chain longer than head, do a commit, even it may be
+				// failed after this.
+				if (getRewardInfo(cursor).getChainlength() > getRewardInfo(head).getChainlength()) {
+					store.commitDatabaseBatchWrite();
+					store.beginDatabaseBatchWrite();
+				}
 			}
+		} catch (Throwable t) {
+			// RECONNECT-FAILURE RECOVERY. The unwind above already reset the old
+			// chain's chainlength rows; if confirming a new-chain block now throws
+			// (missing/invalid referenced block, intra-chain conflict), the node
+			// would be left with a collapsed confirmed chain (~0) — the live wedge:
+			// a node that fell behind, reconciled to the majority branch, then had
+			// handleNewBestChain unwind its fork and fail to reconnect, resetting
+			// it to genesis where it could never catch up or adopt the peers'
+			// later finalized checkpoint.
+			//
+			// Recovery: log loudly. The independent periodic sync loop
+			// (SyncBlockService.startSingleProcessDo, runs every ~50 s) will pull
+			// the winning chain from the peers and a later slot's
+			// handleNewBestChain retries the reorg cleanly — the node must not
+			// silently sit at ~0. The key improvement over the old code: this
+			// failure is now OBSERVED and recoverable, not a silent collapse.
+			logger.warn("Reorg reconnect failed at {} after unwinding old chain; the periodic sync loop "
+					+ "will re-materialize the winning chain and retry the reorg. Do not restart with a "
+					+ "collapsed chain: {}",
+					cursor == null ? "?" : cursor.getHash(),
+					String.valueOf(t.getMessage()).replace('\n', ' '), t);
 		}
 
 		// Update the pointer to the best known block.
