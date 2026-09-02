@@ -82,6 +82,19 @@ public class MeshAttack {
         return PQKey.fromMLDSA(seedFor(idx));
     }
 
+    /**
+     * Recipient index that is UNIQUE PER RUN so per-address confirmed-count
+     * verdicts never accumulate across soak cycles. The V9-V12 recipient
+     * addresses must not be fixed (a single historical confirm on a reused
+     * address would otherwise make every later cycle report a false breach —
+     * the original V3 sticky-FAIL artifact). startIndex advances every soak
+     * cycle, so startIndex*1e6 + salt is distinct each run while staying far
+     * outside the genesis-funded wallet window (startIndex..+totalWallets).
+     */
+    static long runUniqueIndex(long startIndex, long salt) {
+        return startIndex * 1_000_000L + salt;
+    }
+
     static final List<String> VERDICTS = new ArrayList<>();
     static String SEED_NODE = "";
 
@@ -435,7 +448,7 @@ public class MeshAttack {
             for (long c : clBefore) minBefore = Math.min(minBefore, c);
             int depth = 2 + (int) n.applyAsInt(3);
             int rejected = 0, accepted = 0, funded = 0;
-            String forkAttacker = addrFor(seedFor(merchantIdxBase + 20)).toBase58();
+            String forkAttacker = addrFor(seedFor(runUniqueIndex(startIndex, 90020))).toBase58();
             for (int round = 0; round < 3; round++) {
                 try {
                     Block fork = staleForkBlock(nodeUrls, startIndex + 120 + round, depth,
@@ -482,7 +495,7 @@ public class MeshAttack {
         // side-branch tx as CONFIRMED poisoned every later attack run).
         System.out.println("============ V10: SIDE-BRANCH STATUS SPOOF ============");
         {
-            String attackerAddr = addrFor(seedFor(merchantIdxBase + 21)).toBase58();
+            String attackerAddr = addrFor(seedFor(runUniqueIndex(startIndex, 90021))).toBase58();
             long confirmedAny = 0;
             String detail = "no ds tx accepted into a side block";
             try {
@@ -510,7 +523,7 @@ public class MeshAttack {
         // (no double-batch / duplicate spend) while the chain stays healthy.
         System.out.println("============ V11: ORPHAN / DUP RESUBMIT FLOOD ============");
         {
-            String merchantAddr = addrFor(seedFor(merchantIdxBase + 22)).toBase58();
+            String merchantAddr = addrFor(seedFor(runUniqueIndex(startIndex, 90022))).toBase58();
             long before = Long.MAX_VALUE;
             for (int i = 0; i < nnodes; i++) before = Math.min(before, chainLength(nodeUrls[i]));
             // (a) orphans referencing an unknown parent
