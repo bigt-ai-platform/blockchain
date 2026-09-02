@@ -846,13 +846,15 @@ public class MeshAttack {
             int fundedSets = 0;
             for (int s = 0; s < nSiblingSets; s++) {
                 long walletIdx = startIndex + 170 + s;
-                if (fetchUtxo(walletIdx) != null) spentWallets[fundedSets++] = walletIdx;
+                String addr = addrFor(seedFor(walletIdx)).toBase58();
+                UTXO g = utxos.get(addr);
+                if (g != null && !g.isSpent()) spentWallets[fundedSets++] = walletIdx;
             }
             // Each set: one funded UTXO -> three sibling blocks all spending it,
             // each paying a DISTINCT recipient (so a confirmed winner is
             // observable per address).
             for (int s = 0; s < fundedSets; s++) {
-                UTXO u = fetchUtxo(spentWallets[s]);
+                UTXO u = utxos.get(addrFor(seedFor(spentWallets[s])).toBase58());
                 if (u == null) continue;
                 String[] recips = new String[siblingsPerSet];
                 for (int k = 0; k < siblingsPerSet; k++) {
@@ -946,9 +948,10 @@ public class MeshAttack {
             for (int round = 0; round < 4; round++) {
                 try {
                     // A block on the live tip.
-                    UTXO u = fetchUtxo(startIndex + 190 + round);
-                    if (u != null) {
-                        Transaction t = pay(keyFor(startIndex + 190 + round), u, attacker, payAmount, "v21-tip");
+                    long w = startIndex + 190 + round;
+                    UTXO u = utxos.get(addrFor(seedFor(w)).toBase58());
+                    if (u != null && !u.isSpent()) {
+                        Transaction t = pay(keyFor(w), u, attacker, payAmount, "v21-tip");
                         submitBlockTo(nodeUrls[round % nnodes], craftTransferBlock(t));
                     }
                     // A stale fork off an ancestor 2 back (must never win).
@@ -1345,11 +1348,17 @@ public class MeshAttack {
                             Utils.HEX.encode(PQKey.fromMLDSA(seed).getPubKeyHash()))));
             GetOutputsResponse gor = Json.jsonmapper().readValue(resp, GetOutputsResponse.class);
             if (gor.getOutputs() != null) {
+                UTXO fallback = null;
                 for (UTXO x : gor.getOutputs()) {
                     if (x.getValue() != null && x.getAddress() != null && !x.isSpent()) {
-                        return x;
+                        // Prefer the full genesis funding output so pay() has
+                        // enough to cover amount + change + fee; a leftover
+                        // change output can be too small and make pay() throw.
+                        if (x.getValue().getValue().longValue() >= 25000L) return x;
+                        if (fallback == null) fallback = x;
                     }
                 }
+                if (fallback != null) return fallback;
             }
         } catch (Exception ignore) {
         }
