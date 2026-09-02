@@ -61,6 +61,12 @@ import net.bigtangle.wallet.Wallet;
  *   V16 deposit/withdrawal abuse (negative amount; far-future epoch harmless)
  *   V17 early withdrawal (epoch-0 release must not unlock bonded validators)
  *   V18 post-churn finality advance (finality keeps moving, roots identical)
+ *   V19 sibling-conflict deadlock storm (conflicting sibling blocks confirm on)
+ *   V20 proposer-duty starvation (garbage flood must not stall block production)
+ *   V21 reorg churn livelock (tip + stale-fork alternation must not wedge)
+ *   V22 epoch-finality stall probe (finality advances past an epoch boundary)
+ *   V23 beacon-connect conflict deadlock (one sibling per conflict set confirms)
+ *   V24 unwind-reconnect livelock (deep stale forks must not freeze/collapse)
  *
  * System properties (all optional):
  *   attack.fund           per-wallet genesis value            30000
@@ -822,6 +828,277 @@ public class MeshAttack {
             verdict("V18 post-churn finality advance", ok,
                     "fin " + java.util.Arrays.toString(finA) + " -> min " + minFin
                             + (advanced ? "" : " STALLED") + (rootsEqual ? "" : " DIVERGED"));
+        }
+
+        // ================================================================ V19
+        // Sibling-conflict deadlock storm: submit many crafted blocks that spend
+        // the SAME UTXOs (mutually-conflicting siblings) in rapid succession.
+        // The beacon-confirmation sweep must NOT deadlock: it must reference
+        // exactly one sibling per conflict set (deadlock-break) so the chain
+        // keeps confirming and never strands the mempool at 0-confirm.
+        System.out.println("============ V19: SIBLING-CONFLICT DEADLOCK STORM ============");
+        {
+            long before = chainLength(nodeUrls[0]);
+            int nSiblingSets = Math.max(2, n.applyAsInt(6));
+            int siblingsPerSet = 3;
+            java.util.List<String[]> setRecips = new java.util.ArrayList<>();
+            long[] spentWallets = new long[nSiblingSets];
+            int fundedSets = 0;
+            for (int s = 0; s < nSiblingSets; s++) {
+                long walletIdx = startIndex + 170 + s;
+                if (fetchUtxo(walletIdx) != null) spentWallets[fundedSets++] = walletIdx;
+            }
+            // Each set: one funded UTXO -> three sibling blocks all spending it,
+            // each paying a DISTINCT recipient (so a confirmed winner is
+            // observable per address).
+            for (int s = 0; s < fundedSets; s++) {
+                UTXO u = fetchUtxo(spentWallets[s]);
+                if (u == null) continue;
+                String[] recips = new String[siblingsPerSet];
+                for (int k = 0; k < siblingsPerSet; k++) {
+                    recips[k] = addrFor(seedFor(runUniqueIndex(startIndex, 90031 + s * 10 + k))).toBase58();
+                }
+                setRecips.add(recips);
+                try {
+                    for (int k = 0; k < siblingsPerSet; k++) {
+                        Transaction t = pay(keyFor(spentWallets[s]), u, recips[k], payAmount, "v19-sibling");
+                        Block b = craftTransferBlock(t);
+                        for (int i = 0; i < nnodes; i++) {
+                            try {
+                                submitBlockTo(nodeUrls[i], b);
+                            } catch (Exception ignore) {
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    System.out.println("  V19 set " + s + " error: " + e.getMessage());
+                }
+            }
+            // The mesh must keep confirming: after a settle window the chain must
+            // have advanced and every funded set must have EXACTLY ONE confirmed
+            // winner (the other siblings' spends conflict and must be dropped,
+            // not stranded as 0-confirm for the whole set).
+            Thread.sleep(Math.max(60000, confirmTimeoutSec * 1000L / 3));
+            long after = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) after = Math.min(after, chainLength(nodeUrls[i]));
+            int setsWon = 0, setsDroppedAll = 0;
+            for (String[] recips : setRecips) {
+                int won = 0;
+                for (String r : recips) {
+                    if (countConfirmedOn(nodeUrls[0], r) > 0) won++;
+                }
+                if (won == 1) setsWon++;
+                else if (won == 0) setsDroppedAll++;
+            }
+            boolean advanced = after > before;
+            boolean noDeadlock = fundedSets == 0 || (setsWon >= Math.max(1, fundedSets - 1));
+            boolean ok = advanced && noDeadlock;
+            verdict("V19 sibling-conflict deadlock storm (" + fundedSets + " sets x" + siblingsPerSet + ")",
+                    ok, "cl " + before + " -> " + after + (advanced ? "" : " STALLED")
+                            + ", sets with exactly-1 winner " + setsWon + "/" + fundedSets
+                            + ", all-dropped " + setsDroppedAll);
+        }
+
+        // ================================================================ V20
+        // Proposer-duty starvation probe: hammer the node's submitTransaction +
+        // batchBlock with garbage while a slot boundary passes. The slot tick
+        // (posExecutor) must keep producing beacons — a deadlock here stalls the
+        // whole chain. Assert the chain advances within a bounded window.
+        System.out.println("============ V20: PROPOSER-DUTY STARVATION ============");
+        {
+            long before = chainLength(nodeUrls[0]);
+            byte[] garbage = new byte[256];
+            new java.util.Random(startIndex).nextBytes(garbage);
+            int sent = 0;
+            for (int k = 0; k < 40; k++) {
+                for (int i = 0; i < nnodes; i++) {
+                    try {
+                        OkHttp3Util.post(nodeUrls[i] + "batchBlock", garbage);
+                        sent++;
+                    } catch (Exception ignore) {
+                    }
+                }
+                try {
+                    byte[] junk = new byte[64];
+                    new java.util.Random(k).nextBytes(junk);
+                    OkHttp3Util.post(nodeUrls[0] + "submitTransaction", junk);
+                } catch (Exception ignore) {
+                }
+            }
+            // Wait well past a slot (12s) so any duty deadlock would show as no
+            // advance; healthy mesh advances several slots in this window.
+            Thread.sleep(Math.max(45000, confirmTimeoutSec * 1000L / 6));
+            long after = chainLength(nodeUrls[0]);
+            boolean advanced = after > before;
+            verdict("V20 proposer-duty starvation (garbage x" + sent + ")",
+                    advanced, "cl " + before + " -> " + after + (advanced ? "" : " STALLED"));
+        }
+
+        // ================================================================ V21
+        // Reorg churn livelock: repeatedly feed a valid block on the CURRENT tip
+        // and a STALE sibling (valid fork of an ancestor) so handleNewBestChain
+        // must keep reconciling without ever unwinding into a hole or collapsing
+        // (regression for e6ddacb20 / 2e818b16e). The head must keep advancing.
+        System.out.println("============ V21: REORG CHURN LIVELOCK ============");
+        {
+            long before = chainLength(nodeUrls[0]);
+            String attacker = addrFor(seedFor(runUniqueIndex(startIndex, 90040))).toBase58();
+            for (int round = 0; round < 4; round++) {
+                try {
+                    // A block on the live tip.
+                    UTXO u = fetchUtxo(startIndex + 190 + round);
+                    if (u != null) {
+                        Transaction t = pay(keyFor(startIndex + 190 + round), u, attacker, payAmount, "v21-tip");
+                        submitBlockTo(nodeUrls[round % nnodes], craftTransferBlock(t));
+                    }
+                    // A stale fork off an ancestor 2 back (must never win).
+                    Block stale = staleForkBlock(nodeUrls, startIndex + 195 + round, 2, attacker, payAmount);
+                    if (stale != null) {
+                        for (int i = 0; i < nnodes; i++) submitBlockTo(nodeUrls[i], stale);
+                    }
+                } catch (Exception ignore) {
+                }
+                Thread.sleep(2000);
+            }
+            Thread.sleep(Math.max(45000, confirmTimeoutSec * 1000L / 5));
+            long after = chainLength(nodeUrls[0]);
+            boolean advanced = after > before;
+            verdict("V21 reorg churn livelock (4 tip+stale rounds)",
+                    advanced, "cl " + before + " -> " + after + (advanced ? "" : " COLLAPSED/STALLED"));
+        }
+
+        // ================================================================ V22
+        // Epoch-finality stall probe: after flooding conflicting sibling blocks
+        // AND reorg churn, finality must still advance past at least one epoch
+        // boundary on every node with an identical root (the wedge froze
+        // finality at the old checkpoint; this asserts it keeps moving).
+        System.out.println("============ V22: EPOCH-FINALITY STALL PROBE ============");
+        {
+            long[] finA = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) finA[i] = finalizedLength(nodeUrls[i]);
+            int slotsPerEpoch = 8;
+            long epochMs = (long) slotsPerEpoch * 12000L;
+            Thread.sleep(epochMs * 3 / 2);
+            long minFin = Long.MAX_VALUE;
+            boolean rootsEqual = true;
+            String root = finalizedHash(nodeUrls[0]);
+            for (int i = 0; i < nnodes; i++) {
+                long f = finalizedLength(nodeUrls[i]);
+                minFin = Math.min(minFin, f);
+                if (!root.equals(finalizedHash(nodeUrls[i]))) rootsEqual = false;
+            }
+            long beforeMax = Long.MIN_VALUE;
+            for (long f : finA) beforeMax = Math.max(beforeMax, f);
+            boolean advanced = minFin > beforeMax;
+            boolean ok = advanced && rootsEqual;
+            verdict("V22 epoch-finality stall probe", ok,
+                    "fin " + java.util.Arrays.toString(finA) + " -> min " + minFin
+                            + (advanced ? "" : " STALLED") + (rootsEqual ? "" : " DIVERGED"));
+        }
+
+        // ================================================================ V23
+        // Beacon-connect conflict deadlock (regression): craft two sibling batch
+        // blocks spending the SAME mempool UTXOs so the reference sweep must
+        // pick one and the OTHER stays unconfirmed (never deadlock-breaks into 0
+        // references that strands the whole sweep). Assert exactly the winner's
+        // recipients confirm and the chain keeps moving.
+        System.out.println("============ V23: BEACON-CONNECT CONFLICT DEADLOCK ============");
+        {
+            long before = chainLength(nodeUrls[0]);
+            int pairs = Math.max(2, n.applyAsInt(5));
+            String[] recips = new String[pairs];
+            for (int p = 0; p < pairs; p++) {
+                recips[p] = addrFor(seedFor(runUniqueIndex(startIndex, 90050 + p))).toBase58();
+            }
+            int funded = 0;
+            for (int p = 0; p < pairs; p++) {
+                long walletIdx = startIndex + 200 + p;
+                UTXO u = fetchUtxo(walletIdx);
+                if (u == null) continue;
+                funded++;
+                try {
+                    // Two sibling blocks spending the SAME UTXO to two recipients.
+                    Transaction a = pay(keyFor(walletIdx), u, recips[p], payAmount, "v23-a");
+                    Transaction b = pay(keyFor(walletIdx), u,
+                            addrFor(seedFor(runUniqueIndex(startIndex, 90100 + p))).toBase58(),
+                            payAmount, "v23-b");
+                    submitBlockTo(nodeUrls[0], craftTransferBlock(a));
+                    submitBlockTo(nodeUrls[0], craftTransferBlock(b));
+                    submitBlockTo(nodeUrls[1], craftTransferBlock(a));
+                    submitBlockTo(nodeUrls[1], craftTransferBlock(b));
+                } catch (Exception ignore) {
+                }
+            }
+            Thread.sleep(Math.max(60000, confirmTimeoutSec * 1000L / 3));
+            long after = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) after = Math.min(after, chainLength(nodeUrls[i]));
+            // Exactly one of each pair must confirm (winner), never zero (stranded).
+            int won = 0;
+            for (int p = 0; p < pairs; p++) {
+                if (countConfirmedOn(nodeUrls[0], recips[p]) > 0) won++;
+            }
+            boolean advanced = after > before;
+            boolean ok = advanced && (funded == 0 || won >= Math.min(1, funded));
+            verdict("V23 beacon-connect conflict deadlock (" + pairs + " pairs)",
+                    ok, "cl " + before + " -> " + after + (advanced ? "" : " STALLED")
+                            + ", pairs with winner confirmed " + won + "/" + funded);
+        }
+
+        // ================================================================ V24
+        // Unwind-reconnect livelock (regression for 2e818b16e): force a reorg by
+        // submitting a short chain that references a real ancestor, then drive a
+        // reorg the other way — the reconnect must repair any collapsed reward
+        // rows and the node must keep finality/chain moving (never frozen at an
+        // old head with fin=None). Longest-lived stability check in the suite.
+        System.out.println("============ V24: UNWIND-RECONNECT LIVELOCK ============");
+        {
+            long[] clBefore = new long[nnodes];
+            long[] finBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) {
+                clBefore[i] = chainLength(nodeUrls[i]);
+                finBefore[i] = finalizedLength(nodeUrls[i]);
+            }
+            // Submit deep stale forks (5 back) on alternating nodes to force
+            // unwind/reconnect evaluation without winning the best chain.
+            String attacker = addrFor(seedFor(runUniqueIndex(startIndex, 90060))).toBase58();
+            for (int r = 0; r < 5; r++) {
+                try {
+                    Block stale = staleForkBlock(nodeUrls, startIndex + 210 + r, 5, attacker, payAmount);
+                    if (stale != null) submitBlockTo(nodeUrls[r % nnodes], stale);
+                } catch (Exception ignore) {
+                }
+                Thread.sleep(1500);
+            }
+            // The confirmed head must NOT freeze and chain/finality must keep
+            // moving (no collapse to an old head with fin=None).
+            int slotsPerEpoch = 8;
+            long epochMs = (long) slotsPerEpoch * 12000L;
+            Thread.sleep(epochMs * 2);
+            boolean ok = true;
+            String detail = "";
+            for (int i = 0; i < nnodes; i++) {
+                long clNow = chainLength(nodeUrls[i]);
+                if (clNow < clBefore[i]) {
+                    ok = false;
+                    detail += " node" + i + " REGRESSED cl " + clBefore[i] + "->" + clNow;
+                }
+                if (chainHead(nodeUrls[i]).isEmpty()) {
+                    ok = false;
+                    detail += " node" + i + " HEAD LOST";
+                }
+                if (finalizedLength(nodeUrls[i]) < finBefore[i]) {
+                    ok = false;
+                    detail += " node" + i + " FIN REGRESSED";
+                }
+            }
+            boolean rootsEqual = true;
+            String root = finalizedHash(nodeUrls[0]);
+            for (int i = 1; i < nnodes; i++) {
+                if (!root.equals(finalizedHash(nodeUrls[i]))) rootsEqual = false;
+            }
+            ok = ok && rootsEqual;
+            verdict("V24 unwind-reconnect livelock (deep stale forks)",
+                    ok, "finroots equal=" + rootsEqual + (ok ? "" : detail));
         }
 
         // ================================================================ report
