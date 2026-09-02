@@ -51,6 +51,16 @@ import net.bigtangle.wallet.Wallet;
  *   V6 fabricated slashing proof must be rejected
  *   V7 getValidatorKey must never leak private key material
  *   V8 post-attack chain health (nodes alive, spread, advancing)
+ *   V9 stale-fork rewind reorg (a short fork of a real ancestor must not win)
+ *   V10 side-branch status spoof (non-canonical tx must not be CONFIRMED)
+ *   V11 orphan/dup resubmit flood (unknown-parent blocks; dup block+tx -> 1 confirm)
+ *   V12 forged finalized anchor (nonsense-reward beacon must not move finality)
+ *   V13 double-vote form-b slashing proof (same target epoch, diff checkpoint)
+ *   V14 forged validator exit (no-sig / attacker-sig exit must be refused)
+ *   V15 activation bypass (foreign pubkey / attacker epoch must not register)
+ *   V16 deposit/withdrawal abuse (negative amount; far-future epoch harmless)
+ *   V17 early withdrawal (epoch-0 release must not unlock bonded validators)
+ *   V18 post-churn finality advance (finality keeps moving, roots identical)
  *
  * System properties (all optional):
  *   attack.fund           per-wallet genesis value            30000
@@ -575,15 +585,22 @@ public class MeshAttack {
         // its own chain (CasperService.adoptFinalizedAnchor boundary check).
         // We cannot inject a bogus peer advertisement over the public API, so
         // we drive the equivalent on-chain vector: forge a BEACON-type block
-        // that claims an impossible finalized reward-chain position. A node
-        // must reject it and must not regress or move finality.
+        // whose reward chain claims an impossible position (nonsense
+        // prevRewardHash pointing at an unknown future block). batchBlock is
+        // ASYNC (queues bytes, HTTP 200), so "rejected by HTTP" is NOT the
+        // signal — the defense is that the forged beacon never becomes the
+        // confirmed chain head and never moves/regresses finality.
         System.out.println("============ V12: FORGED FINALIZED ANCHOR ============");
         {
             long[] finBefore = new long[nnodes];
             for (int i = 0; i < nnodes; i++) finBefore[i] = finalizedLength(nodeUrls[i]);
             String[] finRootsBefore = new String[nnodes];
             for (int i = 0; i < nnodes; i++) finRootsBefore[i] = finalizedHash(nodeUrls[i]);
-            int rejected = 0, accepted = 0;
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            String[] headBefore = new String[nnodes];
+            for (int i = 0; i < nnodes; i++) headBefore[i] = chainHead(nodeUrls[i]);
+            int sent = 0;
             try {
                 byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
                 Block proto = params.getDefaultSerializer().makeBlock(
@@ -592,35 +609,219 @@ public class MeshAttack {
                     Block fakeBeacon = Block.createBlock(params, proto, proto);
                     fakeBeacon.setBlockType(BlockType.BLOCKTYPE_BEACON);
                     // Nonsense reward chain position: prevRewardHash points at
-                    // an unconfirmed/unknown future block -> must be refused.
+                    // an unconfirmed/unknown future block -> must never confirm.
                     fakeBeacon.setPrevBlockHash(Sha256Hash.wrap(seedFor(999_999_900L + r)));
                     for (int i = 0; i < nnodes; i++) {
                         try {
-                            if (submitBlockTo(nodeUrls[i], fakeBeacon)) accepted++;
-                            else rejected++;
-                        } catch (Exception e) {
-                            rejected++;
+                            submitBlockTo(nodeUrls[i], fakeBeacon);
+                            sent++;
+                        } catch (Exception ignore) {
                         }
                     }
                 }
             } catch (Exception e) {
                 System.out.println("  V12 error: " + e.getMessage());
             }
+            // Wait past at least one slot so any (wrong) adoption would surface.
             Thread.sleep(30000);
-            boolean finAdvanced = true, finStable = true;
+            boolean finStable = true, rootsStable = true, headStable = true;
             for (int i = 0; i < nnodes; i++) {
                 long finAfter = finalizedLength(nodeUrls[i]);
                 if (finAfter < finBefore[i]) finStable = false;
-                if (finAfter > finBefore[i]) finAdvanced = true;
-            }
-            boolean rootsStable = true;
-            for (int i = 0; i < nnodes; i++) {
                 if (!finRootsBefore[i].equals(finalizedHash(nodeUrls[i]))) rootsStable = false;
+                // The forged beacon (claiming an impossible far position) must
+                // never become the confirmed head. If it did, the head would be
+                // the nonsense block, not an on-chain extension of the old head.
+                if (!headBefore[i].equals(chainHead(nodeUrls[i]))
+                        && chainLength(nodeUrls[i]) < clBefore[i] + 2) headStable = false;
             }
-            boolean ok = rejected > 0 && finStable && rootsStable;
+            boolean ok = sent > 0 && finStable && rootsStable && headStable;
             verdict("V12 forged finalized anchor", ok,
-                    "forged beacon accepted " + accepted + ", rejected " + rejected
-                            + ", fin stable=" + finStable + " roots-stable=" + rootsStable);
+                    "forged beacon x" + sent + " broadcast, fin stable=" + finStable
+                            + " roots-stable=" + rootsStable + " head-stable=" + headStable);
+        }
+
+        // ================================================================ V13
+        // Double-vote form-(b) attempt: same validator, SAME target epoch, two
+        // DIFFERENT target checkpoints. Form (b) is intentionally disabled
+        // (honest validators legitimately differ in the epoch-boundary window),
+        // and an attacker cannot forge a real validator's BLS attestation — so
+        // a self-signed pair must be REJECTED, never admitted as a slashing
+        // proof or allowed to move a real validator.
+        System.out.println("============ V13: DOUBLE-VOTE FORM-B PROOF ============");
+        {
+            PQKey attacker = PQKey.createNew();
+            Map<String, Object> att1 = Map.of("pubkey", Utils.HEX.encode(attacker.getPubKey()),
+                    "slot", 21210001, "epoch", 662601, "sourceEpoch", 662600, "targetEpoch", 662601,
+                    "beaconBlockHash", Sha256Hash.ZERO_HASH.toString(),
+                    "targetCheckpoint", Sha256Hash.ZERO_HASH.toString());
+            Map<String, Object> att2 = Map.of("pubkey", Utils.HEX.encode(attacker.getPubKey()),
+                    "slot", 21210002, "epoch", 662601, "sourceEpoch", 662600, "targetEpoch", 662601,
+                    "beaconBlockHash", Sha256Hash.wrap(new byte[32]).toString(),
+                    "targetCheckpoint", Sha256Hash.wrap(new byte[32]).toString());
+            boolean rejected;
+            String detail;
+            try {
+                byte[] r = OkHttp3Util.postString(seedNode + "submitSlashingProof", Json.jsonmapper()
+                        .writeValueAsString(Map.of("attestation1", att1, "attestation2", att2)));
+                Map<?, ?> m = Json.jsonmapper().readValue(r, Map.class);
+                Object ec = m.get("errorcode");
+                rejected = !(ec instanceof Number) || ((Number) ec).intValue() != 0;
+                detail = "errorcode=" + ec;
+            } catch (Exception e) {
+                rejected = true;
+                detail = "rejected: " + (e.getMessage() == null ? "http error" : e.getMessage());
+            }
+            verdict("V13 double-vote form-b proof", rejected, detail);
+        }
+
+        // ================================================================ V14
+        // Unauthenticated exit / slashing of a REAL validator must be refused:
+        // requestValidatorExit without a signature, and with a signature from
+        // an attacker key, must not exit any validator (key-ownership proof).
+        System.out.println("============ V14: FORGED VALIDATOR EXIT ============");
+        {
+            PQKey attacker = PQKey.createNew();
+            long before = activeValidatorCount(nodeUrls[0]);
+            boolean noSigRejected = false, forgedSigRejected = false;
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "requestValidatorExit",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(attacker.getPubKey()))));
+            } catch (Exception e) {
+                noSigRejected = true;
+            }
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "requestValidatorExit",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(attacker.getPubKey()), "signature", "00")));
+            } catch (Exception e) {
+                forgedSigRejected = true;
+            }
+            long after = activeValidatorCount(nodeUrls[0]);
+            boolean ok = noSigRejected && forgedSigRejected && after == before;
+            verdict("V14 forged validator exit", ok,
+                    "no-sig " + (noSigRejected ? "rejected" : "ACCEPTED")
+                            + ", forged-sig " + (forgedSigRejected ? "rejected" : "ACCEPTED")
+                            + ", validators " + before + " -> " + after);
+        }
+
+        // ================================================================ V15
+        // Activation bypass: activating a pubkey with NO stake deposit, or with
+        // an attacker-supplied future epoch, must not register a validator.
+        System.out.println("============ V15: ACTIVATION BYPASS ============");
+        {
+            PQKey attacker = PQKey.createNew();
+            long before = activeValidatorCount(nodeUrls[0]);
+            boolean foreignRejected = false, futureEpochRejected = false;
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "activateValidator",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(attacker.getPubKey()), "epoch", 999999999L)));
+            } catch (Exception e) {
+                foreignRejected = true;
+            }
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "activateValidator",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(attacker.getPubKey()))));
+            } catch (Exception e) {
+                futureEpochRejected = true;
+            }
+            long after = activeValidatorCount(nodeUrls[0]);
+            boolean ok = foreignRejected && after == before;
+            verdict("V15 activation bypass", ok,
+                    "foreign/epoch " + (foreignRejected ? "rejected" : "ACCEPTED")
+                            + ", validators " + before + " -> " + after);
+        }
+
+        // ================================================================ V16
+        // Deposit below minimum / garbage amount must not create stake; and a
+        // processWithdrawal for a bogus future epoch must not let an attacker
+        // force a withdrawal or wedge the node.
+        System.out.println("============ V16: DEPOSIT/WITHDRAWAL ABUSE ============");
+        {
+            PQKey attacker = PQKey.createNew();
+            long before = activeValidatorCount(nodeUrls[0]);
+            boolean badDepositRejected = false, badWithdrawalSafe = true;
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "stakeDeposit",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(attacker.getPubKey()), "amount", "-1")));
+            } catch (Exception e) {
+                badDepositRejected = true;
+            }
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "processWithdrawal",
+                        Json.jsonmapper().writeValueAsString(Map.of("epoch", 999999999L)));
+            } catch (Exception e) {
+                badWithdrawalSafe = false;
+            }
+            long after = activeValidatorCount(nodeUrls[0]);
+            boolean ok = badDepositRejected && badWithdrawalSafe && after == before;
+            verdict("V16 deposit/withdrawal abuse", ok,
+                    "bad-deposit " + (badDepositRejected ? "rejected" : "ACCEPTED")
+                            + ", far-epoch withdrawal " + (badWithdrawalSafe ? "harmless" : "ERRORED")
+                            + ", validators " + before + " -> " + after);
+        }
+
+        // ================================================================ V17
+        // Withdrawal without key proof: processWithdrawal must only release
+        // validators whose exit was signed and queued — an attacker calling it
+        // must never unlock a bonded validator early.
+        System.out.println("============ V17: EARLY WITHDRAWAL ============");
+        {
+            long before = activeValidatorCount(nodeUrls[0]);
+            boolean ok;
+            String detail;
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "processWithdrawal",
+                        Json.jsonmapper().writeValueAsString(Map.of("epoch", 0L)));
+                long after = activeValidatorCount(nodeUrls[0]);
+                ok = after == before;
+                detail = "withdrawal epoch=0 left " + before + " -> " + after + " validators";
+            } catch (Exception e) {
+                ok = true;
+                detail = "rejected: " + (e.getMessage() == null ? "http error" : e.getMessage());
+            }
+            verdict("V17 early withdrawal", ok, detail);
+        }
+
+        // ================================================================ V18
+        // Post-churn finality must keep advancing: after the validator-lifecycle
+        // abuse above, the mesh's finalized root must still move and stay
+        // identical across nodes (plan 1.3 reorg-safe finality / 4.1 boost).
+        System.out.println("============ V18: POST-CHURN FINALITY ADVANCE ============");
+        {
+            long[] finA = new long[nnodes];
+            String[] rootsA = new String[nnodes];
+            for (int i = 0; i < nnodes; i++) {
+                finA[i] = finalizedLength(nodeUrls[i]);
+                rootsA[i] = finalizedHash(nodeUrls[i]);
+            }
+            // Finality advances once per EPOCH (slotsPerEpoch slots), not per
+            // slot; a 45s poll can sit entirely inside one epoch and read the
+            // same finalized length on both sides — a false STALLED. Wait 2.5x
+            // an epoch so at least one finality boundary must pass on a healthy
+            // mesh (Mainnet slotsPerEpoch=8 @ 12s slot -> ~96s/epoch).
+            int slotsPerEpoch = 8;
+            long epochMs = (long) slotsPerEpoch * 12000L;
+            Thread.sleep(epochMs * 5 / 2);
+            long minFin = Long.MAX_VALUE;
+            boolean rootsEqual = true;
+            String root = finalizedHash(nodeUrls[0]);
+            for (int i = 0; i < nnodes; i++) {
+                long f = finalizedLength(nodeUrls[i]);
+                minFin = Math.min(minFin, f);
+                if (!root.equals(finalizedHash(nodeUrls[i]))) rootsEqual = false;
+            }
+            long beforeMax = Long.MIN_VALUE;
+            for (long f : finA) beforeMax = Math.max(beforeMax, f);
+            boolean advanced = minFin > beforeMax;
+            boolean ok = advanced && rootsEqual;
+            verdict("V18 post-churn finality advance", ok,
+                    "fin " + java.util.Arrays.toString(finA) + " -> min " + minFin
+                            + (advanced ? "" : " STALLED") + (rootsEqual ? "" : " DIVERGED"));
         }
 
         // ================================================================ report
@@ -750,6 +951,23 @@ public class MeshAttack {
         }
     }
 
+    /** The confirmed chain head hash (txReward.blockHashHex) from getChainNumber. */
+    static String chainHead(String hostPort) {
+        try {
+            Map<?, ?> m = Json.jsonmapper().readValue(chainNumberJson(hostPort), Map.class);
+            Object tr = m.get("txReward");
+            if (tr instanceof Map) {
+                Object h = ((Map<?, ?>) tr).get("blockHashHex");
+                if (h != null) return String.valueOf(h);
+                Object b = ((Map<?, ?>) tr).get("blockHash");
+                if (b != null) return String.valueOf(b);
+            }
+            return "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** Submit a serialized block to a specific node; true if accepted (no throw). */
     static boolean submitBlockTo(String nodeUrl, Block block) {
         try {
@@ -780,6 +998,29 @@ public class MeshAttack {
             return cnt;
         } catch (Exception e) {
             return 0;
+        }
+    }
+
+    /** Number of active validators reported by a node's getValidators. */
+    static long activeValidatorCount(String nodeUrl) {
+        try {
+            String u = (nodeUrl.startsWith("http") ? nodeUrl : "http://" + nodeUrl);
+            byte[] r = OkHttp3Util.postString(u + "getValidators", "{}");
+            Map<?, ?> top = Json.jsonmapper().readValue(r, Map.class);
+            Object text = top.get("text");
+            Object valObj = text != null ? text : top.get("validators");
+            if (valObj instanceof String) {
+                Map<?, ?> inner = Json.jsonmapper().readValue((String) valObj, Map.class);
+                Object v = inner.get("validators");
+                if (v instanceof java.util.List) return ((java.util.List<?>) v).size();
+                if (v instanceof Map) return ((Map<?, ?>) v).size();
+                return 0;
+            }
+            if (valObj instanceof java.util.List) return ((java.util.List<?>) valObj).size();
+            if (valObj instanceof Map) return ((Map<?, ?>) valObj).size();
+            return 0;
+        } catch (Exception e) {
+            return -1;
         }
     }
 

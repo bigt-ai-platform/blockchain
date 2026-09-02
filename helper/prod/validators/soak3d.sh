@@ -7,7 +7,7 @@
 #   2. stake all nodes, wait for finality
 #   3. baseline benchmark (MeshBm single wave)
 #   4. 3-day soak: 72 hourly MeshBm waves; every 6th hour ALSO runs the
-#      MeshAttack suite (V1-V8) against the mesh; meshmon samples health
+#      MeshAttack suite (V1-V18) against the mesh; meshmon samples health
 #   5. "last": leave 2 -> verify(2) -> join 2 -> finality -> verify(3)
 #   6. final status + report
 #
@@ -126,7 +126,7 @@ for h in $(seq 0 $((SOAK_HOURS - 1))); do
     start=$((SOAK_START + h * WAVE_SIZE))
     attackResult="skip"
     if [ $((h % ATTACK_EVERY)) -eq 0 ] && [ "$h" -ge "${ATTACK_FIRST}" ]; then
-        log "hour ${h}: running MeshAttack V1-V8 (attack_start=${ATTACK_START})"
+        log "hour ${h}: running MeshAttack V1-V18 (attack_start=${ATTACK_START})"
         attackResult="FAIL"
         if "$J" -Dattack.fund="${ATTACK_FUND}" -Dattack.pay=20000 \
             -Dattack.confirmTimeoutSec=300 \
