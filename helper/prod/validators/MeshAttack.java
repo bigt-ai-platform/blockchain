@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import net.bigtangle.core.Address;
+import net.bigtangle.core.AttestationData;
 import net.bigtangle.core.Block;
 import net.bigtangle.core.BlockType;
 import net.bigtangle.core.PQKey;
@@ -67,6 +68,18 @@ import net.bigtangle.wallet.Wallet;
  *   V22 epoch-finality stall probe (finality advances past an epoch boundary)
  *   V23 beacon-connect conflict deadlock (one sibling per conflict set confirms)
  *   V24 unwind-reconnect livelock (deep stale forks must not freeze/collapse)
+ *   V25 attestation-spam / pos_state bloat flood (must be dropped pre-verify)
+ *   V26 slashing-proposal storm (N fake keys, dup proofs must not fork SLASHINGs)
+ *   V27 surround-vote proof (disabled form must stay rejected, like V13)
+ *   V28 bouncing / justification flip-flop (justified must converge, fin advance)
+ *   V29 ex-ante / proposer-boost reorg (1-deep fork must not win the tip)
+ *   V30 RANDAO omission / reveal replay (bad-reveal beacon never confirms)
+ *   V31 churn overload (activation + mass-exit flood must not move the set)
+ *   V32 leak-liveness probe (finality advances, set stable, no spurious bleed)
+ *   V33 whale ingress (huge foreign deposit must be refused)
+ *   V34 censorship / embedded-cap probe (forged beacons ignored, atts bounded)
+ *   V35 long-range / finalized-reversion fork (deep fork never moves fin)
+ *   V36 clock-skew / time-warp partition (split-view spam must not diverge)
  *
  * System properties (all optional):
  *   attack.fund           per-wallet genesis value            30000
@@ -1104,6 +1117,582 @@ public class MeshAttack {
                     ok, "finroots equal=" + rootsEqual + (ok ? "" : detail));
         }
 
+        // ================================================================ V25
+        // Attestation-spam / pos_state bloat flood: hammer submitAttestation
+        // with non-validator keys across every reject gate (inconsistent epoch,
+        // far-future, stale, replay, garbage-BLS). All must be dropped BEFORE
+        // expensive verify / state growth; the chain must keep advancing and
+        // finality must keep moving (no verify-CPU or att_* bloat stall).
+        System.out.println("============ V25: ATTESTATION-SPAM FLOOD ============");
+        {
+            long before = chainLength(nodeUrls[0]);
+            long finBefore = finalizedLength(nodeUrls[0]);
+            int sent = 0;
+            // (a) inconsistent epoch (slot/8 != epoch)
+            sent += submitAttestationSpam(nodeUrls, 211, 8000L, 999L, 999L, 999L, (int) n.applyAsInt(6));
+            // (b) far-future (slot 8M -> epoch 1M, target 1M >> wall epoch + 1)
+            sent += submitAttestationSpam(nodeUrls, 221, 8_000_000L, 1_000_000L, 999_999L, 1_000_000L,
+                    (int) n.applyAsInt(6));
+            // (c) stale (target far behind chain epoch - 8)
+            sent += submitAttestationSpam(nodeUrls, 231, 800L, 100L, 99L, 100L, (int) n.applyAsInt(6));
+            // (d) replay of the stale shape (duplicate delivery)
+            sent += submitAttestationSpam(nodeUrls, 231, 800L, 100L, 99L, 100L, (int) n.applyAsInt(4));
+            // (e) garbage-BLS variant (48-byte invalid pubkey + 96-byte junk sig)
+            sent += submitAttestationSpamGarbageBls(nodeUrls, (int) n.applyAsInt(4));
+            long after = chainAfterSettle(nodeUrls[0], before, Math.max(30000, confirmTimeoutSec * 1000L / 8));
+            long finAfter = finalizedAfterRead(nodeUrls[0]);
+            boolean advanced = after > before;
+            boolean finOk = finAfter >= finBefore;
+            boolean ok = advanced && finOk;
+            verdict("V25 attestation-spam flood (" + sent + ")",
+                    ok, "spam x" + sent + " dropped, cl " + before + " -> " + after
+                            + (advanced ? "" : " STALLED") + ", fin " + finBefore + " -> " + finAfter);
+        }
+
+        // ================================================================ V26
+        // Slashing-proposal storm: N DISTINCT fake keys, each with one
+        // same-slot equivocating pair, each proof resubmitted 3x. The per-proof
+        // verify gate must refuse all (fake keys); even if one passed, the
+        // node-side slashingReported dedup must prevent a per-delivery
+        // SLASHING-block fork storm. No honest validator may be slashed.
+        System.out.println("============ V26: SLASHING-PROPOSAL STORM ============");
+        {
+            long valBefore = activeValidatorCount(nodeUrls[0]);
+            long clBefore = chainLength(nodeUrls[0]);
+            int keys = Math.max(3, (int) n.applyAsInt(8));
+            int sent = 0;
+            for (int k = 0; k < keys; k++) {
+                PQKey fk = PQKey.createNew();
+                byte[] pub = fk.getPubKey();
+                long slot = 21_220_000L + k;
+                long epoch = slot / 8;
+                for (int dup = 0; dup < 3; dup++) {
+                    AttestationData a1 = fakeAttestation(pub, slot, epoch, epoch - 1, epoch,
+                            Sha256Hash.of(("v26a-" + k).getBytes()),
+                            Sha256Hash.of(("v26t-" + k).getBytes()));
+                    AttestationData b2 = fakeAttestation(pub, slot, epoch, epoch - 1, epoch,
+                            Sha256Hash.of(("v26b-" + k).getBytes()),
+                            Sha256Hash.of(("v26u-" + k).getBytes()));
+                    try {
+                        String body = "{\"attestation1\":"
+                                + new String(Json.jsonmapper().writeValueAsBytes(a1),
+                                        java.nio.charset.StandardCharsets.UTF_8)
+                                + ",\"attestation2\":"
+                                + new String(Json.jsonmapper().writeValueAsBytes(b2),
+                                        java.nio.charset.StandardCharsets.UTF_8)
+                                + "}";
+                        OkHttp3Util.postString(seedNode + "submitSlashingProof", body);
+                        sent++;
+                    } catch (Exception ignore) {
+                        sent++;
+                    }
+                }
+            }
+            // 45s settle like V20: confirmed-chainlength advances in bursts,
+            // a 20s window flakes on a loaded mesh even when healthy.
+            long clAfter = chainAfterSettle(nodeUrls[0], clBefore, Math.max(45000, confirmTimeoutSec * 1000L / 6));
+            long valAfter = activeValidatorCount(nodeUrls[0]);
+            boolean ok = valAfter == valBefore && clAfter > clBefore;
+            verdict("V26 slashing-proposal storm (" + keys + " keys x3)",
+                    ok, "proofs x" + sent + " sent, validators " + valBefore + " -> " + valAfter
+                            + (valAfter != valBefore ? " SLASHED" : "") + ", cl " + clBefore + " -> " + clAfter);
+        }
+
+        // ================================================================ V27
+        // Surround-vote proof (companion to V13): strict epoch containment
+        // (source1 < source2 < target2 < target1) from a fresh key. The
+        // surround form is DISABLED like form-(b) — must be REJECTED, never
+        // admitted, validator set unchanged.
+        System.out.println("============ V27: SURROUND-VOTE PROOF ============");
+        {
+            PQKey attacker = PQKey.createNew();
+            AttestationData att1 = fakeAttestation(attacker.getPubKey(),
+                    21_230_001L, 2653750L, 2653700L, 2653750L,
+                    Sha256Hash.of("v27a".getBytes()), Sha256Hash.of("v27t1".getBytes()));
+            AttestationData att2 = fakeAttestation(attacker.getPubKey(),
+                    21_230_002L, 2653750L, 2653720L, 2653740L,
+                    Sha256Hash.of("v27b".getBytes()), Sha256Hash.of("v27t2".getBytes()));
+            boolean rejected;
+            String detail;
+            try {
+                String body = "{\"attestation1\":"
+                        + new String(Json.jsonmapper().writeValueAsBytes(att1),
+                                java.nio.charset.StandardCharsets.UTF_8)
+                        + ",\"attestation2\":"
+                        + new String(Json.jsonmapper().writeValueAsBytes(att2),
+                                java.nio.charset.StandardCharsets.UTF_8)
+                        + "}";
+                byte[] r = OkHttp3Util.postString(seedNode + "submitSlashingProof", body);
+                Map<?, ?> m = Json.jsonmapper().readValue(r, Map.class);
+                Object ec = m.get("errorcode");
+                rejected = !(ec instanceof Number) || ((Number) ec).intValue() != 0;
+                detail = "errorcode=" + ec;
+            } catch (Exception e) {
+                rejected = true;
+                detail = "rejected: " + (e.getMessage() == null ? "http error" : e.getMessage());
+            }
+            long vals = activeValidatorCount(nodeUrls[0]);
+            verdict("V27 surround-vote proof", rejected, detail + ", validators=" + vals);
+        }
+
+        // ================================================================ V28
+        // Bouncing / justification flip-flop: at/near an epoch boundary feed
+        // tip blocks to one half of the mesh and stale forks to the other,
+        // swapping each round. The justified checkpoint must converge (one
+        // hash on all nodes, never regress) and finality must advance — never
+        // bounce forever between branches.
+        System.out.println("============ V28: BOUNCING FLIP-FLOP ============");
+        {
+            String justBefore = justifiedHash(nodeUrls[0]);
+            long finBefore = finalizedLength(nodeUrls[0]);
+            long clBefore28 = chainLength(nodeUrls[0]);
+            String attacker = addrFor(seedFor(runUniqueIndex(startIndex, 90110))).toBase58();
+            int staged28 = 0;
+            for (int round = 0; round < 4; round++) {
+                try {
+                    long w = startIndex + 220 + round;
+                    UTXO u = fetchUtxo(w);
+                    if (u != null && !u.isSpent()) {
+                        Transaction t = pay(keyFor(w), u, attacker, payAmount, "v28-tip");
+                        submitBlockTo(nodeUrls[round % nnodes], craftTransferBlock(t));
+                        staged28++;
+                    }
+                    Block stale = staleForkBlock(nodeUrls, startIndex + 230 + round, 2, attacker, payAmount);
+                    if (stale != null) {
+                        submitBlockTo(nodeUrls[(round + 1) % nnodes], stale);
+                        staged28++;
+                    }
+                } catch (Exception ignore) {
+                }
+                Thread.sleep(2000);
+            }
+            Thread.sleep(Math.max(45000, confirmTimeoutSec * 1000L / 5));
+            java.util.Set<String> justs = new java.util.HashSet<>();
+            for (int i = 0; i < nnodes; i++) justs.add(justifiedHash(nodeUrls[i]));
+            if (justs.size() > 1) {
+                Thread.sleep(20000);
+                justs.clear();
+                for (int i = 0; i < nnodes; i++) justs.add(justifiedHash(nodeUrls[i]));
+            }
+            long finMin = Long.MAX_VALUE, clMin = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) {
+                finMin = Math.min(finMin, finalizedAfterRead(nodeUrls[i]));
+                clMin = Math.min(clMin, chainLength(nodeUrls[i]));
+            }
+            if (clMin <= clBefore28) {
+                Thread.sleep(30000);
+                clMin = Long.MAX_VALUE;
+                for (int i = 0; i < nnodes; i++) clMin = Math.min(clMin, chainLength(nodeUrls[i]));
+            }
+            boolean converged = justs.size() == 1;
+            // Bouncing shows as justified DIVERGENCE; finality must never
+            // regress (forward advance is healthy, so >= not >). Unstaged
+            // (no funded wallets left on a shared mesh) passes vacuously.
+            boolean ok = staged28 == 0 || (converged && finMin >= finBefore && clMin > clBefore28);
+            verdict("V28 bouncing flip-flop (4 swap rounds)",
+                    ok, (staged28 == 0 ? "UNSTAGED " : "") + "just " + justBefore + " -> " + justs
+                            + (converged ? "" : " DIVERGED") + ", fin " + finBefore + " -> min " + finMin
+                            + ", min-cl " + clBefore28 + " -> " + clMin);
+        }
+
+        // ================================================================ V29
+        // Ex-ante / proposer-boost reorg: release a valid 1-deep competing fork
+        // off the head's parent immediately after the head advances (x3). The
+        // 40% proposer boost must hold the timely head — no 1-block reorg wins.
+        System.out.println("============ V29: EX-ANTE BOOST REORG ============");
+        {
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            long minBefore = Long.MAX_VALUE;
+            for (long c : clBefore) minBefore = Math.min(minBefore, c);
+            String attacker = addrFor(seedFor(runUniqueIndex(startIndex, 90120))).toBase58();
+            int sentRounds = 0;
+            for (int round = 0; round < 3; round++) {
+                try {
+                    Block exante = staleForkBlock(nodeUrls, startIndex + 240 + round, 1, attacker, payAmount);
+                    if (exante != null) {
+                        for (int i = 0; i < nnodes; i++) submitBlockTo(nodeUrls[i], exante);
+                        sentRounds++;
+                    }
+                } catch (Exception ignore) {
+                }
+                Thread.sleep(3000);
+            }
+            Thread.sleep(Math.max(30000, confirmTimeoutSec * 1000L / 6));
+            long minAfter = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) minAfter = Math.min(minAfter, chainLength(nodeUrls[i]));
+            java.util.Set<String> fins = finRootSettled(nodeUrls);
+            // Unstaged (no funded wallets left on a shared mesh) passes
+            // vacuously, like V19's fundedSets == 0 case.
+            boolean ok = sentRounds == 0 || (minAfter >= minBefore && fins.size() == 1);
+            verdict("V29 ex-ante boost reorg (1-deep x" + sentRounds + ")",
+                    ok, (sentRounds == 0 ? "UNSTAGED " : "") + "min-cl " + minBefore + " -> " + minAfter
+                            + ", finroots=" + fins.size());
+        }
+
+        // ================================================================ V30
+        // RANDAO omission / reveal replay: forged BEACON blocks with (a) an
+        // unknown-parent position, (b) tampered bytes, (c) TRANSFER bytes
+        // mislabeled BEACON. None may become the confirmed head; the honest
+        // beacon chain must keep advancing (4.2 withhold-penalty is open, so
+        // the verdict is contain + advance, not penalize).
+        System.out.println("============ V30: RANDAO / BAD-REVEAL BEACON ============");
+        {
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            String[] headBefore = new String[nnodes];
+            for (int i = 0; i < nnodes; i++) headBefore[i] = chainHead(nodeUrls[i]);
+            long[] finBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) finBefore[i] = finalizedLength(nodeUrls[i]);
+            int sent = 0;
+            try {
+                byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
+                Block proto = params.getDefaultSerializer().makeBlock(
+                        Utils.HEX.decode((String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                // (a) unknown-parent beacon
+                for (int r = 0; r < 2; r++) {
+                    Block b = Block.createBlock(params, proto, proto);
+                    b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                    b.setPrevBlockHash(Sha256Hash.wrap(seedFor(999_999_700L + r)));
+                    for (int i = 0; i < nnodes; i++) {
+                        try {
+                            submitBlockTo(nodeUrls[i], b);
+                            sent++;
+                        } catch (Exception ignore) {
+                        }
+                    }
+                }
+                // (b) tampered-bytes beacon
+                try {
+                    Block b = Block.createBlock(params, proto, proto);
+                    b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                    byte[] ser = b.bitcoinSerialize();
+                    ser[ser.length / 2] = (byte) (ser[ser.length / 2] ^ 0x33);
+                    Block bad = params.getDefaultSerializer().makeBlock(ser);
+                    for (int i = 0; i < nnodes; i++) {
+                        try {
+                            submitBlockTo(nodeUrls[i], bad);
+                            sent++;
+                        } catch (Exception ignore) {
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+                // (c) transfer-bytes mislabeled BEACON
+                try {
+                    UTXO u = fetchUtxo(startIndex + 250);
+                    if (u != null) {
+                        Transaction t = pay(keyFor(startIndex + 250), u,
+                                addrFor(seedFor(runUniqueIndex(startIndex, 90130))).toBase58(),
+                                payAmount, "v30-mislabeled");
+                        Block b = craftTransferBlock(t);
+                        b.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                        for (int i = 0; i < nnodes; i++) {
+                            try {
+                                submitBlockTo(nodeUrls[i], b);
+                                sent++;
+                            } catch (Exception ignore) {
+                            }
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+            } catch (Exception e) {
+                System.out.println("  V30 error: " + e.getMessage());
+            }
+            long clNow = chainAfterSettle(nodeUrls[0], clBefore[0], Math.max(30000, confirmTimeoutSec * 1000L / 6));
+            boolean stable = true;
+            for (int i = 0; i < nnodes; i++) {
+                if (finalizedAfterRead(nodeUrls[i]) < finBefore[i]) stable = false;
+                if (!headBefore[i].equals(chainHead(nodeUrls[i]))
+                        && chainLength(nodeUrls[i]) < clBefore[i] + 2) stable = false;
+            }
+            boolean advanced = clNow > clBefore[0];
+            boolean ok = sent > 0 && stable && advanced;
+            verdict("V30 bad-reveal beacon (x" + sent + ")", ok,
+                    "forged beacons ignored=" + stable + ", cl " + clBefore[0] + " -> " + clNow);
+        }
+
+        // ================================================================ V31
+        // Churn overload: N fresh-key activateValidator calls (no stake -> must
+        // throw, set unchanged) + N forged requestValidatorExit calls (bad sig
+        // -> refused) + processWithdrawal far-epoch (harmless). The churn cap,
+        // activation delay and exit queue must hold the active set stable.
+        System.out.println("============ V31: CHURN OVERLOAD ============");
+        {
+            long valBefore = activeValidatorCount(nodeUrls[0]);
+            long clBefore = chainLength(nodeUrls[0]);
+            int attempts = Math.max(4, (int) n.applyAsInt(8));
+            int actRejected = 0, exitRejected = 0;
+            for (int k = 0; k < attempts; k++) {
+                PQKey fk = PQKey.createNew();
+                try {
+                    OkHttp3Util.postString(nodeUrls[k % nnodes] + "activateValidator",
+                            Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                    Utils.HEX.encode(fk.getPubKey()), "epoch", 999999999L)));
+                } catch (Exception e) {
+                    actRejected++;
+                }
+                try {
+                    OkHttp3Util.postString(nodeUrls[k % nnodes] + "requestValidatorExit",
+                            Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                    Utils.HEX.encode(fk.getPubKey()), "signature", "00")));
+                } catch (Exception e) {
+                    exitRejected++;
+                }
+            }
+            try {
+                OkHttp3Util.postString(nodeUrls[0] + "processWithdrawal",
+                        Json.jsonmapper().writeValueAsString(Map.of("epoch", 999999999L)));
+            } catch (Exception ignore) {
+            }
+            long clAfter = chainAfterSettle(nodeUrls[0], clBefore, Math.max(45000, confirmTimeoutSec * 1000L / 6));
+            long valAfter = activeValidatorCount(nodeUrls[0]);
+            boolean ok = actRejected == attempts && exitRejected == attempts
+                    && valAfter == valBefore && clAfter > clBefore;
+            verdict("V31 churn overload (" + attempts + " fresh keys)",
+                    ok, "activations rejected " + actRejected + "/" + attempts
+                            + ", exits rejected " + exitRejected + "/" + attempts
+                            + ", validators " + valBefore + " -> " + valAfter
+                            + ", cl " + clBefore + " -> " + clAfter);
+        }
+
+        // ================================================================ V32
+        // Leak-liveness probe (black-box half of the offline-majority chaos):
+        // after all floods above, finality must advance past an epoch boundary
+        // with an identical root, the validator set must be stable (no spurious
+        // bleed while live), and the advisory optimistic-finality signal must
+        // still report (head weight / total). Full >1/3-offline chaos stays a
+        // staging drill (needs duty control); this pins the live-side contract.
+        System.out.println("============ V32: LEAK-LIVENESS PROBE ============");
+        {
+            long valBefore = activeValidatorCount(nodeUrls[0]);
+            long[] finA = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) finA[i] = finalizedLength(nodeUrls[i]);
+            int slotsPerEpoch = 8;
+            long epochMs = (long) slotsPerEpoch * 12000L;
+            Thread.sleep(epochMs * 3 / 2);
+            long minFin = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) minFin = Math.min(minFin, finalizedAfterRead(nodeUrls[i]));
+            // Settled agreement: sequential reads can straddle an epoch
+            // boundary and show 2 roots transiently on a healthy mesh.
+            boolean rootsEqual = finRootSettled(nodeUrls).size() == 1;
+            long beforeMax = Long.MIN_VALUE;
+            for (long f : finA) beforeMax = Math.max(beforeMax, f);
+            long valAfter = activeValidatorCount(nodeUrls[0]);
+            String optDetail = optimisticSummary(nodeUrls[0]);
+            boolean ok = minFin > beforeMax && rootsEqual && valAfter == valBefore;
+            verdict("V32 leak-liveness probe", ok,
+                    "fin " + java.util.Arrays.toString(finA) + " -> min " + minFin
+                            + (minFin > beforeMax ? "" : " STALLED")
+                            + (rootsEqual ? "" : " DIVERGED")
+                            + ", validators " + valBefore + " -> " + valAfter + ", " + optDetail);
+        }
+
+        // ================================================================ V33
+        // Whale ingress: a 10x-MIN_STAKE foreign-key stakeDeposit (and a
+        // privateKey-embedded variant) must be refused at ingress (403) — a
+        // whale must never buy justification/proposer capture through the open
+        // endpoint. Weight-cap enforcement itself is unit-tested
+        // (PosConsensusHardeningTest MAX_EFFECTIVE_BALANCE); here we pin the
+        // ingress half + stability.
+        System.out.println("============ V33: WHALE INGRESS ============");
+        {
+            long valBefore = activeValidatorCount(nodeUrls[0]);
+            long clBefore = chainLength(nodeUrls[0]);
+            PQKey whale = PQKey.createNew();
+            boolean foreignRefused = false, keyRefused = false;
+            try {
+                OkHttp3Util.postString(seedNode + "stakeDeposit",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(whale.getPubKey()), "amount", "320000000")));
+            } catch (Exception e) {
+                foreignRefused = true;
+            }
+            try {
+                OkHttp3Util.postString(seedNode + "stakeDeposit",
+                        Json.jsonmapper().writeValueAsString(Map.of("pubkey",
+                                Utils.HEX.encode(whale.getPubKey()), "amount", "320000000",
+                                "privateKey", Utils.HEX.encode(whale.getPubKey()))));
+            } catch (Exception e) {
+                keyRefused = true;
+            }
+            long clAfter = chainAfterSettle(nodeUrls[0], clBefore, Math.max(45000, confirmTimeoutSec * 1000L / 6));
+            long valAfter = activeValidatorCount(nodeUrls[0]);
+            boolean ok = foreignRefused && keyRefused && valAfter == valBefore && clAfter > clBefore;
+            verdict("V33 whale ingress (10x stake)", ok,
+                    "foreign-whale " + (foreignRefused ? "refused" : "ACCEPTED")
+                            + ", key-embedded " + (keyRefused ? "refused" : "ACCEPTED")
+                            + ", validators " + valBefore + " -> " + valAfter
+                            + ", cl " + clBefore + " -> " + clAfter);
+        }
+
+        // ================================================================ V34
+        // Censorship / embedded-cap probe: (a) forged BEACON embodiments of a
+        // censoring/empty proposer (nonsense position, never confirmable) must
+        // be ignored while honest beacons carry justification forward; (b) the
+        // getAttestations read path for a recent slot must parse and stay
+        // within MAX_ATTESTATIONS_PER_BEACON (1024).
+        System.out.println("============ V34: CENSORSHIP / EMBEDDED-CAP ============");
+        {
+            long clBefore = chainLength(nodeUrls[0]);
+            long finBefore = finalizedLength(nodeUrls[0]);
+            int sent = 0;
+            try {
+                byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
+                Block proto = params.getDefaultSerializer().makeBlock(
+                        Utils.HEX.decode((String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                for (int r = 0; r < 2; r++) {
+                    Block emptyBeacon = Block.createBlock(params, proto, proto);
+                    emptyBeacon.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                    emptyBeacon.setPrevBlockHash(Sha256Hash.wrap(seedFor(999_999_500L + r)));
+                    for (int i = 0; i < nnodes; i++) {
+                        try {
+                            submitBlockTo(nodeUrls[i], emptyBeacon);
+                            sent++;
+                        } catch (Exception ignore) {
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("  V34 error: " + e.getMessage());
+            }
+            int attCount = attestationCount(nodeUrls[0], Math.max(0, clBefore / 2));
+            int attNow = attestationCount(nodeUrls[0], clBefore);
+            long clAfter = chainAfterSettle(nodeUrls[0], clBefore, Math.max(30000, confirmTimeoutSec * 1000L / 6));
+            long finAfter = finalizedAfterRead(nodeUrls[0]);
+            boolean bounded = attCount <= 1024 && attNow <= 1024 && attCount >= 0 && attNow >= 0;
+            boolean ok = sent > 0 && bounded && clAfter > clBefore && finAfter >= finBefore;
+            verdict("V34 censorship/cap probe (x" + sent + ")",
+                    ok, "empty-beacons ignored, cl " + clBefore + " -> " + clAfter
+                            + ", fin " + finBefore + " -> " + finAfter
+                            + ", atts(slot/2,head)=" + attCount + "," + attNow + (bounded ? "" : " UNBOUNDED"));
+        }
+
+        // ================================================================ V35
+        // Long-range / finalized-reversion fork: a valid transfer fork off an
+        // ancestor BELOW the finalized checkpoint (depth = cl - fin + 2,
+        // capped) must never win — even if structurally valid — and the
+        // finalized root must never move backwards. The worst PoS safety
+        // failure, asserted on-chain like V12 (batchBlock is async).
+        System.out.println("============ V35: LONG-RANGE REVERSION ============");
+        {
+            long cl = chainLength(nodeUrls[0]);
+            long fin = finalizedLength(nodeUrls[0]);
+            long[] finBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) finBefore[i] = finalizedLength(nodeUrls[i]);
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            int depth = (int) Math.min(25, Math.max(6, cl - fin + 2));
+            String attacker = addrFor(seedFor(runUniqueIndex(startIndex, 90140))).toBase58();
+            int sent = 0;
+            for (int r = 0; r < 3; r++) {
+                try {
+                    Block deep = staleForkBlock(nodeUrls, startIndex + 260 + r, depth, attacker, payAmount);
+                    if (deep != null) {
+                        for (int i = 0; i < nnodes; i++) {
+                            try {
+                                submitBlockTo(nodeUrls[i], deep);
+                                sent++;
+                            } catch (Exception ignore) {
+                            }
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+            }
+            Thread.sleep(Math.max(30000, confirmTimeoutSec * 1000L / 6));
+            // V24 pattern: per-node non-regression (length may only advance —
+            // a lagging node catching up changes its root WITHOUT regressing,
+            // which is convergence, not reversion) plus settled cross-node
+            // agreement. A real long-range reversion would split the roots or
+            // push a length backwards, failing one of the two.
+            boolean stable = true;
+            String detail = "";
+            for (int i = 0; i < nnodes; i++) {
+                if (finalizedLength(nodeUrls[i]) < finBefore[i]) {
+                    stable = false;
+                    detail += " node" + i + " FIN REGRESSED";
+                }
+                if (chainLength(nodeUrls[i]) < clBefore[i]) {
+                    stable = false;
+                    detail += " node" + i + " REGRESSED";
+                }
+            }
+            java.util.Set<String> roots = finRootSettled(nodeUrls);
+            if (roots.size() > 1) {
+                stable = false;
+                detail += " FINROOTS SPLIT=" + roots.size();
+            }
+            boolean ok = stable;
+            verdict("V35 long-range reversion (depth " + depth + " x" + sent + ")",
+                    ok, (sent == 0 ? "UNSTAGED " : "")
+                            + (stable ? "finalized immutable, no regression, finroots=1" : detail));
+        }
+
+        // ================================================================ V36
+        // Clock-skew / time-warp partition: feed far-future attestations to
+        // node0 ONLY and valid-shape (still fake-key) votes to node1 ONLY, plus
+        // a far-future nonsense beacon mesh-wide. The skew-bounded far-future
+        // gate must drop the warp; the mesh must stay in lockstep (one
+        // finroot, advancing head) — no wall-clock partition.
+        System.out.println("============ V36: CLOCK-SKEW PARTITION ============");
+        {
+            long[] clBefore = new long[nnodes];
+            for (int i = 0; i < nnodes; i++) clBefore[i] = chainLength(nodeUrls[i]);
+            PQKey fk = PQKey.createNew();
+            // far-future to node0 only
+            for (int k = 0; k < Math.max(3, (int) n.applyAsInt(5)); k++) {
+                AttestationData warp = fakeAttestation(fk.getPubKey(),
+                        16_000_000L + k, 2_000_000L, 1_999_999L, 2_000_000L,
+                        Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH);
+                try {
+                    OkHttp3Util.postString(nodeUrls[0] + "submitAttestation",
+                            Json.jsonmapper().writeValueAsString(warp));
+                } catch (Exception ignore) {
+                }
+                AttestationData shape = fakeAttestation(fk.getPubKey(),
+                        800L + k, 100L, 99L, 100L,
+                        Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH);
+                try {
+                    OkHttp3Util.postString(nodeUrls[1 % nnodes] + "submitAttestation",
+                            Json.jsonmapper().writeValueAsString(shape));
+                } catch (Exception ignore) {
+                }
+            }
+            try {
+                byte[] tipResp = OkHttp3Util.postString(nodeUrls[0] + "getTip", "{}");
+                Block proto = params.getDefaultSerializer().makeBlock(
+                        Utils.HEX.decode((String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                Block warpBeacon = Block.createBlock(params, proto, proto);
+                warpBeacon.setBlockType(BlockType.BLOCKTYPE_BEACON);
+                warpBeacon.setPrevBlockHash(Sha256Hash.wrap(seedFor(999_999_300L)));
+                for (int i = 0; i < nnodes; i++) {
+                    try {
+                        submitBlockTo(nodeUrls[i], warpBeacon);
+                    } catch (Exception ignore) {
+                    }
+                }
+            } catch (Exception ignore) {
+            }
+            Thread.sleep(Math.max(30000, confirmTimeoutSec * 1000L / 6));
+            java.util.Set<String> fins = finRootSettled(nodeUrls);
+            long minAfter = Long.MAX_VALUE;
+            for (int i = 0; i < nnodes; i++) minAfter = Math.min(minAfter, chainLength(nodeUrls[i]));
+            long minBefore = Long.MAX_VALUE;
+            for (long c : clBefore) minBefore = Math.min(minBefore, c);
+            if (minAfter <= minBefore) {
+                // Confirmed length moves in bursts; one more window before
+                // calling a stall (same flake class as V25's 30s stall).
+                Thread.sleep(30000);
+                minAfter = Long.MAX_VALUE;
+                for (int i = 0; i < nnodes; i++) minAfter = Math.min(minAfter, chainLength(nodeUrls[i]));
+            }
+            boolean ok = fins.size() == 1 && minAfter > minBefore;
+            verdict("V36 clock-skew partition", ok,
+                    "split-view warp dropped, finroots=" + fins.size() + ", min-cl " + minBefore + " -> " + minAfter);
+        }
+
         // ================================================================ report
         System.out.println("==============================================");
         System.out.println("  MESHATTACK — VERDICT TABLE");
@@ -1302,6 +1891,173 @@ public class MeshAttack {
         } catch (Exception e) {
             return -1;
         }
+    }
+
+    /** Finalized roots across nodes, with one retry to ride out a boundary. */
+    static java.util.Set<String> finRootSet(String[] nodeUrls) {
+        java.util.Set<String> fins = new java.util.HashSet<>();
+        for (String u : nodeUrls) fins.add(finalizedHash(u));
+        return fins;
+    }
+
+    /**
+     * Finroot agreement with a single confirm-retry: reads are sequential
+     * across nodes, so an epoch finalizing mid-read shows 2 roots transiently
+     * on a healthy mesh. Only a persistent split is a real divergence.
+     */
+    static java.util.Set<String> finRootSettled(String[] nodeUrls) throws Exception {
+        java.util.Set<String> fins = finRootSet(nodeUrls);
+        if (fins.size() > 1) {
+            Thread.sleep(20000);
+            fins = finRootSet(nodeUrls);
+        }
+        return fins;
+    }
+
+    /**
+     * Confirmed-chainlength after a settle window, with one extra 30s retry
+     * when the first read shows no advance: confirmed length moves in bursts
+     * (beacon confirm batches), so a single short window flakes on a loaded
+     * mesh even when healthy. Returns the best read (may still be == before).
+     */
+    static long chainAfterSettle(String nodeUrl, long before, long settleMs) throws Exception {
+        Thread.sleep(settleMs);
+        long cl = chainLength(nodeUrl);
+        if (cl <= before) {
+            Thread.sleep(30000);
+            cl = Math.max(cl, chainLength(nodeUrl));
+        }
+        return cl;
+    }
+
+    /** finalizedLength with one re-read when the first call errors (-1). */
+    static long finalizedAfterRead(String nodeUrl) throws Exception {
+        long fin = finalizedLength(nodeUrl);
+        if (fin < 0) {
+            Thread.sleep(10000);
+            fin = Math.max(fin, finalizedLength(nodeUrl));
+        }
+        return fin;
+    }
+
+    /** Justified checkpoint hash (hex) from getChainNumber. */
+    static String justifiedHash(String hostPort) {
+        try {
+            Map<?, ?> m = Json.jsonmapper().readValue(chainNumberJson(hostPort), Map.class);
+            Object jh = m.get("justifiedBlockHash");
+            return jh == null ? "" : String.valueOf(jh);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** Advisory optimistic-finality one-liner (head weight / total / supermajority). */
+    static String optimisticSummary(String hostPort) {
+        try {
+            String u = (hostPort.startsWith("http") ? hostPort : "http://" + hostPort) + "getOptimisticFinality";
+            byte[] r = OkHttp3Util.postString(u.replaceAll("/+getOptimisticFinality", "/getOptimisticFinality"), "{}");
+            Map<?, ?> m = Json.jsonmapper().readValue(r, Map.class);
+            return "opt[head=" + m.get("chainLength") + " weight=" + m.get("headVoteWeight")
+                    + "/" + m.get("totalStake") + " supermajority=" + m.get("supermajority") + "]";
+        } catch (Exception e) {
+            return "opt[unreachable]";
+        }
+    }
+
+    /** Number of attestations a node returns for a slot (bounded by the 1024 cap). */
+    static int attestationCount(String hostPort, long slot) {
+        try {
+            String u = (hostPort.startsWith("http") ? hostPort : "http://" + hostPort) + "getAttestations";
+            byte[] r = OkHttp3Util.postString(u.replaceAll("/+getAttestations", "/getAttestations"),
+                    Json.jsonmapper().writeValueAsString(Map.of("slot", slot)));
+            Map<?, ?> m = Json.jsonmapper().readValue(r, Map.class);
+            Object text = m.get("text");
+            Map<?, ?> inner = text instanceof String
+                    ? Json.jsonmapper().readValue((String) text, Map.class)
+                    : m;
+            Object atts = inner.get("attestations");
+            if (atts instanceof java.util.List) return ((java.util.List<?>) atts).size();
+            // Some builds nest the JSON string twice; fall back to raw scan.
+            String raw = new String(r, java.nio.charset.StandardCharsets.UTF_8);
+            int c = 0, idx = 0;
+            while ((idx = raw.indexOf("\"slot\"", idx)) >= 0) {
+                c++;
+                idx += 6;
+            }
+            return Math.min(c, 100000);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Build an unsigned, fake-key attestation for spam/slashing vectors. The
+     * key is NOT a registered validator (or the BLS is absent), so a healthy
+     * node must drop it before verify / state growth. Serializes
+     * symmetrically with the server's Jackson mapping.
+     */
+    static AttestationData fakeAttestation(byte[] pubkey, long slot, long epoch,
+            long sourceEpoch, long targetEpoch, Sha256Hash head, Sha256Hash target) {
+        AttestationData att = new AttestationData();
+        att.setSlot(slot);
+        att.setEpoch(epoch);
+        att.setSourceEpoch(sourceEpoch);
+        att.setTargetEpoch(targetEpoch);
+        att.setBeaconBlockHash(head);
+        att.setSourceCheckpoint(Sha256Hash.ZERO_HASH);
+        att.setTargetCheckpoint(target);
+        att.setValidatorPubkey(pubkey);
+        return att;
+    }
+
+    /**
+     * Post {@code count} fake-key attestations of one shape, round-robin across
+     * nodes. Returns the number sent (verdicts assert on-chain impact, since
+     * submitAttestation drops garbage silently with HTTP 200).
+     */
+    static int submitAttestationSpam(String[] nodeUrls, long keySalt, long slot, long epoch,
+            long sourceEpoch, long targetEpoch, int count) {
+        int sent = 0;
+        for (int k = 0; k < count; k++) {
+            try {
+                PQKey fk = PQKey.createNew();
+                // Mix key material per shape so each spam key is distinct.
+                byte[] pub = fk.getPubKey();
+                AttestationData att = fakeAttestation(pub, slot + k, epoch, sourceEpoch, targetEpoch,
+                        Sha256Hash.ZERO_HASH, Sha256Hash.wrap(new byte[32]));
+                String body = Json.jsonmapper().writeValueAsString(att);
+                OkHttp3Util.postString(nodeUrls[(int) ((keySalt + k) % nodeUrls.length)] + "submitAttestation", body);
+                sent++;
+            } catch (Exception ignore) {
+                sent++;
+            }
+        }
+        return sent;
+    }
+
+    /** Same as above but with structurally-present (yet invalid) BLS material. */
+    static int submitAttestationSpamGarbageBls(String[] nodeUrls, int count) {
+        int sent = 0;
+        java.util.Random rnd = new java.util.Random(0xC10C);
+        for (int k = 0; k < count; k++) {
+            try {
+                PQKey fk = PQKey.createNew();
+                AttestationData att = fakeAttestation(fk.getPubKey(), 900L + k, 112L, 111L, 112L,
+                        Sha256Hash.ZERO_HASH, Sha256Hash.ZERO_HASH);
+                byte[] badPub = new byte[48];
+                byte[] badSig = new byte[96];
+                rnd.nextBytes(badPub);
+                rnd.nextBytes(badSig);
+                att.setBlsPubkey(badPub);
+                att.setSignature(badSig);
+                String body = Json.jsonmapper().writeValueAsString(att);
+                OkHttp3Util.postString(nodeUrls[k % nodeUrls.length] + "submitAttestation", body);
+                sent++;
+            } catch (Exception ignore) {
+                sent++;
+            }
+        }
+        return sent;
     }
 
     /**

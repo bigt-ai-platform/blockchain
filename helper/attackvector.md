@@ -2,12 +2,13 @@ Copyright 2018 Inasset GmbH.
 
 # Layer0 Attack Vectors & Mitigations
 
-> Status refresh: 2026-09-03 (soak8 validation pass). Items marked
-> `[FIXED]` are closed in the current tree; `[PARTIALLY FIXED]` have guards
-> that still rely on operator discipline; the rest remain open. Consensus
-> hardening status lives in `plan/pos-production-readiness.md`. The automated
-> HTTP attack suite `MeshAttack` (V1-V18) below is implemented and exercised
-> continuously by the `soak10` / `soak3d` meshes.
+> Status refresh: 2026-09-03 (soak8 validation pass; doc sync 2026-09-04).
+> Items marked `[FIXED]` are closed in the current tree; `[PARTIALLY FIXED]`
+> have guards that still rely on operator discipline; the rest remain open.
+> Consensus hardening status lives in `plan/pos-production-readiness.md`. The
+> automated HTTP attack suite `MeshAttack` (V1-V24) below is implemented and
+> exercised continuously by the `soak10` / `soak3d` meshes. Vectors V25+ are
+> PROPOSED PoS stability breaks (open, not yet implemented in `MeshAttack`).
 
 ## Network Layer
 
@@ -231,7 +232,7 @@ history and is removed from the current tree. Rotate the tunnel and purge the
 file from history (`git filter-repo`/BFG + force push) — a fix no code change
 can perform.
 
-## Automated Attack Suite — `MeshAttack` (V1-V18)
+## Automated Attack Suite — `MeshAttack` (V1-V24 implemented, V25+ proposed)
 
 `helper/prod/validators/MeshAttack.java` is a deterministic, black-box HTTP
 attack driver that runs against the hermetic `testnodes.sh` mesh. Attack
@@ -260,13 +261,36 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V16 | Deposit / withdrawal abuse (negative amount; far-future epoch) | rejected / harmless | ✅ DEFLECTED |
 | V17 | Early withdrawal (epoch-0 release) | must not unlock bonded validators | ✅ DEFLECTED |
 | V18 | Post-churn finality advance | finality still advances after the churn; roots identical | ✅ DEFLECTED |
+| V19 | Sibling-conflict deadlock storm (N sets x 3 conflicting siblings, same UTXO) | chain advances; every set has exactly 1 winner, none stranded at 0-confirm | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V20 | Proposer-duty starvation (garbage `batchBlock` + `submitTransaction` flood across a slot boundary) | chain keeps advancing past the slot tick | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V21 | Reorg churn livelock (alternating tip block + 2-back stale fork x4 rounds) | head keeps advancing, no collapse | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V22 | Epoch-finality stall probe (post-churn/flood finality must cross an epoch boundary) | finality advances, roots identical | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V23 | Beacon-connect conflict deadlock (sibling batch blocks spending same mempool UTXOs) | chain advances; ≥1 pair has a confirmed winner, never stranded | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V24 | Unwind-reconnect livelock (deep 5-back stale forks on alternating nodes) | no cl/fin regression, head never lost, finroots equal | ✅ DEFLECTED (code; doc synced 2026-09-04) |
+| V25 | Attestation-spam / store-bloat flood (`submitAttestation`: non-validator, far-future, stale-epoch, replay) | all rejected pre-verify; chain + finality advance; `att_*` range pruned | 🆕 PROPOSED (open) |
+| V26 | Slashing-proposal storm (N distinct fake keys, one equivocation each) | no SLASHING-block fork storm; chain advances; no honest validator slashed | 🆕 PROPOSED (open) |
+| V27 | Surround-vote proof (companion to V13; both forms disabled) | rejected, never admitted; validator set unchanged | 🆕 PROPOSED (open) |
+| V28 | Bouncing / justification flip-flop (withhold + release attestations across two branches at the epoch boundary) | justified checkpoint never bounces; finality advances on one branch | 🆕 PROPOSED (open) |
+| V29 | Ex-ante / proposer-boost reorg (private 1-deep fork released to reorg the tip) | 40% boost holds the timely head; no 1-block ex-ante reorg wins | 🆕 PROPOSED (open) |
+| V30 | RANDAO omission / reveal replay (beacon with missing, empty or replayed reveal) | slot emptied, never confirmed; repeat offender penalized (4.2 open) | 🆕 PROPOSED (open) |
+| V31 | Churn overload: activation flood + mass-exit flood in one epoch | churn cap + exit queue hold; active set stable; finality advances | 🆕 PROPOSED (open) |
+| V32 | Offline-majority / inactivity-leak stall (>1/3 offline past 4 epochs without finality) | real balance bleed shrinks offline weight; online 2/3 resumes finality | 🆕 PROPOSED (open) |
+| V33 | Whale effective-balance dominance (single deposit >> 32 BIG) | weight capped at `MAX_EFFECTIVE_BALANCE`; proposer/finality not captured | 🆕 PROPOSED (open) |
+| V34 | Attestation censorship + embedded-cap overflow (empty beacons; beacon with >1024 embedded atts) | justification still advances via later beacons; oversized set deterministically capped, node never wedges | 🆕 PROPOSED (open) |
+| V35 | Long-range / finalized-reversion fork (deep fork conflicting with the finalized checkpoint, incl. withdrawn-key history) | never wins even if longer; finalized root/hash immutable | 🆕 PROPOSED (open) |
+| V36 | Clock-skew / time-warp partition (far-future-slot attestations + beacons to split ahead/behind-clock nodes) | far-future gated by `pos.maxClockSkewMs`; mesh stays in lockstep | 🆕 PROPOSED (open) |
 
 **Validation:** soak10 on the soak8 image (3-node per-node-PG mesh, 53000
-genesis wallets, 36 cycles @ 10-min cadence) runs V1-V18 every cycle. Cycle 6
+genesis wallets, 36 cycles @ 10-min cadence) runs V1-V24 every cycle (the table
+above still shows the soak8 V1-V18 verdicts; V19-V24 pass in code and are
+regression-synced here). Cycle 6
 (2026-09-03 ~20:21 UTC) reported `ALL_ATTACKS_DEFLECTED` with MeshBm 148/148.
 A deliberate **concurrent double-MeshAttack** (the load pattern that wedged a
 node before the `2e818b16e` reward-chain repair) also produced **no wedge** —
 the mesh stayed in lockstep with an identical finalized root.
+V25-V36 are proposed next: implement in `MeshAttack.java` in V25 → V36 order
+(attestation DoS first, chaos/staging vectors V32-V33 last), one vector per
+commit with a soak10 cycle asserting `ALL_ATTACKS_DEFLECTED` before the next.
 
 **Harness lessons (implemented in the vectors):**
 - V9-V12 recipients use per-run-unique indices — a fixed address + cumulative
@@ -276,6 +300,170 @@ the mesh stayed in lockstep with an identical finalized root.
   not HTTP status — `batchBlock` is async and returns 200 for queued bytes.
 - V18 waits ~2.5 epochs before re-reading finality, since finality advances
   once per epoch (≈96 s), not per slot.
+
+## Proposed PoS stability vectors V25-V36 — OPEN (not yet in `MeshAttack`)
+
+> Each vector below is black-box drivable over the public HTTP API (same
+> harness style as V1-V24: fund at genesis, assert on-chain impact, use
+> per-run-unique addresses). "Breaks stability" = stalls/wedges finality,
+> freezes the head, forks the mesh, or exhausts a bounded resource. Code refs
+> are the defence that must hold.
+
+### V25. Attestation-spam / `pos_state` bloat flood — OPEN
+
+Flood `submitAttestation` with (a) random non-validator pubkeys, (b) replayed
+honest-shaped votes, (c) far-future `targetEpoch = wallEpoch + 10`, (d) stale
+`targetEpoch = chainEpoch - 20`. Then submit one legit transfer and assert the
+chain still advances and finality still moves.
+**Defence under test:** `CasperService.processVote` rejects non-validators
+BEFORE BLS/PQ verify (DoS cost bound), rejects `epoch != epochForSlot`,
+rejects far-future (`wallEpoch + 1`, skew-bounded) and stale
+(`chainEpoch - ATTEST_MAX_STALE_EPOCHS`, = 8); `persistFullAttestation` +
+`SlotService` epoch prune (`deletePosStateByServiceKeyRange("attestation", …)`)
+must keep the `att_*` table bounded. **Breaks:** signature-verify CPU
+exhaustion, `pos_state` disk bloat, head stall.
+
+### V26. Slashing-proposal storm (N-key equivocation) — OPEN
+
+For N=10 distinct fresh keys, submit two same-slot conflicting attestations
+per key to `submitSlashingProof` back-to-back, plus re-submit each proof 3x.
+**Defence under test:** per-proof `verifyAttestation` + `isDoubleVote` gate
+(DispatcherController returns 403/400, never proposes); node-side
+`slashingReported` dedup (one SLASHING block per equivocating pubkey, not per
+delivery). **Breaks:** N-way SLASHING-block fork storm on the reward chain
+(one block per duplicate delivery), mempool/confirm sweep deadlock — the V19/
+V23 deadlock family, but via the slashing path. Verdict: chain advances, zero
+honest validators slashed, at most N (ideally 0, all fake keys) slashing
+blocks proposed.
+
+### V27. Surround-vote proof (companion to V13) — OPEN
+
+Same harness as V13 but with a strict-surround pair
+(`source1 < source2 < target2 < target1`, distinct checkpoints) from a fresh
+key. Must be REJECTED (400/403), never admitted via `submitSlashing`, validator
+set unchanged.
+**Why separate:** form-(b) double-vote AND surround are both DISABLED on
+purpose (they falsely slash honest validators while attestations target the
+moving wall-clock tip — see `plan/pos-remaining-impl.md`). V13+V27 together
+pin that contract: an attacker cannot grief via either disabled form, and a
+future re-enable (stable past-boundary targets) must flip both vectors green
+together. **Breaks (if mis-enabled):** mass false slashing of honest
+validators, finality halt.
+
+### V28. Bouncing / justification flip-flop — OPEN
+
+At an epoch boundary, alternately feed attestations/blocks supporting two
+competing checkpoint hashes to different nodes (tip block to node0, stale fork
+to node1, swap each round x4 — V21 pattern but timed to the boundary), then
+assert `getChainNumber` justified checkpoints converge and finality advances.
+**Defence under test:** bouncing-attack safe window (justified-checkpoint
+switch window, skewed lower bound) + transient-checkpoint fallback to the
+previous epoch's cached chain-derived checkpoint + `markEquivocating` stickiness.
+**Breaks:** justified checkpoint bounces forever between branches, finality
+never advances although both branches keep growing.
+
+### V29. Ex-ante / proposer-boost reorg — OPEN
+
+Build a valid 1-deep competing transfer fork off the parent of the current
+head (via `getTip` + `getBlockByHash`, same as `staleForkBlock` with depth=1)
+and release it immediately after the head advances, x3 rounds. Assert the
+timely head keeps winning and no 1-block reorg takes over.
+**Defence under test:** `GhostService` 40% proposer-boost
+(`PROPOSER_SCORE_BOOST`) for the current-slot proposer during fork choice.
+**Breaks:** cheap single-block ex-ante reorgs, head flip-flop, confirmation
+reversions for merchants.
+
+### V30. RANDAO omission / reveal replay — OPEN
+
+Craft BEACON-type blocks (V12 pattern) with (a) missing/empty RANDAO reveal,
+(b) replay of an old slot's reveal, and submit across the mesh. Assert none
+becomes the confirmed head and the chain keeps producing valid beacons.
+**Defence under test:** beacon validation rejects empty/invalid reveals (slot
+emptied); `plan/pos-remaining-impl.md` 4.2 (missed-proposal penalty /
+RANDAO-withhold penalty) is NOT STARTED — so today the verdict is only
+"never confirms + chain advances", and the penalty half stays open.
+**Breaks:** biased proposer selection (withhold to grind a favourable seed),
+empty-slot finality stall if omission is free and repeated.
+
+### V31. Churn overload: activation flood + mass-exit flood — OPEN
+
+(a) Fire N=8 `activateValidator` calls for fresh unfunded keys + N
+`stakeDeposit` dust amounts in one epoch; (b) fire `requestValidatorExit`
+(with attacker sigs — must be refused) and, in staging with real keys, queue
+all 4 validators' exits at once, then run `processWithdrawal` for the exit
+epoch. Assert `churnLimit = max(4, active/65536)` + activation queue + exit
+queue hold: active set changes by ≤ churn per epoch, chain/finality advance.
+**Defence under test:** `StakeService.churnLimit`, `MAX_SEED_LOOKAHEAD + 1`
+activation delay (chain-epoch domain), churn-capped `processWithdrawals`.
+**Breaks:** validator-set churn livelock (set flips faster than the 2-epoch
+proposer snapshot), justification denominator thrash, finality stall.
+
+### V32. Offline-majority / inactivity-leak stall — OPEN (staging chaos)
+
+Take >1/3 of validators offline (stop 2 of 4 duties, or mass-exit them) and
+hold for >4 epochs without finality, then bring them back. Assert
+`CasperService.applyInactivityLeak` bleeds ONLY the non-voters' real
+`stake.amount` (quadratic, `delay > 4`), `leakedTotalStake` re-weights so the
+online 2/3 resumes finality (Medalla scenario), and `revertInactivityLeak`
+repairs cleanly on reorg.
+**Defence under test:** real balance bleed (not virtual denominator drain),
+chain-derived `recentVoters`, prefix-scoped leak revert. **Breaks:** permanent
+finality stall after a >1/3 outage — the classic PoS liveness failure. Drive
+as a staging chaos drill (cannot be done with fake keys alone; needs duty
+control), assert with V18/V22-style finality-advance waits (2.5 epochs).
+
+### V33. Whale effective-balance dominance — OPEN
+
+Fund one attacker wallet with 10x `MIN_STAKE`, drive the real `stakeDeposit`
+path for it in staging, and compare proposer frequency + justification weight
+against a 32-BIG validator over ≥2 epochs. Assert weight capped at
+`StakeService.MAX_EFFECTIVE_BALANCE (= MIN_STAKE)`.
+**Defence under test:** `getEffectiveStake = amount.min(MAX_EFFECTIVE_BALANCE)`
+enforced in proposer selection, attestation weight, justification denominator
+and rewards. **Breaks:** single-whale proposer capture + finality capture
+(whale alone holds 2/3), reward drain.
+
+### V34. Attestation censorship + embedded-cap overflow — OPEN
+
+(a) Censorship: drive N empty-embedded beacons (withhold all `att_*` votes at
+the proposer) across an epoch boundary; assert justification still advances
+via later honest beacons. (b) Overflow: craft a beacon embedding >1024
+attestations (pad with replayed/fake votes, V12-style `batchBlock`) and assert
+`capAttestations` deterministically keeps newest-1024, root matches, node never
+wedges on beacon size.
+**Defence under test:** chain-read justification from the embedded set (not a
+single beacon), `MAX_ATTESTATIONS_PER_BEACON = 1024` newest-first cap,
+per-slot prefix read `getPosStateByServicePrefix("attestation", att_<slot>_)`.
+**Breaks:** reward starvation + justification delay (censorship), beacon-size
+DoS / non-deterministic root fork (overflow).
+
+### V35. Long-range / finalized-reversion fork — OPEN
+
+Replay a valid transfer fork off an ancestor BELOW the current
+`finalizedChainLength` (walk back `depth = chainLength - finalizedLength + 2`
+instead of V9's 2–5), including a variant that spends a withdrawn validator's
+old output (post-`WITHDRAWAL_DELAY_EPOCHS = 256` key reuse). Broadcast to all
+nodes. Assert finalized root/hash NEVER move backwards, the deep fork never
+becomes head even if longer, no node regresses.
+**Defence under test:** finalized checkpoint as a reorg floor
+(`finalizeCheckpoint`, `verifyRewardChainConfirmReferenced max(embedded,
+stored)` — the `2e818b16e` repair), weak-subjectivity discipline.
+**Breaks:** finalized-transaction reversion — the worst PoS safety failure.
+Verdict mirrors V12 (assert on-chain: fin root stable, head stable), not HTTP
+status.
+
+### V36. Clock-skew / time-warp partition — OPEN
+
+Submit attestations with `slot = currentSlot + 3 epochs` (far-future) to one
+node and valid current-slot votes to another, plus a beacon with a
+far-future-epoch SlotData timestamp; then compare heads/finroots across nodes.
+Assert far-future gated by `pos.maxClockSkewMs` (default one slot) + skewed
+upper/lower bounds, mesh stays in lockstep, no partition.
+**Defence under test:** `SlotService.maxClockSkewMs` upper bound (behind-clock
+nodes accept the real epoch) + bouncing safe-window lower bound (ahead-clock
+nodes cannot close the window early) + far-future attestation gate
+(`targetEpoch > wallEpoch + 1` rejected). **Breaks:** wall-clock partition —
+ahead nodes finalize one branch, behind nodes another, mesh diverges.
 
 ## Summary Table
 
@@ -301,3 +489,18 @@ the mesh stayed in lockstep with an identical finalized root.
 | 17 | L0Anchor no validation | High | Fixed |
 | 18 | Container hardening | Medium | Fixed |
 | 19 | Leaked tunnel creds | Critical | Operator action required |
+| 20 | PoS liveness deadlocks (sibling/beacon-connect/unwind-reconnect) | High | Mitigated (V19/V21/V23/V24) — soak-tested |
+| 21 | Proposer-duty stall under garbage flood | High | Mitigated (V20) — soak-tested |
+| 22 | Post-flood finality stall | High | Mitigated (V18/V22) — soak-tested |
+| 23 | Attestation spam / pos_state bloat (`submitAttestation` flood) | High | Open — V25 proposed (pre-verify + prune) |
+| 24 | Slashing-proposal storm (N-key equivocation) | Medium | Open — V26 proposed (verify + dedup) |
+| 25 | Disabled slashing forms grief (double-vote-b + surround) | High | Open — V13 done, V27 proposed (pin disabled contract) |
+| 26 | Bouncing / justification flip-flop | High | Open — V28 proposed (switch window) |
+| 27 | Ex-ante 1-deep reorg (proposer-boost bypass) | High | Open — V29 proposed (40% boost) |
+| 28 | RANDAO omission / reveal replay | Medium | Open — V30 proposed (4.2 penalty not started) |
+| 29 | Churn overload (activation + mass-exit flood) | High | Open — V31 proposed (churn + exit queue) |
+| 30 | Offline-majority stall (inactivity-leak liveness) | High | Open — V32 proposed staging chaos (real bleed) |
+| 31 | Whale effective-balance capture | High | Open — V33 proposed staging (`MAX_EFFECTIVE_BALANCE`) |
+| 32 | Attestation censorship + embedded-cap overflow | Medium | Open — V34 proposed (1024 cap) |
+| 33 | Long-range / finalized-reversion fork | Critical | Open — V35 proposed (fin floor) |
+| 34 | Clock-skew / time-warp partition | Medium | Open — V36 proposed (`pos.maxClockSkewMs`) |

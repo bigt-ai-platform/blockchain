@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # soak10.sh — fast-cadence load + attack soak on the RUNNING 3-node mesh.
 # Every 10 minutes: one MeshBm wave (150 tx) + one full MeshAttack suite
-# (V1-V18 at reduced scale so 2000 attack wallets cover the whole window).
+# (V1-V36 at reduced scale so 2000 attack wallets cover the whole window).
 #
 # 6h validation = 36 cycles. At the end: leave 2 -> verify -> join 2 ->
 # finality -> verify (the "last" step).
@@ -68,7 +68,7 @@ for c in $(seq 0 $((CYCLES - 1))); do
     start=$((SOAK_START + c * WAVE_SIZE))
     attackResult="skip"
     if [ "$c" -ge "${ATTACK_FIRST}" ]; then
-        log "cycle ${c}: running MeshAttack V1-V18 scale=${ATTACK_SCALE} (start=${ATTACK_START})"
+        log "cycle ${c}: running MeshAttack V1-V36 scale=${ATTACK_SCALE} (start=${ATTACK_START})"
         attackResult="FAIL"
         if "$J" -Dattack.fund="${ATTACK_FUND}" -Dattack.pay=20000 \
             -Dattack.confirmTimeoutSec=240 \
