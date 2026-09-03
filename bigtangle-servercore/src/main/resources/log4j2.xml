@@ -30,7 +30,7 @@
 
 
 		<logger name="net.bigtangle"
-			level="${LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
+			level="${env:LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
 
 		<logger name="org.apache.kafka"
 			level="${LOGGING_LEVEL_KAFKA:-WARN}" />

@@ -22,7 +22,7 @@
             <AppenderRef ref="Console" />
             <AppenderRef ref="RollingFile" />
         </Root>
-        <logger name="net.bigtangle" level="${LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
+        <logger name="net.bigtangle" level="${env:LOGGING_LEVEL_BIGTANGLE:-DEBUG}" />
         <logger name="org.apache.kafka" level="${LOGGING_LEVEL_KAFKA:-WARN}" />
         <logger name="org.apache.kafka.streams.KafkaStreams" level="INFO" />
         <logger name="org.apache.kafka.clients.consumer.ConsumerConfig" level="ERROR" />
