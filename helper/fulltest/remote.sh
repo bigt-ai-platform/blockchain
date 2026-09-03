@@ -29,7 +29,6 @@ SERVER_BASE="${SERVER_URL%/}"
 L1_BASE="${L1_URL%/}"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
 L1_DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$L1_DB_NAME"
-SCHED_ARGS="-Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=1000 -Dservice.schedule.initsync=true -Dservice.schedule.chainlength=true"
 L0_ARGS="--server.net=Test --server.port=$L0_PORT --server.mineraddress=mj61qqqkFDcXFx6P5bMtspDH7tJZ7jVHL4 --spring.main.allow-circular-references=true"
 
 # PoS-era: the L0 HTTP server itself runs the validator duty (beacon proposal +
@@ -132,6 +131,24 @@ case "${1:-}" in
     infra|--infra|infra-only) INFRA_ONLY=true ;;
     stop|down) STOP_ONLY=true ;;
 esac
+
+# Infra-only mode (./remote.sh infra) holds the L0/L1 nodes up indefinitely with
+# NO test load, so it relaxes the always-on test-cadence defaults that otherwise
+# hammer CPU/disk while idle:
+#   - blockbatchrate 1000ms makes BlockBatchService log "start" and rescan the
+#     mempool once per second forever; 10000ms is plenty when nothing is loaded.
+#   - net.bigtangle DEBUG floods the console log with per-tick noise (the bridge
+#     "already issued, skipping" vault re-scans alone wrote ~250k lines here).
+# Override per run via env, e.g.:
+#   BLOCKBATCH_RATE_MS=1000 LOGGING_LEVEL_BIGTANGLE=DEBUG ./remote.sh infra
+if [ "$INFRA_ONLY" = "true" ]; then
+    BLOCKBATCH_RATE_MS="${BLOCKBATCH_RATE_MS:-10000}"
+    LOGGING_LEVEL_BIGTANGLE="${LOGGING_LEVEL_BIGTANGLE:-INFO}"
+fi
+# SCHED_ARGS is consumed only by the L0/L1 launch commands below (Step 4/7b),
+# so it can be built here once the infra/test mode is known.
+SCHED_ARGS="-Dservice.schedule.microbatch=true -Dservice.schedule.blockbatch=true -Dservice.schedule.blockbatchrate=${BLOCKBATCH_RATE_MS:-1000} -Dservice.schedule.initsync=true -Dservice.schedule.chainlength=true"
+export LOGGING_LEVEL_BIGTANGLE
 
 # Skip the maven build. Default: skip in infra-only mode (assumes binaries are
 # already built), build for test runs. Force with SKIP_BUILD=0/1.
