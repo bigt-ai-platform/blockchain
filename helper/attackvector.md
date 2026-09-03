@@ -8,7 +8,9 @@ Copyright 2018 Inasset GmbH.
 > Consensus hardening status lives in `plan/pos-production-readiness.md`. The
 > automated HTTP attack suite `MeshAttack` (V1-V24) below is implemented and
 > exercised continuously by the `soak10` / `soak3d` meshes. Vectors V25+ are
-> PROPOSED PoS stability breaks (open, not yet implemented in `MeshAttack`).
+> PROPOSED PoS stability breaks (open, not yet implemented in `MeshAttack`):
+> V25-V36 cover single-shot consensus breaks, V37-V50 cover sustained load,
+> long-run (soak) stability and consensus-under-load (separate load lane).
 
 ## Network Layer
 
@@ -232,6 +234,98 @@ history and is removed from the current tree. Rotate the tunnel and purge the
 file from history (`git filter-repo`/BFG + force push) — a fix no code change
 can perform.
 
+### 20. Mempool has no TTL / no fee priority — OPEN (gap behind V37)
+
+`MempoolService.checkCapacity` enforces the `server.mempoolMaxTx` (= 4000)
+cap with `spentOutpoints` + dedup, but entries never expire and there is no
+fee market: a sustained cheap-spam flood can pin the mempool full of attacker
+txs while honest txs starve (FIFO, no eviction preference).
+
+**Mitigation:**
+- Add entry TTL + fee/age eviction preference before mainnet load.
+- Until then, front with rate limiting / WAF (see §4).
+
+### 21. Gossip pools and queues are unbounded — OPEN (gap behind V38)
+
+`GossipProtocol` uses unbounded cached listener/connect/sender pools with a
+100k-frame per-peer queue and a 120 s read timeout, and no per-peer rate
+limit — many peers × high frame rate can exhaust sockets/threads/RAM.
+
+**Mitigation:**
+- Bound the pools, cap per-peer frame rate, shorten the idle timeout.
+- Until then, keep gossip inside the WG mesh (see §16) with a fixed peer set.
+
+### 22. HTTP POST body size has no server-level cap — OPEN (gap behind V39)
+
+`Message.MAX_SIZE` is 32 MB but `server.servlet.max-http-post-size` is unset —
+near-max bodies reach deserialization before any cheap reject, so a POST flood
+burns CPU parsing garbage.
+
+**Mitigation:**
+- Set an explicit max POST size at the servlet layer; reject oversize early.
+- Until then, WAF body limits in front of the API port.
+
+### 23. Orphan/unsolid store is unbounded — OPEN (gap behind V40)
+
+`SyncBlockService.connectingOrphans` + `ChainBlockQueue` retain unknown-parent
+blocks with no bound/prune — an unknown-parent storm grows the orphan set
+(and its disk/memory) without limit.
+
+**Mitigation:**
+- Bound the orphan set (count + bytes) with age eviction; prune on finality.
+- Until then, monitor orphan row counts (load-lane sampling, V40).
+
+### 24. Sync has no flow control — OPEN (gap behind V41)
+
+`requestMissingReferenced` fans out to peers at `syncrate` with lock timeouts
+at 100×syncrate and no backpressure — a missing-reference storm amplifies
+across the mesh and lock waits cascade.
+
+**Mitigation:**
+- Add per-peer in-flight caps + backoff; bound the sync queue.
+- Until then, keep `syncrate` conservative on open nodes.
+
+### 25. `pos_state` prune is best-effort — OPEN (gap behind V42)
+
+`savePosState` grows the table on every vote while `CasperService.pruneEpochVotes`
+only prunes on the finality path — hours of load without steady finality let
+`pos_state`/`attestation_votes` grow unbounded.
+
+**Mitigation:**
+- Prune on a wall-clock/epoch schedule independent of finality; alert on row growth.
+- Until then, sample row counts in the soak lane (V42).
+
+### 26. Sync NPE on null confirmed-at-height (minority-fork restart wedge) — FIXED (2026-09-04)
+
+Under load-lane floods (duplicate-resubmit storms, V44 family) a node fell
+behind onto a minority fork and stopped advancing (cl frozen, no errors —
+V46 flagged it correctly on 2026-09-03). Restarting that node wedged it
+permanently: the sync worker NPE-looped forever and the node never synced
+(cl=0):
+- `SyncBlockService.requestNonChainBlocks` (~line 393):
+  `store.getRewardConfirmedAtHeight(chainlength)` returns null for the
+  diverged chain, then `.getBlockHash()` throws.
+- `ServiceBase.getCurrentCutoffHeight` (~line 812, via `connectingOrphans`
+  ~line 1387): same null dereference on the same path.
+Recovery required wiping the node's DB and resyncing from genesis (verified:
+zero post-wipe NPEs, mesh reconverged) — restart alone does NOT heal, unlike
+the §10b wedge. Evidence: NPE stack excerpts in the lane log.
+
+**Mitigation:**
+- Null-guard both call sites with a defined fallback (e.g. fall back to
+  `maxConfirmedReward`, or force full resync) + loud log; never spin on NPE.
+- Add a MeshLoad regression: stall a node, restart it, assert it rejoins
+  (extends V46).
+
+**Fix (2026-09-04, in-tree):** `ServiceBase.getCurrentCutoffHeight` returns 0
+with a loud `SECURITY/STABILITY` warn when the cutoff reward is missing
+(disables staleness pruning for the pass; age-prune still applies), and
+`SyncBlockService.requestNonChainBlocks` skips the auxiliary bulk repair for
+the pass — same null-tolerant convention `syncChain` already used. Validated:
+`DivergedSyncCutoffIT` reproduces the exact production NPE on unfixed code and
+passes on fixed code; MeshLoad REJOIN probe (restart → rejoin, finroots=1)
+passes live; V46 45-min lane shows worst spread 1 on the fixed image.
+
 ## Automated Attack Suite — `MeshAttack` (V1-V24 implemented, V25+ proposed)
 
 `helper/prod/validators/MeshAttack.java` is a deterministic, black-box HTTP
@@ -279,6 +373,20 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V34 | Attestation censorship + embedded-cap overflow (empty beacons; beacon with >1024 embedded atts) | justification still advances via later beacons; oversized set deterministically capped, node never wedges | 🆕 PROPOSED (open) |
 | V35 | Long-range / finalized-reversion fork (deep fork conflicting with the finalized checkpoint, incl. withdrawn-key history) | never wins even if longer; finalized root/hash immutable | 🆕 PROPOSED (open) |
 | V36 | Clock-skew / time-warp partition (far-future-slot attestations + beacons to split ahead/behind-clock nodes) | far-future gated by `pos.maxClockSkewMs`; mesh stays in lockstep | 🆕 PROPOSED (open) |
+| V37 | Mempool saturation + no-TTL wedge (sustained `submitTransaction` flood at/above `server.mempoolMaxTx`) | cap holds, node never wedges, honest txs still confirm | 🆕 PROPOSED (open, load lane) |
+| V38 | Gossip socket/thread explosion (many peers × high frame rate) | pools/queues bounded, node stays responsive | 🆕 PROPOSED (open, load lane) |
+| V39 | Oversized-body / max-block POST flood (near-`MAX_SIZE` bodies) | rejected cheaply pre-deserialize; node never wedges | 🆕 PROPOSED (open, load lane) |
+| V40 | Orphan/unsolid store bloat (unknown-parent block storm) | orphan set bounded/pruned; disk + memory flat | 🆕 PROPOSED (open, load lane) |
+| V41 | Sync request amplification (missing-reference storms across peers) | flow-controlled; lock timeouts never cascade | 🆕 PROPOSED (open, load lane) |
+| V42 | `pos_state` / attestation-vote growth over hours of load | epoch prune holds; row counts flat | 🆕 PROPOSED (open, soak lane) |
+| V43 | GHOST in-memory map growth (votes from many attacker pubkeys) | vote/equivocation maps bounded; RSS flat | 🆕 PROPOSED (open, soak lane) |
+| V44 | DB pool exhaustion → slot-tick starvation (sustained read/write load) | ticks never starve; pool waits bounded | 🆕 PROPOSED (open, soak lane) |
+| V45 | Reference-sweep blowup past the proposal deadline (huge unconfirmed set at slot tick) | sweep bounded; proposals still meet the deadline | 🆕 PROPOSED (open, soak lane) |
+| V46 | 72 h endurance drift, no attack (chainlength spread, finality lag, RSS, rows, pool wait) | all flat; no wedge | 🆕 PROPOSED (open, soak lane) |
+| V47 | Fee-less FIFO ordering grief (cheap spam starves real txs) | honest txs confirm within bound | 🆕 PROPOSED (open) |
+| V48 | Gossip dup-forward amplification loop (same block re-injected at many peers) | forwarded once per peer; no storm | 🆕 PROPOSED (open) |
+| V49 | Equivocation-set poisoning (many fake pubkeys marked equivocating) | honest weight/denominator unaffected | 🆕 PROPOSED (open) |
+| V50 | Weak-subjectivity bootstrap attack (fresh node fed a hostile chain) | checkpoint gate holds; node converges to the honest chain | 🆕 PROPOSED (open) |
 
 **Validation:** soak10 on the soak8 image (3-node per-node-PG mesh, 53000
 genesis wallets, 36 cycles @ 10-min cadence) runs V1-V24 every cycle (the table
@@ -291,6 +399,10 @@ the mesh stayed in lockstep with an identical finalized root.
 V25-V36 are proposed next: implement in `MeshAttack.java` in V25 → V36 order
 (attestation DoS first, chaos/staging vectors V32-V33 last), one vector per
 commit with a soak10 cycle asserting `ALL_ATTACKS_DEFLECTED` before the next.
+V37-V50 run in a SEPARATE load/soak lane (different runtime profile: bounded
+duration, RSS + row counts + pool waits sampled before/after) — not in the
+per-cycle V1-V24 run. L-class (V37-V41) and C-class (V47-V50) are bounded
+floods; S-class (V42-V46) runs for hours alongside them.
 
 **Harness lessons (implemented in the vectors):**
 - V9-V12 recipients use per-run-unique indices — a fixed address + cumulative
@@ -300,6 +412,10 @@ commit with a soak10 cycle asserting `ALL_ATTACKS_DEFLECTED` before the next.
   not HTTP status — `batchBlock` is async and returns 200 for queued bytes.
 - V18 waits ~2.5 epochs before re-reading finality, since finality advances
   once per epoch (≈96 s), not per slot.
+- Load-lane vectors (V37+) assert on resource bounds, not just chain impact:
+  sample RSS, `pos_state`/orphan/mempool row counts and DB pool waits before
+  and after the flood — a vector passes only if the chain advances AND the
+  resource stays flat.
 
 ## Proposed PoS stability vectors V25-V36 — OPEN (not yet in `MeshAttack`)
 
@@ -465,6 +581,153 @@ nodes cannot close the window early) + far-future attestation gate
 (`targetEpoch > wallEpoch + 1` rejected). **Breaks:** wall-clock partition —
 ahead nodes finalize one branch, behind nodes another, mesh diverges.
 
+## Proposed load & long-run stability vectors V37-V50 — OPEN (not yet in `MeshAttack`)
+
+> L-class (V37-V41) are sustained-load / resource-exhaustion floods, S-class
+> (V42-V46) are long-run soak-stability probes run for hours in parallel with
+> the L-class, C-class (V47-V50) is consensus-under-load and depends on the
+> L/S harness. Same black-box style as V1-V36 (fund at genesis, assert
+> on-chain impact, per-run-unique addresses) PLUS resource assertions: RSS,
+> `pos_state`/orphan/mempool row counts and DB pool waits sampled before and
+> after. "Breaks stability" = wedges finality, freezes the head, forks the
+> mesh, or lets a bounded resource grow without limit. Code refs are the
+> defence that must hold; §20-§25 track the confirmed gaps behind them.
+
+### V37. Mempool saturation + no-TTL wedge — OPEN
+
+Sustain a `submitTransaction` flood at/above `server.mempoolMaxTx` (= 4000)
+for the whole run, then submit one honest transfer and assert it still
+confirms and the node never wedges.
+**Defence under test:** `MempoolService.checkCapacity` cap + `spentOutpoints`
++ dedup. **Breaks:** no TTL and no fee priority (see §20) — attacker txs pin
+the pool, honest txs starve forever although the chain keeps moving.
+
+### V38. Gossip socket/thread explosion — OPEN
+
+Connect many peers and drive a high frame rate at each, then assert the node
+stays responsive and the chain advances.
+**Defence under test:** `GossipProtocol` listener/connect/sender pools +
+100k-frame per-peer queue + 120 s read timeout. **Breaks:** pools/queues are
+unbounded with no per-peer rate limit (see §21) — sockets/threads/RAM exhaust
+and the node stops proposing.
+
+### V39. Oversized-body / max-block POST flood — OPEN
+
+Flood `submitTransaction`/`batchBlock` with near-`MAX_SIZE` (32 MB) garbage
+bodies, then assert legit traffic still confirms and the node never wedges.
+**Defence under test:** `Message.MAX_SIZE` bound. **Breaks:** no servlet-level
+max POST size (see §22) — every garbage body burns full deserialization CPU
+before rejection.
+
+### V40. Orphan/unsolid store bloat — OPEN
+
+Storm unknown-parent blocks across the mesh, then assert the orphan set is
+bounded/pruned and disk + memory stay flat while the chain advances.
+**Defence under test:** `SyncBlockService.connectingOrphans` +
+`ChainBlockQueue`. **Breaks:** no bound/prune on the orphan set (see §23) —
+unbounded growth from attacker-crafted parents.
+
+### V41. Sync request amplification — OPEN
+
+Trigger missing-reference storms on many peers at once (stale-fork pattern at
+scale), then assert sync stays flow-controlled and lock timeouts never
+cascade into a stall.
+**Defence under test:** `requestMissingReferenced` + `syncrate` + lock timeout
+(100×syncrate). **Breaks:** no flow control / backpressure (see §24) — fan-out
+amplifies and lock waits cascade.
+
+### V42. `pos_state` / attestation-vote growth over hours — OPEN
+
+Run L-class load for hours and assert `pos_state` / `attestation_votes` row
+counts stay flat (epoch prune holds), even through stretches without steady
+finality.
+**Defence under test:** `savePosState` + `CasperService.pruneEpochVotes` +
+epoch prune. **Breaks:** prune rides the finality path only (see §25) — slow
+finality lets the tables grow without limit.
+
+### V43. GHOST in-memory map growth — OPEN
+
+Feed votes from many distinct attacker pubkeys over hours and assert RSS stays
+flat and finality still advances.
+**Defence under test:** `latestVoteBeacons` + `observedLatestVotes` +
+`equivocatingValidators` + `effCache` bounds/eviction. **Breaks:** unbounded
+per-pubkey entries — attacker-keyed maps grow with the flood, not the
+validator set.
+
+### V44. DB pool exhaustion → slot-tick starvation — OPEN
+
+Sustain heavy read/write load across an epoch boundary and assert slot ticks
+never starve and pool waits stay bounded.
+**Defence under test:** `db.pool.posMaxSize` (= 24) +
+`PosExecutorConfiguration` (core=max=1 + DiscardOldestPolicy) isolation of
+the tick path. **Breaks:** pool exhaustion queues the single tick thread
+behind load — proposals/finality stall although the node is alive.
+
+### V45. Reference-sweep blowup past the proposal deadline — OPEN
+
+Build a huge unconfirmed set, then tick a slot and assert the proposal still
+meets its deadline and the beacon confirms.
+**Defence under test:** `addAllUnconfirmedBlocks` sweep vs
+`pos.proposalDeadlineFraction` (= 0.6). **Breaks:** the sweep result set is
+unbounded — past some size it always overruns the 0.6-slot deadline and the
+node chronically misses proposals under load.
+
+### V46. 72 h endurance drift (no attack) — OPEN
+
+Run the mesh 72 h with normal waves only and assert chainlength spread,
+finality lag, RSS, row counts and pool waits all stay flat — no wedge, no
+slow leak.
+**Defence under test:** all of the above holding at once. **Breaks:** any slow
+leak (unpruned table, growing map, drifting clock) that only shows past hour
+scale. This is the lane the S-class runs in.
+
+### V47. Fee-less FIFO ordering grief — OPEN
+
+Flood cheap spam while honest users pay normal amounts, and assert honest txs
+still confirm within a bound.
+**Defence under test:** mempool admission + block packing order. **Breaks:**
+no fee market exists — FIFO means the cheapest spam starves real txs first
+(see §20).
+
+### V48. Gossip dup-forward amplification loop — OPEN
+
+Re-inject the same valid block at many peers simultaneously and assert each
+peer forwards it once (no broadcast storm) while the chain advances.
+**Defence under test:** gossip-layer dedup (seen-set) before forward.
+**Breaks:** no dedup at the gossip layer — one block becomes N² forwards and
+the mesh spends its budget re-verifying copies.
+
+### V49. Equivocation-set poisoning — OPEN
+
+Submit slashable material from many distinct fake pubkeys and assert honest
+validators' weight and the justification denominator are unaffected and
+finality advances.
+**Defence under test:** equivocation marking scoped to the offending pubkey +
+honest-weight accounting. **Breaks:** the equivocating set grows with attacker
+keys and drags honest weight/denominator with it (V43 family, consensus
+impact).
+
+### V50. Weak-subjectivity bootstrap attack — OPEN
+
+Start a fresh node pointed only at a hostile peer serving a valid-looking but
+dishonest chain, and assert it refuses to converge there and instead joins the
+honest chain once reachable.
+**Defence under test:** `pos.weakSubjectivityCheckpoint` gate (fail-closed when
+set; see `CasperService`). **Breaks:** with no checkpoint configured the fresh
+node has no anchor — it finalizes the attacker's history. Operator action:
+ship a checkpoint with every release.
+
+**Load-lane implementation status (2026-09-04):** all 14 vectors are
+implemented in `helper/prod/validators/MeshLoad.java` (separate driver, same
+genesis-funding contract; fund via `testnodes.sh LOAD_WALLETS`). Full-scale
+(1.0) lane on the 3-node mesh: L-class + C-class 12/12 `ALL_LOAD_DEFLECTED`
+(V38 drove 15k real gossip frames, p99 199 ms; V48 needed deadline polling
+under backlog — driver fix, not a breach); V42 20-min PASS (fin 640 → 736);
+V46 45-min PASS (45 samples, worst spread 1); REJOIN probe PASS (restarted
+node rejoined past the floor, finroots=1). Unit regression
+`DivergedSyncCutoffIT` is RED-before/GREEN-after. Full 72 h V46 still
+pending; rows above stay OPEN until it passes.
+
 ## Summary Table
 
 | # | Attack Vector | Severity | Status |
@@ -504,3 +767,17 @@ ahead nodes finalize one branch, behind nodes another, mesh diverges.
 | 32 | Attestation censorship + embedded-cap overflow | Medium | Open — V34 proposed (1024 cap) |
 | 33 | Long-range / finalized-reversion fork | Critical | Open — V35 proposed (fin floor) |
 | 34 | Clock-skew / time-warp partition | Medium | Open — V36 proposed (`pos.maxClockSkewMs`) |
+| 35 | Mempool saturation + no-TTL wedge (sustained flood) | High | Open — V37 proposed, load lane (cap, no TTL — §20) |
+| 36 | Gossip socket/thread explosion (many peers × rate) | High | Open — V38 proposed, load lane (unbounded pools — §21) |
+| 37 | Oversized-body POST flood (near-MAX_SIZE) | Medium | Open — V39 proposed, load lane (no POST cap — §22) |
+| 38 | Orphan/unsolid store bloat (unknown-parent storm) | High | Open — V40 proposed, load lane (unbounded orphans — §23) |
+| 39 | Sync request amplification (missing-reference storm) | High | Open — V41 proposed, load lane (no flow control — §24) |
+| 40 | `pos_state` / vote growth over hours | High | Open — V42 proposed, soak lane (prune on finality path — §25) |
+| 41 | GHOST in-memory map growth (attacker pubkeys) | High | Open — V43 proposed, soak lane |
+| 42 | DB pool exhaustion → slot-tick starvation | High | Open — V44 proposed, soak lane (pool 24, single tick thread) |
+| 43 | Reference-sweep blowup past proposal deadline | High | Open — V45 proposed, soak lane (unbounded sweep vs 0.6 deadline) |
+| 44 | 72 h endurance drift (no attack) | Medium | Open — V46 proposed, soak lane |
+| 45 | Fee-less FIFO ordering grief | Medium | Open — V47 proposed (no fee market — §20) |
+| 46 | Gossip dup-forward amplification loop | Medium | Open — V48 proposed (no gossip dedup) |
+| 47 | Equivocation-set poisoning (fake pubkeys) | High | Open — V49 proposed |
+| 48 | Weak-subjectivity bootstrap attack | Critical | Open — V50 proposed (checkpoint gate; ship per release) |

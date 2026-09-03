@@ -385,6 +385,18 @@ EOF
             "${VALSRC}/MeshAttack.java" genesis $((NNODES + 1 + BENCH_WALLETS)) "${ATTACK_WALLETS}" \
             >> "${WORKDIR}/genesis.csv"
     fi
+    # Optional load-lane wallets for MeshLoad.java (V37-V50 sustained-load /
+    # soak vectors, same deterministic seed formula). Appended AFTER the attack
+    # wallets so nothing collides; MeshLoad derives them from LOAD_START =
+    # NNODES+1+BENCH_WALLETS+ATTACK_WALLETS. Default 0 = genesis unchanged.
+    if [ "${LOAD_WALLETS:-0}" -gt 0 ] 2>/dev/null; then
+        log "adding ${LOAD_WALLETS} genesis-funded load-lane wallets (${LOAD_FUND:-30000} sat each)"
+        sign_exit_for_cp
+        java -Dload.fund="${LOAD_FUND:-30000}" \
+            -cp "${WORKDIR}/cp/BOOT-INF/classes:${WORKDIR}/cp/BOOT-INF/lib/*" \
+            "${VALSRC}/MeshLoad.java" genesis $((NNODES + 1 + BENCH_WALLETS + ATTACK_WALLETS)) "${LOAD_WALLETS}" \
+            >> "${WORKDIR}/genesis.csv"
+    fi
     # stop leftover node containers FIRST: DROP DATABASE silently fails
     # while a previous run's servers still hold connections, resurrecting
     # stale chain state on the "fresh" databases.

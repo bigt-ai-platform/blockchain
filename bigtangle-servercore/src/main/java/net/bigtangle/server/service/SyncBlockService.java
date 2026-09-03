@@ -390,6 +390,18 @@ public class SyncBlockService {
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(store);
 		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
+		if (confirmedAtHeightReward == null) {
+			// Same diverged-state guard as ServiceBase.getCurrentCutoffHeight:
+			// no confirmed reward at the cutoff chainlength (minority-fork
+			// restart). Skip the auxiliary non-chain bulk repair this pass
+			// instead of NPE-killing the sync worker — the main-chain sync and
+			// orphan paths continue. Loud on purpose (see attackvector §26).
+			log.warn(
+					"SECURITY/STABILITY: no confirmed reward at cutoff chainlength {} (max confirmed {}); "
+							+ "skipping non-chain bulk repair this pass",
+					chainlength, maxConfirmedReward.getChainLength());
+			return;
+		}
 		long cutoffHeight = store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
 
 		// Paged bulk repair: one response per page (ascending height). A full

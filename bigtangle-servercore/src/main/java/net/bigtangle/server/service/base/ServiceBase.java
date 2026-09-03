@@ -842,6 +842,21 @@ public abstract class ServiceBase {
 			return 0;
 		long chainlength = Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		TXReward confirmedAtHeightReward = store.getRewardConfirmedAtHeight(chainlength);
+		if (confirmedAtHeightReward == null) {
+			// Diverged/collapsed confirmed chain (e.g. a node that fell behind
+			// onto a minority fork and restarted): no confirmed reward exists
+			// at the cutoff chainlength. Returning 0 disables staleness
+			// pruning for this pass (orphans are still age-pruned) instead of
+			// NPE-spinning the sync worker forever — the node must keep
+			// syncing its way back. Loud on purpose: this state needs
+			// operator attention (see attackvector §26).
+			logger.warn(
+					"SECURITY/STABILITY: no confirmed reward at cutoff chainlength {} (max confirmed {}); "
+							+ "disabling staleness cutoff this pass",
+					chainlength,
+					maxConfirmedReward.getChainLength());
+			return 0;
+		}
 		return store.get(confirmedAtHeightReward.getBlockHash()).getHeight();
 	}
 
