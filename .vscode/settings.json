@@ -1,21 +1,28 @@
 {
-    "java.completion.importOrder": ["net.bigtangle", "jakarta", "com", "org", "java"],
-    "java.codeGeneration.useBlocks": false,
-    "java.configuration.updateBuildConfiguration": "interactive",
-    "java.errors.unresolvedType": "ignore",
-    "java.format.enabled": true,
-    "java.format.settings.url": "",
-    "java.inlayHints.parameterNames.enabled": "none",
-    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m",
-    "java.semanticHighlighting.enabled": true,
-    "java.cleanup.actionsOnSave": [
-        "qualifyMembers",
-        "addOverride",
-        "addDeprecatedAnnotation"
-    ],
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit",
-        "source.fixAll": "explicit"
-    },
-    "editor.formatOnSave": true
+  "java.completion.importOrder": [
+    "net.bigtangle",
+    "jakarta",
+    "com",
+    "org",
+    "java"
+  ],
+  "java.codeGeneration.useBlocks": false,
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.errors.unresolvedType": "ignore",
+  "java.format.enabled": true,
+  "java.format.settings.url": "",
+  "java.inlayHints.parameterNames.enabled": "none",
+  "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m",
+  "java.semanticHighlighting.enabled": true,
+  "java.cleanup.actionsOnSave": [
+    "qualifyMembers",
+    "addOverride",
+    "addDeprecatedAnnotation"
+  ],
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit"
+  },
+  "editor.formatOnSave": true,
+  "java.compile.nullAnalysis.mode": "disabled"
 }
