@@ -64,9 +64,24 @@ public class BlockStreamHandler extends AbstractStreamHandler {
     protected void process(KStream<String, byte[]> stream) {
         stream.foreach((key, bytes) -> {
             if (foreignChainRecord(key)) return;
-            String payloadKey = recordKey(key);
-            if (!blockService.addConnectedFromKafka(payloadKey.getBytes(), bytes).isPresent()) {
-                enqueueRetry(payloadKey, bytes);
+            try {
+                String payloadKey = recordKey(key);
+                if (!blockService.addConnectedFromKafka(payloadKey.getBytes(), bytes).isPresent()) {
+                    enqueueRetry(payloadKey, bytes);
+                }
+            } catch (Throwable e) {
+                // PER-RECORD ISOLATION: a DB outage mid-ingest (postgres
+                // stop/restart, attackvector §29) must NEVER kill the stream
+                // thread. An uncaught exception here terminated the consumer
+                // permanently (pre-watchdog) or crash-looped it on the same
+                // committed offset (post-watchdog). Route the record to the
+                // retry buffer instead — it replays every 10s, so the block is
+                // ingested once the DB is back, no thread dies, no offset is
+                // lost.
+                if (bytes != null) {
+                    enqueueRetry(recordKey(key), bytes);
+                }
+                log.warn("Kafka block ingest failed (isolating record, retry buffer): {}", e.toString());
             }
         });
         startReplayLoop();

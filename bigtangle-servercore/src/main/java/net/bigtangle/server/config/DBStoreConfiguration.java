@@ -90,8 +90,20 @@ public class DBStoreConfiguration {
 		config.setMaximumPoolSize(maximumPoolSize);
 		config.setMinimumIdle(minimumIdle);
 		config.setConnectionTimeout(30000);
+		// The connection test query runs before a connection is handed out of
+		// the pool, so a physical connection killed by an upstream postgres
+		// restart is evicted and replaced on the next borrow instead of being
+		// handed out and failing mid-request. Without it (and with the old
+		// 30-min maxLifetime) a postgres outage left the whole pool dead: the
+		// node never recovered without a process restart and silently diverged
+		// (attackvector §29, found by MeshChaos V67).
+		config.setConnectionTestQuery("SELECT 1");
+		config.setValidationTimeout(5000);
 		config.setIdleTimeout(60000);
-		config.setMaxLifetime(1800000);
+		// Short lifetime forces the pool to cycle physical connections
+		// regularly, so even idle connections created before an upstream
+		// restart are reaped within minutes rather than persisting as dead.
+		config.setMaxLifetime(600000);
 		config.addDataSourceProperty("cachePrepStmts", "true");
 		config.addDataSourceProperty("prepStmtCacheSize", "250");
 		config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");

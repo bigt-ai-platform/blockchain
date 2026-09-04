@@ -221,6 +221,63 @@ public class DivergedSyncCutoffIT extends AbstractIntegrationTest {
 	}
 
 	/**
+	 * THE §27/V63 REGRESSION: one poison orphan (unparseable RewardInfo, so
+	 * {@code tryConnectingOrphans} throws) must be ISOLATED — logged and left
+	 * for the age-prune — never aborting the reconnect pass. A valid
+	 * connectable orphan queued BEHIND the poison must still connect and be
+	 * removed. Pre-fix the pass threw out of the loop at the poison, stranding
+	 * the valid orphan forever (V63 confirmed live).
+	 */
+	@Test
+	public void testPoisonOrphanIsIsolatedAndValidOneConnects() throws Exception {
+		List<Block> chain = new ArrayList<>();
+		Block head = buildChain(6, chain);
+		blockGraph.updateChain(false);
+		TXReward maxConfirmed = cacheBlockService.getMaxConfirmedReward(store);
+		assertNotNull(maxConfirmed, "chain must confirm");
+		Sha256Hash confirmedRewardHash = maxConfirmed.getBlockHash();
+		long nowSec = System.currentTimeMillis() / 1000;
+
+		// Poison FIRST (sorts before the valid one: chainlength asc): beacon
+		// with truncated RewardInfo -> parseChecked throws inside the pass.
+		Block poison = Block.createBlock(networkParameters, head, head);
+		poison.setBlockType(BlockType.BLOCKTYPE_BEACON);
+		Transaction ptx = new Transaction(networkParameters);
+		ptx.setData(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+		poison.addTransaction(ptx);
+		poison.setLastMiningRewardBlock(1);
+		store.insertChainBlockQueue(new ChainBlockQueue(poison.getHash().getBytes(), poison.bitcoinSerialize(),
+				1, true, nowSec));
+
+		// Valid orphan BEHIND it: reward-prev = the confirmed head (present in
+		// store), so once reached it connects and is removed from the queue.
+		Block valid = Block.createBlock(networkParameters, head, head);
+		valid.setBlockType(BlockType.BLOCKTYPE_BEACON);
+		RewardInfo vri = new RewardInfo(confirmedRewardHash, new java.util.HashSet<>(),
+				maxConfirmed.getChainLength() + 1);
+		Transaction vtx = new Transaction(networkParameters);
+		vtx.setData(vri.toByteArray());
+		valid.addTransaction(vtx);
+		valid.setLastMiningRewardBlock(maxConfirmed.getChainLength() + 1);
+		store.insertChainBlockQueue(new ChainBlockQueue(valid.getHash().getBytes(), valid.bitcoinSerialize(),
+				maxConfirmed.getChainLength() + 1, true, nowSec));
+		store.commitDatabaseBatchWrite();
+
+		// The pass must survive the poison.
+		assertDoesNotThrow(() -> syncBlockService.connectingOrphans(store),
+				"connectingOrphans must not abort on a poison orphan");
+
+		java.util.Set<String> queued = new java.util.HashSet<>();
+		for (ChainBlockQueue q : store.selectChainblockqueue(true, 100)) {
+			queued.add(new Sha256Hash(q.getHash()).toString());
+		}
+		assertTrue(queued.contains(poison.getHash().toString()),
+				"poison orphan stays queued for the age-prune (never fatal)");
+		assertTrue(!queued.contains(valid.getHash().toString()),
+				"valid orphan behind the poison must still connect and leave the queue");
+	}
+
+	/**
 	 * Beacon-shaped queued block with a parseable RewardInfo whose reward-prev
 	 * is absent from the store, so {@code connectingOrphans} can neither
 	 * connect nor (unless stale) prune it — it stays queued. Returns its hash.

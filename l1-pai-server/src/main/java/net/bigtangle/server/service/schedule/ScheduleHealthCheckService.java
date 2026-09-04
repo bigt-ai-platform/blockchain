@@ -22,7 +22,10 @@ public class ScheduleHealthCheckService {
 
     @Scheduled(fixedRate = 2000)
     public void checkService() {
-        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
+        // Not gated on checkService(): the health check sets the server DOWN
+        // on a DB outage, so that gate self-disables the recovery watchdog
+        // (attackvector 29). Always run the cheap DB ping.
+        if (scheduleConfiguration.isChainlength_active()) {
             heathCheckService.startSingleProcess();
         }
     }

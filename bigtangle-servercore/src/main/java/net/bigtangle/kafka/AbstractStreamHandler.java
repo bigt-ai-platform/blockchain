@@ -87,6 +87,33 @@ public abstract class AbstractStreamHandler {
         }, "stream-starter-" + getClass().getSimpleName());
         t.setDaemon(true);
         t.start();
+        // Post-ready watchdog: startWhenReady RETURNS once the client first
+        // reaches RUNNING, so a consumer that dies LATER (e.g. a DB outage
+        // mid-record throws out of the processor and kills the stream thread —
+        // attackvector §29) is never restarted. This daemon loops for the life
+        // of the bean and resurrects any terminal/dead client via the same
+        // idempotent ensureStarted() path the scheduler uses.
+        Thread w = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(15000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                try {
+                    if (!isRunning()) {
+                        log.warn("{} consumer not RUNNING (state={}) — restarting",
+                                getClass().getSimpleName(), streams == null ? "null" : streams.state());
+                        ensureStarted();
+                    }
+                } catch (Exception e) {
+                    log.warn("{} watchdog restart failed: {}", getClass().getSimpleName(), e.getMessage());
+                }
+            }
+        }, "stream-watchdog-" + getClass().getSimpleName());
+        w.setDaemon(true);
+        w.start();
     }
 
     private static boolean isTerminal(KafkaStreams.State s) {

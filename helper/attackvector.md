@@ -381,22 +381,40 @@ null-safe `recordKey`); all three stream handlers route through it.
 Validated: new `StreamKeyRoutingTest` (null/stamped/legacy/foreign keys);
 liveness confirmed on the interop mesh (all three handlers RUNNING).
 
-### 29. Postgres outage: pool never re-establishes, node diverges — OPEN (found by V67, 2026-09-04)
+### 29. Postgres outage: one-way "server down" never recovers — FIXED (2026-09-04, found by V67)
 
 Stopping one node's PostgreSQL for 75s (PER_NODE_PG mesh) while the quorum
-finalizes: the affected node's API goes down and does NOT come back —
-dead pooled HikariCP connections are not re-established (observed >10 min,
-then >25 min). Worse, the node ends up on a DIVERGENT finalized root
-(finroots=2) instead of failing closed to the canonical one. A container
-restart heals it to an identical cl/fin in ~2 min. The §10b/§26 self-heal
-story does not extend to DB outages.
+finalizes froze the affected node permanently: API down, confirmed chain
+frozen at the outage point, DIVERGENT finalized root (finroots=2) — recovered
+only by a process restart.
 
-**Mitigation:**
-- Configure Hikari `connection-test-query` + `max-lifetime` refresh so dead
-  pools recover without a process restart; or fail the node loudly when its DB
-  is unreachable so an operator restarts it (never silent divergence).
-- Add a V67 regression asserting the node rejoins the finroot without a
-  restart once the DB is restored.
+**Root cause (three compounding defects, all fixed in-tree):**
+1. `HeathCheckService` on DB-down did `closeStream()` + `setServiceWait()`
+   (serviceReady=false) and NEVER restored when the DB returned.
+2. `ScheduleHealthCheckService` gated its 2s health check on
+   `checkService()` — so the instant it set the server down it STOPPED
+   watching, self-disabling the recovery detector.
+3. The kafka `BlockStreamHandler` consumer could be killed by an ingest
+   exception (DB outage) and `startWhenReady` is one-shot — nothing
+   restarted a later death.
+
+**Fixes:**
+- `HeathCheckService` tracks the down state and RECOVERS when the DB is back:
+  `setServiceReady(true)` + `ensureStarted()` the stream (logged).
+- `ScheduleHealthCheckService` (layer0 + all L1 copies) no longer gates on
+  `checkService()` — the cheap DB ping always runs so recovery is detected.
+- `BlockStreamHandler.process` wraps each record in a Throwable catch that
+  routes failures to the existing retry buffer (never kills the stream
+  thread; the buffer replays every 10s until the DB returns).
+- `AbstractStreamHandler` gained a daemon watchdog that resurrects any
+  terminal consumer (a later death was unreachable before).
+- Hikari `connectionTestQuery=SELECT 1` + `maxLifetime=10m` so dead pooled
+  connections are evicted on borrow instead of handed out mid-request.
+
+**Validated live (MeshChaos V67, fixed image):** 75s outage → the affected
+node self-recovers in **15s**, finroots=1, quorum confirmed 48→63 through the
+outage. Regression: `DivergedSyncCutoffIT` (3 tests incl. poison-orphan
+isolation) and the kafka watchdog/restart paths exercised by V67.
 
 ## Automated Attack Suites — `MeshAttack` V1-V36, `MeshLoad` V37-V50
 
@@ -475,7 +493,7 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V64 | Mixed endpoint fairness (tx, block, attestation, proof, heavy reads)                                                     | proposer ticks/finality retain service; bounded p99 and pool waits                                        | IMPLEMENTED (`MeshLoad`; sentinel + p99 + finality passed)oad lane)                                                                                                                                                                                                                                                                                                         |
 | V65 | Lagging-peer backfill while the live mesh remains under load                                                             | lagger catches up without throttling proposers or changing finroot                                        | HARNESSED (`MeshChaos` tc throttle; quorum + lagger passed)                                                                                                                                                                                                                                                                                                         |
 | V66 | Rolling validator restart during continuous load                                                                         | quorum finalizes throughout; each node rejoins without state drift                                        | HARNESSED (`MeshChaos` rolling restart; 4/4 rejoin)                                                                                                                                                                                                                                                                                                    |
-| V67 | PostgreSQL outage/reconnect across a proposal/finality boundary                                                          | fail closed, reconnect, catch up; no duplicate state transition                                           | HARNESSED (`MeshChaos`); BREACH live — no self-recovery (§29)                                                                                                                                                                                                                                                                                                    |
+| V67 | PostgreSQL outage/reconnect across a proposal/finality boundary                                                          | fail closed, reconnect, catch up; no duplicate state transition                                           | HARNESSED (`MeshChaos`); §29 fixed — self-recovers ~15s                                                                                                                                                                                                                                                                                                        |
 | V68 | Process pause / stop-the-world stall then resume                                                                         | stale duties are not replayed; node catches up to one finroot                                             | HARNESSED (`MeshChaos` pause; no stale duties)                                                                                                                                                                                                                                                                                                    |
 | V69 | Asymmetric network partition, minority load, then heal                                                                   | neither side conflicts with finalized history; healed mesh converges                                      | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
 | V70 | Disk-full/WAL write failure during block confirmation                                                                    | no unpersisted ACK; restart recovers one canonical state                                                  | PROPOSED (destructive recovery lane)                                                                                                                                                                                                                                                                                               |
@@ -1043,7 +1061,7 @@ pre-restart floor, all sentinels confirm once, and validator/finroot digests
 converge. This generalizes the single `REJOIN` probe to a whole-mesh rolling
 operation.
 
-### V67. PostgreSQL outage and reconnect — HARNESSED, BREACH CONFIRMED LIVE (opt-in, isolated volumes)
+### V67. PostgreSQL outage and reconnect — HARNESSED (passes live after §29 fix; self-recovers ~15s)
 
 Stop or firewall one node's PostgreSQL during proposal assembly, block save,
 confirmation and epoch-boundary processing in separate rounds. Keep the other
@@ -1159,7 +1177,7 @@ and all four oracle classes passed.
 | 62  | Mixed-endpoint scheduler starvation                              | High     | Harnessed — V64 (sentinel + p99 + finality passed)          |
 | 63  | Lagging-peer backfill under load                                 | High     | Harnessed — V65 (tc throttle; lagger caught up)             |
 | 64  | Rolling validator restart under load                             | High     | Harnessed — V66 (rolling restart; 4/4 rejoin)               |
-| 65  | Database outage/reconnect                                        | Critical | Harnessed — V67 BREACH live; restart needed (§29)           |
+| 65  | Database outage/reconnect                                        | Critical | Harnessed — V67; §29 fixed (self-recovers ~15s)             |
 | 66  | Process pause / stale-duty replay                                | High     | Harnessed — V68 (pause; no stale duties)                    |
 | 67  | Asymmetric partition/heal                                        | Critical | Open — V69 proposed (opt-in)                                |
 | 68  | Disk-full/WAL durability failure                                 | Critical | Open — V70 proposed (destructive)                           |

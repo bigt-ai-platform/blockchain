@@ -31,7 +31,12 @@ public class ScheduleHealthCheckService {
      */
    @Scheduled(fixedRate = 2000)
     public void checkService() {
-        if (scheduleConfiguration.isChainlength_active() && serverConfiguration.checkService()) {
+        // Deliberately NOT gated on serverConfiguration.checkService(): the
+        // health check sets the server DOWN when the DB drops, so gating on
+        // that flag self-disables the very watchdog that must detect the DB
+        // coming back (attackvector §29 — a node stayed down forever). The DB
+        // ping is cheap; always run.
+        if (scheduleConfiguration.isChainlength_active()) {
             heathCheckService.startSingleProcess();
         }
 

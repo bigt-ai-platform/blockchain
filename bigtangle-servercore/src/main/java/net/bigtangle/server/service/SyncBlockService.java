@@ -1407,14 +1407,24 @@ public class SyncBlockService {
 			log.debug("Orphan  size = {}", orphanBlocks.size());
 		}
 		for (ChainBlockQueue orphanBlock : orphanBlocks) {
-
 			try {
 				blockStore.beginDatabaseBatchWrite();
 				tryConnectingOrphans(orphanBlock, cut, blockStore);
 				blockStore.commitDatabaseBatchWrite();
 			} catch (Exception e) {
 				blockStore.abortDatabaseBatchWrite();
-				throw e;
+				// PER-ORPHAN ISOLATION (attackvector §27/V63): one malformed /
+				// poison queued block must NOT abort the whole reconnect pass.
+				// Before this guard a single unparseable entry threw out of the
+				// loop, every valid orphan behind it stayed queued forever, and
+				// a node behind the poison stopped converging entirely (V63
+				// confirmed live: stranded orphan + lagging node wedged until
+				// DB wipe). The poison is logged loudly and left for the age
+				// prune (2h) / its own retry — never fatal to the pass.
+				log.warn("SECURITY/STABILITY: orphan {} failed reconnect — isolating and continuing "
+						+ "(remaining {} in pass)", orphanBlock.getHash() != null
+								? net.bigtangle.core.Utils.HEX.encode(orphanBlock.getHash()).substring(0, 16)
+								: "?", orphanBlocks.size() - (orphanBlocks.indexOf(orphanBlock) + 1), e);
 			} finally {
 				blockStore.defaultDatabaseBatchWrite();
 

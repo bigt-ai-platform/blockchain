@@ -48,6 +48,9 @@ public class HeathCheckService {
 
     protected final ReentrantLock lock = Threading.lock("HeathCheckService");
 
+    /** True after the DB outage shut the server down; cleared on recovery. */
+    private volatile boolean serviceDownForDb;
+
     public void startSingleProcess() {
         if (lock.isHeldByCurrentThread() || !lock.tryLock()) {
             log.debug(this.getClass().getName() + "  HeathCheckService running. Returning...");
@@ -56,9 +59,34 @@ public class HeathCheckService {
 
         try {
             if (!checkDB()) {
-                blockStreamHandler.closeStream();
-                serverConfiguration.setServiceWait();
-                log.error(" Database is down. Close the kafka stream and set server down.  ");
+                // DB down: close the kafka stream and set the server down so no
+                // consensus duty runs against a dead store (it would throw every
+                // tick). This is now REVERSIBLE — see the recovery branch below.
+                if (!serviceDownForDb) {
+                    serviceDownForDb = true;
+                    try {
+                        blockStreamHandler.closeStream();
+                    } catch (Exception e) {
+                        log.warn("HeathCheckService close stream failed: {}", e.getMessage());
+                    }
+                    serverConfiguration.setServiceWait();
+                    log.error(" Database is down. Closed kafka stream and set server down.");
+                }
+            } else if (serviceDownForDb) {
+                // DB RECOVERED after an outage (attackvector §29): the server
+                // was set down and its duties gated off; nothing ever brought it
+                // back. Restore service and (re)start the kafka consumers.
+                serviceDownForDb = false;
+                serverConfiguration.setServiceReady(true);
+                try {
+                    // Idempotent: no-op when the consumer is already RUNNING,
+                    // restarts it when closed/terminal (the watchdog also does,
+                    // but recover immediately here).
+                    blockStreamHandler.ensureStarted();
+                } catch (Exception e) {
+                    log.warn("HeathCheckService stream restart failed: {}", e.getMessage());
+                }
+                log.info("Database recovered — server set ready and kafka stream restarted.");
             }
         } catch (Exception e) {
             log.warn("HeathCheckService ", e);

@@ -735,7 +735,10 @@ public class MeshChaos {
                 long finBefore = finalizedAfterRead(SEED_NODE);
                 docker("stop", pg);
                 Thread.sleep(outageSec * 1000L);
-                long finDuring = finalizedAfterRead(nodeUrls[0]);
+                // Quorum liveness DURING the outage: finality only advances per
+                // epoch (~96s+), which a 75s window rarely crosses, so measure
+                // the CONFIRMED chain (advances every slot) on a healthy node.
+                long clDuring = chainLength(nodeUrls[0]);
                 docker("start", pg);
                 // Recovery is measured, not assumed: the pool re-establishes
                 // SLOWLY after an outage (observed 10+ min for a 75s outage —
@@ -755,11 +758,11 @@ public class MeshChaos {
                 }
                 long p99 = tipP99(nodeUrls, 12);
                 java.util.Set<String> fins = finRootSettled(nodeUrls);
-                boolean quorumKeptGoing = finDuring > finBefore;
+                boolean quorumKeptGoing = clDuring > finBefore;
                 boolean recovered = recoverMs >= 0;
                 boolean ok = quorumKeptGoing && recovered && fins.size() == 1 && p99 < 8000;
                 verdict("V67 pg outage (" + outageSec + "s)",
-                        ok, "quorum-fin " + finBefore + " -> " + finDuring + " (during) recovery="
+                        ok, "quorum-cl " + finBefore + " -> " + clDuring + " (during) recovery="
                                 + (recovered ? (recoverMs / 1000) + "s" : ">1500s NEVER") + " tipP99=" + p99
                                 + "ms finroots=" + fins.size());
             } catch (Exception e) {
