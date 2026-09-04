@@ -1395,8 +1395,14 @@ public class SyncBlockService {
 		List<ChainBlockQueue> orphanBlocks = blockStore.selectChainblockqueue(true,
 				serverConfiguration.getSyncblocks());
 		TXReward maxConfirmedReward = cacheBlockService.getMaxConfirmedReward(blockStore);
-		long cut = new ServiceBaseConnect(serverConfiguration, networkParameters, cacheBlockService, jsonmapper)
-				.getCurrentCutoffHeight(maxConfirmedReward, blockStore);
+		// Cutoff in CHAINLENGTH units: tryConnectingOrphans compares it against
+		// Block.lastMiningRewardBlock (a reward chainlength, set from
+		// RewardInfo.getChainlength). getCurrentCutoffHeight returns a block
+		// HEIGHT, which runs ahead of chainlength under load — using it here
+		// wrongfully pruned still-connectable orphans as "too old". Null (no
+		// confirmed chain yet) disables staleness pruning for the pass.
+		long cut = maxConfirmedReward == null ? 0
+				: Math.max(0, maxConfirmedReward.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
 		if (orphanBlocks.size() > 0) {
 			log.debug("Orphan  size = {}", orphanBlocks.size());
 		}

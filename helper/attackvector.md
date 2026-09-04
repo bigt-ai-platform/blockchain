@@ -326,6 +326,27 @@ the pass — same null-tolerant convention `syncChain` already used. Validated:
 passes on fixed code; MeshLoad REJOIN probe (restart → rejoin, finroots=1)
 passes live; V46 45-min lane shows worst spread 1 on the fixed image.
 
+### 27. Orphan prune compared heights to chainlengths — FIXED (2026-09-04)
+
+Review of `getCurrentCutoffHeight` usage found a units mismatch (all other
+call sites are height-consistent): `connectingOrphans` passed its block-height
+cutoff into `tryConnectingOrphans`, which compares it against
+`Block.lastMiningRewardBlock` — a reward CHAINLENGTH (set from
+`RewardInfo.getChainlength` in `SlotService`). Under load the DAG height runs
+ahead of the confirmed chainlength, so still-connectable orphans were
+wrongfully deleted as "too old", creating permanent missing predecessors and
+sync stalls — the same wedge family as §26, different mechanism.
+**Fix (in-tree):** `connectingOrphans` now computes the cutoff directly in
+chainlength units (`max(0, maxConfirmed - CHAINLENGTH_CUTOFF)`; 0 when nothing
+confirmed). Validated: `DivergedSyncCutoffIT.testOrphanPruneUsesChainlengthNotHeight`
+builds the production shape (transfers inflate height ahead of chainlength),
+fails on the old comparison, passes on the new one; below-window and 3h-old
+orphans are still pruned (both prune paths intact).
+Review note (open, minor): a single unparseable queued block aborts the whole
+`connectingOrphans` pass (`throw e` after the per-orphan batch abort) — one
+poison entry stalls every orphan reconnect until age-pruned. Consider
+catch-log-continue per orphan as follow-up.
+
 ## Automated Attack Suite — `MeshAttack` (V1-V24 implemented, V25+ proposed)
 
 `helper/prod/validators/MeshAttack.java` is a deterministic, black-box HTTP

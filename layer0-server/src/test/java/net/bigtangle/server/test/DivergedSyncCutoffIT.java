@@ -13,11 +13,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import net.bigtangle.core.Block;
+import net.bigtangle.core.BlockType;
 import net.bigtangle.core.PQKey;
+import net.bigtangle.core.RewardInfo;
 import net.bigtangle.core.TXReward;
+import net.bigtangle.core.Transaction;
 import net.bigtangle.core.UtilGeneseBlock;
 import net.bigtangle.core.Sha256Hash;
 import net.bigtangle.params.NetworkParameters;
+import net.bigtangle.server.data.ChainBlockQueue;
 import net.bigtangle.server.service.StakeService;
 import net.bigtangle.server.service.base.ServiceBaseConnect;
 import net.bigtangle.core.StakeRecord;
@@ -62,8 +66,7 @@ public class DivergedSyncCutoffIT extends AbstractIntegrationTest {
 	}
 
 	/** Builds a beacon chain of {@code n} beacons from genesis, returning the head. */
-	private Block buildChain(int n, List<Block> out) throws Exception {
-		Sha256Hash prev = UtilGeneseBlock.createGenesis(networkParameters).getHash();
+	private Block buildChain(int n, List<Block> out) throws Exception {		Sha256Hash prev = UtilGeneseBlock.createGenesis(networkParameters).getHash();
 		Block head = null;
 		for (int i = 0; i < n; i++) {
 			head = makeRewardBlock(prev, prev, prev);
@@ -120,5 +123,121 @@ public class DivergedSyncCutoffIT extends AbstractIntegrationTest {
 		assertDoesNotThrow(
 				() -> syncBlockService.requestNonChainBlocks("http://127.0.0.1:9/", store),
 				"requestNonChainBlocks must skip (not NPE) on a missing cutoff reward");
+	}
+
+	/**
+	 * Units regression for the orphan-prune comparison in
+	 * {@code connectingOrphans}: the staleness cutoff is a reward CHAINLENGTH
+	 * (compared against {@code Block.lastMiningRewardBlock}), not the block
+	 * height {@code getCurrentCutoffHeight} returns. Under load the DAG height
+	 * runs ahead of the confirmed chainlength, so a height cutoff wrongfully
+	 * pruned still-connectable orphans as "too old".
+	 *
+	 * <p>Setup reproduces that production shape: chained transfer blocks first
+	 * (height grows, chainlength does not), then beacons — so the cutoff
+	 * block's height is well above the cutoff chainlength (asserted; the test
+	 * fails on setup rather than passing vacuously if that ever stops
+	 * holding).
+	 */
+	@Test
+	public void testOrphanPruneUsesChainlengthNotHeight() throws Exception {
+		// 1) Inflate DAG height ahead of chainlength: 10 production-shaped
+		// beacon fillers (coinbase-only, never confirmed: height grows,
+		// chainlength does not). Mirrors SlotService beacon construction.
+		Block genesisTip = UtilGeneseBlock.createGenesis(networkParameters);
+		Block tip = genesisTip;
+		for (int i = 0; i < 10; i++) {
+			Block filler = Block.createBlock(networkParameters, tip, tip);
+			filler.setBlockType(BlockType.BLOCKTYPE_BEACON);
+			RewardInfo fri = new RewardInfo(genesisTip.getHash(), new java.util.HashSet<>(), 0);
+			Transaction ftx = new Transaction(networkParameters);
+			ftx.setData(fri.toByteArray());
+			filler.addTransaction(ftx);
+			filler.setLastMiningRewardBlock(0);
+			blockGraph.addChain(filler, store);
+			// addChain does not persist block bytes (production stores them
+			// on receipt); put explicitly so later beacons build on these
+			// heights and getBlockWrap resolves.
+			store.put(filler);
+			tip = filler;
+		}
+		store.commitDatabaseBatchWrite();
+		// 2) 45 beacons on the inflated tip -> maxCl ~46, cutoff ~6, but the
+		// cutoff block's HEIGHT is ~10 higher (the production gap). First
+		// beacon links reward-prev to genesis (transfers are not rewards).
+		Sha256Hash genesisHash = genesisHash();
+		List<Block> chain = new ArrayList<>();
+		Block rolling = tip;
+		Sha256Hash prevReward = genesisHash;
+		for (int i = 0; i < NetworkParameters.CHAINLENGTH_CUTOFF + 5; i++) {
+			rolling = makeRewardBlock(prevReward, rolling.getHash(), rolling.getHash());
+			assertNotNull(rolling, "beacon " + i + " must be created");
+			chain.add(rolling);
+			prevReward = rolling.getHash();
+		}
+		blockGraph.updateChain(false);
+
+		TXReward maxConfirmed = cacheBlockService.getMaxConfirmedReward(store);
+		assertNotNull(maxConfirmed, "chain must confirm");
+		long cutCl = Math.max(0, maxConfirmed.getChainLength() - NetworkParameters.CHAINLENGTH_CUTOFF);
+		assertTrue(cutCl > 0, "need a non-genesis cutoff, maxCl=" + maxConfirmed.getChainLength());
+		ServiceBaseConnect serviceBase = new ServiceBaseConnect(serverConfiguration, networkParameters,
+				cacheBlockService, jsonmapper);
+		long cutH = serviceBase.getCurrentCutoffHeight(maxConfirmed, store);
+		assertTrue(cutH > cutCl + 1,
+				"setup must reproduce height-ahead-of-chainlength (cutH=" + cutH + ", cutCl=" + cutCl + ")");
+
+		// 3) Queue three beacon-shaped orphans with parseable RewardInfo and a
+		// missing reward-prev (so they stay queued): one just INSIDE the
+		// chainlength window (must survive), one below it (must be pruned),
+		// one inside the window but 3h old (must be age-pruned).
+		long nowSec = System.currentTimeMillis() / 1000;
+		Sha256Hash keepHash = enqueueOrphan(tip, cutCl + 1, nowSec);
+		Sha256Hash dropHash = enqueueOrphan(tip, 0, nowSec);
+		Sha256Hash oldHash = enqueueOrphan(tip, maxConfirmed.getChainLength(), nowSec - 3 * 3600);
+		store.commitDatabaseBatchWrite();
+		java.util.Set<String> before = new java.util.HashSet<>();
+		for (ChainBlockQueue q : store.selectChainblockqueue(true, 100)) {
+			before.add(new Sha256Hash(q.getHash()).toString());
+		}
+		assertTrue(before.contains(keepHash.toString()) && before.contains(dropHash.toString())
+				&& before.contains(oldHash.toString()), "all 3 orphans must be queued before the pass");
+
+		syncBlockService.connectingOrphans(store);
+
+		java.util.Set<String> queued = new java.util.HashSet<>();
+		for (ChainBlockQueue q : store.selectChainblockqueue(true, 100)) {
+			queued.add(new Sha256Hash(q.getHash()).toString());
+		}
+		assertTrue(queued.contains(keepHash.toString()),
+				"in-window orphan (lastMiningRewardBlock=" + (cutCl + 1) + ", height-cutoff=" + cutH
+						+ ") must survive: prune compares chainlengths, not heights");
+		assertTrue(!queued.contains(dropHash.toString()), "below-window orphan must still be pruned");
+		assertTrue(!queued.contains(oldHash.toString()), "3h-old orphan must still be age-pruned");
+	}
+
+	private Sha256Hash genesisHash() throws Exception {
+		return UtilGeneseBlock.createGenesis(networkParameters).getHash();
+	}
+
+	/**
+	 * Beacon-shaped queued block with a parseable RewardInfo whose reward-prev
+	 * is absent from the store, so {@code connectingOrphans} can neither
+	 * connect nor (unless stale) prune it — it stays queued. Returns its hash.
+	 */
+	private Sha256Hash enqueueOrphan(Block parentsFrom, long lastMiningRewardBlock, long inserttimeSec)
+			throws Exception {
+		Block orphan = Block.createBlock(networkParameters, parentsFrom, parentsFrom);
+		orphan.setBlockType(BlockType.BLOCKTYPE_BEACON);
+		RewardInfo ri = new RewardInfo(
+				Sha256Hash.of(("missing-reward-prev-" + lastMiningRewardBlock).getBytes()),
+				new java.util.HashSet<>(), lastMiningRewardBlock);
+		Transaction tx = new Transaction(networkParameters);
+		tx.setData(ri.toByteArray());
+		orphan.addTransaction(tx);
+		orphan.setLastMiningRewardBlock(lastMiningRewardBlock);
+		store.insertChainBlockQueue(new ChainBlockQueue(orphan.getHash().getBytes(), orphan.bitcoinSerialize(),
+				lastMiningRewardBlock, true, inserttimeSec));
+		return orphan.getHash();
 	}
 }
