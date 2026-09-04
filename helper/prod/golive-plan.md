@@ -20,8 +20,8 @@ Assumption: "rescaled" = each host is re-provisioned (or extended) to run
 Decisions to confirm before Phase 0 (record answers in the launch ticket):
 
 - [ ] Distribution mechanism: **Option A** — bake legacy balances into genesis
-      via `GENESIS_CSV` (`FUND_MODE=genesis`). Recommended; `fundAddresses`
-      must never be enabled in prod.
+      via `GENESIS_CSV` (`FUND_MODE=genesis`). The only mechanism: the
+      `fundAddresses` faucet was removed from the server.
 - [ ] Validator funding source: the 3 validator stakes (≥ 32 BIG each) are
       carved out of the operator's genesis balance (operator transfers to each
       validator address post-genesis) so the CSV still sums to exactly
@@ -75,7 +75,7 @@ Decisions to confirm before Phase 0 (record answers in the launch ticket):
 3. Edit `common.env`:
    - `SEED_HOSTS="10.8.0.11:8081,10.8.0.12:8082,10.8.0.13:8083"`
    - `GOSSIP_SEEDS="10.8.0.11:9095,10.8.0.12:9097,10.8.0.13:9099"`
-   - `FUND_MODE=genesis`, `FUND_ENABLED=false`
+   - `FUND_MODE=genesis` (funding is genesis-only; the faucet was removed)
    - `GENESIS_CSV=/path/GenesisOutput.csv`, `STORE_DOMAIN=core`
    - `API_KEY=<openssl rand -hex 32>`, non-default `DB_PASSWORD`
 4. Per node generate a TLS keystore: `helper/prod/generate_keystore.sh`
@@ -117,13 +117,13 @@ Checkpoint: `getValidators` grows 1 → 2 → 3 on every node.
 On **every** node, all must pass:
 
 - [ ] `curl -X POST http://127.0.0.1:8081/fundAddresses …` → refused
-      (`FUND_ENABLED=false`; genesis funding only).
+      (endpoint removed from the server; genesis funding only).
 - [ ] PoS endpoints require `X-Api-Key` (`stakeDeposit`, `activateValidator`,
       `processWithdrawal`, `setValidatorKey`).
 - [ ] TLS live on the public port; `server.requester` / `pos.gossipPeers`
       rotated to `https://`.
 - [ ] No `SECURITY:` warnings in any node's startup log (API key, TLS, DB
-      password, fundEnabled) — each one is a launch blocker.
+      password) — each one is a launch blocker.
 - [ ] DB ports not exposed publicly; secrets only as env vars, never CLI args.
 
 ## Phase 6 — Publication / seeds

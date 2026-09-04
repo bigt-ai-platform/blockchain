@@ -143,7 +143,6 @@ start_server() {
     if [ -n "${KAFKA_BOOTSTRAP:-}" ]; then
         kafka_args=("--server.runKafkaStream=true" "--kafka.bootstrapServers=${KAFKA_BOOTSTRAP}")
     fi
-    local fund_args=()
     log "starting layer0-server on :${SERVER_PORT} (db=${DB_NAME})"
     docker_run "node-${NODE_INDEX}-server" "${SERVER_IMAGE}:${IMAGE_TAG}" \
         ${JAVA_OPTS_SERVER} "${genesis_csv_arg[@]}" -jar /app/app.jar \

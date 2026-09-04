@@ -24,7 +24,7 @@ L1_DB_NAME="${L1_DB_NAME:-info_order}"
 SERVER_URL="http://127.0.0.1:$L0_PORT/"
 L1_URL="http://127.0.0.1:$L1_PORT/"
 # Bases without the trailing slash, for the script's own curl calls
-# (a URL like //fundAddresses 404s).
+# (a URL like //getTip 404s).
 SERVER_BASE="${SERVER_URL%/}"
 L1_BASE="${L1_URL%/}"
 DB_ARGS="-DDB_HOSTNAME=127.0.0.1 -DDB_USERNAME=root -DDB_PASSWORD=test1234 -DDB_PORT=$PG_PORT -DDB_NAME=$DB_NAME"
@@ -74,11 +74,10 @@ ISSUANCE_PUBKEY="${ISSUANCE_PUBKEY:-}"
 # so the genesis wallet is funded explicitly below (Step 7). The L1-order chain
 # has a fresh genesis and needs its wallet funded too (Step 7c).
 #
-# Preferred: fund the init wallets (genesis / yuan / validator / miner) directly
-# in the L0 GENESIS BLOCK via a GenesisOutput CSV (TestGenesisOutput.csv), so
-# the test wallets start with REAL confirmed chain state and no faucet
-# (chicken-and-egg) injection is needed. If the CSV is absent, remote.sh falls
-# back to the fundAddresses faucet in Step 7.
+# Fund the init wallets (genesis / yuan / validator / miner) directly in the
+# L0 GENESIS BLOCK via a GenesisOutput CSV (TestGenesisOutput.csv), so the
+# test wallets start with REAL confirmed chain state. The /fundAddresses
+# faucet was removed from the server — genesis funding is the only path.
 L0_GENESIS_PUBKEY="${L0_GENESIS_PUBKEY:-}"
 L0_YUAN_PUBKEY="${L0_YUAN_PUBKEY:-}"
 # ML-DSA-87 seed of the L0 genesis wallet (also the L1 genesis wallet). It is
@@ -359,9 +358,8 @@ echo "Bridge vault pubkey: ${VAULT_PUBKEY:0:24}... (${#VAULT_PUBKEY} hex)"
 echo "L1 issuance pubkey: ${ISSUANCE_PUBKEY:0:24}... (${#ISSUANCE_PUBKEY} hex)"
 
 L0_POS_ARGS="-Dpos.validatorKey=$L0_VALIDATOR_KEY $POS_ARGS -Dpos.dutyEnabled=true"
-# When a test genesis CSV is present, mint the init wallets (genesis/yuan/
-# validator/miner) inside the L0 genesis block instead of the fundAddresses
-# faucet — the wallets then start with real, confirmed chain state.
+# Mint the init wallets (genesis/yuan/validator/miner) inside the L0 genesis
+# block — the wallets then start with real, confirmed chain state.
 L0_GENESIS_CSV_ARGS=""
 if [ -f "$TEST_GENESIS_CSV" ]; then
     L0_GENESIS_CSV_ARGS="-Dbigtangle.genesis.csv=$TEST_GENESIS_CSV"
@@ -403,8 +401,8 @@ wait_http_ready() {
 
 # POST a JSON body to an endpoint and keep retrying until the controller really
 # answers (success JSON with errorcode 0). The generic BaseDispatcherController
-# catch-all answers HTTP 400/500 while the specific route (FundAddressesController,
-# stakeDeposit, ...) is still being registered, so a plain curl -sf is not enough.
+# catch-all answers HTTP 400/500 while the specific route (stakeDeposit, ...)
+# is still being registered, so a plain curl -sf is not enough.
 # Huge bodies (e.g. 64 funded UTXOs, each carrying a ~5KB ML-DSA pubkey) exceed
 # the shell command-line ARG_MAX limit, so write the payload to a temp file and
 # post it with --data-binary @file instead of an inline -d argument.
@@ -479,17 +477,12 @@ echo "TipsQueue has $(pg_exec psql -U root -d $DB_NAME -p "$PG_INTERNAL_PORT" -t
 echo ""
 echo "=== Step 7: Register L0 PoS validator ==="
 
-# When the genesis CSV is used, the validator / genesis / yuan wallets already
-# hold confirmed coins from the genesis block, so the fundAddresses faucet calls
-# below are skipped (no synthetic off-chain minting needed).
+# The /fundAddresses faucet was REMOVED from the server: wallets must be
+# funded in the genesis block (TEST_GENESIS_CSV). Fail fast when it is absent
+# instead of calling the dead endpoint.
 if [ -z "$L0_GENESIS_CSV_ARGS" ]; then
-    FUND_AMOUNT=1000000000000
-    if post_ok "$SERVER_BASE/fundAddresses" \
-        "{\"addresses\":[{\"address\":\"validator\",\"value\":$FUND_AMOUNT,\"pubkey\":\"$L0_VALIDATOR_PUBKEY\"}]}"; then
-        echo "L0 validator funded"
-    else
-        echo "L0 validator funding failed"
-    fi
+    echo "ERROR: no genesis distribution ($TEST_GENESIS_CSV missing) and the /fundAddresses faucet no longer exists" >&2
+    exit 1
 fi
 
 sleep 2
@@ -508,44 +501,7 @@ else
     echo "L0 validator activation failed"
 fi
 
-if [ -n "$L0_GENESIS_CSV_ARGS" ]; then
-    echo "L0 init wallets funded via genesis CSV (no faucet)"
-else
-    # Fund the L0 genesis wallet (ML-DSA-87 seed 0x01) so the remote tests can
-    # pay fees / create tokens on the settlement chain as the genesis wallet.
-    # Many distinct confirmed UTXOs are minted (one per entry) so each test /
-    # token creation can spend a fresh confirmed BIG source; a single UTXO would
-    # leave only unconfirmed change after the first spend and later tests would
-    # fail with InsufficientMoneyException.
-    GENESIS_FUND_UTXOS="${GENESIS_FUND_UTXOS:-64}"
-    L0_GENESIS_ENTRIES=""
-    for i in $(seq 1 "$GENESIS_FUND_UTXOS"); do
-        L0_GENESIS_ENTRIES="${L0_GENESIS_ENTRIES}{\"address\":\"genesis\",\"value\":100000000000000,\"pubkey\":\"$L0_GENESIS_PUBKEY\"},"
-    done
-    L0_GENESIS_ENTRIES="[${L0_GENESIS_ENTRIES%,}]"
-    if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$L0_GENESIS_ENTRIES}"; then
-        echo "L0 genesis wallet funded ($GENESIS_FUND_UTXOS UTXOs)"
-    else
-        echo "L0 genesis funding failed"
-    fi
-
-    # Fund the yuan key (ML-DSA-87 seed 0x03) that RemoteFromAddressIT uses as the
-    # yuan token issuer + yuanWallet, so it has confirmed BIG to pay the token
-    # creation fee and the token-payment fees. The plain mempool transfer path
-    # (submitTransaction) never confirms on this PoS build, so the yuan wallet
-    # must start with confirmed BIG instead of waiting for a transfer to confirm.
-    YUAN_FUND_UTXOS="${YUAN_FUND_UTXOS:-8}"
-    YUAN_FUND_ENTRIES=""
-    for i in $(seq 1 "$YUAN_FUND_UTXOS"); do
-        YUAN_FUND_ENTRIES="${YUAN_FUND_ENTRIES}{\"address\":\"yuan\",\"value\":100000000000000,\"pubkey\":\"$L0_YUAN_PUBKEY\"},"
-    done
-    YUAN_FUND_ENTRIES="[${YUAN_FUND_ENTRIES%,}]"
-    if post_ok "$SERVER_BASE/fundAddresses" "{\"addresses\":$YUAN_FUND_ENTRIES}"; then
-        echo "L0 yuan key funded ($YUAN_FUND_UTXOS UTXOs)"
-    else
-        echo "L0 yuan key funding failed"
-    fi
-fi
+echo "L0 init wallets funded via genesis CSV (no faucet; the /fundAddresses endpoint was removed)"
 
 # Wait for the L0 (PoS) beacon chain to start producing
 echo "Waiting for L0 PoS beacon production..."

@@ -158,14 +158,15 @@ in PoS mode.)
 ## 5. Fund, stake and activate validators
 
 For **every** validator `i` (funding/activation can target any reachable node;
-the STAKE blocks propagate through the DAG). The `stakeDeposit` call must be
-submitted to validator `i`'s **own** node, because it signs with that node's
-configured `--pos.validatorKey` and the request `pubkey` must match:
+the STAKE blocks propagate through the DAG). Validators are funded in the
+genesis distribution (`GENESIS_CSV` — the `/fundAddresses` faucet was removed
+from the server, so there is no other funding path). The `stakeDeposit` call
+must be submitted to validator `i`'s **own** node, because it signs with that
+node's configured `--pos.validatorKey` and the request `pubkey` must match:
 
 ```bash
-# 1) Fund the validator's address (requires FUND_ENABLED=true, see below)
-curl -X POST http://127.0.0.1:8081/fundAddresses -H 'Content-Type: application/json' \
-  -d '{"addresses":[{"address":"validator","value":1000000000000,"pubkey":"<VALIDATOR_PUBKEY_i>"}]}'
+# 1) Fund the validator's address — bake it into the genesis CSV
+#    (see GENESIS_CSV above; e.g. value 1000000000000 for <VALIDATOR_PUBKEY_i>)
 
 # 2) Stake (amount must be >= 32,000,000 satoshis = 32 BIG). No private key is
 #    sent over HTTP: the STAKE block is signed with the server's configured
@@ -272,7 +273,6 @@ non-secret settings.
 | `service.schedule.initsync` | Sync on startup | `true` |
 | `service.schedule.microbatch` | Micro-batch service | `true` |
 | `server.runKafkaStream` | Kafka stream processing (unused in this deployment; leave off) | `false` |
-| `server.fundEnabled` | Enable the coin-minting `fundAddresses` endpoint (**test/bootstrap only**; must stay `false` on Mainnet) | `false` |
 | `POS_VALIDATOR_KEY` (env) | Validator private seed (64 or 128 hex). Env var only — never a CLI arg | `…` |
 | `pos.dutyEnabled` | This process proposes/attests (validator duties run on `layer0-server`) | `true` |
 | `pos.slotIntervalMs` | Slot duration | `12000` |
@@ -299,10 +299,9 @@ docker logs -f l0-server
   endpoints. Keep both in a gitignored `validator.env`, never log them, and
   never commit them. Pass them as env vars (`POS_VALIDATOR_KEY`,
   `SERVER_APIKEY`), never as CLI args — CLI args are visible in `ps`.
-- **`fundAddresses` mints confirmed coins over an unauthenticated endpoint.** It
-  is disabled by default (`server.fundEnabled=false`) and must remain disabled on any
-  public or production node. Only enable it for test/bootstrap networks. Even
-  when enabled it refuses non-loopback callers unless `server.faucetPublic=true`.
+- There is no coin-minting endpoint: the `/fundAddresses` faucet was removed
+  from the server. All funds originate in the genesis distribution — audit
+  `GENESIS_CSV` instead of looking for a faucet flag.
 - `stakeDeposit` signs with the node's configured `POS_VALIDATOR_KEY` (it
   rejects a `privateKey` in the request), and `stakeDeposit` /
   `activateValidator` / `processWithdrawal` / `setValidatorKey` require the
@@ -322,5 +321,5 @@ docker logs -f l0-server
   [bigt-ai-platform/seeds](https://github.com/bigt-ai-platform/seeds).
 - A single-validator testnet bootstrap is scripted in
   `helper/prod/validators/` (`generate_keys.sh`, `node-<i>/setup.sh` phases
-  server → stake → verify: PostgreSQL + `fundAddresses` → `stakeDeposit` →
+  server → stake → verify: PostgreSQL + genesis funding → `stakeDeposit` →
   `activateValidator`).

@@ -180,7 +180,6 @@ All configuration is via environment variables (defined in `layer0-server/src/ma
 | `SERVICE_MICROBATCH` | false | Enable micro-batch service |
 | `SERVICE_BLOCKBATCH` | false | Enable batch block service |
 | `SERVICE_CHAINLENGTH` | false | Enable the chain-length update scheduler |
-| `FUND_ENABLED` | false | Enable the coin-minting `fundAddresses` faucet (test/bootstrap only) |
 | `SERVICE_SYNC` | true | Enable block sync |
 | `SERVICE_INITSYNC` | true | Initial sync on startup |
 | `REQUESTER` | (empty) | Bootstrap node URL (e.g., `http://l0-svr-0:8081`) |
@@ -237,8 +236,8 @@ bash helper/fulltest/benchmark.sh --clients 50 --payments 5000
 bash helper/fulltest/benchmark.sh --no-start         # reuse a running network
 ```
 
-The benchmark pre-funds each client via the `fundAddresses` faucet
-(`FUND_ENABLED=true`, already set in `docker-compose.l0-test.yml`), then submits
+The benchmark funds each client at genesis (the `/fundAddresses` faucet was
+removed — clients must be funded via a genesis distribution CSV), then submits
 batched multi-recipient payments through the mempool and prints TPS, latency,
 wall time and OK/fail counts. Tune with `SERVER_URL`, `CLIENTS`, `PAYMENTS`.
 
@@ -367,7 +366,7 @@ docker logs l0-svr-0 | tail -20
 | `docker-compose.l0-single.yml` | Single-node L0 test |
 | `docker-compose.l0-kafka.yml` | Kafka integration variant |
 | `run-tests.sh` | Automated test runner |
-| `benchmark.sh` | Payment throughput benchmark (needs `FUND_ENABLED=true` — set in `docker-compose.l0-test.yml`) |
+| `benchmark.sh` | Payment throughput benchmark (clients funded via genesis CSV) |
 
 ## References
 

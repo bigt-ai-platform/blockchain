@@ -134,19 +134,19 @@ the gate must be identical on every node). Production uses the default 1024.
 3. Restart both processes on each node; verify the health endpoint answers over
    TLS and DAG sync / attestation gossip still converge.
 
-## 6. Disable `fundAddresses` + security warning audit
+## 6. Mint-impossibility + security warning audit
 
-`server.fundEnabled` mints confirmed coins over an **unauthenticated** endpoint.
-It must be `false` on every production node **before** any node is publicly
-reachable.
+The `/fundAddresses` faucet was removed from the server — no endpoint can mint
+coins. Verify the impossibility holds on **every** node before any node is
+publicly reachable.
 
 Verification (must all pass, on **every** node):
 
 ```bash
-# 1. Endpoint refused
+# 1. Mint endpoint gone (must refuse)
 curl -sf -X POST http://127.0.0.1:8081/fundAddresses \
   -H 'Content-Type: application/json' -d '{"addresses":[]}' \
-  && echo "UNSAFE: fundAddresses still enabled" || echo "OK: disabled"
+  && echo "UNSAFE: mint endpoint answers" || echo "OK: no mint endpoint"
 
 # 2. Chain advances (height strictly increasing, epoch boundaries passing)
 curl -X POST http://127.0.0.1:8081/getChainNumber -H 'Content-Type: application/json' -d '{}'
@@ -159,8 +159,8 @@ docker logs -f node-0-server | grep -iE "justif|final"
 ```
 
 Also verify no `SECURITY:` startup warnings remain in each node's log — every
-one of them (missing API key, fundEnabled, no TLS, default DB password) is a
-launch blocker:
+one of them (missing API key, no TLS, default DB password) is a launch
+blocker:
 
 ```bash
 grep -i "SECURITY:" node-0-server.log && echo "UNSAFE: fix warnings above" || echo "OK: no security warnings"

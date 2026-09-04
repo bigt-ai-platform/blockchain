@@ -18,9 +18,10 @@ Companion to `prod.md`. Covers the five required steps:
   M-of-N multisig). **Per-address amounts need the new overload** (see Phase 3).
 - Snapshot source: legacy chain's `outputs` table
   (`toaddress, coinvalue, tokenid, confirmed, spent`).
-- "Pay from genesis" mechanism: `FundAddressesController.fund` mints *confirmed*
-  UTXOs whose `blockHash` = the genesis hash, with per-address values. Gated by
-  `FUND_ENABLED` (`server.fundEnabled`).
+- "Pay from genesis" mechanism: the genesis coinbase mints *confirmed*
+  UTXOs whose `blockHash` = the genesis hash, with per-address values
+  (the old `FundAddressesController.fund` faucet that used to do this was
+  removed from the server).
 - Validator activation: `fund → stakeDeposit(≥32,000,000 BIG) → activateValidator`.
   Reference impl: `helper/prod/validators/` phased `setup.sh` (server → stake →
   verify) and the cutover runbook.
@@ -32,8 +33,8 @@ Companion to `prod.md`. Covers the five required steps:
 ## Phase 0 — Freeze & decisions
 
 - Freeze the legacy chain at a specific height/hash; stop writes (note the cutoff).
-- Choose the distribution mechanism (Phase 3): **Option A** bake into genesis
-  (recommended) vs **Option B** `fundAddresses` bootstrap.
+- Distribution is genesis-baked (Phase 3): the `/fundAddresses` faucet was
+  removed from the server, so there is no bootstrap alternative.
 - Decide the validator set (N nodes) and their host IPs/ports.
 - Confirm total: `SUM(coinvalue)` of open BIG outputs must equal `10^17`.
 
@@ -75,7 +76,8 @@ Companion to `prod.md`. Covers the five required steps:
 
 ## Phase 3 — Pay from genesis to snapshot addresses
 
-**Option A (recommended, consensus-clean): bake the snapshot into the genesis coinbase.**
+Bake the snapshot into the genesis coinbase (the only distribution mechanism
+since the `/fundAddresses` faucet was removed).
 
 - Use the new `UtilGeneseBlock.createGenesis(params, List<GenesisOutput>)`:
   one coinbase output **per snapshot entry** (amount + base58 address or pubkey
@@ -86,21 +88,9 @@ Companion to `prod.md`. Covers the five required steps:
   the legacy balances.
 - Verify: `SUM(outputs.coinvalue)` over genesis outputs == `10^17`.
 
-**Option B (bootstrap, faster but test-only semantics): keep genesis as-is, replay via `fundAddresses`.**
-
-- On node 0, set `FUND_ENABLED=true` **temporarily**, POST the snapshot, then
-  **set `FUND_ENABLED=false` and restart** before the node is publicly reachable
-  (the endpoint mints coins unauthenticated — `prod.md` §Security):
-
-  ```bash
-  curl -X POST http://127.0.0.1:8081/fundAddresses -H 'Content-Type: application/json' \
-    -d '{"addresses":[{"address":"…","value":…,"pubkey":"…"}, …]}'
-  ```
-
-- Mints confirmed UTXOs keyed to the genesis hash (no beacon needed — the PoS
-  chicken-and-egg the prodsim bootstrap works around).
-
-> Recommend A for mainnet auditability; use B to sanity-check the snapshot first.
+> The old Option B (`fundAddresses` bootstrap) is gone: the faucet was removed
+> from the server, so genesis-baking is the only distribution mechanism. To
+> sanity-check a snapshot first, bake it into a throwaway testnet genesis.
 
 ## Phase 4 — Per-validator setup shell scripts
 
@@ -135,7 +125,8 @@ Generated under `helper/prod/validators/`:
 - `getValidators` == the intended N-validator active set.
 - Spot-check migrated balances via `getBalances`.
 - Full audit: `SUM(coinvalue)` of open outputs == `10^17`; every snapshot address present.
-- Enable TLS (`SSL/KEYSTORE`); disable `FUND_ENABLED` before public exposure.
+- Enable TLS (`SSL/KEYSTORE`) before public exposure (no faucet flag exists
+  anymore — funding is genesis-only).
 
 ---
 

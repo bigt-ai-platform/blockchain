@@ -95,6 +95,6 @@ helper/prod/addnode.sh rejoin 4         # re-add seeds, restart, re-stake
   with `--pos.dutyEnabled=true` (proposes/attests).
 - `stakeDeposit` no longer accepts a `privateKey` field — it signs with the
   server's configured key, so each validator stakes via **its own** node's API.
-- `FUND_MODE=bootstrap` requires `FUND_ENABLED=true` on the server and mints
-  coins unauthenticated — test/bootstrap only; prefer `FUND_MODE=genesis`
-  (validators funded in the genesis distribution) for production.
+- Funding is genesis-only: the `/fundAddresses` faucet was removed from the
+  server, so validators are funded in the genesis distribution
+  (`FUND_MODE=genesis`, `GENESIS_CSV`) — there is no bootstrap mode.

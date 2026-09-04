@@ -81,9 +81,9 @@ on one `layer0` DB). Rule stands: recreate the database between campaigns
 before comparing numbers.
 
 Hardening shipped:
-- `/fundAddresses` is now loopback-only unless `server.faucetPublic=true`
-  (faucet mints spendable UTXOs — a misconfigured exposed node was an
-  inflation vector).
+- `/fundAddresses` faucet removed entirely (it minted spendable UTXOs — a
+  misconfigured exposed node was an inflation vector). All funds now
+  originate in the genesis distribution.
 - Actuator exposure restricted from `*` to `health,info,prometheus`;
   loggers/threaddump writes are no longer reachable on the API port
   (set `-Dmanagement.endpoints.web.exposure.include=*` when debugging).
