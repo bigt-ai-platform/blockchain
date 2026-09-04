@@ -381,6 +381,23 @@ null-safe `recordKey`); all three stream handlers route through it.
 Validated: new `StreamKeyRoutingTest` (null/stamped/legacy/foreign keys);
 liveness confirmed on the interop mesh (all three handlers RUNNING).
 
+### 29. Postgres outage: pool never re-establishes, node diverges — OPEN (found by V67, 2026-09-04)
+
+Stopping one node's PostgreSQL for 75s (PER_NODE_PG mesh) while the quorum
+finalizes: the affected node's API goes down and does NOT come back —
+dead pooled HikariCP connections are not re-established (observed >10 min,
+then >25 min). Worse, the node ends up on a DIVERGENT finalized root
+(finroots=2) instead of failing closed to the canonical one. A container
+restart heals it to an identical cl/fin in ~2 min. The §10b/§26 self-heal
+story does not extend to DB outages.
+
+**Mitigation:**
+- Configure Hikari `connection-test-query` + `max-lifetime` refresh so dead
+  pools recover without a process restart; or fail the node loudly when its DB
+  is unreachable so an operator restarts it (never silent divergence).
+- Add a V67 regression asserting the node rejoins the finroot without a
+  restart once the DB is restored.
+
 ## Automated Attack Suites — `MeshAttack` V1-V36, `MeshLoad` V37-V50
 
 `helper/prod/validators/MeshAttack.java` is a deterministic, black-box HTTP
@@ -443,11 +460,11 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V49 | Equivocation-set poisoning (many fake pubkeys marked equivocating)                                                       | honest weight/denominator unaffected                                                                      | IMPLEMENTED (`MeshLoad`; bounded lane passed)                                                                                                                                                                                                                                                                                      |
 | V50 | Weak-subjectivity bootstrap attack (fresh node fed a hostile chain)                                                      | checkpoint gate holds; node converges to the honest chain                                                 | IMPLEMENTED (`MeshLoad`; isolated bootstrap drill open)                                                                                                                                                                                                                                                                            |
 | V51 | Same-slot proposer equivocation (two valid beacons from one controlled validator)                                        | at most one canonical; evidence applied once; no finalized split                                          | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
-| V52 | Orphaned latest-vote contamination after reorg                                                                           | abandoned-branch votes leave GHOST; canonical head/finality converge                                      | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
+| V52 | Orphaned latest-vote contamination after reorg                                                                           | abandoned-branch votes leave GHOST; canonical head/finality converge                                      | HARNESSED (`MeshChaos` safe form; injected votes self-slash live duties)                                                                                                                                                                                                                                                                                                        |
 | V53 | Epoch-boundary activation/exit snapshot race                                                                             | every node derives the same active set and proposer schedule                                              | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
 | V54 | RANDAO multi-candidate grinding (withhold/release competing valid reveals)                                               | one deterministic reveal/seed; proposer schedule does not split                                           | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
-| V55 | Justified-checkpoint cache reorg at an unfinalized epoch boundary                                                        | stale checkpoint is evicted; justification re-derives canonically                                         | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
-| V56 | Slashing include → reorg → replay                                                                                        | burn/refund/reporter reward apply exactly once on the canonical chain                                     | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
+| V55 | Justified-checkpoint cache reorg at an unfinalized epoch boundary                                                        | stale checkpoint is evicted; justification re-derives canonically                                         | HARNESSED (`MeshChaos` safe form)                                                                                                                                                                                                                                                                                                        |
+| V56 | Slashing include → reorg → replay                                                                                        | burn/refund/reporter reward apply exactly once on the canonical chain                                     | HARNESSED (`MeshChaos` genuine evidence; -1 validator exactly once)                                                                                                                                                                                                                                                                                                        |
 | V57 | Real >1/3 validator partition + inactivity-leak recovery                                                                 | no conflicting finality; deterministic leak; finality resumes after heal                                  | PROPOSED (disruptive PoS lane)                                                                                                                                                                                                                                                                                                     |
 | V58 | Exit/withdrawal boundary reorg                                                                                           | no early/double withdrawal; validator lifecycle state reverts exactly                                     | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
 | V59 | Consensus-parameter mismatch (`slotsPerEpoch`, activation height, skew)                                                  | incompatible node fails closed and cannot fragment quorum                                                 | PROPOSED (configuration lane)                                                                                                                                                                                                                                                                                                      |
@@ -456,10 +473,10 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V62 | Valid-prefix + invalid-tail batch poison under sustained load                                                            | whole request rolls back atomically; retry confirms every valid tx once                                   | IMPLEMENTED (`MeshLoad`; atomic rollback + retry 50/50 passed)oad lane)                                                                                                                                                                                                                                                                                                         |
 | V63 | Malformed orphan poison followed by a valid reconnectable orphan                                                         | poison is quarantined; valid orphan connects; sync loop keeps running                                     | Harnessed (`MeshLoad`); BREACH confirmed live, per-orphan isolation open (§27)oad lane)                                                                                                                                                                                                                                                                                                         |
 | V64 | Mixed endpoint fairness (tx, block, attestation, proof, heavy reads)                                                     | proposer ticks/finality retain service; bounded p99 and pool waits                                        | IMPLEMENTED (`MeshLoad`; sentinel + p99 + finality passed)oad lane)                                                                                                                                                                                                                                                                                                         |
-| V65 | Lagging-peer backfill while the live mesh remains under load                                                             | lagger catches up without throttling proposers or changing finroot                                        | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
-| V66 | Rolling validator restart during continuous load                                                                         | quorum finalizes throughout; each node rejoins without state drift                                        | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
-| V67 | PostgreSQL outage/reconnect across a proposal/finality boundary                                                          | fail closed, reconnect, catch up; no duplicate state transition                                           | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
-| V68 | Process pause / stop-the-world stall then resume                                                                         | stale duties are not replayed; node catches up to one finroot                                             | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
+| V65 | Lagging-peer backfill while the live mesh remains under load                                                             | lagger catches up without throttling proposers or changing finroot                                        | HARNESSED (`MeshChaos` tc throttle; quorum + lagger passed)                                                                                                                                                                                                                                                                                                         |
+| V66 | Rolling validator restart during continuous load                                                                         | quorum finalizes throughout; each node rejoins without state drift                                        | HARNESSED (`MeshChaos` rolling restart; 4/4 rejoin)                                                                                                                                                                                                                                                                                                    |
+| V67 | PostgreSQL outage/reconnect across a proposal/finality boundary                                                          | fail closed, reconnect, catch up; no duplicate state transition                                           | HARNESSED (`MeshChaos`); BREACH live — no self-recovery (§29)                                                                                                                                                                                                                                                                                                    |
+| V68 | Process pause / stop-the-world stall then resume                                                                         | stale duties are not replayed; node catches up to one finroot                                             | HARNESSED (`MeshChaos` pause; no stale duties)                                                                                                                                                                                                                                                                                                    |
 | V69 | Asymmetric network partition, minority load, then heal                                                                   | neither side conflicts with finalized history; healed mesh converges                                      | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
 | V70 | Disk-full/WAL write failure during block confirmation                                                                    | no unpersisted ACK; restart recovers one canonical state                                                  | PROPOSED (destructive recovery lane)                                                                                                                                                                                                                                                                                               |
 
@@ -837,7 +854,7 @@ The active set and finalized root converge after the slot. **Breaks:** a
 proposer can split LMD-GHOST or duplicate slashing effects with two valid
 messages; V30 only covers invalid beacons.
 
-### V52. Orphaned latest-vote contamination after reorg — OPEN
+### V52. Orphaned latest-vote contamination after reorg — HARNESSED (safe form passes live)
 
 On an unfinalized branch, submit genuine validator attestations that make it
 temporarily heavier. Reorg that branch out, then submit newer canonical votes
@@ -870,7 +887,7 @@ does not bias the seed. **Defence under test:** reveal-domain validation plus
 canonical apply/revert idempotence. **Breaks:** proposer selection diverges or
 an attacker samples multiple future schedules.
 
-### V55. Justified-checkpoint cache invalidation race — OPEN
+### V55. Justified-checkpoint cache invalidation race — HARNESSED (safe form passes live)
 
 Create a temporary canonical branch containing an unfinalized epoch-boundary
 beacon, force nodes to cache its checkpoint, then make a longer valid sibling
@@ -880,7 +897,7 @@ uses the replacement hash and finality resumes without restart. **Defence under
 test:** reorg-safe `CasperService` checkpoint invalidation. **Breaks:** nodes
 vote forever for a stale boundary and finality silently stalls.
 
-### V56. Slashing include, reorg and replay idempotence — OPEN
+### V56. Slashing include, reorg and replay idempotence — HARNESSED (passes live; genuine evidence)
 
 Use a controlled validator to create genuine slashable evidence. Confirm its
 SLASHING block, reorg that block out above the finalized floor, then include
@@ -890,6 +907,29 @@ UTXO and one whistleblower reward; the reverted branch leaves no balance/state
 residue. **Defence under test:** `applySlashingConfirmed`,
 `revertSlashingBlock` and proof dedup. **Breaks:** double burn/reward, missing
 refund, or validator status that depends on delivery order.
+
+**Chaos-lane live results (2026-09-04, MeshChaos.java on the 4-node
+PER_NODE_PG mesh, opt-in):**
+- V52/V55 (safe form) **PASS** — fork + reorg + mid-flight restart: one head,
+  one finroot, finality advances. The doc's injected-real-vote form is
+  UNSTAGEABLE on a live-duty mesh: casting a real key's attestation for a
+  non-canonical head collides with that node's own same-slot honest vote and
+  SELF-SLASHES it (verified live: 4 validators → 1). Real-vote weighting needs
+  a no-duty fixture mesh where the driver alone signs (deferred).
+- V56 **PASS** — genuine double-vote evidence admitted; exactly ONE validator
+  removed (4→3), stable across 3 dups + 3 replays (3→3) on every node; finality
+  advanced, finroots=1. Destructive by design: run last on a disposable mesh.
+- V66 rolling restart **PASS** (4/4 rejoined past floor, converged).
+- V68 process pause **PASS** (150s freeze across duties+boundary; zero stale
+  duties / no new slashing, converged).
+- V65 gossip throttle (tc 1.5s+5% both ways, 300s) **PASS** — quorum finalized
+  336→368 through the throttle, lagger caught up bounded, tc cleaned.
+- V67 PG outage **BREACH CONFIRMED LIVE**: quorum finalized through the outage
+  (232→240, tip p99 46ms) but the affected node did NOT self-recover — API
+  down >10 min, then >25 min, never catching the finroot, ending on a
+  DIVERGENT finalized root (finroots=2). A process restart heals it in ~2 min
+  to an identical cl/fin. Finding: after a postgres outage the node's DB pool
+  does not re-establish and the node diverges unless restarted — see §29.
 
 ### V57. Real offline-majority partition and leak recovery — OPEN (disruptive)
 
@@ -983,7 +1023,7 @@ write p99 stays bounded, and DB/HTTP/PoS executor queues remain within caps.
 **Breaks:** isolation that survives a one-endpoint flood but collapses when
 several bounded pools contend for the same DB or CPU.
 
-### V65. Lagging-peer backfill under live load — OPEN
+### V65. Lagging-peer backfill under live load — HARNESSED (passes live)
 
 Throttle one node's block/sync traffic for several epochs without stopping its
 API while the majority processes load, then remove the throttle without
@@ -993,7 +1033,7 @@ the healthy nodes does not spike. **Defence under test:** missing-reference
 backpressure, requester rotation and reorg reconnect. **Breaks:** catch-up
 amplifies traffic enough to stall the live quorum or leaves the lagger wedged.
 
-### V66. Rolling validator restart under continuous load — OPEN (opt-in)
+### V66. Rolling validator restart under continuous load — HARNESSED (passes live, opt-in)
 
 On an N>=4 mesh, restart one validator at a time, including the current/next
 proposer, while continuously submitting uniquely tracked sentinel payments.
@@ -1003,7 +1043,7 @@ pre-restart floor, all sentinels confirm once, and validator/finroot digests
 converge. This generalizes the single `REJOIN` probe to a whole-mesh rolling
 operation.
 
-### V67. PostgreSQL outage and reconnect — OPEN (opt-in, isolated volumes)
+### V67. PostgreSQL outage and reconnect — HARNESSED, BREACH CONFIRMED LIVE (opt-in, isolated volumes)
 
 Stop or firewall one node's PostgreSQL during proposal assembly, block save,
 confirmation and epoch-boundary processing in separate rounds. Keep the other
@@ -1013,7 +1053,7 @@ loop, replays each transition at most once and catches the canonical finroot.
 The quorum keeps finalizing. **Breaks:** half-committed consensus state,
 exhausted connection pool after recovery, or duplicate rewards/leaks.
 
-### V68. Process pause / stop-the-world recovery — OPEN (opt-in)
+### V68. Process pause / stop-the-world recovery — HARNESSED (passes live, opt-in)
 
 Pause (`SIGSTOP`/container pause) one validator across several assigned duties
 and an epoch boundary while load continues, then resume without restart.
@@ -1104,11 +1144,11 @@ and all four oracle classes passed.
 | 47  | Equivocation-set poisoning (fake pubkeys)                        | High     | Harnessed — V49; bounded lane passed                        |
 | 48  | Weak-subjectivity bootstrap attack                               | Critical | Partial — V50 harnessed; isolated bootstrap drill open      |
 | 49  | Same-slot proposer equivocation                                  | Critical | Open — V51 proposed (controlled-validator staging)          |
-| 50  | Orphaned latest-vote contamination                               | Critical | Open — V52 proposed (fork-choice rollback)                  |
+| 50  | Orphaned latest-vote contamination                               | Critical | Harnessed — V52 (safe form; real-vote weighting needs no-duty mesh) |
 | 51  | Epoch-boundary validator snapshot race                           | High     | Open — V53 proposed                                         |
 | 52  | RANDAO branch grinding/reorg replay                              | High     | Open — V54 proposed                                         |
-| 53  | Justified-checkpoint cache reorg race                            | Critical | Open — V55 proposed                                         |
-| 54  | Slashing reorg/replay accounting                                 | Critical | Open — V56 proposed                                         |
+| 53  | Justified-checkpoint cache reorg race                            | Critical | Harnessed — V55 (safe form)                                 |
+| 54  | Slashing reorg/replay accounting                                 | Critical | Harnessed — V56 (genuine evidence, exactly-once drop)       |
 | 55  | Real partition + inactivity-leak recovery                        | Critical | Open — V57 proposed (disruptive)                            |
 | 56  | Exit/withdrawal boundary reorg                                   | Critical | Open — V58 proposed                                         |
 | 57  | Consensus-parameter mismatch                                     | Critical | Open — V59 proposed (fail-closed fingerprint needed)        |
@@ -1117,9 +1157,9 @@ and all four oracle classes passed.
 | 60  | Partial batch-admission poison                                   | High     | Harnessed — V62 (atomic rollback + retry passed)            |
 | 61  | Malformed orphan poison                                          | High     | Harnessed — V63 BREACH confirmed live (§27 follow-up open)  |
 | 62  | Mixed-endpoint scheduler starvation                              | High     | Harnessed — V64 (sentinel + p99 + finality passed)          |
-| 63  | Lagging-peer backfill under load                                 | High     | Open — V65 proposed                                         |
-| 64  | Rolling validator restart under load                             | High     | Open — V66 proposed (opt-in)                                |
-| 65  | Database outage/reconnect                                        | Critical | Open — V67 proposed (opt-in)                                |
-| 66  | Process pause / stale-duty replay                                | High     | Open — V68 proposed (opt-in)                                |
+| 63  | Lagging-peer backfill under load                                 | High     | Harnessed — V65 (tc throttle; lagger caught up)             |
+| 64  | Rolling validator restart under load                             | High     | Harnessed — V66 (rolling restart; 4/4 rejoin)               |
+| 65  | Database outage/reconnect                                        | Critical | Harnessed — V67 BREACH live; restart needed (§29)           |
+| 66  | Process pause / stale-duty replay                                | High     | Harnessed — V68 (pause; no stale duties)                    |
 | 67  | Asymmetric partition/heal                                        | Critical | Open — V69 proposed (opt-in)                                |
 | 68  | Disk-full/WAL durability failure                                 | Critical | Open — V70 proposed (destructive)                           |
