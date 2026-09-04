@@ -67,6 +67,12 @@ PG_CONTAINERS="${PG_CONTAINERS:-}"
 L0_REQUESTER="${L0_REQUESTER:-http://127.0.0.1:8081}"
 KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-kafkaeu1.bigtangle.org:9092,kafkaeu2.bigtangle.org:9092}"
 JAVA_OPTS="${JAVA_OPTS:--Xmx2g}"
+# Validator/bridge mode (all default off). POS_VALIDATOR_KEY turns this L1 node
+# into a SOCIAL validator; BRIDGE_VAULT_PUBKEY + BRIDGE_L0_URL enable the
+# bridge so the node mints L0 vault peg-ins (chainId SOCIAL) to the beneficiary.
+POS_VALIDATOR_KEY="${POS_VALIDATOR_KEY:-}"
+BRIDGE_VAULT_PUBKEY="${BRIDGE_VAULT_PUBKEY:-}"
+BRIDGE_L0_URL="${BRIDGE_L0_URL:-https://eu1.bigtangle.org}"
 
 log() { echo "[prod-social] $*"; }
 die() { echo "[prod-social] FAIL: $*" >&2; exit 1; }
@@ -165,11 +171,31 @@ start_one() { # $1=host-index
     log "${host} (${adv}): starting ${CONTAINER} bound to ${SOCIAL_BIND}:${SOCIAL_PORT} (requester=${L0_REQUESTER})"
     remote "$host" "docker rm -f ${CONTAINER} >/dev/null 2>&1 || true"
     # Secrets travel as env vars, never CLI args (visible in ps).
+    # Validator mode: POS_VALIDATOR_KEY enables PoS duties (dutyEnabled defaults
+    # true once a key is set). Bridge mode (BRIDGE_VAULT_PUBKEY) turns this L1
+    # node into the SOCIAL-chain minter that watches L0 vault locks via the
+    # anchor L0 URL and mints the wrapped peg-in to the beneficiary.
+    local validator_env=""
+    if [ -n "${POS_VALIDATOR_KEY:-}" ]; then
+        validator_env="-e POS_VALIDATOR_KEY='${POS_VALIDATOR_KEY}'"
+        log "${host} (${adv}): validator key configured (pubkey-derived identity)"
+    fi
+    local bridge_env=""
+    local chainl_args=""
+    if [ -n "${BRIDGE_VAULT_PUBKEY:-}" ]; then
+        bridge_env="-e BRIDGE_ACTIVE=true -e BRIDGE_VAULTPUBKEYHEX='${BRIDGE_VAULT_PUBKEY}'" \
+            " -e ANCHOR_L0URL='${BRIDGE_L0_URL:-https://eu1.bigtangle.org}'"
+        # The L1 PegInWatcher only mints when chainlength scheduling is active.
+        chainl_args="--service.schedule.chainlength=true"
+        log "${host} (${adv}): bridge enabled (vault ${BRIDGE_VAULT_PUBKEY:0:16}… → L0 ${BRIDGE_L0_URL:-https://eu1.bigtangle.org})"
+    fi
     remote "$host" "docker run -d --name ${CONTAINER} --network host --restart unless-stopped" \
         "--init --stop-timeout 30" \
         "-e HEALTHCHECK_PORT=${SOCIAL_PORT}" \
         "-e SERVER_APIKEY='${SERVER_APIKEY:-}'" \
         "-e JAVA_OPTS='${JAVA_OPTS}'" \
+        "${validator_env}" \
+        "${bridge_env}" \
         "--entrypoint java ${SOCIAL_IMAGE}:${IMAGE_TAG}" \
         "${JAVA_OPTS} --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED -jar /app/app.jar" \
         "--server.port=${SOCIAL_PORT}" "--server.address=${SOCIAL_BIND}" "--server.net=${SERVER_NET}" \
@@ -178,6 +204,7 @@ start_one() { # $1=host-index
         "--db.username=${DB_USERNAME} --db.password=${DB_PASSWORD}" \
         "--server.createtable=true" \
         "--kafka.bootstrapServers=${KAFKA_BOOTSTRAP}" \
+        "${chainl_args}" \
         ">/dev/null" \
         || die "${host}: container start failed"
     ensure_caddy "$host" "$adv"
