@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# prod-kafka.sh — 3-broker KRaft Kafka mirror cluster for prod (primary transport).
+# prod-kafka.sh — 2-broker KRaft Kafka mirror cluster for prod (primary transport).
 #
 # One combined broker+controller per host; every chain topic is replicated on
-# all 3 brokers, so each broker mirrors all data. Validators consume the full
+# both brokers, so each broker mirrors all data. Validators consume the full
 # bootstrap list; P2P gossip stays a hard fallback only
 # (see BlockSaveService.broadcastBytes: gossip fires only when Kafka is off or
 # the publish fails).
 #
 #   s1001.bigt.ai  (node 1)  advertised kafkaeu1.bigtangle.org:9092
 #   s2001.bigt.ai  (node 2)  advertised kafkaeu2.bigtangle.org:9092
-#   h1001.bigt.ai  (node 3)  advertised kafkahk1.bigtangle.org:9092
 #
 # Usage:
 #   prod-kafka.sh up          generate/reuse CLUSTER_ID, start brokers, create topics
-#   prod-kafka.sh topics      (re)create + verify chain topics (RF=3) and topic configs
+#   prod-kafka.sh topics      (re)create + verify chain topics (RF=2) and topic configs
 #   prod-kafka.sh status      broker state + topic/URP overview per host
 #   prod-kafka.sh bootstrap   print the client bootstrap string for
 #                             KAFKA_BOOTSTRAP / BOOT_STRAP_SERVERS
@@ -26,7 +25,7 @@
 #   CLUSTER_ID (else generated once and stored next to this script).
 #
 # Prerequisites per host: docker, open TCP 9092 (clients) + 9093 (controllers),
-# DNS A records: kafkaeu1/kafkaeu2/kafkahk1.bigtangle.org -> host public IPs.
+# DNS A records: kafkaeu1/kafkaeu2.bigtangle.org -> host public IPs.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,14 +33,14 @@ SSH_USER="${SSH_USER:-root}"
 SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=10 -i /config/.ssh/oraclevpc.key}"
 JUMP_HOST="${JUMP_HOST-}"
 
-KAFKA_HOSTS="${KAFKA_HOSTS:-s1001.bigt.ai,s2001.bigt.ai,h1001.bigt.ai}"
-KAFKA_ADVERTISED="${KAFKA_ADVERTISED:-kafkaeu1.bigtangle.org,kafkaeu2.bigtangle.org,kafkahk1.bigtangle.org}"
+KAFKA_HOSTS="${KAFKA_HOSTS:-s1001.bigt.ai,s2001.bigt.ai}"
+KAFKA_ADVERTISED="${KAFKA_ADVERTISED:-kafkaeu1.bigtangle.org,kafkaeu2.bigtangle.org}"
 KAFKA_IMAGE="${KAFKA_IMAGE:-confluentinc/cp-kafka:7.7.1}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-bt-kafka}"
 KAFKA_DATA_DIR="${KAFKA_DATA_DIR:-/data/kafka}"
 KAFKA_CHAIN="${KAFKA_CHAIN:-L0}"
 KAFKA_PARTITIONS="${KAFKA_PARTITIONS:-1}"
-KAFKA_REPLICATION_FACTOR="${KAFKA_REPLICATION_FACTOR:-3}"
+KAFKA_REPLICATION_FACTOR="${KAFKA_REPLICATION_FACTOR:-2}"
 # Must cover a full batch block of PQ-signed txs (~6 KB each); mirrors
 # KafkaMessageProducer.KAFKA_MAX_MESSAGE_BYTES (32 MB) client-side.
 KAFKA_MAX_MESSAGE_BYTES="${KAFKA_MAX_MESSAGE_BYTES:-33554432}"
@@ -55,8 +54,8 @@ die() { echo "[prod-kafka] FAIL: $*" >&2; exit 1; }
 
 IFS=',' read -ra HOSTS <<< "$KAFKA_HOSTS"
 IFS=',' read -ra ADVS <<< "$KAFKA_ADVERTISED"
-[ "${#HOSTS[@]}" -eq 3 ] || die "KAFKA_HOSTS must list 3 hosts (got ${#HOSTS[@]})"
-[ "${#ADVS[@]}" -eq 3 ] || die "KAFKA_ADVERTISED must list 3 names (got ${#ADVS[@]})"
+[ "${#HOSTS[@]}" -eq 2 ] || die "KAFKA_HOSTS must list 2 hosts (got ${#HOSTS[@]})"
+[ "${#ADVS[@]}" -eq 2 ] || die "KAFKA_ADVERTISED must list 2 names (got ${#ADVS[@]})"
 
 TOPICS=(
     "bigtangle-blocks-${KAFKA_CHAIN}"
@@ -92,8 +91,8 @@ cluster_id() {
     printf '%s' "$id"
 }
 
-quorum_voters() { # 1@adv1:9093,2@adv2:9093,3@adv3:9093
-    printf '1@%s:9093,2@%s:9093,3@%s:9093' "${ADVS[0]}" "${ADVS[1]}" "${ADVS[2]}"
+quorum_voters() { # 1@adv1:9093,2@adv2:9093
+    printf '1@%s:9093,2@%s:9093' "${ADVS[0]}" "${ADVS[1]}"
 }
 
 cmd_up() {
@@ -101,13 +100,15 @@ cmd_up() {
     cid="$(cluster_id)"
     voters="$(quorum_voters)"
     log "cluster ${cid} voters ${voters}"
-    for i in 0 1 2; do
+    for i in 0 1; do
         local adv="${ADVS[$i]}"
         if ! getent hosts "$adv" >/dev/null 2>&1; then
             log "WARN: ${adv} does not resolve locally — create the DNS A record"
         fi
-        log "starting broker $((i + 1))/3 on ${HOSTS[$i]} (advertised ${adv}:9092)"
+        log "starting broker $((i + 1))/2 on ${HOSTS[$i]} (advertised ${adv}:9092)"
         remote "$i" "docker rm -f ${KAFKA_CONTAINER} >/dev/null 2>&1 || true"
+        # cp-kafka runs as appuser (1000); host dir must be writable or preflight fails.
+        remote "$i" "mkdir -p ${KAFKA_DATA_DIR} && chown -R 1000:1000 ${KAFKA_DATA_DIR} && chmod 755 ${KAFKA_DATA_DIR}"
         remote "$i" "mkdir -p ${KAFKA_DATA_DIR} && docker run -d --name ${KAFKA_CONTAINER} --network host --restart unless-stopped" \
             "-v ${KAFKA_DATA_DIR}:/var/lib/kafka/data" \
             "-e CLUSTER_ID=\"$cid\"" \
@@ -119,9 +120,9 @@ cmd_up() {
             "-e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=\"CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT\"" \
             "-e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER" \
             "-e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT" \
-            "-e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3" \
-            "-e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3" \
-            "-e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=2" \
+            "-e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=2" \
+            "-e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=2" \
+            "-e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1" \
             "-e KAFKA_MESSAGE_MAX_BYTES=${KAFKA_MAX_MESSAGE_BYTES}" \
             "-e KAFKA_REPLICA_FETCH_MAX_BYTES=${KAFKA_MAX_MESSAGE_BYTES}" \
             "-e KAFKA_AUTO_CREATE_TOPICS_ENABLE=false" \
@@ -137,7 +138,7 @@ cmd_up() {
 cmd_topics() {
     # Run topic admin against the first reachable broker.
     local h=""
-    for i in 0 1 2; do
+    for i in 0 1; do
         if remote "$i" "docker exec ${KAFKA_CONTAINER} kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"; then
             h="$i"
             break
@@ -152,7 +153,7 @@ cmd_topics() {
             log "topic ${t} exists — enforcing configs"
             remote "$h" "docker exec ${KAFKA_CONTAINER} kafka-topics --bootstrap-server localhost:9092 --alter --topic $t" \
                 "--config max.message.bytes=${KAFKA_MAX_MESSAGE_BYTES}" \
-                "--config min.insync.replicas=2" \
+                "--config min.insync.replicas=1" \
                 "--config retention.ms=${KAFKA_RETENTION_MS} >/dev/null" \
                 || die "alter failed for ${t}"
         else
@@ -160,7 +161,7 @@ cmd_topics() {
             remote "$h" "docker exec ${KAFKA_CONTAINER} kafka-topics --bootstrap-server localhost:9092 --create --topic $t" \
                 "--partitions ${KAFKA_PARTITIONS} --replication-factor ${KAFKA_REPLICATION_FACTOR}" \
                 "--config max.message.bytes=${KAFKA_MAX_MESSAGE_BYTES}" \
-                "--config min.insync.replicas=2" \
+                "--config min.insync.replicas=1" \
                 "--config retention.ms=${KAFKA_RETENTION_MS} >/dev/null" \
                 || die "create failed for ${t}"
         fi
@@ -171,7 +172,7 @@ cmd_topics() {
 
 cmd_status() {
     local rc=0
-    for i in 0 1 2; do
+    for i in 0 1; do
         echo "--- ${HOSTS[$i]} (${ADVS[$i]}:9092) ---"
         remote "$i" "docker inspect -f '{{.Name}} {{.State.Status}} (restart={{.HostConfig.RestartPolicy.Name}})' ${KAFKA_CONTAINER} 2>/dev/null" \
             || { echo "  broker container missing"; rc=1; continue; }
@@ -185,13 +186,13 @@ cmd_status() {
 }
 
 cmd_bootstrap() {
-    printf '%s:9092,%s:9092,%s:9092' "${ADVS[0]}" "${ADVS[1]}" "${ADVS[2]}"
+    printf '%s:9092,%s:9092' "${ADVS[0]}" "${ADVS[1]}"
 }
 
 cmd_down() { # [--wipe]
     local wipe=false
     [ "${1:-}" = "--wipe" ] && wipe=true
-    for i in 0 1 2; do
+    for i in 0 1; do
         log "stopping broker on ${HOSTS[$i]}"
         remote "$i" "docker rm -f ${KAFKA_CONTAINER} >/dev/null 2>&1 || true"
         if [ "$wipe" = true ]; then

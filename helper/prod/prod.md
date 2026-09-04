@@ -323,3 +323,106 @@ docker logs -f l0-server
   `helper/prod/validators/` (`generate_keys.sh`, `node-<i>/setup.sh` phases
   server → stake → verify: PostgreSQL + genesis funding → `stakeDeposit` →
   `activateValidator`).
+
+## 10. Live production inventory (deployed 2026-09-04)
+
+### Hosts
+
+| Host | Public IP | Roles |
+|------|-----------|-------|
+| `s1001.bigt.ai` | `85.214.37.95` | Kafka broker 1, `l1-social-server` 1, dedicated `social-pg` |
+| `s2001.bigt.ai` | `85.215.91.140` | Kafka broker 2, `l1-social-server` 2, shared `l0-pg` |
+
+SSH as `root`. The scripts default to `-i /config/.ssh/oraclevpc.key`
+(codeserver path); from other machines override per call:
+
+```bash
+export SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10 -i ~/.ssh/oraclevpc.key"
+```
+
+### DNS (Cloudflare `bigtangle.org`, DNS-only, TTL 300)
+
+| Name | Target |
+|------|--------|
+| `kafkaeu1.bigtangle.org` | `85.214.37.95` (s1001) |
+| `kafkaeu2.bigtangle.org` | `85.215.91.140` (s2001) |
+| `socialeu1.bigtangle.org` | `85.214.37.95` (s1001) |
+| `socialeu2.bigtangle.org` | `85.215.91.140` (s2001) |
+
+Created with the `bigtangle.org` zone (`~/.cloudflared/token.sh` holds a
+separate `bigt.ai` zone id — use zone `d0ca017dc1d5c4c9d895eba583842936`
+for these names). Kafka/TCP must stay DNS-only (`proxied: false`).
+
+### Kafka mirror cluster (`helper/prod/kafka/prod-kafka.sh`)
+
+2-broker KRaft (downgraded from the original 3-broker plan; `h1001` dropped):
+
+- Image `confluentinc/cp-kafka:7.7.1`, container `bt-kafka`,
+  `--network host`, data dir `/data/kafka` on each host.
+- The data dir **must** be owned by `1000:1000` (`cp-kafka` runs as
+  `appuser`; otherwise the container crash-loops on the
+  `/var/lib/kafka/data is writable` preflight). `cmd_up` now chowns it.
+- Quorum `1@kafkaeu1.bigtangle.org:9093,2@kafkaeu2.bigtangle.org:9093`.
+- Chain topics `bigtangle-blocks-L0`, `bigtangle-transactions-L0`,
+  `bigtangle-attestations-L0`: 1 partition, RF=2, `min.insync.replicas=1`,
+  `max.message.bytes=33554432`, infinite retention.
+- Internal topics RF=2, `TRANSACTION_STATE_LOG_MIN_ISR=1` (stays writable
+  with one broker down; note a 2-voter KRaft quorum still needs both
+  controllers for metadata writes).
+- Client bootstrap: `kafkaeu1.bigtangle.org:9092,kafkaeu2.bigtangle.org:9092`.
+- `CLUSTER_ID` is generated once and kept in
+  `helper/prod/kafka/.cluster_id` (local-only, never commit — both brokers
+  must share it).
+
+```bash
+helper/prod/kafka/prod-kafka.sh up        # start brokers + create topics (RF=2)
+helper/prod/kafka/prod-kafka.sh status    # broker state + URP per host
+helper/prod/kafka/prod-kafka.sh bootstrap # print client bootstrap string
+```
+
+Retired during this migration (data volumes kept for rollback):
+- s1001 legacy single-node `kafka` (`apache/kafka:3.9.0`, RF=1 topics such
+  as `bigtangle`/`market-*`/`agent-*`); volume `kafka_kafka-data` (~102M)
+  still on s1001 — remove with `docker volume rm kafka_kafka-data` only
+  when sure.
+- s2001 single-node `bt-kafka` advertising `10.8.0.1` (RF=1
+  `bigtangle-blocks/transactions/attestations` without `-L0` suffix).
+
+### Social servers (`helper/prod/prod-social.sh`)
+
+`l1-social-server:0.6.2` (latest versioned GH tag; never deploy `latest`),
+one `--network host` container per host on `:8091` (`Mainnet`,
+`--server.requester=http://127.0.0.1:8081`,
+`--kafka.bootstrapServers=kafkaeu1,kafkaeu2:9092`):
+
+| Host | Public API | Postgres | Database |
+|------|------------|----------|----------|
+| s1001 | `http://socialeu1.bigtangle.org:8091/` | dedicated `social-pg` (`postgres:16`, `127.0.0.1:5432`, vol `/data/social-pg`) | `social` |
+| s2001 | `http://socialeu2.bigtangle.org:8091/` | shared `l0-pg` (`postgres:16`, `127.0.0.1:5432`) | `social` (alongside `layer0`) |
+
+- s1001 has 8 app-specific postgres containers and none on
+  `localhost:5432`, hence the dedicated `social-pg`. The script pins the
+  container per host — always deploy with
+  `PG_CONTAINERS="social-pg,l0-pg"` (positional, parallel to
+  `SOCIAL_HOSTS`); auto-detect picks the wrong DB on shared hosts.
+- `SOCIAL_ADVERTISED="socialeu1.bigtangle.org,socialeu2.bigtangle.org"`
+  (positional, parallel to `SOCIAL_HOSTS`) names each instance.
+- s2001's docker needed a GHCR login first
+  (`docker login ghcr.io -u j0904 --password-stdin` with a token carrying
+  `read:packages`).
+
+```bash
+export PG_CONTAINERS="social-pg,l0-pg"
+helper/prod/prod-social.sh up      # pull 0.6.2, ensure DB, start, verify API
+helper/prod/prod-social.sh status  # container + API health per host/domain
+helper/prod/prod-social.sh logs 50 # tail logs on both hosts
+```
+
+Verify: `curl http://socialeu1.bigtangle.org:8091/` and `socialeu2` → `200`.
+
+### Open hardening items
+
+- `DB_PASSWORD` is still the default `test1234` (postgres bound to
+  `127.0.0.1` only) and `SERVER_APIKEY` is empty — set both before
+  treating the social API as production.
+- No TLS on `:8091` (plain HTTP via the `socialeu*` names).
