@@ -6,7 +6,7 @@
 		<artifactId>bigtangle</artifactId>
 		<groupId>net.bigtangle</groupId>
 
-		<version>0.6.2</version>
+		<version>0.6.3</version>
 	</parent>
 
 	<artifactId>bigtangle-servercore</artifactId>
@@ -77,7 +77,7 @@
 		<dependency>
 			<groupId>net.bigtangle</groupId>
 			<artifactId>bigtangle-core</artifactId>
-			<version>0.6.2</version>
+			<version>0.6.3</version>
 		</dependency>
 
 

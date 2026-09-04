@@ -5,7 +5,7 @@
 	<parent>
 		<artifactId>bigtangle</artifactId>
 		<groupId>net.bigtangle</groupId>
-		<version>0.6.2</version>
+		<version>0.6.3</version>
 	</parent>
 	<artifactId>l1-nft-server</artifactId>
 	<packaging>jar</packaging>
