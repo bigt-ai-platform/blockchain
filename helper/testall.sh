@@ -27,8 +27,26 @@ ARG_LINE="-Xmx512m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports 
 JVM_ARGS=(-DargLine="${ARG_LINE}")
 FORK_ARGS=(-Dsurefire.forkCount=1)
 
+# Local Kafka for the suite (same provisioning as testnodes.sh). The broker is
+# always present so Kafka-capable tests have one; streams stay OFF by default
+# (server default) because 100+ ITs sharing stream threads is flaky — set
+# KAFKA_STREAMS=1 to opt the whole suite into streams-on.
+# shellcheck disable=SC1091
+source "${ROOT}/helper/kafka-local.sh"
+export KAFKA_CONTAINER="${KAFKA_CONTAINER:-l0-unit-kafka}"
+export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-9492}"
+export KAFKA_CHAINS="${KAFKA_CHAINS:-L0}" KAFKA_FRESH_TOPICS=1
+kafka_local_ensure || { echo "local kafka broker failed" >&2; exit 1; }
+kafka_local_topics || { echo "local kafka topics failed" >&2; exit 1; }
+export BOOT_STRAP_SERVERS="localhost:${KAFKA_HOST_PORT}"
+KAFKA_SUITE_ARGS=()
+if [ "${KAFKA_STREAMS:-0}" = "1" ]; then
+    KAFKA_SUITE_ARGS=(-Dserver.runKafkaStream=true -Dkafka.bootstrapServers="$BOOT_STRAP_SERVERS")
+    echo "=== Suite streams ON via $BOOT_STRAP_SERVERS ==="
+fi
+
 echo "=== Running core tests ==="
-mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}"
+mvn test -pl bigtangle-core -q -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" "${KAFKA_SUITE_ARGS[@]}"
 echo "=== Core tests passed ==="
 
 echo "=== Building servercore module ==="
@@ -36,5 +54,5 @@ mvn install -DskipTests -q -f "$ROOT/pom.xml" -am -pl bigtangle-servercore 2>&1 
 echo "=== Build done ==="
 
 echo "=== Running PoS consensus and mempool tests ==="
-mvn test -pl bigtangle-servercore -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG
+mvn test -pl bigtangle-servercore -f "$ROOT/pom.xml" "${JVM_ARGS[@]}" "${FORK_ARGS[@]}" "${KAFKA_SUITE_ARGS[@]}" -Dsurefire.failIfNoSpecifiedTests=false $TEST_ARG
 echo "=== All tests passed ==="

@@ -17,7 +17,31 @@ if [ -x /home/jcui/.local/java-25/bin/java ]; then
 fi
 
 info "Starting L0 Docker network..."
+# Kafka streams for the test net (KAFKA_STREAMS=0 keeps the old streams-off
+# behavior). The broker is provisioned like testnodes.sh does — local docker,
+# hermetic topics — and attached to the compose network so the servers reach
+# it as <container>:9094 (host tools use localhost:<port>).
+KAFKA_STREAMS="${KAFKA_STREAMS:-1}"
+if [ "$KAFKA_STREAMS" = "1" ]; then
+    export RUNKAFKASTREAM=true
+    export KAFKA_CONTAINER="${KAFKA_CONTAINER:-l0-test-kafka}"
+    export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-9192}"
+    export BOOT_STRAP_SERVERS="${KAFKA_CONTAINER}:9094"
+fi
 docker compose -f "$SCRIPT_DIR/docker-compose.l0-test.yml" up -d
+
+if [ "$KAFKA_STREAMS" = "1" ]; then
+    info "Provisioning local Kafka for the test net..."
+    # shellcheck disable=SC1091
+    source "${ROOT}/helper/kafka-local.sh"
+    export KAFKA_NETWORK
+    KAFKA_NETWORK="$(docker network ls --format '{{.Name}}' | grep -E '(^|_)l0-test-net$' | head -1)"
+    [ -n "$KAFKA_NETWORK" ] || { echo "l0-test-net not found" >&2; exit 1; }
+    export KAFKA_CHAINS="${KAFKA_CHAINS:-L0}" KAFKA_FRESH_TOPICS=1
+    kafka_local_ensure || fail "local kafka broker failed"
+    kafka_local_topics || fail "local kafka topics failed"
+    log "test net streams via ${BOOT_STRAP_SERVERS}"
+fi
 
 info "Waiting for L0 server nodes to be healthy..."
 SERVER_PORTS=(8081 8082 8083)

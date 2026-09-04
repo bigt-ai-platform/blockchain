@@ -328,7 +328,12 @@ For geographic distribution tests, use separate compose files per host and point
 
 ### With Kafka
 
-Add Kafka to test block propagation via event streaming. Set `BOOT_STRAP_SERVERS` and `TOPIC_OUT_NAME` on each node.
+All test harnesses provision the same local-docker Kafka (testnodes pattern —
+`helper/kafka-local.sh`: hermetic `apache/kafka:3.9.0` broker, fresh
+`bigtangle-{blocks,transactions,attestations}-<chain>` topics, 32 MB messages).
+`run-tests.sh`, `benchmark.sh` (streams on by default, `KAFKA_STREAMS=0` to
+revert), `remote.sh` and `benchmarklocal.sh` provision it automatically;
+`docker-compose.l0-kafka.yml` keeps a standalone bitnami variant for demos.
 
 ## Health Checks
 

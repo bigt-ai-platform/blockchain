@@ -366,7 +366,20 @@ orphans are still pruned (both prune paths intact).
 Review note (open, minor): a single unparseable queued block aborts the whole
 `connectingOrphans` pass (`throw e` after the per-orphan batch abort) — one
 poison entry stalls every orphan reconnect until age-pruned. Consider
-catch-log-continue per orphan as follow-up.
+catch-log-continue per orphan as follow-up (V63 harnesses exactly this).
+
+### 28. Null-keyed Kafka record kills the consumer thread — FIXED (2026-09-04)
+
+Found during local-Kafka interop verification for the test harnesses: a record
+with a null key (one console-produce away for anyone with produce access)
+NPE'd `foreignChainRecord`/`recordKey` (`key.indexOf(':')`), killing the
+`BlockStreamHandler` thread with no recovery observed over 10+ minutes — the
+failed offset never commits, so that node's block propagation stays dead while
+everything else looks healthy.
+**Fix (in-tree):** null keys are dropped in `foreignChainRecord` (plus a
+null-safe `recordKey`); all three stream handlers route through it.
+Validated: new `StreamKeyRoutingTest` (null/stamped/legacy/foreign keys);
+liveness confirmed on the interop mesh (all three handlers RUNNING).
 
 ## Automated Attack Suites — `MeshAttack` V1-V36, `MeshLoad` V37-V50
 
@@ -439,10 +452,10 @@ the full suite every cycle; soak3d does it hourly. Exit 0 = all deflected.
 | V58 | Exit/withdrawal boundary reorg                                                                                           | no early/double withdrawal; validator lifecycle state reverts exactly                                     | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
 | V59 | Consensus-parameter mismatch (`slotsPerEpoch`, activation height, skew)                                                  | incompatible node fails closed and cannot fragment quorum                                                 | PROPOSED (configuration lane)                                                                                                                                                                                                                                                                                                      |
 | V60 | Stake-weight overflow/rounding boundary (huge and dust validators)                                                       | identical threshold math; no overflow, negative weight, or proposer split                                 | PROPOSED (PoS staging lane)                                                                                                                                                                                                                                                                                                        |
-| V61 | Hot-outpoint conflict fan-out while mempool is saturated                                                                 | exactly one winner; no ghost spend lock; honest unrelated tx confirms                                     | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
-| V62 | Valid-prefix + invalid-tail batch poison under sustained load                                                            | whole request rolls back atomically; retry confirms every valid tx once                                   | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
-| V63 | Malformed orphan poison followed by a valid reconnectable orphan                                                         | poison is quarantined; valid orphan connects; sync loop keeps running                                     | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
-| V64 | Mixed endpoint fairness (tx, block, attestation, proof, heavy reads)                                                     | proposer ticks/finality retain service; bounded p99 and pool waits                                        | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
+| V61 | Hot-outpoint conflict fan-out while mempool is saturated                                                                 | exactly one winner; no ghost spend lock; honest unrelated tx confirms                                     | IMPLEMENTED (`MeshLoad`; unanimous-winner + sentinel + drain passed)oad lane)                                                                                                                                                                                                                                                                                                         |
+| V62 | Valid-prefix + invalid-tail batch poison under sustained load                                                            | whole request rolls back atomically; retry confirms every valid tx once                                   | IMPLEMENTED (`MeshLoad`; atomic rollback + retry 50/50 passed)oad lane)                                                                                                                                                                                                                                                                                                         |
+| V63 | Malformed orphan poison followed by a valid reconnectable orphan                                                         | poison is quarantined; valid orphan connects; sync loop keeps running                                     | Harnessed (`MeshLoad`); BREACH confirmed live, per-orphan isolation open (§27)oad lane)                                                                                                                                                                                                                                                                                                         |
+| V64 | Mixed endpoint fairness (tx, block, attestation, proof, heavy reads)                                                     | proposer ticks/finality retain service; bounded p99 and pool waits                                        | IMPLEMENTED (`MeshLoad`; sentinel + p99 + finality passed)oad lane)                                                                                                                                                                                                                                                                                                         |
 | V65 | Lagging-peer backfill while the live mesh remains under load                                                             | lagger catches up without throttling proposers or changing finroot                                        | PROPOSED (mixed-load lane)                                                                                                                                                                                                                                                                                                         |
 | V66 | Rolling validator restart during continuous load                                                                         | quorum finalizes throughout; each node rejoins without state drift                                        | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
 | V67 | PostgreSQL outage/reconnect across a proposal/finality boundary                                                          | fail closed, reconnect, catch up; no duplicate state transition                                           | PROPOSED (opt-in recovery lane)                                                                                                                                                                                                                                                                                                    |
@@ -921,7 +934,7 @@ and proposer; no signed overflow, negative balance or order-dependent rounding.
 documented integer-rounding rule. **Breaks:** stake-weight inflation or a
 one-unit quorum split.
 
-### V61. Hot-outpoint conflicts at mempool saturation — OPEN
+### V61. Hot-outpoint conflicts at mempool saturation — HARNESSED (passes live; unanimity oracle)
 
 Fill each node close to `mempoolMaxTx`, then fan out many differently signed
 transactions spending one real UTXO to alternating nodes while submitting an
@@ -932,7 +945,7 @@ spent-outpoint bookkeeping across mempool, block conflict and reorg paths.
 **Breaks:** ghost spend locks, multiple winners, or the admission connection
 leak seen in the earlier churn campaign.
 
-### V62. Valid-prefix plus invalid-tail batch poison — OPEN
+### V62. Valid-prefix plus invalid-tail batch poison — HARNESSED (passes live)
 
 Repeatedly POST batches containing several valid independent transactions
 followed by a bad signature, duplicate outpoint, truncated transaction or
@@ -944,7 +957,7 @@ and finality continue advancing. **Defence under test:**
 **Breaks:** partial admission strands client funds or permanently pins
 `spentOutpoints`.
 
-### V63. Malformed orphan poison isolation — OPEN
+### V63. Malformed orphan poison isolation — HARNESSED, BREACH CONFIRMED LIVE (open: per-orphan isolation)
 
 Queue one unknown-parent block whose stored bytes fail parsing, then deliver a
 valid child before its valid parent and finally deliver that parent. Repeat
@@ -953,8 +966,14 @@ age-pruned without aborting the pass; the valid orphan connects and confirms;
 subsequent reconnect passes keep running. **Defence under test:** per-orphan
 catch/log/continue in `connectingOrphans`. This is the open follow-up in §27;
 today a single parse exception can abort the whole reconnect pass.
+**Live result (2026-09-04):** 9 gossip-injected poisons stranded the valid
+orphan (1/2 confirms) while the chain advanced — and a lagging node behind the
+poison stopped converging entirely (cl frozen, fin stale) until its DB was
+wiped and resynced. Blast radius is larger than one stranded orphan: poison
+also wedges lagging-node recovery. Self-heal bound: the poison's own 2 h age
+prune.
 
-### V64. Mixed-endpoint scheduler starvation — OPEN
+### V64. Mixed-endpoint scheduler starvation — HARNESSED (passes live)
 
 At an epoch boundary, run a controlled ratio of valid transactions, rejected
 transactions, `batchBlock`, attestation spam, slashing-proof spam and expensive
@@ -1094,10 +1113,10 @@ and all four oracle classes passed.
 | 56  | Exit/withdrawal boundary reorg                                   | Critical | Open — V58 proposed                                         |
 | 57  | Consensus-parameter mismatch                                     | Critical | Open — V59 proposed (fail-closed fingerprint needed)        |
 | 58  | Stake arithmetic overflow/rounding split                         | Critical | Open — V60 proposed                                         |
-| 59  | Hot-outpoint conflict under saturation                           | High     | Open — V61 proposed (mixed load)                            |
-| 60  | Partial batch-admission poison                                   | High     | Open — V62 proposed (atomic rollback)                       |
-| 61  | Malformed orphan poison                                          | High     | Open — V63 proposed (§27 follow-up)                         |
-| 62  | Mixed-endpoint scheduler starvation                              | High     | Open — V64 proposed (mixed load)                            |
+| 59  | Hot-outpoint conflict under saturation                           | High     | Harnessed — V61 (unanimous-winner + sentinel + drain passed)  |
+| 60  | Partial batch-admission poison                                   | High     | Harnessed — V62 (atomic rollback + retry passed)            |
+| 61  | Malformed orphan poison                                          | High     | Harnessed — V63 BREACH confirmed live (§27 follow-up open)  |
+| 62  | Mixed-endpoint scheduler starvation                              | High     | Harnessed — V64 (sentinel + p99 + finality passed)          |
 | 63  | Lagging-peer backfill under load                                 | High     | Open — V65 proposed                                         |
 | 64  | Rolling validator restart under load                             | High     | Open — V66 proposed (opt-in)                                |
 | 65  | Database outage/reconnect                                        | Critical | Open — V67 proposed (opt-in)                                |

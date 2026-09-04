@@ -154,10 +154,28 @@ restore_it() {
 }
 trap restore_it EXIT
 
+# ── Local Kafka (same provisioning as testnodes.sh) ─────────────────────────
+# Single-server benchmark still exercises the produce path when streams are on
+# (KAFKA_STREAMS=0 keeps the old streams-off behavior).
+KAFKA_STREAMS="${KAFKA_STREAMS:-1}"
+KAFKA_SYS=()
+if [ "$KAFKA_STREAMS" = "1" ]; then
+    # shellcheck disable=SC1091
+    source "${ROOT}/helper/kafka-local.sh"
+    export KAFKA_CONTAINER="${KAFKA_CONTAINER:-l0-bench-kafka}"
+    export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-9392}"
+    export KAFKA_CHAINS="${KAFKA_CHAINS:-L0}" KAFKA_FRESH_TOPICS=1
+    kafka_local_ensure || fail "local kafka broker failed"
+    kafka_local_topics || fail "local kafka topics failed"
+    KAFKA_SYS=(-Dserver.runKafkaStream=true -Dkafka.bootstrapServers="localhost:${KAFKA_HOST_PORT}")
+    log "bench streams via localhost:${KAFKA_HOST_PORT}"
+fi
+
 # ── Run benchmark ─────────────────────────────────────────────────────────────
 MVN_ARGS=(-Dtest=ConfirmedPaymentBenchmark -Dbench.tx="${TX}" -Dbench.clients="${CLIENTS}" \
 -Dbench.batch="${BATCH}" -Dbatch.minTx="${MIN_TX}" -Dbatch.maxBatchAgeMs="${MAX_AGE}" \
 -Dpos.slotIntervalMs="${SLOT_MS}" -Ddb.dbName="${DB_NAME}" -Ddb.port="${DB_PORT}" \
+"${KAFKA_SYS[@]}" \
 "-DargLine=-Xmx${HEAP} --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED" \
 -DforkedProcessTimeoutInSeconds=0 -DfailIfNoTests=false)
 

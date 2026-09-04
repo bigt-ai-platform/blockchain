@@ -131,13 +131,22 @@ public abstract class AbstractStreamHandler {
      * producers) are accepted.
      */
     protected boolean foreignChainRecord(String key) {
-        int i = key == null ? -1 : key.indexOf(':');
+        // A null key carries no chain stamp and cannot be routed — drop it.
+        // Without this guard a single null-keyed record (trivial for anyone
+        // with produce access to post) NPEs the stream thread and permanently
+        // disables that consumer: the failed offset never commits and the
+        // thread is never replaced.
+        if (key == null)
+            return true;
+        int i = key.indexOf(':');
         return i > 0 && !networkParameters.getChainId().equals(key.substring(0, i));
     }
 
-    /** The payload key without the chain-id stamp. */
+    /** The payload key without the chain-id stamp (null stays null). */
     protected String recordKey(String key) {
-        int i = key == null ? -1 : key.indexOf(':');
+        if (key == null)
+            return null;
+        int i = key.indexOf(':');
         return i > 0 ? key.substring(i + 1) : key;
     }
 

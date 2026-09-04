@@ -67,8 +67,9 @@ import net.bigtangle.wallet.Wallet;
  *
  * Wallet budget at scale 1.0 (bounded defaults): V37 ~4005, V39 ~300,
  * V41 8, V42 soakMin*60/probeSec, V44 ~30, V45 ~300, V47 ~1010, V48 30,
- * V50 3 — plus V42's window; size LOAD_WALLETS accordingly (full lane with
- * the 72h V46/V42 windows needs ~15k). Exit 0 = all deflected.
+ * V50 3, V61 ~2004, V62 ~50, V63 3, V64 ~62 — plus V42's window; size
+ * LOAD_WALLETS accordingly (full lane with the 72h V46/V42 windows needs
+ * ~15k). Exit 0 = all deflected.
  *
  * Vectors:
  *   V37 mempool saturation + no-TTL wedge (spam to the cap, honest tx must win)
@@ -85,6 +86,10 @@ import net.bigtangle.wallet.Wallet;
  *   V48 gossip dup-forward amplification loop (same block xN, confirms once)
  *   V49 equivocation-set poisoning (many fake keys, honest set untouched)
  *   V50 weak-subjectivity isolation (deep fork to ONE node, fin must hold)
+ *   V61 hot-outpoint conflicts at mempool saturation (one winner + sentinel)
+ *   V62 valid-prefix + invalid-tail batch poison (atomic rollback + retry)
+ *   V63 malformed orphan poison isolation (quarantine; valid orphan connects)
+ *   V64 mixed-endpoint scheduler starvation (ticks/finality under endpoint mix)
  *   REJOIN restart-rejoin probe (OPT-IN via only=REJOIN: docker-restarts one
  *     node container and asserts it rejoins the mesh — §26 regression that
  *     restart alone must heal; needs -Dload.rejoinContainer=<name>)
@@ -178,7 +183,7 @@ public class MeshLoad {
         long enduranceMin = Long.getLong("load.enduranceMin", 4320L);
         int sampleSecV42 = Integer.getInteger("load.sampleSec", 30);
         int probeSec = Integer.getInteger("load.probeSec", 60);
-        int burstSec = Integer.getInteger("load.burstSec", 90);
+        int burstSec = Integer.getInteger("load.burstSec", 150);
         int clients = Integer.getInteger("load.clients", 16);
         long maxP99Ms = Long.getLong("load.maxP99Ms", 5000L);
         long maxSpread = Long.getLong("load.maxSpread", 32L);
@@ -906,8 +911,508 @@ public class MeshLoad {
             }
         }
 
-        // ================================================================ REJOIN
-        // Restart-rejoin probe (§26 regression, OPT-IN via only=REJOIN):
+        // ================================================================ V61
+        // Hot-outpoint conflicts at mempool saturation: fill toward the cap,
+        // then fan K differently-signed spends of ONE real UTXO across nodes
+        // plus an honest sentinel. Exactly one conflict may confirm mesh-wide,
+        // the sentinel must confirm, and the pool must drain (no ghost lock).
+        if (wanted(only, "V61")) {
+            System.out.println("============ V61: HOT-OUTPOINT FAN-OUT ============");
+            try {
+                int fill = n.applyAsInt(2000);
+                int base0 = take.applyAsInt(fill + 2);
+                String fillAddr = addrFor(seedFor(runUniqueIndex(startIndex, 61001))).toBase58();
+                int sent = 0;
+                for (int i = 0; i < fill; i++) {
+                    UTXO u = utxos.get(addrFor(seedFor(base0 + i)).toBase58());
+                    if (u == null) continue;
+                    try {
+                        if (submitTx(pay(keyFor(base0 + i), u, fillAddr, payAmount, "v61-fill"))) sent++;
+                    } catch (Exception ignore) {
+                    }
+                }
+                int peakPending = 0;
+                for (String u : nodeUrls) peakPending = Math.max(peakPending, pendingCount(u));
+                int k = n.applyAsInt(20);
+                UTXO w = utxos.get(addrFor(seedFor(base0 + fill)).toBase58());
+                List<String> conflictAddrs = new ArrayList<>();
+                List<Block> conflictBlocks = new ArrayList<>();
+                if (w != null) {
+                    for (int j = 0; j < k; j++) {
+                        String a = addrFor(seedFor(runUniqueIndex(startIndex, 61010 + j))).toBase58();
+                        conflictAddrs.add(a);
+                        try {
+                            Transaction t = pay(keyFor(base0 + fill), w, a, payAmount, "v61-conflict");
+                            conflictBlocks.add(craftTransferBlock(t));
+                        } catch (Exception ignore) {
+                        }
+                    }
+                }
+                // Fire near-simultaneously: sequential submits arrive seconds
+                // apart and the ingress gate picks a winner before the race.
+                AtomicInteger conflictsSent = new AtomicInteger();
+                ExecutorService race = Executors.newFixedThreadPool(Math.min(16, clients));
+                List<Future<?>> raceFuts = new ArrayList<>();
+                for (int j = 0; j < conflictBlocks.size(); j++) {
+                    final int jj = j;
+                    raceFuts.add(race.submit(() -> {
+                        try {
+                            if (submitBlockTo(nodeUrls[jj % nnodes], conflictBlocks.get(jj)))
+                                conflictsSent.incrementAndGet();
+                        } catch (Exception ignore) {
+                        }
+                        return null;
+                    }));
+                }
+                for (Future<?> f : raceFuts) {
+                    try { f.get(120, TimeUnit.SECONDS); } catch (Exception ignore) { }
+                }
+                race.shutdownNow();
+                String sentinelAddr = addrFor(seedFor(runUniqueIndex(startIndex, 61002))).toBase58();
+                int sentinelSent = 0;
+                UTXO su = utxos.get(addrFor(seedFor(base0 + fill + 1)).toBase58());
+                if (su != null) {
+                    try {
+                        if (submitTx(pay(keyFor(base0 + fill + 1), su, sentinelAddr, payAmount, "v61-sentinel")))
+                            sentinelSent++;
+                    } catch (Exception ignore) {
+                    }
+                }
+                // Unanimity rule (V10 caveat): a single node's CONFIRMED label
+                // is unreliable under load (stale-branch mislabel), so a spend
+                // counts as a winner only when EVERY node confirms it, and the
+                // mesh must agree. One settle re-poll separates a transient
+                // mislabel from a real double-confirm.
+                int winners = -1, sentinelConfirmed = 0;
+                java.util.List<String> winnerAddrs = new ArrayList<>();
+                long deadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
+                while (System.currentTimeMillis() < deadline) {
+                    Thread.sleep(5000);
+                    winners = 0;
+                    winnerAddrs.clear();
+                    for (String a : conflictAddrs) {
+                        boolean unanimous = !conflictAddrs.isEmpty();
+                        for (String nu : nodeUrls) {
+                            if (countConfirmedOn(nu, a) == 0) { unanimous = false; break; }
+                        }
+                        if (unanimous) { winners++; winnerAddrs.add(a); }
+                    }
+                    sentinelConfirmed = countConfirmed(sentinelAddr);
+                    if (winners == 1 && sentinelConfirmed >= sentinelSent && sentinelSent > 0) break;
+                }
+                if (winners != 1) {
+                    // Settle re-poll after 60s quiet: transient labels converge.
+                    Thread.sleep(60000);
+                    winners = 0;
+                    winnerAddrs.clear();
+                    for (String a : conflictAddrs) {
+                        boolean unanimous = !conflictAddrs.isEmpty();
+                        for (String nu : nodeUrls) {
+                            if (countConfirmedOn(nu, a) == 0) { unanimous = false; break; }
+                        }
+                        if (unanimous) { winners++; winnerAddrs.add(a); }
+                    }
+                    sentinelConfirmed = countConfirmed(sentinelAddr);
+                }
+                int drainPending = 0;
+                for (String u : nodeUrls) {
+                    int pc = pendingCount(u);
+                    if (pc >= 0) drainPending = Math.max(drainPending, pc);
+                }
+                long clAfter = chainLength(seedNode);
+                java.util.Set<String> fins = finRootSettled(nodeUrls);
+                boolean ok = conflictsSent.get() > 0 && winners == 1 && sentinelSent > 0
+                        && sentinelConfirmed >= sentinelSent && drainPending < peakPending
+                        && fins.size() == 1;
+                verdict("V61 hot-outpoint (fill x" + sent + ", conflicts x" + conflictsSent.get() + ")",
+                        ok, "unanimous-winners=" + winners + " (want 1)" + winnerAddrs
+                                + ", sentinel " + sentinelConfirmed + "/" + sentinelSent
+                                + ", pending peak " + peakPending + " -> " + drainPending
+                                + ", finroots=" + fins.size());
+            } catch (Exception e) {
+                verdict("V61 hot-outpoint", false, "error: " + shortMsg(e));
+            }
+        }
+
+        // ================================================================ V62
+        // Valid-prefix + invalid-tail batch poison: POST submitTransactions
+        // batches of M valid txs plus one bad tail (duplicate / tampered /
+        // truncated, round-robin). Each rejected batch must admit ZERO prefix
+        // txs (atomic rollback); resubmitting the prefix alone must confirm
+        // every tx exactly once.
+        if (wanted(only, "V62")) {
+            System.out.println("============ V62: BATCH POISON ROLLBACK ============");
+            try {
+                int rounds = n.applyAsInt(5);
+                int m = n.applyAsInt(10);
+                int base0 = take.applyAsInt(rounds * m);
+                String roundAddr = addrFor(seedFor(runUniqueIndex(startIndex, 62001))).toBase58();
+                boolean atomic = true;
+                int totalConfirmed = 0, totalValid = 0, refused = 0;
+                java.util.Random rnd = new java.util.Random(0x62);
+                for (int r = 0; r < rounds; r++) {
+                    List<Transaction> valid = new ArrayList<>();
+                    List<String> hashes = new ArrayList<>();
+                    for (int j = 0; j < m; j++) {
+                        UTXO u = utxos.get(addrFor(seedFor(base0 + r * m + j)).toBase58());
+                        if (u == null) continue;
+                        try {
+                            Transaction t = pay(keyFor(base0 + r * m + j), u, roundAddr, payAmount, "v62");
+                            valid.add(t);
+                            hashes.add(t.getHash().toString());
+                        } catch (Exception ignore) {
+                        }
+                    }
+                    if (valid.isEmpty()) continue;
+                    totalValid += valid.size();
+                    // Poison tail by round: 0 duplicate, 1 tampered, 2 truncated.
+                    List<byte[]> parts = new ArrayList<>();
+                    for (Transaction t : valid) parts.add(t.bitcoinSerialize());
+                    if (r % 3 == 0) {
+                        parts.add(valid.get(0).bitcoinSerialize());
+                    } else if (r % 3 == 1) {
+                        byte[] bad = valid.get(0).bitcoinSerialize().clone();
+                        bad[bad.length / 2] ^= (byte) (rnd.nextInt(255) + 1);
+                        parts.add(bad);
+                    } else {
+                        byte[] trunc = valid.get(0).bitcoinSerialize();
+                        byte[] cut = java.util.Arrays.copyOf(trunc, Math.max(1, trunc.length * 3 / 4));
+                        parts.add(cut);
+                    }
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    java.io.DataOutputStream dos = new java.io.DataOutputStream(baos);
+                    for (int i = 0; i < parts.size(); i++) {
+                        byte[] b = parts.get(i);
+                        // Truncated tail keeps the full length prefix but ships
+                        // short bytes — the server must fail the batch, not
+                        // desync into admitting the prefix.
+                        if (r % 3 == 2 && i == parts.size() - 1) {
+                            dos.writeInt(valid.get(0).bitcoinSerialize().length);
+                        } else {
+                            dos.writeInt(b.length);
+                        }
+                        dos.write(b);
+                    }
+                    dos.close();
+                    String nu = nodeUrls[r % nnodes];
+                    try {
+                        OkHttp3Util.post(nu + "submitTransactions", baos.toByteArray());
+                    } catch (Exception ignore) {
+                        refused++;
+                    }
+                    Thread.sleep(3000);
+                    java.util.Set<String> pending = fetchPendingHashes(nu);
+                    for (String h : hashes) {
+                        if (pending.contains(h)) { atomic = false; break; }
+                    }
+                    // Retry the valid prefix alone: must all confirm exactly once.
+                    for (Transaction t : valid) submitTx(t);
+                }
+                int confirmed = 0;
+                long deadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
+                while (System.currentTimeMillis() < deadline) {
+                    Thread.sleep(5000);
+                    confirmed = countConfirmed(roundAddr);
+                    if (confirmed >= totalValid && totalValid > 0) break;
+                }
+                long clAfter = chainAfterSettle(seedNode, chainLength(seedNode), 30000);
+                java.util.Set<String> fins = finRootSettled(nodeUrls);
+                boolean ok = totalValid > 0 && atomic && confirmed >= totalValid && fins.size() == 1
+                        && clAfter > 0;
+                verdict("V62 batch poison (" + rounds + " rounds)",
+                        ok, (atomic ? "" : "PREFIX ADMITTED ") + "poison refused x" + refused + "/" + rounds
+                                + ", retry confirmed " + confirmed + "/" + totalValid
+                                + ", finroots=" + fins.size());
+            } catch (Exception e) {
+                verdict("V62 batch poison", false, "error: " + shortMsg(e));
+            }
+        }
+
+        // ================================================================ V63
+        // Malformed orphan poison isolation: queue parseable-but-unconnectable
+        // orphans (valid sigs, unknown parents, in-window lastMiningRewardBlock
+        // so they sort FIRST: order by chainlength asc) ahead of one valid
+        // orphan, then deliver the valid orphan's parent. The poison must be
+        // quarantined without aborting the pass: the valid orphan connects and
+        // confirms. EXPECTED BREACH on code without per-orphan
+        // catch/log/continue (§27 follow-up): the pass dies at the poison.
+        // Needs load.gossipPorts (orphans queue via the gossip/sync path, not
+        // the mempool-gated batchBlock endpoint); without them: UNSTAGED.
+        if (wanted(only, "V63")) {
+            System.out.println("============ V63: ORPHAN POISON ISOLATION ============");
+            try {
+                String[] gports = gossipPortsRaw.isEmpty() ? new String[0] : gossipPortsRaw.split(",");
+                if (gports.length == 0) {
+                    verdict("V63 orphan poison", false, "UNSTAGED: set -Dload.gossipPorts=a,b,c");
+                } else {
+                    long cl0 = chainLength(seedNode);
+                    long cutCl = Math.max(0, cl0 - 40);
+                    int base0 = take.applyAsInt(3);
+                    String goodAddr = addrFor(seedFor(runUniqueIndex(startIndex, 63001))).toBase58();
+                    // Parent P first (withheld): a normal tip transfer.
+                    UTXO up = utxos.get(addrFor(seedFor(base0 + 2)).toBase58());
+                    Block parentP = null;
+                    if (up != null) {
+                        try {
+                            parentP = craftTransferBlock(
+                                    pay(keyFor(base0 + 2), up, goodAddr, payAmount, "v63-parent"));
+                        } catch (Exception ignore) {
+                        }
+                    }
+                    // Valid orphan O_good: spends wallet B, parents = P (missing).
+                    UTXO ug = utxos.get(addrFor(seedFor(base0 + 1)).toBase58());
+                    Block good = null;
+                    if (ug != null && parentP != null) {
+                        try {
+                            Transaction t = pay(keyFor(base0 + 1), ug, goodAddr, payAmount, "v63-good");
+                            byte[] tipResp = OkHttp3Util.postString(seedNode + "getTip", "{}");
+                            Block proto = params.getDefaultSerializer().makeBlock(Utils.HEX.decode(
+                                    (String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                            Block trunk = fetchBlock(proto.getPrevBlockHash());
+                            Block branch = fetchBlock(proto.getPrevBranchBlockHash());
+                            good = Block.createBlock(params, trunk, branch);
+                            good.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+                            good.addTransaction(t);
+                            good.setPrevBlockHash(parentP.getHash());
+                            good.setPrevBranchBlockHash(parentP.getHash());
+                            good.setLastMiningRewardBlock(cl0);
+                        } catch (Exception ignore) {
+                        }
+                    }
+                    // Poisons: valid sigs (wallet A re-spent = formally valid at
+                    // ingress), unknown parents, lastMiningRewardBlock just
+                    // inside the window so they sort FIRST (chainlength asc).
+                    UTXO ua = utxos.get(addrFor(seedFor(base0)).toBase58());
+                    int npoison = Math.max(3, n.applyAsInt(8));
+                    int stagedPoison = 0;
+                    if (ua != null) {
+                        for (int i = 0; i < npoison; i++) {
+                            try {
+                                Transaction t = pay(keyFor(base0), ua,
+                                        addrFor(seedFor(runUniqueIndex(startIndex, 63010 + i))).toBase58(),
+                                        payAmount, "v63-poison");
+                                byte[] tipResp = OkHttp3Util.postString(seedNode + "getTip", "{}");
+                                Block proto = params.getDefaultSerializer().makeBlock(Utils.HEX.decode(
+                                        (String) Json.jsonmapper().readValue(tipResp, Map.class)
+                                                .get("dataHex")));
+                                Block trunk = fetchBlock(proto.getPrevBlockHash());
+                                Block branch = fetchBlock(proto.getPrevBranchBlockHash());
+                                Block pb = Block.createBlock(params, trunk, branch);
+                                pb.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+                                pb.addTransaction(t);
+                                pb.setPrevBlockHash(Sha256Hash.wrap(seedFor(900_000L + i)));
+                                pb.setPrevBranchBlockHash(Sha256Hash.wrap(seedFor(910_000L + i)));
+                                pb.setLastMiningRewardBlock(cutCl + 1);
+                                for (int gi = 0; gi < nnodes; gi++) {
+                                    if (sendGossipFrame(nodeUrls, gports, gi, 1, pb.bitcoinSerialize()))
+                                        stagedPoison++;
+                                }
+                            } catch (Exception ignore) {
+                            }
+                        }
+                    }
+                    Thread.sleep(5000);
+                    // Then the valid orphan, then its parent.
+                    boolean stagedGood = false;
+                    if (good != null) {
+                        for (int gi = 0; gi < nnodes; gi++) {
+                            if (sendGossipFrame(nodeUrls, gports, gi, 1, good.bitcoinSerialize()))
+                                stagedGood = true;
+                        }
+                    }
+                    Thread.sleep(5000);
+                    if (parentP != null) {
+                        for (int gi = 0; gi < nnodes; gi++)
+                            sendGossipFrame(nodeUrls, gports, gi, 1, parentP.bitcoinSerialize());
+                    }
+                    int confirmed = -1;
+                    if (stagedGood) {
+                        long deadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
+                        while (System.currentTimeMillis() < deadline) {
+                            Thread.sleep(5000);
+                            confirmed = countConfirmed(goodAddr);
+                            // Parent + good share the recipient: 2 confirms total.
+                            if (confirmed >= 2) break;
+                        }
+                    }
+                    long clAfter = chainAfterSettle(seedNode, cl0, 30000);
+                    boolean connected = stagedGood && confirmed >= 2;
+                    boolean ok = connected && clAfter > cl0;
+                    verdict("V63 orphan poison (x" + stagedPoison + ")",
+                            ok, (!stagedGood ? "UNSTAGED "
+                                    : (connected ? ""
+                                            : "EXPECTED-BREACH? valid orphan stranded behind poison "))
+                                    + "good confirms " + confirmed + "/2, cl " + cl0 + " -> " + clAfter);
+                }
+            } catch (Exception e) {
+                verdict("V63 orphan poison", false, "error: " + shortMsg(e));
+            }
+        }
+
+        // ================================================================ V64
+        // Mixed-endpoint scheduler starvation: valid + invalid tx floods,
+        // garbage batchBlocks, attestation/slashing spam and heavy reads from
+        // separate pools across an epoch boundary. Ticks must meet deadlines
+        // (chain advances steadily), finality advances, honest sentinels
+        // confirm, tip p99 stays bounded.
+        if (wanted(only, "V64")) {
+            System.out.println("============ V64: MIXED-ENDPOINT STARVATION ============");
+            try {
+                int budget = n.applyAsInt(60);
+                int base0 = take.applyAsInt(budget + 2);
+                String mixAddr = addrFor(seedFor(runUniqueIndex(startIndex, 64001))).toBase58();
+                String sentinelAddr = addrFor(seedFor(runUniqueIndex(startIndex, 64002))).toBase58();
+                long clBefore = chainLength(seedNode);
+                long finBefore = finalizedAfterRead(seedNode);
+                AtomicInteger validSent = new AtomicInteger();
+                AtomicInteger wi = new AtomicInteger();
+                long endAt = System.currentTimeMillis() + burstSec * 1000L;
+                ExecutorService pool = Executors.newFixedThreadPool(clients);
+                List<Future<?>> futs = new ArrayList<>();
+                // Pool V: valid tx flood.
+                for (int c = 0; c < Math.max(2, clients / 4); c++) {
+                    futs.add(pool.submit(() -> {
+                        while (System.currentTimeMillis() < endAt) {
+                            int i = wi.getAndIncrement();
+                            if (i >= budget) return null;
+                            try {
+                                UTXO u = utxos.get(addrFor(seedFor(base0 + i)).toBase58());
+                                if (u != null && submitTx(pay(keyFor(base0 + i), u, mixAddr,
+                                        payAmount, "v64"))) {
+                                    validSent.incrementAndGet();
+                                }
+                            } catch (Exception ignore) {
+                            }
+                        }
+                        return null;
+                    }));
+                }
+                // Pool I: invalid tx (re-spends of the first wallets = rejected).
+                futs.add(pool.submit(() -> {
+                    while (System.currentTimeMillis() < endAt) {
+                        try {
+                            UTXO u = utxos.get(addrFor(seedFor(base0)).toBase58());
+                            if (u != null) {
+                                submitTx(pay(keyFor(base0), u, mixAddr, payAmount, "v64-bad"));
+                            }
+                        } catch (Exception ignore) {
+                        }
+                        try { Thread.sleep(200); } catch (InterruptedException ie) { return null; }
+                    }
+                    return null;
+                }));
+                // Pool B: garbage batchBlocks (unknown parents, no funds needed).
+                futs.add(pool.submit(() -> {
+                    java.util.Random rnd = new java.util.Random(0x64);
+                    while (System.currentTimeMillis() < endAt) {
+                        try {
+                            byte[] tipResp = OkHttp3Util.postString(seedNode + "getTip", "{}");
+                            Block proto = params.getDefaultSerializer().makeBlock(Utils.HEX.decode(
+                                    (String) Json.jsonmapper().readValue(tipResp, Map.class).get("dataHex")));
+                            Block b = Block.createBlock(params, proto, proto);
+                            b.setBlockType(BlockType.BLOCKTYPE_TRANSFER);
+                            byte[] rh = new byte[32];
+                            rnd.nextBytes(rh);
+                            b.setPrevBlockHash(Sha256Hash.wrap(rh));
+                            submitBlockTo(nodeUrls[rnd.nextInt(nnodes)], b);
+                        } catch (Exception ignore) {
+                        }
+                        try { Thread.sleep(500); } catch (InterruptedException ie) { return null; }
+                    }
+                    return null;
+                }));
+                // Pool A+S: attestation + slashing spam (fake keys, no funds).
+                futs.add(pool.submit(() -> {
+                    try {
+                        submitAttestationSpam(nodeUrls, 641, 8200L, 1025L, 1024L, 1025L,
+                                Math.max(10, budget / 2));
+                        PQKey fk = PQKey.createNew();
+                        AttestationData a1 = fakeAttestation(fk.getPubKey(), 31_320_000L, 3915000L,
+                                3914999L, 3915000L, Sha256Hash.of("v64a".getBytes()),
+                                Sha256Hash.of("v64t".getBytes()));
+                        AttestationData b2 = fakeAttestation(fk.getPubKey(), 31_320_000L, 3915000L,
+                                3914999L, 3915000L, Sha256Hash.of("v64b".getBytes()),
+                                Sha256Hash.of("v64u".getBytes()));
+                        String body = "{\"attestation1\":"
+                                + new String(Json.jsonmapper().writeValueAsBytes(a1),
+                                        java.nio.charset.StandardCharsets.UTF_8)
+                                + ",\"attestation2\":"
+                                + new String(Json.jsonmapper().writeValueAsBytes(b2),
+                                        java.nio.charset.StandardCharsets.UTF_8)
+                                + "}";
+                        long slashEnd = System.currentTimeMillis() + burstSec * 1000L;
+                        while (System.currentTimeMillis() < slashEnd) {
+                            try {
+                                OkHttp3Util.postString(seedNode + "submitSlashingProof", body);
+                            } catch (Exception ignore) {
+                            }
+                            try { Thread.sleep(1000); } catch (InterruptedException ie) { return null; }
+                        }
+                    } catch (Exception ignore) {
+                    }
+                    return null;
+                }));
+                // Pool R: heavy reads (big getOutputs + status polls).
+                List<String> bigHashes = new ArrayList<>();
+                for (int i = 0; i < 2000; i++) {
+                    bigHashes.add(Utils.HEX.encode(PQKey.fromMLDSA(seedFor(startIndex + i)).getPubKeyHash()));
+                }
+                for (int c = 0; c < 2; c++) {
+                    final int ci = c;
+                    futs.add(pool.submit(() -> {
+                        while (System.currentTimeMillis() < endAt) {
+                            try {
+                                OkHttp3Util.postString(nodeUrls[ci % nnodes] + "getOutputs",
+                                        Json.jsonmapper().writeValueAsString(bigHashes));
+                            } catch (Exception ignore) {
+                            }
+                            try {
+                                OkHttp3Util.postString(nodeUrls[(ci + 1) % nnodes]
+                                        + "getPendingTransactions", "{}");
+                            } catch (Exception ignore) {
+                            }
+                        }
+                        return null;
+                    }));
+                }
+                // Honest sentinels mid-burst.
+                Thread.sleep(Math.min(30000, burstSec * 1000L / 3));
+                int sentinelSent = 0;
+                for (int j = 0; j < 2; j++) {
+                    UTXO u = utxos.get(addrFor(seedFor(base0 + budget + j)).toBase58());
+                    if (u == null) continue;
+                    try {
+                        if (submitTx(pay(keyFor(base0 + budget + j), u, sentinelAddr, payAmount, "v64-ok")))
+                            sentinelSent++;
+                    } catch (Exception ignore) {
+                    }
+                }
+                for (Future<?> f : futs) {
+                    try { f.get(burstSec + 120L, TimeUnit.SECONDS); } catch (Exception ignore) { }
+                }
+                pool.shutdownNow();
+                int sentinelConfirmed = 0;
+                long deadline = System.currentTimeMillis() + confirmTimeoutSec * 1000L;
+                while (System.currentTimeMillis() < deadline) {
+                    Thread.sleep(5000);
+                    sentinelConfirmed = countConfirmed(sentinelAddr);
+                    if (sentinelConfirmed >= sentinelSent && sentinelSent > 0) break;
+                }
+                long p99 = tipP99(nodeUrls, 20);
+                long clAfter = chainAfterSettle(seedNode, clBefore, 60000);
+                long finAfter = finalizedAfterRead(seedNode);
+                boolean ok = sentinelSent > 0 && sentinelConfirmed >= sentinelSent
+                        && clAfter > clBefore && finAfter > finBefore && p99 <= maxP99Ms;
+                verdict("V64 endpoint mix (" + burstSec + "s, valid x" + validSent + ")",
+                        ok, "sentinel " + sentinelConfirmed + "/" + sentinelSent + ", tipP99=" + p99
+                                + "ms (bound " + maxP99Ms + "), cl " + clBefore + " -> " + clAfter
+                                + ", fin " + finBefore + " -> " + finAfter);
+            } catch (Exception e) {
+                verdict("V64 endpoint mix", false, "error: " + shortMsg(e));
+            }
+        }
+
+        // ================================================================ REJOIN        // Restart-rejoin probe (§26 regression, OPT-IN via only=REJOIN):
         // docker-restarts one node container and asserts it rejoins the mesh
         // (chain advances past the pre-restart floor, finroots agree). Restart
         // alone must heal — the pre-fix code NPE-spun forever here.
@@ -1056,6 +1561,73 @@ public class MeshLoad {
             }
         }
         return percentile(lat, 99);
+    }
+
+    /** Pending-transaction hashes on a node (empty set when unreadable). */
+    static java.util.Set<String> fetchPendingHashes(String nodeUrl) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        try {
+            byte[] r = OkHttp3Util.postString(nodeUrl + "getPendingTransactions", "{}");
+            Map<?, ?> map = Json.jsonmapper().readValue(r, Map.class);
+            Object listObj = map.get("transactionlist");
+            if (listObj instanceof List) {
+                for (Object o : (List<?>) listObj) {
+                    try {
+                        byte[] txBytes = java.util.Base64.getDecoder().decode(String.valueOf(o));
+                        out.add(net.bigtangle.core.Sha256Hash.create(txBytes).toString());
+                    } catch (Exception ignore) {
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+        }
+        return out;
+    }
+
+    /**
+     * Deliver one raw gossip frame (MAGIC, type, len, payload) to node gi.
+     * gossipPorts parallels nodeUrls (one TCP port per node, e.g. testnodes
+     * 9421,9422,9423). True when the bytes were handed to the socket.
+     */
+    static boolean sendGossipFrame(String[] nodeUrls, String[] gossipPorts, int gi, int type, byte[] payload) {
+        try {
+            String host = hostOf(nodeUrls[gi % nodeUrls.length]);
+            int port = Integer.parseInt(gossipPorts[gi % gossipPorts.length].trim());
+            try (java.net.Socket s = new java.net.Socket()) {
+                s.connect(new java.net.InetSocketAddress(host, port), 5000);
+                java.io.DataOutputStream dos = new java.io.DataOutputStream(s.getOutputStream());
+                dos.writeInt(0x42474C31);
+                dos.writeInt(type);
+                dos.writeInt(payload.length);
+                dos.write(payload);
+                dos.flush();
+                return true;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** countConfirmed on a specific node rather than always the seed node. */
+    static int countConfirmedOn(String nodeUrl, String address) {
+        try {
+            String u = (nodeUrl.startsWith("http") ? nodeUrl : "http://" + nodeUrl);
+            byte[] r = OkHttp3Util.postString(u + "getTransactionsStatusByAddress",
+                    Json.jsonmapper().writeValueAsString(Map.of("address", address)));
+            GetTransactionStatusResponse.GetTransactionsStatusResponse resp = Json.jsonmapper().readValue(r,
+                    GetTransactionStatusResponse.GetTransactionsStatusResponse.class);
+            int cnt = 0;
+            if (resp.getTransactions() != null) {
+                for (GetTransactionStatusResponse item : resp.getTransactions()) {
+                    if ("CONFIRMED".equals(item.getStatus())) {
+                        cnt++;
+                    }
+                }
+            }
+            return cnt;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /** Pending-transaction count on a node (-1 when unreadable). */

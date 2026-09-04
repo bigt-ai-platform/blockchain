@@ -104,7 +104,8 @@ services:
       SERVICE_SYNC: "true"
       SERVICE_INITSYNC: "true"
       SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
+      RUNKAFKASTREAM: ${RUNKAFKASTREAM:-false}
+      BOOT_STRAP_SERVERS: ${BOOT_STRAP_SERVERS:-}
       CREATETABLE: "true"
     depends_on:
       postgres-l0-0: { condition: service_healthy }
@@ -133,7 +134,8 @@ services:
       SERVICE_SYNC: "true"
       SERVICE_INITSYNC: "true"
       SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
+      RUNKAFKASTREAM: ${RUNKAFKASTREAM:-false}
+      BOOT_STRAP_SERVERS: ${BOOT_STRAP_SERVERS:-}
       CREATETABLE: "false"
     depends_on:
       postgres-l0-1: { condition: service_healthy }
@@ -162,7 +164,8 @@ services:
       SERVICE_SYNC: "true"
       SERVICE_INITSYNC: "true"
       SYNCBLOCKS: 1000
-      RUNKAFKASTREAM: "false"
+      RUNKAFKASTREAM: ${RUNKAFKASTREAM:-false}
+      BOOT_STRAP_SERVERS: ${BOOT_STRAP_SERVERS:-}
       CREATETABLE: "false"
     depends_on:
       postgres-l0-2: { condition: service_healthy }

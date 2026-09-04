@@ -31,6 +31,24 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Local Kafka for the suite (same role as helper/kafka-local.sh locally:
+      # every harness gets its own broker). Single listener is enough — CI
+      # tests run on the host and reach it at localhost:9092. bitnami image
+      # (not apache) because GH services cannot mount the server.properties
+      # file the apache image needs for custom listeners.
+      kafka:
+        image: bitnami/kafka:3.7
+        env:
+          KAFKA_CFG_NODE_ID: 1
+          KAFKA_CFG_PROCESS_ROLES: broker,controller
+          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+          ALLOW_PLAINTEXT_LISTENER: "yes"
+        ports:
+          - 9092:9092
 
 
     steps:
@@ -46,6 +64,10 @@ jobs:
 
 
       - name: Run Maven integration tests
-        run: mvn -B package  -Dsurefire.excludes=**/performance/**  --file pom.xml 
+        run: mvn -B package  -Dsurefire.excludes=**/performance/**  --file pom.xml
         env:
           MAVEN_OPTS: -Xmx4g -Xms1g
+          # Local broker (see kafka service above + helper/kafka-local.sh).
+          # Streams stay OFF by default (server default); KAFKA_STREAMS=1 in a
+          # manual dispatch opts the suite into streams-on.
+          BOOT_STRAP_SERVERS: localhost:9092

@@ -174,48 +174,17 @@ ensure_pg() {
 }
 
 ensure_kafka() {
-    if ! (echo > /dev/tcp/127.0.0.1/9092) 2>/dev/null; then
-        log "starting local kafka (bt4-kafka on :9092)"
-        docker rm -f bt4-kafka >/dev/null 2>&1 || true
-        # message.max.bytes must cover a full batch block (batch.txPerBlock x
-        # ~6 KB PQ-signed txs). The 1 MB default silently drops the publish,
-        # so peers never receive the block: its transactions confirm only on
-        # the creating node and the mesh forks permanently (measured as
-        # 'Message larger than MAX_BLOCK_SIZE' on every peer).
-        docker run -d --name bt4-kafka -p 9092:9092 apache/kafka:3.9.0 \
-            --override message.max.bytes=33554432 \
-            --override replica.fetch.max.bytes=33554432 >/dev/null
-        sleep 8
-    fi
-    # kafka-topics is NOT on PATH in apache/kafka images — full path required
-    local kt=(docker exec bt4-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092)
-    for _ in $(seq 1 30); do
-        "${kt[@]}" --list >/dev/null 2>&1 && break
-        sleep 1
-    done
-    # fresh topics every 'up': delete, wait until gone, recreate EMPTY.
-    # Recreate is mandatory — Kafka Streams aborts with
-    # MissingSourceTopicException when a source topic is absent during
-    # assignment (broker auto-create only fires on produce, which races
-    # stream startup and loses).
-    local t
-    # topics are chain-suffixed by KafkaConfiguration (chainId "L0" for both
-    # MainNetParams and TestParams layer0 variants)
-    for t in bigtangle-blocks-L0 bigtangle-transactions-L0 bigtangle-attestations-L0; do
-        "${kt[@]}" --delete --topic "$t" >/dev/null 2>&1 || true
-        for _ in $(seq 1 30); do
-            "${kt[@]}" --list 2>/dev/null | grep -qx "$t" || break
-            sleep 1
-        done
-        # create races the async delete (TopicExistsException while the
-        # topic is still 'deleting' broker-side) — retry until it sticks.
-        local created=0 a
-        for a in 1 2 3 4 5 6 7 8; do
-            "${kt[@]}" --create --topic "$t" --partitions 1 --replication-factor 1 >/dev/null 2>&1 && { created=1; break; }
-            sleep 3
-        done
-        [ "$created" = 1 ] || die "could not recreate kafka topic $t"
-    done
+    # Local hermetic broker via the shared provisioner (helper/kafka-local.sh):
+    # same apache/kafka:3.9.0 image and bt4-kafka/:9092 identity as before,
+    # but the broker config is a mounted server.properties — the old
+    # `--override` CLI flags are rejected by the image entrypoint and the
+    # 1 MB broker default used to silently drop full batch blocks (mesh fork).
+    # shellcheck disable=SC1091
+    source "${ROOT}/helper/kafka-local.sh"
+    export KAFKA_CONTAINER="${KAFKA_CONTAINER:-bt4-kafka}" KAFKA_HOST_PORT=9092
+    export KAFKA_CHAINS="${KAFKA_CHAINS:-L0}" KAFKA_FRESH_TOPICS=1
+    kafka_local_ensure || die "local kafka broker failed"
+    kafka_local_topics || die "local kafka topics failed"
 }
 
 gen_keys() { # → ValidatorKeyTool output lines (uses exec jar, falls back to image)

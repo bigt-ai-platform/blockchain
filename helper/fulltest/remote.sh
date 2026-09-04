@@ -366,6 +366,25 @@ if [ -f "$TEST_GENESIS_CSV" ]; then
     echo "Using L0 genesis distribution: $TEST_GENESIS_CSV"
 fi
 
+# Local Kafka for the L0 + L1 chains (KAFKA_STREAMS=0 keeps streams-off).
+# Same local-docker provisioning as testnodes.sh: hermetic broker + fresh
+# chain topics (L0 + ordermatch). Servers run on this host, so they use the
+# localhost listener.
+KAFKA_STREAMS="${KAFKA_STREAMS:-1}"
+if [ "$KAFKA_STREAMS" = "1" ]; then
+    echo "Provisioning local Kafka (testnodes pattern)..."
+    # shellcheck disable=SC1091
+    source "${ROOT}/helper/kafka-local.sh"
+    export KAFKA_CONTAINER="${KAFKA_CONTAINER:-l0-remote-kafka}"
+    export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-9292}"
+    export KAFKA_CHAINS="${KAFKA_CHAINS:-L0 ordermatch}" KAFKA_FRESH_TOPICS=1
+    kafka_local_ensure || { echo "local kafka broker failed" >&2; exit 1; }
+    kafka_local_topics || { echo "local kafka topics failed" >&2; exit 1; }
+    export RUNKAFKASTREAM=true
+    export BOOT_STRAP_SERVERS="localhost:${KAFKA_HOST_PORT}"
+    echo "L0/L1 streams via ${BOOT_STRAP_SERVERS}"
+fi
+
 # --- Step 4: Start L0 HTTP server (PoS validator duty on the settlement chain) ---
 echo ""
 echo "=== Step 4: Start L0 HTTP server (port $L0_PORT) ==="

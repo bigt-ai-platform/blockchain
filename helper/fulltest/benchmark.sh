@@ -58,7 +58,30 @@ done
 # ── Start Docker network ──────────────────────────────────────────────────
 if [ "$RUN_NETWORK" = true ]; then
     header "Starting L0 Docker network..."
+    # Kafka streams for the bench net (KAFKA_STREAMS=0 keeps streams-off).
+    # Same local-docker provisioning as testnodes.sh; servers reach the broker
+    # as <container>:9094 on the compose network.
+    KAFKA_STREAMS="${KAFKA_STREAMS:-1}"
+    if [ "$KAFKA_STREAMS" = "1" ]; then
+        export RUNKAFKASTREAM=true
+        export KAFKA_CONTAINER="${KAFKA_CONTAINER:-l0-test-kafka}"
+        export KAFKA_HOST_PORT="${KAFKA_HOST_PORT:-9192}"
+        export BOOT_STRAP_SERVERS="${KAFKA_CONTAINER}:9094"
+    fi
     docker compose -f "$COMPOSE_FILE" up -d
+
+    if [ "$KAFKA_STREAMS" = "1" ]; then
+        info "Provisioning local Kafka for the bench net..."
+        # shellcheck disable=SC1091
+        source "${ROOT}/helper/kafka-local.sh"
+        export KAFKA_NETWORK
+        KAFKA_NETWORK="$(docker network ls --format '{{.Name}}' | grep -E '(^|_)l0-test-net$' | head -1)"
+        [ -n "$KAFKA_NETWORK" ] || fail "l0-test-net not found"
+        export KAFKA_CHAINS="${KAFKA_CHAINS:-L0}" KAFKA_FRESH_TOPICS=1
+        kafka_local_ensure || fail "local kafka broker failed"
+        kafka_local_topics || fail "local kafka topics failed"
+        log "bench net streams via ${BOOT_STRAP_SERVERS}"
+    fi
 
     info "Waiting for server nodes..."
     for port in 8081 8082 8083; do
