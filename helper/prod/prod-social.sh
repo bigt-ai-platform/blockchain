@@ -183,8 +183,7 @@ start_one() { # $1=host-index
     local bridge_env=""
     local chainl_args=""
     if [ -n "${BRIDGE_VAULT_PUBKEY:-}" ]; then
-        bridge_env="-e BRIDGE_ACTIVE=true -e BRIDGE_VAULTPUBKEYHEX='${BRIDGE_VAULT_PUBKEY}'" \
-            " -e ANCHOR_L0URL='${BRIDGE_L0_URL:-https://eu1.bigtangle.org}'"
+        bridge_env="-e BRIDGE_ACTIVE=true -e BRIDGE_VAULTPUBKEYHEX='${BRIDGE_VAULT_PUBKEY}' -e ANCHOR_L0URL='${BRIDGE_L0_URL:-https://eu1.bigtangle.org}'"
         # The L1 PegInWatcher only mints when chainlength scheduling is active.
         chainl_args="--service.schedule.chainlength=true"
         log "${host} (${adv}): bridge enabled (vault ${BRIDGE_VAULT_PUBKEY:0:16}… → L0 ${BRIDGE_L0_URL:-https://eu1.bigtangle.org})"

@@ -70,34 +70,42 @@ fi
 CP="${CACHE}/BOOT-INF/classes:${CACHE}/BOOT-INF/lib/*"
 TOOL="${TOOL_DIR}/SocialFundTool.java"
 
-run_tool() { # $1=phase  (rest of args consumed)
-    L0_URL="$L0_URL" SOCIAL_URLS="$SOCIAL_URLS" API_KEY="$API_KEY" \
-        java -cp "$CP" "$TOOL" "$WALLET" "$1" "$AMOUNT_SAT"
+run_tool() { # extra args appended after the wallet path
+    L0_URL="$L0_URL" SOCIAL_URLS="$SOCIAL_URLS" API_KEY="$API_KEY" BENEFICIARY_PUBKEY="${BENEFICIARY_PUBKEY:-}" \
+        java -cp "$CP" "$TOOL" "$WALLET" "$@"
 }
 
 case "${1:-run}" in
     check)
         log "preflight gate (no funds moved)"
-        run_tool preflight
+        run_tool preflight "$AMOUNT_SAT"
         ;;
     split)
-        run_tool split
+        run_tool split "$AMOUNT_SAT"
         ;;
     pegin)
-        run_tool pegin
+        run_tool pegin "$AMOUNT_SAT"
+        ;;
+    give) # give <toBase58> <sat>
+        [ -n "${2:-}" ] || die "usage: prod-social-fund.sh give <toBase58> <sat>"
+        run_tool give "$2" "$3"
+        ;;
+    stakenode) # stakenode <url> <pubkeyHex> <sat>
+        [ -n "${2:-}" ] && [ -n "${3:-}" ] || die "usage: prod-social-fund.sh stakenode <url> <pubkeyHex> <sat>"
+        run_tool stakenode "$2" "$3" "$4"
         ;;
     stake)
-        run_tool stake
+        run_tool stake "$AMOUNT_SAT"
         ;;
     run)
         log "phase 1/4 preflight"
-        run_tool preflight
+        run_tool preflight "$AMOUNT_SAT"
         log "phase 2/4 split"
-        run_tool split
+        run_tool split "$AMOUNT_SAT"
         log "phase 3/4 pegin"
-        run_tool pegin
+        run_tool pegin "$AMOUNT_SAT"
         log "phase 4/4 stake+activate"
-        run_tool stake
+        run_tool stake "$AMOUNT_SAT"
         log "done — verify with https://${SOCIAL_URLS%% *}/getValidators"
         ;;
     *)

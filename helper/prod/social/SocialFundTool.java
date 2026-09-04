@@ -225,10 +225,20 @@ public class SocialFundTool {
             System.err.println("ABORT: exact " + sat + " UTXO never confirmed (run split first / wait longer)");
             System.exit(2);
         }
+        // Beneficiary of the L1 mint defaults to the wallet itself (v1 pubkey).
+        // BENEFICIARY_PUBKEY overrides it (e.g. a SOCIAL validator seed pubkey).
+        PQKey beneficiary = key;
+        String b = System.getenv("BENEFICIARY_PUBKEY");
+        if (b != null && !b.isEmpty()) {
+            beneficiary = PQKey.fromPublicOnly(Utils.HEX.decode(b));
+            System.out.println("BENEFICIARY="
+                    + Address.fromHash160(params, Utils.sha256hash160(beneficiary.getPubKey())).toBase58());
+        }
         // Single-key vault script == P2PKH to the wallet pubkey (wallet == vault).
         Transaction tx = new Transaction(params);
         tx.setVersion(PQConstants.TX_PQ_VERSION);
-        tx.setToAddressInSubtangle(addr.getHash160()); // beneficiary == wallet pubkey hash
+        tx.setToAddressInSubtangle(Address.fromHash160(params,
+                Utils.sha256hash160(beneficiary.getPubKey())).getHash160());
         tx.setDataClassName("PegInInfo");
         tx.setData(Json.jsonmapper().writeValueAsBytes(Map.of("chainId", CHAIN_ID)));
         tx.addInput(source.getBlockHash(), new net.bigtangle.wallet.FreeStandingTransactionOutput(params, source));
@@ -240,6 +250,82 @@ public class SocialFundTool {
         System.out.println("PEGIN_RESP=" + new String(resp, java.nio.charset.StandardCharsets.UTF_8).replace('\n', ' '));
         System.out.println("PEGIN_TXID=" + tx.getHashAsString());
         System.out.println("PEGIN_AMOUNT_SAT=" + source.getValue().getValue());
+    }
+
+    /** Send `sat` to a base58 address (plain L0 transfer), change back to self. */
+    private void give(String toB58, BigInteger sat) throws Exception {
+        List<UTXO> utxos = spendableBc();
+        BigInteger fee = Coin.FEE_DEFAULT.getValue();
+        UTXO src = null;
+        for (UTXO u : utxos) {
+            BigInteger need = sat.add(fee);
+            if (u.getValue().getValue().compareTo(need) >= 0
+                    && (src == null || u.getValue().getValue().compareTo(src.getValue().getValue()) < 0)) {
+                src = u; // smallest sufficient UTXO
+            }
+        }
+        if (src == null) {
+            System.err.println("ABORT: no UTXO >= amount+fee to send from");
+            System.exit(2);
+        }
+        BigInteger change = src.getValue().getValue().subtract(sat).subtract(fee);
+        Address to = Address.fromBase58(params, toB58);
+        Transaction tx = new Transaction(params);
+        tx.setVersion(PQConstants.TX_PQ_VERSION);
+        TransactionInput in = tx.addInput(src.getBlockHash(), src.getTxHash(), src.getIndex(),
+                src.getScript() == null ? new Script(new byte[0]) : src.getScript());
+        tx.addOutput(new Coin(sat, NetworkParameters.BIGTANGLE_TOKENID), to);
+        if (change.signum() > 0) {
+            tx.addOutput(new Coin(change, NetworkParameters.BIGTANGLE_TOKENID), addr);
+        }
+        signInput(tx, in, src.getScript(), 0);
+        submit(tx);
+        System.out.println("GIVE_TXID=" + tx.getHashAsString());
+        System.out.println("GIVE_TO=" + toB58 + " SAT=" + sat);
+    }
+
+    /** Wait for `pubkeyHex` to hold >= sat on `url`, then stakeDeposit + activateValidator. */
+    private void stakenode(String url, String pubkeyHex, BigInteger sat) throws Exception {
+        ObjectMapper m = Json.jsonmapper();
+        String base = url.replaceAll("/+$", "") + "/";
+        byte[] rawPub = Utils.HEX.decode(pubkeyHex);
+        String hashHex = Utils.HEX.encode(Utils.sha256hash160(rawPub));
+        String pubkeyHashAddr = Address.fromHash160(params, Utils.sha256hash160(rawPub)).toBase58();
+        System.out.println("STAKING pubkeyHash=" + hashHex + " (" + pubkeyHashAddr + ") on " + base);
+        if (apiKey().isEmpty()) {
+            System.err.println("ABORT: API_KEY not set");
+            System.exit(3);
+        }
+        boolean funded = false;
+        for (int i = 0; i < 80; i++) {
+            byte[] resp = OkHttp3Util.postString(base + "getBalances",
+                    m.writeValueAsString(List.of(hashHex)));
+            GetBalancesResponse bal = m.readValue(resp, GetBalancesResponse.class);
+            BigInteger total = BigInteger.ZERO;
+            for (UTXO x : bal.getOutputs()) {
+                if (x == null || x.getValue() == null || x.isSpent() || !x.isConfirmed()) continue;
+                if (java.util.Arrays.equals(x.getValue().getTokenid(), NetworkParameters.BIGTANGLE_TOKENID)) {
+                    total = total.add(x.getValue().getValue());
+                }
+            }
+            System.out.println("  balance_sat=" + total);
+            if (total.compareTo(sat) >= 0) { funded = true; break; }
+            Thread.sleep(4000);
+        }
+        if (!funded) {
+            System.err.println("ABORT: " + pubkeyHashAddr + " never reached " + sat + " sat on " + base);
+            System.exit(3);
+        }
+        byte[] s = postJsonKey(base + "stakeDeposit",
+                m.writeValueAsString(Map.of("pubkey", pubkeyHex, "amount", sat.toString())), apiKey());
+        System.out.println("  stakeDeposit -> " + new String(s, java.nio.charset.StandardCharsets.UTF_8).replace('\n', ' '));
+        byte[] a = postJsonKey(base + "activateValidator",
+                m.writeValueAsString(Map.of("pubkey", pubkeyHex, "epoch", 0)), apiKey());
+        System.out.println("  activateValidator -> " + new String(a, java.nio.charset.StandardCharsets.UTF_8).replace('\n', ' '));
+        Thread.sleep(5000);
+        byte[] v = OkHttp3Util.postString(base + "getValidators", "{}");
+        System.out.println("  getValidators -> "
+                + new String(v, java.nio.charset.StandardCharsets.UTF_8).replace('\n', ' '));
     }
 
     private void stake(BigInteger sat) throws Exception {
@@ -328,19 +414,23 @@ public class SocialFundTool {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {
-            System.err.println("usage: SocialFundTool <walletJson> <preflight|split|pegin|stake> <sat>");
+            System.err.println("usage: SocialFundTool <walletJson> <preflight|split|pegin|give|stakenode|stake> [...]");
+            System.err.println("  preflight/split/pegin/stake: <sat>");
+            System.err.println("  give:  <toBase58> <sat>");
+            System.err.println("  stakenode: <url> <pubkeyHex> <sat>");
             System.exit(1);
         }
         String wallet = args[0];
         String cmd = args[1];
-        BigInteger sat = new BigInteger(args[2]);
         NetworkParameters params = MainNetParams.get();
         SocialFundTool t = loadWallet(wallet, params);
         switch (cmd) {
-            case "preflight": t.preflight(sat); break;
-            case "split": t.split(sat); break;
-            case "pegin": t.pegin(sat); break;
-            case "stake": t.stake(sat); break;
+            case "preflight": t.preflight(new BigInteger(args[2])); break;
+            case "split": t.split(new BigInteger(args[2])); break;
+            case "pegin": t.pegin(new BigInteger(args[2])); break;
+            case "give": t.give(args[2], new BigInteger(args[3])); break;
+            case "stakenode": t.stakenode(args[2], args[3], new BigInteger(args[4])); break;
+            case "stake": t.stake(new BigInteger(args[2])); break;
             default:
                 System.err.println("unknown phase " + cmd);
                 System.exit(1);

@@ -50,6 +50,8 @@
 #   KAFKA_BOOTSTRAP (default the 2 prod mirrors), RUN_KAFKA (default true),
 #   L0_PEER_UDP L0_PEER_TCP L0_GOSSIP (default 30317/30318/9195),
 #   POS_DUTY (default true; requires POS_VALIDATOR_KEY for beacon duties),
+#   POS_VALIDATOR_KEYS (optional CSV parallel to L0_HOSTS for a distinct key
+#     per node; falls back to POS_VALIDATOR_KEY for all),
 #   BRIDGE_VAULT_PUBKEY (optional L0 vault pubkey; enables bridge peg-in
 #     validation), BRIDGE_VAULT_PRIKEY (optional; enables peg-out signing),
 #   GENESIS_CSV (default ${ROOT}/helper/prodsim/genesis/GenesisOutput.csv; the
@@ -62,7 +64,7 @@ SSH_USER="${SSH_USER:-root}"
 SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=10 -i /config/.ssh/oraclevpc.key}"
 JUMP_HOST="${JUMP_HOST-}"
 PROD_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "${PROD_DIR}/.." && pwd)"
+ROOT="$(cd "${PROD_DIR}/../.." && pwd)"
 
 L0_HOSTS="${L0_HOSTS:-s1001.bigt.ai,s2001.bigt.ai}"
 L0_ADVERTISED="${L0_ADVERTISED:-eu1.bigtangle.org,eu2.bigtangle.org}"
@@ -143,6 +145,12 @@ PGCS=()
 if [ -n "$PG_CONTAINERS" ]; then
     IFS=',' read -ra PGCS <<< "$PG_CONTAINERS"
     [ "${#PGCS[@]}" -eq "${#HOSTS[@]}" ] || die "PG_CONTAINERS (${#PGCS[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+fi
+# Optional per-host validator keys (CSV, same order as L0_HOSTS).
+PKEYS=()
+if [ -n "${POS_VALIDATOR_KEYS:-}" ]; then
+    IFS=',' read -ra PKEYS <<< "$POS_VALIDATOR_KEYS"
+    [ "${#PKEYS[@]}" -eq "${#HOSTS[@]}" ] || die "POS_VALIDATOR_KEYS (${#PKEYS[@]}) must match L0_HOSTS (${#HOSTS[@]})"
 fi
 
 ssh_transport() {
@@ -285,7 +293,7 @@ ensure_genesis() { # $1=host
 # ---- Node ------------------------------------------------------------------
 start_one() { # $1=host-index
     local idx="$1"
-    local host="${HOSTS[$idx]}" adv="${ADVS[$idx]}" port="${APORTS[$idx]}" pgc
+    local host="${HOSTS[$idx]}" adv="${ADVS[$idx]}" port="${APORTS[$idx]}" pgc pk
     pgc="$(pg_container_of "$idx")"
     local requester gossip_seeds pos_peers
     requester="$(peer_list "$idx")"
@@ -306,6 +314,14 @@ start_one() { # $1=host-index
     # Optional bridge/vault provisioning (L0 side of the L0<->L1 peg): when
     # BRIDGE_VAULT_PUBKEY is set the node validates peg-ins that lock to that
     # vault script. BRIDGE_VAULT_PRIKEY enables later peg-out signing on L0.
+    if [ "${#PKEYS[@]}" -gt 0 ]; then
+        pk="${PKEYS[$idx]}"
+    else
+        pk="${POS_VALIDATOR_KEY:-}"
+    fi
+    if [ -n "$pk" ] && [ "${#PKEYS[@]}" -gt 0 ]; then
+        log "${host} (${adv}): validator key #${idx} configured"
+    fi
     local bridge_env=""
     if [ -n "${BRIDGE_VAULT_PUBKEY:-}" ]; then
         bridge_env="-e BRIDGE_ACTIVE=true -e BRIDGE_VAULTPUBKEYHEX='${BRIDGE_VAULT_PUBKEY}'"
@@ -324,7 +340,7 @@ start_one() { # $1=host-index
     fi
     remote "$host" "docker run -d --name ${CONTAINER} --network host --restart unless-stopped" \
         "--init --stop-timeout 30" \
-        "-e POS_VALIDATOR_KEY='${POS_VALIDATOR_KEY:-}'" \
+        "-e POS_VALIDATOR_KEY='${pk:-}'" \
         "-e SERVER_APIKEY='${SERVER_APIKEY:-}'" \
         "-e HEALTHCHECK_PORT=${port}" \
         "-e JAVA_OPTS='${L0_JAVA_OPTS}'" \
