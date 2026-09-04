@@ -5,7 +5,7 @@
 	<parent>
 		<artifactId>bigtangle</artifactId>
 		<groupId>net.bigtangle</groupId>
-		<version>0.6.1</version>
+		<version>0.6.2</version>
 	</parent>
 
 	<artifactId>layer0-server</artifactId>
