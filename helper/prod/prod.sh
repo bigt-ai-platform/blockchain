@@ -38,6 +38,13 @@
 #   SSH_USER SSH_OPTS JUMP_HOST,
 #   L0_HOSTS (default "s1001.bigt.ai,s2001.bigt.ai"),
 #   L0_ADVERTISED (default "eu1.bigtangle.org,eu2.bigtangle.org", same order),
+#   L0_CONSUMERIDSUFFIX (optional CSV parallel to L0_HOSTS overriding the kafka
+#     consumerIdSuffix per node; default derives the first DNS label of each
+#     L0_ADVERTISED entry, e.g. eu1 from eu1.bigtangle.org). Every node MUST
+#     have a distinct suffix: a shared one puts peers in ONE kafka consumer
+#     group and partitions are served to a single member, starving the others
+#     for votes/blocks (permanent head divergence — see
+#     AbstractStreamHandler.getApplicationId).
 #   L0_IMAGE (default ghcr.io/bigt-ai-platform/layer0-server), IMAGE_TAG
 #     (default: latest numeric GH container tag, auto-detected e.g. 0.6.3;
 #     override to pin — never use `latest`),
@@ -70,6 +77,9 @@ L0_HOSTS="${L0_HOSTS:-s1001.bigt.ai,s2001.bigt.ai}"
 L0_ADVERTISED="${L0_ADVERTISED:-eu1.bigtangle.org,eu2.bigtangle.org}"
 L0_IMAGE="${L0_IMAGE:-ghcr.io/bigt-ai-platform/layer0-server}"
 CONTAINER="${CONTAINER:-l0-server}"
+# Per-host kafka consumer group suffix (optional CSV parallel to L0_HOSTS).
+# Defaults to the first DNS label of the matching L0_ADVERTISED entry.
+L0_CONSUMERIDSUFFIX="${L0_CONSUMERIDSUFFIX:-}"
 # Per-host L0 API listener ports. 8082 is free on both hosts (s1001 keeps 8081
 # for reg-europa; 30308 on s1001 is taken by the legacy bigtangle 0.3.5).
 L0_API_PORTS="${L0_API_PORTS:-8082,8082}"
@@ -152,6 +162,31 @@ if [ -n "${POS_VALIDATOR_KEYS:-}" ]; then
     IFS=',' read -ra PKEYS <<< "$POS_VALIDATOR_KEYS"
     [ "${#PKEYS[@]}" -eq "${#HOSTS[@]}" ] || die "POS_VALIDATOR_KEYS (${#PKEYS[@]}) must match L0_HOSTS (${#HOSTS[@]})"
 fi
+CSUFFIX=()
+if [ -n "$L0_CONSUMERIDSUFFIX" ]; then
+    IFS=',' read -ra CSUFFIX <<< "$L0_CONSUMERIDSUFFIX"
+    [ "${#CSUFFIX[@]}" -eq "${#HOSTS[@]}" ] || die "L0_CONSUMERIDSUFFIX (${#CSUFFIX[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+fi
+# Every node on the shared broker MUST get a distinct kafka consumerIdSuffix,
+# else they join ONE consumer group and partitions are served to a single
+# member (broadcast starvation → permanent head divergence, no finality).
+# Derive the default and refuse to deploy an ambiguous layout.
+declare -A SEEN_CSFX=()
+for i in "${!HOSTS[@]}"; do
+    local_csfx=""
+    if [ "${#CSUFFIX[@]}" -gt 0 ]; then
+        local_csfx="${CSUFFIX[$i]}"
+    else
+        local_csfx="${ADVS[$i]%%.*}"
+    fi
+    if [ -z "$local_csfx" ]; then
+        die "cannot derive kafka consumerIdSuffix for ${HOSTS[$i]} — set L0_CONSUMERIDSUFFIX"
+    fi
+    if [ -n "${SEEN_CSFX[$local_csfx]:-}" ]; then
+        die "duplicate kafka consumerIdSuffix '${local_csfx}' across nodes — every L0 node needs a distinct CONSUMERIDSUFFIX (shared suffix = one kafka consumer group = partition starvation)"
+    fi
+    SEEN_CSFX[$local_csfx]=1
+done
 
 ssh_transport() {
     if [ -n "${JUMP_HOST:-}" ]; then
@@ -293,7 +328,12 @@ ensure_genesis() { # $1=host
 # ---- Node ------------------------------------------------------------------
 start_one() { # $1=host-index
     local idx="$1"
-    local host="${HOSTS[$idx]}" adv="${ADVS[$idx]}" port="${APORTS[$idx]}" pgc pk
+    local host="${HOSTS[$idx]}" adv="${ADVS[$idx]}" port="${APORTS[$idx]}" pgc pk csfx
+    if [ "${#CSUFFIX[@]}" -gt 0 ]; then
+        csfx="${CSUFFIX[$idx]}"
+    else
+        csfx="${adv%%.*}"
+    fi
     pgc="$(pg_container_of "$idx")"
     local requester gossip_seeds pos_peers
     requester="$(peer_list "$idx")"
@@ -341,6 +381,7 @@ start_one() { # $1=host-index
     remote "$host" "docker run -d --name ${CONTAINER} --network host --restart unless-stopped" \
         "--init --stop-timeout 30" \
         "-e POS_VALIDATOR_KEY='${pk:-}'" \
+        "-e CONSUMERIDSUFFIX='${csfx}'" \
         "-e SERVER_APIKEY='${SERVER_APIKEY:-}'" \
         "-e HEALTHCHECK_PORT=${port}" \
         "-e JAVA_OPTS='${L0_JAVA_OPTS}'" \

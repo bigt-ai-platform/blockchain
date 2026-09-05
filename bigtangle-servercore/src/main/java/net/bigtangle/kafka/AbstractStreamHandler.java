@@ -264,7 +264,29 @@ public abstract class AbstractStreamHandler {
         // partition is served to only ONE member — peers then starve for votes
         // and blocks (observed as permanent head divergence). Always append a
         // per-node identity (API port is unique per node).
-        return getClass().getCanonicalName() + "_" + suffix + "-node" + serverConfiguration.getPort();
+        return applicationId(getClass(), suffix, serverConfiguration.getPort());
+    }
+
+    /**
+     * Kafka Streams application id for one of this node's stream handlers.
+     *
+     * <p>The id is the consumer-group id: every member that shares it competes
+     * for the topic partitions, so TWO NODES MUST NEVER RESOLVE THE SAME ID.
+     * A duplicate id silently splits the group — with a single-partition chain
+     * topic one member is served and the others starve for votes/blocks, which
+     * shows up only later as permanent head divergence and zero finality (the
+     * deployed L0 pair wedged exactly this way when both ran on the same API
+     * port with the same default CONSUMERIDSUFFIX).
+     *
+     * <p>Uniqueness therefore requires EACH node to configure a distinct
+     * {@code kafka.consumerIdSuffix} (CONSUMERIDSUFFIX) — the API port is NOT
+     * a sufficient discriminator when nodes bind the same port on different
+     * hosts. The prod deploy scripts derive it per host from the advertised
+     * domain (eu1/eu2, socialeu1/socialeu2) and refuse to start with a
+     * duplicate.
+     */
+    static String applicationId(Class<?> handler, String suffix, String port) {
+        return handler.getCanonicalName() + "_" + suffix + "-node" + port;
     }
 
     public boolean isRunning() {

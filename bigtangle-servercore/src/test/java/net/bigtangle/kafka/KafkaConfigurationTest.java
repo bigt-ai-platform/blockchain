@@ -2,6 +2,7 @@ package net.bigtangle.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.streams.kstream.KStream;
@@ -72,5 +73,34 @@ public class KafkaConfigurationTest {
 
         // a chain id whose name contains the local id is still foreign
         assertTrue(h.foreignChainRecord(CHAIN_ID + "-x:abc123"));
+    }
+
+    /**
+     * Root-cause regression: two nodes that resolve the SAME kafka application
+     * id join ONE consumer group; with single-partition chain topics the group
+     * serves each partition to a single member, so peers starve for votes and
+     * blocks — permanent head divergence and zero finality (deployed L0 pair).
+     * Every node must therefore resolve a DISTINCT id.
+     */
+    @Test
+    public void testApplicationIdIsUniqueAcrossNodes() {
+        Class<?> blockHandler = net.bigtangle.kafka.BlockStreamHandler.class;
+
+        // The wedged production layout: both L0 nodes bound API port 8082 and
+        // neither set CONSUMERIDSUFFIX, so both defaulted to the SAME id.
+        assertEquals(
+                AbstractStreamHandler.applicationId(blockHandler, "bigtangletest", "8082"),
+                AbstractStreamHandler.applicationId(blockHandler, "bigtangletest", "8082"),
+                "same suffix + same port MUST collide (documented failure mode)");
+
+        // Distinct per-node suffix (eu1/eu2) on the SAME port is unique.
+        String eu1 = AbstractStreamHandler.applicationId(blockHandler, "eu1", "8082");
+        String eu2 = AbstractStreamHandler.applicationId(blockHandler, "eu2", "8082");
+        assertNotEquals(eu1, eu2, "distinct CONSUMERIDSUFFIX must yield distinct consumer groups");
+
+        // Distinct ports with the same suffix are unique too (single-host mesh).
+        assertNotEquals(
+                AbstractStreamHandler.applicationId(blockHandler, "bigtangletest", "8081"),
+                AbstractStreamHandler.applicationId(blockHandler, "bigtangletest", "8082"));
     }
 }
