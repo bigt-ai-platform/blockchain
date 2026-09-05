@@ -1,33 +1,39 @@
 #!/usr/bin/env bash
-# prod.sh — deploy the Layer-0 (layer0-server) pair on s1001 + s2001, streamed
-# over the 2-broker prod Kafka mirror and exposed through the system Caddy.
+# prod.sh — deploy the Layer-0 (layer0-server) network, streamed over the
+# 2-broker prod Kafka mirror and exposed through the system Caddy.
 #
-# One L0 node per host (--network host). The nodes exchange blocks through the
-# shared Kafka cluster (topics bigtangle-{blocks,transactions,attestations}-L0,
+# The node set is the CSV overrides below, so the SAME script drives a 2-node
+# pair (default), a 3-node mesh, or N nodes — a host may appear more than once
+# to run co-located L0 processes (each with its own API/gossip/peer port,
+# validator key, consumer suffix and database). Nodes exchange blocks through
+# the shared Kafka cluster (topics bigtangle-{blocks,transactions,attestations}-L0,
 # see helper/prod/kafka/prod-kafka.sh), which is the PRIMARY transport; P2P
 # gossip and the peer requester stay as sync/fallback.
 #
-#   s1001.bigt.ai  85.214.37.95   L0 node 0   API :8082   https://eu1.bigtangle.org/
-#   s2001.bigt.ai  85.215.91.140  L0 node 1   API :8082   https://eu2.bigtangle.org/
+#   s1001.bigt.ai  85.214.37.95   node eu1  API :8082  https://eu1.bigtangle.org/
+#   s2001.bigt.ai  85.215.91.140  node eu2  API :8082  https://eu2.bigtangle.org/
+#   s2001.bigt.ai  85.215.91.140  node eu3  API :8083  https://eu3.bigtangle.org/
 #
 # Caddy terminates TLS (auto Let's Encrypt) and reverse-proxies to each node's
-# loopback API. The L0 API also binds 0.0.0.0 on :8082 because the two nodes
-# reach each other over the public IPs (requester/gossip); open TCP 8082 + the
-# gossip/peer ports to the peer host's IP in the cloud security list.
+# loopback API. The L0 API binds 0.0.0.0 so nodes reach each other over the
+# public IPs (requester/gossip); open each API + gossip/peer port to every
+# peer host's IP in the cloud security list. Co-located nodes on one host need
+# distinct API ports and distinct gossip/peer ports.
 #
-# DB: each host gets its own dedicated postgres 16 container (`l0eu-pg`,
-# loopback :5441, volume /data/l0eu-pg, database `layer0`) — kept off the
-# shared 5432/5433/5434 namespaces (s1001: social-pg/router-db/bigtai-db;
-# s2001: l0-pg).
+# DB: one postgres 16 container per host (`l0eu-pg`, loopback 5441, volume
+# /data/l0eu-pg) shared by all co-located nodes on that host; each node uses
+# its own DATABASE (layer0 for the first node, layer0eu3 for a second, ...).
 #
-# Genesis: a fresh database mints the GENESIS_CSV distribution (default
-# helper/prodsim/genesis/GenesisOutput.csv, staged byte-identical on every
-# host) instead of the code-default single genesis output — this funds the
-# operator/validator wallet (e.g. v1.json) in the genesis block.
+# Genesis: a fresh database mints the code-default genesis output (the total
+# supply to the 2-of-3 ceremony multisig, MainNetParams.genesisPub) when
+# GENESIS_CSV is empty (the default). Set GENESIS_CSV to a distribution CSV
+# (staged byte-identical on every host) for prodsim-style per-address minting
+# instead. After a key-mode reset, fund wallets with
+# helper/prod/genesis-payout.sh (see reset.md §6).
 #
 # Usage:
 #   prod.sh up        ensure postgres, (re)start L0 nodes, wire Caddy HTTPS,
-#                     verify https://eu1/eu2.bigtangle.org
+#                     verify each https://<adv>
 #   prod.sh reset     stop nodes, wipe the L0 databases (fresh genesis), then up
 #                     with the latest image (destructive — requires --yes)
 #   prod.sh status    per-host container + API + HTTPS state
@@ -48,21 +54,33 @@
 #   L0_IMAGE (default ghcr.io/bigt-ai-platform/layer0-server), IMAGE_TAG
 #     (default: latest numeric GH container tag, auto-detected e.g. 0.6.3;
 #     override to pin — never use `latest`),
-#   CONTAINER (default l0-server), L0_API_PORTS (default "8082,8082"),
-#   SERVER_NET (default Mainnet), SERVER_CHAIN (default L0),
-#   STORE_DOMAIN (default core), L0_JAVA_OPTS (default -Xmx5028m ...),
+#   CONTAINER (default l0-server — a host may repeat in L0_HOSTS to run N
+#     co-located L0 nodes; give each a distinct name via L0_CONTAINERS),
+#   L0_CONTAINERS (optional CSV parallel to L0_HOSTS naming the docker
+#     container per node; default l0-server for the first node on a host,
+#     l0-server-<n> for later nodes on the same host),
+#   L0_API_PORTS (default "8082,8082"), SERVER_NET (default Mainnet),
+#   SERVER_CHAIN (default L0), STORE_DOMAIN (default core),
+#   L0_JAVA_OPTS (default -Xmx5028m ...),
 #   DB_PORT (default 5441 — loopback on every host), DB_NAME (default layer0),
-#   DB_USERNAME DB_PASSWORD (default root/test1234 — override in prod),
-#   PG_CONTAINERS (optional per-host pinning like "social-pg,l0-pg"),
+#   L0_DB_PORTS / L0_DB_NAMES (optional CSVs parallel to L0_HOSTS — needed
+#     when a host runs >1 node on ONE postgres: distinct databases, e.g.
+#     "layer0,layer0,layer0eu3"), DB_USERNAME DB_PASSWORD (default root/
+#     test1234 — override in prod), PG_CONTAINERS (optional per-node pinning
+#     like "l0eu-pg,l0eu-pg"),
 #   KAFKA_BOOTSTRAP (default the 2 prod mirrors), RUN_KAFKA (default true),
 #   L0_PEER_UDP L0_PEER_TCP L0_GOSSIP (default 30317/30318/9195),
+#   L0_PEER_UDP_PORTS / L0_PEER_TCP_PORTS / L0_GOSSIP_PORTS (optional CSVs
+#     parallel to L0_HOSTS for co-located nodes — each process on a host needs
+#     distinct gossip/peer ports),
 #   POS_DUTY (default true; requires POS_VALIDATOR_KEY for beacon duties),
 #   POS_VALIDATOR_KEYS (optional CSV parallel to L0_HOSTS for a distinct key
 #     per node; falls back to POS_VALIDATOR_KEY for all),
 #   BRIDGE_VAULT_PUBKEY (optional L0 vault pubkey; enables bridge peg-in
 #     validation), BRIDGE_VAULT_PRIKEY (optional; enables peg-out signing),
-#   GENESIS_CSV (default ${ROOT}/helper/prodsim/genesis/GenesisOutput.csv; the
-#     per-address distribution minted on a fresh chain; empty disables),
+#   GENESIS_CSV (default empty = code-default genesis to the ceremony 2-of-3
+#     multisig; set to a CSV path for prodsim-style per-address minting, then
+#     fund via helper/prod/genesis-payout.sh — see reset.md §6),
 #   L0_SEEDS (optional "ip:port,ip:port" requester list; default derived from
 #     L0_HOSTS by excluding each node's self), SERVER_APIKEY, JAVA_OPTS.
 set -euo pipefail
@@ -77,6 +95,7 @@ L0_HOSTS="${L0_HOSTS:-s1001.bigt.ai,s2001.bigt.ai}"
 L0_ADVERTISED="${L0_ADVERTISED:-eu1.bigtangle.org,eu2.bigtangle.org}"
 L0_IMAGE="${L0_IMAGE:-ghcr.io/bigt-ai-platform/layer0-server}"
 CONTAINER="${CONTAINER:-l0-server}"
+L0_CONTAINERS="${L0_CONTAINERS:-}"
 # Per-host kafka consumer group suffix (optional CSV parallel to L0_HOSTS).
 # Defaults to the first DNS label of the matching L0_ADVERTISED entry.
 L0_CONSUMERIDSUFFIX="${L0_CONSUMERIDSUFFIX:-}"
@@ -88,8 +107,12 @@ SERVER_CHAIN="${SERVER_CHAIN:-L0}"
 STORE_DOMAIN="${STORE_DOMAIN:-core}"
 # Dedicated postgres per host: loopback 5441 (5432/5433/5434 are used by other
 # products on s1001). Override DB_PORT/PG_CONTAINERS when reusing existing pg.
+# Co-located nodes on one host share the postgres server but use DISTINCT
+# databases — set L0_DB_NAMES parallel to L0_HOSTS for that layout.
 DB_PORT="${DB_PORT:-5441}"
 DB_NAME="${DB_NAME:-layer0}"
+L0_DB_PORTS="${L0_DB_PORTS:-}"
+L0_DB_NAMES="${L0_DB_NAMES:-}"
 DB_USERNAME="${DB_USERNAME:-root}"
 DB_PASSWORD="${DB_PASSWORD:-test1234}"
 PG_CONTAINERS="${PG_CONTAINERS:-}"
@@ -99,6 +122,9 @@ RUN_KAFKA="${RUN_KAFKA:-true}"
 L0_PEER_UDP="${L0_PEER_UDP:-30317}"
 L0_PEER_TCP="${L0_PEER_TCP:-30318}"
 L0_GOSSIP="${L0_GOSSIP:-9195}"
+L0_PEER_UDP_PORTS="${L0_PEER_UDP_PORTS:-}"
+L0_PEER_TCP_PORTS="${L0_PEER_TCP_PORTS:-}"
+L0_GOSSIP_PORTS="${L0_GOSSIP_PORTS:-}"
 POS_DUTY="${POS_DUTY:-true}"
 CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/Caddyfile.d}"
 # Bridge/vault (L0 side): set BRIDGE_VAULT_PUBKEY to validate L0->L1 peg-ins
@@ -106,13 +132,14 @@ CADDY_SITES_DIR="${CADDY_SITES_DIR:-/etc/caddy/Caddyfile.d}"
 # signing on L0. Empty = bridge off.
 BRIDGE_VAULT_PUBKEY="${BRIDGE_VAULT_PUBKEY:-}"
 BRIDGE_VAULT_PRIKEY="${BRIDGE_VAULT_PRIKEY:-}"
-# Genesis distribution CSV (columns: address,pubkey,value). Defaults to the
-# prodsim mainnet snapshot — a fresh DB mints one output per CSV row instead of
-# the code's single genesis output (funds the operator wallet, see
-# UtilGeneseBlock.createGenesis / helper/prod/genesis.sh). Must be byte-identical
-# on every node so all derive the same genesis hash. Staged per host at
-# L0_GENESIS_REMOTE. Empty disables.
-GENESIS_CSV="${GENESIS_CSV:-${ROOT}/helper/prodsim/genesis/GenesisOutput.csv}"
+# Genesis distribution CSV (columns: address,pubkey,value). Default empty: a
+# fresh DB mints the code-default genesis (total supply to the ceremony 2-of-3
+# multisig, MainNetParams.genesisPub); wallets are funded afterwards with
+# helper/prod/genesis-payout.sh (see reset.md §6). Set to a CSV path for
+# prodsim-style per-address minting instead (see UtilGeneseBlock.createGenesis
+# / helper/prod/genesis.sh) — the file must then be byte-identical on every
+# node so all derive the same genesis hash. Staged per host at L0_GENESIS_REMOTE.
+GENESIS_CSV="${GENESIS_CSV:-}"
 L0_GENESIS_REMOTE="${L0_GENESIS_REMOTE:-/data/l0-genesis.csv}"
 L0_JAVA_OPTS="${L0_JAVA_OPTS:--Xmx5028m --add-exports java.base/sun.nio.ch=ALL-UNNAMED --add-exports java.base/java.lang=ALL-UNNAMED}"
 
@@ -167,6 +194,59 @@ if [ -n "$L0_CONSUMERIDSUFFIX" ]; then
     IFS=',' read -ra CSUFFIX <<< "$L0_CONSUMERIDSUFFIX"
     [ "${#CSUFFIX[@]}" -eq "${#HOSTS[@]}" ] || die "L0_CONSUMERIDSUFFIX (${#CSUFFIX[@]}) must match L0_HOSTS (${#HOSTS[@]})"
 fi
+# Per-node arrays (CSV, parallel to L0_HOSTS). Empty = derive: a host may run
+# N co-located nodes, so the FIRST node on a host keeps the single-value
+# defaults and later nodes on the same host auto-derive distinct
+# container/gossip/peer/db values.
+read_csv() { # $1=varname $2=raw CSV $3=fallback-per-node fn-index marker
+    local __n="$1" __raw="$2"
+    if [ -n "$__raw" ]; then
+        IFS=',' read -ra "$__n" <<< "$__raw"
+    else
+        eval "$__n=()"
+    fi
+}
+read_csv DBPS "$L0_DB_PORTS"
+read_csv DBNS "$L0_DB_NAMES"
+read_csv CNAMES "$L0_CONTAINERS"
+read_csv GUDP "$L0_PEER_UDP_PORTS"
+read_csv GTCP "$L0_PEER_TCP_PORTS"
+read_csv GGOSSIP "$L0_GOSSIP_PORTS"
+# CSV overrides must be full-length; derivation below only fills EMPTY arrays.
+[ "${#DBPS[@]}" -eq 0 ] || [ "${#DBPS[@]}" -eq "${#HOSTS[@]}" ] || die "L0_DB_PORTS (${#DBPS[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+[ "${#DBNS[@]}" -eq 0 ] || [ "${#DBNS[@]}" -eq "${#HOSTS[@]}" ] || die "L0_DB_NAMES (${#DBNS[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+[ "${#CNAMES[@]}" -eq 0 ] || [ "${#CNAMES[@]}" -eq "${#HOSTS[@]}" ] || die "L0_CONTAINERS (${#CNAMES[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+[ "${#GUDP[@]}" -eq 0 ] || [ "${#GUDP[@]}" -eq "${#HOSTS[@]}" ] || die "L0_PEER_UDP_PORTS (${#GUDP[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+[ "${#GTCP[@]}" -eq 0 ] || [ "${#GTCP[@]}" -eq "${#HOSTS[@]}" ] || die "L0_PEER_TCP_PORTS (${#GTCP[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+[ "${#GGOSSIP[@]}" -eq 0 ] || [ "${#GGOSSIP[@]}" -eq "${#HOSTS[@]}" ] || die "L0_GOSSIP_PORTS (${#GGOSSIP[@]}) must match L0_HOSTS (${#HOSTS[@]})"
+for i in "${!HOSTS[@]}"; do
+    # first occurrence index of this host (co-located nodes share its postgres
+    # server: same db host port, DISTINCT database name)
+    fst_host="${HOSTS[$i]}" first_idx=-1
+    for ((k2=0;k2<${#HOSTS[@]};k2++)); do
+        if [ "${HOSTS[$k2]}" = "$fst_host" ]; then first_idx="$k2"; break; fi
+    done
+    occ=$(( i - first_idx ))
+    if [ -z "${CNAMES[$i]:-}" ]; then
+        if [ "$occ" -eq 0 ]; then CNAMES[$i]="$CONTAINER"; else CNAMES[$i]="${CONTAINER}-${occ}"; fi
+    fi
+    if [ -z "${GGOSSIP[$i]:-}" ]; then
+        if [ "$occ" -eq 0 ]; then GGOSSIP[$i]="$L0_GOSSIP"; else GGOSSIP[$i]="$((L0_GOSSIP + occ))"; fi
+    fi
+    if [ -z "${GUDP[$i]:-}" ]; then
+        if [ "$occ" -eq 0 ]; then GUDP[$i]="$L0_PEER_UDP"; else GUDP[$i]="$((L0_PEER_UDP + occ*100))"; fi
+    fi
+    if [ -z "${GTCP[$i]:-}" ]; then
+        if [ "$occ" -eq 0 ]; then GTCP[$i]="$L0_PEER_TCP"; else GTCP[$i]="$((L0_PEER_TCP + occ*100))"; fi
+    fi
+    if [ -z "${DBPS[$i]:-}" ]; then
+        # co-located nodes share the host postgres: same host port, distinct db
+        if [ "$occ" -eq 0 ]; then DBPS[$i]="$DB_PORT"; else DBPS[$i]="${DBPS[$first_idx]}"; fi
+    fi
+    if [ -z "${DBNS[$i]:-}" ]; then
+        if [ "$occ" -eq 0 ]; then DBNS[$i]="$DB_NAME"; else DBNS[$i]="${DB_NAME}${ADVS[$i]%%.*}"; fi
+    fi
+done
 # Every node on the shared broker MUST get a distinct kafka consumerIdSuffix,
 # else they join ONE consumer group and partitions are served to a single
 # member (broadcast starvation → permanent head divergence, no finality).
@@ -209,6 +289,8 @@ host_ip() { # $1=hostname → public IP (resolves s1001.bigt.ai -> 85.214.37.95)
 # Requester / gossip mesh = every peer (excluding self). L0_SEEDS overrides.
 # REQUESTER is the full peer list; validator_common excludes SELF at runtime —
 # here we derive peers directly so each node points at the other node only.
+# Co-located nodes on one host still peer over the host's public IP (each has
+# a distinct API port), so a simple index-exclusion works for N>2 as well.
 peer_list() { # $1=my-index → requester strings of the other nodes
     local me="$1" out=""
     if [ -n "${L0_SEEDS:-}" ]; then printf '%s' "$L0_SEEDS"; return 0; fi
@@ -229,35 +311,37 @@ peer_ips() { # $1=my-index → "ip:gossip" of the other nodes (gossip.peers)
         local ip
         ip="$(host_ip "${HOSTS[$j]}")"
         [ -n "$ip" ] || die "cannot resolve ${HOSTS[$j]}"
-        out="${out}${out:+,}${ip}:${L0_GOSSIP}"
+        out="${out}${out:+,}${ip}:${GGOSSIP[$j]}"
     done
     printf '%s' "$out"
 }
 
 # ---- Postgres --------------------------------------------------------------
-pg_container_of() { # $1=host-index → pg container name
+pg_container_of() { # $1=host-index → pg container name (per-node; shared per host)
     local idx="$1"
     local host="${HOSTS[$idx]}"
     if [ "${#PGCS[@]}" -gt 0 ]; then
         printf '%s' "${PGCS[$idx]}"
         return 0
     fi
-    printf 'l0eu-pg'
+    # default: one dedicated pg per host (co-located nodes share it)
+    printf '%s' "l0eu-pg"
 }
 
 ensure_pg() { # $1=host-index — create dedicated postgres when not pinned
     local idx="$1"
-    local host="${HOSTS[$idx]}" pgc
+    local host="${HOSTS[$idx]}" pgc dbp
     pgc="$(pg_container_of "$idx")"
+    dbp="${DBPS[$idx]}"
     if remote "$host" "docker ps --format '{{.Names}}' | grep -qx '${pgc}'" 2>/dev/null; then
         log "${host}: postgres ${pgc} already running"
         return 0
     fi
-    log "${host}: creating postgres ${pgc} on 127.0.0.1:${DB_PORT} (${DB_NAME})"
+    log "${host}: creating postgres ${pgc} on 127.0.0.1:${dbp}"
     remote "$host" "docker rm -f ${pgc} >/dev/null 2>&1 || true"
     remote "$host" "mkdir -p /data/${pgc} && docker run -d --name ${pgc} --restart unless-stopped" \
-        "-e POSTGRES_USER='${DB_USERNAME}' -e POSTGRES_PASSWORD='${DB_PASSWORD}' -e POSTGRES_DB='${DB_NAME}'" \
-        "-p 127.0.0.1:${DB_PORT}:5432 -v /data/${pgc}:/var/lib/postgresql/data ${PG_IMAGE} >/dev/null" \
+        "-e POSTGRES_USER='${DB_USERNAME}' -e POSTGRES_PASSWORD='${DB_PASSWORD}' -e POSTGRES_DB='postgres'" \
+        "-p 127.0.0.1:${dbp}:5432 -v /data/${pgc}:/var/lib/postgresql/data ${PG_IMAGE} >/dev/null" \
         || die "${host}: cannot start postgres ${pgc}"
     for _ in $(seq 1 20); do
         remote "$host" "docker exec ${pgc} pg_isready -U '${DB_USERNAME}' -h 127.0.0.1 -p 5432 >/dev/null 2>&1" && { log "${host}: postgres ${pgc} ready"; return 0; }
@@ -266,13 +350,14 @@ ensure_pg() { # $1=host-index — create dedicated postgres when not pinned
     die "${host}: postgres ${pgc} not ready"
 }
 
-ensure_db() { # $1=host-index — CREATE DATABASE DB_NAME when absent (pinned pg path)
+ensure_db() { # $1=host-index — CREATE DATABASE DBNS[i] when absent
     local idx="$1"
-    local host="${HOSTS[$idx]}" pgc
+    local host="${HOSTS[$idx]}" pgc dbn
     pgc="$(pg_container_of "$idx")"
-    remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'\" | grep -q 1" \
-        || remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -c 'CREATE DATABASE ${DB_NAME};'" \
-        || die "${host}: cannot create database ${DB_NAME} in ${pgc}"
+    dbn="${DBNS[$idx]}"
+    remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='${dbn}'\" | grep -q 1" \
+        || remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -c 'CREATE DATABASE ${dbn};'" \
+        || die "${host}: cannot create database ${dbn} in ${pgc}"
 }
 
 # ---- Caddy -----------------------------------------------------------------
@@ -329,6 +414,8 @@ ensure_genesis() { # $1=host
 start_one() { # $1=host-index
     local idx="$1"
     local host="${HOSTS[$idx]}" adv="${ADVS[$idx]}" port="${APORTS[$idx]}" pgc pk csfx
+    local cname="${CNAMES[$idx]}" dbp="${DBPS[$idx]}" dbn="${DBNS[$idx]}"
+    local gudp="${GUDP[$idx]}" gtcp="${GTCP[$idx]}" ggossip="${GGOSSIP[$idx]}"
     if [ "${#CSUFFIX[@]}" -gt 0 ]; then
         csfx="${CSUFFIX[$idx]}"
     else
@@ -344,8 +431,8 @@ start_one() { # $1=host-index
     fi
     log "${host} (${adv}): pulling ${L0_IMAGE}:${IMAGE_TAG}"
     remote "$host" "docker pull ${L0_IMAGE}:${IMAGE_TAG} >/dev/null" || die "${host}: image pull failed"
-    log "${host} (${adv}): starting ${CONTAINER} on 0.0.0.0:${port} (db=${DB_NAME}@${pgc}:${DB_PORT})"
-    remote "$host" "docker rm -f ${CONTAINER} >/dev/null 2>&1 || true"
+    log "${host} (${adv}): starting ${cname} on 0.0.0.0:${port} (db=${dbn}@${pgc}:${dbp})"
+    remote "$host" "docker rm -f ${cname} >/dev/null 2>&1 || true"
     # Secrets as container env vars, never CLI args (visible in ps).
     local kafka_args=("--server.runKafkaStream=false")
     if [ "$RUN_KAFKA" = "true" ] && [ -n "$KAFKA_BOOTSTRAP" ]; then
@@ -378,7 +465,7 @@ start_one() { # $1=host-index
         genesis_arg="-Dbigtangle.genesis.csv=/genesis.csv"
         log "${host} (${adv}): genesis distribution from ${GENESIS_CSV}"
     fi
-    remote "$host" "docker run -d --name ${CONTAINER} --network host --restart unless-stopped" \
+    remote "$host" "docker run -d --name ${cname} --network host --restart unless-stopped" \
         "--init --stop-timeout 30" \
         "-e POS_VALIDATOR_KEY='${pk:-}'" \
         "-e CONSUMERIDSUFFIX='${csfx}'" \
@@ -392,14 +479,14 @@ start_one() { # $1=host-index
         "--server.port=${port}" "--server.address=0.0.0.0" \
         "--server.net=${SERVER_NET}" "--server.chain=${SERVER_CHAIN}" \
         "--store.domain=${STORE_DOMAIN}" \
-        "--db.hostname=localhost --db.port=${DB_PORT} --db.dbName=${DB_NAME}" \
+        "--db.hostname=localhost --db.port=${dbp} --db.dbName=${dbn}" \
         "--db.username=${DB_USERNAME} --db.password=${DB_PASSWORD}" \
         "--server.createtable=true" \
         "${kafka_args[@]}" \
         "--server.requester=${requester}" \
         "--service.schedule.chainlength=true --service.schedule.blockbatch=true" \
         "--service.schedule.microbatch=true --service.schedule.initsync=true" \
-        "--peer.udpPort=${L0_PEER_UDP} --peer.tcpPort=${L0_PEER_TCP} --gossip.port=${L0_GOSSIP}" \
+        "--peer.udpPort=${gudp} --peer.tcpPort=${gtcp} --gossip.port=${ggossip}" \
         "--gossip.peers=${gossip_seeds}" \
         "--pos.dutyEnabled=${POS_DUTY}" \
         "--pos.gossipPeers=${pos_peers}" \
@@ -407,8 +494,8 @@ start_one() { # $1=host-index
     ensure_caddy "$host" "$adv" "$port"
 }
 
-wait_api() { # $1=host $2=adv $3=port
-    local host="$1" adv="$2" port="$3"
+wait_api() { # $1=host $2=adv $3=port $4=cname
+    local host="$1" adv="$2" port="$3" cname="$4"
     for _ in $(seq 1 80); do
         if remote "$host" "curl -sf -m 3 http://127.0.0.1:${port}/ >/dev/null 2>&1"; then
             log "${host}: API up"
@@ -426,7 +513,7 @@ wait_api() { # $1=host $2=adv $3=port
         fi
         sleep 3
     done
-    die "${host}: API not up — docker logs ${CONTAINER}"
+    die "${host}: API not up — docker logs ${cname}"
 }
 
 cmd_up() {
@@ -446,16 +533,16 @@ cmd_up() {
         start_one "$i"
     done
     for i in "${!HOSTS[@]}"; do
-        wait_api "${HOSTS[$i]}" "${ADVS[$i]}" "${APORTS[$i]}"
+        wait_api "${HOSTS[$i]}" "${ADVS[$i]}" "${APORTS[$i]}" "${CNAMES[$i]}"
     done
     cmd_status
 }
 
 cmd_status() {
-    local rc=0 i host adv port st api https
+    local rc=0 i host adv port cname st api https
     for i in "${!HOSTS[@]}"; do
-        host="${HOSTS[$i]}" adv="${ADVS[$i]}" port="${APORTS[$i]}"
-        st="$(remote "$host" "docker inspect -f '{{.State.Status}}' ${CONTAINER} 2>/dev/null" || echo missing)"
+        host="${HOSTS[$i]}" adv="${ADVS[$i]}" port="${APORTS[$i]}" cname="${CNAMES[$i]}"
+        st="$(remote "$host" "docker inspect -f '{{.State.Status}}' ${cname} 2>/dev/null" || echo missing)"
         api="down"
         remote "$host" "curl -sf -m 5 http://127.0.0.1:${port}/ >/dev/null 2>&1" && api="up"
         https="-"
@@ -467,27 +554,29 @@ cmd_status() {
 }
 
 cmd_logs() { # [N]
-    local n="${1:-50}" host
-    for host in "${HOSTS[@]}"; do
-        echo "===== ${host} ====="
-        remote "$host" "docker logs --tail=${n} ${CONTAINER} 2>&1" || true
+    local n="${1:-50}" i host cname
+    for i in "${!HOSTS[@]}"; do
+        host="${HOSTS[$i]}" cname="${CNAMES[$i]}"
+        echo "===== ${host} ${cname} ====="
+        remote "$host" "docker logs --tail=${n} ${cname} 2>&1" || true
     done
 }
 
 cmd_down() {
-    local host
-    for host in "${HOSTS[@]}"; do
-        log "${host}: stopping ${CONTAINER} (postgres + data kept)"
-        remote "$host" "docker rm -f ${CONTAINER} >/dev/null 2>&1 || true"
+    local i host cname
+    for i in "${!HOSTS[@]}"; do
+        host="${HOSTS[$i]}" cname="${CNAMES[$i]}"
+        log "${host}: stopping ${cname} (postgres + data kept)"
+        remote "$host" "docker rm -f ${cname} >/dev/null 2>&1 || true"
     done
 }
 
 reset_db() { # $1=host-index — wipe the L0 database so the chain restarts fresh
     local idx="$1"
-    local host="${HOSTS[$idx]}" pgc
+    local host="${HOSTS[$idx]}" pgc cname="${CNAMES[$idx]}" dbn="${DBNS[$idx]}"
     pgc="$(pg_container_of "$idx")"
-    log "${host}: stopping ${CONTAINER}"
-    remote "$host" "docker rm -f ${CONTAINER} >/dev/null 2>&1 || true"
+    log "${host}: stopping ${cname}"
+    remote "$host" "docker rm -f ${cname} >/dev/null 2>&1 || true"
     if [ "${#PGCS[@]}" -eq 0 ]; then
         # Dedicated postgres created by this script: drop the container and
         # wipe its data dir; ensure_pg/up recreate both on next boot.
@@ -496,9 +585,9 @@ reset_db() { # $1=host-index — wipe the L0 database so the chain restarts fres
         remote "$host" "rm -rf /data/${pgc}" || die "${host}: cannot wipe /data/${pgc}"
     else
         # Pinned/external postgres: leave the server alone, drop + recreate DB.
-        log "${host}: dropping + recreating database ${DB_NAME} in ${pgc}"
-        remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -c 'DROP DATABASE IF EXISTS ${DB_NAME};'" \
-            || die "${host}: cannot drop database ${DB_NAME}"
+        log "${host}: dropping + recreating database ${dbn} in ${pgc}"
+        remote "$host" "docker exec ${pgc} psql -U '${DB_USERNAME}' -d postgres -c 'DROP DATABASE IF EXISTS ${dbn};'" \
+            || die "${host}: cannot drop database ${dbn}"
         ensure_db "$idx"
     fi
 }
@@ -508,7 +597,7 @@ cmd_reset() {
     [ "${1:-}" = "--yes" ] && yes=true
     if [ "$yes" = false ]; then
         if [ ! -t 0 ]; then
-            die "reset wipes the L0 databases on all hosts (fresh genesis, re-stake needed); pass --yes to confirm non-interactively"
+            die "reset wipes the L0 databases (fresh genesis to the ceremony multisig — fund wallets afterwards with genesis-payout.sh, then re-stake); pass --yes to confirm non-interactively"
         fi
         printf 'Wipe L0 databases on %s and redeploy? [y/N] ' "${HOSTS[*]}" >&2
         read -r ans
@@ -524,7 +613,7 @@ cmd_reset() {
     cmd_up
 }
 
-usage() { sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { awk 'NR>=2 && /^set -euo pipefail/{exit} NR>=2' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-}" in
     up) shift; cmd_up "$@" ;;
