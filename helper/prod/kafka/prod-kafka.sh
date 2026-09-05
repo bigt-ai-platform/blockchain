@@ -20,7 +20,8 @@
 #
 # Env overrides:
 #   SSH_USER SSH_OPTS JUMP_HOST, KAFKA_HOSTS, KAFKA_ADVERTISED, KAFKA_IMAGE,
-#   KAFKA_CONTAINER, KAFKA_DATA_DIR, KAFKA_CHAIN, KAFKA_PARTITIONS,
+#   KAFKA_CONTAINER, KAFKA_DATA_DIR, KAFKA_CHAINS (default "L0,SOCIAL";
+#   KAFKA_CHAIN still works as a single-chain override), KAFKA_PARTITIONS,
 #   KAFKA_REPLICATION_FACTOR, KAFKA_MAX_MESSAGE_BYTES, KAFKA_RETENTION_MS,
 #   CLUSTER_ID (else generated once and stored next to this script).
 #
@@ -38,7 +39,19 @@ KAFKA_ADVERTISED="${KAFKA_ADVERTISED:-kafkaeu1.bigtangle.org,kafkaeu2.bigtangle.
 KAFKA_IMAGE="${KAFKA_IMAGE:-confluentinc/cp-kafka:7.7.1}"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-bt-kafka}"
 KAFKA_DATA_DIR="${KAFKA_DATA_DIR:-/data/kafka}"
-KAFKA_CHAIN="${KAFKA_CHAIN:-L0}"
+# Chains to provision topics for (comma list, e.g. "L0,SOCIAL"). Every server
+# derives its topics as bigtangle-{blocks,transactions,attestations}-<chainId>
+# (KafkaConfiguration.chainTopic) and brokers run with auto-create OFF, so a
+# chain without its topic set is completely isolated: no block/tx/attestation
+# flow between its nodes. KAFKA_CHAIN (singular) is kept as a single-chain
+# override for backward compatibility.
+if [ -n "${KAFKA_CHAINS:-}" ]; then
+    _CHAINS_CSV="$KAFKA_CHAINS"
+elif [ -n "${KAFKA_CHAIN:-}" ]; then
+    _CHAINS_CSV="$KAFKA_CHAIN"
+else
+    _CHAINS_CSV="L0,SOCIAL"
+fi
 KAFKA_PARTITIONS="${KAFKA_PARTITIONS:-1}"
 KAFKA_REPLICATION_FACTOR="${KAFKA_REPLICATION_FACTOR:-2}"
 # Must cover a full batch block of PQ-signed txs (~6 KB each); mirrors
@@ -57,11 +70,15 @@ IFS=',' read -ra ADVS <<< "$KAFKA_ADVERTISED"
 [ "${#HOSTS[@]}" -eq 2 ] || die "KAFKA_HOSTS must list 2 hosts (got ${#HOSTS[@]})"
 [ "${#ADVS[@]}" -eq 2 ] || die "KAFKA_ADVERTISED must list 2 names (got ${#ADVS[@]})"
 
-TOPICS=(
-    "bigtangle-blocks-${KAFKA_CHAIN}"
-    "bigtangle-transactions-${KAFKA_CHAIN}"
-    "bigtangle-attestations-${KAFKA_CHAIN}"
-)
+TOPICS=()
+IFS=',' read -ra _CHAIN_ARR <<< "$_CHAINS_CSV"
+for _c in "${_CHAIN_ARR[@]}"; do
+    _c="${_c//[[:space:]]/}"
+    [ -n "$_c" ] || continue
+    TOPICS+=("bigtangle-blocks-${_c}" "bigtangle-transactions-${_c}" "bigtangle-attestations-${_c}")
+done
+unset _CHAIN_ARR _c _CHAINS_CSV
+[ "${#TOPICS[@]}" -gt 0 ] || die "no chains to provision (KAFKA_CHAINS/KAFKA_CHAIN empty)"
 
 ssh_transport() {
     if [ -n "${JUMP_HOST:-}" ]; then
@@ -151,10 +168,9 @@ cmd_topics() {
     for t in "${TOPICS[@]}"; do
         if printf '%s\n' "$existing" | grep -qx "$t"; then
             log "topic ${t} exists — enforcing configs"
-            remote "$h" "docker exec ${KAFKA_CONTAINER} kafka-topics --bootstrap-server localhost:9092 --alter --topic $t" \
-                "--config max.message.bytes=${KAFKA_MAX_MESSAGE_BYTES}" \
-                "--config min.insync.replicas=1" \
-                "--config retention.ms=${KAFKA_RETENTION_MS} >/dev/null" \
+            # NOTE: kafka-topics --alter --config was removed in Kafka 7.x;
+            # topic configs go through kafka-configs.
+            remote "$h" "docker exec ${KAFKA_CONTAINER} kafka-configs --bootstrap-server localhost:9092 --alter --entity-type topics --entity-name $t --add-config max.message.bytes=${KAFKA_MAX_MESSAGE_BYTES},min.insync.replicas=1,retention.ms=${KAFKA_RETENTION_MS} >/dev/null" \
                 || die "alter failed for ${t}"
         else
             log "creating topic ${t} (partitions=${KAFKA_PARTITIONS} RF=${KAFKA_REPLICATION_FACTOR})"

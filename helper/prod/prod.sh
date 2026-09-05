@@ -39,7 +39,7 @@
 #   L0_HOSTS (default "s1001.bigt.ai,s2001.bigt.ai"),
 #   L0_ADVERTISED (default "eu1.bigtangle.org,eu2.bigtangle.org", same order),
 #   L0_IMAGE (default ghcr.io/bigt-ai-platform/layer0-server), IMAGE_TAG
-#     (default: latest numeric GH container tag, auto-detected e.g. 0.6.2;
+#     (default: latest numeric GH container tag, auto-detected e.g. 0.6.3;
 #     override to pin — never use `latest`),
 #   CONTAINER (default l0-server), L0_API_PORTS (default "8082,8082"),
 #   SERVER_NET (default Mainnet), SERVER_CHAIN (default L0),
@@ -129,7 +129,7 @@ if tags:
     print(sorted(tags, key=lambda s: [int(x) for x in s.split(".")])[-1])
 ' 2>/dev/null || true)"
     fi
-    if [ -z "$out" ]; then out="0.6.2"; fi
+    if [ -z "$out" ]; then out="0.6.3"; fi
     printf '%s' "$out"
 }
 # Latest versioned tag at runtime; IMAGE_TAG env override pins a specific one.

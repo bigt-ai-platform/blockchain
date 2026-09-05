@@ -30,6 +30,8 @@
 #   prod-social-fund.sh check            preflight gate (read-only)
 #   prod-social-fund.sh split            exact-amount self-UTXO
 #   prod-social-fund.sh pegin            vault lock for SOCIAL
+#   prod-social-fund.sh give <toBase58> <sat>        plain L0 transfer
+#   prod-social-fund.sh stakenode <url> <pubkeyHex> <sat>  stake one node
 #   prod-social-fund.sh stake            stake + activate the validators
 #   prod-social-fund.sh run              check -> split -> pegin -> stake
 set -euo pipefail
@@ -59,7 +61,7 @@ log "L0=$L0_URL"
 log "SOCIAL_URLS=$SOCIAL_URLS"
 [ -n "$API_KEY" ] || log "WARN: API_KEY unset — stake/activate will fail"
 
-EXEC_JAR="$(ls -t "${ROOT}"/layer0-server/target/layer0-server-*-exec.jar 2>/dev/null | head -1 || true)"
+EXEC_JAR="$(ls "${ROOT}"/layer0-server/target/layer0-server-*-exec.jar 2>/dev/null | sort -V | tail -1 || true)"
 [ -n "$EXEC_JAR" ] || die "no layer0-server exec jar at layer0-server/target/ (run: mvn -q package -DskipTests)"
 CACHE="${TMPDIR:-/tmp}/bigtangle-social-fund/cp"
 if [ ! -d "${CACHE}/BOOT-INF/classes" ]; then
@@ -87,12 +89,12 @@ case "${1:-run}" in
         run_tool pegin "$AMOUNT_SAT"
         ;;
     give) # give <toBase58> <sat>
-        [ -n "${2:-}" ] || die "usage: prod-social-fund.sh give <toBase58> <sat>"
-        run_tool give "$2" "$3"
+        [ -n "${2:-}" ] && [ -n "${3:-}" ] || die "usage: prod-social-fund.sh give <toBase58> <sat>"
+        run_tool give "${2}" "${3}"
         ;;
     stakenode) # stakenode <url> <pubkeyHex> <sat>
-        [ -n "${2:-}" ] && [ -n "${3:-}" ] || die "usage: prod-social-fund.sh stakenode <url> <pubkeyHex> <sat>"
-        run_tool stakenode "$2" "$3" "$4"
+        [ -n "${2:-}" ] && [ -n "${3:-}" ] && [ -n "${4:-}" ] || die "usage: prod-social-fund.sh stakenode <url> <pubkeyHex> <sat>"
+        run_tool stakenode "${2}" "${3}" "${4}"
         ;;
     stake)
         run_tool stake "$AMOUNT_SAT"
@@ -109,7 +111,7 @@ case "${1:-run}" in
         log "done — verify with https://${SOCIAL_URLS%% *}/getValidators"
         ;;
     *)
-        sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
         exit 1
         ;;
 esac
