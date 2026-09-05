@@ -65,9 +65,12 @@ DB_NAME="${DB_NAME:-social}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-root}"
 DB_PASSWORD="${DB_PASSWORD:-test1234}"
-# Optional per-host postgres pinning (same order as SOCIAL_HOSTS),
-# e.g. PG_CONTAINERS="social-pg,l0-pg". Empty = auto-detect.
-PG_CONTAINERS="${PG_CONTAINERS:-}"
+# Per-host postgres pinning (same order as SOCIAL_HOSTS).
+# Default matches the live inventory (prod.md §10): s1001 dedicated social-pg,
+# s2001 shared l0-pg. s1001 runs 8 pg containers, so auto-detect (first
+# postgres container) picks the wrong DB — override explicitly via env only
+# when the inventory changes.
+PG_CONTAINERS="${PG_CONTAINERS:-social-pg,l0-pg}"
 L0_REQUESTER="${L0_REQUESTER:-http://127.0.0.1:8082}"
 # Per-node kafka consumer group suffix (optional CSV parallel to SOCIAL_HOSTS).
 # Defaults to the first DNS label of the matching SOCIAL_ADVERTISED entry.
